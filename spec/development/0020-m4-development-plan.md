@@ -1,7 +1,7 @@
 ---
 id: "0020"
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-22T18:29:00+08:00"
+updated_at: "2026-09-22T18:51:42+08:00"
 status: completed
 design_refs:
   - ../design/assets-runtime.md
@@ -67,14 +67,18 @@ M4.1 重点为身份、Project 和文件失败保护；M4.2 为数据与 assetc�
 | 时点 | 决策及约束 |
 | --- | --- |
 | M4.1.1 | meta 公共类型和预算；确定 v1 编解码及已有 Project 记录采用规则 |
-| M4.1.2 | 多文件恢复记录精确格式、提交顺序和故障注入点；不承诺跨文件原子性 |
-| M4.2.1 | 锁定 vcpkg baseline 下的 glTF/图片库版本、许可证、target；CPU 数据预算 |
+| M4.1.2 | 多文件恢复记录精确格式、提交顺序和故障注入点；接入 PicoSHA2 摘要封装；不承诺跨文件原子性 |
+| M4.2.1 | 按已定 fastgltf 选型接入并验证实际 CMake/链接；固定 CPU 数据预算 |
 | M4.2.2 | CPU 产物 manifest/二进制 v1、解码预算和离线输出参数 |
-| M4.3.1 | 摘要提供方、内容键/current 索引、复用产物 v1 的验证上限 |
+| M4.3.1 | 复用 PicoSHA2 摘要封装，固定 key 编码/current 索引及产物 v1 的验证上限 |
 | M4.4.1 | 活动作业/终态/字节限额、completion 所有权、异常向宿主报告 |
 | M4.4.3 | Windows 阻塞输入的可取消读取方案；资产目录生命周期与精确命令 schema |
 
 这些选择应在所属实现开始前写回对应设计；后期实现遇到范围过大可继续细分，保留原编号。
+
+三方库选型已由用户确定为 fastgltf、stb_image、PicoSHA2，版本与许可证核验见
+[设计中的选型表](../design/assets-importers.md#已确定的三方库与基线)。M4.2.2 接入 stb_image，
+M4.1.2 的恢复摘要和 M4.3 的缓存摘要复用 PicoSHA2；CPU 队列继续用标准库。
 
 ## 本次实际变更与验证
 
@@ -96,6 +100,18 @@ M4.1 重点为身份、Project 和文件失败保护；M4.2 为数据与 assetc�
 
 本记录 completed 仅表示文档任务完成。未构建引擎或运行 C++ 测试；M4 所有实现及行为验收均未执行。
 
+### 三方库选型补充
+
+按用户附件与选型意见，合并维护本记录；未新增日志编号。读取固定 vcpkg baseline 的
+versions/baseline.json、fastgltf/stb/picosha2/simdjson 的 port 清单，以及各自 CMake 安装/查找规则。
+基线记录为 fastgltf 0.9.0、stb 2024-07-29#1、PicoSHA2 1.0.1，fastgltf 传递引入 simdjson 4.3.1。
+进一步核对 fastgltf 0.9.0 CMake 导出、stb 锁定提交源码与 PicoSHA2 1.0.1 分块接口。
+去除“库待选型”事项，补充内部封装、输入所有权、图片精度与确定性 key 编码约定。
+格式能力维持已定的静态局部网格子集；附件中的节点层级扩展没有自动纳入本轮范围。
+本次仍仅修改设计、Roadmap 与本记录；未修改 vcpkg 清单、安装库或声明已链接验证。
+本次补充基线为 7c6fea9。执行 check-spec.ps1，Path 限定 assets-importers.md、assets-runtime.md、
+本记录与 roadmap.md，4 个文档/61 个本地链接及元数据检查通过；git diff --check 通过。
+
 ## 下一步
 
 下一项为 M4.1.1：先固定 meta v1/登记候选的公共类型与边界，再实现定向身份/Project 适配用例。
@@ -105,3 +121,4 @@ M4.1 重点为身份、Project 和文件失败保护；M4.2 为数据与 assetc�
 
 - 2026-09-22T18:20:46+08:00：创建 M4 设计与分节安排。
 - 2026-09-22T18:29:00+08:00：完成兼容边界审阅、路线/索引同步和定向文档检查。
+- 2026-09-22T18:51:42+08:00：确定 fastgltf/stb_image/PicoSHA2，核验固定基线、补充接入边界并通过定向文档检查。

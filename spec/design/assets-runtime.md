@@ -1,7 +1,7 @@
 ---
 module: assets-runtime
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-22T18:29:00+08:00"
+updated_at: "2026-09-22T18:51:42+08:00"
 status: draft
 ---
 
@@ -25,8 +25,8 @@ GPU 上传、渲染资源和 GPU Ready 留到 M7。资产准备不修改实体�
 | --- | --- | --- |
 | assets/types（已有） | dk::asset_types | 持久 ID/种类/引用，继续仅依赖 Core |
 | assets/data | dk::asset_data | 不可变 CPU 网格/材质/纹理值；依赖 types、math |
-| assets/importers | dk::asset_importers | 源文件到 CPU 数据；依赖 data、IO，私有解析/解码依赖 |
-| assets/runtime | dk::asset_runtime | 元数据目录、缓存、加载请求/发布；按阶段依赖 types/data、IO、importers、jobs |
+| assets/importers | dk::asset_importers | 源文件到 CPU 数据；依赖 data、IO，私有 fastgltf/stb_image |
+| assets/runtime | dk::asset_runtime | 元数据目录、缓存、加载请求/发布；按阶段依赖 types/data、IO、importers、jobs，私有 PicoSHA2 |
 | framework/services、operations | dk::asset_services、dk::asset_operations | Project 与资产目录适配、命令注册；复用现有服务分层 |
 
 资产底层不依赖 Scene、Commands、Vulkan 或 Editor。AssetService 从 ProjectDescription 构造
@@ -65,6 +65,10 @@ GPU 上传、渲染资源和 GPU Ready 留到 M7。资产准备不修改实体�
 `rename_source`；名称在 M4.1 落实头文件时固定。输入/输出均为 dk 值类型与 Result，
 不暴露 JSON 或导入器内部对象。目录快照携带会话 ID 和单调 catalog revision，更新需要匹配两者。
 
+三方库和固定基线核验集中见 [选型说明](assets-importers.md#已确定的三方库与基线)。
+PicoSHA2 在 M4.1.2 首次用于恢复记录的文件摘要，M4.3 复用同一个内部 Sha256 封装；
+先放在 assets/runtime 实现侧，不为尚无调用者的通用 hash 模块创建空 target。
+
 ### 兼容与提交点
 
 已有无 meta 的 M2 工程仍可做文件校验和场景保存/加载。进入 M4 托管链路时必须显式登记：
@@ -87,7 +91,14 @@ GPU 上传、渲染资源和 GPU Ready 留到 M7。资产准备不修改实体�
 
 缓存按输入内容寻址，计划 key 为以下规范化输入的 SHA-256：缓存格式版本、导入器实现版本、
 支持的契约版本、settings、源字节摘要、按稳定顺序排列的依赖 URI/字节摘要，以及输出 ID 映射。
-不使用 mtime/大小作为唯一正确性依据。散列实现的具体依赖在 M4.3.1 开工核验后确定。
+不使用 mtime/大小作为唯一正确性依据。散列实现确定为 PicoSHA2，输出固定 32 字节摘要，
+对外文本采用小写十六进制。CacheKey 表示输入版本，不能替代或重新生成 AssetId。
+
+摘要包装支持分块输入，复用 hash256_one_by_one 的 process/finish 接口，块间检查 IO 错误和取消；
+对已读取输入快照分块消费，避免为散列再复制整份数据，也不能重读另一版本后给旧产物盖上新摘要。
+构建输入描述采用带类型/长度边界的确定性编码，固定字段与依赖顺序，数值表示在 M4.3.1 固定；
+禁止无分隔地拼接字符串，不将时间戳、线程完成顺序或进程地址混入 key。
+依据：[PicoSHA2 1.0.1 分块接口](https://github.com/okdshin/PicoSHA2/blob/v1.0.1/README.md)。
 
 M4 的源依赖为 buffer/图片文件，不递归解释任意其他资产工程。按需请求时重新核验依赖；
 缺失或损坏、设置/源内容/导入器变化、产物版本不兼容均不能命中有效缓存。首版不做目录监视。
@@ -126,6 +137,7 @@ generation 不回绕；新结果只在所属目录会话和 generation 均匹配
 
 - M4.1：身份往返、冲突、合法重命名和每个文件提交点失败；Project v1 与旧无 meta 工程兼容。
 - M4.3：逐项改变 key 输入、仅修改图片、损坏/删除缓存、写入中断；失败保留旧索引且 ID 不变。
+  摘要封装首次落地时验证已知向量、空输入及分块/一次性结果一致，缓存编码测试区分不同字段边界。
 - M4.4：复用请求、取消/完成竞争、旧代晚到、卸载后旧句柄、会话切换、CPU-only 生命周期。
 
 CPU 产物 manifest 在 M4.2.2 固定，缓存索引/预算和恢复记录格式在所属小节先补充再实现；这些细节不阻塞

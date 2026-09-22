@@ -1,7 +1,7 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-22T18:29:00+08:00"
+updated_at: "2026-09-22T18:51:42+08:00"
 status: draft
 ---
 
@@ -14,9 +14,55 @@ status: draft
 [0020](../development/0020-m4-development-plan.md)。
 
 `dk::asset_importers` 依赖 asset_data、IO；解析器、图像解码和 JSON 为 PRIVATE 依赖。
-解析和图片解码复用三方库，不手写通用 glTF 或 PNG/JPEG 解码器。M4.2.1 开工时核验当前
-vcpkg baseline 的可用版本、许可证、CMake target 和最小依赖再选择；本次不修改清单或下载库。
+按用户选型，glTF/GLB 使用 fastgltf，PNG/JPEG 使用 stb_image，缓存摘要使用 PicoSHA2。
+库选型已确定；实际安装、链接与功能测试在使用它们的实施小节完成，本次只更新设计。
 导入器使用引擎提供的字节/依赖读取入口，不能绕过路径、大小限制自行访问网络或任意文件。
+
+## 已确定的三方库与基线
+
+已读取本机 vcpkg 仓库在项目 builtin-baseline
+`62159a45e18f3a9ac0548628dcaf74fcb60c6ff9` 的 baseline/port 文件，记录如下：
+
+| 用途 | 库 / vcpkg 包 | 基线记录版本 | port 声明许可证 | 接入点 |
+| --- | --- | --- | --- | --- |
+| glTF/GLB 解析 | fastgltf / fastgltf | 0.9.0 | MIT | assets/importers，PRIVATE 链接 fastgltf::fastgltf |
+| PNG/JPEG 解码 | stb_image / stb | 2024-07-29#1；stb_image 2.30 | MIT OR CC-PDDC | 导入器内部的单一 StbImageDecoder.cpp |
+| SHA-256 | PicoSHA2 / picosha2 | 1.0.1 | MIT | 资产管线内部 Sha256 封装，见运行时设计 |
+| fastgltf 的传递依赖 | simdjson / simdjson | 4.3.1 | Apache-2.0 OR MIT | 由 fastgltf port 引入 |
+
+这些是当前基线数据，不是已安装/编译通过的声明；实施时记录实际解析结果与兼容性。
+JSON 清单继续使用 nlohmann-json，ID 继续使用 stduuid，数学继续使用 Eigen；
+工作队列使用标准库。simdjson 属于导入器依赖，不替换引擎的 JSON 接口。
+
+计划 CMake 用法：fastgltf 使用 `find_package(fastgltf CONFIG REQUIRED)`；
+stb 使用 `find_package(Stb REQUIRED)` 与 `Stb_INCLUDE_DIR`，以 SYSTEM PRIVATE 添加头文件目录；
+PicoSHA2 使用 `find_path(DK_PICOSHA2_INCLUDE_DIR NAMES picosha2.h REQUIRED)`，同样仅内部包含。
+此基线的 picosha2 port 只安装头文件，没有提供可假定使用的 CMake 导出 target。
+对应模块落地时才追加其所需 vcpkg feature/自动选择逻辑，不把导入器依赖加到最小 Core 必需项。
+
+核验依据：[固定基线](https://github.com/microsoft/vcpkg/blob/62159a45e18f3a9ac0548628dcaf74fcb60c6ff9/versions/baseline.json)、
+[fastgltf port](https://github.com/microsoft/vcpkg/blob/62159a45e18f3a9ac0548628dcaf74fcb60c6ff9/ports/fastgltf/vcpkg.json)、
+[fastgltf 0.9.0 CMake](https://github.com/spnda/fastgltf/blob/v0.9.0/CMakeLists.txt)、
+[Stb 查找模块](https://github.com/microsoft/vcpkg/blob/62159a45e18f3a9ac0548628dcaf74fcb60c6ff9/ports/stb/FindStb.cmake)、
+[PicoSHA2 port](https://github.com/microsoft/vcpkg/blob/62159a45e18f3a9ac0548628dcaf74fcb60c6ff9/ports/picosha2/portfile.cmake)。
+
+## 实现封装约定
+
+fastgltf 只负责解析与 accessor 提取，输出转换为引擎拥有的 CPU 值，不将 fastgltf::Asset 放进公共接口。
+外部 buffer/图片经 IO 读取并登记依赖，再由有所有权的字节存储/BufferDataAdapter 供 accessor 使用；
+不能将尚未读取的 URI 当作已加载内存，也不让自动外部加载绕过引擎检查。Parser 按工作线程独占，
+调用工具前完成形状/范围及首版子集检查。向量首版逐分量转换到 Eigen，不假设两者内存布局相同。
+依据：[解析与线程约定](https://fastgltf.readthedocs.io/latest/overview.html)、
+[accessor/BufferDataAdapter](https://fastgltf.readthedocs.io/latest/tools.html)。
+
+stb_image 适配器仅一个翻译单元定义 STB_IMAGE_IMPLEMENTATION，同时限定 STBI_ONLY_PNG、
+STBI_ONLY_JPEG、STBI_NO_STDIO。所有输入通过 stbi_load_from_memory 解码为 RGBA8，
+先检查长度能表示为 int、图像尺寸与解码预算；16 位源图明确返回 not_supported，不静默降低精度。
+返回数据使用 RAII 释放，不把 stb 指针交给公共接口；解码层保持像素字节，颜色空间由材质绑定解释。
+不修改全局翻转设置；图片编码字节的加载与像素解码分成两个步骤。
+依据：[锁定源码的内存解码、格式宏与释放接口](https://github.com/nothings/stb/blob/f75e8d1cad7d90d72ef7a4661f1b994ef78b4e31/stb_image.h)。
+
+库能解析的特性不自动成为引擎支持项；本次选型保持下列已定义的静态 mesh 局部数据范围。
 
 ## 首版格式覆盖
 
