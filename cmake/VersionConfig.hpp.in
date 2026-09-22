@@ -1,0 +1,4 @@
+#pragma once
+
+#define DK_VERSION_STRING "@PROJECT_VERSION@"
+

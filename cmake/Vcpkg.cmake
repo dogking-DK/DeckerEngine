@@ -1,0 +1,36 @@
+include_guard(GLOBAL)
+
+if(NOT DK_USE_VCPKG)
+    if(DK_VCPKG_FEATURES)
+        message(FATAL_ERROR "DK_VCPKG_FEATURES requires DK_USE_VCPKG=ON; clear features for bootstrap builds.")
+    endif()
+    if(DEFINED VCPKG_TARGET_TRIPLET OR
+       (DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg[.]cmake$"))
+        message(FATAL_ERROR "Use a fresh build directory to disable an existing vcpkg toolchain.")
+    endif()
+    return()
+endif()
+
+set(_dk_known_features foundation scene graphics editor scripting tests)
+foreach(_dk_feature IN LISTS DK_VCPKG_FEATURES)
+    if(NOT _dk_feature IN_LIST _dk_known_features)
+        message(FATAL_ERROR "Unknown DK_VCPKG_FEATURES entry: ${_dk_feature}")
+    endif()
+endforeach()
+
+set(VCPKG_MANIFEST_MODE ON CACHE BOOL "Use the project manifest" FORCE)
+set(VCPKG_MANIFEST_FEATURES "${DK_VCPKG_FEATURES}")
+set(VCPKG_MANIFEST_NO_DEFAULT_FEATURES ON)
+
+if(NOT DEFINED CMAKE_TOOLCHAIN_FILE OR CMAKE_TOOLCHAIN_FILE STREQUAL "")
+    if(NOT DEFINED ENV{VCPKG_ROOT} OR "$ENV{VCPKG_ROOT}" STREQUAL "")
+        message(FATAL_ERROR "Set VCPKG_ROOT, supply the vcpkg toolchain, or use the windows-bootstrap preset.")
+    endif()
+    file(TO_CMAKE_PATH "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" _dk_vcpkg_toolchain)
+    set(CMAKE_TOOLCHAIN_FILE "${_dk_vcpkg_toolchain}" CACHE FILEPATH "vcpkg toolchain")
+endif()
+
+if(NOT EXISTS "${CMAKE_TOOLCHAIN_FILE}")
+    message(FATAL_ERROR "CMAKE_TOOLCHAIN_FILE does not exist: ${CMAKE_TOOLCHAIN_FILE}")
+endif()
+

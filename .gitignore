@@ -1,0 +1,25 @@
+# Build trees and generated dependency artifacts
+/out/
+/build/
+/cmake-build-*/
+/vcpkg_installed/
+/CMakeFiles/
+/CMakeCache.txt
+/Testing/
+/compile_commands.json
+*.user
+*.suo
+*.VC.db
+/.vs/
+# Local environment and editor overrides
+/CMakeUserPresets.json
+/.vscode/
+.env
+.env.*
+# Rebuildable project caches
+**/.cache/
+**/output/
+*.log
+.DS_Store
+Thumbs.db
+

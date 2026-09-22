@@ -1,0 +1,67 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "decker-engine",
+  "version-semver": "0.1.0",
+  "description": "DeckerEngine modular C++ engine",
+  "builtin-baseline": "62159a45e18f3a9ac0548628dcaf74fcb60c6ff9",
+  "dependencies": [],
+  "default-features": [],
+  "features": {
+    "foundation": {
+      "description": "Foundation libraries for future core/math/serialization modules",
+      "dependencies": [
+        "fmt",
+        "spdlog",
+        "glm",
+        "nlohmann-json"
+      ]
+    },
+    "scene": {
+      "description": "Scene ECS",
+      "dependencies": [
+        "flecs"
+      ]
+    },
+    "graphics": {
+      "description": "Vulkan device, allocator and Slang compiler/runtime",
+      "dependencies": [
+        "vulkan",
+        "vulkan-memory-allocator",
+        "shader-slang"
+      ]
+    },
+    "editor": {
+      "description": "SDL3 and ImGui desktop editor backends",
+      "dependencies": [
+        {
+          "name": "sdl3",
+          "features": [
+            "vulkan"
+          ]
+        },
+        {
+          "name": "imgui",
+          "features": [
+            "docking-experimental",
+            "sdl3-binding",
+            "vulkan-binding"
+          ]
+        }
+      ]
+    },
+    "scripting": {
+      "description": "Embedded Lua scripting",
+      "dependencies": [
+        "lua",
+        "sol2"
+      ]
+    },
+    "tests": {
+      "description": "Future unit test framework",
+      "dependencies": [
+        "catch2"
+      ]
+    }
+  }
+}
+
