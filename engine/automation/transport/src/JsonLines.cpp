@@ -5,10 +5,15 @@
 namespace dk
 {
 int run_json_lines(Runtime &runtime, std::istream &input, std::ostream &output, std::ostream &diagnostics,
-                   bool auto_guard)
+                   bool auto_guard, bool persistent)
 {
+    if (persistent && auto_guard)
+    {
+        diagnostics << "auto-guard is not permitted for persistent streams\n";
+        return 2;
+    }
     bool failed = false;
-    for (;;)
+    while (!runtime.stopping())
     {
         std::string line;
         bool oversized = false, received = false;
@@ -46,6 +51,6 @@ int run_json_lines(Runtime &runtime, std::istream &input, std::ostream &output, 
             }
         }
     }
-    return failed ? 1 : 0;
+    return !persistent && failed ? 1 : 0;
 }
 } // namespace dk

@@ -1,7 +1,7 @@
 ---
 module: automation-protocol
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-09-22T13:50:31+08:00"
+updated_at: "2026-09-22T14:05:59+08:00"
 status: accepted
 ---
 
@@ -19,8 +19,9 @@ named params 为当前命令配置，数组 params 返回 -32602。缺失 params
 支持 1–128 个元素的 JSON-RPC batch 数组，按顺序执行，返回非通知响应数组；空数组无效。
 这与 scene.transaction 不同：协议 batch 不提供原子性。
 
-成功响应为 {jsonrpc:"2.0",id,result:{value:<command-result>}}；M3.5 将在 result/data 增加同步任务信息。
+成功响应为 {jsonrpc:"2.0",id,result:{task_id,status:"succeeded",value:<command-result>}}（M3.5）。
 错误为 {jsonrpc:"2.0",id,error:{code,message,data?}}，data 含 engine_code、engine_name、context。
+若已进入实际命令分派，data 额外包含 task_id、status:"failed"；协议级错误不分配任务。
 未知方法 -32601、参数错误 -32602、内部错误 -32603；业务 invalid_state=-32002、not_found=-32003、
 io_error=-32004、not_supported=-32005、conflict=-32007。未知方法先于参数 schema 校验。
 
@@ -31,4 +32,8 @@ UTF-8 JSON Lines：每个非空行一个对象或 batch，支持 CRLF，纯空�
 参数/命令/JSON 错误可恢复；资源异常不伪装成可恢复业务错误。
 
 验证完整/通知/混合 batch、ID 及 envelope、严格解析、stdout/stderr、错误码和跨进程状态；
-具体 stdio 停止和 task 保留策略在 M3.5 开始前补充。
+M3.5 stdio 使用完全相同的请求/响应格式，客户端从 result.value.state（或返回的直接 state）
+取得 guard 后执行下一次编辑。tasks.get 的 id 为任务 UUID；JSON-RPC id 仅用于匹配响应。
+持续服务遇到可恢复错误继续，EOF/shutdown 退出 0；--auto-guard 在 stdio 模式拒绝，退出 2。
+shutdown 所在协议 batch 会完成其余元素的错误响应，然后一次刷新并关闭；随后各行不再读取。
+任务终态和缓存定义见 [Runtime](runtime.md)。

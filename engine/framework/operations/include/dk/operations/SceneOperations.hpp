@@ -4,6 +4,7 @@
 
 namespace dk
 {
+[[nodiscard]] Json document_state_schema();
 [[nodiscard]] Json document_state_json(DocumentState state);
 [[nodiscard]] Json edit_guard_json(EditGuard guard);
 [[nodiscard]] Result<EditGuard> parse_edit_guard(const Json &value);

@@ -108,3 +108,59 @@ TEST_CASE("JSON line transport drains oversized input and handles final lines an
     rejected.setstate(std::ios::badbit);
     REQUIRE(run_json_lines(*p.runtime, valid, rejected, diagnostics) == 3);
 }
+
+TEST_CASE("synchronous task IDs expose terminal status and bounded retention")
+{
+    Protocol p;
+    auto success = p.call(request("runtime.capabilities"));
+    REQUIRE(success["result"]["status"] == "succeeded");
+    REQUIRE(success["result"]["value"]["async_tasks"] == false);
+    auto first_id = success["result"]["task_id"];
+    REQUIRE(TaskId::parse(first_id.get<std::string>()));
+    auto metadata = p.call(request("tasks.get", {{"id", first_id}}))["result"]["value"];
+    REQUIRE(metadata["method"] == "runtime.capabilities");
+    REQUIRE(metadata["document"].is_null());
+    auto failure = p.call(request("scene.query"));
+    REQUIRE(failure["error"]["data"]["status"] == "failed");
+    auto failed_id = failure["error"]["data"]["task_id"];
+    metadata = p.call(request("tasks.get", {{"id", failed_id}}))["result"]["value"];
+    REQUIRE(metadata["error_code"] == static_cast<unsigned>(ErrorCode::invalid_state));
+    REQUIRE(metadata["status"] == "failed");
+    REQUIRE_FALSE(p.call(request("missing"))["error"].contains("data"));
+    for (int i = 0; i < 260; ++i)
+    {
+        auto r = dispatch_json_rpc(*p.runtime, request("runtime.capabilities"));
+        REQUIRE_FALSE(r.failed);
+    }
+    auto list = p.call(request("tasks.list"))["result"]["value"];
+    REQUIRE(list.size() == 256);
+    REQUIRE(p.call(request("tasks.get", {{"id", first_id}}))["error"]["code"] == -32003);
+    p.call(request("scene.new"));
+    auto changed = p.call(request("entity.create"), true);
+    metadata = p.call(request("tasks.get", {{"id", changed["result"]["task_id"]}}))["result"]["value"];
+    REQUIRE(metadata["document"]["revision"] == 1);
+}
+
+TEST_CASE("stdio EOF recovers errors and shutdown refuses later batch mutations")
+{
+    Protocol p;
+    std::istringstream input("{\n" + request("runtime.capabilities").dump() + "\n");
+    std::ostringstream output, diagnostics;
+    REQUIRE(run_json_lines(*p.runtime, input, output, diagnostics, false, true) == 0);
+    REQUIRE(diagnostics.str().empty());
+    Json batch = Json::array({request("runtime.shutdown"), request("scene.new")});
+    auto results = p.call(batch);
+    REQUIRE(results[0]["result"]["value"]["stopping"] == true);
+    REQUIRE(results[1]["error"]["code"] == -32002);
+    REQUIRE_FALSE(results[1]["error"]["data"].contains("task_id"));
+    REQUIRE(p.runtime->stopping());
+    REQUIRE_FALSE(p.runtime->dispatch("commands.list", Json::object()));
+    Protocol notification;
+    auto stop = request("runtime.shutdown");
+    stop.erase("id");
+    std::istringstream queued(stop.dump() + "\n" + request("scene.new").dump());
+    std::ostringstream no_response;
+    REQUIRE(run_json_lines(*notification.runtime, queued, no_response, diagnostics, false, true) == 0);
+    REQUIRE(no_response.str().empty());
+    REQUIRE(queued.peek() == '{');
+}

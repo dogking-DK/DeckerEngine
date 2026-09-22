@@ -123,6 +123,7 @@ Json document_state_json(DocumentState s)
             {"dirty", s.dirty},
             {"entity_count", s.entity_count}};
 }
+Json document_state_schema() { return state_schema(); }
 Json edit_guard_json(EditGuard g)
 {
     return {{"document_id", g.document_id.to_string()}, {"revision", g.revision}};

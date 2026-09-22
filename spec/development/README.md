@@ -18,5 +18,6 @@
 | 0014 | [场景服务与编辑操作](0014-scene-services.md) | application-services、foundation-core | completed |
 | 0015 | [事务与撤销重做](0015-transactions-history.md) | application-services、scene | completed |
 | 0016 | [CPU Runtime 与 CLI 批处理](0016-cpu-runtime-cli.md) | runtime、automation-protocol | completed |
+| 0017 | [持续 stdio 与交付 A](0017-stdio-delivery-a.md) | runtime、automation-protocol | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

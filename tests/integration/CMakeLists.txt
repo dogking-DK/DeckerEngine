@@ -5,6 +5,13 @@ if(TARGET dk_run)
         PASS_REGULAR_EXPRESSION "DeckerEngine ${_dk_version_regex}")
 endif()
 if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
+    find_program(DK_POWERSHELL NAMES pwsh powershell REQUIRED)
+    add_test(NAME dk.runtime.stdio_interactive
+        COMMAND "${DK_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass
+            -File "${CMAKE_CURRENT_SOURCE_DIR}/RuntimeStdioTest.ps1"
+            -Runner "$<TARGET_FILE:dk_run>"
+            -WorkDir "${CMAKE_CURRENT_BINARY_DIR}/test-artifacts/$<CONFIG>/runtime/stdio")
+    set_tests_properties(dk.runtime.stdio_interactive PROPERTIES TIMEOUT 60)
     foreach(case IN ITEMS roundtrip errors)
         add_test(NAME dk.runtime.batch_${case}
             COMMAND "${CMAKE_COMMAND}"

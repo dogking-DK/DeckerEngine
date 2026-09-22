@@ -49,22 +49,33 @@ RpcOutcome single(Runtime &runtime, const Json &request, bool auto_guard)
     const auto params = request.value("params", Json::object());
     if (!params.is_object())
         return error(-32602, "Named object parameters required");
-    auto result = runtime.dispatch(method, params, auto_guard);
-    if (!result)
+    auto execution = runtime.dispatch(method, params, auto_guard);
+    if (!execution || !execution->result)
     {
-        const auto &e = result.error();
+        const auto &e = execution ? execution->result.error() : execution.error();
         const int code =
             e.code == ErrorCode::invalid_argument
                 ? -32602
                 : (e.code == ErrorCode::internal_error ? -32603 : -32000 - static_cast<int>(e.code));
-        return error(code, e.message,
-                     Json{{"engine_code", static_cast<unsigned>(e.code)},
-                          {"engine_name", error_code_name(e.code)},
-                          {"context", e.context}});
+        Json data{{"engine_code", static_cast<unsigned>(e.code)},
+                  {"engine_name", error_code_name(e.code)},
+                  {"context", e.context}};
+        if (execution)
+        {
+            data["task_id"] = execution->task_id.to_string();
+            data["status"] = "failed";
+        }
+        return error(code, e.message, std::move(data));
     }
     if (notification)
         return {{}, false};
-    return {Json{{"jsonrpc", "2.0"}, {"id", id}, {"result", {{"value", std::move(*result)}}}}, false};
+    return {Json{{"jsonrpc", "2.0"},
+                 {"id", id},
+                 {"result",
+                  {{"value", std::move(*execution->result)},
+                   {"task_id", execution->task_id.to_string()},
+                   {"status", "succeeded"}}}},
+            false};
 }
 } // namespace
 RpcOutcome dispatch_json_rpc(Runtime &runtime, const Json &request, bool auto_guard)

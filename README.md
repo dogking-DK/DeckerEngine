@@ -9,7 +9,8 @@
 M3.1 已提供独立命令注册表、参数/结果 schema 校验及 commands.list / commands.describe。
 M3.2 通过 dk::scene_services 和 dk::scene_operations 提供会话管理、场景编辑、查询与保存。
 M3.3 提供事务与有界历史；M3.4 的 dk-run 支持无窗口 CPU 批处理和 JSON-RPC。
-渲染、物理、编辑器、IPC 和脚本模块尚未实现。
+M3.5 已接入持续 stdio、同步任务查询与正常关闭，达到交付 A。
+渲染、物理、编辑器、网络/命名管道 IPC 和脚本模块尚未实现。
 
 ## 目录
 
@@ -31,7 +32,7 @@ DeckerEngine/
 │   ├── render/                # data、resources、passes、pipelines
 │   ├── physics/               # API、CPU/GPU 求解器
 │   ├── framework/             # commands、services、operations、runtime
-│   ├── automation/            # protocol、transport、client、server
+│   ├── automation/            # JSON-RPC、JSON Lines；网络和 SDK 预留
 │   ├── scripting/             # API、Lua
 │   └── editor/                # model、interaction、widgets、panels
 ├── apps/                      # runner CPU CLI；editor、ctl 预留
@@ -49,7 +50,7 @@ DeckerEngine/
     └── templates/             # 两类文档模板
 ```
 
-仅真实模块建立 CMake target；engine 管理 foundation/core/math/io、assets/types、scene 和 framework/commands，
+仅真实模块建立 CMake target；engine 管理 foundation、assets/types、scene、framework 和 automation，
 apps 管理 runner。其他空目录通过 .gitkeep 留存，开发模块时再增加 CMakeLists。
 
 ## CPU 批处理
@@ -64,7 +65,7 @@ New-Item -ItemType Directory -Force out/demo | Out-Null
 
 第一进程用一个事务创建父子实体和变换，分别保存 scene.json/project.json；第二进程重新加载并查询。
 输入 UTF-8 JSON Lines，每行一个 JSON-RPC 2.0 请求或 1–128 项协议 batch；通知没有响应。
-stdout 每行一个 JSON 响应，命令返回值在 result.value，stderr 仅诊断。
+stdout 每行一个 JSON 响应，result 含 task_id、status 和命令返回值 value，stderr 仅诊断。
 --auto-guard 显式允许离线顺序脚本为省略 guard 的命令注入当前状态，显式 guard 始终保留。
 默认仍要求编辑 guard，协议 batch 与 scene.transaction 的原子事务不同。
 
@@ -80,6 +81,33 @@ ctest --test-dir out/build/windows-runtime-cpu -C Debug --output-on-failure
 ```
 
 Release 替换配置名。该配置只装配 stduuid、Eigen、flecs、JSON，未链接窗口/GPU。
+
+## 持续 stdio 服务
+
+```powershell
+.\out\build\windows-dev\bin\Debug\dk-run.exe --project-root out/demo --stdio
+```
+
+从 stdin 逐行发送 UTF-8 JSON-RPC，进程立即刷新每条响应；不必关闭 stdin。
+可先发送下面两行，查看能力和创建场景：
+
+```jsonl
+{"jsonrpc":"2.0","id":1,"method":"runtime.capabilities"}
+{"jsonrpc":"2.0","id":2,"method":"scene.new"}
+```
+
+读取第二条响应的 result.value，其中 document_id/revision 构成下一次编辑的 guard。
+每次编辑完成后用返回的 state 更新 guard；stdio 不允许 --auto-guard。
+commands.list / commands.describe 提供实际注册能力和参数/结果 schema。
+
+所有操作同步完成；成功为 result.status=succeeded，已分派命令失败在 error.data 返回 task_id/status=failed。
+tasks.list 枚举最近 256 个已完成任务，tasks.get({id:任务UUID}) 查询元数据；不保留大结果，进程重启后清空。
+JSON-RPC 请求 id 用于关联响应，task_id 用于查询执行记录。无异步 wait/cancel 能力。
+runtime.shutdown 在输出响应后正常关闭，也可关闭 stdin；stdio 的可恢复请求错误不会改变正常退出码 0。
+启动错误仍为 2，致命流/资源错误为 3；输出失败时应查询场景状态，不能据此假定编辑未执行。
+
+完整交互及重启验收见 [RuntimeStdioTest.ps1](tests/integration/RuntimeStdioTest.ps1)，
+协议定义和限制见 [automation-protocol](spec/design/automation-protocol.md)。
 
 ## 命令层独立验证
 

@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-09-22T14:05:00+08:00"
+updated_at: "2026-09-22T14:17:51+08:00"
 status: accepted
 ---
 
@@ -25,6 +25,8 @@ M1.5 Windows 安全保存已完成，见 [0007](development/0007-atomic-file-sav
 M1.6 CPU 集成验收已完成，见 [0008](development/0008-foundation-integration.md)，M1 全部子阶段完成。
 M2.1–M2.4 已完成：flecs 文档、组件层级、工程/资产引用和 JSON 安全持久化；
 最终验收见 [0012](development/0012-scene-persistence.md)。
+M3.1–M3.5 已完成：统一命令、场景服务、内存事务/撤销重做、CPU CLI/stdio 和同步任务，
+交付 A 最终验收见 [0017](development/0017-stdio-delivery-a.md)。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作，暂不安排复杂并行与性能优化。
@@ -41,7 +43,7 @@ M2.1–M2.4 已完成：flecs 文档、组件层级、工程/资产引用和 JSO
 | M0 工程骨架 | 可配置、编译和测试的基础工程；spec 流程 | 无 | 已完成 |
 | M1 Foundation 最小基础 | 错误、日志、稳定 ID、数学约定、文件 IO | M0 | 已完成，M1.1–M1.6 均验收；Windows 本地文件范围 |
 | M2 场景文档 | 实体、变换、层级、资产引用、保存与重载 | M1 | 已完成（M2.1–M2.4） |
-| M3 命令与 CPU Runtime | CLI/stdio 创建、修改、查询、保存场景 | M2 | 进行中 |
+| M3 命令与 CPU Runtime | CLI/stdio 创建、修改、查询、保存场景 | M2 | 已完成（M3.1–M3.5，交付 A） |
 | M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3 | 待开始 |
 | M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、最小呈现 | M1 | 待开始 |
 | M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 待开始 |
@@ -56,7 +58,7 @@ M9 的 Lua 命令绑定在 M3 后可提前做；若调整次序，仍需满足�
 
 三个可单独交付的节点：
 
-- **A：M3 完成。** 无窗口、无 GPU，通过结构化命令生成场景并保存、重载。
+- **A：M3 完成，已验收。** 无窗口、无 GPU，通过结构化命令生成场景并保存、重载。
 - **B：M7 完成。** 从磁盘资产和场景得到可核验的离屏图像，AI 可以等待任务并检查结果。
 - **C：M8 完成。** 编辑器和外部 CLI 操作同一套场景服务，保存后可在 runner 重现画面。
 
@@ -173,7 +175,7 @@ M9、M10 将这套基础扩展为可脚本化的渲染与物理实验平台。
 | M3.2 | 场景服务与编辑操作 | M3.1 | 命令完成实体和层级编辑，过期 revision 被拒绝 | 已完成，见 [0014](development/0014-scene-services.md) |
 | M3.3 | 事务与撤销重做 | M3.2 | 一组内存编辑原子提交或回滚，撤销/重做保持状态 | 已完成，见 [0015](development/0015-transactions-history.md) |
 | M3.4 | CPU Runtime 与 CLI 批处理 | M3.3 | 无窗口进程可创建、保存、重启并查询场景 | 已完成，见 [0016](development/0016-cpu-runtime-cli.md) |
-| M3.5 | 持续 stdio 协议 | M3.4 | JSON-RPC 请求/错误/退出码、日志分离及同步任务状态；交付 A | 待开始 |
+| M3.5 | 持续 stdio 协议 | M3.4 | JSON-RPC 请求/错误/退出码、日志分离及同步任务状态；交付 A | 已完成，见 [0017](development/0017-stdio-delivery-a.md) |
 
 **先写设计：** `commands.md`、`application-services.md`、
 `runtime.md`、`automation-protocol.md`。
@@ -428,14 +430,16 @@ Debug/Release 配置通过。既有符号链接测试因权限跳过，其他平
 M2.1–M2.4 已按连续授权完成，每节均先设计、单独记录、验证和详细本地提交。
 默认 Debug/Release 各 128 通过、1 项既有权限跳过；无日志/runner/示例配置各 104 通过、1 跳过；
 无日志/runner/Catch2 CPU 示例配置各 16/16。快照精度、旧 revision 保存和失败状态保护均通过。
-用户已授权 M3 全部小节，继续逐节设计、留档、测试和详细本地提交。
+用户授权的 M3 全部小节已逐节设计、留档、测试并详细本地提交。
 M3.1 已完成：默认 Debug/Release 各 133 通过、1 既有权限跳过；独立命令层各 15/15。
 M3.2 已完成：默认 Debug/Release 各 137 通过、1 既有权限跳过；独立命令层各 16/16。
 M3.3 已完成：默认 Debug/Release 各 143 通过、1 既有权限跳过，原子事务与有界历史通过。
 M3.4 已完成：默认 Debug/Release 各 149 通过、1 既有权限跳过；独立 CPU Runtime 各 3/3，bootstrap 各 1/1。
-下一项为 **M3.5 持续 stdio 协议**；本次范围止于 M3.5，不自动启动 M4。
+M3.5 已完成：最终默认 Debug/Release 各 152 通过、1 既有权限跳过；独立 CPU Runtime 各 4/4，
+bootstrap 各 1/1。真实持续 stdio 在 stdin 打开时即时响应、保存/关闭/EOF/重启均通过，交付 A 完成。
+下一项为 **M4.1 资产身份与导入契约**；本次范围止于 M3.5，不自动启动 M4。
 
-当前下一可用开发编号为 **0017**；实际开工时重新扫描
+当前下一可用开发编号为 **0018**；实际开工时重新扫描
 [开发目录](development/README.md)，取最大编号加一。
 仅在实际开发开始时创建新编号记录；子阶段状态和验收证据在本文件持续维护。
 

@@ -2,6 +2,10 @@
 #ifdef DK_RUN_WITH_RUNTIME
 #include <dk/automation/JsonLines.hpp>
 #include <fstream>
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 #endif
 #include <filesystem>
 #include <iostream>
@@ -17,6 +21,7 @@ int run(const std::vector<std::filesystem::path> &args)
         std::cout << "DeckerEngine CPU runner\nUsage: dk-run [--help | --version]\n";
 #ifdef DK_RUN_WITH_RUNTIME
         std::cout << "       dk-run --project-root ROOT --batch FILE [--auto-guard]\n";
+        std::cout << "       dk-run --project-root ROOT --stdio\n";
 #endif
         return 0;
     }
@@ -27,7 +32,7 @@ int run(const std::vector<std::filesystem::path> &args)
     }
 #ifdef DK_RUN_WITH_RUNTIME
     std::filesystem::path root, batch;
-    bool auto_guard = false;
+    bool auto_guard = false, stdio = false;
     for (std::size_t i = 0; i < args.size(); ++i)
     {
         if (args[i] == "--project-root" && root.empty() && i + 1 < args.size())
@@ -36,15 +41,17 @@ int run(const std::vector<std::filesystem::path> &args)
             batch = args[++i];
         else if (args[i] == "--auto-guard" && !auto_guard)
             auto_guard = true;
+        else if (args[i] == "--stdio" && !stdio)
+            stdio = true;
         else
         {
             std::cerr << "Invalid arguments. Use dk-run --help.\n";
             return 2;
         }
     }
-    if (root.empty() || batch.empty())
+    if (root.empty() || (stdio == !batch.empty()) || (stdio && auto_guard))
     {
-        std::cerr << "--project-root and --batch are required.\n";
+        std::cerr << "Use --project-root with exactly one of --batch/--stdio; --auto-guard is batch-only.\n";
         return 2;
     }
     auto runtime = dk::Runtime::create(root);
@@ -53,6 +60,15 @@ int run(const std::vector<std::filesystem::path> &args)
         std::cerr << runtime.error().message << '\n';
         return 2;
     }
+#ifdef _WIN32
+    if (_setmode(_fileno(stdout), _O_BINARY) == -1 || (stdio && _setmode(_fileno(stdin), _O_BINARY) == -1))
+    {
+        std::cerr << "Cannot configure binary protocol streams.\n";
+        return 3;
+    }
+#endif
+    if (stdio)
+        return dk::run_json_lines(**runtime, std::cin, std::cout, std::cerr, false, true);
     std::ifstream input(batch, std::ios::binary);
     if (!input)
     {
