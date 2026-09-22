@@ -6,4 +6,4 @@
 | project-foundation | [工程基础](project-foundation.md) | accepted | Git、目录、CMake、vcpkg、构建探针与留档 |
 
 后续模块开始开发时先新建设计并加入此表；架构总览中的规划不等于模块已实现。
-
+阶段目标和先后顺序见 [开发 Roadmap](../roadmap.md)，它不替代模块专项设计。

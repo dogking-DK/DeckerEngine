@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T09:09:41+08:00"
+updated_at: "2026-09-22T09:29:25+08:00"
 status: accepted
 ---
 
@@ -78,12 +78,13 @@ ECS 计划用 flecs，内嵌脚本计划用 Lua/sol2，外部自动化计划用 
 
 ## 后续设计顺序
 
-工程基础 → Foundation/资产身份 → Scene/序列化 → Commands/服务/自动化 →
-Vulkan Device/Shader → GPU Graph → Render Pass/运行时 → Editor → Physics/脚本扩展。
+工程基础 → Foundation/资产身份 → Scene/序列化 → Commands/服务/CPU Runtime →
+资产加载/导入 → Vulkan Device/Shader → GPU Graph → 场景渲染 → Editor/IPC →
+脚本自动化 → Physics 实验。
 可以按需求调整，但在编写模块实现前完成对应专项设计和编号开发记录。
+阶段依赖、交付节点和验收条件以 [开发 Roadmap](../roadmap.md) 为准。
 
 ## 相关记录
 
 - [工程基础设计](project-foundation.md)
 - [0001 工程初始化](../development/0001-project-bootstrap.md)
-

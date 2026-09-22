@@ -5,6 +5,7 @@
 - [设计目录](design/README.md)：当前有效的模块边界、接口、数据与取舍。
 - [开发目录](development/README.md)：按编号排列的实际变更、验证结果和交接信息。
 - [架构总览](design/architecture.md)
+- [开发 Roadmap](roadmap.md)：阶段依赖、交付物、验收条件和近期任务。
 - [工程基础设计](design/project-foundation.md)
 - [设计模板](templates/design.md) / [开发记录模板](templates/development.md)
 - [开发留档 skill](../.agents/skills/decker-spec-workflow/SKILL.md)
@@ -48,4 +49,3 @@
 只读分析不要求新建开发记录。纯文档修订直接维护对应文档及修改时间，
 若它属于正在进行的开发任务则同步该任务记录。细小修复可写短记录，
 但不能省去相关设计检查。文档不替代验证，也不把计划写成已实现结果。
-

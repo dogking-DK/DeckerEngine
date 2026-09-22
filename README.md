@@ -36,6 +36,7 @@ DeckerEngine/
 ├── projects/demo/             # 示例资产、场景、脚本预留
 ├── tests/                     # unit、integration、gpu、replay
 └── spec/
+    ├── roadmap.md             # 阶段路线、依赖与验收条件
     ├── design/                # 每个模块的设计文档
     ├── development/           # 按编号排序的开发记录
     └── templates/             # 两类文档模板
@@ -135,6 +136,7 @@ ctest --test-dir out/build/local -C Debug --output-on-failure
 设计和开发文档都记录创建时间与最后修改时间，创建时间保持不变。
 
 - [整体架构](spec/design/architecture.md)
+- [开发 Roadmap](spec/roadmap.md)
 - [工程基础设计](spec/design/project-foundation.md)
 - [0001 工程初始化记录](spec/development/0001-project-bootstrap.md)
 - [decker-spec-workflow skill](.agents/skills/decker-spec-workflow/SKILL.md)
@@ -143,6 +145,5 @@ skill 位于仓库 `.agents/skills`，符合
 [OpenAI 官方 skill 文档](https://learn.chatgpt.com/docs/build-skills)中的仓库发现规则；
 根 AGENTS.md 同时提供固定读取入口。
 
-构建输出和个人环境被 .gitignore 排除。当前仓库已初始化 main 分支，
-初始文件尚未提交，未配置远程仓库。
-
+构建输出和个人环境被 .gitignore 排除。仓库已初始化 main 分支；
+当前变更和远程配置分别通过 git status 和 git remote -v 查看。
