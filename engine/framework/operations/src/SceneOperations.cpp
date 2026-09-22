@@ -206,7 +206,7 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
                    CommandEffect effect, CommandHandler handler)
     {
         return registry.add({std::move(name), std::move(description), std::move(parameters),
-                             std::move(result), effect, false},
+                             std::move(result), effect, effect == CommandEffect::memory_edit},
                             std::move(handler));
     };
     auto r = add("scene.new", "Create a new scene session",
@@ -274,12 +274,17 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
             });
     if (!r)
         return r;
-    auto offset_schema = revision_schema(); offset_schema["maximum"] = 10000;
-    auto limit_schema = revision_schema(); limit_schema["minimum"] = 1; limit_schema["maximum"] = 256;
+    auto offset_schema = revision_schema();
+    offset_schema["maximum"] = 10000;
+    auto limit_schema = revision_schema();
+    limit_schema["minimum"] = 1;
+    limit_schema["maximum"] = 256;
     r = add("scene.query", "Query a page of entities ordered by persistent ID",
             schema::object({{"offset", offset_schema}, {"limit", limit_schema}}),
-            schema::object({{"state", state_schema()}, {"entities", schema::array(entity_schema(), 0, 256)},
-                            {"offset", offset_schema}, {"has_more", schema::boolean()}},
+            schema::object({{"state", state_schema()},
+                            {"entities", schema::array(entity_schema(), 0, 256)},
+                            {"offset", offset_schema},
+                            {"has_more", schema::boolean()}},
                            {"state", "entities", "offset", "has_more"}),
             CommandEffect::query,
             [&service](const Json &p) -> Result<Json>
@@ -299,7 +304,9 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
                     entities.push_back(std::move(*entity));
                 }
                 return Json{{"state", document_state_json(*service.state())},
-                            {"entities", std::move(entities)}, {"offset", offset}, {"has_more", end < ids.size()}};
+                            {"entities", std::move(entities)},
+                            {"offset", offset},
+                            {"has_more", end < ids.size()}};
             });
     if (!r)
         return r;
@@ -363,6 +370,86 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
                     return Json{{"state", document_state_json(*service.state())},
                                 {"created_id", *result ? Json((*result)->to_string()) : Json(nullptr)}};
                 });
+        if (!r)
+            return r;
+    }
+    r = add(
+        "scene.transaction", "Commit an atomic batch of undoable entity edits",
+        schema::object({{"guard", guard_schema()},
+                        {"commands", schema::array(schema::object({{"method", schema::string(1, 96)},
+                                                                   {"params", {{"type", "object"}}}},
+                                                                  {"method", "params"}),
+                                                   1, 128)}},
+                       {"guard", "commands"}),
+        schema::object({{"state", state_schema()},
+                        {"created_ids", schema::array(schema::nullable(id_schema()), 1, 128)}},
+                       {"state", "created_ids"}),
+        CommandEffect::memory_edit,
+        [&service, &registry](const Json &p) -> Result<Json>
+        {
+            auto guard = parse_edit_guard(p["guard"]);
+            if (!guard)
+                return std::unexpected(guard.error());
+            std::vector<SceneEdit> edits;
+            for (const auto &item : p["commands"])
+            {
+                const auto name = item["method"].get<std::string>();
+                if (name != "entity.create" && name != "entity.delete" && name != "entity.set_name" &&
+                    name != "entity.set_transform" && name != "entity.set_parent" &&
+                    name != "entity.set_assets")
+                    return std::unexpected(Error{
+                        ErrorCode::invalid_argument, "Command is not permitted in a transaction", {name}});
+                auto params = item["params"];
+                if (params.contains("guard"))
+                    return std::unexpected(Error{ErrorCode::invalid_argument,
+                                                 "Transaction items must not supply their own guard"});
+                params["guard"] = p["guard"];
+                auto valid = registry.validate_parameters(name, params);
+                if (!valid)
+                    return std::unexpected(valid.error().with_context(name));
+                auto edit = decode_scene_edit(name, params);
+                if (!edit)
+                    return std::unexpected(edit.error().with_context(name));
+                edits.push_back(std::move(*edit));
+            }
+            auto result = service.edit_batch(*guard, edits);
+            if (!result)
+                return std::unexpected(result.error());
+            Json ids = Json::array();
+            for (const auto &id : *result)
+                ids.push_back(id ? Json(id->to_string()) : Json(nullptr));
+            return Json{{"state", document_state_json(*service.state())}, {"created_ids", std::move(ids)}};
+        });
+    if (!r)
+        return r;
+    r = add("history.status", "Query bounded undo and redo history", schema::object(),
+            schema::object({{"undo_count", revision_schema()},
+                            {"redo_count", revision_schema()},
+                            {"logical_bytes", revision_schema()}},
+                           {"undo_count", "redo_count", "logical_bytes"}),
+            CommandEffect::query,
+            [&service](const Json &) -> Result<Json>
+            {
+                const auto h = service.history_status();
+                return Json{{"undo_count", h.undo_count},
+                            {"redo_count", h.redo_count},
+                            {"logical_bytes", h.logical_bytes}};
+            });
+    if (!r)
+        return r;
+    for (const bool redo : {false, true})
+    {
+        r = registry.add({redo ? "history.redo" : "history.undo",
+                          redo ? "Redo the next memory edit" : "Undo the last memory edit",
+                          schema::object({{"guard", guard_schema()}}, {"guard"}), state_schema(),
+                          CommandEffect::memory_edit, false},
+                         [&service, redo](const Json &p) -> Result<Json>
+                         {
+                             auto guard = parse_edit_guard(p["guard"]);
+                             if (!guard)
+                                 return std::unexpected(guard.error());
+                             return state_result(service, redo ? service.redo(*guard) : service.undo(*guard));
+                         });
         if (!r)
             return r;
     }

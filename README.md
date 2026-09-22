@@ -61,6 +61,11 @@ scene.query 支持 offset（默认 0）和 limit（默认 128，最多 256），
 变换使用 translation[3]、rotation[x,y,z,w]、scale[3]，查询 world_matrix 按行展开。
 场景和工程清单分别保存。详见 [应用服务设计](spec/design/application-services.md)。
 
+`scene.transaction` 接收一个 guard 和 1–128 条 `{method, params}`，内部只允许六种 entity 编辑，
+内层不传 guard；失败整体回滚，成功只增加一次 revision。单条编辑也进入同一历史机制。
+`history.status` 查询历史，`history.undo/redo` 使用最新 guard；撤销重做保留实体 ID 并继续递增 revision。
+历史默认最多 64 单元/32 MiB 逻辑载荷，保存保留历史，new/load 清空；文件保存不支持撤销。
+
 `dk::commands` 的 `CommandRegistry` 注册参数/结果 schema、effect 和同步 handler。
 `commands.list` 枚举能力，`commands.describe` 返回完整契约；未知命令、参数错误和
 handler 契约错误分别返回结构化 Error。支持的 schema 子集与上限见

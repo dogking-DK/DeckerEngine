@@ -1,11 +1,20 @@
 ---
 module: scene
 created_at: "2026-09-22T12:05:49+08:00"
-updated_at: "2026-09-22T13:06:18+08:00"
+updated_at: "2026-09-22T13:42:16+08:00"
 status: accepted
 ---
 
 # SceneDocument 设计
+
+## M3.3 内存内容提交
+
+SceneSnapshot 增加 same_content 与 logical_bytes；比较忽略 revision/来源，仅比较 SceneId 和有序实体值。
+SceneDocument::stage(snapshot) 复制内容进入独立 ECS，revision=0、dirty=true、独立快照来源；不检查磁盘资源。
+apply_snapshot(snapshot) 要求同 SceneId，内容相同返回 false；否则先完整构建/验证候选世界，再交换 Impl，
+保留当前快照来源、revision 加 1、dirty=true。溢出或验证失败保持原状态。
+此 API 支持 [服务事务](application-services.md)，不允许把历史 revision 直接写回真实文档。
+快照只能从有效文档产生；持久化 codec 和来源检查维持原边界。
 
 ## 目标与阶段
 

@@ -16,5 +16,6 @@
 | 0012 | [场景序列化与安全重载](0012-scene-persistence.md) | scene、project-format、foundation-io | completed |
 | 0013 | [命令注册与能力发现](0013-command-registry.md) | commands | completed |
 | 0014 | [场景服务与编辑操作](0014-scene-services.md) | application-services、foundation-core | completed |
+| 0015 | [事务与撤销重做](0015-transactions-history.md) | application-services、scene | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

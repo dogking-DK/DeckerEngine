@@ -1,7 +1,7 @@
 ---
 module: application-services
 created_at: "2026-09-22T13:28:00+08:00"
-updated_at: "2026-09-22T13:38:00+08:00"
+updated_at: "2026-09-22T13:42:16+08:00"
 status: accepted
 ---
 
@@ -38,7 +38,7 @@ revision 和 dirty 沿用 Scene 语义；无变化操作不递增。new/load、�
 TRS 为 translation[3]、rotation[x,y,z,w]、scale[3]；所有数值有限，服务/Scene 完成语义校验。
 set_assets 先确认注册种类和文件，再执行单次修改。JSON schema 禁止未知字段。
 编辑使用 Edit variant（创建/删除/改名/变换/父级/资产），为 M3.3 批量事务复用。
-本节每条编辑对应一次 Scene 调用；事务、历史和 Runtime 留待后续小节。
+M3.2 每条编辑对应一次 Scene 调用；M3.3 改为统一的内存事务，Runtime 留待后续小节。
 服务活得比引用它的 registry 更久；不存在全局单例和后台线程。
 
 ## 验证
@@ -47,3 +47,24 @@ set_assets 先确认注册种类和文件，再执行单次修改。JSON schema 
 检查 stale revision、会话 ID 更换、失败加载、非叶删除、循环父级、缺失资源均不破坏状态。
 默认 Debug/Release 回归，独立命令配置保持可构建。
 记录：[0014](../development/0014-scene-services.md)。
+
+## M3.3 事务和历史
+
+edit_batch(guard, edits) 限 1–128 条。先快照并构建独立暂存文档，在暂存文档顺序编辑；
+中途失败丢弃暂存结果，真实文档和历史不变。成功将内容作为一个提交，真实 revision 只加 1。
+暂存文档 revision 从 0 起，避免真实 revision 临近上限时批内多条操作错误耗尽计数。
+内容完全相同的事务是 no-op，保留 revision、dirty、redo；创建后删除也可成为 no-op。
+分配、历史预算计算和结果列表准备发生在真实文档提交前；提交点仅交换已验证内容和预建历史。
+
+历史保存 before/after 不可变内存快照，undo/redo 恢复内容但 revision 继续单调递增，dirty=true。
+保存不清历史，new/load 清空历史；新编辑丢弃 redo。撤销不读取外部文件，缺失资产不影响内存回滚，
+再次保存时仍检查资源。历史默认最多 64 单元、32 MiB 逻辑载荷，计入 before/after 的实体、名称和资产值，
+不声称是分配器/进程内存硬上限。超限时淘汰最旧 undo；单个单元超预算则修改前拒绝。
+HistoryLimits 可设更小的正数用于宿主控制和预算测试，不能超过默认上限。
+
+scene.transaction(guard,commands[{method,params}]) 只接受六种 entity 内存编辑，params 不含内层 guard；
+复用注册表 schema 和同一个 decode_scene_edit，再交服务原子执行。返回 state 和逐条 created_ids（非创建为 null）。
+禁止保存、查询、new/load、history 和嵌套事务；命令发现标明 entity 编辑和事务 undoable。
+history.status 返回 undo_count/redo_count/logical_bytes；history.undo/redo 要求 guard，空栈返回 invalid_state。
+验证失败回滚、稳定 ID、层级恢复、no-op/redo、资产失踪后撤销、预算淘汰、revision 上限和保存状态。
+记录：[0015](../development/0015-transactions-history.md)。

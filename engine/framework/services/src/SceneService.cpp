@@ -4,12 +4,16 @@
 
 namespace dk
 {
-Result<std::unique_ptr<SceneService>> SceneService::create(const std::filesystem::path &root)
+Result<std::unique_ptr<SceneService>> SceneService::create(const std::filesystem::path &root,
+                                                           HistoryLimits limits)
 {
+    if (limits.entries == 0 || limits.entries > 64 || limits.logical_bytes == 0 ||
+        limits.logical_bytes > 32 * 1024 * 1024)
+        return std::unexpected(Error{ErrorCode::invalid_argument, "History limits exceed supported range"});
     auto paths = ProjectPaths::create(root);
     if (!paths)
         return std::unexpected(paths.error());
-    return std::unique_ptr<SceneService>(new SceneService(std::move(*paths)));
+    return std::unique_ptr<SceneService>(new SceneService(std::move(*paths), limits));
 }
 Result<const SceneDocument *> SceneService::document() const
 {
@@ -64,6 +68,8 @@ Result<void> SceneService::new_scene(ProjectDescription description, std::option
     project_ = std::move(owned_project);
     document_ = std::move(*document);
     document_id_ = *id;
+    undo_.clear();
+    redo_.clear();
     return {};
 }
 Result<void> SceneService::load(const std::filesystem::path &manifest, std::optional<EditGuard> guard)
@@ -84,6 +90,8 @@ Result<void> SceneService::load(const std::filesystem::path &manifest, std::opti
     project_ = std::move(owned_project);
     document_ = std::move(*document);
     document_id_ = *id;
+    undo_.clear();
+    redo_.clear();
     return {};
 }
 Result<void> SceneService::save(EditGuard guard)
@@ -168,9 +176,107 @@ Result<std::optional<EntityId>> SceneService::apply_edit(SceneDocument &doc, con
 }
 Result<std::optional<EntityId>> SceneService::edit(EditGuard guard, const SceneEdit &edit)
 {
+    auto result = edit_batch(guard, std::span{&edit, std::size_t{1}});
+    if (!result)
+        return std::unexpected(result.error());
+    return result->front();
+}
+Result<std::vector<std::optional<EntityId>>> SceneService::edit_batch(EditGuard guard,
+                                                                      std::span<const SceneEdit> edits)
+{
     auto valid = check_guard(guard);
     if (!valid)
         return std::unexpected(valid.error());
-    return apply_edit(*document_, edit);
+    if (edits.empty() || edits.size() > 128)
+        return std::unexpected(Error{ErrorCode::invalid_argument, "Transaction requires 1-128 edits"});
+    auto before = document_->snapshot();
+    if (!before)
+        return std::unexpected(before.error());
+    auto staged = SceneDocument::stage(*before);
+    if (!staged)
+        return std::unexpected(staged.error());
+    std::vector<std::optional<EntityId>> results;
+    results.reserve(edits.size());
+    for (std::size_t i = 0; i < edits.size(); ++i)
+    {
+        auto result = apply_edit(**staged, edits[i]);
+        if (!result)
+            return std::unexpected(result.error().with_context("transaction index=" + std::to_string(i)));
+        results.push_back(*result);
+    }
+    auto after = (*staged)->snapshot();
+    if (!after)
+        return std::unexpected(after.error());
+    if (before->same_content(*after))
+        return results;
+    const auto bytes = before->logical_bytes() + after->logical_bytes();
+    if (bytes > limits_.logical_bytes)
+        return std::unexpected(Error{ErrorCode::invalid_state, "Transaction exceeds history byte budget"});
+    auto entry =
+        std::make_shared<const HistoryEntry>(HistoryEntry{std::move(*before), std::move(*after), bytes});
+    auto prepared = undo_;
+    prepared.push_back(entry);
+    std::size_t total = 0;
+    for (const auto &value : prepared)
+        total += value->bytes;
+    while (prepared.size() > limits_.entries || total > limits_.logical_bytes)
+    {
+        total -= prepared.front()->bytes;
+        prepared.erase(prepared.begin());
+    }
+    auto applied = document_->apply_snapshot(entry->after);
+    if (!applied)
+        return std::unexpected(applied.error());
+    if (*applied)
+    {
+        undo_.swap(prepared);
+        redo_.clear();
+    }
+    return results;
+}
+HistoryStatus SceneService::history_status() const noexcept
+{
+    std::size_t bytes = 0;
+    for (const auto &entry : undo_)
+        bytes += entry->bytes;
+    for (const auto &entry : redo_)
+        bytes += entry->bytes;
+    return {undo_.size(), redo_.size(), bytes};
+}
+Result<void> SceneService::history_step(EditGuard guard, bool redo)
+{
+    auto valid = check_guard(guard);
+    if (!valid)
+        return valid;
+    const auto &source = redo ? redo_ : undo_;
+    if (source.empty())
+        return std::unexpected(Error{ErrorCode::invalid_state, redo ? "Nothing to redo" : "Nothing to undo"});
+    auto prepared_undo = undo_;
+    auto prepared_redo = redo_;
+    auto entry = source.back();
+    if (redo)
+    {
+        prepared_redo.pop_back();
+        prepared_undo.push_back(entry);
+    }
+    else
+    {
+        prepared_undo.pop_back();
+        prepared_redo.push_back(entry);
+    }
+    auto applied = document_->apply_snapshot(redo ? entry->after : entry->before);
+    if (!applied)
+        return std::unexpected(applied.error());
+    undo_.swap(prepared_undo);
+    redo_.swap(prepared_redo);
+    return {};
+}
+Result<void> SceneService::undo(EditGuard guard)
+{
+    return history_step(guard, false);
+}
+Result<void> SceneService::redo(EditGuard guard)
+{
+    return history_step(guard, true);
 }
 } // namespace dk

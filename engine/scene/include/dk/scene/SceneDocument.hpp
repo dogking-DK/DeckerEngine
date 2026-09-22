@@ -42,6 +42,10 @@ public:
     [[nodiscard]] Result<void> set_asset_references(EntityId id, std::vector<AssetReference> references);
     [[nodiscard]] Result<void> validate() const;
     [[nodiscard]] Result<SceneSnapshot> snapshot() const;
+    // Independent staging world, revision zero; no resource file reads.
+    [[nodiscard]] static Result<std::unique_ptr<SceneDocument>> stage(const SceneSnapshot& snapshot);
+    // Atomic content replacement, preserving identity/provenance and advancing revision.
+    [[nodiscard]] Result<bool> apply_snapshot(const SceneSnapshot& snapshot);
 
 private:
     friend struct detail::ScenePersistence;

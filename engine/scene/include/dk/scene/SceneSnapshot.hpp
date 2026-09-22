@@ -12,6 +12,8 @@ public:
     [[nodiscard]] SceneId id() const noexcept { return id_; }
     [[nodiscard]] std::uint64_t revision() const noexcept { return revision_; }
     [[nodiscard]] std::span<const EntityData> entities() const noexcept { return entities_; }
+    [[nodiscard]] bool same_content(const SceneSnapshot& other) const noexcept;
+    [[nodiscard]] std::size_t logical_bytes() const noexcept;
 private:
     friend class SceneDocument;
     friend struct detail::ScenePersistence;

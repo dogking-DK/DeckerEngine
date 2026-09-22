@@ -337,6 +337,38 @@ Result<SceneSnapshot> SceneDocument::snapshot() const
     return SceneSnapshot{id(), revision(), std::move(data), impl_->origin};
 }
 
+bool SceneSnapshot::same_content(const SceneSnapshot& other) const noexcept
+{
+    if (id_ != other.id_ || entities_.size() != other.entities_.size()) return false;
+    for (std::size_t i = 0; i < entities_.size(); ++i) {
+        const auto& a = entities_[i]; const auto& b = other.entities_[i];
+        if (a.id != b.id || a.name != b.name || !same_trs(a.local, b.local) || a.parent != b.parent || a.assets != b.assets) return false;
+    }
+    return true;
+}
+std::size_t SceneSnapshot::logical_bytes() const noexcept
+{
+    auto size = sizeof(SceneSnapshot) + entities_.size() * sizeof(EntityData);
+    for (const auto& entity : entities_) size += entity.name.size() + entity.assets.size() * sizeof(AssetReference);
+    return size;
+}
+Result<std::unique_ptr<SceneDocument>> SceneDocument::stage(const SceneSnapshot& snapshot)
+{
+    return detail::ScenePersistence::build(snapshot.id(), 0, {snapshot.entities().begin(), snapshot.entities().end()});
+}
+Result<bool> SceneDocument::apply_snapshot(const SceneSnapshot& desired)
+{
+    if (desired.id() != id()) return scene_error(ErrorCode::invalid_argument, "Snapshot belongs to another scene", "SceneDocument.apply_snapshot");
+    auto current = snapshot(); if (!current) return std::unexpected(current.error());
+    if (current->same_content(desired)) return false;
+    auto editable = impl_->can_edit(); if (!editable) return std::unexpected(editable.error());
+    auto candidate = detail::ScenePersistence::build(id(), revision() + 1, {desired.entities().begin(), desired.entities().end()});
+    if (!candidate) return std::unexpected(candidate.error());
+    (*candidate)->impl_->origin = impl_->origin;
+    impl_.swap((*candidate)->impl_);
+    return true;
+}
+
 Result<std::unique_ptr<SceneDocument>> detail::ScenePersistence::build(
     SceneId id, std::uint64_t revision, std::vector<EntityData> entities)
 {

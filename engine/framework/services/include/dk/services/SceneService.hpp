@@ -48,10 +48,22 @@ struct SetAssets
     std::vector<AssetReference> assets;
 };
 using SceneEdit = std::variant<CreateEntity, DeleteEntity, SetName, SetTransform, SetParent, SetAssets>;
+struct HistoryLimits
+{
+    std::size_t entries = 64;
+    std::size_t logical_bytes = 32 * 1024 * 1024;
+};
+struct HistoryStatus
+{
+    std::size_t undo_count;
+    std::size_t redo_count;
+    std::size_t logical_bytes;
+};
 class SceneService final
 {
   public:
-    [[nodiscard]] static Result<std::unique_ptr<SceneService>> create(const std::filesystem::path &root);
+    [[nodiscard]] static Result<std::unique_ptr<SceneService>> create(const std::filesystem::path &root,
+                                                                      HistoryLimits limits = {});
     [[nodiscard]] Result<DocumentState> state() const;
     [[nodiscard]] Result<const SceneDocument *> document() const;
     [[nodiscard]] Result<void> check_guard(EditGuard guard) const;
@@ -61,9 +73,25 @@ class SceneService final
     [[nodiscard]] Result<void> save(EditGuard guard);
     [[nodiscard]] Result<void> save_manifest(EditGuard guard, const std::filesystem::path &manifest);
     [[nodiscard]] Result<std::optional<EntityId>> edit(EditGuard guard, const SceneEdit &edit);
+    [[nodiscard]] Result<std::vector<std::optional<EntityId>>> edit_batch(EditGuard guard,
+                                                                          std::span<const SceneEdit> edits);
+    [[nodiscard]] HistoryStatus history_status() const noexcept;
+    [[nodiscard]] Result<void> undo(EditGuard guard);
+    [[nodiscard]] Result<void> redo(EditGuard guard);
 
   private:
-    explicit SceneService(ProjectPaths paths) : paths_{std::move(paths)} {}
+    explicit SceneService(ProjectPaths paths, HistoryLimits limits)
+        : paths_{std::move(paths)}, limits_{limits}
+    {
+    }
+    struct HistoryEntry
+    {
+        SceneSnapshot before;
+        SceneSnapshot after;
+        std::size_t bytes;
+    };
+    using History = std::vector<std::shared_ptr<const HistoryEntry>>;
+    [[nodiscard]] Result<void> history_step(EditGuard guard, bool redo);
     [[nodiscard]] Result<void> check_replacement(std::optional<EditGuard> guard) const;
     [[nodiscard]] Result<std::optional<EntityId>> apply_edit(SceneDocument &document,
                                                              const SceneEdit &edit) const;
@@ -71,5 +99,8 @@ class SceneService final
     std::unique_ptr<Project> project_;
     std::unique_ptr<SceneDocument> document_;
     DocumentId document_id_;
+    HistoryLimits limits_;
+    History undo_;
+    History redo_;
 };
 } // namespace dk
