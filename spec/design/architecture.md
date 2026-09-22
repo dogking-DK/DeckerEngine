@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T09:29:25+08:00"
+updated_at: "2026-09-22T10:55:54+08:00"
 status: accepted
 ---
 
@@ -14,9 +14,10 @@ status: accepted
 `dk/` 开头，CMake 实体 target 为 `dk_*`，别名为 `dk::*`，
 构建选项和宏以 `DK_` 开头，程序以 `dk-` 开头。
 
-技术方向：C++23、Vulkan、Slang、SDL3、ImGui、CMake、vcpkg；
+技术方向：C++23、Eigen、Vulkan、Slang、SDL3、ImGui、CMake、vcpkg；
 ECS 计划用 flecs，内嵌脚本计划用 Lua/sol2，外部自动化计划用 Python。
-本次只实现工程基础；其余模块在开始开发前另写专项设计。
+已实现工程骨架、Core 错误/日志/稳定 ID、Eigen 基础数学和仿射 Transform。
+下一阶段为文件 IO；其余模块在开始开发前另写专项设计。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，
@@ -83,8 +84,13 @@ ECS 计划用 flecs，内嵌脚本计划用 Lua/sol2，外部自动化计划用 
 脚本自动化 → Physics 实验。
 可以按需求调整，但在编写模块实现前完成对应专项设计和编号开发记录。
 阶段依赖、交付节点和验收条件以 [开发 Roadmap](../roadmap.md) 为准。
+每个里程碑细分为可独立验收的 Mx.y 小阶段，默认单次开发只推进一个。
 
 ## 相关记录
 
 - [工程基础设计](project-foundation.md)
+- [Core 基础设计](foundation-core.md)
+- [Eigen 数学设计](foundation-math.md)
+- [0004 Eigen 与小阶段划分](../development/0004-eigen-math-foundation.md)
+- [0005 Transform](../development/0005-transform.md)
 - [0001 工程初始化](../development/0001-project-bootstrap.md)

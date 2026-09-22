@@ -1,4 +1,7 @@
 #include <dk/core/Version.hpp>
+#ifdef DK_RUN_WITH_LOGGING
+#include <dk/core/Log.hpp>
+#endif
 
 #include <iostream>
 #include <string_view>
@@ -16,7 +19,13 @@ int main(int argc, char* argv[])
         return 0;
     }
 
+#ifdef DK_RUN_WITH_LOGGING
+    auto logger = dk::Logger::create();
+    if (logger && (*logger)->write(dk::LogLevel::error, "runner",
+            "Unsupported arguments. Use dk-run --help.")) {
+        return 2;
+    }
+#endif
     std::cerr << "Unsupported arguments. Use dk-run --help.\n";
     return 2;
 }
-

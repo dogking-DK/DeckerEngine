@@ -4,16 +4,23 @@
   "version-semver": "0.1.0",
   "description": "DeckerEngine modular C++ engine",
   "builtin-baseline": "62159a45e18f3a9ac0548628dcaf74fcb60c6ff9",
-  "dependencies": [],
+  "dependencies": [
+    "stduuid"
+  ],
   "default-features": [],
   "features": {
     "foundation": {
-      "description": "Foundation libraries for future core/math/serialization modules",
+      "description": "Core logging and planned serialization dependencies",
       "dependencies": [
         "fmt",
         "spdlog",
-        "glm",
         "nlohmann-json"
+      ]
+    },
+    "math": {
+      "description": "Eigen math foundation",
+      "dependencies": [
+        "eigen3"
       ]
     },
     "scene": {
@@ -57,11 +64,10 @@
       ]
     },
     "tests": {
-      "description": "Future unit test framework",
+      "description": "Catch2 unit test framework",
       "dependencies": [
         "catch2"
       ]
     }
   }
 }
-

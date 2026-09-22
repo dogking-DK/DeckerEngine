@@ -1,3 +1,5 @@
 add_subdirectory(core)
-# math, io, jobs and metadata will become targets as their modules are implemented.
-
+if(DK_BUILD_MATH)
+    add_subdirectory(math)
+endif()
+# io, jobs and metadata will become targets as their modules are implemented.

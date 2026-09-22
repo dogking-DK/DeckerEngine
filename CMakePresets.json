@@ -32,9 +32,15 @@
     {
       "name": "windows-bootstrap",
       "inherits": "windows-base",
-      "displayName": "Windows bootstrap (no external dependencies)",
+      "displayName": "Windows bootstrap (minimal stduuid dependency)",
+      "binaryDir": "${sourceDir}/out/build/windows-bootstrap-stduuid",
       "cacheVariables": {
-        "DK_USE_VCPKG": "OFF",
+        "DK_USE_VCPKG": "ON",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+        "VCPKG_HOST_TRIPLET": "x64-windows",
+        "DK_BUILD_LOGGING": "OFF",
+        "DK_BUILD_MATH": "OFF",
+        "DK_BUILD_UNIT_TESTS": "OFF",
         "DK_VCPKG_FEATURES": ""
       }
     },
@@ -52,7 +58,7 @@
       "inherits": "windows-dev",
       "displayName": "Prepare all planned desktop dependencies",
       "cacheVariables": {
-        "DK_VCPKG_FEATURES": "foundation;scene;graphics;editor;scripting;tests"
+        "DK_VCPKG_FEATURES": "foundation;math;scene;graphics;editor;scripting;tests"
       }
     },
     {
@@ -168,4 +174,3 @@
     }
   ]
 }
-

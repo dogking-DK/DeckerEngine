@@ -1,5 +1,8 @@
 add_executable(dk_run src/main.cpp)
 set_target_properties(dk_run PROPERTIES OUTPUT_NAME "dk-run")
 target_link_libraries(dk_run PRIVATE dk::core)
+if(DK_BUILD_LOGGING)
+    target_link_libraries(dk_run PRIVATE dk::logging)
+    target_compile_definitions(dk_run PRIVATE DK_RUN_WITH_LOGGING=1)
+endif()
 dk_target_defaults(dk_run)
-

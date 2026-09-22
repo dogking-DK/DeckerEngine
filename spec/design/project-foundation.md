@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T09:09:41+08:00"
+updated_at: "2026-09-22T10:42:53+08:00"
 status: accepted
 ---
 
@@ -10,7 +10,8 @@ status: accepted
 ## 目标与范围
 
 在空目录初始化 main 分支 Git 仓库，建立可扩展模块目录、可重复构建入口、
-vcpkg 清单和技术留档流程。当前交付 core 版本查询和 dk-run 构建探针，
+vcpkg 清单和技术留档流程。本设计记录工程基础，Core 能力增量见
+[Core 设计](foundation-core.md)。工程提供 core 版本查询和 dk-run 构建探针，
 以验证 C++23 静态库到可执行程序的真实链接；尚不实现引擎场景运行功能。
 
 ## 构建和目录
@@ -23,15 +24,18 @@ engine/foundation/core 是首个真实静态库 `dk_core`，别名 `dk::core`。
 
 `dk-run --version` 输出 DeckerEngine 和版本；
 无参数或 `--help` 输出当前骨架用法；不支持的参数在 stderr 报错并返回 2。
-该程序当前只链接 dk::core。其他应用、模块和工具只预留目录并注明未实现。
+该程序链接 dk::core，启用日志时额外链接 dk::logging。
+其他应用、模块和工具只预留目录并注明未实现。
 
 CMake 最低 3.28，C++23 target 使用要求向消费者传播，禁用编译器扩展。
-项目警告函数只作用于自身 target，不污染依赖。构建目录为 `out/build/<preset>`，
-按配置放置 bin/lib。禁止源码内构建。CTest 使用不依赖第三方的 runner 冒烟验证。
+项目警告函数只作用于自身 target，不污染依赖。默认构建目录为 `out/build/<preset>`，
+bootstrap 的迁移目录见下文；按配置放置 bin/lib。禁止源码内构建。
+CTest 保留 runner 冒烟验证，开发预设额外运行 Catch2 行为测试。
 
 ## CMake Presets
 
-- `windows-bootstrap`：Visual Studio 18 2026 / x64，关闭 vcpkg，仅验证基础链路；
+- `windows-bootstrap`：Visual Studio 18 2026 / x64，vcpkg 只安装必需的 stduuid，
+  关闭日志/数学/单元测试，构建目录为 out/build/windows-bootstrap-stduuid；
   此生成器要求 CMake 4.2 或更新。
 - `windows-dev`：相同生成器，开启 vcpkg 并选择 foundation feature。
 - `windows-desktop-deps`：准备后续桌面功能依赖；安装依赖不表示模块已实现。
@@ -45,7 +49,12 @@ CMake 最低 3.28，C++23 target 使用要求向消费者传播，禁用编译�
 使用 manifest mode，固定 builtin-baseline 为
 `62159a45e18f3a9ac0548628dcaf74fcb60c6ff9`（初始化时本机干净的 vcpkg HEAD）。
 依赖 feature 分为 foundation、scene、graphics、editor、scripting、tests，
-默认清单不安装任何第三方库。当前 core 构建探针只使用 C++ 标准库。
+清单默认安装 Core 必需的 stduuid，可选库仍按 feature 选择。
+stduuid 在 Core 实现中使用，不暴露到公开头。
+数学模块使用独立 math feature 安装 eigen3，启用 DK_BUILD_MATH 时自动补充该组；
+foundation 中移除未使用的 glm，保留日志及后续 JSON 依赖。
+dk::math 的公开 Eigen 类型要求 PUBLIC 传递 Eigen3::Eigen，详见
+[数学设计](foundation-math.md)。bootstrap 显式关闭数学，保持最小依赖构建。
 
 `DK_VCPKG_FEATURES` 在首次 `project()` 前映射到
 `VCPKG_MANIFEST_FEATURES`，并验证 feature 名。关闭 vcpkg 时不能选择 feature；
@@ -70,12 +79,21 @@ Slang 库；未来跨平台 shaderc 编译工具需单独处理 host 工具，�
 
 ## 验证计划与取舍
 
+当前工程在初始化骨架上按 [Core 设计](foundation-core.md) 扩展：
+dk::core 增加错误和 ID，dk::logging 为可选日志 target。
+DK_BUILD_LOGGING、DK_BUILD_MATH 和 DK_BUILD_UNIT_TESTS 默认开启；
+vcpkg 自动补充对应依赖组。windows-bootstrap 显式关闭三者，保留仅依赖 stduuid 的最小探针；
+开发预设使用 Catch2 增加真实行为测试，并实际链接日志依赖。
+以下原始骨架验证仍保留，Core 增量验证见 [0002](../development/0002-foundation-core.md)，
+stduuid 迁移及最小预设调整见 [0003](../development/0003-stduuid-migration.md)。
+Eigen 数学、math feature 与阶段细分见 [0004](../development/0004-eigen-math-foundation.md)。
+
 运行 configure/build/CTest，检查版本与错误参数行为；检查预设 JSON、
 vcpkg feature 解析、skill 格式、文档链接及 Git 忽略项。
 真实安装受网络、编译器、缓存影响，未完成的依赖构建应如实记录；
-基础无依赖构建与完整桌面依赖验证分别记录。
+最小依赖构建与完整桌面依赖验证分别记录。
 
-暂不建立大量空静态库、不实现 Vulkan 初始化、不引入完整测试框架。
+暂不建立大量空静态库、不实现 Vulkan 初始化；Catch2 已用于当前 Core 单元测试。
 不定义安装导出/打包协议；模块 API 稳定后再设计。
 未进行完整读取的原会话后半部分不作为本次已确认事实。
 
@@ -84,4 +102,3 @@ vcpkg feature 解析、skill 格式、文档链接及 Git 忽略项。
 - [CMake Presets](https://cmake.org/cmake/help/v4.2/manual/cmake-presets.7.html)
 - [vcpkg CMake integration](https://learn.microsoft.com/en-us/vcpkg/users/buildsystems/cmake-integration)
 - [OpenAI 官方 skill 文档](https://learn.chatgpt.com/docs/build-skills)
-
