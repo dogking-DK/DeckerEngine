@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-09-22T18:51:42+08:00"
+updated_at: "2026-09-22T19:00:00+08:00"
 status: accepted
 ---
 
@@ -214,7 +214,7 @@ M9、M10 将这套基础扩展为可脚本化的渲染与物理实验平台。
 详细的 10 个实施小节、独立验收和开工决策见
 [0020 M4 开发计划](development/0020-m4-development-plan.md)。默认下一次开发仅推进 **M4.1.1**；
 后续按 M4.x.y 顺序，每节记录实际证据后再关闭父阶段。设计稿不代表代码已实现。
-三方库已确定为 fastgltf、stb_image（stb port）、PicoSHA2，当前基线版本与封装约定见
+三方库已确定为 fastgltf、stb_image（stb port）、xxHash（XXH3-128），当前基线版本与封装约定见
 [导入器设计](design/assets-importers.md#已确定的三方库与基线)。对应模块实施时接入 vcpkg/CMake 并记录实际链接验证。
 
 **验收：** 同一资产重复导入 ID 保持；合法重命名后引用仍有效；

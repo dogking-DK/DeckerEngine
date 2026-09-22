@@ -1,7 +1,7 @@
 ---
 id: "0020"
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-22T18:51:42+08:00"
+updated_at: "2026-09-22T19:00:00+08:00"
 status: completed
 design_refs:
   - ../design/assets-runtime.md
@@ -67,18 +67,18 @@ M4.1 重点为身份、Project 和文件失败保护；M4.2 为数据与 assetc�
 | 时点 | 决策及约束 |
 | --- | --- |
 | M4.1.1 | meta 公共类型和预算；确定 v1 编解码及已有 Project 记录采用规则 |
-| M4.1.2 | 多文件恢复记录精确格式、提交顺序和故障注入点；接入 PicoSHA2 摘要封装；不承诺跨文件原子性 |
+| M4.1.2 | 多文件恢复记录精确格式、提交顺序和故障注入点；接入 xxHash/XXH3-128 摘要封装；不承诺跨文件原子性 |
 | M4.2.1 | 按已定 fastgltf 选型接入并验证实际 CMake/链接；固定 CPU 数据预算 |
 | M4.2.2 | CPU 产物 manifest/二进制 v1、解码预算和离线输出参数 |
-| M4.3.1 | 复用 PicoSHA2 摘要封装，固定 key 编码/current 索引及产物 v1 的验证上限 |
+| M4.3.1 | 复用 XXH3-128 摘要封装，固定 key 编码/current 索引及产物 v1 的验证上限 |
 | M4.4.1 | 活动作业/终态/字节限额、completion 所有权、异常向宿主报告 |
 | M4.4.3 | Windows 阻塞输入的可取消读取方案；资产目录生命周期与精确命令 schema |
 
 这些选择应在所属实现开始前写回对应设计；后期实现遇到范围过大可继续细分，保留原编号。
 
-三方库选型已由用户确定为 fastgltf、stb_image、PicoSHA2，版本与许可证核验见
+三方库当前选型为 fastgltf、stb_image、xxHash（XXH3-128），版本与许可证核验见
 [设计中的选型表](../design/assets-importers.md#已确定的三方库与基线)。M4.2.2 接入 stb_image，
-M4.1.2 的恢复摘要和 M4.3 的缓存摘要复用 PicoSHA2；CPU 队列继续用标准库。
+M4.1.2 的恢复摘要和 M4.3 的缓存摘要复用 XXH3-128；CPU 队列继续用标准库。
 
 ## 本次实际变更与验证
 
@@ -100,7 +100,7 @@ M4.1.2 的恢复摘要和 M4.3 的缓存摘要复用 PicoSHA2；CPU 队列继续
 
 本记录 completed 仅表示文档任务完成。未构建引擎或运行 C++ 测试；M4 所有实现及行为验收均未执行。
 
-### 三方库选型补充
+### 初次三方库选型（摘要方案已由下文更新）
 
 按用户附件与选型意见，合并维护本记录；未新增日志编号。读取固定 vcpkg baseline 的
 versions/baseline.json、fastgltf/stb/picosha2/simdjson 的 port 清单，以及各自 CMake 安装/查找规则。
@@ -112,6 +112,18 @@ versions/baseline.json、fastgltf/stb/picosha2/simdjson 的 port 清单，以及
 本次补充基线为 7c6fea9。执行 check-spec.ps1，Path 限定 assets-importers.md、assets-runtime.md、
 本记录与 roadmap.md，4 个文档/61 个本地链接及元数据检查通过；git diff --check 通过。
 
+### 摘要方案调整为 xxHash
+
+按用户后续选择，将当前摘要方案改为 xxHash 的 XXH3-128，替换初次选型中的 PicoSHA2；
+fastgltf/stb_image 及 M4 分节保持不变。修改基线为 d28234a，继续合并维护本记录。
+核对固定 vcpkg baseline 的 xxhash 0.8.3/BSD-2-Clause、port 安装规则，以及官方 0.8.3
+CMake 导出、一次性/分块和规范编码接口。计划 PRIVATE 链接 xxHash::xxhash，不安装 xxhsum。
+固定默认算法参数、16 字节规范大端摘要/32 字符小写十六进制、算法标识及格式版本；
+未知算法的缓存按未命中处理，恢复记录明确拒绝并保留。用途为本地内容指纹，AssetId 规则不变。
+本次仅同步两份设计、Roadmap 与本记录，未修改 vcpkg/CMake、安装依赖、实现散列或测量性能。
+执行 check-spec.ps1，Path 限定上述 4 个文件，4 个文档/61 个本地链接及元数据检查通过；
+git diff --check 通过。未运行与本次文档变更无关的 C++ 全量测试。
+
 ## 下一步
 
 下一项为 M4.1.1：先固定 meta v1/登记候选的公共类型与边界，再实现定向身份/Project 适配用例。
@@ -122,3 +134,4 @@ versions/baseline.json、fastgltf/stb/picosha2/simdjson 的 port 清单，以及
 - 2026-09-22T18:20:46+08:00：创建 M4 设计与分节安排。
 - 2026-09-22T18:29:00+08:00：完成兼容边界审阅、路线/索引同步和定向文档检查。
 - 2026-09-22T18:51:42+08:00：确定 fastgltf/stb_image/PicoSHA2，核验固定基线、补充接入边界并通过定向文档检查。
+- 2026-09-22T19:00:00+08:00：按后续选型改用 xxHash/XXH3-128，补充规范编码与算法版本约定，保留初次选型历史。

@@ -1,7 +1,7 @@
 ---
 module: assets-runtime
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-22T18:51:42+08:00"
+updated_at: "2026-09-22T19:00:00+08:00"
 status: draft
 ---
 
@@ -26,7 +26,7 @@ GPU 上传、渲染资源和 GPU Ready 留到 M7。资产准备不修改实体�
 | assets/types（已有） | dk::asset_types | 持久 ID/种类/引用，继续仅依赖 Core |
 | assets/data | dk::asset_data | 不可变 CPU 网格/材质/纹理值；依赖 types、math |
 | assets/importers | dk::asset_importers | 源文件到 CPU 数据；依赖 data、IO，私有 fastgltf/stb_image |
-| assets/runtime | dk::asset_runtime | 元数据目录、缓存、加载请求/发布；按阶段依赖 types/data、IO、importers、jobs，私有 PicoSHA2 |
+| assets/runtime | dk::asset_runtime | 元数据目录、缓存、加载请求/发布；按阶段依赖 types/data、IO、importers、jobs，私有 xxHash |
 | framework/services、operations | dk::asset_services、dk::asset_operations | Project 与资产目录适配、命令注册；复用现有服务分层 |
 
 资产底层不依赖 Scene、Commands、Vulkan 或 Editor。AssetService 从 ProjectDescription 构造
@@ -66,7 +66,7 @@ GPU 上传、渲染资源和 GPU Ready 留到 M7。资产准备不修改实体�
 不暴露 JSON 或导入器内部对象。目录快照携带会话 ID 和单调 catalog revision，更新需要匹配两者。
 
 三方库和固定基线核验集中见 [选型说明](assets-importers.md#已确定的三方库与基线)。
-PicoSHA2 在 M4.1.2 首次用于恢复记录的文件摘要，M4.3 复用同一个内部 Sha256 封装；
+xxHash 的 XXH3-128 在 M4.1.2 首次用于恢复记录的文件摘要，M4.3 复用同一个内部 ContentDigest 封装；
 先放在 assets/runtime 实现侧，不为尚无调用者的通用 hash 模块创建空 target。
 
 ### 兼容与提交点
@@ -89,16 +89,25 @@ PicoSHA2 在 M4.1.2 首次用于恢复记录的文件摘要，M4.3 复用同一�
 
 ## M4.3：缓存与依赖
 
-缓存按输入内容寻址，计划 key 为以下规范化输入的 SHA-256：缓存格式版本、导入器实现版本、
+缓存按输入内容寻址，计划 key 为以下规范化输入的 XXH3-128：摘要算法标识、缓存格式版本、导入器实现版本、
 支持的契约版本、settings、源字节摘要、按稳定顺序排列的依赖 URI/字节摘要，以及输出 ID 映射。
-不使用 mtime/大小作为唯一正确性依据。散列实现确定为 PicoSHA2，输出固定 32 字节摘要，
-对外文本采用小写十六进制。CacheKey 表示输入版本，不能替代或重新生成 AssetId。
+不使用 mtime/大小作为唯一正确性依据。散列实现确定为 xxHash，采用 `XXH3_128bits` 默认参数，
+不使用随机 seed 或自定义 secret。摘要固定 16 字节，对外文本为 32 个小写十六进制字符。
+持久字节使用 `XXH128_canonicalFromHash` 生成的规范大端编码，禁止直接保存 `XXH128_hash_t` 内存；
+该编码独立于产物数值块的小端格式。CacheKey 表示输入版本，不能替代或重新生成 AssetId。
 
-摘要包装支持分块输入，复用 hash256_one_by_one 的 process/finish 接口，块间检查 IO 错误和取消；
+摘要包装支持分块输入，使用 `XXH3_128bits_reset/update/digest` 默认参数接口，与一次性计算保持一致；
+状态通过 `XXH3_createState/freeState` 配对并由 RAII 管理，检查分配/接口错误，块间检查 IO 错误和取消。
 对已读取输入快照分块消费，避免为散列再复制整份数据，也不能重读另一版本后给旧产物盖上新摘要。
 构建输入描述采用带类型/长度边界的确定性编码，固定字段与依赖顺序，数值表示在 M4.3.1 固定；
 禁止无分隔地拼接字符串，不将时间戳、线程完成顺序或进程地址混入 key。
-依据：[PicoSHA2 1.0.1 分块接口](https://github.com/okdshin/PicoSHA2/blob/v1.0.1/README.md)。
+依据：[xxHash 0.8.3 的 XXH3-128、流式与规范编码接口](https://github.com/Cyan4973/xxHash/blob/v0.8.3/xxhash.h)。
+
+缓存 manifest 与恢复记录显式保存 `hash_algorithm: "xxh3-128"` 和各自格式版本，禁止把其他算法的摘要
+当作当前摘要解释。缓存算法/版本不兼容时视为未命中并重建，保留未知条目；恢复记录算法未知时返回
+not_supported 并保留记录，不猜测文件状态或自动删除。首版不维护双摘要，也不自动切换算法。
+XXH3-128 用于本地内容变化与缓存意外损坏检测，不提供密码学抗碰撞或真实性认证；
+真实性要求若在未来出现，应另行设计。性能收益在实施时按实际资源与 IO 路径测量，当前没有工程基准结果。
 
 M4 的源依赖为 buffer/图片文件，不递归解释任意其他资产工程。按需请求时重新核验依赖；
 缺失或损坏、设置/源内容/导入器变化、产物版本不兼容均不能命中有效缓存。首版不做目录监视。
@@ -137,7 +146,8 @@ generation 不回绕；新结果只在所属目录会话和 generation 均匹配
 
 - M4.1：身份往返、冲突、合法重命名和每个文件提交点失败；Project v1 与旧无 meta 工程兼容。
 - M4.3：逐项改变 key 输入、仅修改图片、损坏/删除缓存、写入中断；失败保留旧索引且 ID 不变。
-  摘要封装首次落地时验证已知向量、空输入及分块/一次性结果一致，缓存编码测试区分不同字段边界。
+  摘要封装首次落地时验证官方已知向量、空输入、分块/一次性结果一致及规范字节/十六进制编码；
+  所属小节验证算法标识不匹配时的缓存重建/恢复拒绝，缓存编码测试区分不同字段边界。
 - M4.4：复用请求、取消/完成竞争、旧代晚到、卸载后旧句柄、会话切换、CPU-only 生命周期。
 
 CPU 产物 manifest 在 M4.2.2 固定，缓存索引/预算和恢复记录格式在所属小节先补充再实现；这些细节不阻塞
