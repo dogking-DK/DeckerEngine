@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T15:58:55+08:00"
+updated_at: "2026-09-22T16:37:39+08:00"
 status: accepted
 ---
 
@@ -43,6 +43,26 @@ CMake 最低 3.28，C++23 target 使用要求向消费者传播，禁用编译�
 项目警告函数只作用于自身 target，不污染依赖。默认构建目录为 `out/build/<preset>`，
 bootstrap 的迁移目录见下文；按配置放置 bin/lib。禁止源码内构建。
 CTest 保留 runner 冒烟验证，开发预设额外运行 Catch2 行为测试。
+
+## Visual Studio 解决方案分组
+
+解决方案通过 CMake 的 FOLDER 元数据分类，根目录显式开启 USE_FOLDERS，
+将 CMake 自动生成的 ALL_BUILD、ZERO_CHECK、RUN_TESTS 等项目归入 CMake。
+各分组目录在 add_subdirectory 前设置 CMAKE_FOLDER，由下级真实 target 继承：
+
+- engine → Engine；foundation、assets、automation、framework 分别追加
+  Foundation、Assets、Automation、Framework 子组；dk_scene 直接位于 Engine。
+- apps → Apps；当前包含 dk_run。
+- tests → Tests；包含各单元测试和 dk_log_probe，CTest 的脚本测试继续由 RUN_TESTS 执行。
+- examples → Examples；包含 Foundation 和 Scene 示例。
+- tools → Tools；当前没有真实 target，不生成空的解决方案文件夹。
+
+后续模块在对应目录创建 target 时自动继承分组；需要进一步细分时，
+在该目录以 `${CMAKE_FOLDER}/子组名` 扩展。只控制 IDE 展示，不改变 target 名称、
+编译选项、链接关系、默认构建集合或测试注册，不手改生成的 slnx/vcxproj 或 VS 个人配置。
+通过根脚本重新生成后，已打开的 VS 接受重新加载提示即可更新树形结构。
+验证生成前后的项目/依赖/配置保持一致、所有项目均归组，并检查完整与最小预设。
+本次为工程基础维护，合并记录到 [0018](../development/0018-vs2026-generation-script.md)。
 
 ## CMake Presets
 

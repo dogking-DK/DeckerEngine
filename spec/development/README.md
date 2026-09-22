@@ -19,6 +19,6 @@
 | 0015 | [事务与撤销重做](0015-transactions-history.md) | application-services、scene | completed |
 | 0016 | [CPU Runtime 与 CLI 批处理](0016-cpu-runtime-cli.md) | runtime、automation-protocol | completed |
 | 0017 | [持续 stdio 与交付 A](0017-stdio-delivery-a.md) | runtime、automation-protocol | completed |
-| 0018 | [VS2026 工程生成脚本](0018-vs2026-generation-script.md) | project-foundation | completed |
+| 0018 | [VS2026 工程生成与解决方案分组](0018-vs2026-generation-script.md) | project-foundation | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

@@ -151,6 +151,12 @@ Release 替换配置名即可；此配置不构建 Scene、Eigen、IO、窗口�
 用 VS2026 打开即可选择 x64 的 Debug/Release 配置。从其他目录调用脚本也可正常生成。
 脚本只配置工程和准备依赖；不会自动编译或打开 IDE，配置失败会返回非零退出码。
 
+解决方案按 `Engine`、`Apps`、`Tests`、`Examples` 和 `CMake` 分组。
+`Engine` 下再分 `Foundation`、`Assets`、`Automation`、`Framework`；场景库直接位于 `Engine`。
+测试程序及日志探针集中在 `Tests`，`dk_run` 位于 `Apps`，CMake 辅助项目位于 `CMake`。
+分组由 CMake 目录继承维护；未来工具 target 归入 `Tools`，空分组不会显示。
+已打开解决方案时，重新运行脚本后在 VS 接受重新加载提示；也可关闭并重新打开 `.slnx`。
+
 安装 vcpkg 并设置 `VCPKG_ROOT`；基础预设仅安装 Core 必需的 stduuid：
 
 ```powershell

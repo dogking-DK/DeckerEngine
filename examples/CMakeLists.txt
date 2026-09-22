@@ -1,3 +1,5 @@
+set(CMAKE_FOLDER "Examples")
+
 if(DK_BUILD_MATH AND DK_BUILD_IO)
     add_subdirectory(foundation)
 else()

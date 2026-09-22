@@ -1,3 +1,5 @@
+set(CMAKE_FOLDER "Engine")
+
 add_subdirectory(foundation)
 if(DK_BUILD_SCENE)
     add_subdirectory(assets)
