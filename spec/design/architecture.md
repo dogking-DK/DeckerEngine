@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T13:41:30+08:00"
+updated_at: "2026-09-22T14:05:00+08:00"
 status: accepted
 ---
 
@@ -22,6 +22,7 @@ M1 完成，M2 已接入 flecs 场景文档、组件层级、工程/资产引用
 见 [Scene 设计](scene.md)、[工程协议](project-format.md) 和 [资产类型](assets-types.md)。
 M3.1 已接入独立 [命令层](commands.md)，供后续服务和自动化共用契约。
 M3.2 [场景服务与操作层](application-services.md) 已提供会话 guard、实体编辑、分页查询与保存。
+M3.3 的内存事务/撤销重做和 M3.4 [CPU Runtime](runtime.md)、[JSON-RPC 批处理](automation-protocol.md) 已通过进程验收。
 其余模块在开始开发前另写专项设计。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话

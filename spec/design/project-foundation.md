@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T13:24:40+08:00"
+updated_at: "2026-09-22T14:02:00+08:00"
 status: accepted
 ---
 
@@ -12,7 +12,7 @@ status: accepted
 在空目录初始化 main 分支 Git 仓库，建立可扩展模块目录、可重复构建入口、
 vcpkg 清单和技术留档流程。本设计记录工程基础，Core 能力增量见
 [Core 设计](foundation-core.md)。工程提供 core 版本查询和 dk-run 构建探针，
-以验证 C++23 静态库到可执行程序的真实链接；尚不实现引擎场景运行功能。
+以验证 C++23 静态库到可执行程序的真实链接；M3.4 扩展为 CPU 场景批处理入口。
 
 ## 构建和目录
 
@@ -24,7 +24,8 @@ engine/foundation/core 是首个真实静态库 `dk_core`，别名 `dk::core`。
 
 `dk-run --version` 输出 DeckerEngine 和版本；
 无参数或 `--help` 输出当前骨架用法；不支持的参数在 stderr 报错并返回 2。
-该程序链接 dk::core，启用日志时额外链接 dk::logging。
+该程序始终链接 dk::core；FRAMEWORK 与 Scene 开启时链接 automation_transport → protocol → runtime。
+M3.4 runner 诊断直接写 stderr，不依赖可选 logging；最小 bootstrap 仍保留原功能范围。
 其他应用、模块和工具只预留目录并注明未实现。
 
 DK_BUILD_EXAMPLES 默认 ON；当前 math/io 同时启用时建立独立 dk-foundation-demo，
@@ -35,6 +36,7 @@ Scene 要求 math/io 同时开启；启用示例时增加 dk-scene-demo 及独�
 bootstrap 和独立 Foundation 配置显式关闭 Scene；README 保留最新可复现命令。
 M3.1 新增 DK_BUILD_FRAMEWORK（默认 OFF，windows-dev ON），构建独立 dk::commands；
 commands feature 仅引入 JSON，场景关闭时不反向启用 Scene/Math/IO。
+M3.4 Scene 开启时继续装配 services/operations/runtime 与 automation/protocol/transport。
 bootstrap 和独立 Foundation/Scene 验证应显式关闭 FRAMEWORK，避免继承开发预设。
 
 CMake 最低 3.28，C++23 target 使用要求向消费者传播，禁用编译器扩展。

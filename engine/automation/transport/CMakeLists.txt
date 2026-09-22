@@ -1,0 +1,5 @@
+add_library(dk_automation_transport STATIC src/JsonLines.cpp)
+add_library(dk::automation_transport ALIAS dk_automation_transport)
+target_sources(dk_automation_transport PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/automation/JsonLines.hpp)
+target_link_libraries(dk_automation_transport PUBLIC dk::automation_protocol)
+dk_target_defaults(dk_automation_transport)

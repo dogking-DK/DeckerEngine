@@ -1,0 +1,5 @@
+add_library(dk_automation_protocol STATIC src/JsonRpc.cpp)
+add_library(dk::automation_protocol ALIAS dk_automation_protocol)
+target_sources(dk_automation_protocol PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/automation/JsonRpc.hpp)
+target_link_libraries(dk_automation_protocol PUBLIC dk::runtime)
+dk_target_defaults(dk_automation_protocol)

@@ -8,6 +8,7 @@
 已接入 flecs 场景文档、组件与变换层级、工程/资产引用、JSON 快照保存和安全重载。
 M3.1 已提供独立命令注册表、参数/结果 schema 校验及 commands.list / commands.describe。
 M3.2 通过 dk::scene_services 和 dk::scene_operations 提供会话管理、场景编辑、查询与保存。
+M3.3 提供事务与有界历史；M3.4 的 dk-run 支持无窗口 CPU 批处理和 JSON-RPC。
 渲染、物理、编辑器、IPC 和脚本模块尚未实现。
 
 ## 目录
@@ -33,7 +34,7 @@ DeckerEngine/
 │   ├── automation/            # protocol、transport、client、server
 │   ├── scripting/             # API、Lua
 │   └── editor/                # model、interaction、widgets、panels
-├── apps/                      # runner（当前探针）、editor、ctl
+├── apps/                      # runner CPU CLI；editor、ctl 预留
 ├── tools/                     # assetc、shaderc
 ├── sdk/python/                # 未来外部自动化客户端
 ├── shaders/common/            # 公共 Slang 模块
@@ -50,6 +51,35 @@ DeckerEngine/
 
 仅真实模块建立 CMake target；engine 管理 foundation/core/math/io、assets/types、scene 和 framework/commands，
 apps 管理 runner。其他空目录通过 .gitkeep 留存，开发模块时再增加 CMakeLists。
+
+## CPU 批处理
+
+先按 windows-dev 构建，然后在现有工程目录执行示例：
+
+```powershell
+New-Item -ItemType Directory -Force out/demo | Out-Null
+.\out\build\windows-dev\bin\Debug\dk-run.exe --project-root out/demo --batch examples/automation/create-scene.jsonl --auto-guard
+.\out\build\windows-dev\bin\Debug\dk-run.exe --project-root out/demo --batch examples/automation/load-scene.jsonl
+```
+
+第一进程用一个事务创建父子实体和变换，分别保存 scene.json/project.json；第二进程重新加载并查询。
+输入 UTF-8 JSON Lines，每行一个 JSON-RPC 2.0 请求或 1–128 项协议 batch；通知没有响应。
+stdout 每行一个 JSON 响应，命令返回值在 result.value，stderr 仅诊断。
+--auto-guard 显式允许离线顺序脚本为省略 guard 的命令注入当前状态，显式 guard 始终保留。
+默认仍要求编辑 guard，协议 batch 与 scene.transaction 的原子事务不同。
+
+退出码：0 全部成功，1 批处理含可恢复请求错误（继续后续行），2 参数/启动文件错误，3 致命流/资源错误。
+单行上限 1 MiB，超长行排空后报告错误；详细错误映射见 [协议设计](spec/design/automation-protocol.md)。
+
+仅构建 CPU Runtime、保留进程验收而关闭日志/示例/Catch2：
+
+```powershell
+cmake --preset windows-dev -B out/build/windows-runtime-cpu -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_WARNINGS_AS_ERRORS=ON -DDK_VCPKG_FEATURES=
+cmake --build out/build/windows-runtime-cpu --config Debug
+ctest --test-dir out/build/windows-runtime-cpu -C Debug --output-on-failure
+```
+
+Release 替换配置名。该配置只装配 stduuid、Eigen、flecs、JSON，未链接窗口/GPU。
 
 ## 命令层独立验证
 

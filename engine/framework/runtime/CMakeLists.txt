@@ -1,0 +1,5 @@
+add_library(dk_runtime STATIC src/Runtime.cpp)
+add_library(dk::runtime ALIAS dk_runtime)
+target_sources(dk_runtime PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/runtime/Runtime.hpp)
+target_link_libraries(dk_runtime PUBLIC dk::scene_services dk::commands PRIVATE dk::scene_operations)
+dk_target_defaults(dk_runtime)

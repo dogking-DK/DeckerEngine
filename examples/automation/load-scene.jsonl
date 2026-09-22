@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","id":1,"method":"scene.load","params":{"manifest":"project.json"}}
+{"jsonrpc":"2.0","id":2,"method":"scene.query"}

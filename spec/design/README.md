@@ -13,6 +13,8 @@
 | project-format | [工程格式](project-format.md) | accepted | M2.3 版本清单、路径与文件诊断 |
 | commands | [命令注册](commands.md) | accepted | M3.1 schema、注册与能力发现 |
 | application-services | [场景应用服务](application-services.md) | accepted | M3.2 文档会话/命令；M3.3 事务/撤销重做 |
+| runtime | [CPU Runtime](runtime.md) | accepted | M3.4 生命周期、串行分派和 CLI |
+| automation-protocol | [自动化协议](automation-protocol.md) | accepted | M3.4 JSON-RPC、批处理和流边界 |
 
 后续模块开始开发时先新建设计并加入此表；架构总览中的规划不等于模块已实现。
 阶段目标和先后顺序见 [开发 Roadmap](../roadmap.md)，它不替代模块专项设计。
