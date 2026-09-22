@@ -19,6 +19,12 @@ CMake target 使用 dk_* / dk::*，构建选项和宏使用 DK_*，程序使用 
 
 构建和验证命令见 [README.md](README.md)。修改后执行与改动相关的验证，
 并在开发记录或交付说明中区分通过、失败与未运行的检查。
+默认只验证目标功能及直接受影响链路，不固定执行全量或 Debug/Release 双配置。
+按任务使用以下 skill，具体操作仍以模块设计和命令文档为准：
+
+- [decker-build-verify](.agents/skills/decker-build-verify/SKILL.md)：选择并执行定向构建/测试。
+- [decker-state-contracts](.agents/skills/decker-state-contracts/SKILL.md)：状态变化、提交点和失败保护。
+- [decker-command-development](.agents/skills/decker-command-development/SKILL.md)：命令实现、契约和文档同步。
 
 Git 提交使用简明标题和详细正文，说明问题/目标、主要行为和文件范围、
 相关 Mx.y/开发记录、验证命令与结果、跳过项和实际限制。不要只写一行标题，

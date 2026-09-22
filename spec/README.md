@@ -11,6 +11,21 @@
 - [设计模板](templates/design.md) / [开发记录模板](templates/development.md)
 - [开发留档 skill](../.agents/skills/decker-spec-workflow/SKILL.md)
 
+## 开发辅助 skills
+
+按任务加载，不要求每次修改使用全部 skill：
+
+| Skill | 适用范围 |
+| --- | --- |
+| [decker-build-verify](../.agents/skills/decker-build-verify/SKILL.md) | 按目标行为选择局部构建和测试，汇总实际结果 |
+| [decker-state-contracts](../.agents/skills/decker-state-contracts/SKILL.md) | 状态变化、失败保护及提交点，具体操作仍在模块设计中 |
+| [decker-command-development](../.agents/skills/decker-command-development/SKILL.md) | Commands/Operations/Services 开发与命令参考同步 |
+
+默认只验证目标功能及直接受影响链路；有实际影响依据才扩大范围，
+不为每次提交或阶段结束固定执行全量或双配置。文档检查使用
+[check-spec.ps1](../scripts/check-spec.ps1)，支持限定文件；
+构建/CTest 使用 [verify.ps1](../scripts/verify.ps1)，必须指定目标和筛选，全量需显式选择并说明原因。
+
 ## 文件和元数据
 
 设计文件使用稳定模块名：`spec/design/<module>.md`；复杂模块可分为

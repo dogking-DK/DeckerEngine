@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T16:37:39+08:00"
+updated_at: "2026-09-22T17:14:09+08:00"
 status: accepted
 ---
 
@@ -122,6 +122,28 @@ Slang 库；未来跨平台 shaderc 编译工具需单独处理 host 工具，�
 根 AGENTS.md 让后续任务先读取该 skill。
 本模块设计先落盘，再实现构建文件；开发事实持续写入
 [0001](../development/0001-project-bootstrap.md)。
+
+## 开发辅助 skills
+
+在 `.agents/skills` 增加三个按任务选择的仓库 skill，入口说明触发范围与工作方法，
+不复制模块设计或全部命令；保留既有 decker-spec-workflow 的留档粒度规则。
+
+- decker-build-verify：根据改动及直接受影响调用链选择构建目标/测试，默认单配置、局部验证。
+  scripts/verify.ps1 接收 BuildDir、Configuration（默认 Debug）、Target 和 TestRegex；
+  显式 Full+Reason 才构建/测试全部，不自行切换配置或扩展范围。
+  要求已配置构建目录；先构建指定目标，失败停止；再枚举匹配测试，零匹配报错，最后执行 CTest。
+  每次独立保存日志、JUnit 和 summary.json 到 out/verify，记录提交/工作区、所选测试及通过/失败/跳过。
+  调用者须确认 Target 覆盖所选测试程序及进程夹具；脚本不从文件名猜测依赖，也不自动配置或清理缓存。
+- decker-state-contracts：明确修改状态、成功结果、失败保护、提交点和必要案例；
+  仅将内存编辑/事务、持久化等已实践模式放入按需参考，具体操作仍归属模块设计。
+- decker-command-development：复用 Commands/Operations/Services 和现有传输，
+  同步 spec/commands 的目录、字段、guard、副作用和示例，选择受影响命令测试。
+
+scripts/check-spec.ps1 将现有临时文档检查提升为仓库脚本，检查 README/AGENTS/spec/skills
+中的本地链接、spec 元数据、开发编号及 JSON 清单；支持限定文件检查。
+这三个 skill 不新增常驻 agent、并行委派或逐次小改留档要求。
+验证采用辅助脚本的正常/失败/零匹配/跳过案例、真实局部测试及 skill 格式/链接检查。
+本组改动合并记录到 [0019](../development/0019-development-skills.md)，不推进 M4。
 
 ## 验证计划与取舍
 

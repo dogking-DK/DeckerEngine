@@ -17,12 +17,13 @@ M3.5 已接入持续 stdio、同步任务查询与正常关闭，达到交付 A�
 ```text
 DeckerEngine/
 ├── AGENTS.md                  # AI 开发入口与约定
-├── .agents/skills/             # 仓库开发留档 skill
+├── .agents/skills/             # 留档、定向验证、状态契约与命令开发 skills
 ├── CMakeLists.txt
 ├── CMakePresets.json
 ├── generate-vs2026.bat        # 生成 VS2026 x64 开发工程
 ├── vcpkg.json                 # 依赖基线和按模块分组的 features
 ├── cmake/                     # 选项、toolchain 配置、编译警告
+├── scripts/                   # 定向构建/测试和文档检查
 ├── engine/
 │   ├── foundation/            # core、math、io（已构建）；jobs、metadata 预留
 │   ├── platform/              # 窗口和输入接口、SDL3
@@ -54,6 +55,24 @@ DeckerEngine/
 
 仅真实模块建立 CMake target；engine 管理 foundation、assets/types、scene、framework 和 automation，
 apps 管理 runner。其他空目录通过 .gitkeep 留存，开发模块时再增加 CMakeLists。
+
+## 定向验证与开发辅助
+
+默认只构建和验证本次目标功能及直接受影响的调用链。已配置 windows-dev 时，例如：
+
+```powershell
+pwsh -NoProfile -File scripts/verify.ps1 -Target dk_commands_tests -TestRegex '^dk\.commands\.discovery is sorted' -Reason '验证命令发现'
+pwsh -NoProfile -File scripts/check-spec.ps1
+```
+
+verify 默认 Debug 单配置；用 `-BuildDir` 指定其他已配置目录，`-Configuration Release` 选择 Release。
+先构建指定目标再枚举/执行匹配测试；构建失败或零匹配都会报错，不回退到全量。
+结果和日志在 `out/verify/<本次运行>/`，summary.json 区分通过/失败/跳过和未执行步骤。
+完整回归需要显式 `-Full -Reason '具体原因'`；它仅覆盖当前构建树和所选配置。
+纯文档可通过 `& ./scripts/check-spec.ps1 -Path @('README.md', 'spec/commands/entity.md')` 限定扫描。
+
+三个 [开发辅助 skill](spec/README.md#开发辅助-skills) 分别指导验证范围、状态变更与失败处理、
+命令实现和文档同步；已有留档 skill 继续负责按改动规模记录。按任务使用，无需每次全部加载。
 
 ## CPU 批处理
 
