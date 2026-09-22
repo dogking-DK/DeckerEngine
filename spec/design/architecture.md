@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T14:17:51+08:00"
+updated_at: "2026-09-22T18:26:04+08:00"
 status: accepted
 ---
 
@@ -24,7 +24,9 @@ M3.1 已接入独立 [命令层](commands.md)，供后续服务和自动化共�
 M3.2 [场景服务与操作层](application-services.md) 已提供会话 guard、实体编辑、分页查询与保存。
 M3.3 的内存事务/撤销重做和 M3.4 [CPU Runtime](runtime.md)、[JSON-RPC 批处理](automation-protocol.md) 已通过进程验收。
 M3.5 持续 stdio、同步任务查询和关闭已完成，M3 交付 A 验收见 [0017](../development/0017-stdio-delivery-a.md)。
-其余模块在开始开发前另写专项设计。
+M4 的 [资产运行时](assets-runtime.md)、[导入器](assets-importers.md)、
+[CPU 作业](foundation-jobs.md) 设计稿和 [实施小节](../development/0020-m4-development-plan.md)
+已建立，尚未实现。其余模块在开始开发前另写专项设计。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，

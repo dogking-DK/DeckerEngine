@@ -10,6 +10,9 @@
 | foundation-integration | [Foundation 集成验收](foundation-integration.md) | accepted | M1.6 独立 CPU 示例、ID/变换/安全保存和跨进程重载 |
 | scene | [场景文档](scene.md) | accepted | M2 flecs 身份、层级、快照、安全保存与重载 |
 | assets-types | [资产类型](assets-types.md) | accepted | M2.3 持久引用与种类 |
+| assets-runtime | [资产身份、缓存与加载](assets-runtime.md) | draft | M4.1/M4.3/M4.4 计划；尚未实现 |
+| assets-importers | [静态 glTF 导入与 assetc](assets-importers.md) | draft | M4.2 格式子集、CPU 数据和离线工具计划 |
+| foundation-jobs | [CPU 队列与后台作业](foundation-jobs.md) | draft | M4.4 JobId、取消/等待/退出与命令接入计划 |
 | project-format | [工程格式](project-format.md) | accepted | M2.3 版本清单、路径与文件诊断 |
 | commands | [命令注册](commands.md) | accepted | M3.1 schema、注册与能力发现 |
 | application-services | [场景应用服务](application-services.md) | accepted | M3.2 文档会话/命令；M3.3 事务/撤销重做 |

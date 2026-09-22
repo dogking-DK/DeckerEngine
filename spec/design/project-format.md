@@ -1,7 +1,7 @@
 ---
 module: project-format
 created_at: "2026-09-22T12:28:05+08:00"
-updated_at: "2026-09-22T13:06:18+08:00"
+updated_at: "2026-09-22T18:26:04+08:00"
 status: accepted
 ---
 
@@ -45,6 +45,15 @@ Scene 文件持久化由 [Scene M2.4](scene.md) 规定；此接口不修改资�
 默认 Debug/Release 回归，最小 Scene 配置新增 IO/JSON；无日志或 GPU 依赖。
 文件写入在 M2.4 通过 Foundation atomic writer 提供；M2.3 只返回编码文本和读取。
 不提供 schema 迁移、资产解码或持续文件监视。
+
+## M4 衔接（设计阶段）
+
+M4 保持 v1 清单和已有无 meta 工程可读取；assets 的 path 仍指向源文件，不能改作缓存路径。
+计划由 AssetService 显式登记 meta/子资产后，构造候选 ProjectDescription 并整体替换只读 Project，
+不对外暴露可变索引。相同源路径的子资产用不同 AssetId 登记，种类与 meta 映射须一致。
+目录更新使用独立会话/revision；已有 Scene 内容、revision、dirty 与历史不因缓存加载而改变。
+清单与 sidecar 的多文件写入、受控改名和失败恢复见 [资产运行时设计稿](assets-runtime.md)。
+上述扩展尚未实现，不能由已有 resolve_asset 的成功推断导入成功或 CPU Ready。
 
 参考：[nlohmann parse](https://json.nlohmann.me/api/basic_json/parse/)、
 [parser callback](https://json.nlohmann.me/api/basic_json/parser_callback_t/)、
