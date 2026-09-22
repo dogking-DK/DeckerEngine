@@ -10,9 +10,11 @@ constexpr std::array transform{
     PropertyDescriptor{"rotation", PropertyType::quaternion},
     PropertyDescriptor{"scale", PropertyType::vector3}};
 constexpr std::array hierarchy{PropertyDescriptor{"parent", PropertyType::optional_entity_id}};
+constexpr std::array assets{PropertyDescriptor{"items", PropertyType::asset_references}};
 constexpr std::array descriptors{
     ComponentDescriptor{"dk.Identity", 1, identity}, ComponentDescriptor{"dk.Name", 1, name},
-    ComponentDescriptor{"dk.Transform", 1, transform}, ComponentDescriptor{"dk.Hierarchy", 1, hierarchy}};
+    ComponentDescriptor{"dk.Transform", 1, transform}, ComponentDescriptor{"dk.Hierarchy", 1, hierarchy},
+    ComponentDescriptor{"dk.AssetReferences", 1, assets}};
 } // namespace
 std::span<const ComponentDescriptor> scene_component_descriptors() noexcept { return descriptors; }
 } // namespace dk

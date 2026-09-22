@@ -1,11 +1,13 @@
 #pragma once
 #include <dk/core/StableId.hpp>
+#include <dk/assets/AssetReference.hpp>
 #include <dk/math/Transform.hpp>
 #include <cstdint>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace dk {
 struct EntityData {
@@ -13,8 +15,9 @@ struct EntityData {
     std::string name;
     Trsd local;
     std::optional<EntityId> parent;
+    std::vector<AssetReference> assets;
 };
-enum class PropertyType { entity_id, text, vector3, quaternion, optional_entity_id };
+enum class PropertyType { entity_id, text, vector3, quaternion, optional_entity_id, asset_references };
 struct PropertyDescriptor {
     std::string_view name;
     PropertyType type;

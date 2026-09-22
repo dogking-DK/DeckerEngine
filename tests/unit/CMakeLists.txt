@@ -12,7 +12,7 @@ dk_target_defaults(dk_core_tests)
 
 include(Catch)
 if(DK_BUILD_SCENE)
-    add_executable(dk_scene_tests SceneDocumentTests.cpp)
+    add_executable(dk_scene_tests SceneDocumentTests.cpp ProjectTests.cpp)
     target_link_libraries(dk_scene_tests PRIVATE dk::scene Catch2::Catch2WithMain)
     dk_target_defaults(dk_scene_tests)
     catch_discover_tests(dk_scene_tests TEST_PREFIX "dk.scene."

@@ -82,14 +82,14 @@ ctest --preset windows-debug
 启用日志时自动选择 foundation，启用数学时自动选择 math，启用单元测试时自动选择 tests，
 并保留 DK_VCPKG_FEATURES 中额外指定的组。
 fmt/spdlog 已由 dk::logging 实际链接，Eigen 由 dk::math PUBLIC 传递；
-JSON 供后续模块使用，原规划的 GLM 已从清单移除。
+JSON 由 Scene 私有使用，原规划的 GLM 已从清单移除。
 
 | DK_VCPKG_FEATURES | vcpkg 依赖 |
 | --- | --- |
 | 始终安装（基础依赖） | stduuid（dk::core 私有使用） |
 | foundation | fmt、spdlog、nlohmann-json |
 | math | eigen3（当前基线 5.0.1） |
-| scene | flecs |
+| scene | flecs、nlohmann-json |
 | graphics | vulkan、vulkan-memory-allocator、shader-slang |
 | editor | sdl3[vulkan]、imgui[docking-experimental,sdl3-binding,vulkan-binding] |
 | scripting | lua、sol2 |
@@ -314,7 +314,7 @@ ctest --test-dir out/build/windows-foundation -C Release --output-on-failure
 当前安全保存验收仍限 Windows 本地文件。
 详见 [集成设计](spec/design/foundation-integration.md) 和 [0008](spec/development/0008-foundation-integration.md)。
 
-## SceneDocument（M2.1–M2.2）
+## SceneDocument（M2.1–M2.3）
 
 链接 `dk::scene`，包含 [SceneDocument.hpp](engine/scene/include/dk/scene/SceneDocument.hpp)。
 `create()` 返回持有私有 flecs world 的文档；`create_entity()` 生成持久 EntityId，
@@ -323,10 +323,26 @@ ctest --test-dir out/build/windows-foundation -C Release --output-on-failure
 新文档 dirty=true。`entity()` 返回名称、局部 Trsd 和父 ID 的副本；
 `set_name` / `set_local_transform` / `set_parent` 验证后编辑，`world_transform` 返回派生仿射矩阵。
 重挂保留局部 TRS，删除有子节点的实体被拒绝；循环、缺失父级、非有限变换均不改变旧状态。
-`scene_component_descriptors()` 提供稳定组件名、版本及字段类型。Scene 要求 `DK_BUILD_MATH=ON`。
-资产引用和持久化在后续 M2 子节接入。
+`scene_component_descriptors()` 提供稳定组件名、版本及字段类型。Scene 要求 math/io 同时开启。
+`set_asset_references()` 设置 AssetId/AssetKind 列表，验证 nil、重复 ID 和种类。
+`dk::asset_types` 仅包含持久资产类型；没有资产解码或设备资源。
 设计见 [scene.md](spec/design/scene.md)，验收见 [0009](spec/development/0009-scene-identity.md)、
 [0010](spec/development/0010-scene-hierarchy.md)。
+
+[Project.hpp](engine/scene/include/dk/scene/Project.hpp) 提供版本 1 工程清单的
+`parse_project` / `serialize_project`、`Project::create` / `open`、资产路径解析和文件校验。
+`check_asset_references(scene, project)` 给出包含实体/资产 ID 的引用诊断。
+工程根必须存在，清单的 scene/assets 路径是使用 `/` 的规范相对路径。
+JSON 限制 16 MiB、64 层嵌套；拒绝未知版本、字段、重复键/ID 和路径越界。
+设计与协议见 [project-format.md](spec/design/project-format.md)，记录见 [0011](spec/development/0011-project-assets.md)。
+
+独立 Scene 配置（关闭日志、示例与 runner）：
+
+```powershell
+cmake --preset windows-dev -B out/build/windows-scene-only -DDK_BUILD_MATH=ON -DDK_BUILD_IO=ON -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --build out/build/windows-scene-only --config Debug
+ctest --test-dir out/build/windows-scene-only -C Debug --output-on-failure
+```
 
 ## 开发留档
 

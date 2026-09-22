@@ -1,7 +1,7 @@
 ---
 module: scene
 created_at: "2026-09-22T12:05:49+08:00"
-updated_at: "2026-09-22T12:27:09+08:00"
+updated_at: "2026-09-22T12:36:42+08:00"
 status: accepted
 ---
 
@@ -85,6 +85,10 @@ destroy_entity 仅允许叶节点，非叶拒绝且不改变 revision；调用�
 独立 Scene 配置加入数学并继续以警告即错误构建。
 
 ## 后续
+
+M2.3 按 [资产类型](assets-types.md) 和 [工程格式](project-format.md) 为 EntityData
+加入 assets 值列表与 set_asset_references；新增第五个 dk.AssetReferences v1 描述。
+引入 dk::io、dk::asset_types 和私有 JSON 依赖，Scene 的独立配置同时开启数学与 IO。
 
 工程/资产引用、JSON 快照与原子重载在各子阶段开始前扩展设计。
 不把预留阶段当作当前已实现的功能。

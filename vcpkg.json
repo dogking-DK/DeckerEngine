@@ -24,9 +24,10 @@
       ]
     },
     "scene": {
-      "description": "Scene ECS",
+      "description": "Scene ECS and project serialization",
       "dependencies": [
-        "flecs"
+        "flecs",
+        "nlohmann-json"
       ]
     },
     "graphics": {

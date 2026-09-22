@@ -10,7 +10,7 @@
 TEST_CASE("scene component descriptors expose stable versions and property types", "[scene]")
 {
     const auto descriptors = dk::scene_component_descriptors();
-    REQUIRE(descriptors.size() == 4);
+    REQUIRE(descriptors.size() == 5);
     REQUIRE(descriptors[0].name == "dk.Identity");
     REQUIRE(descriptors[0].properties[0].read_only);
     REQUIRE(descriptors[2].name == "dk.Transform");

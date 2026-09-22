@@ -242,6 +242,8 @@ Result<void> SceneDocument::validate() const
         if (!components || !components->value || components->value->data.id != id || !valid_name(components->value->data.name)) {
             return scene_error(ErrorCode::internal_error, "Entity components are inconsistent", "SceneDocument.validate");
         }
+        const auto references = validate_asset_references(components->value->data.assets);
+        if (!references) { return references; }
     }
     const auto prepared = impl_->prepare({}, nullptr);
     if (!prepared) { return std::unexpected(prepared.error()); }
@@ -301,6 +303,22 @@ Result<void> SceneDocument::set_parent(EntityId id, std::optional<EntityId> pare
     if (data->parent == parent) { return {}; }
     data->parent = parent;
     return impl_->replace_hierarchy(*data);
+}
+
+Result<void> SceneDocument::set_asset_references(EntityId id, std::vector<AssetReference> references)
+{
+    auto data = entity(id);
+    if (!data) { return std::unexpected(data.error()); }
+    const auto valid = validate_asset_references(references);
+    if (!valid) { return valid; }
+    if (data->assets == references) { return {}; }
+    const auto editable = impl_->can_edit();
+    if (!editable) { return editable; }
+    data->assets = std::move(references);
+    auto prepared = std::make_shared<const detail::SceneValue>(detail::SceneValue{std::move(*data), impl_->value(id).world});
+    impl_->world.entity(impl_->entities.at(id)).get_mut<detail::SceneComponents>().value.swap(prepared);
+    impl_->changed();
+    return {};
 }
 
 } // namespace dk

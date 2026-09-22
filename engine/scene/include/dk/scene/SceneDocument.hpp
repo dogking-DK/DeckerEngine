@@ -38,6 +38,7 @@ public:
     [[nodiscard]] Result<void> set_local_transform(EntityId id, const Trsd& local);
     // Retains the local TRS. nullopt detaches; parents with children cannot be deleted.
     [[nodiscard]] Result<void> set_parent(EntityId id, std::optional<EntityId> parent);
+    [[nodiscard]] Result<void> set_asset_references(EntityId id, std::vector<AssetReference> references);
     [[nodiscard]] Result<void> validate() const;
 
 private:
