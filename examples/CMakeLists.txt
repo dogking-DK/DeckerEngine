@@ -1,0 +1,5 @@
+if(DK_BUILD_MATH AND DK_BUILD_IO)
+    add_subdirectory(foundation)
+else()
+    message(STATUS "Foundation example requires DK_BUILD_MATH and DK_BUILD_IO; skipped.")
+endif()

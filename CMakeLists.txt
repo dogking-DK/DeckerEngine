@@ -21,9 +21,11 @@ include(CompilerWarnings)
 add_subdirectory(engine)
 add_subdirectory(apps)
 add_subdirectory(tools)
+if(DK_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
 
 if(DK_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
-

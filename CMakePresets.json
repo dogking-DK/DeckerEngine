@@ -41,6 +41,7 @@
         "DK_BUILD_LOGGING": "OFF",
         "DK_BUILD_MATH": "OFF",
         "DK_BUILD_IO": "OFF",
+        "DK_BUILD_EXAMPLES": "OFF",
         "DK_BUILD_UNIT_TESTS": "OFF",
         "DK_VCPKG_FEATURES": ""
       }

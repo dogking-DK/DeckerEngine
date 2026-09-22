@@ -1,0 +1,8 @@
+add_executable(dk_foundation_demo src/main.cpp)
+set_target_properties(dk_foundation_demo PROPERTIES OUTPUT_NAME dk-foundation-demo)
+target_link_libraries(dk_foundation_demo PRIVATE dk::core dk::math dk::io)
+if(DK_BUILD_LOGGING)
+    target_link_libraries(dk_foundation_demo PRIVATE dk::logging)
+    target_compile_definitions(dk_foundation_demo PRIVATE DK_DEMO_WITH_LOGGING)
+endif()
+dk_target_defaults(dk_foundation_demo)

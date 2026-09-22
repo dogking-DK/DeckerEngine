@@ -3,7 +3,7 @@
 用于渲染、物理实验、场景编辑与自动化操作的 C++23 引擎工程。
 命名空间为 `dk`，CMake target 使用 `dk_*` / `dk::*`。
 
-当前已提供工程骨架、Core 错误/结果类型、稳定 ID、可选日志、Eigen 基础数学与 Transform、工程路径和二进制 IO、Windows 安全保存、
+当前已提供工程骨架、Core 错误/结果类型、稳定 ID、可选日志、Eigen 基础数学与 Transform、工程路径和二进制 IO、Windows 安全保存、Foundation CPU 集成示例、
 `dk-run --version` 构建探针、CMake/vcpkg 配置和 spec 开发流程。
 渲染、场景、物理、编辑器、IPC 和脚本模块尚未实现。
 
@@ -36,6 +36,7 @@ DeckerEngine/
 ├── shaders/common/            # 公共 Slang 模块
 ├── projects/demo/             # 示例资产、场景、脚本预留
 ├── tests/                     # unit、integration、gpu、replay
+├── examples/foundation/       # 独立 ID/变换/安全保存示例
 └── spec/
     ├── roadmap.md             # 阶段路线、依赖与验收条件
     ├── design/                # 每个模块的设计文档
@@ -136,7 +137,7 @@ ctest --test-dir out/build/local-stduuid -C Debug --output-on-failure
 `CMAKE_PREFIX_PATH`），并提供已开启模块需要的其他依赖。
 个人路径和构建覆盖放到被 Git 忽略的 CMakeUserPresets.json。
 `DK_BUILD_RUNNER`、`DK_BUILD_TESTS`、`DK_BUILD_UNIT_TESTS`、
-`DK_BUILD_LOGGING`、`DK_BUILD_MATH`、`DK_BUILD_IO` 默认开启；bootstrap 关闭日志、数学、IO 和单元测试。
+`DK_BUILD_LOGGING`、`DK_BUILD_MATH`、`DK_BUILD_IO`、`DK_BUILD_EXAMPLES` 默认开启；bootstrap 关闭日志、数学、IO、示例和单元测试。
 DK_BUILD_TESTS=OFF 会关闭全部测试；DK_BUILD_UNIT_TESTS=OFF 仅保留可用的集成探针。
 `DK_WARNINGS_AS_ERRORS` 可按需开启。
 
@@ -261,8 +262,8 @@ cmake --build out/build/windows-io-only --config Debug
 ctest --test-dir out/build/windows-io-only -C Debug --output-on-failure
 ```
 
-Windows 开发构建现有 86 项 CTest（26 项 IO/安全保存、42 项数学/Transform、16 项 Core、
-日志流探针和版本探针），bootstrap 保留 1 项版本测试。
+Windows 开发构建现有 101 项 CTest（26 项 IO/安全保存、42 项数学/Transform、16 项 Core、
+15 项 Foundation 集成、日志流探针和版本探针），bootstrap 保留 1 项版本测试。
 边界与验证见 [IO 设计](spec/design/foundation-io.md) 和 [0006](spec/development/0006-foundation-io.md)。
 
 ## 安全保存（M1.5）
@@ -279,10 +280,38 @@ Windows 开发构建现有 86 项 CTest（26 项 IO/安全保存、42 项数学/
 替换会改变文件身份和元数据，不保留旧 ACL/时间/备用数据流，其他硬链接仍指向旧文件。
 原子可见性依赖本地同卷重命名语义，已在本机 NTFS 验证；不保证断电持久化或外部并发修改隔离。
 
-Debug/Release 各 **85 项通过、1 项跳过**；独立 Core/IO **35 项通过、1 项跳过**，无失败。
-跳过项为符号链接目标测试，当前环境没有创建符号链接权限。
+安全保存测试已加入全量回归；符号链接目标测试在无创建权限的环境跳过。
 故障注入与真实共享冲突/只读目标等验证见 [0007](spec/development/0007-atomic-file-save.md)。
-下一阶段是 **M1.6 Foundation 集成验收**，串联 ID、Transform 和保存/重载。
+
+## Foundation CPU 示例（M1.6）
+
+`dk-foundation-demo` 串联 ID、父子变换、工程路径、安全保存和重载。
+默认在 math/io 均启用时构建；关闭 `DK_BUILD_EXAMPLES` 可禁用。
+使用已有工程根目录，`save` 会覆盖指定相对文件并读回验证，`load` 只读：
+
+```powershell
+New-Item -ItemType Directory -Force out/demo | Out-Null
+.\out\build\windows-dev\bin\Debug\dk-foundation-demo.exe save out/demo sample.dkf
+.\out\build\windows-dev\bin\Debug\dk-foundation-demo.exe load out/demo sample.dkf
+```
+
+两个进程输出相同 ID、世界坐标和点往返结果；日志/错误只到 stderr。
+`.dkf` 是当前示例专用格式，不是未来场景协议，读取限制 4096 字节。
+M1.6 已通过：默认 Debug/Release 各 **100 项通过、1 项权限跳过**，无失败。
+
+无日志、runner、Catch2、窗口和 GPU 依赖的独立配置：
+
+```powershell
+cmake --preset windows-dev -B out/build/windows-foundation -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --build out/build/windows-foundation --config Debug
+ctest --test-dir out/build/windows-foundation -C Debug --output-on-failure
+cmake --build out/build/windows-foundation --config Release
+ctest --test-dir out/build/windows-foundation -C Release --output-on-failure
+```
+
+该配置仅安装 stduuid、Eigen 及 vcpkg 构建辅助包，Debug/Release 各 **15/15** 通过。
+当前安全保存验收仍限 Windows 本地文件；下一阶段为 M2.1 场景文档与实体身份。
+详见 [集成设计](spec/design/foundation-integration.md) 和 [0008](spec/development/0008-foundation-integration.md)。
 
 ## 开发留档
 
@@ -300,6 +329,7 @@ Roadmap 的 M0–M10 均拆为 Mx.y 小阶段，各自包含前置、范围和�
 - [工程路径与文件 IO 设计](spec/design/foundation-io.md)
 - [0006 文件 IO 开发记录](spec/development/0006-foundation-io.md)
 - [0007 安全保存开发记录](spec/development/0007-atomic-file-save.md)
+- [0008 Foundation 集成验收](spec/development/0008-foundation-integration.md)
 - [0005 Transform 开发记录](spec/development/0005-transform.md)
 - [0004 Eigen 基础数学与阶段细分](spec/development/0004-eigen-math-foundation.md)
 - [0003 stduuid 迁移记录](spec/development/0003-stduuid-migration.md)

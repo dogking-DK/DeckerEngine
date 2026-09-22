@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T11:21:27+08:00"
+updated_at: "2026-09-22T11:52:43+08:00"
 status: accepted
 ---
 
@@ -16,7 +16,7 @@ vcpkg 清单和技术留档流程。本设计记录工程基础，Core 能力增
 
 ## 构建和目录
 
-根目录依次组织 engine、apps、tools、tests。
+根目录依次组织 engine、apps、tools、examples、tests。
 engine/foundation/core 是首个真实静态库 `dk_core`，别名 `dk::core`。
 公开头 `dk/core/Version.hpp` 提供
 `[[nodiscard]] std::string_view dk::version() noexcept`；
@@ -26,6 +26,10 @@ engine/foundation/core 是首个真实静态库 `dk_core`，别名 `dk::core`。
 无参数或 `--help` 输出当前骨架用法；不支持的参数在 stderr 报错并返回 2。
 该程序链接 dk::core，启用日志时额外链接 dk::logging。
 其他应用、模块和工具只预留目录并注明未实现。
+
+DK_BUILD_EXAMPLES 默认 ON；当前 math/io 同时启用时建立独立 dk-foundation-demo，
+不满足依赖时跳过，不反向开启模块。bootstrap 关闭示例。
+示例跨进程 CTest 不依赖 runner 或 Catch2，详见 [集成设计](foundation-integration.md)。
 
 CMake 最低 3.28，C++23 target 使用要求向消费者传播，禁用编译器扩展。
 项目警告函数只作用于自身 target，不污染依赖。默认构建目录为 `out/build/<preset>`，
