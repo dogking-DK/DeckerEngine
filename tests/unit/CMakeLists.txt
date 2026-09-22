@@ -11,6 +11,13 @@ endif()
 dk_target_defaults(dk_core_tests)
 
 include(Catch)
+if(DK_BUILD_FRAMEWORK)
+    add_executable(dk_commands_tests CommandTests.cpp)
+    target_link_libraries(dk_commands_tests PRIVATE dk::commands Catch2::Catch2WithMain)
+    dk_target_defaults(dk_commands_tests)
+    catch_discover_tests(dk_commands_tests TEST_PREFIX "dk.commands."
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST)
+endif()
 if(DK_BUILD_SCENE)
     find_package(nlohmann_json CONFIG REQUIRED)
     add_executable(dk_scene_tests SceneDocumentTests.cpp ProjectTests.cpp SceneIOTests.cpp)

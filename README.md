@@ -6,6 +6,7 @@
 当前已提供工程骨架、Core 错误/结果类型、稳定 ID、可选日志、Eigen 基础数学与 Transform、工程路径和二进制 IO、Windows 安全保存、Foundation CPU 集成示例、
 `dk-run --version` 构建探针、CMake/vcpkg 配置和 spec 开发流程。
 已接入 flecs 场景文档、组件与变换层级、工程/资产引用、JSON 快照保存和安全重载。
+M3.1 已提供独立命令注册表、参数/结果 schema 校验及 commands.list / commands.describe。
 渲染、物理、编辑器、IPC 和脚本模块尚未实现。
 
 ## 目录
@@ -46,8 +47,23 @@ DeckerEngine/
     └── templates/             # 两类文档模板
 ```
 
-仅真实模块建立 CMake target；engine 管理 foundation/core/math/io、assets/types 和 scene，
+仅真实模块建立 CMake target；engine 管理 foundation/core/math/io、assets/types、scene 和 framework/commands，
 apps 管理 runner。其他空目录通过 .gitkeep 留存，开发模块时再增加 CMakeLists。
+
+## 命令层独立验证
+
+`dk::commands` 的 `CommandRegistry` 注册参数/结果 schema、effect 和同步 handler。
+`commands.list` 枚举能力，`commands.describe` 返回完整契约；未知命令、参数错误和
+handler 契约错误分别返回结构化 Error。支持的 schema 子集与上限见
+[命令设计](spec/design/commands.md)。
+
+```powershell
+cmake --preset windows-dev -B out/build/windows-commands-only -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=ON -DDK_WARNINGS_AS_ERRORS=ON -DDK_VCPKG_FEATURES=
+cmake --build out/build/windows-commands-only --config Debug
+ctest --test-dir out/build/windows-commands-only -C Debug --output-on-failure
+```
+
+Release 替换配置名即可；此配置不构建 Scene、Eigen、IO、窗口或 GPU。
 
 ## Windows 快速验证
 
@@ -81,6 +97,7 @@ ctest --preset windows-debug
 
 `windows-dev` 默认构建 Core、日志、Eigen 数学、IO、Scene 与 Catch2 单元测试。
 `DK_BUILD_SCENE` 默认 OFF，开发预设启用，并自动选择 scene feature。
+`DK_BUILD_FRAMEWORK` 默认 OFF，开发预设启用；命令层选择 commands feature，并 PUBLIC 使用 JSON。
 启用日志时自动选择 foundation，启用数学时自动选择 math，启用单元测试时自动选择 tests，
 并保留 DK_VCPKG_FEATURES 中额外指定的组。
 fmt/spdlog 已由 dk::logging 实际链接，Eigen 由 dk::math PUBLIC 传递；
@@ -92,6 +109,7 @@ JSON 由 Scene 私有使用，原规划的 GLM 已从清单移除。
 | foundation | fmt、spdlog、nlohmann-json |
 | math | eigen3（当前基线 5.0.1） |
 | scene | flecs、nlohmann-json |
+| commands | nlohmann-json |
 | graphics | vulkan、vulkan-memory-allocator、shader-slang |
 | editor | sdl3[vulkan]、imgui[docking-experimental,sdl3-binding,vulkan-binding] |
 | scripting | lua、sol2 |
@@ -216,7 +234,7 @@ if (transform) {
 仅验证 Core/数学、关闭日志和 runner 的独立配置：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-math-only -DDK_BUILD_SCENE=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES=
+cmake --preset windows-dev -B out/build/windows-math-only -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES=
 cmake --build out/build/windows-math-only --config Debug
 ctest --test-dir out/build/windows-math-only -C Debug --output-on-failure
 ```
@@ -260,7 +278,7 @@ if (root) {
 仅验证 Core/IO、关闭数学、日志和 runner，并开启警告即错误：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-io-only -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-io-only -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-io-only --config Debug
 ctest --test-dir out/build/windows-io-only -C Debug --output-on-failure
 ```
@@ -305,7 +323,7 @@ M1.6 已通过：默认 Debug/Release 各 **100 项通过、1 项权限跳过**�
 无日志、runner、Catch2、窗口和 GPU 依赖的独立配置：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-foundation -DDK_BUILD_SCENE=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-foundation -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-foundation --config Debug
 ctest --test-dir out/build/windows-foundation -C Debug --output-on-failure
 cmake --build out/build/windows-foundation --config Release

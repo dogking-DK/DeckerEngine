@@ -8,6 +8,7 @@ option(DK_BUILD_MATH "Build the Eigen math foundation" ON)
 option(DK_BUILD_IO "Build project paths and binary file IO" ON)
 option(DK_BUILD_EXAMPLES "Build examples whose module dependencies are enabled" ON)
 option(DK_BUILD_SCENE "Build the flecs scene document" OFF)
+option(DK_BUILD_FRAMEWORK "Build commands and available CPU application modules" OFF)
 option(DK_WARNINGS_AS_ERRORS "Treat DeckerEngine warnings as errors" OFF)
 option(DK_USE_VCPKG "Use the vcpkg manifest toolchain" ON)
 set(DK_VCPKG_FEATURES "foundation" CACHE STRING

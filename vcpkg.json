@@ -30,6 +30,10 @@
         "nlohmann-json"
       ]
     },
+    "commands": {
+      "description": "Command values and schemas",
+      "dependencies": ["nlohmann-json"]
+    },
     "graphics": {
       "description": "Vulkan device, allocator and Slang compiler/runtime",
       "dependencies": [

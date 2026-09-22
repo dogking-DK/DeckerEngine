@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T13:06:18+08:00"
+updated_at: "2026-09-22T13:24:40+08:00"
 status: accepted
 ---
 
@@ -33,6 +33,9 @@ DK_BUILD_EXAMPLES 默认 ON；当前 math/io 同时启用时建立独立 dk-foun
 M2 开发预设启用 DK_BUILD_SCENE（选项自身默认 OFF），构建 dk::asset_types/dk::scene。
 Scene 要求 math/io 同时开启；启用示例时增加 dk-scene-demo 及独立进程验收。
 bootstrap 和独立 Foundation 配置显式关闭 Scene；README 保留最新可复现命令。
+M3.1 新增 DK_BUILD_FRAMEWORK（默认 OFF，windows-dev ON），构建独立 dk::commands；
+commands feature 仅引入 JSON，场景关闭时不反向启用 Scene/Math/IO。
+bootstrap 和独立 Foundation/Scene 验证应显式关闭 FRAMEWORK，避免继承开发预设。
 
 CMake 最低 3.28，C++23 target 使用要求向消费者传播，禁用编译器扩展。
 项目警告函数只作用于自身 target，不污染依赖。默认构建目录为 `out/build/<preset>`，

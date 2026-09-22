@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T13:06:18+08:00"
+updated_at: "2026-09-22T13:24:40+08:00"
 status: accepted
 ---
 
@@ -20,6 +20,7 @@ ECS 使用 flecs，内嵌脚本计划用 Lua/sol2，外部自动化计划用 Pyt
 工程路径、二进制文件 IO 和 Windows 同目录安全保存，已通过独立 CPU 示例的集成验收。
 M1 完成，M2 已接入 flecs 场景文档、组件层级、工程/资产引用和 JSON 安全保存/重载，
 见 [Scene 设计](scene.md)、[工程协议](project-format.md) 和 [资产类型](assets-types.md)。
+M3.1 已接入独立 [命令层](commands.md)，供后续服务和自动化共用契约。
 其余模块在开始开发前另写专项设计。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话

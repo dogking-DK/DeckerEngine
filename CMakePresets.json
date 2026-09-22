@@ -43,6 +43,7 @@
         "DK_BUILD_IO": "OFF",
         "DK_BUILD_EXAMPLES": "OFF",
         "DK_BUILD_SCENE": "OFF",
+        "DK_BUILD_FRAMEWORK": "OFF",
         "DK_BUILD_UNIT_TESTS": "OFF",
         "DK_VCPKG_FEATURES": ""
       }
@@ -53,6 +54,7 @@
       "displayName": "Windows development (foundation dependencies)",
       "cacheVariables": {
         "DK_BUILD_SCENE": "ON",
+        "DK_BUILD_FRAMEWORK": "ON",
         "VCPKG_TARGET_TRIPLET": "x64-windows",
         "VCPKG_HOST_TRIPLET": "x64-windows"
       }
