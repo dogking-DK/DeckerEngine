@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T11:21:27+08:00"
+updated_at: "2026-09-22T11:44:41+08:00"
 status: accepted
 ---
 
@@ -17,7 +17,8 @@ status: accepted
 技术方向：C++23、Eigen、Vulkan、Slang、SDL3、ImGui、CMake、vcpkg；
 ECS 计划用 flecs，内嵌脚本计划用 Lua/sol2，外部自动化计划用 Python。
 已实现工程骨架、Core 错误/日志/稳定 ID、Eigen 基础数学、仿射 Transform、
-工程路径和二进制文件 IO。下一阶段为安全保存；其余模块在开始开发前另写专项设计。
+工程路径、二进制文件 IO 和 Windows 同目录安全保存。下一阶段为 Foundation 集成验收；
+其余模块在开始开发前另写专项设计。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，
@@ -93,6 +94,7 @@ ECS 计划用 flecs，内嵌脚本计划用 Lua/sol2，外部自动化计划用 
 - [Eigen 数学设计](foundation-math.md)
 - [工程路径与文件 IO](foundation-io.md)
 - [0006 文件 IO](../development/0006-foundation-io.md)
+- [0007 安全保存](../development/0007-atomic-file-save.md)
 - [0004 Eigen 与小阶段划分](../development/0004-eigen-math-foundation.md)
 - [0005 Transform](../development/0005-transform.md)
 - [0001 工程初始化](../development/0001-project-bootstrap.md)

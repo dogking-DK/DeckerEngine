@@ -1,7 +1,7 @@
 ---
 module: foundation-io
 created_at: "2026-09-22T11:06:07+08:00"
-updated_at: "2026-09-22T11:06:07+08:00"
+updated_at: "2026-09-22T11:40:25+08:00"
 status: accepted
 ---
 
@@ -9,16 +9,17 @@ status: accepted
 
 ## 目标与边界
 
-实施 [Roadmap](../roadmap.md) 的 M1.4：UTF-8/原生路径转换、工程相对路径、
-最小二进制读写；复用 [Core](foundation-core.md) 的 Result/Error。
+实施 [Roadmap](../roadmap.md) 的 M1.4 路径/二进制 IO 和 M1.5 安全保存；
+复用 [Core](foundation-core.md) 的 Result/Error。
 公开头 include/dk/io/Path.hpp、File.hpp，实现在 src。
-新增 dk_io / dk::io，PUBLIC 链接 dk::core，仅标准库，无新增 vcpkg 依赖。
+dk_io / dk::io PUBLIC 链接 dk::core；基础 IO 使用标准库，安全保存使用 Windows API，
+无新增 vcpkg 依赖。
 DK_BUILD_IO 默认 ON；关闭时不创建 IO target/测试，bootstrap 显式关闭 IO。
 不依赖数学、日志、Scene、窗口或 GPU。
 
 普通写入会截断已有内容，失败可能留下空文件或部分数据。
-临时文件、原子替换、旧文件保护与持久化保证属于 M1.5；
-本阶段不能作为场景安全保存接口。
+M1.5 新增独立安全保存接口，不改变普通写入语义；
+该接口保存已准备好的字节，场景序列化/内容校验由上层负责。
 
 ## 路径接口
 
@@ -70,7 +71,64 @@ max_bytes=0 只允许空文件，实际容量还受 vector::max_size() 限制；
 输入不修改，无全局可变状态；独立文件可并发，同一文件的读写由调用方协调。
 ProjectPaths 创建后只读，不改变全局 CWD。
 
-## 实施与验证
+## 安全保存接口（M1.5）
+
+File.hpp 增加 write_file_bytes_atomic(path, span<const byte>) -> Result<void>。
+首版后端支持 Windows 本地普通文件；其他平台返回 not_supported，绝不退化为截断写入。
+基础路径和普通 IO 的跨平台入口不变。没有公开临时文件对象或可变全局配置。
+
+流程与所有权：
+
+1. 验证非空 Unicode 路径；捕获绝对路径并 canonical 父目录，父目录必须存在。
+   接受相对目标；拒绝空文件名、dot/dot-dot、尾随空格/点、ADS、保留设备名、
+   非普通目标和目标重解析点。仅接受常规驱动器路径；UNC/设备命名空间、
+   网络驱动器返回 not_supported。父目录可含符号链接，由 canonical 消解。
+2. 使用 Core 的 stduuid 生成 .dk-save-<uuid>.tmp，同目录 CREATE_NEW 独占创建；
+   碰撞最多重试 32 次，已有候选文件不覆盖、不删除。不用先检查再创建。
+   候选名与目标名按 Windows 不区分大小写比较，同名时直接跳过，即使目标不存在。
+   临时文件句柄不继承、不共享；内容未完成前目标保持原样。
+3. WriteFile 分块写入，处理短写；零进展视为 io_error。
+   FlushFileBuffers 刷新临时文件后检查 CloseHandle，任何失败均不执行替换。
+4. MoveFileExW 使用 MOVEFILE_REPLACE_EXISTING；不使用 COPY_ALLOWED，
+   不删除目标后再重命名，不回退复制。目标可以不存在，也可被完整新文件替换。
+   替换前再次检查目标类型；调用方仍须协调同一路径/目录的并发修改。
+5. 成功的重命名为提交点，之后不执行可能将结果改报为失败的操作。
+   成功后临时路径已消失；新目标拥有临时文件的元数据。
+
+失败与清理：
+
+- 创建失败不触碰候选或目标；获得临时文件所有权后，所有正常错误路径关闭句柄并删除本次临时文件。
+  RAII 在资源异常展开时尽力清理；不扫描或清理其他保存任务的临时文件。
+- 保留主错误码；如果关闭/删除清理也失败，在 Error.context 追加清理错误和临时文件路径，
+  便于定位残留。不隐藏清理失败，也不为清理失败回滚/删除目标。
+- 本地文件系统在运行中的写入、刷新、关闭和拒绝重命名错误时，旧目标保持原字节；
+  新目标在提交前失败时仍不存在。分配异常继续传播，析构清理不能保证上报诊断。
+- 缺失父目录为 not_found，路径/类型无效为 invalid_argument，
+  权限/共享冲突/写入/刷新/关闭/替换/候选耗尽为 io_error。
+  不支持的平台或路径类型为 not_supported；生成临时 ID 的错误沿用 Core 结果。
+
+原子性与持久化边界：
+
+- 同目录避免跨卷复制；可见性依赖本地文件系统的同卷重命名语义，
+  验收范围为 Windows 本地 NTFS。读者可能仍持有旧文件句柄；未允许删除共享的读者可使保存失败。
+  不承诺对任意文件系统、过滤驱动、远程服务、恶意路径竞态或外部并发写入的事务隔离。
+- 临时内容在提交前刷新；目录重命名的断电持久化和设备实际落盘仍不承诺。
+  强制终止可能留下 .dk-save-*.tmp；不实现启动时恢复或自动清扫。
+- 替换文件身份，而不是原地改写。旧目标的 ACL、时间、备用数据流不保留；
+  新文件默认继承父目录 ACL。其他硬链接仍指向旧文件。目标符号链接/重解析点拒绝。
+  上层如需版本校验、保留元数据、备份或恢复协议，需要另行设计。
+- 不采用 ReplaceFileW，其文档列出的部分失败可能已经改变目标名称/状态，
+  不适合本阶段简单的失败保护契约。
+
+验证采用公开接口的真实文件场景和 IO 模块内部的每次调用独立平台操作适配器。
+测试包装真实后端，在部分写入、刷新、关闭、替换及清理位置注入错误，
+观察旧字节、新目标缺失和目录残留；不向公开接口暴露故障参数。
+内部操作接口仅由 IO 自身实现/测试引用，不作为其他引擎模块的依赖。
+覆盖候选碰撞及耗尽、短写/零进展、Windows 共享冲突/只读文件、
+中文/空/大字节序列、无父目录、非法目标、重复保存、错误诊断。
+Debug/Release 全量和仅 Core/IO（警告即错误）回归后同步 0007 与 roadmap。
+
+## M1.4 实施记录
 
 1. 先将此前成果按用户要求本地提交为 b0b7255，再写本设计和 0006。
 2. 实现路径、文件接口、开关和独立 dk_io_tests（仅链接 dk::io/Catch2）。
@@ -89,3 +147,7 @@ ProjectPaths 创建后只读，不改变全局 CWD。
 - [ifstream](https://learn.microsoft.com/en-us/cpp/standard-library/basic-ifstream-class?view=msvc-170)
 - [Windows 文件共享](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew)
 - [0006 文件 IO](../development/0006-foundation-io.md)
+- [0007 安全保存](../development/0007-atomic-file-save.md)
+- [MoveFileExW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw)
+- [FlushFileBuffers](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers)
+- [ReplaceFileW 失败语义](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew)

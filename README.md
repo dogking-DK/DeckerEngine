@@ -3,9 +3,9 @@
 用于渲染、物理实验、场景编辑与自动化操作的 C++23 引擎工程。
 命名空间为 `dk`，CMake target 使用 `dk_*` / `dk::*`。
 
-当前已提供工程骨架、Core 错误/结果类型、稳定 ID、可选日志、Eigen 基础数学与 Transform、工程路径和二进制 IO、
+当前已提供工程骨架、Core 错误/结果类型、稳定 ID、可选日志、Eigen 基础数学与 Transform、工程路径和二进制 IO、Windows 安全保存、
 `dk-run --version` 构建探针、CMake/vcpkg 配置和 spec 开发流程。
-原子保存、渲染、场景、物理、编辑器、IPC 和脚本模块尚未实现。
+渲染、场景、物理、编辑器、IPC 和脚本模块尚未实现。
 
 ## 目录
 
@@ -234,7 +234,7 @@ M1.3 验证记录见 [0005](spec/development/0005-transform.md)。
 所有操作返回 `Result`；路径/参数错误为 invalid_argument，缺失文件或父目录为 not_found，
 其他系统错误为 io_error，错误上下文包含操作和可用的路径、系统诊断。
 工程路径解析仅处理词法结构，子路径符号链接仍按 OS 解析。
-普通写入失败可能留下空文件或部分数据；安全保存将在下一阶段 **M1.5** 实现。
+普通写入失败可能留下空文件或部分数据；需要旧文件保护时使用下方 M1.5 安全保存接口。
 
 ```cpp
 #include <dk/io/File.hpp>
@@ -261,9 +261,28 @@ cmake --build out/build/windows-io-only --config Debug
 ctest --test-dir out/build/windows-io-only -C Debug --output-on-failure
 ```
 
-Windows 开发构建现有 73 项 CTest（13 项 IO、42 项数学/Transform、16 项 Core、
+Windows 开发构建现有 86 项 CTest（26 项 IO/安全保存、42 项数学/Transform、16 项 Core、
 日志流探针和版本探针），bootstrap 保留 1 项版本测试。
 边界与验证见 [IO 设计](spec/design/foundation-io.md) 和 [0006](spec/development/0006-foundation-io.md)。
+
+## 安全保存（M1.5）
+
+继续链接 `dk::io`、包含 File.hpp，调用 `write_file_bytes_atomic(path, bytes)`。
+首版支持 Windows 本地普通文件：同目录独占创建临时文件，写完、刷新并关闭后重命名替换。
+保存空数据、新建文件和覆盖文件使用同一接口；父目录必须存在。
+
+写入/刷新/关闭/替换失败时保留旧内容并清理本次临时文件；如果清理也失败，
+错误上下文保留主错误并列出清理错误和临时路径。临时重名不会覆盖其他文件。
+与普通写入一样返回 `Result<void>`，无新增 vcpkg 依赖。
+
+目标重解析点、设备名和备用数据流不接受；UNC/网络驱动器及其他操作系统返回 not_supported。
+替换会改变文件身份和元数据，不保留旧 ACL/时间/备用数据流，其他硬链接仍指向旧文件。
+原子可见性依赖本地同卷重命名语义，已在本机 NTFS 验证；不保证断电持久化或外部并发修改隔离。
+
+Debug/Release 各 **85 项通过、1 项跳过**；独立 Core/IO **35 项通过、1 项跳过**，无失败。
+跳过项为符号链接目标测试，当前环境没有创建符号链接权限。
+故障注入与真实共享冲突/只读目标等验证见 [0007](spec/development/0007-atomic-file-save.md)。
+下一阶段是 **M1.6 Foundation 集成验收**，串联 ID、Transform 和保存/重载。
 
 ## 开发留档
 
@@ -280,6 +299,7 @@ Roadmap 的 M0–M10 均拆为 Mx.y 小阶段，各自包含前置、范围和�
 - [Eigen 数学设计](spec/design/foundation-math.md)
 - [工程路径与文件 IO 设计](spec/design/foundation-io.md)
 - [0006 文件 IO 开发记录](spec/development/0006-foundation-io.md)
+- [0007 安全保存开发记录](spec/development/0007-atomic-file-save.md)
 - [0005 Transform 开发记录](spec/development/0005-transform.md)
 - [0004 Eigen 基础数学与阶段细分](spec/development/0004-eigen-math-foundation.md)
 - [0003 stduuid 迁移记录](spec/development/0003-stduuid-migration.md)

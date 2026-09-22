@@ -12,7 +12,8 @@ dk_target_defaults(dk_core_tests)
 
 include(Catch)
 if(DK_BUILD_IO)
-    add_executable(dk_io_tests IoTests.cpp)
+    add_executable(dk_io_tests IoTests.cpp
+        "${PROJECT_SOURCE_DIR}/engine/foundation/io/tests/AtomicFileTests.cpp")
     target_link_libraries(dk_io_tests PRIVATE dk::io Catch2::Catch2WithMain)
     target_compile_definitions(dk_io_tests PRIVATE DK_TEST_CONFIG="$<CONFIG>")
     dk_target_defaults(dk_io_tests)

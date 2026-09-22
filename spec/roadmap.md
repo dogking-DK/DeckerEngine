@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-09-22T11:24:00+08:00"
+updated_at: "2026-09-22T11:44:41+08:00"
 status: accepted
 ---
 
@@ -21,6 +21,7 @@ Core 初始实现及 Debug/Release 验证见 [0002](development/0002-foundation-
 Eigen 基础数学 M1.2 已完成，见 [0004](development/0004-eigen-math-foundation.md)；
 M1.3 Transform 已完成，见 [0005](development/0005-transform.md)；
 M1.4 工程路径与文件 IO 已完成，见 [0006](development/0006-foundation-io.md)。
+M1.5 Windows 安全保存已完成，见 [0007](development/0007-atomic-file-save.md)。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作，暂不安排复杂并行与性能优化。
@@ -35,7 +36,7 @@ M1.4 工程路径与文件 IO 已完成，见 [0006](development/0006-foundation
 | 阶段 | 交付目标 | 必要前置 | 状态 |
 | --- | --- | --- | --- |
 | M0 工程骨架 | 可配置、编译和测试的基础工程；spec 流程 | 无 | 已完成 |
-| M1 Foundation 最小基础 | 错误、日志、稳定 ID、数学约定、文件 IO | M0 | 进行中：M1.1–M1.4 完成，下一项 M1.5 |
+| M1 Foundation 最小基础 | 错误、日志、稳定 ID、数学约定、文件 IO | M0 | 进行中：M1.1–M1.5 完成，下一项 M1.6 |
 | M2 场景文档 | 实体、变换、层级、资产引用、保存与重载 | M1 | 待开始 |
 | M3 命令与 CPU Runtime | CLI/stdio 创建、修改、查询、保存场景 | M2 | 待开始 |
 | M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3 | 待开始 |
@@ -99,7 +100,7 @@ M9、M10 将这套基础扩展为可脚本化的渲染与物理实验平台。
 | M1.2 | Eigen 类型、单位/坐标、角度与基础旋转 | M1.1 | Debug/Release 各 36 项通过；独立数学配置 28 项通过；[0004](development/0004-eigen-math-foundation.md) | 已完成 |
 | M1.3 | Transform TRS、组合与逆变换 | M1.2 | 剪切/镜像/奇异与溢出验证；Debug/Release 各 60 项、独立数学 52 项通过；[0005](development/0005-transform.md) | 已完成 |
 | M1.4 | 工程路径与文件读写 | M1.1 | Unicode/相对路径、二进制及错误边界；Debug/Release 各 73 项、独立 IO 23 项通过；[0006](development/0006-foundation-io.md) | 已完成 |
-| M1.5 | 同目录临时文件与安全替换 | M1.4 | 写入/替换失败保留原文件，清理临时产物；明确平台原子性边界 | 待开始 |
+| M1.5 | 同目录临时文件与安全替换 | M1.4 | Windows NTFS 故障保护/清理；Debug/Release 各 85 通过、1 跳过，独立 IO 35 通过、1 跳过；[0007](development/0007-atomic-file-save.md) | 已完成 |
 | M1.6 | Foundation 集成验收 | M1.3、M1.5 | 独立 CPU 示例串联 ID、变换和保存/重载，Debug/Release 通过且不依赖窗口/GPU | 待开始 |
 
 **先写设计：** `foundation-core.md`、`foundation-math.md`、
@@ -416,16 +417,17 @@ GPU 未完成前不释放状态，也不默认经 CPU 读回再上传。
 
 ## 当前执行边界与下一步
 
-已完成 **M1.4 工程路径与文件 IO**，设计见 [foundation-io.md](design/foundation-io.md)，
-记录见 [0006](development/0006-foundation-io.md)。
-严格 UTF-8 转换、固定工程根、带上限的二进制读取和普通写入均已实现。
-普通写入会截断已有文件，错误时不保证原内容。本次止于该子阶段边界。
+已完成 **M1.5 同目录临时文件与安全替换**，设计见 [foundation-io.md](design/foundation-io.md)，
+记录见 [0007](development/0007-atomic-file-save.md)。
+Windows 安全保存支持独占临时文件、分块写入/刷新/关闭、同卷重命名与失败清理；
+故障测试验证旧文件保护。符号链接测试因本机创建权限不足跳过，其他平台及断电恢复未验证。
+原有普通写入仍会截断已有文件，调用方按需求选用独立安全保存接口。
 
-下一项为 **M1.5 同目录临时文件与安全替换**，随后为 M1.6 Foundation 集成验收。
-M1.5 开工时先扩展 foundation-io.md，明确临时文件所有权、失败清理、
-替换失败时的旧文件保护，以及 Windows 原子性与持久化边界。
+下一项为 **M1.6 Foundation 集成验收**。
+先建立集成案例设计，串联稳定 ID、Transform 和安全保存/重载，
+提供不依赖窗口/GPU 的 CPU 示例并验证 Debug/Release。M1 仍处于进行中。
 
-当前下一可用开发编号为 **0007**；实际开工时重新扫描
+当前下一可用开发编号为 **0008**；实际开工时重新扫描
 [开发目录](development/README.md)，取最大编号加一。
 仅在实际开发开始时创建新编号记录；子阶段状态和验收证据在本文件持续维护。
 
