@@ -48,6 +48,7 @@ DeckerEngine/
     ├── roadmap.md             # 阶段路线、依赖与验收条件
     ├── design/                # 每个模块的设计文档
     ├── development/           # 按编号排序的开发记录
+    ├── commands/              # 命令目录、参数、返回值和调用示例
     └── templates/             # 两类文档模板
 ```
 
@@ -55,6 +56,8 @@ DeckerEngine/
 apps 管理 runner。其他空目录通过 .gitkeep 留存，开发模块时再增加 CMakeLists。
 
 ## CPU 批处理
+
+完整命令用法见 [命令参考](spec/commands/README.md)，按发现、场景、实体、历史和运行时分类。
 
 先按 windows-dev 构建，然后在现有工程目录执行示例：
 

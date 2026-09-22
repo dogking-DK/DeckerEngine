@@ -4,6 +4,7 @@
 
 - [设计目录](design/README.md)：当前有效的模块边界、接口、数据与取舍。
 - [开发目录](development/README.md)：按编号排列的实际变更、验证结果和交接信息。
+- [命令参考](commands/README.md)：按功能分类的命令目录、参数、返回值和调用示例。
 - [架构总览](design/architecture.md)
 - [开发 Roadmap](roadmap.md)：阶段依赖、交付物、验收条件和近期任务。
 - [工程基础设计](design/project-foundation.md)
@@ -30,6 +31,16 @@
   不代表新增人工审批步骤。
 - 设计含 `module`；开发含 `id` 和 `design_refs`（相对该文件的设计链接）。
 - 正文保留可点击的相关设计、开发记录和代码路径。
+
+## 命令文档
+
+可调用命令的使用说明放在 `spec/commands/`，按功能分组，目录入口为 README.md。
+每条命令说明用途、参数/必填项/默认值、返回值、前置条件、guard、副作用/撤销范围、
+常见错误和调用示例；公共类型与协议规则在入口集中说明。
+参考页记录 created_at、updated_at，更新时保留创建时间；不分配开发日志编号。
+新增、修改或删除命令时同步对应参考页和目录。以 commands.list/commands.describe
+核对实际注册与 schema，并运行受影响的示例；业务语义同时对照模块设计与实现。
+模块设计保存设计理由，skill 保存开发方法；具体命令定义不复制到 skill 中。
 
 ## 开发记录粒度
 

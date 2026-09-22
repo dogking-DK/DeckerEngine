@@ -12,6 +12,7 @@ CMake target 使用 dk_* / dk::*，构建选项和宏使用 DK_*，程序使用 
 
 优先阅读 [架构总览](spec/design/architecture.md)、相关模块设计和最近开发记录。
 阶段目标、依赖和近期任务见 [开发 Roadmap](spec/roadmap.md)。
+新增或变更命令时同步 [命令参考](spec/commands/README.md)，规则见 spec 规范。
 不把预留目录或依赖 feature 当作已实现能力。
 公开接口位于 include/dk/，内部实现位于 src/；
 模块依赖通过 target 的 PUBLIC/PRIVATE/INTERFACE 表达，不使用全局 include/link。

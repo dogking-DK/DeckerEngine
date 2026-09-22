@@ -1,7 +1,7 @@
 ---
 module: commands
 created_at: "2026-09-22T13:12:54+08:00"
-updated_at: "2026-09-22T13:41:00+08:00"
+updated_at: "2026-09-22T17:00:46+08:00"
 status: accepted
 ---
 
@@ -35,6 +35,15 @@ execute 先查命令，再校验参数，然后调用同步 handler，最后检�
 参数失败为 invalid_argument、未知命令为 not_found、坏结果或 handler 普通异常为 internal_error；
 handler 的业务 Error 保留 code 和有序 context，追加命令名。资源分配异常向上抛出。
 registry 仅负责契约，不为任意外部 handler 的副作用提供回滚；M3.3 在可信场景服务建立事务。
+
+## 命令使用文档
+
+[命令参考](../commands/README.md) 面向人和 AI 的调用需求，按功能分组维护名称、
+用途、参数、返回值、guard、副作用/撤销范围、错误和示例。模块内部设计继续由本文件、
+服务设计和协议设计维护；skill 仅规定维护步骤，不复制具体命令目录。
+新增或修改命令时同步对应参考页，使用 commands.list 检查目录覆盖，
+使用 commands.describe 对照参数/结果 schema 与 effect/undoable；业务前置条件同时核对服务实现。
+验证只覆盖改动涉及的命令和示例；纯文档更新不新增编号开发记录。
 
 ## 发现和边界
 
