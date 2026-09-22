@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <functional>
 #include <span>
 #include <vector>
 
@@ -26,5 +27,11 @@ inline constexpr std::size_t default_file_read_limit = 64U * 1024U * 1024U;
 // from concurrent path changes. Other platforms return not_supported.
 [[nodiscard]] Result<void> write_file_bytes_atomic(
     const std::filesystem::path& path, std::span<const std::byte> bytes);
+
+// Runs after closing the temporary file and before replacing the target.
+// Validator must only read the temporary file and must not retain its path.
+using AtomicFileValidator = std::function<Result<void>(const std::filesystem::path&)>;
+[[nodiscard]] Result<void> write_file_bytes_atomic(const std::filesystem::path& path,
+    std::span<const std::byte> bytes, const AtomicFileValidator& validator);
 
 } // namespace dk

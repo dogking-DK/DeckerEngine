@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T11:52:43+08:00"
+updated_at: "2026-09-22T13:06:18+08:00"
 status: accepted
 ---
 
@@ -30,6 +30,9 @@ engine/foundation/core 是首个真实静态库 `dk_core`，别名 `dk::core`。
 DK_BUILD_EXAMPLES 默认 ON；当前 math/io 同时启用时建立独立 dk-foundation-demo，
 不满足依赖时跳过，不反向开启模块。bootstrap 关闭示例。
 示例跨进程 CTest 不依赖 runner 或 Catch2，详见 [集成设计](foundation-integration.md)。
+M2 开发预设启用 DK_BUILD_SCENE（选项自身默认 OFF），构建 dk::asset_types/dk::scene。
+Scene 要求 math/io 同时开启；启用示例时增加 dk-scene-demo 及独立进程验收。
+bootstrap 和独立 Foundation 配置显式关闭 Scene；README 保留最新可复现命令。
 
 CMake 最低 3.28，C++23 target 使用要求向消费者传播，禁用编译器扩展。
 项目警告函数只作用于自身 target，不污染依赖。默认构建目录为 `out/build/<preset>`，
@@ -56,7 +59,8 @@ CTest 保留 runner 冒烟验证，开发预设额外运行 Catch2 行为测试�
 清单默认安装 Core 必需的 stduuid，可选库仍按 feature 选择。
 stduuid 在 Core 实现中使用，不暴露到公开头。
 数学模块使用独立 math feature 安装 eigen3，启用 DK_BUILD_MATH 时自动补充该组；
-foundation 中移除未使用的 glm，保留日志及后续 JSON 依赖。
+foundation 中移除未使用的 glm，保留日志及 JSON 依赖。M2 的 scene feature
+也声明 flecs/nlohmann-json，关闭日志的场景配置不需要 fmt/spdlog。
 dk::math 的公开 Eigen 类型要求 PUBLIC 传递 Eigen3::Eigen，详见
 [数学设计](foundation-math.md)。bootstrap 显式关闭数学，保持最小依赖构建。
 IO 通过默认开启的 DK_BUILD_IO 构建 dk::io，仅链接 dk::core，无额外依赖；

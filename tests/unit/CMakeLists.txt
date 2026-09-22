@@ -12,8 +12,9 @@ dk_target_defaults(dk_core_tests)
 
 include(Catch)
 if(DK_BUILD_SCENE)
-    add_executable(dk_scene_tests SceneDocumentTests.cpp ProjectTests.cpp)
-    target_link_libraries(dk_scene_tests PRIVATE dk::scene Catch2::Catch2WithMain)
+    find_package(nlohmann_json CONFIG REQUIRED)
+    add_executable(dk_scene_tests SceneDocumentTests.cpp ProjectTests.cpp SceneIOTests.cpp)
+    target_link_libraries(dk_scene_tests PRIVATE dk::scene Catch2::Catch2WithMain nlohmann_json::nlohmann_json)
     dk_target_defaults(dk_scene_tests)
     catch_discover_tests(dk_scene_tests TEST_PREFIX "dk.scene."
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST)

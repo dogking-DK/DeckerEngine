@@ -13,5 +13,6 @@
 | 0009 | [flecs 文档与实体身份](0009-scene-identity.md) | scene | completed |
 | 0010 | [组件与变换层级](0010-scene-hierarchy.md) | scene | completed |
 | 0011 | [工程格式与资产引用](0011-project-assets.md) | scene、assets-types、project-format | completed |
+| 0012 | [场景序列化与安全重载](0012-scene-persistence.md) | scene、project-format、foundation-io | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

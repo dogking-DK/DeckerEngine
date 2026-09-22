@@ -36,7 +36,8 @@ inline void fields(const Json& value, std::initializer_list<std::string_view> na
 }
 inline void version_one(const Json& value)
 {
-    require(value.is_number_integer() && value == 1, "Unsupported format or component version", ErrorCode::not_supported);
+    require(value.is_number_integer(), "Version must be an integer");
+    require(value == 1, "Unsupported format or component version", ErrorCode::not_supported);
 }
 inline std::string string_value(const Json& value)
 {

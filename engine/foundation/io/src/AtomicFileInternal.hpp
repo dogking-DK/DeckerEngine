@@ -26,6 +26,7 @@ public:
 
 [[nodiscard]] std::unique_ptr<AtomicWriteOps> make_atomic_write_ops();
 [[nodiscard]] Result<void> write_file_bytes_atomic_impl(
-    const std::filesystem::path& path, std::span<const std::byte> bytes, AtomicWriteOps& ops);
+    const std::filesystem::path& path, std::span<const std::byte> bytes, AtomicWriteOps& ops,
+    const AtomicFileValidator& validator = {});
 
 } // namespace dk::detail

@@ -237,7 +237,7 @@ std::unique_ptr<AtomicWriteOps> make_atomic_write_ops()
 }
 
 Result<void> write_file_bytes_atomic_impl(const fs::path& path,
-    std::span<const std::byte> bytes, AtomicWriteOps& ops)
+    std::span<const std::byte> bytes, AtomicWriteOps& ops, const AtomicFileValidator& validator)
 {
     const auto target = prepare_target(path);
     if (!target) { return std::unexpected(target.error()); }
@@ -288,6 +288,10 @@ Result<void> write_file_bytes_atomic_impl(const fs::path& path,
     if (const auto code = ops.close()) {
         return temp.fail(file_error("atomic_save.close", *display, code));
     }
+    if (validator) {
+        const auto validated = validator(temp.path);
+        if (!validated) { return temp.fail(validated.error().with_context("atomic_save.validate")); }
+    }
     if (const auto checked = check_target(*target, *display); !checked) {
         return temp.fail(checked.error());
     }
@@ -302,9 +306,15 @@ Result<void> write_file_bytes_atomic_impl(const fs::path& path,
 
 Result<void> write_file_bytes_atomic(const fs::path& path, std::span<const std::byte> bytes)
 {
+    return write_file_bytes_atomic(path, bytes, {});
+}
+
+Result<void> write_file_bytes_atomic(const fs::path& path, std::span<const std::byte> bytes,
+    const AtomicFileValidator& validator)
+{
     auto ops = detail::make_atomic_write_ops();
     if (!ops) { return std::unexpected(unsupported("<platform>")); }
-    return detail::write_file_bytes_atomic_impl(path, bytes, *ops);
+    return detail::write_file_bytes_atomic_impl(path, bytes, *ops, validator);
 }
 
 } // namespace dk

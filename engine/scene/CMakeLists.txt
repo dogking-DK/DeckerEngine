@@ -9,9 +9,10 @@ endif()
 add_library(dk_scene STATIC)
 add_library(dk::scene ALIAS dk_scene)
 target_sources(dk_scene
-    PRIVATE src/SceneDocument.cpp src/Components.cpp src/Project.cpp
+    PRIVATE src/SceneDocument.cpp src/Components.cpp src/Project.cpp src/SceneIO.cpp
     PUBLIC FILE_SET HEADERS BASE_DIRS include FILES
-        include/dk/scene/SceneDocument.hpp include/dk/scene/Components.hpp include/dk/scene/Project.hpp)
+        include/dk/scene/SceneDocument.hpp include/dk/scene/Components.hpp include/dk/scene/Project.hpp
+        include/dk/scene/SceneSnapshot.hpp include/dk/scene/SceneIO.hpp)
 target_link_libraries(dk_scene PUBLIC dk::core dk::math dk::io dk::asset_types
     PRIVATE nlohmann_json::nlohmann_json $<IF:$<TARGET_EXISTS:flecs::flecs>,flecs::flecs,flecs::flecs_static>)
 dk_target_defaults(dk_scene)

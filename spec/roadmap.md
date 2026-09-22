@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-09-22T12:36:42+08:00"
+updated_at: "2026-09-22T13:06:18+08:00"
 status: accepted
 ---
 
@@ -23,6 +23,8 @@ M1.3 Transform 已完成，见 [0005](development/0005-transform.md)；
 M1.4 工程路径与文件 IO 已完成，见 [0006](development/0006-foundation-io.md)。
 M1.5 Windows 安全保存已完成，见 [0007](development/0007-atomic-file-save.md)。
 M1.6 CPU 集成验收已完成，见 [0008](development/0008-foundation-integration.md)，M1 全部子阶段完成。
+M2.1–M2.4 已完成：flecs 文档、组件层级、工程/资产引用和 JSON 安全持久化；
+最终验收见 [0012](development/0012-scene-persistence.md)。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作，暂不安排复杂并行与性能优化。
@@ -38,7 +40,7 @@ M1.6 CPU 集成验收已完成，见 [0008](development/0008-foundation-integrat
 | --- | --- | --- | --- |
 | M0 工程骨架 | 可配置、编译和测试的基础工程；spec 流程 | 无 | 已完成 |
 | M1 Foundation 最小基础 | 错误、日志、稳定 ID、数学约定、文件 IO | M0 | 已完成，M1.1–M1.6 均验收；Windows 本地文件范围 |
-| M2 场景文档 | 实体、变换、层级、资产引用、保存与重载 | M1 | 进行中：M2.1–M2.3 完成 |
+| M2 场景文档 | 实体、变换、层级、资产引用、保存与重载 | M1 | 已完成（M2.1–M2.4） |
 | M3 命令与 CPU Runtime | CLI/stdio 创建、修改、查询、保存场景 | M2 | 待开始 |
 | M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3 | 待开始 |
 | M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、最小呈现 | M1 | 待开始 |
@@ -137,7 +139,7 @@ M9、M10 将这套基础扩展为可脚本化的渲染与物理实验平台。
 | M2.1 | flecs 文档与实体身份 | M1 | 创建/删除实体、持久 ID 去重，所有权和失败回滚；[0009](development/0009-scene-identity.md) | 已完成 |
 | M2.2 | 组件与变换层级 | M2.1 | 名称/Transform/Hierarchy、父子传播、循环与删除；[0010](development/0010-scene-hierarchy.md) | 已完成 |
 | M2.3 | 工程格式与资产引用 | M2.2 | 格式版本、引用和缺失诊断；[0011](development/0011-project-assets.md) | 已完成 |
-| M2.4 | 序列化与安全重载 | M2.3 | 两遍加载、失败不替换旧状态；revision/dirty、版本和保存往返全部验证 | 待开始 |
+| M2.4 | 序列化与安全重载 | M2.3 | 两遍恢复、快照/dirty、临时文件验证、失败保护与进程往返；[0012](development/0012-scene-persistence.md) | 已完成 |
 
 **先写设计：** `assets-types.md`、`project-format.md`、`scene.md`。
 在 scene 设计中明确编辑态与未来运行态的所有权，不提前实现整个模拟系统。
@@ -423,11 +425,12 @@ GPU 未完成前不释放状态，也不默认经 CPU 读回再上传。
 CPU 示例串联 ID、仿射变换与安全保存/重载；15 项进程集成测试在无日志/runner/Catch2 的
 Debug/Release 配置通过。既有符号链接测试因权限跳过，其他平台和断电恢复不在已验证范围。
 
-M2.1–M2.3 完成，下一项为 **M2.4 序列化与安全重载**，扩展 Scene 和 IO 设计。
-用户已授权连续推进 M2.1–M2.4，每节保持先设计、独立记录、验证和详细本地提交，
-无需逐节等待查收；只有必须由用户决定的阻塞事项才暂停相关工作。
+M2.1–M2.4 已按连续授权完成，每节均先设计、单独记录、验证和详细本地提交。
+默认 Debug/Release 各 128 通过、1 项既有权限跳过；无日志/runner/示例配置各 104 通过、1 跳过；
+无日志/runner/Catch2 CPU 示例配置各 16/16。快照精度、旧 revision 保存和失败状态保护均通过。
+下一项为 **M3.1 命令注册与能力发现**；本次连续开发范围止于 M2，不自动启动 M3。
 
-当前下一可用开发编号为 **0012**；实际开工时重新扫描
+当前下一可用开发编号为 **0013**；实际开工时重新扫描
 [开发目录](development/README.md)，取最大编号加一。
 仅在实际开发开始时创建新编号记录；子阶段状态和验收证据在本文件持续维护。
 

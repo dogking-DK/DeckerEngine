@@ -2,6 +2,7 @@
 
 #include <dk/core/StableId.hpp>
 #include <dk/scene/Components.hpp>
+#include <dk/scene/SceneSnapshot.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -40,8 +41,10 @@ public:
     [[nodiscard]] Result<void> set_parent(EntityId id, std::optional<EntityId> parent);
     [[nodiscard]] Result<void> set_asset_references(EntityId id, std::vector<AssetReference> references);
     [[nodiscard]] Result<void> validate() const;
+    [[nodiscard]] Result<SceneSnapshot> snapshot() const;
 
 private:
+    friend struct detail::ScenePersistence;
     struct Impl;
     explicit SceneDocument(std::unique_ptr<Impl> impl);
     std::unique_ptr<Impl> impl_;

@@ -1,5 +1,6 @@
 #include <dk/scene/SceneDocument.hpp>
 #include <dk/math/Math.hpp>
+#include "ScenePersistence.hpp"
 
 #include <flecs.h>
 
@@ -63,6 +64,7 @@ struct SceneDocument::Impl {
     SceneId id;
     std::uint64_t revision = 0;
     bool dirty = true;
+    std::shared_ptr<const int> origin = std::make_shared<const int>(0);
 
     Result<void> can_edit() const
     {
@@ -170,6 +172,9 @@ Result<EntityId> SceneDocument::create_entity()
 
 Result<void> SceneDocument::create_entity(EntityId id)
 {
+    if (entity_count() >= 10000) {
+        return scene_error(ErrorCode::invalid_state, "Scene entity limit is 10000", "SceneDocument.create_entity");
+    }
     if (id.is_nil() || contains(id)) {
         return scene_error(ErrorCode::invalid_argument, "Entity ID is nil or already exists: " + id.to_string(),
             "SceneDocument.create_entity");
@@ -286,6 +291,7 @@ Result<void> SceneDocument::set_local_transform(EntityId id, const Trsd& local)
 {
     auto data = entity(id);
     if (!data) { return std::unexpected(data.error()); }
+    if (same_trs(data->local, local)) { return {}; }
     const auto checked = Transformd::from_trs(local);
     if (!checked) { return std::unexpected(checked.error()); }
     auto normalized = local;
@@ -320,5 +326,64 @@ Result<void> SceneDocument::set_asset_references(EntityId id, std::vector<AssetR
     impl_->changed();
     return {};
 }
+
+Result<SceneSnapshot> SceneDocument::snapshot() const
+{
+    const auto valid = validate();
+    if (!valid) { return std::unexpected(valid.error()); }
+    std::vector<EntityData> data;
+    data.reserve(entity_count());
+    for (const auto key : entity_ids()) { data.push_back(impl_->value(key).data); }
+    return SceneSnapshot{id(), revision(), std::move(data), impl_->origin};
+}
+
+Result<std::unique_ptr<SceneDocument>> detail::ScenePersistence::build(
+    SceneId id, std::uint64_t revision, std::vector<EntityData> entities)
+{
+    if (entities.size() > 10000) {
+        return scene_error(ErrorCode::invalid_argument, "Scene entity limit is 10000", "SceneDocument.import");
+    }
+    auto result = SceneDocument::create(id);
+    if (!result) { return result; }
+    auto& doc = **result;
+    // Pass 1: register all persistent IDs and local data without resolving parents.
+    for (auto& data : entities) {
+        if (!valid_name(data.name)) {
+            return scene_error(ErrorCode::invalid_argument, "Invalid entity name", "SceneDocument.import");
+        }
+        const auto references = validate_asset_references(data.assets);
+        if (!references) { return std::unexpected(references.error()); }
+        const auto transform = Transformd::from_trs(data.local);
+        if (!transform) { return std::unexpected(transform.error()); }
+        const auto normalized = *normalize_quaternion(data.local.rotation);
+        // Preserve already-normalized serialized coefficients at their original precision.
+        if ((data.local.rotation.coeffs() - normalized.coeffs()).cwiseAbs().maxCoeff()
+            > 8.0 * std::numeric_limits<double>::epsilon()) {
+            data.local.rotation = normalized;
+        }
+        const auto added = doc.create_entity(data.id);
+        if (!added) { return std::unexpected(added.error()); }
+        auto prepared = std::make_shared<const SceneValue>(SceneValue{data, {}});
+        doc.impl_->world.entity(doc.impl_->entities.at(data.id)).get_mut<SceneComponents>().value.swap(prepared);
+    }
+    // Pass 2: resolve all parent IDs and build finite world transforms in topological order.
+    auto prepared = doc.impl_->prepare({}, nullptr);
+    if (!prepared) { return std::unexpected(prepared.error()); }
+    for (auto& [key, value] : *prepared) {
+        doc.impl_->world.entity(doc.impl_->entities.at(key)).get_mut<SceneComponents>().value.swap(value);
+    }
+    doc.impl_->revision = revision;
+    return result;
+}
+
+bool detail::ScenePersistence::owns(const SceneDocument& document, const SceneSnapshot& snapshot) noexcept
+{
+    return document.impl_->origin == snapshot.origin_;
+}
+void detail::ScenePersistence::saved(SceneDocument& document, const SceneSnapshot& snapshot) noexcept
+{
+    document.impl_->dirty = document.revision() != snapshot.revision();
+}
+void detail::ScenePersistence::loaded(SceneDocument& document) noexcept { document.impl_->dirty = false; }
 
 } // namespace dk

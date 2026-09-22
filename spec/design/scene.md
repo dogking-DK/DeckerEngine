@@ -1,7 +1,7 @@
 ---
 module: scene
 created_at: "2026-09-22T12:05:49+08:00"
-updated_at: "2026-09-22T12:36:42+08:00"
+updated_at: "2026-09-22T13:06:18+08:00"
 status: accepted
 ---
 
@@ -9,15 +9,15 @@ status: accepted
 
 ## 目标与阶段
 
-按 M2.1–M2.4 逐节建立场景编辑文档。本次 M2.1 只实现 flecs 所有权、SceneId、
-实体创建/删除、稳定 EntityId 索引和 revision/dirty 基础；组件/层级在 M2.2，
-资产/工程在 M2.3，持久化与清洁状态确认在 M2.4 实施。
+按 M2.1–M2.4 逐节建立场景编辑文档：flecs 所有权、稳定身份、组件与变换层级、
+工程/资产引用，以及 JSON 快照、保存和重载。各节设计与验证记录保留对应关系。
 不创建 Runtime/PlayWorld，不向调用方暴露 ECS 句柄、world 或可变组件指针。
 
 ## 模块和依赖
 
 engine/scene 建立 dk_scene / dk::scene，公开 include/dk/scene/SceneDocument.hpp。
-Pimpl 私有持有 flecs::world，PUBLIC 依赖 dk::core，PRIVATE 依赖 flecs。
+Pimpl 私有持有 flecs::world，PUBLIC 依赖 dk::core、dk::math、dk::io、dk::asset_types，
+PRIVATE 依赖 flecs 和 nlohmann-json。Scene 要求 math/io 开启，关闭时 CMake 明确报错。
 当前 vcpkg 锁定基线的 flecs 为 4.1.4；由已有 scene feature 提供，不变更基线。
 DK_BUILD_SCENE 默认 OFF，windows-dev 预设启用；启用时自动补充 scene feature。
 基础 bootstrap 和各独立 Foundation 命令显式关闭 Scene，避免隐式扩大依赖。
@@ -68,6 +68,8 @@ Debug/Release 全量回归；独立仅 Core/Scene/Catch2（关闭数学/IO/日�
 固定持久组件名 dk.Identity、dk.Name、dk.Transform、dk.Hierarchy，首版版本均为 1。
 Components.hpp 显式描述字段名称、类型和只读属性；无 RTTI 自动反射或任意组件扩展。
 EntityId 只读，世界矩阵为派生值不持久化。名称不是身份，也不绑定 flecs 名称路径。
+当前 flecs 内部存储 Identity 和不可变 SceneComponents 聚合负载；持久组件名属于逻辑协议，
+不暴露独立的 flecs 查询接口。聚合负载便于无分配地提交经过验证的整组组件。
 
 entity(id) 读取副本；set_name、set_local_transform、set_parent 是唯一写入口。
 TRS 输入由数学库校验，四元数规范化后保存；相同规范值为无操作，不递增 revision。
@@ -84,17 +86,68 @@ destroy_entity 仅允许叶节点，非叶拒绝且不改变 revision；调用�
 缺失实体、坏名称、循环、非叶删除、溢出回退和属性描述；默认 Debug/Release 回归，
 独立 Scene 配置加入数学并继续以警告即错误构建。
 
-## 后续
+## 场景协议、快照与安全重载（M2.4）
+
+SceneIO.hpp 提供 serialize_scene/parse_scene、load_scene/reload_scene、save_scene、
+save_project。内存编解码显式接收只读 Project，以校验所有 AssetId、种类和文件存在性。
+load/save 默认使用 project.scene_path；父目录由调用方创建。单线程所有者约定保持不变。
+
+v1 场景 JSON 顶层严格含 format="DeckerScene"、version=1、scene_id、revision、
+entities。revision 为 uint64 非负整数，不存 dirty。实体数组每项严格含 components，
+其键恰为五种稳定组件名，每个组件对象包含 version=1 和描述中的字段。
+Transform translation/scale 为 3 个有限 double，rotation 为 [x,y,z,w]，导入验证并归一化；
+归一化前后分量差不超过 8 * double epsilon 的四元数保留原值，避免已保存单位四元数
+因重复归一化产生末位漂移；与当前局部 TRS 精确相同的写入直接视为无操作。
+Hierarchy.parent 为 null 或非 nil EntityId；AssetReferences.items 为 {id,kind} 数组。
+仅持久化局部 TRS，重算 world。未知组件/字段/版本、重复 ID/键、缺失引用、
+循环、非法数值均拒绝；JSON 沿用 16 MiB/64 层限制，实体上限 10000。
+输出实体按 ID 排序，保留资产引用列表顺序；不序列化 ECS 句柄，不提供迁移。
+
+两遍恢复在独立候选文档完成：第一遍登记所有 EntityId 和局部组件；
+第二遍解析父级/资产引用并拓扑重算。输入顺序可以子在父前，整体 O(N+E)。
+完成校验前不触碰旧文档，reload_scene 只在成功后交换 unique_ptr；
+成功后旧对象的引用/指针失效，调用方重新取值。parse_scene 为未保存的导入状态（dirty=true），
+load_scene 从文件读入后 dirty=false，revision 恢复文件中的值。
+
+SceneDocument::snapshot 返回不可变 SceneSnapshot 值，包含同一时刻的 ID/revision/实体副本，
+及不可伪造的文档实例来源令牌。快照可在后续编辑后继续编码；不允许跨文档
+（即使 SceneId/revision 相同）用于确认保存。公开接口不提供任意清除 dirty。
+save_scene(doc, snapshot, project) 先验证来源、编码并检查引用，再交给原子 writer：
+写入/刷新/关闭临时文件，读回逐字节对比并重新解析协议，全部通过才替换目标。
+替换成功后只做无失败状态确认：dirty=(当前 revision != 保存快照 revision)。
+因此先存新快照再存旧快照也会恢复 dirty=true；失败不更改 dirty/revision 或旧文件。
+便捷重载 save_scene(doc, project) 在调用时取快照。
+
+IO 增加带验证器的 atomic writer 重载，验证器只读临时路径，在替换之前调用；
+返回错误走已有带诊断清理，抛异常由 RAII 清理后继续传播，未开始替换时旧文件仍保留。
+保存继承 Windows 本地文件/NTFS 已验收范围，不承诺断电持久化、外部并发写隔离
+或不可信同权限进程篡改临时路径的防护。工程 JSON 同样可经 save_project 验证后安全写入。
+
+验收覆盖包含父子/剪切/资产/Unicode 的文件往返，子在父前、重复/坏版本、
+循环/孤儿/缺失资源、失败重载保留旧对象与 revision/dirty、旧快照保存、
+跨实例快照拒绝、最大 revision、真实文件共享冲突、验证器失败和异常清理。
+默认与最小 Scene Debug/Release 回归，并运行独立 CPU 场景进程示例闭环。
+
+examples/scene 提供 dk-scene-demo create/load ROOT，要求已有根目录和 mesh.bin 引用占位文件。
+create 生成父子实体并覆盖 scene.json/project.json；两文件各自原子，非多文件事务。
+load 从 project.json 恢复。标准输出只含场景身份/revision/数量，诊断到 stderr；
+Windows 使用 wmain 支持 Unicode 路径。进程测试覆盖独立创建/重载、坏版本与缺失资产，
+这只是 M2 CPU 验收入口，M3 的统一命令层后续设计。
+
+## 后续边界
 
 M2.3 按 [资产类型](assets-types.md) 和 [工程格式](project-format.md) 为 EntityData
 加入 assets 值列表与 set_asset_references；新增第五个 dk.AssetReferences v1 描述。
 引入 dk::io、dk::asset_types 和私有 JSON 依赖，Scene 的独立配置同时开启数学与 IO。
 
-工程/资产引用、JSON 快照与原子重载在各子阶段开始前扩展设计。
-不把预留阶段当作当前已实现的功能。
+M2 不包含 Commands/Runtime、资产解码、图形设备、版本迁移、后台编辑或增量变换计算。
+下一阶段由 M3 设计命令层，沿用本模块的受校验写入口和快照保存语义。
 
 ## 参考与记录
 
 - [flecs 实体与组件](https://www.flecs.dev/flecs/EntitiesComponents.html)
 - [Core](foundation-core.md)、[Roadmap](../roadmap.md)
 - [0009 文档与实体身份](../development/0009-scene-identity.md)
+- [0010 组件与层级](../development/0010-scene-hierarchy.md)
+- [0011 工程与资产引用](../development/0011-project-assets.md)
+- [0012 序列化与安全重载](../development/0012-scene-persistence.md)

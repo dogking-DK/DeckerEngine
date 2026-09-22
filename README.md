@@ -5,7 +5,8 @@
 
 当前已提供工程骨架、Core 错误/结果类型、稳定 ID、可选日志、Eigen 基础数学与 Transform、工程路径和二进制 IO、Windows 安全保存、Foundation CPU 集成示例、
 `dk-run --version` 构建探针、CMake/vcpkg 配置和 spec 开发流程。
-已接入 flecs SceneDocument 与持久实体身份；渲染、物理、编辑器、IPC 和脚本模块尚未实现。
+已接入 flecs 场景文档、组件与变换层级、工程/资产引用、JSON 快照保存和安全重载。
+渲染、物理、编辑器、IPC 和脚本模块尚未实现。
 
 ## 目录
 
@@ -21,8 +22,8 @@ DeckerEngine/
 │   ├── foundation/            # core、math、io（已构建）；jobs、metadata 预留
 │   ├── platform/              # 窗口和输入接口、SDL3
 │   ├── geometry/              # CPU 几何查询和 BVH
-│   ├── assets/                # 资产类型、加载、导入
-│   ├── scene/                 # 组件、层级、序列化、迁移
+│   ├── assets/                # types 已实现；加载、导入预留
+│   ├── scene/                 # 文档、组件、层级、工程与 JSON 持久化
 │   ├── graphics/              # Vulkan device、presentation、shaders、graph
 │   ├── render/                # data、resources、passes、pipelines
 │   ├── physics/               # API、CPU/GPU 求解器
@@ -37,6 +38,7 @@ DeckerEngine/
 ├── projects/demo/             # 示例资产、场景、脚本预留
 ├── tests/                     # unit、integration、gpu、replay
 ├── examples/foundation/       # 独立 ID/变换/安全保存示例
+├── examples/scene/            # CPU 场景创建与跨进程重载
 └── spec/
     ├── roadmap.md             # 阶段路线、依赖与验收条件
     ├── design/                # 每个模块的设计文档
@@ -44,8 +46,8 @@ DeckerEngine/
     └── templates/             # 两类文档模板
 ```
 
-仅真实模块建立 CMake target；当前多层关系为根 → engine → foundation → core/math/io，
-以及根 → apps → runner。其他空目录通过 .gitkeep 留存，开发模块时再增加 CMakeLists。
+仅真实模块建立 CMake target；engine 管理 foundation/core/math/io、assets/types 和 scene，
+apps 管理 runner。其他空目录通过 .gitkeep 留存，开发模块时再增加 CMakeLists。
 
 ## Windows 快速验证
 
@@ -314,7 +316,7 @@ ctest --test-dir out/build/windows-foundation -C Release --output-on-failure
 当前安全保存验收仍限 Windows 本地文件。
 详见 [集成设计](spec/design/foundation-integration.md) 和 [0008](spec/development/0008-foundation-integration.md)。
 
-## SceneDocument（M2.1–M2.3）
+## SceneDocument（M2.1–M2.4）
 
 链接 `dk::scene`，包含 [SceneDocument.hpp](engine/scene/include/dk/scene/SceneDocument.hpp)。
 `create()` 返回持有私有 flecs world 的文档；`create_entity()` 生成持久 EntityId，
@@ -344,7 +346,43 @@ cmake --build out/build/windows-scene-only --config Debug
 ctest --test-dir out/build/windows-scene-only -C Debug --output-on-failure
 ```
 
-## 开发留档
+## 场景保存与 CPU 示例
+
+场景持久化入口为 [SceneIO.hpp](engine/scene/include/dk/scene/SceneIO.hpp)：
+
+- `snapshot()` 捕获不可变实体数据和 revision；`serialize_scene` / `parse_scene` 处理 v1 JSON。
+- `save_scene(document, project)` 保存当前快照；也可传入此前快照，后续编辑仍保持 dirty。
+- `load_scene(project)` 返回干净文档；内存 `parse_scene` 返回 dirty 的导入文档。
+- `reload_scene(owner, project)` 先构建并验证候选，成功才交换所有者，失败保留旧对象。
+- `save_project(project, relative_manifest)` 安全保存工程清单。
+
+场景和组件均显式 version=1，最多 10000 实体；先登记实体再解析关系，不依赖文件顺序。
+保存先读回并验证临时文件，然后原子替换；继承 Windows 本地文件边界。
+Scene/Project 文件各自原子，不构成跨文件事务。协议细节与测试见
+[Scene 设计](spec/design/scene.md)、[0012](spec/development/0012-scene-persistence.md)。
+
+CPU 示例要求已有根目录和资产引用占位文件（本阶段不解码网格）。create 会覆盖其中的 scene.json/project.json：
+
+```powershell
+New-Item -ItemType Directory -Force out/demo-scene | Out-Null
+Set-Content -LiteralPath out/demo-scene/mesh.bin -Value "M2 reference fixture"
+.\out\build\windows-dev\bin\Debug\dk-scene-demo.exe create out/demo-scene
+.\out\build\windows-dev\bin\Debug\dk-scene-demo.exe load out/demo-scene
+```
+
+无日志、runner 和 Catch2 的场景示例配置：
+
+```powershell
+cmake --preset windows-dev -B out/build/windows-scene-cpu -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --build out/build/windows-scene-cpu --config Debug
+ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
+```
+
+## 开发留档流程
+
+M1.6 与 M2.1–M2.4 已完成并分节本地提交。最终默认 Debug/Release 各 128 通过、
+1 项既有符号链接权限跳过；独立 Scene 配置各 104 通过、1 跳过，纯 CPU 示例各 16/16。
+下一小阶段为 M3.1 命令注册与能力发现。
 
 开发前先看 [AGENTS.md](AGENTS.md) 和 [spec 规范](spec/README.md)：
 先创建/更新模块设计，然后实现；过程中持续更新编号开发记录。

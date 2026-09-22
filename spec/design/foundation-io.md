@@ -1,7 +1,7 @@
 ---
 module: foundation-io
 created_at: "2026-09-22T11:06:07+08:00"
-updated_at: "2026-09-22T11:40:25+08:00"
+updated_at: "2026-09-22T13:06:18+08:00"
 status: accepted
 ---
 
@@ -142,6 +142,13 @@ Debug/Release 全量和仅 Core/IO（警告即错误）回归后同步 0007 与 
 6. 完成后同步文档并单独本地提交 M1.4，不推送远程。下一阶段为 M1.5。
 
 ## 参考与记录
+
+M2.4 新增 AtomicFileValidator（std::function<Result<void>(const filesystem::path&)>）
+重载：临时文件 flush/close 成功之后、check_target/replace 之前调用只读验证器。
+空验证器保持原行为；验证失败沿用 TempGuard.fail 清理并附临时路径，异常由 RAII
+尽力清理并向调用方传播。验证器不能修改文件或相关文档、不能保留临时路径。
+此重载服务于 Scene/Project 的读回验证，不改变已有两参数 API 或原平台边界。
+验证见 [0012](../development/0012-scene-persistence.md)：拒绝/异常时旧文件不变且无残留。
 
 - [filesystem](https://learn.microsoft.com/en-us/cpp/standard-library/filesystem-functions?view=msvc-170)
 - [ifstream](https://learn.microsoft.com/en-us/cpp/standard-library/basic-ifstream-class?view=msvc-170)

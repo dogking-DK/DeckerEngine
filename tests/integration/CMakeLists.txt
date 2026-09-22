@@ -16,3 +16,11 @@ if(TARGET dk_foundation_demo AND WIN32)
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/FoundationDemoTest.cmake")
     endforeach()
 endif()
+
+if(TARGET dk_scene_demo AND WIN32)
+    add_test(NAME dk.scene_demo.roundtrip
+        COMMAND "${CMAKE_COMMAND}"
+            "-DDEMO=$<TARGET_FILE:dk_scene_demo>"
+            "-DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-artifacts/$<CONFIG>/scene"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/SceneDemoTest.cmake")
+endif()
