@@ -5,7 +5,7 @@
 
 当前已提供工程骨架、Core 错误/结果类型、稳定 ID、可选日志、Eigen 基础数学与 Transform、工程路径和二进制 IO、Windows 安全保存、Foundation CPU 集成示例、
 `dk-run --version` 构建探针、CMake/vcpkg 配置和 spec 开发流程。
-渲染、场景、物理、编辑器、IPC 和脚本模块尚未实现。
+已接入 flecs SceneDocument 与持久实体身份；渲染、物理、编辑器、IPC 和脚本模块尚未实现。
 
 ## 目录
 
@@ -77,7 +77,8 @@ cmake --build --preset windows-debug
 ctest --preset windows-debug
 ```
 
-`windows-dev` 默认构建 Core、日志、Eigen 数学、IO 与 Catch2 单元测试。
+`windows-dev` 默认构建 Core、日志、Eigen 数学、IO、Scene 与 Catch2 单元测试。
+`DK_BUILD_SCENE` 默认 OFF，开发预设启用，并自动选择 scene feature。
 启用日志时自动选择 foundation，启用数学时自动选择 math，启用单元测试时自动选择 tests，
 并保留 DK_VCPKG_FEATURES 中额外指定的组。
 fmt/spdlog 已由 dk::logging 实际链接，Eigen 由 dk::math PUBLIC 传递；
@@ -213,7 +214,7 @@ if (transform) {
 仅验证 Core/数学、关闭日志和 runner 的独立配置：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-math-only -DDK_BUILD_LOGGING=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES=
+cmake --preset windows-dev -B out/build/windows-math-only -DDK_BUILD_SCENE=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES=
 cmake --build out/build/windows-math-only --config Debug
 ctest --test-dir out/build/windows-math-only -C Debug --output-on-failure
 ```
@@ -257,12 +258,12 @@ if (root) {
 仅验证 Core/IO、关闭数学、日志和 runner，并开启警告即错误：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-io-only -DDK_BUILD_MATH=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-io-only -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-io-only --config Debug
 ctest --test-dir out/build/windows-io-only -C Debug --output-on-failure
 ```
 
-Windows 开发构建现有 101 项 CTest（26 项 IO/安全保存、42 项数学/Transform、16 项 Core、
+M1.6 的 Windows 开发构建包含 101 项 CTest（26 项 IO/安全保存、42 项数学/Transform、16 项 Core、
 15 项 Foundation 集成、日志流探针和版本探针），bootstrap 保留 1 项版本测试。
 边界与验证见 [IO 设计](spec/design/foundation-io.md) 和 [0006](spec/development/0006-foundation-io.md)。
 
@@ -302,7 +303,7 @@ M1.6 已通过：默认 Debug/Release 各 **100 项通过、1 项权限跳过**�
 无日志、runner、Catch2、窗口和 GPU 依赖的独立配置：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-foundation -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-foundation -DDK_BUILD_SCENE=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-foundation --config Debug
 ctest --test-dir out/build/windows-foundation -C Debug --output-on-failure
 cmake --build out/build/windows-foundation --config Release
@@ -310,8 +311,17 @@ ctest --test-dir out/build/windows-foundation -C Release --output-on-failure
 ```
 
 该配置仅安装 stduuid、Eigen 及 vcpkg 构建辅助包，Debug/Release 各 **15/15** 通过。
-当前安全保存验收仍限 Windows 本地文件；下一阶段为 M2.1 场景文档与实体身份。
+当前安全保存验收仍限 Windows 本地文件。
 详见 [集成设计](spec/design/foundation-integration.md) 和 [0008](spec/development/0008-foundation-integration.md)。
+
+## SceneDocument（M2.1）
+
+链接 `dk::scene`，包含 [SceneDocument.hpp](engine/scene/include/dk/scene/SceneDocument.hpp)。
+`create()` 返回持有私有 flecs world 的文档；`create_entity()` 生成持久 EntityId，
+也可传入已有 ID。重复/nil ID 和缺失删除会返回错误，成功修改递增 revision。
+`entity_ids()` 返回排序副本，`validate()` 检查 ECS 与身份索引一致性。
+新文档 dirty=true；组件、层级及持久化在后续 M2 子节接入。
+设计见 [scene.md](spec/design/scene.md)，验收见 [0009](spec/development/0009-scene-identity.md)。
 
 ## 开发留档
 

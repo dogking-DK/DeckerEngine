@@ -10,5 +10,6 @@
 | 0006 | [工程路径与文件 IO](0006-foundation-io.md) | foundation-io、project-foundation | completed |
 | 0007 | [同目录临时文件与安全替换](0007-atomic-file-save.md) | foundation-io | completed |
 | 0008 | [Foundation CPU 集成验收](0008-foundation-integration.md) | foundation-integration、project-foundation | completed |
+| 0009 | [flecs 文档与实体身份](0009-scene-identity.md) | scene | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

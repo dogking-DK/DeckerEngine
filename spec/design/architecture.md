@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T12:02:27+08:00"
+updated_at: "2026-09-22T12:13:38+08:00"
 status: accepted
 ---
 
@@ -15,10 +15,11 @@ status: accepted
 构建选项和宏以 `DK_` 开头，程序以 `dk-` 开头。
 
 技术方向：C++23、Eigen、Vulkan、Slang、SDL3、ImGui、CMake、vcpkg；
-ECS 计划用 flecs，内嵌脚本计划用 Lua/sol2，外部自动化计划用 Python。
+ECS 使用 flecs，内嵌脚本计划用 Lua/sol2，外部自动化计划用 Python。
 已实现工程骨架、Core 错误/日志/稳定 ID、Eigen 基础数学、仿射 Transform、
 工程路径、二进制文件 IO 和 Windows 同目录安全保存，已通过独立 CPU 示例的集成验收。
-M1 完成，下一阶段为 M2 场景文档；其余模块在开始开发前另写专项设计。
+M1 完成，M2.1 已接入私有 flecs 场景文档与实体身份，见 [Scene 设计](scene.md)。
+其余模块在开始开发前另写专项设计。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，
