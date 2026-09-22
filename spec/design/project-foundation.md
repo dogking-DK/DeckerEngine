@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T10:42:53+08:00"
+updated_at: "2026-09-22T11:21:27+08:00"
 status: accepted
 ---
 
@@ -35,7 +35,7 @@ CTest 保留 runner 冒烟验证，开发预设额外运行 Catch2 行为测试�
 ## CMake Presets
 
 - `windows-bootstrap`：Visual Studio 18 2026 / x64，vcpkg 只安装必需的 stduuid，
-  关闭日志/数学/单元测试，构建目录为 out/build/windows-bootstrap-stduuid；
+  关闭日志/数学/IO/单元测试，构建目录为 out/build/windows-bootstrap-stduuid；
   此生成器要求 CMake 4.2 或更新。
 - `windows-dev`：相同生成器，开启 vcpkg 并选择 foundation feature。
 - `windows-desktop-deps`：准备后续桌面功能依赖；安装依赖不表示模块已实现。
@@ -55,6 +55,8 @@ stduuid 在 Core 实现中使用，不暴露到公开头。
 foundation 中移除未使用的 glm，保留日志及后续 JSON 依赖。
 dk::math 的公开 Eigen 类型要求 PUBLIC 传递 Eigen3::Eigen，详见
 [数学设计](foundation-math.md)。bootstrap 显式关闭数学，保持最小依赖构建。
+IO 通过默认开启的 DK_BUILD_IO 构建 dk::io，仅链接 dk::core，无额外依赖；
+bootstrap 也关闭 IO，接口和验证见 [IO 设计](foundation-io.md)。
 
 `DK_VCPKG_FEATURES` 在首次 `project()` 前映射到
 `VCPKG_MANIFEST_FEATURES`，并验证 feature 名。关闭 vcpkg 时不能选择 feature；
@@ -81,12 +83,13 @@ Slang 库；未来跨平台 shaderc 编译工具需单独处理 host 工具，�
 
 当前工程在初始化骨架上按 [Core 设计](foundation-core.md) 扩展：
 dk::core 增加错误和 ID，dk::logging 为可选日志 target。
-DK_BUILD_LOGGING、DK_BUILD_MATH 和 DK_BUILD_UNIT_TESTS 默认开启；
-vcpkg 自动补充对应依赖组。windows-bootstrap 显式关闭三者，保留仅依赖 stduuid 的最小探针；
+DK_BUILD_LOGGING、DK_BUILD_MATH、DK_BUILD_IO 和 DK_BUILD_UNIT_TESTS 默认开启；
+vcpkg 自动补充所需依赖组。windows-bootstrap 显式关闭四者，保留仅依赖 stduuid 的最小探针；
 开发预设使用 Catch2 增加真实行为测试，并实际链接日志依赖。
 以下原始骨架验证仍保留，Core 增量验证见 [0002](../development/0002-foundation-core.md)，
 stduuid 迁移及最小预设调整见 [0003](../development/0003-stduuid-migration.md)。
 Eigen 数学、math feature 与阶段细分见 [0004](../development/0004-eigen-math-foundation.md)。
+IO 开关和独立 Core/IO 验证见 [0006](../development/0006-foundation-io.md)。
 
 运行 configure/build/CTest，检查版本与错误参数行为；检查预设 JSON、
 vcpkg feature 解析、skill 格式、文档链接及 Git 忽略项。

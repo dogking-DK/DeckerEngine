@@ -11,6 +11,18 @@ endif()
 dk_target_defaults(dk_core_tests)
 
 include(Catch)
+if(DK_BUILD_IO)
+    add_executable(dk_io_tests IoTests.cpp)
+    target_link_libraries(dk_io_tests PRIVATE dk::io Catch2::Catch2WithMain)
+    target_compile_definitions(dk_io_tests PRIVATE DK_TEST_CONFIG="$<CONFIG>")
+    dk_target_defaults(dk_io_tests)
+    catch_discover_tests(dk_io_tests
+        TEST_PREFIX "dk.io."
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        DISCOVERY_MODE PRE_TEST
+    )
+endif()
+
 if(DK_BUILD_MATH)
     add_executable(dk_math_tests MathTests.cpp TransformTests.cpp)
     target_link_libraries(dk_math_tests PRIVATE dk::math Catch2::Catch2WithMain)

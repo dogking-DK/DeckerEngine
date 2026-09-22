@@ -3,9 +3,9 @@
 用于渲染、物理实验、场景编辑与自动化操作的 C++23 引擎工程。
 命名空间为 `dk`，CMake target 使用 `dk_*` / `dk::*`。
 
-当前已提供工程骨架、Core 错误/结果类型、稳定 ID、可选日志、Eigen 基础数学与 Transform、
+当前已提供工程骨架、Core 错误/结果类型、稳定 ID、可选日志、Eigen 基础数学与 Transform、工程路径和二进制 IO、
 `dk-run --version` 构建探针、CMake/vcpkg 配置和 spec 开发流程。
-IO、渲染、场景、物理、编辑器、IPC 和脚本模块尚未实现。
+原子保存、渲染、场景、物理、编辑器、IPC 和脚本模块尚未实现。
 
 ## 目录
 
@@ -18,7 +18,7 @@ DeckerEngine/
 ├── vcpkg.json                 # 依赖基线和按模块分组的 features
 ├── cmake/                     # 选项、toolchain 配置、编译警告
 ├── engine/
-│   ├── foundation/            # core、math（已构建）；io、jobs、metadata 预留
+│   ├── foundation/            # core、math、io（已构建）；jobs、metadata 预留
 │   ├── platform/              # 窗口和输入接口、SDL3
 │   ├── geometry/              # CPU 几何查询和 BVH
 │   ├── assets/                # 资产类型、加载、导入
@@ -43,7 +43,7 @@ DeckerEngine/
     └── templates/             # 两类文档模板
 ```
 
-仅真实模块建立 CMake target；当前多层关系为根 → engine → foundation → core/math，
+仅真实模块建立 CMake target；当前多层关系为根 → engine → foundation → core/math/io，
 以及根 → apps → runner。其他空目录通过 .gitkeep 留存，开发模块时再增加 CMakeLists。
 
 ## Windows 快速验证
@@ -76,7 +76,7 @@ cmake --build --preset windows-debug
 ctest --preset windows-debug
 ```
 
-`windows-dev` 默认构建 Core、日志、Eigen 数学与 Catch2 单元测试。
+`windows-dev` 默认构建 Core、日志、Eigen 数学、IO 与 Catch2 单元测试。
 启用日志时自动选择 foundation，启用数学时自动选择 math，启用单元测试时自动选择 tests，
 并保留 DK_VCPKG_FEATURES 中额外指定的组。
 fmt/spdlog 已由 dk::logging 实际链接，Eigen 由 dk::math PUBLIC 传递；
@@ -91,7 +91,7 @@ JSON 供后续模块使用，原规划的 GLM 已从清单移除。
 | graphics | vulkan、vulkan-memory-allocator、shader-slang |
 | editor | sdl3[vulkan]、imgui[docking-experimental,sdl3-binding,vulkan-binding] |
 | scripting | lua、sol2 |
-| tests | catch2（已接入 Core 和数学单元测试） |
+| tests | catch2（已接入 Core、数学和 IO 单元测试） |
 
 需要预下载全部规划中的桌面依赖时，使用
 `cmake --preset windows-desktop-deps`。
@@ -127,7 +127,7 @@ MSVC 环境；Linux/macOS 需自行准备支持 C++23 的编译器。
 只构建 Core 和版本探针、安装最小 stduuid 依赖时可以运行：
 
 ```sh
-cmake -S . -B out/build/local-stduuid -DDK_USE_VCPKG=ON -DDK_VCPKG_FEATURES= -DDK_BUILD_LOGGING=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_UNIT_TESTS=OFF
+cmake -S . -B out/build/local-stduuid -DDK_USE_VCPKG=ON -DDK_VCPKG_FEATURES= -DDK_BUILD_LOGGING=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_UNIT_TESTS=OFF
 cmake --build out/build/local-stduuid --config Debug
 ctest --test-dir out/build/local-stduuid -C Debug --output-on-failure
 ```
@@ -136,7 +136,7 @@ ctest --test-dir out/build/local-stduuid -C Debug --output-on-failure
 `CMAKE_PREFIX_PATH`），并提供已开启模块需要的其他依赖。
 个人路径和构建覆盖放到被 Git 忽略的 CMakeUserPresets.json。
 `DK_BUILD_RUNNER`、`DK_BUILD_TESTS`、`DK_BUILD_UNIT_TESTS`、
-`DK_BUILD_LOGGING`、`DK_BUILD_MATH` 默认开启；bootstrap 预设关闭日志、数学和单元测试。
+`DK_BUILD_LOGGING`、`DK_BUILD_MATH`、`DK_BUILD_IO` 默认开启；bootstrap 关闭日志、数学、IO 和单元测试。
 DK_BUILD_TESTS=OFF 会关闭全部测试；DK_BUILD_UNIT_TESTS=OFF 仅保留可用的集成探针。
 `DK_WARNINGS_AS_ERRORS` 可按需开启。
 
@@ -209,18 +209,61 @@ if (transform) {
 }
 ```
 
-下一小阶段为 M1.4 工程路径与文件 IO。
-
 仅验证 Core/数学、关闭日志和 runner 的独立配置：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-math-only -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES=
+cmake --preset windows-dev -B out/build/windows-math-only -DDK_BUILD_LOGGING=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES=
 cmake --build out/build/windows-math-only --config Debug
 ctest --test-dir out/build/windows-math-only -C Debug --output-on-failure
 ```
 
-开发构建现有 60 项 CTest（42 项数学/Transform、16 项 Core、日志流探针、版本探针），
-bootstrap 保留 1 项版本测试。M1.3 验证记录见 [0005](spec/development/0005-transform.md)。
+M1.3 验证记录见 [0005](spec/development/0005-transform.md)。
+
+## 工程路径与文件 IO（M1.4）
+
+消费者链接 `dk::io`，包含
+[Path.hpp](engine/foundation/io/include/dk/io/Path.hpp) 和
+[File.hpp](engine/foundation/io/include/dk/io/File.hpp)，无需额外三方库。
+
+- `path_from_utf8` / `path_to_utf8` 转换 UTF-8 与原生路径；拒绝空串、NUL 和非法 Unicode。
+- `ProjectPaths::create(root)` 固定已有工程根目录；`resolve(relative)` 规范化相对路径，
+  拒绝绝对路径和词法越界，不受之后工作目录改变影响。
+- `read_file_bytes(path, max_bytes)` 返回 ByteBuffer；默认上限 64 MiB，超限返回错误。
+- `write_file_bytes(path, bytes)` 创建或截断普通文件，不创建父目录，空数据生成空文件。
+
+所有操作返回 `Result`；路径/参数错误为 invalid_argument，缺失文件或父目录为 not_found，
+其他系统错误为 io_error，错误上下文包含操作和可用的路径、系统诊断。
+工程路径解析仅处理词法结构，子路径符号链接仍按 OS 解析。
+普通写入失败可能留下空文件或部分数据；安全保存将在下一阶段 **M1.5** 实现。
+
+```cpp
+#include <dk/io/File.hpp>
+#include <dk/io/Path.hpp>
+
+const auto root = dk::path_from_utf8("projects/demo");
+if (root) {
+    const auto project = dk::ProjectPaths::create(*root);
+    if (project) {
+        const auto file = project->resolve("data.bin");
+        if (file) {
+            const auto bytes = dk::read_file_bytes(*file);
+            // 按 Result 检查读取结果；此示例不会创建或覆盖文件。
+        }
+    }
+}
+```
+
+仅验证 Core/IO、关闭数学、日志和 runner，并开启警告即错误：
+
+```powershell
+cmake --preset windows-dev -B out/build/windows-io-only -DDK_BUILD_MATH=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --build out/build/windows-io-only --config Debug
+ctest --test-dir out/build/windows-io-only -C Debug --output-on-failure
+```
+
+Windows 开发构建现有 73 项 CTest（13 项 IO、42 项数学/Transform、16 项 Core、
+日志流探针和版本探针），bootstrap 保留 1 项版本测试。
+边界与验证见 [IO 设计](spec/design/foundation-io.md) 和 [0006](spec/development/0006-foundation-io.md)。
 
 ## 开发留档
 
@@ -235,6 +278,8 @@ Roadmap 的 M0–M10 均拆为 Mx.y 小阶段，各自包含前置、范围和�
 - [工程基础设计](spec/design/project-foundation.md)
 - [Core 基础设计](spec/design/foundation-core.md)
 - [Eigen 数学设计](spec/design/foundation-math.md)
+- [工程路径与文件 IO 设计](spec/design/foundation-io.md)
+- [0006 文件 IO 开发记录](spec/development/0006-foundation-io.md)
 - [0005 Transform 开发记录](spec/development/0005-transform.md)
 - [0004 Eigen 基础数学与阶段细分](spec/development/0004-eigen-math-foundation.md)
 - [0003 stduuid 迁移记录](spec/development/0003-stduuid-migration.md)
