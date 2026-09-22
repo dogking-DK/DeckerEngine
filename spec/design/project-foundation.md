@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T14:02:00+08:00"
+updated_at: "2026-09-22T15:58:55+08:00"
 status: accepted
 ---
 
@@ -55,6 +55,17 @@ CTest 保留 runner 冒烟验证，开发预设额外运行 Catch2 行为测试�
 
 共享 presets 不包含本机绝对路径。个人覆盖用已忽略的
 `CMakeUserPresets.json`，vcpkg 根路径通过 `VCPKG_ROOT` 环境变量提供。
+
+## VS2026 工程生成入口
+
+根目录提供 generate-vs2026.bat，使用 Windows 自带 cmd，复用 windows-dev configure preset，
+不另存一份生成器/架构/依赖选项。以脚本所在目录为工作目录，执行后恢复调用者目录；
+配置阶段按现有 vcpkg manifest 准备依赖，输出包含 Debug/Release 的 VS2026 x64 解决方案。
+检查 PATH 中的 CMake，失败时给出 CMake 4.2+ 安装提示；配置失败原样返回非零退出码。
+成功显示 out/build/windows-dev/DeckerEngine.slnx；兼容生成 .sln 时显示对应路径。
+没有自动清理缓存、编译或启动 IDE。必要条件继续是 VS2026 C++ 工具、CMake 和已配置的 vcpkg。
+验证从其他工作目录实际调用、生成的解决方案和生成器/架构，以及缺少 CMake 时的诊断。
+这是工程基础维护，不推进 M4；记录见 [0018](../development/0018-vs2026-generation-script.md)。
 
 ## vcpkg 策略
 

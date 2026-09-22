@@ -20,6 +20,7 @@ DeckerEngine/
 ├── .agents/skills/             # 仓库开发留档 skill
 ├── CMakeLists.txt
 ├── CMakePresets.json
+├── generate-vs2026.bat        # 生成 VS2026 x64 开发工程
 ├── vcpkg.json                 # 依赖基线和按模块分组的 features
 ├── cmake/                     # 选项、toolchain 配置、编译警告
 ├── engine/
@@ -140,6 +141,16 @@ Release 替换配置名即可；此配置不构建 Scene、Eigen、IO、窗口�
 ## Windows 快速验证
 
 需要 Visual Studio 2026 C++ 桌面开发工具和 CMake 4.2+。
+设置 `VCPKG_ROOT` 后，在根目录运行 [generate-vs2026.bat](generate-vs2026.bat)：
+
+```powershell
+.\generate-vs2026.bat
+```
+
+脚本复用 `windows-dev` 预设，生成 `out/build/windows-dev/DeckerEngine.slnx`，
+用 VS2026 打开即可选择 x64 的 Debug/Release 配置。从其他目录调用脚本也可正常生成。
+脚本只配置工程和准备依赖；不会自动编译或打开 IDE，配置失败会返回非零退出码。
+
 安装 vcpkg 并设置 `VCPKG_ROOT`；基础预设仅安装 Core 必需的 stduuid：
 
 ```powershell
