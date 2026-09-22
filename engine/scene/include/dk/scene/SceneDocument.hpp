@@ -1,6 +1,7 @@
 #pragma once
 
 #include <dk/core/StableId.hpp>
+#include <dk/scene/Components.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -31,6 +32,12 @@ public:
     [[nodiscard]] Result<EntityId> create_entity();
     [[nodiscard]] Result<void> create_entity(EntityId id);
     [[nodiscard]] Result<void> destroy_entity(EntityId id);
+    [[nodiscard]] Result<EntityData> entity(EntityId id) const;
+    [[nodiscard]] Result<Transformd> world_transform(EntityId id) const;
+    [[nodiscard]] Result<void> set_name(EntityId id, std::string name);
+    [[nodiscard]] Result<void> set_local_transform(EntityId id, const Trsd& local);
+    // Retains the local TRS. nullopt detaches; parents with children cannot be deleted.
+    [[nodiscard]] Result<void> set_parent(EntityId id, std::optional<EntityId> parent);
     [[nodiscard]] Result<void> validate() const;
 
 private:

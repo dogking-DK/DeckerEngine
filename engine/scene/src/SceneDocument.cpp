@@ -1,4 +1,5 @@
 #include <dk/scene/SceneDocument.hpp>
+#include <dk/math/Math.hpp>
 
 #include <flecs.h>
 
@@ -9,6 +10,8 @@
 namespace dk {
 namespace detail {
 struct SceneIdentity { EntityId id; };
+struct SceneValue { EntityData data; Transformd world; };
+struct SceneComponents { std::shared_ptr<const SceneValue> value; };
 } // namespace detail
 namespace {
 
@@ -17,10 +20,44 @@ std::unexpected<Error> scene_error(ErrorCode code, std::string message, std::str
     return std::unexpected(Error{code, std::move(message), {std::move(operation)}});
 }
 
+bool valid_name(std::string_view text)
+{
+    if (text.size() > 1024) { return false; }
+    for (std::size_t i = 0; i < text.size();) {
+        auto ch = static_cast<unsigned char>(text[i++]);
+        if (ch == 0) { return false; }
+        if (ch < 0x80) { continue; }
+        unsigned remaining = 0;
+        std::uint32_t value = 0;
+        std::uint32_t minimum = 0;
+        if (ch >= 0xc2 && ch <= 0xdf) { remaining = 1; value = ch & 0x1fU; minimum = 0x80; }
+        else if (ch >= 0xe0 && ch <= 0xef) { remaining = 2; value = ch & 0xfU; minimum = 0x800; }
+        else if (ch >= 0xf0 && ch <= 0xf4) { remaining = 3; value = ch & 7U; minimum = 0x10000; }
+        else { return false; }
+        if (text.size() - i < remaining) { return false; }
+        while (remaining-- != 0) {
+            ch = static_cast<unsigned char>(text[i++]);
+            if ((ch & 0xc0U) != 0x80U) { return false; }
+            value = (value << 6U) | (ch & 0x3fU);
+        }
+        if (value < minimum || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff)) { return false; }
+    }
+    return true;
+}
+
+bool same_trs(const Trsd& a, const Trsd& b)
+{
+    return a.translation == b.translation && a.scale == b.scale && a.rotation.coeffs() == b.rotation.coeffs();
+}
+
 } // namespace
 
 struct SceneDocument::Impl {
-    explicit Impl(SceneId id_value) : id{id_value} { world.component<detail::SceneIdentity>(); }
+    explicit Impl(SceneId id_value) : id{id_value}
+    {
+        world.component<detail::SceneIdentity>();
+        world.component<detail::SceneComponents>();
+    }
     flecs::world world;
     std::unordered_map<EntityId, flecs::entity_t> entities;
     SceneId id;
@@ -35,6 +72,60 @@ struct SceneDocument::Impl {
         return {};
     }
     void changed() noexcept { ++revision; dirty = true; }
+
+    const detail::SceneValue& value(EntityId entity_id) const
+    {
+        return *world.entity(entities.at(entity_id)).get<detail::SceneComponents>().value;
+    }
+    using Values = std::unordered_map<EntityId, std::shared_ptr<const detail::SceneValue>>;
+    Result<Values> prepare(EntityId changed_id, const EntityData* replacement) const
+    {
+        std::unordered_map<EntityId, std::vector<EntityId>> children;
+        std::vector<EntityId> ready;
+        const auto data_for = [&](EntityId key) -> const EntityData& {
+            return replacement && key == changed_id ? *replacement : value(key).data;
+        };
+        for (const auto& [key, handle] : entities) {
+            (void)handle;
+            const auto& data = data_for(key);
+            if (data.parent) {
+                if (!entities.contains(*data.parent)) {
+                    return scene_error(ErrorCode::not_found, "Parent entity not found", "SceneDocument.hierarchy");
+                }
+                children[*data.parent].push_back(key);
+            } else { ready.push_back(key); }
+        }
+        Values prepared;
+        prepared.reserve(entities.size());
+        for (std::size_t index = 0; index < ready.size(); ++index) {
+            const auto key = ready[index];
+            const auto& data = data_for(key);
+            auto transform = Transformd::from_trs(data.local);
+            if (!transform) { return std::unexpected(transform.error().with_context("SceneDocument.local")); }
+            if (data.parent) { transform = prepared.at(*data.parent)->world.compose(*transform); }
+            if (!transform) { return std::unexpected(transform.error().with_context("SceneDocument.world")); }
+            prepared.emplace(key, std::make_shared<const detail::SceneValue>(detail::SceneValue{data, *transform}));
+            if (const auto found = children.find(key); found != children.end()) {
+                ready.insert(ready.end(), found->second.begin(), found->second.end());
+            }
+        }
+        if (prepared.size() != entities.size()) {
+            return scene_error(ErrorCode::invalid_argument, "Hierarchy contains a cycle", "SceneDocument.hierarchy");
+        }
+        return prepared;
+    }
+    Result<void> replace_hierarchy(const EntityData& data)
+    {
+        const auto editable = can_edit();
+        if (!editable) { return editable; }
+        auto prepared = prepare(data.id, &data);
+        if (!prepared) { return std::unexpected(prepared.error()); }
+        for (auto& [key, value_ptr] : *prepared) {
+            world.entity(entities.at(key)).get_mut<detail::SceneComponents>().value.swap(value_ptr);
+        }
+        changed();
+        return {};
+    }
 };
 
 SceneDocument::SceneDocument(std::unique_ptr<Impl> impl) : impl_{std::move(impl)} {}
@@ -85,6 +176,9 @@ Result<void> SceneDocument::create_entity(EntityId id)
     }
     const auto editable = impl_->can_edit();
     if (!editable) { return editable; }
+    EntityData data;
+    data.id = id;
+    auto components = std::make_shared<const detail::SceneValue>(detail::SceneValue{std::move(data), {}});
     const auto [slot, inserted] = impl_->entities.emplace(id, 0);
     (void)inserted; // Prevalidated above; the document has one serialized owner.
     try {
@@ -96,6 +190,7 @@ Result<void> SceneDocument::create_entity(EntityId id)
         }
         try {
             entity.set<detail::SceneIdentity>({id});
+            entity.set<detail::SceneComponents>({std::move(components)});
         } catch (...) {
             entity.destruct();
             throw;
@@ -117,6 +212,12 @@ Result<void> SceneDocument::destroy_entity(EntityId id)
     }
     const auto editable = impl_->can_edit();
     if (!editable) { return editable; }
+    for (const auto& [key, handle] : impl_->entities) {
+        (void)handle;
+        if (impl_->value(key).data.parent == id) {
+            return scene_error(ErrorCode::invalid_state, "Cannot delete an entity with children", "SceneDocument.destroy_entity");
+        }
+    }
     impl_->world.entity(found->second).destruct();
     impl_->entities.erase(found);
     impl_->changed();
@@ -137,8 +238,69 @@ Result<void> SceneDocument::validate() const
         if (!identity || identity->id != id || id.is_nil()) {
             return scene_error(ErrorCode::internal_error, "Entity identity disagrees with index", "SceneDocument.validate");
         }
+        const auto* components = entity.try_get<detail::SceneComponents>();
+        if (!components || !components->value || components->value->data.id != id || !valid_name(components->value->data.name)) {
+            return scene_error(ErrorCode::internal_error, "Entity components are inconsistent", "SceneDocument.validate");
+        }
+    }
+    const auto prepared = impl_->prepare({}, nullptr);
+    if (!prepared) { return std::unexpected(prepared.error()); }
+    for (const auto& [key, candidate] : *prepared) {
+        if (candidate->world.matrix() != impl_->value(key).world.matrix()) {
+            return scene_error(ErrorCode::internal_error, "World transform cache is inconsistent", "SceneDocument.validate");
+        }
     }
     return {};
+}
+
+Result<EntityData> SceneDocument::entity(EntityId id) const
+{
+    if (!contains(id)) { return scene_error(ErrorCode::not_found, "Entity not found", "SceneDocument.entity"); }
+    return impl_->value(id).data;
+}
+
+Result<Transformd> SceneDocument::world_transform(EntityId id) const
+{
+    if (!contains(id)) { return scene_error(ErrorCode::not_found, "Entity not found", "SceneDocument.world_transform"); }
+    return impl_->value(id).world;
+}
+
+Result<void> SceneDocument::set_name(EntityId id, std::string name)
+{
+    auto data = entity(id);
+    if (!data) { return std::unexpected(data.error()); }
+    if (!valid_name(name)) { return scene_error(ErrorCode::invalid_argument, "Name must be UTF-8 without NUL and at most 1024 bytes", "SceneDocument.set_name"); }
+    if (data->name == name) { return {}; }
+    const auto editable = impl_->can_edit();
+    if (!editable) { return editable; }
+    data->name = std::move(name);
+    auto prepared = std::make_shared<const detail::SceneValue>(detail::SceneValue{std::move(*data), impl_->value(id).world});
+    impl_->world.entity(impl_->entities.at(id)).get_mut<detail::SceneComponents>().value.swap(prepared);
+    impl_->changed();
+    return {};
+}
+
+Result<void> SceneDocument::set_local_transform(EntityId id, const Trsd& local)
+{
+    auto data = entity(id);
+    if (!data) { return std::unexpected(data.error()); }
+    const auto checked = Transformd::from_trs(local);
+    if (!checked) { return std::unexpected(checked.error()); }
+    auto normalized = local;
+    normalized.rotation = *normalize_quaternion(local.rotation);
+    if (same_trs(data->local, normalized)) { return {}; }
+    data->local = normalized;
+    return impl_->replace_hierarchy(*data);
+}
+
+Result<void> SceneDocument::set_parent(EntityId id, std::optional<EntityId> parent)
+{
+    auto data = entity(id);
+    if (!data) { return std::unexpected(data.error()); }
+    if (parent && parent->is_nil()) { return scene_error(ErrorCode::invalid_argument, "Parent ID cannot be nil", "SceneDocument.set_parent"); }
+    if (data->parent == parent) { return {}; }
+    data->parent = parent;
+    return impl_->replace_hierarchy(*data);
 }
 
 } // namespace dk

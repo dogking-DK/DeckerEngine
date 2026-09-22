@@ -3,7 +3,148 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <dk/math/Math.hpp>
+#include <limits>
 #include <type_traits>
+
+TEST_CASE("scene component descriptors expose stable versions and property types", "[scene]")
+{
+    const auto descriptors = dk::scene_component_descriptors();
+    REQUIRE(descriptors.size() == 4);
+    REQUIRE(descriptors[0].name == "dk.Identity");
+    REQUIRE(descriptors[0].properties[0].read_only);
+    REQUIRE(descriptors[2].name == "dk.Transform");
+    REQUIRE(descriptors[2].properties.size() == 3);
+    REQUIRE(descriptors[2].properties[1].type == dk::PropertyType::quaternion);
+    for (const auto& descriptor : descriptors) { REQUIRE(descriptor.version == 1); }
+}
+
+TEST_CASE("scene names are owned UTF-8 values and invalid or unchanged edits preserve revision", "[scene]")
+{
+    auto scene = *dk::SceneDocument::create();
+    const auto id = *scene->create_entity();
+    REQUIRE(scene->entity(id)->name.empty());
+    REQUIRE(scene->set_name(id, "父节点/😀").has_value());
+    const auto revision = scene->revision();
+    auto copy = *scene->entity(id);
+    copy.name = "copy";
+    REQUIRE(scene->entity(id)->name == "父节点/😀");
+    REQUIRE(scene->set_name(id, "父节点/😀").has_value());
+    REQUIRE(scene->revision() == revision);
+    for (const auto& bad : {std::string(1025, 'a'), std::string("x\0y", 3),
+         std::string("\xc0\x80", 2), std::string("\xed\xa0\x80", 3), std::string("\xf4\x90\x80\x80", 4)}) {
+        REQUIRE_FALSE(scene->set_name(id, bad).has_value());
+        REQUIRE(scene->revision() == revision);
+        REQUIRE(scene->entity(id)->name == "父节点/😀");
+    }
+    REQUIRE_FALSE(scene->entity({}).has_value());
+    REQUIRE_FALSE(scene->set_name({}, "absent").has_value());
+    REQUIRE_FALSE(scene->world_transform({}).has_value());
+}
+
+TEST_CASE("scene hierarchy propagates full affine worlds and preserves local TRS when reparenting", "[scene]")
+{
+    auto scene = *dk::SceneDocument::create();
+    const auto parent = *scene->create_entity();
+    const auto child = *scene->create_entity();
+    const auto leaf = *scene->create_entity();
+    dk::Trsd a;
+    a.translation = {10, 0, 0};
+    a.scale = {2, 3, -1};
+    a.rotation = *dk::rotation_from_axis_angle(dk::Vec3d{0, 0, 1}, dk::radians(90.0));
+    dk::Trsd b;
+    b.translation = {1, 2, 3};
+    b.rotation = *dk::rotation_from_axis_angle(dk::Vec3d{0, 0, 1}, dk::radians(45.0));
+    REQUIRE(scene->set_local_transform(parent, a).has_value());
+    REQUIRE(scene->set_local_transform(child, b).has_value());
+    REQUIRE(scene->set_parent(child, parent).has_value());
+    REQUIRE(scene->set_parent(leaf, child).has_value());
+    auto expected = dk::Transformd::from_trs(a)->compose(*dk::Transformd::from_trs(b));
+    REQUIRE(scene->world_transform(leaf)->matrix().isApprox(expected->matrix(), 1e-12));
+    REQUIRE(scene->entity(child)->local.translation == b.translation);
+    a.translation = {20, 1, 2};
+    REQUIRE(scene->set_local_transform(parent, a).has_value());
+    expected = dk::Transformd::from_trs(a)->compose(*dk::Transformd::from_trs(b));
+    REQUIRE(scene->world_transform(leaf)->matrix().isApprox(expected->matrix(), 1e-12));
+    REQUIRE(scene->set_parent(child, std::nullopt).has_value());
+    REQUIRE(scene->world_transform(leaf)->matrix().isApprox(dk::Transformd::from_trs(b)->matrix(), 1e-12));
+    REQUIRE(scene->destroy_entity(parent).has_value());
+    REQUIRE(scene->validate().has_value());
+}
+
+TEST_CASE("scene rejects hierarchy cycles missing parents and nonleaf deletion without mutation", "[scene]")
+{
+    auto scene = *dk::SceneDocument::create();
+    const auto a = *scene->create_entity();
+    const auto b = *scene->create_entity();
+    const auto c = *scene->create_entity();
+    REQUIRE(scene->set_parent(b, a).has_value());
+    REQUIRE(scene->set_parent(c, b).has_value());
+    const auto revision = scene->revision();
+    REQUIRE_FALSE(scene->set_parent(a, c).has_value());
+    REQUIRE_FALSE(scene->set_parent(a, a).has_value());
+    REQUIRE_FALSE(scene->set_parent(a, dk::EntityId{}).has_value());
+    REQUIRE_FALSE(scene->set_parent(a, *dk::EntityId::generate()).has_value());
+    REQUIRE_FALSE(scene->destroy_entity(a).has_value());
+    REQUIRE_FALSE(scene->destroy_entity(b).has_value());
+    REQUIRE(scene->set_parent(b, a).has_value());
+    REQUIRE(scene->revision() == revision);
+    REQUIRE_FALSE(scene->entity(a)->parent.has_value());
+    REQUIRE(scene->entity(b)->parent == a);
+    REQUIRE(scene->validate().has_value());
+    REQUIRE(scene->destroy_entity(c).has_value());
+    REQUIRE(scene->destroy_entity(b).has_value());
+    REQUIRE(scene->destroy_entity(a).has_value());
+}
+
+TEST_CASE("scene transform validation normalizes quaternions and rolls back descendant overflow", "[scene]")
+{
+    auto scene = *dk::SceneDocument::create();
+    const auto parent = *scene->create_entity();
+    const auto child = *scene->create_entity();
+    dk::Trsd local;
+    local.rotation = dk::Quatd{2, 0, 0, 0};
+    const auto initial_revision = scene->revision();
+    REQUIRE(scene->set_local_transform(child, local).has_value());
+    REQUIRE(scene->revision() == initial_revision);
+    local.scale = {2, 1, 1};
+    REQUIRE(scene->set_local_transform(child, local).has_value());
+    REQUIRE(scene->set_parent(child, parent).has_value());
+    const auto before = *scene->world_transform(child);
+    const auto revision = scene->revision();
+    dk::Trsd bad;
+    bad.scale.x() = std::numeric_limits<double>::max();
+    REQUIRE_FALSE(scene->set_local_transform(parent, bad).has_value());
+    bad.translation.x() = std::numeric_limits<double>::infinity();
+    REQUIRE_FALSE(scene->set_local_transform(child, bad).has_value());
+    bad = {};
+    bad.rotation.coeffs().setZero();
+    REQUIRE_FALSE(scene->set_local_transform(child, bad).has_value());
+    REQUIRE(scene->revision() == revision);
+    REQUIRE(scene->world_transform(child)->matrix() == before.matrix());
+    REQUIRE(scene->entity(parent)->local.scale == dk::Vec3d::Ones());
+    local.scale = {0, -2, 3};
+    REQUIRE(scene->set_local_transform(child, local).has_value());
+    REQUIRE_FALSE(scene->world_transform(child)->inverse().has_value());
+    REQUIRE(scene->validate().has_value());
+}
+
+TEST_CASE("scene hierarchy traversal handles deep chains without recursive calls", "[scene]")
+{
+    auto scene = *dk::SceneDocument::create();
+    std::optional<dk::EntityId> previous;
+    dk::Trsd local;
+    local.translation.x() = 1;
+    for (int index = 0; index < 160; ++index) {
+        const auto id = *scene->create_entity();
+        REQUIRE(scene->set_local_transform(id, local).has_value());
+        REQUIRE(scene->set_parent(id, previous).has_value());
+        previous = id;
+    }
+    REQUIRE(scene->world_transform(*previous)->matrix()(0, 3) == 160);
+    REQUIRE(scene->validate().has_value());
+}
+
 
 static_assert(!std::is_copy_constructible_v<dk::SceneDocument>);
 static_assert(!std::is_move_constructible_v<dk::SceneDocument>);

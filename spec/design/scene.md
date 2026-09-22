@@ -1,7 +1,7 @@
 ---
 module: scene
 created_at: "2026-09-22T12:05:49+08:00"
-updated_at: "2026-09-22T12:05:49+08:00"
+updated_at: "2026-09-22T12:27:09+08:00"
 status: accepted
 ---
 
@@ -58,9 +58,35 @@ C++ 异常路径销毁已建实体、回收索引项，提交后才更新 revisi
 Debug/Release 全量回归；独立仅 Core/Scene/Catch2（关闭数学/IO/日志/示例/runner）
 验证 M2.1 边界。M2.2 引入数学后再调整独立配置。
 
+## 组件与层级（M2.2）
+
+本节新增公开 EntityData 值副本：id、UTF-8 name（可空，上限 1024 字节、禁止 NUL）、
+双精度 Trsd local、optional<EntityId> parent。每个实体始终拥有 Identity/Name/Transform/Hierarchy；
+缺省名称空、单位 TRS、无父级。world_transform 返回派生 Transformd，保留剪切。
+场景现在 PUBLIC 依赖 dk::math；DK_BUILD_SCENE 要求 DK_BUILD_MATH=ON，关闭时配置明确报错。
+
+固定持久组件名 dk.Identity、dk.Name、dk.Transform、dk.Hierarchy，首版版本均为 1。
+Components.hpp 显式描述字段名称、类型和只读属性；无 RTTI 自动反射或任意组件扩展。
+EntityId 只读，世界矩阵为派生值不持久化。名称不是身份，也不绑定 flecs 名称路径。
+
+entity(id) 读取副本；set_name、set_local_transform、set_parent 是唯一写入口。
+TRS 输入由数学库校验，四元数规范化后保存；相同规范值为无操作，不递增 revision。
+set_parent(nullopt) 解绑，显式 nil/缺失父级、自指向/循环返回错误；重挂保留 local。
+destroy_entity 仅允许叶节点，非叶拒绝且不改变 revision；调用方显式自底向上删除。
+
+层级以稳定 ID 组件保存，不使用会隐式级联删除的 flecs ChildOf。
+修改变换/父级时先复制组件候选，按根至叶的拓扑队列计算所有 world（无递归栈深限制）。
+发现循环、缺失引用或非有限组合时不提交。成功后用已准备好的不可变 shared_ptr 交换 ECS
+组件负载和派生矩阵，提交不分配内存；查询不暴露这些内部指针。此基线以正确性为先，
+层级编辑 O(N+E)，尚不做脏子树增量更新。普通创建、名称和叶删除无需重建整个 world。
+
+验证多级传播、非均匀缩放剪切、负/零缩放、规范化、重挂/解绑、无操作、
+缺失实体、坏名称、循环、非叶删除、溢出回退和属性描述；默认 Debug/Release 回归，
+独立 Scene 配置加入数学并继续以警告即错误构建。
+
 ## 后续
 
-组件属性描述与变换层级、工程/资产引用、JSON 快照与原子重载在各子阶段开始前扩展设计。
+工程/资产引用、JSON 快照与原子重载在各子阶段开始前扩展设计。
 不把预留阶段当作当前已实现的功能。
 
 ## 参考与记录

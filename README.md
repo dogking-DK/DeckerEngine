@@ -314,14 +314,19 @@ ctest --test-dir out/build/windows-foundation -C Release --output-on-failure
 当前安全保存验收仍限 Windows 本地文件。
 详见 [集成设计](spec/design/foundation-integration.md) 和 [0008](spec/development/0008-foundation-integration.md)。
 
-## SceneDocument（M2.1）
+## SceneDocument（M2.1–M2.2）
 
 链接 `dk::scene`，包含 [SceneDocument.hpp](engine/scene/include/dk/scene/SceneDocument.hpp)。
 `create()` 返回持有私有 flecs world 的文档；`create_entity()` 生成持久 EntityId，
 也可传入已有 ID。重复/nil ID 和缺失删除会返回错误，成功修改递增 revision。
 `entity_ids()` 返回排序副本，`validate()` 检查 ECS 与身份索引一致性。
-新文档 dirty=true；组件、层级及持久化在后续 M2 子节接入。
-设计见 [scene.md](spec/design/scene.md)，验收见 [0009](spec/development/0009-scene-identity.md)。
+新文档 dirty=true。`entity()` 返回名称、局部 Trsd 和父 ID 的副本；
+`set_name` / `set_local_transform` / `set_parent` 验证后编辑，`world_transform` 返回派生仿射矩阵。
+重挂保留局部 TRS，删除有子节点的实体被拒绝；循环、缺失父级、非有限变换均不改变旧状态。
+`scene_component_descriptors()` 提供稳定组件名、版本及字段类型。Scene 要求 `DK_BUILD_MATH=ON`。
+资产引用和持久化在后续 M2 子节接入。
+设计见 [scene.md](spec/design/scene.md)，验收见 [0009](spec/development/0009-scene-identity.md)、
+[0010](spec/development/0010-scene-hierarchy.md)。
 
 ## 开发留档
 
