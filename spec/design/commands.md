@@ -1,7 +1,7 @@
 ---
 module: commands
 created_at: "2026-09-22T13:12:54+08:00"
-updated_at: "2026-09-22T13:12:54+08:00"
+updated_at: "2026-09-22T13:41:00+08:00"
 status: accepted
 ---
 
@@ -24,10 +24,12 @@ effect 为 query/memory_edit/external/control，undoable 只允许 memory_edit�
 
 支持 JSON Schema 片段子集：type（或 type 数组支持 nullable）、properties、required、
 additionalProperties（bool）、items、minItems/maxItems、minLength/maxLength、minimum/maximum、
-enum。不支持引用、组合或外部 schema，未知关键字在注册时拒绝。
+enum（最多 256 项）。不支持引用、组合或外部 schema，未知关键字在注册时拒绝。
 字符串长度按 Unicode 码点；整数必须使用整数 JSON 值（1.0 拒绝），以
 x-dk-integer-token=true 扩展说明；浮点要求有限。具体 UUID、层级和 revision 语义由服务验证。
 对象可显式禁止未知字段。构造辅助函数生成同一份校验/发现使用的 schema，避免文档与校验分离。
+M3.2 补充数值比较：显式区分 signed/unsigned 和浮点范围，不依赖 JSON 库的跨整数类型排序，
+确保完整 uint64 revision 边界正确；enum 的深层数值相等也沿用此规则。
 
 execute 先查命令，再校验参数，然后调用同步 handler，最后检查结果 schema。
 参数失败为 invalid_argument、未知命令为 not_found、坏结果或 handler 普通异常为 internal_error；

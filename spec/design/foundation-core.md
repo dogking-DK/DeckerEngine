@@ -1,7 +1,7 @@
 ---
 module: foundation-core
 created_at: "2026-09-22T09:41:24+08:00"
-updated_at: "2026-09-22T10:15:52+08:00"
+updated_at: "2026-09-22T13:28:00+08:00"
 status: accepted
 ---
 
@@ -29,7 +29,8 @@ stduuid 迁移见 [0003](../development/0003-stduuid-migration.md)。
 ## 错误与 Result
 
 `ErrorCode` 使用明确整数值：invalid_argument=1、invalid_state=2、
-not_found=3、io_error=4、not_supported=5、internal_error=6。
+not_found=3、io_error=4、not_supported=5、internal_error=6、conflict=7。
+M3.2 新增 conflict 表达文档会话或 revision 冲突；原有数值保持不变。
 `error_code_name()` 提供稳定名称，未知枚举值返回 unknown。
 
 `Error` 保存 code、message 与由内到外追加的 context。

@@ -55,3 +55,17 @@ TEST_CASE("strict command JSON rejects duplicate keys malformed input and limits
     REQUIRE_FALSE(parse_command_json(std::string(1024 * 1024 + 1, ' ')));
     REQUIRE_FALSE(validate_command_value(Json::array({1, 2}), 2));
 }
+TEST_CASE("numeric bounds and enums preserve signed unsigned and floating precision") {
+    auto s = schema::integer(); s["minimum"] = 0; s["maximum"] = std::numeric_limits<std::uint64_t>::max();
+    REQUIRE(schema::check(s)); REQUIRE(schema::validate(s, std::numeric_limits<std::uint64_t>::max()));
+    REQUIRE_FALSE(schema::validate(s, -1));
+    s = schema::number(); s["maximum"] = std::uint64_t{9007199254740992ULL};
+    REQUIRE_FALSE(schema::validate(s, std::uint64_t{9007199254740993ULL}));
+    s["maximum"] = 9007199254740992.0;
+    REQUIRE_FALSE(schema::validate(s, std::uint64_t{9007199254740993ULL}));
+    s["maximum"] = std::numeric_limits<std::uint64_t>::max();
+    REQUIRE_FALSE(schema::validate(s, 0x1p64));
+    s = {{"enum", {-1, std::numeric_limits<std::uint64_t>::max()}}};
+    REQUIRE(schema::check(s)); REQUIRE(schema::validate(s, -1)); REQUIRE_FALSE(schema::validate(s, 0));
+    REQUIRE_FALSE(schema::check({{"enum", {1, 1.0}}}));
+}

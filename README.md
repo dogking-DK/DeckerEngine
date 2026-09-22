@@ -7,6 +7,7 @@
 `dk-run --version` 构建探针、CMake/vcpkg 配置和 spec 开发流程。
 已接入 flecs 场景文档、组件与变换层级、工程/资产引用、JSON 快照保存和安全重载。
 M3.1 已提供独立命令注册表、参数/结果 schema 校验及 commands.list / commands.describe。
+M3.2 通过 dk::scene_services 和 dk::scene_operations 提供会话管理、场景编辑、查询与保存。
 渲染、物理、编辑器、IPC 和脚本模块尚未实现。
 
 ## 目录
@@ -51,6 +52,14 @@ DeckerEngine/
 apps 管理 runner。其他空目录通过 .gitkeep 留存，开发模块时再增加 CMakeLists。
 
 ## 命令层独立验证
+
+启用 FRAMEWORK 和 Scene 时，`register_scene_commands(registry, service)` 注册
+scene.new/load/query/save、project.save、entity.create/delete/get/set_name/set_transform/set_parent/set_assets。
+编辑和保存参数使用 `guard: {document_id, revision}`；new/load 替换现有场景也必须携带 guard。
+从返回的 state 读取最新 guard；保存到磁盘后，重新载入会生成新的 document_id。
+scene.query 支持 offset（默认 0）和 limit（默认 128，最多 256），返回 has_more 和稳定 ID 排序的实体页。
+变换使用 translation[3]、rotation[x,y,z,w]、scale[3]，查询 world_matrix 按行展开。
+场景和工程清单分别保存。详见 [应用服务设计](spec/design/application-services.md)。
 
 `dk::commands` 的 `CommandRegistry` 注册参数/结果 schema、effect 和同步 handler。
 `commands.list` 枚举能力，`commands.describe` 返回完整契约；未知命令、参数错误和

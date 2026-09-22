@@ -1,0 +1,5 @@
+add_library(dk_scene_operations STATIC src/SceneOperations.cpp)
+add_library(dk::scene_operations ALIAS dk_scene_operations)
+target_sources(dk_scene_operations PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/operations/SceneOperations.hpp)
+target_link_libraries(dk_scene_operations PUBLIC dk::commands dk::scene_services)
+dk_target_defaults(dk_scene_operations)

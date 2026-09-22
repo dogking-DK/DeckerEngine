@@ -1,1 +1,5 @@
 add_subdirectory(commands)
+if(DK_BUILD_SCENE)
+    add_subdirectory(services)
+    add_subdirectory(operations)
+endif()

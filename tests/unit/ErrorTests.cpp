@@ -55,6 +55,7 @@ TEST_CASE("result supports void and move only values", "[error]")
 
 TEST_CASE("error names have stable fallback", "[error]")
 {
+    REQUIRE(dk::error_code_name(dk::ErrorCode::conflict) == "conflict");
     REQUIRE(dk::error_code_name(dk::ErrorCode::io_error) == "io_error");
     REQUIRE(dk::error_code_name(dk::ErrorCode::invalid_argument) == "invalid_argument");
     REQUIRE(dk::error_code_name(static_cast<dk::ErrorCode>(999)) == "unknown");

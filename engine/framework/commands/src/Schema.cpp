@@ -1,4 +1,5 @@
 #include <dk/commands/Schema.hpp>
+#include <algorithm>
 #include <cmath>
 #include <set>
 
@@ -6,6 +7,41 @@ namespace dk {
 namespace {
 Result<void> invalid(std::string message) { return std::unexpected(Error{ErrorCode::invalid_argument, std::move(message)}); }
 bool size_value(const Json& value) { return value.is_number_unsigned() || (value.is_number_integer() && value.get<std::int64_t>() >= 0); }
+int numeric_compare(const Json& a, const Json& b) {
+    if (a.is_number_integer() && b.is_number_integer()) {
+        const bool an = !a.is_number_unsigned() && a.get<std::int64_t>() < 0;
+        const bool bn = !b.is_number_unsigned() && b.get<std::int64_t>() < 0;
+        if (an != bn) return an ? -1 : 1;
+        if (an) { const auto av = a.get<std::int64_t>(), bv = b.get<std::int64_t>(); return av < bv ? -1 : (av > bv ? 1 : 0); }
+        const auto av = a.get<std::uint64_t>(), bv = b.get<std::uint64_t>(); return av < bv ? -1 : (av > bv ? 1 : 0);
+    }
+    if (a.is_number_float() && b.is_number_integer()) return -numeric_compare(b, a);
+    if (a.is_number_integer()) {
+        const double d = b.get<double>();
+        Json part;
+        if (a.is_number_unsigned()) {
+            if (d < 0) return 1;
+            if (d >= 0x1p64) return -1;
+            part = static_cast<std::uint64_t>(d);
+        } else {
+            if (d < -0x1p63) return 1;
+            if (d >= 0x1p63) return -1;
+            part = static_cast<std::int64_t>(d);
+        }
+        const auto compared = numeric_compare(a, part);
+        if (compared != 0) return compared;
+        const auto truncated = part.get<double>();
+        return truncated < d ? -1 : (truncated > d ? 1 : 0);
+    }
+    const double av = a.get<double>(), bv = b.get<double>(); return av < bv ? -1 : (av > bv ? 1 : 0);
+}
+bool equivalent(const Json& a, const Json& b) {
+    if (a.is_number() && b.is_number()) return numeric_compare(a, b) == 0;
+    if (a.type() != b.type() || a.size() != b.size()) return false;
+    if (a.is_array()) { for (std::size_t i = 0; i < a.size(); ++i) if (!equivalent(a[i], b[i])) return false; return true; }
+    if (a.is_object()) { for (const auto& [key, value] : a.items()) if (!b.contains(key) || !equivalent(value, b[key])) return false; return true; }
+    return a == b;
+}
 Result<void> inspect(const Json& value, std::size_t depth, std::size_t& nodes) {
     if (depth > 64 || ++nodes > 200000) return invalid("JSON structural limit exceeded");
     if (value.is_discarded() || value.is_binary()) return invalid("Unsupported JSON value");
@@ -51,15 +87,14 @@ Result<void> check_schema(const Json& s, std::size_t depth) {
         } else if (key == "x-dk-integer-token") {
             if (v != true) return invalid("x-dk-integer-token must be true");
         } else if (key == "enum") {
-            if (!v.is_array() || v.empty()) return invalid("enum must be a nonempty array");
-            std::set<Json> seen;
-            for (const auto& item : v) if (!seen.insert(item).second) return invalid("Duplicate enum value");
+            if (!v.is_array() || v.empty() || v.size() > 256) return invalid("enum requires 1-256 values");
+            for (std::size_t i = 0; i < v.size(); ++i) for (std::size_t j = 0; j < i; ++j) if (equivalent(v[i], v[j])) return invalid("Duplicate enum value");
         } else if (key == "minimum" || key == "maximum") {
             if (!v.is_number()) return invalid("Numeric bound required");
         } else if (!size_value(v)) return invalid("Nonnegative integer bound required");
     }
     for (const auto& bounds : {std::pair{"minItems", "maxItems"}, std::pair{"minLength", "maxLength"}, std::pair{"minimum", "maximum"}})
-        if (s.contains(bounds.first) && s.contains(bounds.second) && s[bounds.first] > s[bounds.second]) return invalid("Inverted schema bounds");
+        if (s.contains(bounds.first) && s.contains(bounds.second) && numeric_compare(s[bounds.first], s[bounds.second]) > 0) return invalid("Inverted schema bounds");
     return {};
 }
 Result<void> validate_value(const Json& s, const Json& v, const std::string& path) {
@@ -71,7 +106,7 @@ Result<void> validate_value(const Json& s, const Json& v, const std::string& pat
         else match = matches(t.get<std::string>(), v);
         if (!match) return fail("Unexpected value type");
     }
-    if (s.contains("enum") && std::find(s["enum"].begin(), s["enum"].end(), v) == s["enum"].end()) return fail("Value outside enum");
+    if (s.contains("enum") && std::none_of(s["enum"].begin(), s["enum"].end(), [&v](const Json& item) { return equivalent(item, v); })) return fail("Value outside enum");
     if (v.is_object()) {
         if (s.contains("required")) for (const auto& key : s["required"]) if (!v.contains(key.get<std::string>())) return fail("Missing " + key.get<std::string>());
         for (const auto& [key, child] : v.items()) {
@@ -88,7 +123,7 @@ Result<void> validate_value(const Json& s, const Json& v, const std::string& pat
         for (const unsigned char c : v.get_ref<const std::string&>()) if ((c & 0xc0) != 0x80) ++length;
         if ((s.contains("minLength") && length < s["minLength"].get<std::size_t>()) || (s.contains("maxLength") && length > s["maxLength"].get<std::size_t>())) return fail("String length outside bounds");
     }
-    if (v.is_number() && ((s.contains("minimum") && v < s["minimum"]) || (s.contains("maximum") && v > s["maximum"]))) return fail("Number outside bounds");
+    if (v.is_number() && ((s.contains("minimum") && numeric_compare(v, s["minimum"]) < 0) || (s.contains("maximum") && numeric_compare(v, s["maximum"]) > 0))) return fail("Number outside bounds");
     return {};
 }
 } // namespace

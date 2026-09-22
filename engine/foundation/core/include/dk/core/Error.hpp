@@ -14,6 +14,7 @@ enum class ErrorCode : std::uint32_t {
     io_error = 4,
     not_supported = 5,
     internal_error = 6,
+    conflict = 7,
 };
 
 [[nodiscard]] std::string_view error_code_name(ErrorCode code) noexcept;

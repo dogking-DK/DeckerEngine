@@ -13,6 +13,7 @@ std::string_view error_code_name(ErrorCode code) noexcept
     case ErrorCode::io_error: return "io_error";
     case ErrorCode::not_supported: return "not_supported";
     case ErrorCode::internal_error: return "internal_error";
+    case ErrorCode::conflict: return "conflict";
     }
     return "unknown";
 }

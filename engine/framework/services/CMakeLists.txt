@@ -1,0 +1,5 @@
+add_library(dk_scene_services STATIC src/SceneService.cpp)
+add_library(dk::scene_services ALIAS dk_scene_services)
+target_sources(dk_scene_services PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/services/SceneService.hpp)
+target_link_libraries(dk_scene_services PUBLIC dk::scene)
+dk_target_defaults(dk_scene_services)
