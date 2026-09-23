@@ -9,6 +9,10 @@
   ],
   "default-features": [],
   "features": {
+    "memory": {
+      "description": "Multi-instance CPU heap resources",
+      "dependencies": [{ "name": "mimalloc", "default-features": false }]
+    },
     "profiling": {
       "description": "Optional Tracy CPU profiling client",
       "dependencies": [

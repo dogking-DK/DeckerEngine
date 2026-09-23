@@ -1,9 +1,13 @@
 #include <dk/profiling/Profiler.hpp>
+#include <dk/profiling/Memory.hpp>
 
 int main()
 {
     static_assert(!dk::profiling::enabled());
     static_assert(!dk::profiling::is_connected());
+    static_assert(!dk::profiling::memory_enabled());
+    dk::profiling::record_allocation(nullptr, 0, dk::profiling::HeapCategory::general);
+    dk::profiling::record_free(nullptr, dk::profiling::HeapCategory::general);
     int effects = 0;
     DK_PROFILE_ZONE((++effects, "Disabled"));
     DK_PROFILE_ZONE_VALUE(++effects);

@@ -4,6 +4,8 @@ param(
     [string]$BuildDir = 'out/build/windows-profiling',
     [string]$Configuration = 'RelWithDebInfo',
     [string]$ToolsDir = 'out/profiling-tools/vcpkg_installed/x64-windows/tools/tracy',
+    [ValidateSet('cpu', 'memory', 'memory-disabled')][string]$Mode = 'cpu',
+    [string]$MemoryInspector = 'out/profiling-tools/inspector/bin/Release/dk-memory-trace-inspect.exe',
     [ValidateRange(1024, 65535)][int]$Port = 18086
 )
 
@@ -13,10 +15,13 @@ function Resolve-RepoPath([string]$Path) {
     if ([IO.Path]::IsPathRooted($Path)) { return [IO.Path]::GetFullPath($Path) }
     return [IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
 }
-$probe = Join-Path (Resolve-RepoPath $BuildDir) "bin/$Configuration/dk_profiling_probe.exe"
+$probeName = if ($Mode -eq 'cpu') { 'dk_profiling_probe' } else { 'dk_memory_probe' }
+$probe = Join-Path (Resolve-RepoPath $BuildDir) "bin/$Configuration/$probeName.exe"
 $capture = Join-Path (Resolve-RepoPath $ToolsDir) 'tracy-capture.exe'
 $exporter = Join-Path (Resolve-RepoPath $ToolsDir) 'tracy-csvexport.exe'
-foreach ($file in @($probe, $capture, $exporter)) {
+$required = @($probe, $capture, $exporter)
+if ($Mode -ne 'cpu') { $required += (Resolve-RepoPath $MemoryInspector) }
+foreach ($file in $required) {
     if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Required executable missing: $file" }
 }
 # Fail rather than intentionally connect to an unrelated process using this port.
@@ -26,7 +31,8 @@ try { $portCheck.Start() } finally { $portCheck.Stop() }
 $runId = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
 $runDir = Join-Path $repoRoot "out/profiling/$runId"
 New-Item -ItemType Directory -Path $runDir | Out-Null
-$tracePath = Join-Path $runDir 'cpu.tracy'
+$traceName = if ($Mode -eq 'cpu') { 'cpu.tracy' } else { 'memory.tracy' }
+$tracePath = Join-Path $runDir $traceName
 $processes = [Collections.Generic.List[object]]::new()
 $summary = [ordered]@{
     status = 'failed'; configuration = $Configuration; port = $Port
@@ -35,6 +41,12 @@ $summary = [ordered]@{
     commit = $null; working_tree = $null; tools_version = $null
     probe = $probe; workload = '128 CPU steps, text boundaries, nested worker and exception unwinding'
     mode = 'on-demand; workload starts after connection; no memory events'
+    capture_kind = $Mode; memory_inspection = $null
+}
+if ($Mode -ne 'cpu') {
+    $summary.workload = '36 heap allocations; 2 categories; 2 systems; foreign frees, zero bytes and denied budget'
+    $summary.mode = 'on-demand; all allocations and frees inside one connection'
+    $summary.cpu_zones = $null; $summary.thread_count = $null
 }
 
 function Start-Tool([string]$Name, [string]$Executable, [string[]]$Arguments) {
@@ -90,6 +102,17 @@ try {
     $captureProcess = Start-Tool 'capture' $capture @('-a', '127.0.0.1', '-p', "$Port", '-o', $tracePath, '-s', '5')
     $null = Finish-Tool $captureProcess
     $probeOutput = Finish-Tool $probeProcess
+    if ($Mode -ne 'cpu') {
+        $expected = if ($Mode -eq 'memory') { 'on' } else { 'off' }
+        if ($probeOutput.Trim() -ne "memory=$expected;allocations=36") { throw "Unexpected probe output: $probeOutput" }
+        $json = Finish-Tool (Start-Tool 'memory-inspect' (Resolve-RepoPath $MemoryInspector) @($tracePath, $expected))
+        $inspection = $json | ConvertFrom-Json
+        if ($inspection.status -ne 'passed') { throw 'Memory capture inspection failed' }
+        $summary.memory_inspection = $inspection
+        $summary.status = 'passed'
+        Write-Host "Memory capture verified: $($inspection.allocations) allocations; expected=$expected. $tracePath"
+        return
+    }
     if ($probeOutput -notmatch '^profiling=on;checksum=8128\s*$') { throw "Unexpected probe output: $probeOutput" }
     if ((Get-Item -LiteralPath $tracePath).Length -eq 0) { throw 'Empty Tracy capture' }
     $csv = Finish-Tool (Start-Tool 'export' $exporter @('-u', $tracePath))
@@ -141,5 +164,5 @@ try {
         $entry.Process.Dispose()
     }
     $summary.finished_at = [DateTimeOffset]::Now.ToString('o')
-    [IO.File]::WriteAllText((Join-Path $runDir 'summary.json'), ($summary | ConvertTo-Json) + "`n")
+    [IO.File]::WriteAllText((Join-Path $runDir 'summary.json'), ($summary | ConvertTo-Json -Depth 8) + "`n")
 }

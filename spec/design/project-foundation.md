@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-23T16:34:00+08:00"
+updated_at: "2026-09-23T17:48:09+08:00"
 status: accepted
 ---
 
@@ -40,6 +40,9 @@ M3.4 Scene 开启时继续装配 services/operations/runtime 与 automation/prot
 bootstrap 和独立 Foundation/Scene 验证应显式关闭 FRAMEWORK，避免继承开发预设。
 M1.7.1 增加真实 dk::profiling 包装：OFF 为无 Tracy 依赖的 INTERFACE target，ON 为静态适配库。
 Runtime/IO/runner 按实现需要 PRIVATE 链接，构建开关及采集规则见 [Profiling 设计](foundation-profiling.md)。
+M1.7.2 增加 `dk::memory` 静态包装，PRIVATE 链接 mimalloc v3 和 profiling；公开头无三方类型。
+`DK_BUILD_MEMORY` 默认 OFF，windows-dev/profiling 启用，bootstrap 保持最小依赖。
+`DK_PROFILE_MEMORY` 默认 ON，仅在 `DK_ENABLE_PROFILING=ON` 时发 backing 事件；CPU-only 对照可独立关闭它。
 
 CMake 最低 3.28，C++23 target 使用要求向消费者传播，禁用编译器扩展。
 项目警告函数只作用于自身 target，不污染依赖。默认构建目录为 `out/build/<preset>`，
@@ -99,7 +102,7 @@ CTest 保留 runner 冒烟验证，开发预设额外运行 Catch2 行为测试�
 [三方库说明](../third-party-libraries.md)。默认不添加旧版本 override，也不在每次配置时跟随浮动 master。
 升级时先抓取官方索引，核对所有直接依赖、相关传递依赖及规划选型，再固定提交。
 本机 vcpkg 干净 checkout 只做 fast-forward，同步其 bootstrap 要求的工具版本。
-依赖 feature 分为 foundation、math、scene、commands、graphics、editor、scripting、tests、profiling，
+依赖 feature 分为 foundation、math、memory、scene、commands、graphics、editor、scripting、tests、profiling，
 清单默认安装 Core 必需的 stduuid，可选库仍按 feature 选择。
 stduuid 在 Core 实现中使用，不暴露到公开头。
 数学模块使用独立 math feature 安装 eigen3，启用 DK_BUILD_MATH 时自动补充该组；
@@ -110,6 +113,7 @@ dk::math 的公开 Eigen 类型要求 PUBLIC 传递 Eigen3::Eigen，详见
 IO 通过默认开启的 DK_BUILD_IO 构建 dk::io，PUBLIC 链接 dk::core，PRIVATE 链接可关闭的 dk::profiling；
 bootstrap 也关闭 IO，接口和验证见 [IO 设计](foundation-io.md)。
 profiling feature 选择 Tracy on-demand 且关闭默认 features；开启 DK_ENABLE_PROFILING 时自动补充。
+memory feature 选择 mimalloc 3.5.3 且关闭默认 features；开启 DK_BUILD_MEMORY 时自动补充，不启用 override。
 仓库同版本 overlay 仅补充客户端 TRACY_ENABLE=ON，不通过消费方宏掩盖禁用的依赖库。
 工具端清单独立位于 tools/profiling，不在引擎构建中启用 GUI/CLI 工具 feature。
 
@@ -131,6 +135,9 @@ Slang 库；未来跨平台 shaderc 编译工具需单独处理 host 工具，�
 默认只使用 Debug，不因升级工具或索引而自动运行全部配置。
 M1.7.1 接入与新基线证据见 [0023](../development/0023-tracy-cpu-profiling.md)；既有库版本未变，
 仅对 profiling 条件编译及直接受影响链路做 OFF/ON 验证，不重复全依赖回归。
+M1.7.2 再次核验同一官方基线，新增 heap/关闭闸门/预算及内存事件定向验证，见
+[0024](../development/0024-mimalloc-heap.md)。内存读取工具另建于 tools/profiling/inspector，
+不加入引擎解决方案；bootstrap 配置确认不自动装配 mimalloc/Tracy。
 协议进程测试按 runner 的 UTF-8 契约显式解码 stdout/stderr，不依赖 Windows 活动代码页
 或独立 CMake 脚本的默认 policy；往返用例同时核对预期中文名称，避免相同乱码被误判为一致。
 

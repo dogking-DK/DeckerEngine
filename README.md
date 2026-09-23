@@ -10,7 +10,8 @@ M3.1 已提供独立命令注册表、参数/结果 schema 校验及 commands.li
 M3.2 通过 dk::scene_services 和 dk::scene_operations 提供会话管理、场景编辑、查询与保存。
 M3.3 提供事务与有界历史；M3.4 的 dk-run 支持无窗口 CPU 批处理和 JSON-RPC。
 M3.5 已接入持续 stdio、同步任务查询与正常关闭，达到交付 A。
-M1.7.1 已接入可选 Tracy CPU 分析、Runtime/IO 埋点和受控采集；Memory System 后续小节待实现。
+M1.7.1–2 已接入可选 Tracy CPU 分析和 mimalloc heap：独立内存域、对齐分配、预算、关闭闸门及内存采集。
+PMR、智能指针、自动路由、arena/pool 属于后续小节。
 渲染、物理、编辑器、网络/命名管道 IPC 和脚本模块尚未实现。
 
 ## 目录
@@ -26,7 +27,7 @@ DeckerEngine/
 ├── cmake/                     # 选项、toolchain 配置、编译警告
 ├── scripts/                   # 定向构建/测试和文档检查
 ├── engine/
-│   ├── foundation/            # core、math、io、profiling；memory、jobs、metadata 待实现
+│   ├── foundation/            # core、math、io、profiling、memory heap；jobs、metadata 待实现
 │   ├── platform/              # 窗口和输入接口、SDL3
 │   ├── geometry/              # CPU 几何查询和 BVH
 │   ├── assets/                # types 已实现；加载、导入预留
@@ -39,7 +40,7 @@ DeckerEngine/
 │   ├── scripting/             # API、Lua
 │   └── editor/                # model、interaction、widgets、panels
 ├── apps/                      # runner CPU CLI；editor、ctl 预留
-├── tools/                     # profiling 工具依赖清单；assetc、shaderc 预留
+├── tools/                     # profiling 独立工具和内存 capture 检查器；assetc、shaderc 预留
 ├── sdk/python/                # 未来外部自动化客户端
 ├── shaders/common/            # 公共 Slang 模块
 ├── projects/demo/             # 示例资产、场景、脚本预留
@@ -100,7 +101,7 @@ stdout 每行一个 JSON 响应，result 含 task_id、status 和命令返回值
 仅构建 CPU Runtime、保留进程验收而关闭日志/示例/Catch2：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-runtime-cpu -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_WARNINGS_AS_ERRORS=ON -DDK_VCPKG_FEATURES=
+cmake --preset windows-dev -B out/build/windows-runtime-cpu -DDK_BUILD_MEMORY=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_WARNINGS_AS_ERRORS=ON -DDK_VCPKG_FEATURES=
 cmake --build out/build/windows-runtime-cpu --config Debug
 ctest --test-dir out/build/windows-runtime-cpu -C Debug --output-on-failure
 ```
@@ -155,7 +156,7 @@ handler 契约错误分别返回结构化 Error。支持的 schema 子集与上�
 [命令设计](spec/design/commands.md)。
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-commands-only -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=ON -DDK_WARNINGS_AS_ERRORS=ON -DDK_VCPKG_FEATURES=
+cmake --preset windows-dev -B out/build/windows-commands-only -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=ON -DDK_WARNINGS_AS_ERRORS=ON -DDK_VCPKG_FEATURES=
 cmake --build out/build/windows-commands-only --config Debug
 ctest --test-dir out/build/windows-commands-only -C Debug --output-on-failure
 ```
@@ -208,7 +209,8 @@ cmake --build --preset windows-debug
 ctest --preset windows-debug
 ```
 
-`windows-dev` 默认构建 Core、日志、Eigen 数学、IO、Scene 与 Catch2 单元测试。
+`windows-dev` 默认构建 Core、日志、Eigen 数学、IO、Scene、Memory heap 与 Catch2 单元测试。
+`DK_BUILD_MEMORY` 默认 OFF，开发及 profiling 预设启用，自动选择 memory feature；bootstrap 保持关闭。
 `DK_BUILD_SCENE` 默认 OFF，开发预设启用，并自动选择 scene feature。
 `DK_BUILD_FRAMEWORK` 默认 OFF，开发预设启用；命令层选择 commands feature，并 PUBLIC 使用 JSON。
 启用日志时自动选择 foundation，启用数学时自动选择 math，启用单元测试时自动选择 tests，
@@ -221,6 +223,7 @@ JSON 由 Scene 私有使用，原规划的 GLM 已从清单移除。
 | 始终安装（基础依赖） | stduuid（dk::core 私有使用） |
 | foundation | fmt、spdlog、nlohmann-json |
 | math | eigen3（当前基线 5.0.1） |
+| memory | mimalloc 3.5.3（无 override；dk::memory 私有使用） |
 | scene | flecs、nlohmann-json |
 | commands | nlohmann-json |
 | graphics | vulkan、vulkan-memory-allocator、shader-slang |
@@ -256,6 +259,47 @@ Windows 使用 `x64-windows`，不使用全静态 CRT triplet。
 feature 选择在 `project()` 前映射到 `VCPKG_MANIFEST_FEATURES`，
 遵循 [vcpkg CMake 集成规范](https://learn.microsoft.com/en-us/vcpkg/users/buildsystems/cmake-integration)。
 更换生成器、triplet 或开关 vcpkg 时使用独立构建目录。
+
+## Memory heap（M1.7.2）
+
+模块链接 `dk::memory`。当前底层接口显式持有资源；后续 M1.7.3 再提供拥有型容器和自动持久域路由。
+以下函数演示预算、关闭期间释放及关闭重试，返回值供调用方处理：
+
+```cpp
+#include <dk/memory/MemorySystem.hpp>
+
+std::expected<dk::memory::CloseResult, dk::memory::AllocationError> heap_example()
+{
+    namespace mem = dk::memory;
+    auto system = mem::MemorySystem::create();
+    if (!system) return std::unexpected(system.error());
+    auto heap = system->create_heap({"assets", mem::DomainCategory::assets, 1024});
+    if (!heap) return std::unexpected(heap.error());
+    auto block = heap->try_allocate(256, 64);
+    if (!block) return std::unexpected(block.error());
+
+    system->begin_close(); // 拒绝新申请；现有块仍有效
+    const auto busy = system->try_close(); // closing，尚有 1 个活块
+    (void)busy;
+    heap->deallocate(*block, 256, 64); // 原资源及原 size/alignment；允许跨线程
+    return system->try_close(); // closed
+}
+```
+
+原始指针不自动持有资源，必须保留一个 `ResourceHandle` 直到释放；资源可晚于创建线程和
+MemorySystem 包装对象析构。`snapshot()` 返回域身份、活块、backing 请求量、峰值、预算和失败次数。
+并发快照为近似采样，静止时精确；预算包含在途申请，限制请求字节而非进程 RSS。
+零字节申请按 1 字节计费；错误返回固定枚举，失败不产生 alloc 事件。
+完整接口与契约见 [Memory 设计](spec/design/foundation-memory.md)。
+
+定向验证（先配置 windows-dev）：
+
+```powershell
+& ./scripts/verify.ps1 -Target @('dk_memory_tests', 'dk_memory_probe') -TestRegex '^dk\.memory\.' -Reason 'Memory heap 与关闭生命周期'
+```
+
+真实内存采集与关闭事件的对照见 [Profiling 工具说明](tools/profiling/README.md)；
+M1.7.2 记录见 [0024](spec/development/0024-mimalloc-heap.md)。
 
 ## Tracy CPU 性能分析（M1.7.1）
 
@@ -307,7 +351,8 @@ void import_mesh(std::string_view asset_name)
 ZONE/FRAME 名称使用静态期字符串；TEXT 立即复制文本，空文本忽略，最多 65534 字节，截断按字节。
 线程命名使用 `DK_PROFILE_THREAD_NAME("worker")`；普通 `set_thread_name` 函数的实参仍按 C++ 规则求值。
 `DK_PROFILE_CALLSTACK_DEPTH` 默认 0，允许 0–64；按诊断需要增加深度会增加开销，尚无性能基准。
-内存事件开关待 M1.7.2 实现；GPU 和 Jobs 埋点尚未接入。
+`DK_PROFILE_MEMORY` 默认 ON，仅在 `DK_ENABLE_PROFILING=ON` 时启用 heap backing 事件。
+设为 OFF 可保留 CPU 区间而关闭内存事件；GPU 和 Jobs 埋点尚未接入。
 依赖使用[最小 Tracy overlay](cmake/vcpkg-ports/README.md) 显式启用客户端，配置时核验导出的宏，
 避免只编译消费方埋点却链接禁用的 client。详见 [Profiling 设计](spec/design/foundation-profiling.md)。
 
@@ -328,7 +373,7 @@ MSVC 环境；Linux/macOS 需自行准备支持 C++23 的编译器。
 只构建 Core 和版本探针、安装最小 stduuid 依赖时可以运行：
 
 ```sh
-cmake -S . -B out/build/local-stduuid -DDK_USE_VCPKG=ON -DDK_VCPKG_FEATURES= -DDK_BUILD_LOGGING=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_UNIT_TESTS=OFF
+cmake -S . -B out/build/local-stduuid -DDK_USE_VCPKG=ON -DDK_VCPKG_FEATURES= -DDK_BUILD_MEMORY=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_UNIT_TESTS=OFF
 cmake --build out/build/local-stduuid --config Debug
 ctest --test-dir out/build/local-stduuid -C Debug --output-on-failure
 ```
@@ -413,7 +458,7 @@ if (transform) {
 仅验证 Core/数学、关闭日志和 runner 的独立配置：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-math-only -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES=
+cmake --preset windows-dev -B out/build/windows-math-only -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES=
 cmake --build out/build/windows-math-only --config Debug
 ctest --test-dir out/build/windows-math-only -C Debug --output-on-failure
 ```
@@ -457,7 +502,7 @@ if (root) {
 仅验证 Core/IO、关闭数学、日志和 runner，并开启警告即错误：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-io-only -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-io-only -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-io-only --config Debug
 ctest --test-dir out/build/windows-io-only -C Debug --output-on-failure
 ```
@@ -502,7 +547,7 @@ M1.6 已通过：默认 Debug/Release 各 **100 项通过、1 项权限跳过**�
 无日志、runner、Catch2、窗口和 GPU 依赖的独立配置：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-foundation -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-foundation -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-foundation --config Debug
 ctest --test-dir out/build/windows-foundation -C Debug --output-on-failure
 cmake --build out/build/windows-foundation --config Release
@@ -538,7 +583,7 @@ JSON 限制 16 MiB、64 层嵌套；拒绝未知版本、字段、重复键/ID �
 独立 Scene 配置（关闭日志、示例与 runner）：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-scene-only -DDK_BUILD_MATH=ON -DDK_BUILD_IO=ON -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-scene-only -DDK_BUILD_MATH=ON -DDK_BUILD_IO=ON -DDK_BUILD_MEMORY=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-scene-only --config Debug
 ctest --test-dir out/build/windows-scene-only -C Debug --output-on-failure
 ```
@@ -570,7 +615,7 @@ Set-Content -LiteralPath out/demo-scene/mesh.bin -Value "M2 reference fixture"
 无日志、runner 和 Catch2 的场景示例配置：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-scene-cpu -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-scene-cpu -DDK_BUILD_MEMORY=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-scene-cpu --config Debug
 ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
 ```
@@ -579,7 +624,7 @@ ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
 
 M1.6 与 M2.1–M2.4 已完成并分节本地提交。最终默认 Debug/Release 各 128 通过、
 1 项既有符号链接权限跳过；独立 Scene 配置各 104 通过、1 跳过，纯 CPU 示例各 16/16。
-下一小阶段为 M3.1 命令注册与能力发现。
+上述计数为当时验收记录；M3 交付 A 及 M1.7.1–2 也已完成，当前下一项为 M1.7.3。
 
 开发前先看 [AGENTS.md](AGENTS.md) 和 [spec 规范](spec/README.md)：
 先创建/更新模块设计，然后实现；过程中持续更新编号开发记录。

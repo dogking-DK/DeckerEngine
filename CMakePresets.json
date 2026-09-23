@@ -53,6 +53,7 @@
       "inherits": "windows-base",
       "displayName": "Windows development (foundation dependencies)",
       "cacheVariables": {
+        "DK_BUILD_MEMORY": "ON",
         "DK_BUILD_SCENE": "ON",
         "DK_BUILD_FRAMEWORK": "ON",
         "VCPKG_TARGET_TRIPLET": "x64-windows",

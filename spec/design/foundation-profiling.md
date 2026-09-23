@@ -1,7 +1,7 @@
 ---
 module: foundation-profiling
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-23T16:38:00+08:00"
+updated_at: "2026-09-23T17:48:09+08:00"
 status: accepted
 ---
 
@@ -12,7 +12,8 @@ status: accepted
 从 M1.7.1 提供可实际采集的 CPU 分析能力，再随 [Memory System](foundation-memory.md) 接入
 内存事件、使用量曲线与线程上下文。工具用于回答命令/IO/任务耗时、内存峰值、保留量与分配热点。
 M1.7.1 已完成 CPU 接入、OFF/ON 定向验证和真实采集，见 [0023](../development/0023-tracy-cpu-profiling.md)。
-后续内存/GPU 埋点仍为规划。
+M1.7.2 已提供 heap backing 事件与真实配对采集，见 [0024](../development/0024-mimalloc-heap.md)。
+arena/pool 用量曲线和 GPU 埋点仍为规划。
 accepted 表示采用当前方案，不代表所有小节已验收或已经测得性能改进。
 
 2026-09-23 实施核验官方最新提交 `33d78c1ed898a06938f31312167c7abefd229455`，
@@ -24,7 +25,8 @@ viewer/capture 工具与 client 使用匹配版本，不将网站缓存中的旧
 ## 模块和构建方式
 
 目录 `engine/foundation/profiling`，target `dk_profiling / dk::profiling`，
-头文件 `include/dk/profiling/Profiler.hpp`，实现 `src/Profiler.cpp`。模块不依赖 Memory、Core、日志或 Runtime。
+头文件 `include/dk/profiling/Profiler.hpp`、`Memory.hpp`，实现 `src/Profiler.cpp`、`Memory.cpp`。
+模块不依赖 Memory、Core、日志或 Runtime。
 Memory/Jobs/IO/Runtime 的实现按需 PRIVATE 链接它；公开模板若需要埋点则明确 PUBLIC 传递。
 
 项目侧只使用 DK_* 宏和 dk::profiling 函数。CPU zone 宏必须在**调用处**保留源码位置、函数名和
@@ -38,13 +40,15 @@ TEXT 接受可转为 string_view 的文本并只求值一次，保持临时 stri
 空文本不发事件，超过 Tracy 字节上限的内容截到 65534 字节（边界可能切断 UTF-8 字符）。
 宏只在同一词法作用域内访问 zone，scope 不跨线程；ZONE/FRAME 名称必须使用静态期字符串。
 关闭时参数不求值由 DK_* 宏保证，普通 C++ 函数的实参仍遵循语言自身的求值规则。
-DK_PROFILE_MEMORY 待 M1.7.2 实现时再添加，首节不提供无效果的内存追踪开关。
+M1.7.2 增加 `memory_enabled()` 和 `record_allocation/record_free` 固定分类接口。
+CPU 或内存开关关闭时内存适配内联为空操作；CPU 关闭时不要求 Tracy 头或 client，
+仅关闭内存时仍保留 CPU client。预算和关闭契约始终由 Memory 自身执行。
 
-| 选项/配置（内存项待实现） | 语义 |
+| 选项/配置 | 语义 |
 | --- | --- |
 | DK_ENABLE_PROFILING=OFF | 默认轻量构建；不查找、安装或链接 Tracy；所有埋点编译消除 |
 | 专用 profiling preset | 开启分析，优先 RelWithDebInfo + PDB；优化下测量，Debug 用于行为调试 |
-| DK_PROFILE_MEMORY=ON（计划） | M1.7.2 提供；仅在 profiling 开启时有效，启用 heap backing alloc/free 及内存计数 |
+| DK_PROFILE_MEMORY=ON | 默认 ON，仅在 profiling 开启时有效；启用 heap backing alloc/free，默认无逐分配 plot |
 | DK_PROFILE_CALLSTACK_DEPTH=0 | 默认不采集每次分配/zone 调用栈；诊断 preset 可提高深度 |
 | profiling vcpkg feature | tracy，default-features=false，启用 on-demand；不自动构建 GUI 工具 |
 | 独立工具配置 | 按需 cli-tools / 匹配版本 viewer；与被测程序分开，不拉 GUI 依赖进入 CPU Runtime |
@@ -67,7 +71,7 @@ TRACY_NO_CRASH_HANDLER；升级官方 port 时检查是否可以移除 overlay�
 ## 埋点接口与最早交付
 
 CPU 包装：`DK_PROFILE_ZONE("literal")`、`DK_PROFILE_ZONE_VALUE(id)`、
-`DK_PROFILE_FRAME("literal")`、`set_thread_name(...)`；named allocation/free 和 plot 适配留到内存小节。
+`DK_PROFILE_FRAME("literal")`、`set_thread_name(...)`；named allocation/free 已在 M1.7.2 接入，plot 留到 arena/pool 小节。
 静态名称表达稳定操作，例如 Runtime.Dispatch、IO.Read、Scene.Save；运行时 command/JobId 使用 zone value/text，
 不为每条请求制造新的 source location。禁用分析时，格式化文本等额外参数计算也必须消除。
 
@@ -95,7 +99,7 @@ Jobs 的排队、执行与发布各自为线程内 zone，通过 JobId 关联；
    `DK_PROFILE_MEMORY` 是构建配置，不在块存活期间按域任意切换或只采样一半事件。
 4. named pool 标签首版采用适配层中唯一的静态字符数组，分类为 `dk/heap/general`、`assets`、
    `scene`、`render`、`jobs`、`other`；同类别的多个 Runtime 在 Tracy 内存视图聚合。
-   系统/域实例明细保存在引擎快照并以 zone value 关联，不把临时 string.c_str() 交给 Tracy。
+   系统/域实例明细保存在引擎快照，后续需要时以 zone value 关联，不把临时 string.c_str() 交给 Tracy。
 5. 不分别在 PMR、smart pointer、Buffer、heap 每层重复发同一 allocation。
    arena/pool 的 chunk 已在 backing 轨道中；子对象默认只更新 logical/used/retained/peak 曲线。
    曲线在安全点或固定低频采样，跨线程先聚合再发布；不每次 bump 就发 plot。
@@ -109,8 +113,9 @@ checkpoint 部分 rewind 的配对。`TracyMemoryDiscard` 只能清空对应整�
 **不能用于包含其他 arena/Runtime/外层 scope 活对象的共享标签**。首版不依赖 discard 实现正确性。
 
 追踪适配不回调日志、用户 observer 或 dk::memory 分配；Tracy 自身事件缓存保持其独立分配路径。
-固定名称在初始化时建立，不在 hook 中创建字符串。调试重入守卫用于暴露错误，不把随意丢失
-alloc/free 事件当作正常防递归方案。Memory 正确性不依赖 viewer 在线或成功接收事件。
+固定名称在静态存储中建立，不在 hook 中创建字符串。生产路径仅调用固定适配器，不向用户开放 observer；
+测试 sink 仅供内部确定性探针，不可重入 Memory。不把随意丢失 alloc/free 事件当作防递归方案。
+Memory 正确性不依赖 viewer 在线或成功接收事件。
 
 ## 采集模式、退出和开销
 
@@ -148,8 +153,13 @@ M1.7.1 定向构建 OFF/ON 的 profiling 探针与受影响 runner/IO 链路：�
 验收使用 csvexport 读回 134 个 CPU 区间，验证调用处位置、两个线程 ID、异常关闭、动态文本边界。
 线程命名通过包装调用接入，CSV 不展示线程名；未做 GUI 视觉验收，不声称已检验 viewer 中的名称显示。
 
-M1.7.2 起通过测试 sink 检验失败无 alloc、跨线程配对和同地址复用顺序，再用真实 Tracy capture
-验证 adapter；sink 不替代客户端验收。M1.7.4–5 验证 chunk 与 logical 曲线不重复累计。
+M1.7.2 已通过测试 sink 检验失败无 alloc、跨线程配对和同地址复用顺序，再用真实 Tracy capture
+验证 adapter；sink 不替代客户端验收。真实探针读回 assets 35 次/2241 字节、scene 1 次/32 字节，
+合计 36 次申请全部配对、2 次异线程释放、0 个存活块；CPU 开启且内存关闭时同负载无内存事件。
+这里的字节是累计请求量，不能作为同时存活峰值。独立 [内存检查器](../../tools/profiling/README.md)
+使用匹配版本的 Tracy server 解码事件；不依赖仅导出 CPU 数据的 csvexport 来推断内存正确性。
+脚本 `-Mode memory/memory-disabled` 保存检查结果，默认 `-Mode cpu` 保持原有 134 区间验证。
+M1.7.4–5 再验证 chunk 与 logical 曲线不重复累计。
 M1.7.6 验证多 Runtime 共用 client、其中一个关闭不影响另一实例、延迟释放仍记录。
 针对实际条件编译路径验证 OFF/ON 是必要范围，不扩大为全引擎双配置回归。
 

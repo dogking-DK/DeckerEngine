@@ -1,8 +1,8 @@
 ---
 module: foundation-memory
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-23T16:44:00+08:00"
-status: draft
+updated_at: "2026-09-23T17:48:09+08:00"
+status: accepted
 ---
 
 # Foundation Memory System 设计
@@ -12,7 +12,36 @@ status: draft
 为长期对象、跨线程数据和高频临时分配提供统一的所有权、对齐、预算与诊断规则。
 通用 heap 使用 mimalloc，向上提供 PMR、标准容器 allocator、智能指针工厂、arena 和 pool。
 与 [Tracy 性能分析](foundation-profiling.md) 一起作为 **M1.7 基础设施补充**，先于 M4 实施。
-原 M1.1–M1.6、M2、M3 的验收保持有效。本文件是设计稿，尚无对应 C++、target 或已安装依赖。
+原 M1.1–M1.6、M2、M3 的验收保持有效。M1.7.2 已完成 heap 实现及定向验收，记录见
+[0024](../development/0024-mimalloc-heap.md)；PMR、Buffer、自动路由与 arena/pool 仍是后续设计。
+
+## M1.7.2 已确定的实现契约
+
+- MemorySystem 为 move-only 装配对象，create 返回 expected；create_heap 接收名称、分类和 hard budget。
+  名称复制到稳定 control，可重名；SystemId 进程内单调、DomainId 在系统内单调，0 表示空句柄。
+- ResourceHandle 拷贝拥有 control；本节 try_allocate 返回原始 void*，deallocate 必须配对原始
+  bytes/alignment，并保持至少一个 handle 活到释放完成。空指针释放为空操作，非法地址/错资源/重复释放
+  是调用契约错误，不承诺恢复；下一节的 Buffer/allocator 自动维持该所有权。
+- 每域原子 gate 把 Closing、维护状态及活动操作计数放在同一个字中。分配取得 gate 后再检查系统
+  Open；系统关闭先发布 Closing 再关闭所有域入场。已入场分配允许完成，释放在 Closing 中继续入场。
+  try_close 只有排他取得零活动 gate 后才检查 live 计数；存在活块则恢复 Closing 返回 busy，
+  无活块才 mi_heap_delete 并发布 Closed，避免计数检查与删除之间的竞争。
+- 系统注册表用冷路径 mutex；资源持有独立 shared SystemState，不回持注册表，避免引用环。
+  系统析构发起关闭并放弃注册表所有权，外部 handle 保持 control/heap 存活，最后合法所有者延迟清理。
+  本节尚无 ThreadContext；其注册 lease 在 M1.7.3 起加入，不预建空接口。
+- 预算 CAS 预留 reserved_bytes（活块加在途请求），后端失败撤销预留；backing_requested_bytes、
+  live_allocations 和 peak 仅在成功时更新。零字节计费 1；对齐必须为 2 的幂，保守限制 size+alignment-1
+  不超过 PTRDIFF_MAX，checked_byte_size 处理乘法溢出。失败为固定枚举，不构造错误字符串。
+- 快照为原子字段的非事务采样，静止时精确；预算与删除判断使用同步计数，不能从采样推断可销毁。
+  allocation_count/failure_count 是诊断累计数；域分类用于 Tracy 固定标签，名称不传入热路径。
+- 内部测试入口允许替换 backend/sink，以确定性制造 heap 创建失败、分配失败、地址复用和关闭竞争；
+  不提供公开 observer 或回调配置，测试上下文必须比所有测试资源活得久。
+- 默认 DK_BUILD_MEMORY=OFF，windows-dev/profiling 启用；memory feature 仅安装 mimalloc，无 override。
+  DK_PROFILE_MEMORY 默认 ON，但仅在 DK_ENABLE_PROFILING 同时开启时发实际 heap alloc/free 事件。
+  预算和所有权检查独立于采集；本节 backing 用量由快照与 Tracy 内存事件给出，不逐分配重复发 plot。
+
+真实内存采集使用匹配 Tracy server 读回工具检查 named pool、大小、跨线程释放和零残留。
+该工具独立于引擎构建，CPU csvexport 仍负责 CPU 区间，不用 CPU zone 数量代替内存事件验收。
 
 优先解决不同生命周期和线程间移交的正确性，再依据测量决定优化；不承诺替换分配器就一定更快。
 本模块管理 CPU 内存。VMA 继续负责 GPU allocation，GPU fence/延迟销毁由 graphics/render 管理。
@@ -20,20 +49,22 @@ status: draft
 
 ## 模块与依赖
 
-- 计划目录 `engine/foundation/memory`，target `dk_memory / dk::memory`，命名空间 `dk::memory`。
-- 公开头位于 `include/dk/memory/`：`MemorySystem.hpp`、`Resource.hpp`、`Allocator.hpp`、
-  `SmartPtr.hpp`、`Buffer.hpp`、`Arena.hpp`、`Pool.hpp`、`Statistics.hpp`、`Context.hpp`、`Containers.hpp`；按小节实现后再添加。
+- 目录 `engine/foundation/memory`，target `dk_memory / dk::memory`，命名空间 `dk::memory`。
+- 已提供 [MemorySystem.hpp](../../engine/foundation/memory/include/dk/memory/MemorySystem.hpp) 和
+  [Resource.hpp](../../engine/foundation/memory/include/dk/memory/Resource.hpp)。Allocator、SmartPtr、Buffer、
+  Arena、Pool、Statistics、Context、Containers 等头按后续小节实现后再添加。
 - 公共接口使用标准库及本模块类型；错误使用不分配内存的枚举/POD。首版不依赖 dk::core，
-  Core 也不反向依赖 Memory。mimalloc 和 dk::profiling 为 PRIVATE 链接依赖。
+  Core 也不反向依赖 Memory。mimalloc、dk::profiling 和 Threads::Threads 为 PRIVATE 链接依赖。
 - `mi_heap_t`、mimalloc 头文件和 Tracy 事件接口均留在实现内。上层按实际公开类型决定
   PUBLIC/PRIVATE 链接 dk::memory，不能用全局 include/link 注入。
-- 计划 `DK_BUILD_MEMORY` 开关及 `memory` vcpkg feature；实施 M1.7.2 时添加，禁用模块不安装 mimalloc。
+- 已添加 `DK_BUILD_MEMORY` 开关及 `memory` vcpkg feature；禁用模块不自动选择 mimalloc。
 
 2026-09-23 初次核验：当时项目基线 `67b9e21f86e3034657a04da429a8bf274de67925` 和当时
 官方最新提交 `9e3427bc82738568947beb508e78231f99c04f4c` 均提供 **mimalloc 3.5.3 / MIT**。
-M1.7.1 升级到 33d78c1e 后 mimalloc 版本仍不变，尚未接入本模块；当前基线见三方库说明。
-实施时重新核验 [三方库版本规则](../third-party-libraries.md)，要求 mimalloc **v3** 语义。
-计划 `find_package(mimalloc 3 CONFIG REQUIRED)`，按 port 导出选择 `mimalloc-static` 或 `mimalloc`。
+M1.7.2 再次核验官方 master 仍为 33d78c1e，安装并接入 mimalloc 3.5.3；当前基线见三方库说明。
+遵循 [三方库版本规则](../third-party-libraries.md)，要求 mimalloc **v3** 语义。
+使用 `find_package(mimalloc 3 CONFIG REQUIRED)`，优先链接导出的 `mimalloc`，兼容 `mimalloc-static` 名称；
+本次仅验收 x64-windows 的动态 mimalloc，无静态 triplet 验证结论。
 不启用 override feature，不运行注入工具，不设置进程或线程默认 heap。
 
 ## 实例、域与线程结构
@@ -183,8 +214,8 @@ namespace dk::memory {
 }
 ```
 
-ResourceHandle 只能指向 HeapResource 或 SharedPoolResource。其 control 地址稳定，
-不可因 MemorySystem 容器扩容而移动；内部 resource 继承 `std::pmr::memory_resource`。
+M1.7.2 的 ResourceHandle 只指向 heap control；后续再扩展 SharedPoolResource 和 PMR 适配。
+control 地址稳定，不可因 MemorySystem 容器扩容而移动；M1.7.3 的内部 resource 将实现 `std::pmr::memory_resource`。
 Buffer、allocator 和智能指针 deleter/control block 持有 handle，保证异步结果存活期间资源仍在。
 控制对象自身由独立 bootstrap 分配路径创建，禁止用自己尚未建好的 allocator 构造自己的 control。
 资源只持有上游 handle，系统注册回指为非拥有关系，避免引用环。

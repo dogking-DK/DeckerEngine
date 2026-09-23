@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-23T16:34:00+08:00"
+updated_at: "2026-09-23T17:48:09+08:00"
 status: accepted
 ---
 
@@ -32,8 +32,9 @@ status: accepted
 - builtin-baseline：`33d78c1ed898a06938f31312167c7abefd229455`。
 - 来源：[官方固定索引](https://github.com/microsoft/vcpkg/blob/33d78c1ed898a06938f31312167c7abefd229455/versions/baseline.json)。
 - Windows host/target triplet：`x64-windows`。
-- 最近接入：[0023](development/0023-tracy-cpu-profiling.md)，Tracy 0.14.1 已安装并通过 CPU capture，
-  对直接受影响的 Runtime/IO 路径做 ON/OFF 定向验证；此前七个已集成库的版本未改变。
+- 最近接入：[0024](development/0024-mimalloc-heap.md)，mimalloc 3.5.3 已安装并通过多线程 heap 验证，
+  Tracy heap capture 已读回配对事件；本节重新核验的官方 master 不变，无须再升级基线。
+  [0023](development/0023-tracy-cpu-profiling.md) 的 CPU capture 与 Runtime/IO 定向验证继续有效。
   [0021](development/0021-vcpkg-baseline-update.md) 中的 Debug 测试和 22 包依赖解析是旧基线的历史证据，
   本次不据此声明所有预留 feature 已在新基线构建或运行。
 
@@ -53,31 +54,26 @@ M1.7 的 Tracy 与 mimalloc 未包含在 0021 当时的 22 包解析验证中。
 | Eigen / `eigen3` | 5.0.1 | math | 向量、矩阵、四元数和 Transform；dk::math PUBLIC 传递 Eigen3::Eigen |
 | flecs / `flecs` | 4.1.6 | scene | SceneDocument 内部 ECS；由 Pimpl 持有，公共接口不暴露 flecs 句柄 |
 | Catch2 / `catch2` | 3.16.0 | tests | 单元测试与 CTest 测试发现；测试 target 私有链接，运行时模块不依赖它 |
-| Tracy / `tracy` | 0.14.1 | profiling | dk::profiling 的 PUBLIC 依赖；CPU zone、线程名、动态文本及采集，client BSD-3-Clause；on-demand、无 crash-handler/GUI，默认不开启 |
+| Tracy / `tracy` | 0.14.1 | profiling | dk::profiling 的 PUBLIC 依赖；CPU zone、线程名、动态文本及 heap backing 事件，client BSD-3-Clause；on-demand、无 crash-handler/GUI，默认不开启 |
+| mimalloc / `mimalloc` | 3.5.3 | memory | dk::memory PRIVATE；v3 多线程 CPU heap，MIT；关闭默认 features，无 override，不替换全局 new/delete |
 
 对应设计：[Core/日志](design/foundation-core.md)、[数学](design/foundation-math.md)、
-[Scene](design/scene.md)、[Commands](design/commands.md)、[Profiling](design/foundation-profiling.md)。
+[Scene](design/scene.md)、[Commands](design/commands.md)、[Profiling](design/foundation-profiling.md)、[Memory](design/foundation-memory.md)。
 实际依赖声明：[Core/日志 CMake](../engine/foundation/core/CMakeLists.txt)、
 [Math CMake](../engine/foundation/math/CMakeLists.txt)、[Scene CMake](../engine/scene/CMakeLists.txt)、
 [Commands CMake](../engine/framework/commands/CMakeLists.txt)、[单元测试 CMake](../tests/unit/CMakeLists.txt)、
-[Profiling CMake](../engine/foundation/profiling/CMakeLists.txt)。
+[Profiling CMake](../engine/foundation/profiling/CMakeLists.txt)、[Memory CMake](../engine/foundation/memory/CMakeLists.txt)。
 
 Tracy 的[同版本 overlay](../cmake/vcpkg-ports/README.md) 保留官方来源、源码哈希及补丁，
 仅显式设置 TRACY_ENABLE=ON；官方 port 尚未覆盖该版本的默认 OFF。
 [独立工具清单](../tools/profiling/vcpkg.json) 选择 cli-tools，使用同基线和 overlay 安装 capture/csvexport；
 不把工具端 capstone、zstd 等库加入引擎客户端依赖。更新 baseline 时同步两份清单并重新核对 overlay。
 
-## M1.7 已选型，尚未接入
-
-| 库 / vcpkg port | 当前基线版本 | 计划用途 | 边界 |
-| --- | --- | --- | --- |
-| mimalloc / `mimalloc` | 3.5.3 | CPU 通用 heap；PMR、智能指针、arena/pool 的上游 | dk::memory PRIVATE；依赖 v3 多线程 heap 语义，MIT；不启用 override |
-
-已核对本次固定提交的 mimalloc 仍为 3.5.3；尚未安装或加入 feature，M1.7.2 开始时重新核验。
-初次设计对 Tracy 的旧基线版本判断有误：67b9e21f 实际为 0.13.1#1，
-当前基线才是本次采用的 0.14.1，更正经过见 0023。
-设计见 [内存系统](design/foundation-memory.md)、[性能分析](design/foundation-profiling.md)，记录见
-[0022](development/0022-memory-profiling-design.md)。
+mimalloc 按域创建 heap，使用 `mi_heap_malloc_aligned/mi_free/mi_heap_delete`；
+资源关闭闸门保证最后一次释放结束后才删除 heap，不调用 destroy 强制释放活块。
+当前安装为 x64-windows 动态库，安装产物确认 `MI_OVERRIDE=OFF`。PMR、智能指针、arena/pool 尚未实现。
+内存 capture 检查器独立复用 Tracy 工具依赖和同版本源码，不成为引擎运行时依赖，见
+[工具说明](../tools/profiling/README.md)。
 
 ## M4 已选型，尚未接入
 
