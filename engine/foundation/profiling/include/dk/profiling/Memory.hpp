@@ -8,6 +8,7 @@
 
 namespace dk::profiling {
 enum class HeapCategory { general, assets, scene, render, jobs, other };
+struct ScratchUsage { std::size_t used = 0, retained = 0, backing = 0; };
 [[nodiscard]] inline constexpr bool memory_enabled() noexcept
 {
     return DK_ENABLE_PROFILING && DK_PROFILE_MEMORY;
@@ -17,8 +18,11 @@ enum class HeapCategory { general, assets, scene, render, jobs, other };
 // returning storage. No logging, dk::memory allocations or user callbacks here.
 void record_allocation(const void* pointer, std::size_t size, HeapCategory category) noexcept;
 void record_free(const void* pointer, HeapCategory category) noexcept;
+// Replace one arena's last contribution at a safe point. Final contribution must be zero.
+void record_scratch_sample(ScratchUsage previous, ScratchUsage current) noexcept;
 #else
 inline void record_allocation(const void*, std::size_t, HeapCategory) noexcept {}
 inline void record_free(const void*, HeapCategory) noexcept {}
+inline void record_scratch_sample(ScratchUsage, ScratchUsage) noexcept {}
 #endif
 } // namespace dk::profiling

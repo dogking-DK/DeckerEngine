@@ -27,5 +27,6 @@
 | 0023 | [M1.7.1 Tracy CPU 性能分析](0023-tracy-cpu-profiling.md) | foundation-profiling、project-foundation | completed |
 | 0024 | [M1.7.2 mimalloc heap 与内存事件](0024-mimalloc-heap.md) | foundation-memory、foundation-profiling | completed |
 | 0025 | [M1.7.3 拥有型内存接口与持久域路由](0025-memory-ownership-routing.md) | foundation-memory | completed |
+| 0026 | [M1.7.4 ScratchArena 与线程临时作用域](0026-scratch-arena.md) | foundation-memory, foundation-profiling | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

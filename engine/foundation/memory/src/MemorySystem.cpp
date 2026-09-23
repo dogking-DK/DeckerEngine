@@ -302,6 +302,7 @@ ThreadContext::ThreadContext(MemorySystem& system) : thread_(std::this_thread::g
 ThreadContext::~ThreadContext()
 {
     if (thread_ != std::this_thread::get_id() || scopes_ != 0) { std::terminate(); }
+    scratch_.reset(); // Drop chunk backing while the context lease still prevents system close.
     system_->contexts.fetch_sub(1, std::memory_order_release);
 }
 SystemId ThreadContext::system_id() const noexcept { return system_->id; }
@@ -312,6 +313,14 @@ SystemId ResourceHandle::system_id() const noexcept { return control_ ? control_
 DomainId ResourceHandle::domain_id() const noexcept { return control_ ? control_->id : 0; }
 std::string_view ResourceHandle::name() const noexcept { return control_ ? std::string_view{control_->name} : std::string_view{}; }
 DomainCategory ResourceHandle::category() const noexcept { return control_ ? control_->category : DomainCategory::other; }
+ResourceState ResourceHandle::state() const noexcept
+{
+    if (!control_) { return ResourceState::closed; }
+    const auto value = control_->gate.load(std::memory_order_acquire);
+    if (value & closed_bit) { return ResourceState::closed; }
+    return (value & closing_bit) || control_->system->state.load() != ResourceState::open
+        ? ResourceState::closing : ResourceState::open;
+}
 ResourceSnapshot ResourceHandle::snapshot() const noexcept { return control_ ? control_->snapshot() : ResourceSnapshot{}; }
 std::pmr::memory_resource* ResourceHandle::pmr_resource() const noexcept
 { return control_ ? static_cast<std::pmr::memory_resource*>(control_.get()) : std::pmr::null_memory_resource(); }

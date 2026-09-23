@@ -10,8 +10,8 @@ M3.1 已提供独立命令注册表、参数/结果 schema 校验及 commands.li
 M3.2 通过 dk::scene_services 和 dk::scene_operations 提供会话管理、场景编辑、查询与保存。
 M3.3 提供事务与有界历史；M3.4 的 dk-run 支持无窗口 CPU 批处理和 JSON-RPC。
 M3.5 已接入持续 stdio、同步任务查询与正常关闭，达到交付 A。
-M1.7.1–3 已接入可选 Tracy CPU 分析、mimalloc heap、PMR、拥有型容器/智能指针及持久域路由。
-内存域支持预算、关闭闸门和跨线程释放；arena/pool 和任务路由属于后续小节。
+M1.7.1–4 已接入可选 Tracy CPU 分析、mimalloc heap、PMR、拥有型容器/智能指针、持久域路由和线程 scratch。
+内存域支持预算、关闭闸门和跨线程释放；ScratchArena 支持嵌套回退、保留上限与用量曲线，pool 和任务路由待后续小节。
 渲染、物理、编辑器、网络/命名管道 IPC 和脚本模块尚未实现。
 
 ## 目录
@@ -365,7 +365,75 @@ ExecutionScope 支持嵌套另一系统；DomainScope 只切换同系统的持�
 `Buffer` 只管理字节，不对任意 C++ 对象执行 realloc；新增长字节未初始化，零长度 Buffer 仍规范化申请 1 字节。
 
 定向验证使用上节 memory 命令；实现与验收见 [0025](spec/development/0025-memory-ownership-routing.md)。
-下一项是 M1.7.4 ScratchArena/ScratchScope；本节尚无 scratch、pool、任务 token 或线程缓存。
+
+## 临时内存与自动 ScratchScope（M1.7.4）
+
+入口为线程配置一次 scratch 上游，业务函数使用 `ScratchScope` 和 `scratch_vector<T>()`，无需传入线程/heap。
+返回结果仍使用持久域；临时容器必须先于 scope 析构。完整示例：
+
+```cpp
+#include <dk/memory/MemorySystem.hpp>
+#include <dk/memory/Context.hpp>
+#include <dk/memory/Containers.hpp>
+#include <dk/memory/SmartPtr.hpp>
+
+struct Mesh { dk::Vector<int> indices; };
+
+std::shared_ptr<Mesh> build_mesh()
+{
+    dk::memory::ScratchScope scratch; // 先声明，最后析构并 rewind
+    auto temporary = dk::memory::scratch_vector<int>();
+    temporary = {0, 1, 2};
+    auto result = dk::memory::make_shared<Mesh>();
+    result->indices.assign(temporary.begin(), temporary.end());
+    return result; // 只移交持久结果
+}
+
+int main()
+{
+    namespace mem = dk::memory;
+    auto memory = mem::MemorySystem::create();
+    if (!memory) return 1;
+    auto assets = memory->create_heap({"assets", mem::DomainCategory::assets});
+    auto scratchHeap = memory->create_heap({"scratch", mem::DomainCategory::jobs});
+    if (!assets || !scratchHeap) return 2;
+    std::shared_ptr<Mesh> mesh;
+    {
+        mem::ThreadContext thread{*memory, *scratchHeap};
+        mem::ExecutionScope entry{thread, *assets};
+        mesh = build_mesh();
+        auto usage = thread.scratch().snapshot();
+        if (usage.used_bytes != 0) return 3; // 空闲 chunk 可以留待复用
+    } // context 归还缓存；mesh 继续持有 Assets
+    if (mesh->indices.size() != 3 || mesh->indices.back() != 2) return 4;
+    mesh.reset();
+    return memory->try_close().closed() ? 0 : 5;
+}
+```
+
+`ScratchOptions{chunk_bytes, max_retained_bytes}` 默认 64 KiB/1 MiB。嵌套 scope 只回收内层申请，
+普通 chunk 在上限内复用，超过普通 chunk 大小的申请退出时立即归还。`try_reset()` 仅在无活动 scope 时
+清空缓存并更新 generation；`try_checkpoint()/try_rewind()` 提供显式、同线程、严格 LIFO 的底层接口。
+`ScratchScope{arena}` 不修改 TLS，显式 PMR 容器使用 `scope.resource()`；直接 raw/PMR 申请也要求活动 checkpoint。
+`DomainScope` 不切换 scratch 上游；新的 `ExecutionScope` 不继承外层 ScratchScope。
+保留原 `ThreadContext{system}` 用于仅持久分配；它不会自动创建 scratch。
+同一 arena 的分配归当前最内层 checkpoint；不要在内层 scope 扩容一个需要在外层继续使用的 scratch 容器，
+因为新缓冲会随内层回退。需要跨作用域保留的数据先复制到持久容器。
+
+`snapshot()` 的 used 包含对齐 padding，retained 只计完全空闲 chunk，backing 计全部 chunk 容量；
+三者不能相加当总占用，也不等于 RSS。关闭系统后拒绝新申请，清理和释放仍可执行。
+Tracy 只记录 chunk 的 alloc/free，用量曲线在作用域边界、增长、reset 和显式 `sample()` 处采样。
+`dk/scratch/sampled-peak` 是进程内采样总 used 的历史峰值；精确的单 arena 峰值保存在 snapshot 中。
+
+```powershell
+& ./scripts/verify.ps1 -Target @('dk_memory_tests', 'dk_arena_probe') -TestRegex '^dk\.memory\.arena' -Reason 'ScratchArena 定向验证'
+& ./scripts/verify.ps1 -BuildDir out/build/windows-profiling -Configuration RelWithDebInfo -Target dk_arena_probe -TestRegex '^dk\.memory\.arena_probe$' -Reason 'Scratch 用量采集探针'
+& ./scripts/capture-profiling.ps1 -Mode arena
+```
+
+采集前准备匹配版本的独立工具，见 [Profiling 工具](tools/profiling/README.md)。
+实现与验收见 [0026](spec/development/0026-scratch-arena.md)。下一项为 M1.7.5 Pool；
+任务 token、worker 缓存和既有 Runtime/Jobs 自动装配仍待实现。
 
 ## Tracy CPU 性能分析（M1.7.1）
 
@@ -690,7 +758,7 @@ ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
 
 M1.6 与 M2.1–M2.4 已完成并分节本地提交。最终默认 Debug/Release 各 128 通过、
 1 项既有符号链接权限跳过；独立 Scene 配置各 104 通过、1 跳过，纯 CPU 示例各 16/16。
-上述计数为当时验收记录；M3 交付 A 及 M1.7.1–3 也已完成，当前下一项为 M1.7.4。
+上述计数为当时验收记录；M3 交付 A 及 M1.7.1–4 也已完成，当前下一项为 M1.7.5。
 
 开发前先看 [AGENTS.md](AGENTS.md) 和 [spec 规范](spec/README.md)：
 先创建/更新模块设计，然后实现；过程中持续更新编号开发记录。

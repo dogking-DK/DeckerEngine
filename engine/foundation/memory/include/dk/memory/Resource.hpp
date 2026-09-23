@@ -15,7 +15,7 @@ enum class ResourceState { open, closing, closed };
 enum class DomainCategory { general, assets, scene, render, jobs, other };
 enum class AllocationError {
     invalid_handle, invalid_argument, invalid_alignment, size_overflow,
-    limit_exceeded, out_of_memory, closing
+    limit_exceeded, out_of_memory, closing, wrong_thread, missing_scope, invalid_checkpoint, busy
 };
 
 struct HeapOptions {
@@ -63,6 +63,7 @@ public:
     [[nodiscard]] DomainId domain_id() const noexcept;
     [[nodiscard]] std::string_view name() const noexcept; // Borrowed until the last handle dies.
     [[nodiscard]] DomainCategory category() const noexcept;
+    [[nodiscard]] ResourceState state() const noexcept;
     [[nodiscard]] ResourceSnapshot snapshot() const noexcept; // Non-transactional atomic sample.
     // Borrowed; retain an owner until every PMR user is destroyed. Empty -> null_memory_resource.
     [[nodiscard]] std::pmr::memory_resource* pmr_resource() const noexcept;

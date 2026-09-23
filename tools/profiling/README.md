@@ -29,7 +29,7 @@ cmake --build out/profiling-tools/inspector --config Release --target dk_memory_
 或指向另一个由相同 overlay 准备的源目录。不要把未应用 port 补丁的上游 checkout 当作等价输入。
 检查器构建固定版本并使用 MSVC UTF-8 编码；无 GUI 或 viewer 依赖。
 
-## 采集三种模式
+## 采集模式
 
 先配置、构建所需探针。每个构建目录内串行执行配置/构建：
 
@@ -49,6 +49,22 @@ cmake --preset windows-profiling -B out/build/windows-profiling-cpu-only -DDK_PR
 | cpu（默认） | 134 个 CPU 区间、2 个线程，保留原有源码位置/动态文本检查 |
 | memory | 36 次申请全部配对，assets 35 次/2241 字节、scene 1 次/32 字节，2 次异线程释放，0 个活块 |
 | memory-disabled | 同一 heap 工作负载完成 36 次申请，capture 中内存事件为 0 |
+| arena | 102 次临时申请只产生 jobs 3 次/3200 字节 chunk 事件，全部配对；4 条 scratch 曲线的峰值/结束值及 Memory 格式正确 |
+| arena-disabled | 同一 arena 工作负载完成，capture 中内存事件和 scratch 曲线均为 0 |
+
+M1.7.4 的双线程 arena 探针单独构建/采集：
+
+```powershell
+& ./scripts/verify.ps1 -BuildDir out/build/windows-profiling -Configuration RelWithDebInfo -Target dk_arena_probe -TestRegex '^dk\.memory\.arena_probe$' -Reason 'Arena 采集探针'
+& ./scripts/capture-profiling.ps1 -Mode arena
+& ./scripts/verify.ps1 -BuildDir out/build/windows-profiling-cpu-only -Configuration RelWithDebInfo -Target dk_arena_probe -TestRegex '^dk\.memory\.arena_probe$' -Reason 'Arena 内存采集禁用路径'
+& ./scripts/capture-profiling.ps1 -Mode arena-disabled -BuildDir out/build/windows-profiling-cpu-only
+```
+
+`dk/scratch/used` 峰值 2912、retained 峰值 1024、backing 峰值 3200，三个当前量最终归零；
+`dk/scratch/sampled-peak` 最终保留 2912。后者为安全点采样的总 used 历史峰值，非并发瞬时精确值。
+检查器额外参数 `arena` 选择此负载；默认仍验证 M1.7.2 的 heap 探针。
+两种 arena 模式还读回 8 个 CPU 区间/2 个线程，覆盖 Probe、Grow、Rewind 和 Reset；内存采集关闭不关闭 CPU zone。
 
 脚本要求 PowerShell 7，默认 localhost IPv4 端口 18086；并行采集必须指定不同 `-Port`。
 内存检查器位置可用 `-MemoryInspector` 改写，默认取上述 Release 产物。
@@ -58,3 +74,4 @@ cmake --preset windows-profiling -B out/build/windows-profiling-cpu-only -DDK_PR
 结果保存到 `out/profiling/<本次运行>/`：capture、进程日志、summary.json；内存模式附带检查器 JSON。
 计数字节是累计申请量，不是峰值或 RSS。该工作负载含受控等待，只验收采集正确性，不是吞吐基准。
 M1.7.2 的实际验证与限制见 [0024](../../spec/development/0024-mimalloc-heap.md)。
+M1.7.4 的 arena 曲线与禁用验证见 [0026](../../spec/development/0026-scratch-arena.md)。

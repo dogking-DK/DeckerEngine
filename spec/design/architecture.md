@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-23T18:38:11+08:00"
+updated_at: "2026-09-23T19:14:49+08:00"
 status: accepted
 ---
 
@@ -31,7 +31,8 @@ M4 之前新增 M1.7 [Memory System](foundation-memory.md) 与
 [Tracy 性能分析](foundation-profiling.md) 基础设施补充，不包含在原 M1–M3 验收中。
 M1.7.1 的 CPU 包装、Runtime/IO 埋点、条件构建与真实 capture 已验收；M1.7.2 的多实例 heap、
 预算、关闭闸门及 backing 内存事件已验收。M1.7.3 的 PMR、拥有型容器/智能指针、最小 context 与
-持久域路由已验收；arena/pool、任务路由和 GPU 事件仍待后续小节。既有 Runtime 尚未自动装配内存上下文。
+持久域路由已验收。M1.7.4 的 ScratchArena、自动嵌套作用域、保留上限与 Tracy 曲线已验收；
+pool、任务路由和 GPU 事件仍待后续小节。既有 Runtime 尚未自动装配内存上下文。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，
@@ -41,7 +42,7 @@ M1.7.1 的 CPU 包装、Runtime/IO 埋点、条件构建与真实 capture 已验
 
 | 目录 | 职责 | 依赖约束 |
 | --- | --- | --- |
-| engine/foundation | core、数学、IO、可选 profiling 与 memory heap；规划任务、元数据 | 不依赖 Scene、Vulkan、Editor；profiling 不反向依赖 memory |
+| engine/foundation | core、数学、IO、可选 profiling、memory heap/拥有型接口/scratch；规划任务、元数据 | 不依赖 Scene、Vulkan、Editor；profiling 不反向依赖 memory |
 | engine/platform | 窗口、输入、SDL3 后端 | 可选，CPU 无窗口运行不依赖它 |
 | engine/geometry | AABB、射线、CPU BVH | 仅基础数学/数据 |
 | engine/assets | 资产类型、运行时、导入器 | 与设备资源和图资源分离 |

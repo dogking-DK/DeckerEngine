@@ -8,6 +8,7 @@ int main()
     static_assert(!dk::profiling::memory_enabled());
     dk::profiling::record_allocation(nullptr, 0, dk::profiling::HeapCategory::general);
     dk::profiling::record_free(nullptr, dk::profiling::HeapCategory::general);
+    dk::profiling::record_scratch_sample({}, {});
     int effects = 0;
     DK_PROFILE_ZONE((++effects, "Disabled"));
     DK_PROFILE_ZONE_VALUE(++effects);

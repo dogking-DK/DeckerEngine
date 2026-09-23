@@ -1,7 +1,7 @@
 ---
 module: foundation-memory
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-23T18:38:11+08:00"
+updated_at: "2026-09-23T19:14:49+08:00"
 status: accepted
 ---
 
@@ -14,7 +14,38 @@ status: accepted
 与 [Tracy 性能分析](foundation-profiling.md) 一起作为 **M1.7 基础设施补充**，先于 M4 实施。
 原 M1.1–M1.6、M2、M3 的验收保持有效。M1.7.2 已完成 heap 实现及定向验收，记录见
 [0024](../development/0024-mimalloc-heap.md)。M1.7.3 已完成 PMR、Buffer、拥有型分配器/智能指针与
-最小 context/持久域路由，见 [0025](../development/0025-memory-ownership-routing.md)；arena/pool 和任务路由仍待实现。
+最小 context/持久域路由，见 [0025](../development/0025-memory-ownership-routing.md)。M1.7.4 提供 ScratchArena、
+嵌套 ScratchScope 与用量曲线，见 [0026](../development/0026-scratch-arena.md)；pool 和任务路由仍待实现。
+
+## M1.7.4 实施细化
+
+开发记录为 [0026](../development/0026-scratch-arena.md)。本节只实现 scratch，不提前加入 pool、RoutingToken 或 worker 缓存。
+
+- `ScratchArena` 是不可移动的线程专属 PMR resource，拥有固定上游 ResourceHandle；按 chunk 申请，普通分配只推进游标。
+  默认 chunk 64 KiB、空闲保留上限 1 MiB；超过 chunk 大小的申请使用独立大块，rewind 时立即归还。
+  冷路径 chunk 元数据使用普通 new，不算入 backing；用户数据全部通过上游 heap。
+- checkpoint 是带 arena 身份、generation、单调序号和深度的不透明 token；只允许同线程、同 arena、严格 LIFO rewind。
+  rewind 消费 token，重复/错序/跨 arena token 不改状态；reset 只允许无活动 checkpoint，释放缓存并递增 generation。
+  reset 不清零 lifetime peak、allocation_count/failure_count，当前用量与保留容量归零。
+  零字节规范化为 1；对齐须为 2 的幂，大小/对齐及累计字节数检查溢出。无活动 checkpoint 不允许分配。
+  新 chunk 先准备元数据与 backing，成功后才接入活动链；失败保留已有地址、内容、游标和 checkpoint。
+- `ScratchScope` 自动取得当前 ThreadContext 的 arena 并建立 checkpoint；析构回退。显式 `ScratchScope(arena)`
+  不修改 TLS，适合独立算法/测试。先声明 scope 再声明 PMR 容器，容器必须先析构；arena 不记录或调用对象析构。
+  PMR deallocate 不回收游标；借用对象不能逃出其 scope 或跨线程。错线程/错序析构是契约错误并 terminate。
+- `ThreadContext(system, scratch_upstream, options)` 在入口配置一次 scratch，验证上游属于同系统；chunk 延迟分配。
+  原 `ThreadContext(system)` 保持仅持久分配用途。`scratch_vector<T>()` 要求当前帧有活动 ScratchScope，缺配置/作用域明确报错。
+  DomainScope 继承当前 scratch，持久域切换不改 backing 归属；每次 ExecutionScope 都从未绑定 scratch 开始，嵌套系统不继承旧 scope。
+  context 销毁先释放 scratch 缓存，再解除系统 lease。Closing 后连缓存内 bump 都拒绝，但 rewind/reset/析构仍允许清理。
+- 快照区分 requested（规范化申请之和）、used（含对齐 padding 的游标）、backing（全部 chunk 容量）、
+  retained（完全空闲缓存 chunk 容量）；活动 chunk 的剩余尾部不计 retained，所以 used+retained 不一定等于 backing。
+  per-arena peak 精确记录；这些数不是 RSS，也不能与 heap backing 相加当总内存。
+- Tracy 只由上游 heap 发 chunk alloc/free，不为小分配重复发事件。固定 `dk/scratch/used`、`retained`、`backing`、
+  `sampled-peak` 四条全局汇总曲线在 checkpoint、rewind 前后、chunk 增长、reset 和显式 sample 安全点更新。
+  汇总使用冷路径 mutex，各 arena 保存上次贡献；析构撤销贡献。sampled-peak 是采样总 used 峰值，不声称是并发瞬时精确峰值。
+  profiling OFF 或仅 CPU profiling 时无内存曲线；普通 bump 不加全局锁。
+
+验收覆盖嵌套/代际/对齐、受控预算/OOM 失败、缓存复用和大块归还、异常时先析构后 rewind、自动路由隔离、
+错线程和 Closing 清理。新增 Tracy 曲线须真实 capture/readback，核对归零、采样峰值和只含 chunk 的配对内存事件。
 
 ## M1.7.3 实施细化
 
@@ -92,7 +123,8 @@ weak 控制块延迟释放、缺上下文、嵌套/异常恢复、显式与隐�
   [Buffer.hpp](../../engine/foundation/memory/include/dk/memory/Buffer.hpp)、
   [SmartPtr.hpp](../../engine/foundation/memory/include/dk/memory/SmartPtr.hpp)、
   [Context.hpp](../../engine/foundation/memory/include/dk/memory/Context.hpp)、
-  [Containers.hpp](../../engine/foundation/memory/include/dk/memory/Containers.hpp)。Arena/Pool 等在对应小节再添加。
+  [Containers.hpp](../../engine/foundation/memory/include/dk/memory/Containers.hpp)、
+  [Arena.hpp](../../engine/foundation/memory/include/dk/memory/Arena.hpp)。Pool 在后续小节添加。
 - 公共接口使用标准库及本模块类型；错误使用不分配内存的枚举/POD。首版不依赖 dk::core，
   Core 也不反向依赖 Memory。mimalloc、dk::profiling 和 Threads::Threads 为 PRIVATE 链接依赖。
 - `mi_heap_t`、mimalloc 头文件和 Tracy 事件接口均留在实现内。上层按实际公开类型决定
@@ -173,7 +205,7 @@ MemorySystem 不创建 worker，也不替 Jobs 执行 join。
 三方库不会被自动接管。不安装全局 new/delete hook，不用 std::pmr::set_default_resource 做线程路由。
 持久对象与 scratch 的使用意图保持可辨识，框架不能可靠推断一个指针是否会逃逸。
 
-概念用法（API 尚未实现）：
+业务示意（memory API 已实现，Source/Vertex/decode_vertices 由业务定义；完整可编译示例见 README）：
 
 ```cpp
 struct Mesh {
@@ -235,14 +267,14 @@ Memory 的 M1.7.6 用标准线程探针验证此契约，真正 Jobs 自动捕�
 
 ## 公共接口与资源存活
 
-以下为总体接口形状，含后续小节，非可编译示例；实际 M1.7.3 用法见
+以下为总体接口形状，含后续小节，非可编译示例；实际 M1.7.3–4 用法见
 [README](../../README.md#拥有型内存与持久域路由m173)。
 
 ```cpp
 namespace dk::memory {
   class MemorySystem;        // create_heap、begin_close、try_close
   class ResourceHandle;      // 持有稳定 ResourceControl；只用于持久、线程安全资源
-  class ThreadContext;       // ThreadContext(system)；scratch()/local_pool() 待后续实现
+  class ThreadContext;       // 可选 scratch 上游；local_pool() 待后续实现
   class ExecutionScope;      // 框架绑定执行线程/系统/持久资源
   class DomainScope;         // 在同一系统内覆盖默认持久资源
   class RoutingToken;        // 拥有型任务路由；不包含线程局部资源
@@ -310,16 +342,19 @@ heap 直接对象与其子 pool/chunk 的总账只在底层计一次；arena 的
 
 ScratchArena 是引擎的 chunk + bump allocator，**不同于 mimalloc 用于 OS 保留空间的 arena API**。
 向指定 HeapResource 申请 chunk；快路径做关闭状态检查、线程内对齐、边界检查和指针推进，不逐块锁全局 heap。
-暂定普通 chunk 64 KiB、scope 结束后最多保留 1 MiB 空闲容量，均可配置，性能测量后再调整。
+默认普通 chunk 64 KiB、scope 结束后最多保留 1 MiB 空闲容量，均可配置，性能测量后再调整。
 超大请求使用独立 chunk，不无限抬高后续保留量；上游 budget 是实际增长上限。
 
 `ScratchScope` 建立 checkpoint，严格 LIFO 退出；checkpoint 含 arena 身份、generation、chunk/offset。
-内层 rewind 只收回内层分配，保留外层数据；过期 token、错线程、乱序退出属于契约错误。
+内层 rewind 只收回内层分配，保留外层数据；try 接口对过期 token、错线程、错序回退返回固定错误且不改状态。
+RAII scope 的错线程/错序析构为不可恢复的生命周期错误并 terminate。
 arena 不可复制/跨线程移动，reset 只能在无活动 scope 的安全点执行。
 
 不自动管理 C++ 对象析构。调用方先声明 scope，再构造依赖它的局部对象；对象先析构，scope 再 rewind。
 PMR deallocate 对空间回收为空操作，`vector.clear()` 仍保留 capacity，不能据此认为 arena 可以重置。
 已返回的地址/引用在 rewind 后失效；错误重置不能承诺由运行时完整检测。
+同一 arena 中的新分配一律归当前最内层 checkpoint；外层 PMR 容器不能在内层 scope 扩容后继续逃逸使用，
+否则新缓冲会随内层 rewind。需要跨 scope 保留的结果应复制到持久资源；resource 指针不编码容器原始 scope。
 构造失败时 RAII 清理已构造对象，scope 收回临时空间；扩 chunk 失败不修改已有 checkpoint 和可见数据。
 
 M4 作业完成前将结果拷贝/构造到拥有 HeapResource 的 Buffer/容器，再通过 completion 移交。
@@ -385,7 +420,7 @@ pool busy trim；有意控制的关闭/分配竞争；worker 退出后结果仍�
 线程不同、queued 取消释放 token、关闭后 token 不能启动任务、清除 context 缓存不会残留 TLS。
 容器在域切换后扩容/释放仍归原资源；隐式成员构造、显式 allocator-aware 构造和嵌套容器传播分别验证。
 保留低层 TLS 无关的显式分配测试，避免便利层掩盖资源生命周期错误。
-错线程与过期 checkpoint 通过调试诊断验证，不能把未定义行为测试当作正常恢复路径。
+错线程调用与过期 checkpoint 通过 try 接口验证；借用对象逃逸/错序析构仍不是可恢复的正常路径。
 
 最终测量同一 Release/RelWithDebInfo 工作负载：heap、PMR、arena、local/shared pool，
 不同尺寸/对齐、同线程与跨线程、1/2/4/N 线程；记录吞吐、延迟分布、峰值、保留量及 profiling 开销。
@@ -397,7 +432,7 @@ Thread sanitizer/ASan 仅在支持的构建配置实际执行后记录，不能�
 按 [Roadmap M1.7](../roadmap.md#m17memory-与性能分析补充) 的七个小节实施：
 Tracy CPU 底座 → heap → PMR/智能指针与持久路由 → arena → pool → context/任务路由/关闭集成 → 场景测量。
 M1.7.3 已交付 ThreadContext/ExecutionScope 的最小线程与系统绑定，此时不包含 arena/pool；
-M1.7.4/5 增加对应局部资源，M1.7.6 完成 token、缓存退休与多系统组合验收，避免基础接口依赖后续小节。
+M1.7.4 已增加线程 scratch，M1.7.5 增加 pool，M1.7.6 完成 token、缓存退休与多系统组合验收，避免基础接口依赖后续小节。
 生命周期闸门、拥有型 handle 和最小记账从 heap 首节就具备，不能留到最后补救悬空资源。
 首轮只在受控示例与新 M4 的大块数据/临时工作中采用，不批量改变 M1–M3 公共容器 ABI。
 Tracy 的现有 Runtime/IO 埋点可先接入，不需要等待容器迁移。

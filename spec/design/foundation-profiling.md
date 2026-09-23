@@ -1,7 +1,7 @@
 ---
 module: foundation-profiling
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-23T17:48:09+08:00"
+updated_at: "2026-09-23T19:13:31+08:00"
 status: accepted
 ---
 
@@ -13,7 +13,7 @@ status: accepted
 内存事件、使用量曲线与线程上下文。工具用于回答命令/IO/任务耗时、内存峰值、保留量与分配热点。
 M1.7.1 已完成 CPU 接入、OFF/ON 定向验证和真实采集，见 [0023](../development/0023-tracy-cpu-profiling.md)。
 M1.7.2 已提供 heap backing 事件与真实配对采集，见 [0024](../development/0024-mimalloc-heap.md)。
-arena/pool 用量曲线和 GPU 埋点仍为规划。
+M1.7.4 已接入 arena 用量曲线，见 [0026](../development/0026-scratch-arena.md)；pool 曲线和 GPU 埋点仍为规划。
 accepted 表示采用当前方案，不代表所有小节已验收或已经测得性能改进。
 
 2026-09-23 实施核验官方最新提交 `33d78c1ed898a06938f31312167c7abefd229455`，
@@ -71,7 +71,7 @@ TRACY_NO_CRASH_HANDLER；升级官方 port 时检查是否可以移除 overlay�
 ## 埋点接口与最早交付
 
 CPU 包装：`DK_PROFILE_ZONE("literal")`、`DK_PROFILE_ZONE_VALUE(id)`、
-`DK_PROFILE_FRAME("literal")`、`set_thread_name(...)`；named allocation/free 已在 M1.7.2 接入，plot 留到 arena/pool 小节。
+`DK_PROFILE_FRAME("literal")`、`set_thread_name(...)`；named allocation/free 已在 M1.7.2 接入，scratch plot 在 M1.7.4 接入。
 静态名称表达稳定操作，例如 Runtime.Dispatch、IO.Read、Scene.Save；运行时 command/JobId 使用 zone value/text，
 不为每条请求制造新的 source location。禁用分析时，格式化文本等额外参数计算也必须消除。
 
@@ -107,6 +107,14 @@ Jobs 的排队、执行与发布各自为线程内 zone，通过 JobId 关联；
 因此一个 64 KiB arena chunk 内分出 100 个对象，heap 轨道只记录这一个 64 KiB 申请。
 对象退出后的 arena used 下降，chunk 若继续保留，backing 仍保持；真正归还上游时才出现 free。
 预算、backing 请求量、logical 使用量与进程 RSS 是不同指标，UI/报告不能相加当总内存。
+
+M1.7.4 的 `record_scratch_sample(previous, current)` 在安全点替换每个 arena 的上一笔贡献，
+使用短 mutex 汇总为固定 `dk/scratch/used`、`dk/scratch/retained`、`dk/scratch/backing` 和
+`dk/scratch/sampled-peak` 曲线，Memory 格式/阶梯展示。retained 是完全空闲 chunk，backing 包括全部 chunk；
+sampled-peak 是进程内采样总 used 的历史最大值，不代表瞬时精确峰值或 RSS，arena 快照另保存自身精确峰值。
+checkpoint、rewind 前后、chunk 增长/复用、reset 和显式 sample 时更新；销毁撤销贡献。
+普通 bump 不发事件、不加全局锁；Memory.Scratch.Grow/Rewind/Reset 提供操作级 CPU zone。
+DK_PROFILE_MEMORY=OFF 时曲线适配为空函数，CPU zone 仍按 DK_ENABLE_PROFILING 控制。
 
 逐对象 arena/pool 追踪留作以后诊断模式：必须使用独立 logical named pool，并解决地址复用和
 checkpoint 部分 rewind 的配对。`TracyMemoryDiscard` 只能清空对应整个命名池，
@@ -159,7 +167,8 @@ M1.7.2 已通过测试 sink 检验失败无 alloc、跨线程配对和同地址�
 这里的字节是累计请求量，不能作为同时存活峰值。独立 [内存检查器](../../tools/profiling/README.md)
 使用匹配版本的 Tracy server 解码事件；不依赖仅导出 CPU 数据的 csvexport 来推断内存正确性。
 脚本 `-Mode memory/memory-disabled` 保存检查结果，默认 `-Mode cpu` 保持原有 134 区间验证。
-M1.7.4–5 再验证 chunk 与 logical 曲线不重复累计。
+M1.7.4 的 `-Mode arena/arena-disabled` 验证 102 次临时申请只产生 3 次 jobs chunk 分配/释放，
+4 条曲线读回 peak/结束值正确，内存采集关闭时事件和曲线均为零。M1.7.5 再补 pool 对应验收。
 M1.7.6 验证多 Runtime 共用 client、其中一个关闭不影响另一实例、延迟释放仍记录。
 针对实际条件编译路径验证 OFF/ON 是必要范围，不扩大为全引擎双配置回归。
 

@@ -14,7 +14,8 @@ include(Catch)
 if(DK_BUILD_MEMORY)
     add_executable(dk_memory_tests
         "${PROJECT_SOURCE_DIR}/engine/foundation/memory/tests/MemoryTests.cpp"
-        "${PROJECT_SOURCE_DIR}/engine/foundation/memory/tests/OwnershipTests.cpp")
+        "${PROJECT_SOURCE_DIR}/engine/foundation/memory/tests/OwnershipTests.cpp"
+        "${PROJECT_SOURCE_DIR}/engine/foundation/memory/tests/ArenaTests.cpp")
     target_include_directories(dk_memory_tests PRIVATE "${PROJECT_SOURCE_DIR}/engine/foundation/memory/src")
     target_link_libraries(dk_memory_tests PRIVATE dk::memory Catch2::Catch2WithMain Threads::Threads)
     dk_target_defaults(dk_memory_tests)
