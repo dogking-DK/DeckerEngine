@@ -3,6 +3,7 @@
 
 namespace dk::memory {
 namespace detail { struct MemoryAccess; }
+class ThreadContext;
 
 // Methods are thread-safe; moving/destroying this wrapper requires exclusive access.
 // Destruction starts closing. External handles retain their heaps for legal frees.
@@ -23,6 +24,7 @@ public:
 
 private:
     friend struct detail::MemoryAccess;
+    friend class ThreadContext;
     struct Impl;
     explicit MemorySystem(std::unique_ptr<Impl> impl) noexcept;
     std::unique_ptr<Impl> impl_;

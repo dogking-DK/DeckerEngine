@@ -10,8 +10,8 @@ M3.1 已提供独立命令注册表、参数/结果 schema 校验及 commands.li
 M3.2 通过 dk::scene_services 和 dk::scene_operations 提供会话管理、场景编辑、查询与保存。
 M3.3 提供事务与有界历史；M3.4 的 dk-run 支持无窗口 CPU 批处理和 JSON-RPC。
 M3.5 已接入持续 stdio、同步任务查询与正常关闭，达到交付 A。
-M1.7.1–2 已接入可选 Tracy CPU 分析和 mimalloc heap：独立内存域、对齐分配、预算、关闭闸门及内存采集。
-PMR、智能指针、自动路由、arena/pool 属于后续小节。
+M1.7.1–3 已接入可选 Tracy CPU 分析、mimalloc heap、PMR、拥有型容器/智能指针及持久域路由。
+内存域支持预算、关闭闸门和跨线程释放；arena/pool 和任务路由属于后续小节。
 渲染、物理、编辑器、网络/命名管道 IPC 和脚本模块尚未实现。
 
 ## 目录
@@ -27,7 +27,7 @@ DeckerEngine/
 ├── cmake/                     # 选项、toolchain 配置、编译警告
 ├── scripts/                   # 定向构建/测试和文档检查
 ├── engine/
-│   ├── foundation/            # core、math、io、profiling、memory heap；jobs、metadata 待实现
+│   ├── foundation/            # core、math、io、profiling、memory/持久路由；jobs、metadata 待实现
 │   ├── platform/              # 窗口和输入接口、SDL3
 │   ├── geometry/              # CPU 几何查询和 BVH
 │   ├── assets/                # types 已实现；加载、导入预留
@@ -262,7 +262,7 @@ feature 选择在 `project()` 前映射到 `VCPKG_MANIFEST_FEATURES`，
 
 ## Memory heap（M1.7.2）
 
-模块链接 `dk::memory`。当前底层接口显式持有资源；后续 M1.7.3 再提供拥有型容器和自动持久域路由。
+模块链接 `dk::memory`。底层接口显式持有资源；日常代码可使用下节的拥有型容器和自动持久域路由。
 以下函数演示预算、关闭期间释放及关闭重试，返回值供调用方处理：
 
 ```cpp
@@ -300,6 +300,72 @@ MemorySystem 包装对象析构。`snapshot()` 返回域身份、活块、backin
 
 真实内存采集与关闭事件的对照见 [Profiling 工具说明](tools/profiling/README.md)；
 M1.7.2 记录见 [0024](spec/development/0024-mimalloc-heap.md)。
+
+## 拥有型内存与持久域路由（M1.7.3）
+
+框架入口绑定一次 ThreadContext 和持久资源，业务函数里的 `dk::Vector`、`dk::String`、
+`dk::memory::make_unique/make_shared` 自动捕获该资源。下面是可单独编译链接 `dk::memory` 的完整示例：
+
+```cpp
+#include <dk/memory/MemorySystem.hpp>
+#include <dk/memory/Containers.hpp>
+#include <dk/memory/SmartPtr.hpp>
+
+struct Mesh { dk::Vector<int> indices; };
+
+std::shared_ptr<Mesh> build_mesh()
+{
+    auto mesh = dk::memory::make_shared<Mesh>();
+    mesh->indices = {0, 1, 2};
+    return mesh;
+}
+
+int main()
+{
+    namespace mem = dk::memory;
+    auto memory = mem::MemorySystem::create();
+    if (!memory) return 1;
+    auto assets = memory->create_heap({"assets", mem::DomainCategory::assets});
+    auto scene = memory->create_heap({"scene", mem::DomainCategory::scene});
+    if (!assets || !scene) return 2;
+    std::shared_ptr<Mesh> result;
+    {
+        mem::ThreadContext thread{*memory};
+        mem::ExecutionScope entry{thread, *assets};
+        result = build_mesh(); // 对象/control block 和 indices 都归 Assets
+        {
+            mem::DomainScope domain{*scene};
+            dk::String label(80, 'x'); // 新对象归 Scene
+            result->indices.reserve(1024); // 已有容器扩容仍归 Assets
+        }
+    } // 路由恢复；结果和 allocator 继续持有资源
+    result.reset();
+    return memory->try_close().closed() ? 0 : 3;
+}
+```
+
+当前提供上述入口 API，尚未将既有 Runtime/Jobs 自动装配到内存系统。未绑定时隐式接口抛
+`ContextError`，`try_current_resource()` 返回固定错误码；不会静默转到全局 heap。
+ExecutionScope 支持嵌套另一系统；DomainScope 只切换同系统的持久域。context/scope 必须同线程、
+按栈序析构，context 晚于 scope；存活 context 会使系统关闭返回 active_contexts/busy。
+容器/Buffer/智能指针的释放无需 TLS，但容器自身的并发读写仍遵守标准库规则。
+
+| 需要 | 接口与边界 |
+| --- | --- |
+| 显式选择资源 | `Allocator<T>{handle}`、`make_unique_in<T>`、`make_shared_in<T>`；不改写 TLS |
+| 资源敏感类型的成员 | 声明 allocator_type，按 uses_allocator 构造；嵌套标准容器使用 scoped_allocator_adaptor，示例见 [测试](engine/foundation/memory/tests/OwnershipTests.cpp) |
+| 跨域复制容器 | `dk::Vector<int> clone{source, mem::Allocator<int>{target}}`；普通复制保留源 allocator |
+| 借用 PMR | `std::pmr::vector<int> values{owner.pmr_resource()}`；owner 必须晚于容器析构，跨域复制显式传目标 resource |
+| 拥有字节缓冲 | `try_allocate(handle, bytes, alignment)` 返回 expected&lt;Buffer&gt;；try_resize 失败保留原内容，增长需容纳新旧块的预算 |
+
+拥有型 allocator 的 copy/move/swap 均传播资源，移动后源容器可继续使用。普通成员不声明 allocator
+感知时，显式 `_in` 只决定对象/control block 的资源，成员默认构造仍从当前作用域捕获；不会反射并改写任意类。
+对象构造异常原样传播并释放存储。shared 的最后一个 weak 控制块仍持有资源；unique 的 reset/null 赋值
+保留 deleter，销毁或用空 UniquePtr 替换后才释放其句柄。PMR 仅借用，不提供这一自动所有权保证。
+`Buffer` 只管理字节，不对任意 C++ 对象执行 realloc；新增长字节未初始化，零长度 Buffer 仍规范化申请 1 字节。
+
+定向验证使用上节 memory 命令；实现与验收见 [0025](spec/development/0025-memory-ownership-routing.md)。
+下一项是 M1.7.4 ScratchArena/ScratchScope；本节尚无 scratch、pool、任务 token 或线程缓存。
 
 ## Tracy CPU 性能分析（M1.7.1）
 
@@ -624,7 +690,7 @@ ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
 
 M1.6 与 M2.1–M2.4 已完成并分节本地提交。最终默认 Debug/Release 各 128 通过、
 1 项既有符号链接权限跳过；独立 Scene 配置各 104 通过、1 跳过，纯 CPU 示例各 16/16。
-上述计数为当时验收记录；M3 交付 A 及 M1.7.1–2 也已完成，当前下一项为 M1.7.3。
+上述计数为当时验收记录；M3 交付 A 及 M1.7.1–3 也已完成，当前下一项为 M1.7.4。
 
 开发前先看 [AGENTS.md](AGENTS.md) 和 [spec 规范](spec/README.md)：
 先创建/更新模块设计，然后实现；过程中持续更新编号开发记录。

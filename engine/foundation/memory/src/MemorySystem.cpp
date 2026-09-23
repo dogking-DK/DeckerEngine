@@ -1,4 +1,5 @@
 #include <dk/memory/MemorySystem.hpp>
+#include <dk/memory/Context.hpp>
 #include <dk/profiling/Memory.hpp>
 #include "MemoryInternal.hpp"
 
@@ -59,12 +60,13 @@ namespace detail {
 struct SystemState {
     SystemId id;
     std::atomic<ResourceState> state{ResourceState::open};
+    std::atomic<std::size_t> contexts{0};
     Backend backend;
     EventSink sink;
     SystemState(SystemId identity, Backend b, EventSink s) noexcept : id(identity), backend(b), sink(s) {}
 };
 
-struct ResourceControl {
+struct ResourceControl : std::pmr::memory_resource {
     std::shared_ptr<SystemState> system;
     DomainId id;
     std::string name;
@@ -82,6 +84,16 @@ struct ResourceControl {
         // A raw pointer without a retained owner violates the public contract.
         if (!close().closed()) { std::terminate(); }
     }
+
+    void* do_allocate(std::size_t bytes, std::size_t alignment) override
+    {
+        auto result = allocate(bytes, alignment);
+        if (!result) { throw std::bad_alloc{}; }
+        return *result;
+    }
+    void do_deallocate(void* pointer, std::size_t bytes, std::size_t alignment) override
+    { deallocate(pointer, bytes, alignment); }
+    bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override { return this == &other; }
 
     bool enter(bool allocating) noexcept
     {
@@ -210,8 +222,13 @@ struct MemorySystem::Impl {
         std::lock_guard lock{registry_mutex};
         begin_close_locked();
         CloseResult result;
+        result.active_contexts = shared->contexts.load(std::memory_order_acquire);
+        if (result.active_contexts) { result.state = ResourceState::closing; }
         for (const auto& resource : resources) {
-            const auto item = resource->close();
+            const auto sample = resource->snapshot();
+            const auto item = result.active_contexts
+                ? CloseResult{sample.state, sample.live_allocations, sample.active_operations, sample.backing_requested_bytes}
+                : resource->close();
             if (!item.closed()) { result.state = ResourceState::closing; }
             saturating_add(result.live_allocations, item.live_allocations);
             saturating_add(result.active_operations, item.active_operations);
@@ -274,12 +291,30 @@ void MemorySystem::begin_close() noexcept
 }
 CloseResult MemorySystem::try_close() noexcept { return impl_ ? impl_->close() : CloseResult{}; }
 
+ThreadContext::ThreadContext(MemorySystem& system) : thread_(std::this_thread::get_id())
+{
+    if (!system.impl_) { throw ContextError{ContextErrorCode::invalid_resource}; }
+    std::lock_guard lock{system.impl_->registry_mutex};
+    if (system.state() != ResourceState::open) { throw ContextError{ContextErrorCode::closing}; }
+    system_ = system.impl_->shared;
+    system_->contexts.fetch_add(1, std::memory_order_release);
+}
+ThreadContext::~ThreadContext()
+{
+    if (thread_ != std::this_thread::get_id() || scopes_ != 0) { std::terminate(); }
+    system_->contexts.fetch_sub(1, std::memory_order_release);
+}
+SystemId ThreadContext::system_id() const noexcept { return system_->id; }
+ResourceState ThreadContext::state() const noexcept { return system_->state.load(); }
+
 ResourceHandle::ResourceHandle(std::shared_ptr<detail::ResourceControl> control) noexcept : control_(std::move(control)) {}
 SystemId ResourceHandle::system_id() const noexcept { return control_ ? control_->system->id : 0; }
 DomainId ResourceHandle::domain_id() const noexcept { return control_ ? control_->id : 0; }
 std::string_view ResourceHandle::name() const noexcept { return control_ ? std::string_view{control_->name} : std::string_view{}; }
 DomainCategory ResourceHandle::category() const noexcept { return control_ ? control_->category : DomainCategory::other; }
 ResourceSnapshot ResourceHandle::snapshot() const noexcept { return control_ ? control_->snapshot() : ResourceSnapshot{}; }
+std::pmr::memory_resource* ResourceHandle::pmr_resource() const noexcept
+{ return control_ ? static_cast<std::pmr::memory_resource*>(control_.get()) : std::pmr::null_memory_resource(); }
 std::expected<void*, AllocationError> ResourceHandle::try_allocate(std::size_t bytes, std::size_t alignment) const noexcept
 {
     if (!control_) { return std::unexpected(AllocationError::invalid_handle); }

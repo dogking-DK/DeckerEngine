@@ -1,7 +1,7 @@
 ---
 module: foundation-memory
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-23T17:48:09+08:00"
+updated_at: "2026-09-23T18:38:11+08:00"
 status: accepted
 ---
 
@@ -13,7 +13,43 @@ status: accepted
 通用 heap 使用 mimalloc，向上提供 PMR、标准容器 allocator、智能指针工厂、arena 和 pool。
 与 [Tracy 性能分析](foundation-profiling.md) 一起作为 **M1.7 基础设施补充**，先于 M4 实施。
 原 M1.1–M1.6、M2、M3 的验收保持有效。M1.7.2 已完成 heap 实现及定向验收，记录见
-[0024](../development/0024-mimalloc-heap.md)；PMR、Buffer、自动路由与 arena/pool 仍是后续设计。
+[0024](../development/0024-mimalloc-heap.md)。M1.7.3 已完成 PMR、Buffer、拥有型分配器/智能指针与
+最小 context/持久域路由，见 [0025](../development/0025-memory-ownership-routing.md)；arena/pool 和任务路由仍待实现。
+
+## M1.7.3 实施细化
+
+本节在 M1.7.2 上增加以下接口，开发记录为 [0025](../development/0025-memory-ownership-routing.md)。
+不增加新三方库，也不迁移既有 Scene/Runtime 容器。
+
+- `ResourceHandle::pmr_resource()` 返回稳定 control 内的借用 PMR 接口，按身份比较；空 handle 返回
+  null_memory_resource，不落到全局默认 heap。申请失败转 bad_alloc；调用者保持 owner 到最后一次 deallocate。
+- `Allocator<T>` 拥有资源，默认构造通过 current_resource 捕获；显式构造无 TLS 副作用。
+  复制、rebind 和移动保留同一 owner（移动也保持源 allocator 有效）；三个 propagation trait 均 true。
+  分配溢出抛 bad_array_new_length，其他分配失败 bad_alloc；不自定义 construct，嵌套传播使用标准 scoped_allocator。
+- `dk::Vector<T>`、`dk::String` 为 std 别名。跨域 clone 使用显式 allocator 的标准复制构造；
+  PMR clone 也显式传目标 resource，不能假定其默认复制保留原域。
+- `Buffer` 为 move-only 字节所有者，保存 resource/原 size/alignment。显式 try_allocate 返回 expected；
+  try_resize 在同资源申请候选、复制 min(old,new)、交换后释放旧块，失败保留地址/内容/大小。
+  同大小为 no-op，其他调整有新旧块同时占用预算的瞬时需求，新增字节未初始化；零长度仍拥有一个规范化块。
+- unique/shared 工厂提供隐式与 `_in` 两组。显式工厂采用标准 uses_allocator 构造，支持声明 allocator_type
+  的资源敏感类型；普通成员容器不会被反射或强制改路由。unique 不支持数组/Derived 到 Base 隐式转换。
+  shared 通过 allocate_shared 和拥有型 allocator 保存控制块，最后 weak_ptr 释放前 owner 仍在。
+  工厂支持 const 结果；unique 用标准 uses_allocator 参数和 placement new 构造，失败释放原始存储。
+  unique 的 reset/null 赋值保留 deleter 的 owner，销毁或显式用空 UniquePtr 替换才放弃该句柄。
+- `ThreadContext context{system}` 在当前线程注册最小 lease，不可复制/移动；本节无 scratch/pool。
+  注册与系统 Closing 由 registry mutex 串行化；CloseResult 增加 active_contexts。
+  有 context 时系统 try_close 保持 Closing 并延后 heap 删除；context 析构可晚于系统包装对象。
+- ExecutionScope(context, resource) 和 DomainScope(resource) 为不可移动的栈帧，严格同线程/LIFO。
+  前者允许嵌套另一系统，后者仅允许当前系统。验证成功后才发布 TLS，失败不改变旧帧。
+  空上下文/资源、错线程/系统、Closing 分别返回固定 ContextErrorCode；普通入口抛静态消息 ContextError。
+  try_current_resource 返回 expected；无绑定不默选全局资源。作用域错序/错线程销毁属契约错误并 terminate。
+- Context 持有共享系统状态，scope 持有资源且借用 context；context 必须晚于 scope 析构。
+  系统 ID 不复用，context 本节无缓存/重置，因此不另造可失效 generation；缓存/token 在 M1.7.6 再实现。
+  Closing 后路由查询拒绝新工作，已有 allocator/Buffer/智能指针仍可释放；原资源本身的 gate 负责最终申请许可。
+
+验收覆盖 PMR 身份/借用、预算/构造失败、allocator 传播及移动后复用、过对齐、Buffer 强失败保证、
+weak 控制块延迟释放、缺上下文、嵌套/异常恢复、显式与隐式成员路由、scoped_allocator、线程隔离和 context 关闭。
+默认仅运行 memory 相关 Debug 测试；新增拥有型链路用确定性 sink 检验事件只由 heap 发出，不重复全量 capture。
 
 ## M1.7.2 已确定的实现契约
 
@@ -50,9 +86,13 @@ status: accepted
 ## 模块与依赖
 
 - 目录 `engine/foundation/memory`，target `dk_memory / dk::memory`，命名空间 `dk::memory`。
-- 已提供 [MemorySystem.hpp](../../engine/foundation/memory/include/dk/memory/MemorySystem.hpp) 和
-  [Resource.hpp](../../engine/foundation/memory/include/dk/memory/Resource.hpp)。Allocator、SmartPtr、Buffer、
-  Arena、Pool、Statistics、Context、Containers 等头按后续小节实现后再添加。
+- 已提供 [MemorySystem.hpp](../../engine/foundation/memory/include/dk/memory/MemorySystem.hpp)、
+  [Resource.hpp](../../engine/foundation/memory/include/dk/memory/Resource.hpp)、
+  [Allocator.hpp](../../engine/foundation/memory/include/dk/memory/Allocator.hpp)、
+  [Buffer.hpp](../../engine/foundation/memory/include/dk/memory/Buffer.hpp)、
+  [SmartPtr.hpp](../../engine/foundation/memory/include/dk/memory/SmartPtr.hpp)、
+  [Context.hpp](../../engine/foundation/memory/include/dk/memory/Context.hpp)、
+  [Containers.hpp](../../engine/foundation/memory/include/dk/memory/Containers.hpp)。Arena/Pool 等在对应小节再添加。
 - 公共接口使用标准库及本模块类型；错误使用不分配内存的枚举/POD。首版不依赖 dk::core，
   Core 也不反向依赖 Memory。mimalloc、dk::profiling 和 Threads::Threads 为 PRIVATE 链接依赖。
 - `mi_heap_t`、mimalloc 头文件和 Tracy 事件接口均留在实现内。上层按实际公开类型决定
@@ -195,13 +235,14 @@ Memory 的 M1.7.6 用标准线程探针验证此契约，真正 Jobs 自动捕�
 
 ## 公共接口与资源存活
 
-以下是拟定接口形状，非现有可编译示例；实施对应小节时补齐参数类型，不提前创建空接口。
+以下为总体接口形状，含后续小节，非可编译示例；实际 M1.7.3 用法见
+[README](../../README.md#拥有型内存与持久域路由m173)。
 
 ```cpp
 namespace dk::memory {
-  class MemorySystem;        // create_heap、attach_thread、begin_close、try_close
+  class MemorySystem;        // create_heap、begin_close、try_close
   class ResourceHandle;      // 持有稳定 ResourceControl；只用于持久、线程安全资源
-  class ThreadContext;       // 不可跨线程移动；scratch()、local_pool()
+  class ThreadContext;       // ThreadContext(system)；scratch()/local_pool() 待后续实现
   class ExecutionScope;      // 框架绑定执行线程/系统/持久资源
   class DomainScope;         // 在同一系统内覆盖默认持久资源
   class RoutingToken;        // 拥有型任务路由；不包含线程局部资源
@@ -214,8 +255,8 @@ namespace dk::memory {
 }
 ```
 
-M1.7.2 的 ResourceHandle 只指向 heap control；后续再扩展 SharedPoolResource 和 PMR 适配。
-control 地址稳定，不可因 MemorySystem 容器扩容而移动；M1.7.3 的内部 resource 将实现 `std::pmr::memory_resource`。
+当前 ResourceHandle 指向 heap control；SharedPoolResource 在后续小节扩展。
+control 地址稳定，不可因 MemorySystem 容器扩容而移动；M1.7.3 的内部 resource 已实现 `std::pmr::memory_resource`。
 Buffer、allocator 和智能指针 deleter/control block 持有 handle，保证异步结果存活期间资源仍在。
 控制对象自身由独立 bootstrap 分配路径创建，禁止用自己尚未建好的 allocator 构造自己的 control。
 资源只持有上游 handle，系统注册回指为非拥有关系，避免引用环。
@@ -303,7 +344,7 @@ SharedPool control 必须晚于所有对象/control block 销毁；LocalPool 必
 ## 关闭、并发与提交点
 
 系统及资源采用 `Open → Closing → Closed`，关闭不可回到 Open。
-create_heap/attach_thread/注册表变更走冷路径互斥；共享资源快路径使用自己的操作闸门和计数。
+create_heap/ThreadContext 注册/注册表变更走冷路径互斥；共享资源快路径使用自己的操作闸门和计数。
 入场必须以同一个原子协议协调状态与 in-flight 操作，不能“先读 Open，再无保护地访问已删除 heap”。
 申请入场发生于 begin_close 之前的操作允许完成；关闭禁止后续入场，但始终允许合法释放。
 arena/local pool 的 context 注册存活期间，系统不能销毁其底层资源；关闭通知通过原子状态传递，
@@ -355,7 +396,7 @@ Thread sanitizer/ASan 仅在支持的构建配置实际执行后记录，不能�
 
 按 [Roadmap M1.7](../roadmap.md#m17memory-与性能分析补充) 的七个小节实施：
 Tracy CPU 底座 → heap → PMR/智能指针与持久路由 → arena → pool → context/任务路由/关闭集成 → 场景测量。
-M1.7.3 同时交付 ThreadContext/ExecutionScope 的最小线程与系统绑定，此时不包含 arena/pool；
+M1.7.3 已交付 ThreadContext/ExecutionScope 的最小线程与系统绑定，此时不包含 arena/pool；
 M1.7.4/5 增加对应局部资源，M1.7.6 完成 token、缓存退休与多系统组合验收，避免基础接口依赖后续小节。
 生命周期闸门、拥有型 handle 和最小记账从 heap 首节就具备，不能留到最后补救悬空资源。
 首轮只在受控示例与新 M4 的大块数据/临时工作中采用，不批量改变 M1–M3 公共容器 ABI。

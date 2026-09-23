@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <expected>
 #include <memory>
+#include <memory_resource>
 #include <string_view>
 
 namespace dk::memory {
@@ -42,6 +43,7 @@ struct CloseResult {
     std::size_t live_allocations = 0;
     std::size_t active_operations = 0;
     std::size_t backing_requested_bytes = 0;
+    std::size_t active_contexts = 0;
     [[nodiscard]] bool closed() const noexcept { return state == ResourceState::closed; }
 };
 
@@ -62,6 +64,8 @@ public:
     [[nodiscard]] std::string_view name() const noexcept; // Borrowed until the last handle dies.
     [[nodiscard]] DomainCategory category() const noexcept;
     [[nodiscard]] ResourceSnapshot snapshot() const noexcept; // Non-transactional atomic sample.
+    // Borrowed; retain an owner until every PMR user is destroyed. Empty -> null_memory_resource.
+    [[nodiscard]] std::pmr::memory_resource* pmr_resource() const noexcept;
 
     // Keep an owning handle alive through deallocation. Zero bytes consume one byte.
     [[nodiscard]] std::expected<void*, AllocationError>

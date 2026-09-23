@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-23T17:48:09+08:00"
+updated_at: "2026-09-23T18:38:11+08:00"
 status: accepted
 ---
 
@@ -30,7 +30,8 @@ M4 的 [资产运行时](assets-runtime.md)、[导入器](assets-importers.md)�
 M4 之前新增 M1.7 [Memory System](foundation-memory.md) 与
 [Tracy 性能分析](foundation-profiling.md) 基础设施补充，不包含在原 M1–M3 验收中。
 M1.7.1 的 CPU 包装、Runtime/IO 埋点、条件构建与真实 capture 已验收；M1.7.2 的多实例 heap、
-预算、关闭闸门及 backing 内存事件已验收。PMR/自动路由、arena/pool、GPU 事件仍待后续小节。
+预算、关闭闸门及 backing 内存事件已验收。M1.7.3 的 PMR、拥有型容器/智能指针、最小 context 与
+持久域路由已验收；arena/pool、任务路由和 GPU 事件仍待后续小节。既有 Runtime 尚未自动装配内存上下文。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，
