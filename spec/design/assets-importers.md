@@ -1,7 +1,7 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-23T11:41:34+08:00"
+updated_at: "2026-09-23T14:22:27+08:00"
 status: draft
 ---
 
@@ -17,8 +17,9 @@ status: draft
 按用户选型，glTF/GLB 使用 fastgltf，PNG/JPEG 使用 stb_image，内容摘要使用 xxHash 的 XXH3-128。
 库选型已确定；实际安装、链接与功能测试在使用它们的实施小节完成，本次只更新设计。
 导入器使用引擎提供的字节/依赖读取入口，不能绕过路径、大小限制自行访问网络或任意文件。
-实施前完成 M1.7 [Memory](foundation-memory.md) / [Tracy](foundation-profiling.md)。导入上下文显式
-传入持久 Assets 资源与线程 scratch；最终 CPU 数据拥有其资源，失败/取消先析构解析对象再重置临时空间。
+实施前完成 M1.7 [Memory](foundation-memory.md) / [Tracy](foundation-profiling.md)。服务/任务入口绑定
+当前 Runtime 的 Assets 持久路由；普通导入函数通过隐式工厂/容器和 scratch 工厂取用资源，不层层传 thread/heap。
+底层仍保留显式资源入口；最终 CPU 数据拥有其资源，失败/取消先析构解析对象再重置临时空间。
 为解析、accessor 转换、解码和摘要建立稳定 zone。三方库内部暂未适配的分配明确属于观测范围之外；
 不得仅因外层使用 PMR 就声称 fastgltf/stb 的全部分配已被接管。
 

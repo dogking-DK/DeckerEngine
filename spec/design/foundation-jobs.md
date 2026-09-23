@@ -1,7 +1,7 @@
 ---
 module: foundation-jobs
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-23T11:41:34+08:00"
+updated_at: "2026-09-23T14:22:27+08:00"
 status: draft
 ---
 
@@ -14,7 +14,11 @@ status: draft
 首版一个可关闭的 worker + 有界队列，std::jthread/stop_token/条件变量；不建设协程、任务图或 work stealing。
 它支持协作取消，不保证能抢占三方解码器或阻塞的系统 IO。
 前置为 M1.7 [内存系统](foundation-memory.md) 与 [Tracy](foundation-profiling.md)，两者目前均未实现。
-每个 worker 在自身线程建立 ThreadContext，每次执行使用嵌套 ScratchScope；共享队列和 completion
+submit 自动捕获当前系统/持久域的拥有型 RoutingToken；队列本身使用独立资源。
+每个 worker 在自身线程按 SystemId/generation 建立 ThreadContext，执行前绑定 ExecutionScope 和 ScratchScope，
+结束/异常后恢复旧路由；业务回调无需逐层接收 thread/heap。token 不包含提交线程的 arena 或 context，
+系统已 Closing 时不再启动任务；queued 取消直接释放 token。跨 Runtime 共用 worker 不得残留上一个任务的域。
+共享队列和 completion
 使用持久 heap/SharedPool。完成数据拥有资源 handle，不携带 worker scratch/local pool 的借用地址。
 输入快照同样拥有其存储，取消不能提前回收仍被 worker 访问的输入。
 主线程、worker 使用明确线程名称，排队/执行/发布分别埋点并关联 JobId，RAII zone 不跨线程闭合。
@@ -60,6 +64,7 @@ Windows 读取取消/EOF 唤醒方案在该小节先做最小进程验证，再�
 关闭顺序：拒绝新提交 → 请求取消排队/执行中作业 → 唤醒输入和等待者 → 回收 worker/completion
 → 销毁资产服务 → 销毁队列。registry 中捕获的服务引用必须先失效/解除；不得持锁 join。
 worker 退出前在所属线程销毁局部对象及 ThreadContext；其移交的 owning 结果可继续存活。
+系统退休时在 worker 安全点清除该系统的 context 缓存和路由 lease，避免闲置缓存永久阻止 memory 关闭。
 MemorySystem 在队列、服务和 completion 释放后关闭，Tracy client 晚于这些释放事件；
 外部仍持有结果时遵循 Memory 的 Closing/延迟释放规则，不能强制清空 heap。
 正常 EOF 和 runtime.shutdown 共用关闭流程；stdout 响应先刷新，不自动保存场景。

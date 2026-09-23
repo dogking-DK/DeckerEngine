@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-23T11:41:34+08:00"
+updated_at: "2026-09-23T14:22:27+08:00"
 status: accepted
 ---
 
@@ -80,6 +80,7 @@ M4 之前新增 M1.7 [Memory System](foundation-memory.md) 与
    撤销/重做由命令层支持，并明确可回滚操作的范围。
 9. CPU MemorySystem 按 Runtime/tool 实例拥有，mimalloc v3 heap 按域管理；持久资源可跨线程，
    scratch/local pool 归属线程。资源存活晚于所有容器和控制块；GPU 内存继续由 VMA 管理。
+   框架入口绑定作用域，业务自动取得持久域和线程 scratch；任务传播拥有型路由，不传播线程局部地址。
    进程共享 Tracy 观测后端，heap backing 与 arena/pool logical 指标分开，不重复计为总内存。
 
 ## 目录与 target

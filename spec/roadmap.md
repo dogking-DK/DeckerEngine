@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-09-23T11:41:34+08:00"
+updated_at: "2026-09-23T14:22:27+08:00"
 status: accepted
 ---
 
@@ -135,16 +135,18 @@ M9、M10 将这套基础扩展为可脚本化的渲染与物理实验平台。
 | --- | --- | --- | --- | --- |
 | M1.7.1 | dk::profiling、Tracy/vcpkg 开关、CPU zone/线程名、runner/IO 局部埋点 | 原 M1、M3 | OFF 无 Tracy 依赖与参数求值；ON 生成可读 capture；无 viewer 正常退出、stdout 兼容 | 待开始 |
 | M1.7.2 | dk::memory、mimalloc v3、域/ResourceHandle、对齐 heap、预算和关闭闸门、Tracy backing 事件 | M1.7.1 | 对齐/溢出/失败回滚、多线程分配与异线程释放、事件配对及关闭竞争 | 待开始 |
-| M1.7.3 | PMR resource、拥有型 Allocator/Buffer、unique/shared 工厂 | M1.7.2 | 构造失败释放、allocator 传播、PMR 显式复制、weak_ptr 最后控制块与资源存活 | 待开始 |
-| M1.7.4 | ScratchArena、嵌套 ScratchScope、保留上限与用量曲线 | M1.7.3 | LIFO/代际/对齐、失败不破坏旧数据、先析构后 rewind、曲线与 backing 不重复 | 待开始 |
+| M1.7.3 | PMR、拥有型 Allocator/Buffer、容器别名、隐式/显式智能指针与持久域作用域 | M1.7.2 | 构造失败、缺少上下文、路由嵌套恢复、allocator 传播、weak_ptr 控制块存活 | 待开始 |
+| M1.7.4 | ScratchArena、自动取得线程 scratch 的嵌套 ScratchScope、保留上限与用量曲线 | M1.7.3 | LIFO/代际/对齐、失败不破坏旧数据、先析构后 rewind、曲线与 backing 不重复 | 待开始 |
 | M1.7.5 | LocalPool/SharedPool、ObjectPool、受控 trim | M1.7.4 | 局部线程约束、共享并发/异线程释放、构造失败、活对象时拒绝 trim | 待开始 |
-| M1.7.6 | ThreadContext、多个系统协调关闭、延迟释放与 worker 移交探针 | M1.7.5 | worker 退出后结果仍可释放、busy close 可重试、一个系统退出不影响另一个 | 待开始 |
+| M1.7.6 | ThreadContext、拥有型任务路由/线程复用探针、多系统关闭与延迟释放 | M1.7.5 | 换线程重绑定、无残留域、清理缓存、worker 退出后结果可释放、busy close 重试 | 待开始 |
 | M1.7.7 | 代表性重复工作负载、定向集成与性能基线报告 | M1.7.6 | heap/PMR/arena/pool 正确性；OFF/CPU/Memory 采集对照、峰值/保留量和开销可复现 | 待开始 |
 
 每次默认只推进一个 M1.7.x。资源生命周期和并发闸门从 M1.7.2 开始保证，M1.7.6 验证组合场景，
 不是延后处理 heap 正确性。先用标准线程完成探针，不依赖尚未实现的 M4 Jobs，避免循环前置。
 Tracy 逐对象 arena 追踪、自研无锁 pool、全局 new/delete 替换、GPU profiling 不纳入该补充验收。
 M4 新数据采用持久资源、worker 临时数据采用 scratch；M5–M7 再接 GPU zone 和 frame-slot 完成信号。
+日常 API 自动取得框架绑定的上下文，持久与临时使用意图仍显式区分；真正 Jobs 的自动路由接入在 M4.4，
+M1.7.6 先独立验收 token/恢复规则，不将尚未实现的调度器当作已有能力。
 
 ## M2：场景文档与持久化
 

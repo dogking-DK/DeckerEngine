@@ -1,7 +1,7 @@
 ---
 module: foundation-memory
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-23T11:53:00+08:00"
+updated_at: "2026-09-23T14:26:10+08:00"
 status: draft
 ---
 
@@ -22,7 +22,7 @@ status: draft
 
 - 计划目录 `engine/foundation/memory`，target `dk_memory / dk::memory`，命名空间 `dk::memory`。
 - 公开头位于 `include/dk/memory/`：`MemorySystem.hpp`、`Resource.hpp`、`Allocator.hpp`、
-  `SmartPtr.hpp`、`Buffer.hpp`、`Arena.hpp`、`Pool.hpp`、`Statistics.hpp`；按小节实现后再添加。
+  `SmartPtr.hpp`、`Buffer.hpp`、`Arena.hpp`、`Pool.hpp`、`Statistics.hpp`、`Context.hpp`、`Containers.hpp`；按小节实现后再添加。
 - 公共接口使用标准库及本模块类型；错误使用不分配内存的枚举/POD。首版不依赖 dk::core，
   Core 也不反向依赖 Memory。mimalloc 和 dk::profiling 为 PRIVATE 链接依赖。
 - `mi_heap_t`、mimalloc 头文件和 Tracy 事件接口均留在实现内。上层按实际公开类型决定
@@ -55,7 +55,7 @@ flowchart TD
   P -. 使用量 / 保留量 .-> O
 ```
 
-`MemorySystem` 是可独立创建的装配对象，每个 Runtime/离线工具/测试可有自己的实例，显式注入使用者。
+`MemorySystem` 是可独立创建的装配对象，每个 Runtime/离线工具/测试可有自己的实例，在框架边界显式装配。
 多个实例能同时存在；没有决定所有分配去向的单一全局 instance。SystemId/DomainId 是会话身份，
 不写入资产或场景文件。域名称可配置，图中的类别是默认建议，不是固定全局数组。
 
@@ -65,8 +65,10 @@ flowchart TD
 引擎无需给所有分配增加一把全局互斥锁。域属于逻辑分组，并非 OS 内存隔离或安全边界。
 
 `ThreadContext` 在所属线程创建和销毁，绑定一个 MemorySystem，持有该线程的 scratch/local pool。
-一个线程可以使用多个系统的独立 context；首版显式传递，不提供隐含全局 TLS allocator。
-未来若加 TLS 查询，必须以 SystemId + generation 区分，并验证存活，不能缓存悬空裸指针。
+一个线程可以使用多个系统的独立 context。框架通过 ExecutionScope 绑定当前 context 和持久资源域，
+业务函数通过线程局部路由获取，无需层层传递 thread/heap；显式资源接口仍供底层和测试使用。
+TLS 只指向当前 RAII 路由栈帧，不拥有一个进程全局 MemorySystem；栈帧持有有效的 context lease 和资源 handle，
+以 SystemId + generation 校验身份。退出/异常时恢复前一帧，不保留已结束作用域的裸 context 缓存。
 MemorySystem 不创建 worker，也不替 Jobs 执行 join。
 
 | 资源 | 分配线程 | 释放线程 | 回收时机 / 用途 |
@@ -80,6 +82,85 @@ MemorySystem 不创建 worker，也不替 Jobs 执行 join。
 线程安全分配器不使容器、对象或析构函数自动线程安全。具有渲染线程析构要求的对象，
 仍由所属服务安排销毁；内存层不私自把析构回调移动到其他线程。
 
+## 日常使用：框架绑定、业务自动路由
+
+业务默认接口不要求反复传入 ThreadContext/ResourceHandle。路由信息由 Runtime/服务/任务执行器在
+入口设置一次；allocator 在构造时捕获资源，后续使用不依赖当时的线程上下文。
+线程身份可自动取得，Assets/Scene 等业务归属由入口声明，不能靠调用栈、源文件名或类型名猜测。
+
+| 操作 | 路由规则 |
+| --- | --- |
+| `make_unique<T>()` / `make_shared<T>()` | 使用当前作用域的持久资源，永不因存在 ScratchScope 就改走 arena |
+| 默认构造 `dk::Vector<T>` / `dk::String` | 标准容器别名 + 拥有型 Allocator；构造时捕获当前持久资源 |
+| `ScratchScope scope;` | 获取当前执行线程的 scratch，建立嵌套 checkpoint |
+| `scratch_vector<T>()` | 工厂返回绑定当前活动 ScratchScope 的 std::pmr::vector，不改标准 PMR 默认资源 |
+| `DomainScope domain{handle}` | 同一 MemorySystem 内暂时覆盖持久资源，嵌套退出后恢复；不改变已构造对象 |
+| 显式 `make_shared_in<T>(handle, ...)` / 显式 Allocator | 以给定资源为准，用于特殊所有权、独立单元测试与 allocator-aware 类型 |
+
+`dk::Vector` 等仅为 std 容器别名，不引入新容器算法或继承 STL 容器。普通 std::vector/default PMR 和
+三方库不会被自动接管。不安装全局 new/delete hook，不用 std::pmr::set_default_resource 做线程路由。
+持久对象与 scratch 的使用意图保持可辨识，框架不能可靠推断一个指针是否会逃逸。
+
+概念用法（API 尚未实现）：
+
+```cpp
+struct Mesh {
+    dk::Vector<Vertex> vertices; // 默认 allocator 捕获构造时的持久资源
+};
+
+std::shared_ptr<Mesh> import_mesh(const Source& source) {
+    DK_PROFILE_ZONE("Assets.Import");
+    dk::memory::ScratchScope scratch;
+    auto temporary = dk::memory::scratch_vector<Vertex>();
+    decode_vertices(source, temporary);
+    auto result = dk::memory::make_shared<Mesh>();
+    result->vertices.assign(temporary.begin(), temporary.end());
+    return result;
+}
+```
+
+AssetService 的入口/任务执行器保证 Assets 路由已绑定，因此函数只接收业务参数。
+对象/成员容器在该作用域内默认构造时捕获 Assets；临时数据仍归属 worker 的 scratch。
+scratch 上游在 context 创建时选定（例如 Jobs 域），不会因为持久域切换就把已有 chunk 转移账目。
+scratch 的工作归属可由任务 zone 关联，但 heap backing 始终记到实际上游。
+
+### 绑定与传播契约
+
+- ExecutionScope 在 Runtime 分派、离线工具入口或 executor 执行任务前建立，绑定实际执行线程的
+  ThreadContext 与同系统的持久资源；局部 DomainScope 仅切换域。两者不可跨线程移动，严格 LIFO。
+  嵌套调用另一 Runtime 时须建立该 Runtime 的 ExecutionScope，退出后恢复原系统和域。
+- 没有绑定上下文时，隐式工厂/默认 allocator 不偷偷选进程全局 General。`try_current_resource()`
+  返回 missing_context；普通接口抛固定消息、不动态分配诊断字符串的 ContextError。
+  错误系统/失效 generation 同样明确拒绝，Debug/Release 行为一致。显式 `_in`/Allocator 仍可直接使用活资源。
+- implicit allocator 只在构造时查询 TLS，之后的扩容/释放使用保存的 ResourceHandle。
+  例如在 Assets 内创建 vector，移动到主线程 Scene 作用域后扩容，仍记入 Assets；不会在 free 时重查当前域。
+  copy/move/swap 继续遵守拥有型 allocator 的既定传播规则；跨域复制需显式目标 allocator/clone_to。
+- 隐式 `make_shared<T>()` 的普通成员构造发生在当前持久域，因此 dk 容器默认构造自然一致。
+  显式 `_in` 不偷偷改写 TLS；资源敏感类型需通过 allocator-aware 构造或构造参数传给内部容器。
+  任意第三方类或后续在另一作用域默认创建的嵌套对象，不保证自动跟随外层；嵌套容器需要
+  uses_allocator/scoped_allocator 配合，M1.7.3 提供相应范例和跨域测试，不宣称能够反射所有成员。
+- 智能指针/Buffer 释放依赖创建时保存的资源，不依赖当前线程、当前域或原 scope 是否仍存在。
+  Tracy free 标签也来自原资源，不能拿执行释放时的 TLS 标签配对。
+- ScratchScope 对应当前栈帧及线程，scratch_vector 要求活动 scope；返回后仍由调用方遵守对象先析构规则。
+  新 Runtime 的嵌套路由不能继承前一 Runtime 的 scratch scope。跨线程/异步边界不能传 scratch 借用对象。
+
+### 异步和线程复用
+
+Jobs 的 submit 捕获拥有型 RoutingToken，内容为系统控制存活凭据、SystemId/generation 和持久
+ResourceHandle；显式 JobOptions 可覆盖路由。不捕获提交线程的 ThreadContext、arena、TLS 帧或 checkpoint。
+任务队列节点属于队列自己的资源，任务输出默认属于捕获的资源，两者不是一笔归属。
+
+worker 根据 token 找到/创建自己在该系统下的 ThreadContext，建立 ExecutionScope + ScratchScope，
+再调用用户回调；正常、异常、取消路径都恢复旧路由。任务未执行就取消时释放 token，不创建 scratch。
+token 保持控制对象存活但不能阻止系统进入 Closing，也不能重新开启它；开始执行前再次检查状态。
+嵌套提交继承当前持久域，多个 Runtime 复用同一 worker 时按 token 切换，不能继承上一次任务残留域。
+
+ThreadContext 由执行器在所属线程管理，缓存按 SystemId/generation 区分；系统退休时在该线程安全点
+清理相关缓存项，worker 退出时清理余下 context。关闭期间不能让闲置缓存永久挡住 MemorySystem::try_close。
+Memory 的 M1.7.6 用标准线程探针验证此契约，真正 Jobs 自动捕获/恢复在 M4.4 落实。
+外部 std::thread/三方线程不会自动继承 TLS，需通过引擎线程入口或显式作用域绑定一次。
+首版执行回调不可在持有 ExecutionScope/ScratchScope 时挂起并迁移线程；未来协程调度器须另做 task-local 传播。
+
 ## 公共接口与资源存活
 
 以下是拟定接口形状，非现有可编译示例；实施对应小节时补齐参数类型，不提前创建空接口。
@@ -89,10 +170,14 @@ namespace dk::memory {
   class MemorySystem;        // create_heap、attach_thread、begin_close、try_close
   class ResourceHandle;      // 持有稳定 ResourceControl；只用于持久、线程安全资源
   class ThreadContext;       // 不可跨线程移动；scratch()、local_pool()
+  class ExecutionScope;      // 框架绑定执行线程/系统/持久资源
+  class DomainScope;         // 在同一系统内覆盖默认持久资源
+  class RoutingToken;        // 拥有型任务路由；不包含线程局部资源
   class Buffer;              // 持有 ResourceHandle + pointer + size + alignment
   template<class T> class Allocator; // 持有 ResourceHandle；用于 std 容器/control block
   template<class T> using UniquePtr = std::unique_ptr<T, ResourceDeleter<T>>;
-  // make_unique<T>(handle, args...) / make_shared<T>(handle, args...)
+  // make_unique<T>(args...) / make_shared<T>(args...)：捕获当前持久资源
+  // make_unique_in<T>(handle, args...) / make_shared_in<T>(handle, args...)：显式路径
   // try_allocate(handle, bytes, alignment) -> expected<Buffer, AllocationError>
 }
 ```
@@ -116,7 +201,7 @@ Buffer、allocator 和智能指针 deleter/control block 持有 handle，保证�
 
 - 使用标准 `std::pmr` 容器，不重写 vector/string，也不调用 `std::pmr::set_default_resource`。
   PMR 复制构造可能选择默认 resource，跨域复制必须显式传入目标 allocator，提供 `clone_to` 示例。
-- `Allocator<T>` 保存拥有型 ResourceHandle，rebind 保留它，`is_always_equal=false`；
+- `Allocator<T>` 默认构造捕获当前持久资源，也可显式传入拥有型 ResourceHandle；rebind 保留它，`is_always_equal=false`；
   copy/move assignment 和 swap 的 allocator propagation 均设为 true，复制构造保留原 handle。
   这与 PMR 的 propagation 规则不同，须独立测试，不能将两者混为一种容器语义。
 - `make_unique<T>` 使用同资源分配/构造；构造抛异常则释放原块。deleter 保存原类型析构和分配信息。
@@ -223,6 +308,10 @@ profiler 生命周期、开关和采集模式以 [性能分析设计](foundation
 构造失败回收；allocator propagation；最后 weak_ptr 的控制块回收；嵌套 scope 与地址失效边界；
 pool busy trim；有意控制的关闭/分配竞争；worker 退出后结果仍可释放；Tracy 同地址复用事件配对。
 使用 barrier/latch 与可控失败上游，避免靠 sleep 或真实耗尽系统内存制造故障。
+自动路由另验证：无上下文拒绝、两 Runtime 嵌套/异常恢复、同一 worker 执行交替域任务、提交与执行
+线程不同、queued 取消释放 token、关闭后 token 不能启动任务、清除 context 缓存不会残留 TLS。
+容器在域切换后扩容/释放仍归原资源；隐式成员构造、显式 allocator-aware 构造和嵌套容器传播分别验证。
+保留低层 TLS 无关的显式分配测试，避免便利层掩盖资源生命周期错误。
 错线程与过期 checkpoint 通过调试诊断验证，不能把未定义行为测试当作正常恢复路径。
 
 最终测量同一 Release/RelWithDebInfo 工作负载：heap、PMR、arena、local/shared pool，
@@ -233,7 +322,9 @@ Thread sanitizer/ASan 仅在支持的构建配置实际执行后记录，不能�
 ## 实施与迁移边界
 
 按 [Roadmap M1.7](../roadmap.md#m17memory-与性能分析补充) 的七个小节实施：
-Tracy CPU 底座 → heap → PMR/智能指针 → arena → pool → context/关闭集成 → 场景测量。
+Tracy CPU 底座 → heap → PMR/智能指针与持久路由 → arena → pool → context/任务路由/关闭集成 → 场景测量。
+M1.7.3 同时交付 ThreadContext/ExecutionScope 的最小线程与系统绑定，此时不包含 arena/pool；
+M1.7.4/5 增加对应局部资源，M1.7.6 完成 token、缓存退休与多系统组合验收，避免基础接口依赖后续小节。
 生命周期闸门、拥有型 handle 和最小记账从 heap 首节就具备，不能留到最后补救悬空资源。
 首轮只在受控示例与新 M4 的大块数据/临时工作中采用，不批量改变 M1–M3 公共容器 ABI。
 Tracy 的现有 Runtime/IO 埋点可先接入，不需要等待容器迁移。

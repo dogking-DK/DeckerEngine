@@ -1,7 +1,7 @@
 ---
 module: assets-runtime
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-23T11:41:34+08:00"
+updated_at: "2026-09-23T14:22:27+08:00"
 status: draft
 ---
 
@@ -35,6 +35,8 @@ GPU 上传、渲染资源和 GPU Ready 留到 M7。资产准备不修改实体�
 M1.7 [Memory](foundation-memory.md) 与 [Tracy](foundation-profiling.md) 是实施前置。
 Ready 数据和导入结果使用 Assets 域的 owning Buffer/容器，已有消费者可在 unload 后继续持有；
 解析临时空间使用当前执行线程的 ScratchScope，不将 scratch PMR 容器直接 move 到 Ready。
+AssetService 在入口绑定当前 Runtime 的 Assets 域，内部函数自动路由；异步任务捕获拥有型路由 token，
+在 worker 重新绑定其线程 context。已有 Ready 容器的扩容/释放保持创建时的资源，不因主线程域改变而重路由。
 内容哈希/导入/缓存/发布分别埋 CPU zone；heap 记录 backing，临时空间记录用量和高水位，避免重复统计。
 
 ## M4.1：身份与元数据

@@ -1,7 +1,7 @@
 ---
 module: foundation-profiling
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-23T11:53:00+08:00"
+updated_at: "2026-09-23T14:22:27+08:00"
 status: draft
 ---
 
@@ -79,6 +79,7 @@ Jobs 的排队、执行与发布各自为线程内 zone，通过 JobId 关联；
 2. 释放在存储交还 mimalloc **之前**记录匹配 `TracyFreeN`，然后释放、结清统计；
    不允许先 free 再发事件，否则其他线程复用同地址时会出现 alloc/free 顺序错误。
 3. 分配与释放可来自不同线程，但地址、named pool 和追踪模式保持一致。
+   自动路由仅决定新对象的资源；既有对象的分配/释放标签取自其保存的 resource，不读取当前 TLS 域。
    `DK_PROFILE_MEMORY` 是构建配置，不在块存活期间按域任意切换或只采样一半事件。
 4. named pool 标签首版采用适配层中唯一的静态字符数组，分类为 `dk/heap/general`、`assets`、
    `scene`、`render`、`jobs`、`other`；同类别的多个 Runtime 在 Tracy 内存视图聚合。
