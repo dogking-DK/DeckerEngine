@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-09-23T19:13:31+08:00"
+updated_at: "2026-09-23T19:54:50+08:00"
 status: accepted
 ---
 
@@ -28,8 +28,9 @@ M2.1–M2.4 已完成：flecs 文档、组件层级、工程/资产引用和 JSO
 M3.1–M3.5 已完成：统一命令、场景服务、内存事务/撤销重做、CPU CLI/stdio 和同步任务，
 交付 A 最终验收见 [0017](development/0017-stdio-delivery-a.md)。
 新增 M1.7 Memory/Tracy 基础设施补充，设计见 [0022](development/0022-memory-profiling-design.md)，
-M1.7.1–4 已完成，见 [0023](development/0023-tracy-cpu-profiling.md)、[0024](development/0024-mimalloc-heap.md)、
-[0025](development/0025-memory-ownership-routing.md)、[0026](development/0026-scratch-arena.md)，M1.7.5–7 待开始。
+M1.7.1–5 已完成，见 [0023](development/0023-tracy-cpu-profiling.md)、[0024](development/0024-mimalloc-heap.md)、
+[0025](development/0025-memory-ownership-routing.md)、[0026](development/0026-scratch-arena.md)、
+[0027](development/0027-memory-pools.md)，M1.7.6–7 待开始。
 原 M1–M3 验收不包含这项新增能力。默认先完成该补充，再推进 M4。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
@@ -48,7 +49,7 @@ M1.7.1–4 已完成，见 [0023](development/0023-tracy-cpu-profiling.md)、[00
 | M1 Foundation 最小基础 | 错误、日志、稳定 ID、数学约定、文件 IO | M0 | 已完成，M1.1–M1.6 均验收；Windows 本地文件范围 |
 | M2 场景文档 | 实体、变换、层级、资产引用、保存与重载 | M1 | 已完成（M2.1–M2.4） |
 | M3 命令与 CPU Runtime | CLI/stdio 创建、修改、查询、保存场景 | M2 | 已完成（M3.1–M3.5，交付 A） |
-| M1.7 Foundation 补充 | Tracy、mimalloc heap、PMR/智能指针、arena/pool、多线程生命周期 | 原 M1、M3（现有链路埋点） | 进行中：M1.7.1–4 已完成，M1.7.5–7 待开始 |
+| M1.7 Foundation 补充 | Tracy、mimalloc heap、PMR/智能指针、arena/pool、多线程生命周期 | 原 M1、M3（现有链路埋点） | 进行中：M1.7.1–5 已完成，M1.7.6–7 待开始 |
 | M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3、M1.7 | 设计稿已建立，实施待开始 |
 | M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、最小呈现 | M1、M1.7 | 待开始 |
 | M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 待开始 |
@@ -131,8 +132,9 @@ M9、M10 将这套基础扩展为可脚本化的渲染与物理实验平台。
 
 设计：[Memory System](design/foundation-memory.md)、[Tracy 接入](design/foundation-profiling.md)。
 选型为 mimalloc v3 和 Tracy，版本默认跟随 vcpkg 最新收录并固定验证基线。
-M1.7.1–4 已验收，证据见 [0023](development/0023-tracy-cpu-profiling.md)、[0024](development/0024-mimalloc-heap.md)、
-[0025](development/0025-memory-ownership-routing.md)、[0026](development/0026-scratch-arena.md)；pool、任务路由和性能基线仍待执行。
+M1.7.1–5 已验收，证据见 [0023](development/0023-tracy-cpu-profiling.md)、[0024](development/0024-mimalloc-heap.md)、
+[0025](development/0025-memory-ownership-routing.md)、[0026](development/0026-scratch-arena.md)、
+[0027](development/0027-memory-pools.md)；context/任务路由和性能基线仍待执行。
 
 | 小节 | 范围 | 前置 | 独立验收 | 状态 |
 | --- | --- | --- | --- | --- |
@@ -140,7 +142,7 @@ M1.7.1–4 已验收，证据见 [0023](development/0023-tracy-cpu-profiling.md)
 | M1.7.2 | dk::memory、mimalloc v3、域/ResourceHandle、对齐 heap、预算和关闭闸门、Tracy backing 事件 | M1.7.1 | 15 个 heap 用例通过；真实 capture 36 次全部配对、2 次跨线程释放，内存关闭为 0 事件，见 0024 | 已完成 |
 | M1.7.3 | PMR、拥有型 Allocator/Buffer、容器别名、隐式/显式智能指针与持久域作用域 | M1.7.2 | 新增 17 个拥有型/路由用例；原 heap 与 probe 回归、完整 README 示例通过，见 0025 | 已完成 |
 | M1.7.4 | ScratchArena、自动取得线程 scratch 的嵌套 ScratchScope、保留上限与用量曲线 | M1.7.3 | 15 个新用例及双线程 probe；真实 Tracy 4 曲线/3 chunk 配对、内存禁用采集通过，见 0026 | 已完成 |
-| M1.7.5 | LocalPool/SharedPool、ObjectPool、受控 trim | M1.7.4 | 局部线程约束、共享并发/异线程释放、构造失败、活对象时拒绝 trim | 待开始 |
+| M1.7.5 | LocalPool/SharedPool、ObjectPool、受控 trim | M1.7.4 | 16 个 Pool 用例与双线程 probe；构造/在途竞争、weak/busy trim；Tracy ON/内存 OFF 采集通过，见 0027 | 已完成 |
 | M1.7.6 | ThreadContext、拥有型任务路由/线程复用探针、多系统关闭与延迟释放 | M1.7.5 | 换线程重绑定、无残留域、清理缓存、worker 退出后结果可释放、busy close 重试 | 待开始 |
 | M1.7.7 | 代表性重复工作负载、定向集成与性能基线报告 | M1.7.6 | heap/PMR/arena/pool 正确性；OFF/CPU/Memory 采集对照、峰值/保留量和开销可复现 | 待开始 |
 
@@ -480,8 +482,9 @@ bootstrap 各 1/1。真实持续 stdio 在 stdin 打开时即时响应、保存/
 **M1.7.2 已完成**：mimalloc 3.5.3 heap、域/ResourceHandle、预算/关闭闸门与 Tracy backing 事件。
 **M1.7.3 已完成**：PMR、拥有型 Allocator/Buffer、容器与智能指针、最小线程 context 和持久域路由。
 **M1.7.4 已完成**：ScratchArena、自动嵌套 ScratchScope、保留上限、PMR 临时容器与 Tracy 用量曲线。
-下一项为 **M1.7.5 LocalPool/SharedPool、ObjectPool 和受控 trim**。
-先按 M1.7.5–7 完成基础设施补充，再继续 M4.1.1；每次默认仅推进一个独立小节。
+**M1.7.5 已完成**：LocalPool/SharedPool、ObjectPool、拥有型 pool allocator、受控 trim 与用量曲线。
+下一项为 **M1.7.6 context 装配、拥有型任务路由、线程复用和关闭集成**。
+先按 M1.7.6–7 完成基础设施补充，再继续 M4.1.1；每次默认仅推进一个独立小节。
 
 根目录 VS2026 生成脚本作为工程维护完成，见 [0018](development/0018-vs2026-generation-script.md)，不改变里程碑顺序。
 三个开发辅助 skill 与定向验证脚本已作为工程维护完成，见
@@ -494,7 +497,8 @@ M4 开发安排与三份设计稿见 [0020](development/0020-m4-development-plan
 [0024](development/0024-mimalloc-heap.md) 为 M1.7.2 的实现验收记录。
 [0025](development/0025-memory-ownership-routing.md) 为 M1.7.3 的实现验收记录。
 [0026](development/0026-scratch-arena.md) 为 M1.7.4 的实现验收记录。
-当前下一可用开发编号为 **0027**；实际开工时重新扫描
+[0027](development/0027-memory-pools.md) 为 M1.7.5 的实现验收记录。
+当前下一可用开发编号为 **0028**；实际开工时重新扫描
 [开发目录](development/README.md)，取最大编号加一。
 重要设计准备或实际开发开始时创建编号记录，不预建未来小节的空日志；
 子阶段状态和验收证据在本文件及对应实施记录持续维护。

@@ -51,6 +51,8 @@ cmake --preset windows-profiling -B out/build/windows-profiling-cpu-only -DDK_PR
 | memory-disabled | 同一 heap 工作负载完成 36 次申请，capture 中内存事件为 0 |
 | arena | 102 次临时申请只产生 jobs 3 次/3200 字节 chunk 事件，全部配对；4 条 scratch 曲线的峰值/结束值及 Memory 格式正确 |
 | arena-disabled | 同一 arena 工作负载完成，capture 中内存事件和 scratch 曲线均为 0 |
+| pool | 192 次局部/共享对象申请；backing 事件与独立 probe 计数一致并全部配对；八条曲线格式/峰值/结束值匹配 |
+| pool-disabled | 相同池工作负载完成，无内存事件和 pool 曲线，保留 CPU 区间 |
 
 M1.7.4 的双线程 arena 探针单独构建/采集：
 
@@ -66,6 +68,20 @@ M1.7.4 的双线程 arena 探针单独构建/采集：
 检查器额外参数 `arena` 选择此负载；默认仍验证 M1.7.2 的 heap 探针。
 两种 arena 模式还读回 8 个 CPU 区间/2 个线程，覆盖 Probe、Grow、Rewind 和 Reset；内存采集关闭不关闭 CPU zone。
 
+M1.7.5 Pool 采集：
+
+```powershell
+& ./scripts/verify.ps1 -BuildDir out/build/windows-profiling -Configuration RelWithDebInfo -Target dk_pool_probe -TestRegex '^dk\.memory\.pool_probe$' -Reason 'Pool 采集探针'
+& ./scripts/capture-profiling.ps1 -Mode pool
+& ./scripts/verify.ps1 -BuildDir out/build/windows-profiling-cpu-only -Configuration RelWithDebInfo -Target dk_pool_probe -TestRegex '^dk\.memory\.pool_probe$' -Reason 'Pool 内存采集禁用'
+& ./scripts/capture-profiling.ps1 -Mode pool-disabled -BuildDir out/build/windows-profiling-cpu-only
+```
+
+池的标准库布局不写死在检查器中；脚本保存 `pool-measurements.json`，作为 inspector 的 `pool <测量文件>` 参数。
+测量含上游申请次数/累计字节、采样 backing/idle-backings；对象逻辑峰值固定为 local 512/shared 1024 字节。
+检查事件数小于 192 子申请数、全部配对且归零、曲线 Memory 格式与结束值；CPU 区间为实际 Grow 次数加 Probe/Worker/两次 Trim。
+MSVC RelWithDebInfo 本次结果为 21 次上游申请、25 区间、2 线程；其他 STL 不要求相同 chunk 数量。
+
 脚本要求 PowerShell 7，默认 localhost IPv4 端口 18086；并行采集必须指定不同 `-Port`。
 内存检查器位置可用 `-MemoryInspector` 改写，默认取上述 Release 产物。
 所有分配与释放位于一次稳定 on-demand 连接内，不包括启动前存活对象，也不推断晚连接的泄漏情况。
@@ -75,3 +91,4 @@ M1.7.4 的双线程 arena 探针单独构建/采集：
 计数字节是累计申请量，不是峰值或 RSS。该工作负载含受控等待，只验收采集正确性，不是吞吐基准。
 M1.7.2 的实际验证与限制见 [0024](../../spec/development/0024-mimalloc-heap.md)。
 M1.7.4 的 arena 曲线与禁用验证见 [0026](../../spec/development/0026-scratch-arena.md)。
+M1.7.5 的 pool 验证与 MSVC Debug 构造兼容处理见 [0027](../../spec/development/0027-memory-pools.md)。

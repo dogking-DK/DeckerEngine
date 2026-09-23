@@ -1,7 +1,7 @@
 ---
 module: foundation-profiling
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-23T19:13:31+08:00"
+updated_at: "2026-09-23T19:54:50+08:00"
 status: accepted
 ---
 
@@ -13,7 +13,8 @@ status: accepted
 内存事件、使用量曲线与线程上下文。工具用于回答命令/IO/任务耗时、内存峰值、保留量与分配热点。
 M1.7.1 已完成 CPU 接入、OFF/ON 定向验证和真实采集，见 [0023](../development/0023-tracy-cpu-profiling.md)。
 M1.7.2 已提供 heap backing 事件与真实配对采集，见 [0024](../development/0024-mimalloc-heap.md)。
-M1.7.4 已接入 arena 用量曲线，见 [0026](../development/0026-scratch-arena.md)；pool 曲线和 GPU 埋点仍为规划。
+M1.7.4 已接入 arena 用量曲线，见 [0026](../development/0026-scratch-arena.md)；M1.7.5 已接入 pool 曲线，
+见 [0027](../development/0027-memory-pools.md)。GPU 埋点仍为规划。
 accepted 表示采用当前方案，不代表所有小节已验收或已经测得性能改进。
 
 2026-09-23 实施核验官方最新提交 `33d78c1ed898a06938f31312167c7abefd229455`，
@@ -116,6 +117,13 @@ checkpoint、rewind 前后、chunk 增长/复用、reset 和显式 sample 时更
 普通 bump 不发事件、不加全局锁；Memory.Scratch.Grow/Rewind/Reset 提供操作级 CPU zone。
 DK_PROFILE_MEMORY=OFF 时曲线适配为空函数，CPU zone 仍按 DK_ENABLE_PROFILING 控制。
 
+M1.7.5 提供 `record_pool_sample(kind, previous, current)`，local/shared 分别汇总
+`dk/pool/{local,shared}/{live,backing,idle-backing,sampled-peak}` 八条曲线。
+idle-backing 只表示无活分配时保留的全部上游占用；标准池不公开活跃池的精确空闲槽/碎片统计。
+构造/析构、trim 前后和显式 try_sample 更新，后者与维护争用时返回 busy；不逐对象采样或重复发 alloc/free。
+Memory.Pool.Grow 包围计数上游的真实申请，Memory.Pool.Trim 包围成功维护。
+MSVC Debug 固定构造元数据位于 control 内，不属于 heap backing；Tracy hook 不捕获 bootstrap control 内存。
+
 逐对象 arena/pool 追踪留作以后诊断模式：必须使用独立 logical named pool，并解决地址复用和
 checkpoint 部分 rewind 的配对。`TracyMemoryDiscard` 只能清空对应整个命名池，
 **不能用于包含其他 arena/Runtime/外层 scope 活对象的共享标签**。首版不依赖 discard 实现正确性。
@@ -168,7 +176,11 @@ M1.7.2 已通过测试 sink 检验失败无 alloc、跨线程配对和同地址�
 使用匹配版本的 Tracy server 解码事件；不依赖仅导出 CPU 数据的 csvexport 来推断内存正确性。
 脚本 `-Mode memory/memory-disabled` 保存检查结果，默认 `-Mode cpu` 保持原有 134 区间验证。
 M1.7.4 的 `-Mode arena/arena-disabled` 验证 102 次临时申请只产生 3 次 jobs chunk 分配/释放，
-4 条曲线读回 peak/结束值正确，内存采集关闭时事件和曲线均为零。M1.7.5 再补 pool 对应验收。
+4 条曲线读回 peak/结束值正确，内存采集关闭时事件和曲线均为零。
+M1.7.5 的 `-Mode pool/pool-disabled` 使用 192 次对象申请及异线程释放；
+标准池的 chunk 数量/布局按 STL 与配置变化，probe 输出独立计数，inspector 比对实际 backing 事件和八条曲线。
+当前 MSVC RelWithDebInfo 实测 21 次上游申请/6064 累计字节、全部配对、8 次异线程 backing 释放；
+两模式均 25 个 CPU 区间/2 线程，关闭内存采集时无内存事件或 pool 曲线。具体证据见 0027。
 M1.7.6 验证多 Runtime 共用 client、其中一个关闭不影响另一实例、延迟释放仍记录。
 针对实际条件编译路径验证 OFF/ON 是必要范围，不扩大为全引擎双配置回归。
 

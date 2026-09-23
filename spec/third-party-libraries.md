@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-23T19:13:31+08:00"
+updated_at: "2026-09-23T19:54:50+08:00"
 status: accepted
 ---
 
@@ -73,7 +73,8 @@ mimalloc 按域创建 heap，使用 `mi_heap_malloc_aligned/mi_free/mi_heap_dele
 资源关闭闸门保证最后一次释放结束后才删除 heap，不调用 destroy 强制释放活块。
 当前安装为 x64-windows 动态库，安装产物确认 `MI_OVERRIDE=OFF`。M1.7.3 已添加 PMR、拥有型分配器/
 Buffer/智能指针和持久域路由，M1.7.4 增加 ScratchArena/ScratchScope，以 mimalloc heap 作为 chunk 上游；
-Tracy 记录 backing 事件与 scratch 用量曲线。本节不增加依赖或修改版本；pool 尚未实现。
+Tracy 记录 backing 事件与 scratch 用量曲线。M1.7.5 已用标准 PMR pool 包装局部/共享池和 ObjectPool，
+上游继续为 mimalloc heap，新增 pool 曲线；未新增三方依赖或修改版本。MSVC Debug 构造元数据兼容见 Memory 设计。
 内存 capture 检查器独立复用 Tracy 工具依赖和同版本源码，不成为引擎运行时依赖，见
 [工具说明](../tools/profiling/README.md)。
 

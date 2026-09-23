@@ -1,7 +1,7 @@
 ---
 module: foundation-memory
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-23T19:14:49+08:00"
+updated_at: "2026-09-23T19:54:50+08:00"
 status: accepted
 ---
 
@@ -15,7 +15,49 @@ status: accepted
 原 M1.1–M1.6、M2、M3 的验收保持有效。M1.7.2 已完成 heap 实现及定向验收，记录见
 [0024](../development/0024-mimalloc-heap.md)。M1.7.3 已完成 PMR、Buffer、拥有型分配器/智能指针与
 最小 context/持久域路由，见 [0025](../development/0025-memory-ownership-routing.md)。M1.7.4 提供 ScratchArena、
-嵌套 ScratchScope 与用量曲线，见 [0026](../development/0026-scratch-arena.md)；pool 和任务路由仍待实现。
+嵌套 ScratchScope 与用量曲线，见 [0026](../development/0026-scratch-arena.md)。M1.7.5 提供局部/共享 Pool、
+ObjectPool 与受控 trim，见 [0027](../development/0027-memory-pools.md)；context 装配及任务路由仍待实现。
+
+## M1.7.5 实施细化
+
+开发记录 [0027](../development/0027-memory-pools.md)。沿用标准 PMR pool，不增加依赖；
+本节提供独立 pool，ThreadContext 的统一 local_pool 装配/退休留在 M1.7.6。
+
+- `LocalPoolResource` 为不可复制/移动的线程专属借用 PMR，内部 unsynchronized_pool_resource；
+  `SharedPoolResource` 为可复制的拥有型句柄，稳定 control 内为 synchronized_pool_resource。
+  两者固定持有上游 heap ResourceHandle，不改写其语义；共享池新增独立 PoolAllocator，避免扩大 heap handle 的关闭/路由接口。
+  默认 PMR 与已有持久工厂不会自动改用 pool。pool_options 是标准实现可调整的提示，不是预算，实际 options 可查询。
+- 上游计数 PMR 适配器通过 heap 分配标准库 chunk/运行期元数据；拥有型 control 及下述 MSVC Debug 构造元数据使用 bootstrap 存储。
+  分配前验证零字节/对齐/溢出，规范化 size=0 为 1。上游错误保留固定枚举，PMR/allocator 对外抛 bad_alloc。
+  失败不发布用户块、不增加 logical/live；标准库允许保留已取得的内部存储，因此不承诺 backing 完全不变，仍受 heap budget 约束。
+- 每池 gate 协调在途操作、Closing 和排他维护；共享分配保持并发，由 synchronized_pool_resource 管理内部同步。
+  分配计数成功后、离开 gate 前发布；释放先完成标准库 deallocate 再减少 live。Closing（含上游 Closing）拒绝缓存分配，允许释放。
+  `try_trim()` 只在零在途且零 live 时回收标准后端，否则返回 busy 且不改变状态；trim 不关闭池，后续可重用。
+  实施核验 MSVC Debug 的 release 后仍保留容器 proxy 元数据；因此成功 trim 完整析构标准后端，下一次申请才延迟重建。
+  共享池用冷路径初始化 mutex 和 acquire/release ready 标记保护重建；正常分配不进入该 mutex。
+  完整销毁同样用于 close，避免 Closed 后仍占用上游；重建失败不发布用户块，下一次可以重试。
+  当前 MSVC Debug 的标准 pool 构造声明 noexcept，但会申请 iterator proxy。仅在 `_MSC_VER && _ITERATOR_DEBUG_LEVEL>0`
+  时，构造期请求使用 control 内 256 字节对齐保留区（当前工具链实际 16 字节），避免可注入的上游失败穿过 noexcept。
+  该存储属于 bootstrap control，不计 heap backing；构造完成后的全部请求仍走计数上游。重建时旧后端已销毁，才复用此区。
+  这是针对已验证 STL 的有界兼容处理；升级工具链需重跑构造/重建故障测试，保留区不足视作不支持的 STL 布局并 terminate。
+  `try_close()` 先关闭入场，busy 时保留存储，零 live/在途时 release 并发布 Closed；最后 control 销毁不得有活块。
+  局部 try 接口错线程明确拒绝；错线程释放/析构属契约错误。共享句柄的复制品可并发使用，同一个句柄对象的赋值/销毁仍需外部同步。
+  Shared try_close 返回 CloseResult，Local try_close 返回 expected<CloseResult, AllocationError> 以携带 wrong_thread；
+  Local begin_close 是同线程契约接口。options() 保存首次后端构造时的实际配置，trim 不重置 lifetime 峰值/计数。
+- `ObjectPool<T>` 借用 LocalPoolResource，make 返回带同线程 deleter 的 unique_ptr；
+  `SharedObjectPool<T>` 拥有 SharedPoolResource，make 返回拥有型 unique_ptr，make_shared 通过 PoolAllocator 保留控制块资源。
+  构造遵循 uses_allocator，构造失败归还槽位；析构函数执行期间 live 仍非零，防止重入 trim 提前释放。
+  最后 weak_ptr 释放前 shared 控制块仍算活分配。普通成员不会被反射改路由；需要嵌套传播的类型声明 allocator_type。
+- PoolSnapshot 区分 normalized logical_live_bytes、backing_bytes、peak、live/in-flight 和累计申请/失败。
+  `idle_backing_bytes` 只在池没有活分配和在途操作时报告全部保留量；活跃池内部的空槽/碎片/元数据无法由标准 API 精确拆分。
+  snapshot 为非事务诊断采样，不可据此判断可以 trim；安全点 `try_sample()` 取得排他采样权，不在每次子分配加全局观测锁。
+- Tracy 仅在 heap 记录 backing alloc/free。local/shared 各自提供 live、backing、idle-backing、sampled-peak 固定汇总曲线，
+  trim 前后、构造/析构及显式 try_sample 更新；峰值为采样历史值。Grow/Trim CPU zone 只包围上游申请/维护。
+  OFF/CPU-only 内存曲线为空；共享 control 的最后一次采样归零。
+
+验收：局部/共享对齐与零字节、缓存复用、过大请求、预算/OOM、已有数据保留、构造异常、allocator 传播、
+跨线程释放、weak 控制块、busy trim/close、受控在途申请和释放竞争，以及真实 Tracy backing 配对与曲线禁用。
+标准行为依据 [pool members](https://eel.is/c++draft/mem.res.pool.mem)；不依赖某个 STL 的 chunk 大小或地址复用顺序。
 
 ## M1.7.4 实施细化
 
@@ -124,7 +166,10 @@ weak 控制块延迟释放、缺上下文、嵌套/异常恢复、显式与隐�
   [SmartPtr.hpp](../../engine/foundation/memory/include/dk/memory/SmartPtr.hpp)、
   [Context.hpp](../../engine/foundation/memory/include/dk/memory/Context.hpp)、
   [Containers.hpp](../../engine/foundation/memory/include/dk/memory/Containers.hpp)、
-  [Arena.hpp](../../engine/foundation/memory/include/dk/memory/Arena.hpp)。Pool 在后续小节添加。
+  [Arena.hpp](../../engine/foundation/memory/include/dk/memory/Arena.hpp)、
+  [Pool.hpp](../../engine/foundation/memory/include/dk/memory/Pool.hpp)、
+  [PoolAllocator.hpp](../../engine/foundation/memory/include/dk/memory/PoolAllocator.hpp)、
+  [ObjectPool.hpp](../../engine/foundation/memory/include/dk/memory/ObjectPool.hpp)。
 - 公共接口使用标准库及本模块类型；错误使用不分配内存的枚举/POD。首版不依赖 dk::core，
   Core 也不反向依赖 Memory。mimalloc、dk::profiling 和 Threads::Threads 为 PRIVATE 链接依赖。
 - `mi_heap_t`、mimalloc 头文件和 Tracy 事件接口均留在实现内。上层按实际公开类型决定
@@ -152,7 +197,7 @@ flowchart TD
   T2 --> A2[ScratchArena + LocalPool]
   A1 --> H
   A2 --> H
-  S --> P[按需 SharedPool]
+  R --> P[按需 SharedPool]
   P --> H
   H -. allocation / free .-> O[dk::profiling / Tracy]
   A1 -. 使用量 / 保留量 .-> O
@@ -287,7 +332,7 @@ namespace dk::memory {
 }
 ```
 
-当前 ResourceHandle 指向 heap control；SharedPoolResource 在后续小节扩展。
+ResourceHandle 保持 heap control 语义；SharedPoolResource 单独拥有 pool control，PoolAllocator/PoolDeleter 负责其所有权。
 control 地址稳定，不可因 MemorySystem 容器扩容而移动；M1.7.3 的内部 resource 已实现 `std::pmr::memory_resource`。
 Buffer、allocator 和智能指针 deleter/control block 持有 handle，保证异步结果存活期间资源仍在。
 控制对象自身由独立 bootstrap 分配路径创建，禁止用自己尚未建好的 allocator 构造自己的 control。
@@ -432,7 +477,7 @@ Thread sanitizer/ASan 仅在支持的构建配置实际执行后记录，不能�
 按 [Roadmap M1.7](../roadmap.md#m17memory-与性能分析补充) 的七个小节实施：
 Tracy CPU 底座 → heap → PMR/智能指针与持久路由 → arena → pool → context/任务路由/关闭集成 → 场景测量。
 M1.7.3 已交付 ThreadContext/ExecutionScope 的最小线程与系统绑定，此时不包含 arena/pool；
-M1.7.4 已增加线程 scratch，M1.7.5 增加 pool，M1.7.6 完成 token、缓存退休与多系统组合验收，避免基础接口依赖后续小节。
+M1.7.4 已增加线程 scratch，M1.7.5 已增加独立 pool，M1.7.6 完成 context 装配、token、缓存退休与多系统组合验收。
 生命周期闸门、拥有型 handle 和最小记账从 heap 首节就具备，不能留到最后补救悬空资源。
 首轮只在受控示例与新 M4 的大块数据/临时工作中采用，不批量改变 M1–M3 公共容器 ABI。
 Tracy 的现有 Runtime/IO 埋点可先接入，不需要等待容器迁移。

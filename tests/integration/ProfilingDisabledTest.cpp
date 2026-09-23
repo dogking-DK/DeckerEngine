@@ -9,6 +9,7 @@ int main()
     dk::profiling::record_allocation(nullptr, 0, dk::profiling::HeapCategory::general);
     dk::profiling::record_free(nullptr, dk::profiling::HeapCategory::general);
     dk::profiling::record_scratch_sample({}, {});
+    dk::profiling::record_pool_sample(dk::profiling::PoolKind::local, {}, {});
     int effects = 0;
     DK_PROFILE_ZONE((++effects, "Disabled"));
     DK_PROFILE_ZONE_VALUE(++effects);

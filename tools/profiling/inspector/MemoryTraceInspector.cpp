@@ -3,6 +3,7 @@
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -12,11 +13,20 @@
 
 int main(int argc, char** argv)
 {
-    if ((argc != 3 && argc != 4) || (std::strcmp(argv[2], "on") && std::strcmp(argv[2], "off"))
-        || (argc == 4 && std::strcmp(argv[3], "arena"))) { return 2; }
+    const bool arena = argc == 4 && std::strcmp(argv[3], "arena") == 0;
+    const bool pool = argc == 5 && std::strcmp(argv[3], "pool") == 0;
+    if ((argc != 3 && !arena && !pool) || (std::strcmp(argv[2], "on") && std::strcmp(argv[2], "off"))) { return 2; }
     const bool expected = std::strcmp(argv[2], "on") == 0;
-    const bool arena = argc == 4;
     try {
+        nlohmann::json measured;
+        if (pool) {
+            std::ifstream input{argv[4]}; input >> measured;
+            if (measured.at("requests") != 192 || measured.at("memory_enabled") != expected
+                || measured.at("backing_allocations").get<std::size_t>() == 0
+                || measured.at("backing_allocations").get<std::size_t>() >= 192) {
+                throw std::runtime_error("invalid pool probe measurements");
+            }
+        }
         auto file = std::unique_ptr<tracy::FileRead>{tracy::FileRead::Open(argv[1])};
         if (!file) { throw std::runtime_error("cannot open capture"); }
         tracy::Worker worker{*file};
@@ -44,7 +54,12 @@ int main(int argc, char** argv)
             counts[name].first += count; counts[name].second += bytes; total += count;
             pools.push_back({{"name", name}, {"allocations", count}, {"bytes", bytes}, {"live_bytes", memory.usage}});
         }
-        if (expected && arena) {
+        if (expected && pool) {
+            if (total != measured.at("backing_allocations").get<std::size_t>() || counts.size() != 1
+                || counts["dk/heap/jobs"].second != measured.at("backing_bytes_total").get<std::uint64_t>()) {
+                throw std::runtime_error("pool capture must match backing measurements without per-object duplicates");
+            }
+        } else if (expected && arena) {
             if (total != 3 || counts.size() != 1 || counts["dk/heap/jobs"] != std::pair<std::size_t, std::uint64_t>{3, 3200}
                 || cross_thread != 0) {
                 throw std::runtime_error("arena must emit only three paired backing chunks totaling 3200 bytes");
@@ -59,23 +74,34 @@ int main(int argc, char** argv)
         std::map<std::string, std::pair<double, double>> expected_plots{
             {"dk/scratch/used", {2912, 0}}, {"dk/scratch/retained", {1024, 0}},
             {"dk/scratch/backing", {3200, 0}}, {"dk/scratch/sampled-peak", {2912, 2912}}};
+        if (pool) {
+            expected_plots = {
+                {"dk/pool/local/live", {512, 0}}, {"dk/pool/local/sampled-peak", {512, 512}},
+                {"dk/pool/shared/live", {1024, 0}}, {"dk/pool/shared/sampled-peak", {1024, 1024}},
+                {"dk/pool/local/backing", {measured.at("local_backing_peak").get<double>(), 0}},
+                {"dk/pool/shared/backing", {measured.at("shared_backing_peak").get<double>(), 0}},
+                {"dk/pool/local/idle-backing", {measured.at("local_idle_peak").get<double>(), 0}},
+                {"dk/pool/shared/idle-backing", {measured.at("shared_idle_peak").get<double>(), 0}}};
+        }
         for (const auto* plot : worker.GetPlots()) {
             if (plot->type != tracy::PlotType::User) { continue; }
             const std::string name = worker.GetString(plot->name);
-            if (!name.starts_with("dk/scratch/")) { continue; }
-            if (!expected || !arena) { throw std::runtime_error("unexpected scratch curve"); }
+            if (!name.starts_with("dk/scratch/") && !name.starts_with("dk/pool/")) { continue; }
+            if (!expected || (!arena && !pool)) { throw std::runtime_error("unexpected memory curve"); }
             const auto match = expected_plots.find(name);
             if (match == expected_plots.end() || plot->data.empty() || plot->min < 0
                 || plot->max != match->second.first || plot->data.back().val != match->second.second
                 || plot->format != tracy::PlotValueFormatting::Memory) {
-                throw std::runtime_error("scratch curve peak, final value or format differs from workload");
+                throw std::runtime_error("memory curve peak, final value or format differs from workload: " + name);
             }
             plots.push_back({{"name", name}, {"samples", plot->data.size()}, {"peak", plot->max}, {"final", plot->data.back().val}});
             expected_plots.erase(match);
         }
-        if (expected && arena && !expected_plots.empty()) { throw std::runtime_error("missing scratch curves"); }
+        if (expected && (arena || pool) && !expected_plots.empty()) { throw std::runtime_error("missing memory curves"); }
         std::cout << nlohmann::json{{"status", "passed"}, {"memory_enabled", expected}, {"allocations", total},
-            {"cross_thread_frees", cross_thread}, {"pools", pools}, {"scratch_plots", plots}}.dump(2) << '\n';
+            {"cross_thread_frees", cross_thread}, {"pools", pools},
+            {"scratch_plots", pool ? nlohmann::json::array() : plots},
+            {"pool_plots", pool ? plots : nlohmann::json::array()}}.dump(2) << '\n';
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n'; return 1;

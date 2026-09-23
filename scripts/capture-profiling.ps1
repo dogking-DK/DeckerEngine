@@ -4,7 +4,7 @@ param(
     [string]$BuildDir = 'out/build/windows-profiling',
     [string]$Configuration = 'RelWithDebInfo',
     [string]$ToolsDir = 'out/profiling-tools/vcpkg_installed/x64-windows/tools/tracy',
-    [ValidateSet('cpu', 'memory', 'memory-disabled', 'arena', 'arena-disabled')][string]$Mode = 'cpu',
+    [ValidateSet('cpu', 'memory', 'memory-disabled', 'arena', 'arena-disabled', 'pool', 'pool-disabled')][string]$Mode = 'cpu',
     [string]$MemoryInspector = 'out/profiling-tools/inspector/bin/Release/dk-memory-trace-inspect.exe',
     [ValidateRange(1024, 65535)][int]$Port = 18086
 )
@@ -16,7 +16,8 @@ function Resolve-RepoPath([string]$Path) {
     return [IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
 }
 $arenaMode = $Mode -like 'arena*'
-$probeName = if ($Mode -eq 'cpu') { 'dk_profiling_probe' } elseif ($arenaMode) { 'dk_arena_probe' } else { 'dk_memory_probe' }
+$poolMode = $Mode -like 'pool*'
+$probeName = if ($Mode -eq 'cpu') { 'dk_profiling_probe' } elseif ($arenaMode) { 'dk_arena_probe' } elseif ($poolMode) { 'dk_pool_probe' } else { 'dk_memory_probe' }
 $probe = Join-Path (Resolve-RepoPath $BuildDir) "bin/$Configuration/$probeName.exe"
 $capture = Join-Path (Resolve-RepoPath $ToolsDir) 'tracy-capture.exe'
 $exporter = Join-Path (Resolve-RepoPath $ToolsDir) 'tracy-csvexport.exe'
@@ -50,6 +51,7 @@ if ($Mode -ne 'cpu') {
     $summary.cpu_zones = $null; $summary.thread_count = $null
 }
 if ($arenaMode) { $summary.workload = '102 arena requests; 3 backing chunks; 2 threads; nested rewind, retention and reset; 4 aggregate scratch plots' }
+if ($poolMode) { $summary.workload = '192 local/shared pool requests; 2 threads; foreign object frees and trim; 8 pool plots; STL backing compared with independent probe counters' }
 
 function Start-Tool([string]$Name, [string]$Executable, [string[]]$Arguments) {
     $info = [Diagnostics.ProcessStartInfo]::new()
@@ -105,11 +107,19 @@ try {
     $null = Finish-Tool $captureProcess
     $probeOutput = Finish-Tool $probeProcess
     if ($Mode -ne 'cpu') {
-        $expected = if ($Mode -in @('memory', 'arena')) { 'on' } else { 'off' }
+        $expected = if ($Mode -in @('memory', 'arena', 'pool')) { 'on' } else { 'off' }
         $expectedOutput = if ($arenaMode) { "arena=$expected;chunks=3;requests=102" } else { "memory=$expected;allocations=36" }
-        if ($probeOutput.Trim() -ne $expectedOutput) { throw "Unexpected probe output: $probeOutput" }
+        if (-not $poolMode -and $probeOutput.Trim() -ne $expectedOutput) { throw "Unexpected probe output: $probeOutput" }
         $inspectArgs = @($tracePath, $expected)
         if ($arenaMode) { $inspectArgs += 'arena' }
+        if ($poolMode) {
+            $poolMeasurement = $probeOutput | ConvertFrom-Json
+            if ($poolMeasurement.status -ne 'passed' -or $poolMeasurement.requests -ne 192 -or
+                $poolMeasurement.memory_enabled -ne ($expected -eq 'on')) { throw 'Unexpected pool probe output' }
+            $measurementFile = Join-Path $runDir 'pool-measurements.json'
+            [IO.File]::WriteAllText($measurementFile, $probeOutput)
+            $inspectArgs += @('pool', $measurementFile)
+        }
         $json = Finish-Tool (Start-Tool 'memory-inspect' (Resolve-RepoPath $MemoryInspector) $inspectArgs)
         $inspection = $json | ConvertFrom-Json
         if ($inspection.status -ne 'passed') { throw 'Memory capture inspection failed' }
@@ -133,6 +143,25 @@ try {
             $summary.cpu_zones = $arenaZones.Count
             $summary.thread_count = @($arenaZones.thread | Sort-Object -Unique).Count
             if ($summary.cpu_zones -ne 8 -or $summary.thread_count -ne 2) { throw 'Unexpected arena CPU tracks' }
+        }
+        if ($poolMode) {
+            $poolCsv = Finish-Tool (Start-Tool 'export' $exporter @('-u', $tracePath))
+            [IO.File]::WriteAllText((Join-Path $runDir 'cpu-zones.csv'), $poolCsv)
+            $poolZones = @($poolCsv | ConvertFrom-Csv)
+            foreach ($zoneCount in @(
+                @{ Name = 'Pool.Probe'; Count = 1 }, @{ Name = 'Pool.Worker'; Count = 1 },
+                @{ Name = 'Memory.Pool.Trim'; Count = 2 }, @{ Name = 'Memory.Pool.Grow'; Count = $poolMeasurement.backing_allocations }
+            )) {
+                if (@($poolZones | Where-Object name -EQ $zoneCount.Name).Count -ne $zoneCount.Count) {
+                    throw "Unexpected pool CPU zone count: $($zoneCount.Name)"
+                }
+            }
+            foreach ($zone in $poolZones) {
+                if ([long]$zone.exec_time_ns -lt 0 -or [int]$zone.src_line -le 0) { throw 'Unclosed or misplaced pool CPU zone' }
+            }
+            $summary.cpu_zones = $poolZones.Count
+            $summary.thread_count = @($poolZones.thread | Sort-Object -Unique).Count
+            if ($summary.cpu_zones -ne ($poolMeasurement.backing_allocations + 4) -or $summary.thread_count -ne 2) { throw 'Unexpected pool CPU tracks' }
         }
         $summary.status = 'passed'
         Write-Host "Memory capture verified: $($inspection.allocations) allocations; expected=$expected. $tracePath"

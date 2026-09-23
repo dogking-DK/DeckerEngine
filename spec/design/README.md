@@ -8,8 +8,8 @@
 | foundation-math | [Eigen 数学与 Transform](foundation-math.md) | accepted | M1.2 基础数学；M1.3 TRS、仿射组合和逆变换 |
 | foundation-io | [工程路径与文件 IO](foundation-io.md) | accepted | M1.4 路径/字节 IO；M1.5 同目录临时文件与安全替换 |
 | foundation-integration | [Foundation 集成验收](foundation-integration.md) | accepted | M1.6 独立 CPU 示例、ID/变换/安全保存和跨进程重载 |
-| foundation-memory | [Memory System](foundation-memory.md) | accepted | M1.7.2–4 heap、PMR、拥有型接口、持久域路由与 scratch 已完成；pool 与任务路由待实现 |
-| foundation-profiling | [Tracy 性能分析](foundation-profiling.md) | accepted | CPU、heap 事件和 arena 曲线采集已完成；pool 曲线、GPU 观测待实现 |
+| foundation-memory | [Memory System](foundation-memory.md) | accepted | M1.7.2–5 heap、拥有型接口、scratch/pool 已完成；context/任务路由集成待实现 |
+| foundation-profiling | [Tracy 性能分析](foundation-profiling.md) | accepted | CPU、heap 事件和 arena/pool 曲线采集已完成；GPU 观测待实现 |
 | scene | [场景文档](scene.md) | accepted | M2 flecs 身份、层级、快照、安全保存与重载 |
 | assets-types | [资产类型](assets-types.md) | accepted | M2.3 持久引用与种类 |
 | assets-runtime | [资产身份、缓存与加载](assets-runtime.md) | draft | M4.1/M4.3/M4.4 计划；尚未实现 |

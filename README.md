@@ -10,8 +10,8 @@ M3.1 已提供独立命令注册表、参数/结果 schema 校验及 commands.li
 M3.2 通过 dk::scene_services 和 dk::scene_operations 提供会话管理、场景编辑、查询与保存。
 M3.3 提供事务与有界历史；M3.4 的 dk-run 支持无窗口 CPU 批处理和 JSON-RPC。
 M3.5 已接入持续 stdio、同步任务查询与正常关闭，达到交付 A。
-M1.7.1–4 已接入可选 Tracy CPU 分析、mimalloc heap、PMR、拥有型容器/智能指针、持久域路由和线程 scratch。
-内存域支持预算、关闭闸门和跨线程释放；ScratchArena 支持嵌套回退、保留上限与用量曲线，pool 和任务路由待后续小节。
+M1.7.1–5 已接入可选 Tracy 分析、mimalloc heap、PMR、拥有型接口、持久域路由、线程 scratch 和局部/共享 Pool。
+内存域支持预算、关闭闸门和跨线程释放；arena 支持嵌套回退，Pool 提供 ObjectPool、安全 trim 和用量曲线。任务路由待后续小节。
 渲染、物理、编辑器、网络/命名管道 IPC 和脚本模块尚未实现。
 
 ## 目录
@@ -432,8 +432,79 @@ Tracy 只记录 chunk 的 alloc/free，用量曲线在作用域边界、增长�
 ```
 
 采集前准备匹配版本的独立工具，见 [Profiling 工具](tools/profiling/README.md)。
-实现与验收见 [0026](spec/development/0026-scratch-arena.md)。下一项为 M1.7.5 Pool；
+实现与验收见 [0026](spec/development/0026-scratch-arena.md)。Pool 用法见下节；
 任务 token、worker 缓存和既有 Runtime/Jobs 自动装配仍待实现。
+
+## Pool 与对象复用（M1.7.5）
+
+`LocalPoolResource` 供同线程反复创建/销毁小对象，`SharedPoolResource` 支持并发申请与异线程释放。
+前者由调用方保持存活，后者为可复制的拥有型句柄；两者都持有固定 heap 上游。
+`ObjectPool<T>` 提供局部 unique 对象，`SharedObjectPool<T>` 提供拥有型 unique/shared 对象：
+
+```cpp
+#include <dk/memory/MemorySystem.hpp>
+#include <dk/memory/ObjectPool.hpp>
+#include <thread>
+
+struct Particle { int value; explicit Particle(int n) : value(n) {} };
+
+int main()
+{
+    namespace mem = dk::memory;
+    auto memory = mem::MemorySystem::create();
+    if (!memory) return 1;
+    auto heap = memory->create_heap({"particles", mem::DomainCategory::scene});
+    if (!heap) return 2;
+    std::shared_ptr<Particle> result;
+    std::weak_ptr<Particle> weak;
+    {
+        mem::LocalPoolResource local{*heap, {32, 256}};
+        mem::ObjectPool<Particle> localObjects{local};
+        { auto particle = localObjects.make(7); if (particle->value != 7) return 3; }
+        if (!local.try_trim()) return 4; // 活对象已经销毁，归还缓存；后续还能重用
+
+        auto pool = mem::SharedPoolResource::create(*heap, {32, 256});
+        if (!pool) return 5;
+        mem::SharedObjectPool<Particle> sharedObjects{*pool};
+        result = sharedObjects.make_shared(42);
+        weak = result;
+        if (pool->try_trim()) return 6; // 仍有活对象，trim 应拒绝
+    } // 工厂/外观已退出，result 和 weak 控制块继续保有池
+    std::jthread consumer{[value = std::move(result)]() mutable { value.reset(); }};
+    consumer.join();
+    if (!weak.expired()) return 7;
+    if (memory->try_close().closed()) return 8; // weak 控制块尚未释放
+    weak.reset();
+    return memory->try_close().closed() ? 0 : 9;
+}
+```
+
+局部对象必须在池之前、同一线程销毁；共享 unique 的 deleter 和 shared/weak 控制块拥有池。
+`make` 构造失败归还槽位，普通成员不自动改路由；allocator-aware 类型按标准 uses_allocator 传播。
+共享容器使用 `std::vector<T, mem::PoolAllocator<T>>` 并显式传入 `PoolAllocator<T>{pool}`；
+其复制/移动/swap 传播 pool owner，默认空 allocator 不能申请，也不查询 TLS。
+借用 PMR 使用 `pool.pmr_resource()`，调用方需保持 owner；不同池不能相互释放指针。
+
+`try_trim()` 在有活块（含 weak 控制块）或在途操作时返回 busy，不影响已有数据。
+成功时清空标准后端，下次申请延迟重建；`try_close()` 先禁止新申请，待对象释放后重试关闭。
+Shared 的 try_close 返回 CloseResult；Local 返回 expected&lt;CloseResult, AllocationError&gt;，可报告错线程。
+关闭上游同样禁止缓存分配，但已有对象仍可释放。Pool 不会隐式接管现有 dk 容器或持久工厂。
+
+PoolOptions 沿用标准 `{max_blocks_per_chunk, largest_required_pool_block}` 提示，实际值通过 options() 查询；
+上游 heap budget 才是申请预算。统计中的 logical_live 是用户请求量，backing 是实际上游占用；
+idle_backing 仅在完全空闲时报告保留量，不能当作活跃池的可用槽容量，也不等于 RSS。
+`try_sample()` 在安全点发布 local/shared 各四条 Tracy 曲线；忙时返回 busy，不逐对象采集全局曲线。
+当前 MSVC Debug 构造期的 iterator proxy 使用 control 内固定保留区，属于 bootstrap 元数据；
+标准池 chunk 和运行期元数据继续经过上游，见 [设计与工具链限制](spec/design/foundation-memory.md#m175-实施细化)。
+
+```powershell
+& ./scripts/verify.ps1 -Target @('dk_memory_tests', 'dk_pool_probe') -TestRegex '^dk\.memory\.pool' -Reason 'Pool 定向验证'
+& ./scripts/verify.ps1 -BuildDir out/build/windows-profiling -Configuration RelWithDebInfo -Target dk_pool_probe -TestRegex '^dk\.memory\.pool_probe$' -Reason 'Pool 采集探针'
+& ./scripts/capture-profiling.ps1 -Mode pool
+```
+
+独立采集工具准备见 [Profiling 工具](tools/profiling/README.md)，验收见 [0027](spec/development/0027-memory-pools.md)。
+下一项为 M1.7.6：context/拥有型任务路由、线程复用和关闭集成；本节未自动装配既有 Runtime/Jobs。
 
 ## Tracy CPU 性能分析（M1.7.1）
 
@@ -758,7 +829,7 @@ ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
 
 M1.6 与 M2.1–M2.4 已完成并分节本地提交。最终默认 Debug/Release 各 128 通过、
 1 项既有符号链接权限跳过；独立 Scene 配置各 104 通过、1 跳过，纯 CPU 示例各 16/16。
-上述计数为当时验收记录；M3 交付 A 及 M1.7.1–4 也已完成，当前下一项为 M1.7.5。
+上述计数为当时验收记录；M3 交付 A 及 M1.7.1–5 也已完成，当前下一项为 M1.7.6。
 
 开发前先看 [AGENTS.md](AGENTS.md) 和 [spec 规范](spec/README.md)：
 先创建/更新模块设计，然后实现；过程中持续更新编号开发记录。

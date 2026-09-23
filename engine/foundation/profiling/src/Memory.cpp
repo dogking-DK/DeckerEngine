@@ -59,5 +59,29 @@ void record_scratch_sample(ScratchUsage previous, ScratchUsage current) noexcept
     TracyPlot(backing, static_cast<std::int64_t>(total.backing));
     TracyPlot(sampled_peak, static_cast<std::int64_t>(peak));
 }
+void record_pool_sample(PoolKind kind, PoolUsage previous, PoolUsage current) noexcept
+{
+    struct Totals { PoolUsage usage; std::size_t peak = 0; bool configured = false; };
+    static std::mutex mutex;
+    static Totals totals[2];
+    static constexpr const char* names[2][4] = {
+        {"dk/pool/local/live", "dk/pool/local/backing", "dk/pool/local/idle-backing", "dk/pool/local/sampled-peak"},
+        {"dk/pool/shared/live", "dk/pool/shared/backing", "dk/pool/shared/idle-backing", "dk/pool/shared/sampled-peak"}};
+    const auto index = kind == PoolKind::local ? 0 : 1;
+    std::lock_guard lock{mutex};
+    auto& total = totals[index];
+    total.usage.live = total.usage.live - previous.live + current.live;
+    total.usage.backing = total.usage.backing - previous.backing + current.backing;
+    total.usage.idle_backing = total.usage.idle_backing - previous.idle_backing + current.idle_backing;
+    total.peak = (std::max)(total.peak, total.usage.live);
+    if (!total.configured) {
+        for (const auto* name : names[index]) { TracyPlotConfig(name, tracy::PlotFormatType::Memory, true, true, 0); }
+        total.configured = true;
+    }
+    TracyPlot(names[index][0], static_cast<std::int64_t>(total.usage.live));
+    TracyPlot(names[index][1], static_cast<std::int64_t>(total.usage.backing));
+    TracyPlot(names[index][2], static_cast<std::int64_t>(total.usage.idle_backing));
+    TracyPlot(names[index][3], static_cast<std::int64_t>(total.peak));
+}
 } // namespace dk::profiling
 #endif
