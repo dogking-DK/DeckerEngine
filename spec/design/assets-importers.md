@@ -1,7 +1,7 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-22T19:00:00+08:00"
+updated_at: "2026-09-23T08:51:49+08:00"
 status: draft
 ---
 
@@ -21,14 +21,14 @@ status: draft
 ## 已确定的三方库与基线
 
 已读取本机 vcpkg 仓库在项目 builtin-baseline
-`62159a45e18f3a9ac0548628dcaf74fcb60c6ff9` 的 baseline/port 文件，记录如下：
+`67b9e21f86e3034657a04da429a8bf274de67925` 的 baseline/port 文件，记录如下：
 
 | 用途 | 库 / vcpkg 包 | 基线记录版本 | port 声明许可证 | 接入点 |
 | --- | --- | --- | --- | --- |
 | glTF/GLB 解析 | fastgltf / fastgltf | 0.9.0 | MIT | assets/importers，PRIVATE 链接 fastgltf::fastgltf |
 | PNG/JPEG 解码 | stb_image / stb | 2024-07-29#1；stb_image 2.30 | MIT OR CC-PDDC | 导入器内部的单一 StbImageDecoder.cpp |
-| XXH3-128 内容摘要 | xxHash / xxhash | 0.8.3 | BSD-2-Clause | 资产管线内部 ContentDigest 封装，见运行时设计 |
-| fastgltf 的传递依赖 | simdjson / simdjson | 4.3.1 | Apache-2.0 OR MIT | 由 fastgltf port 引入 |
+| XXH3-128 内容摘要 | xxHash / xxhash | 0.8.4 | BSD-2-Clause | 资产管线内部 ContentDigest 封装，见运行时设计 |
+| fastgltf 的传递依赖 | simdjson / simdjson | 4.6.11 | (Apache-2.0 OR MIT) AND BSL-1.0 AND BSD-3-Clause | 由 fastgltf port 引入 |
 
 这些是当前基线数据，不是已安装/编译通过的声明；实施时记录实际解析结果与兼容性。
 JSON 清单继续使用 nlohmann-json，ID 继续使用 stduuid，数学继续使用 Eigen；
@@ -40,12 +40,13 @@ xxHash 使用 `find_package(xxHash CONFIG REQUIRED)`，PRIVATE 链接 `xxHash::x
 不启用命令行工具 `xxhsum` feature，不在公共头文件暴露 xxHash 类型。
 对应模块落地时才追加其所需 vcpkg feature/自动选择逻辑，不把导入器依赖加到最小 Core 必需项。
 
-核验依据：[固定基线](https://github.com/microsoft/vcpkg/blob/62159a45e18f3a9ac0548628dcaf74fcb60c6ff9/versions/baseline.json)、
-[fastgltf port](https://github.com/microsoft/vcpkg/blob/62159a45e18f3a9ac0548628dcaf74fcb60c6ff9/ports/fastgltf/vcpkg.json)、
+核验依据：[固定基线](https://github.com/microsoft/vcpkg/blob/67b9e21f86e3034657a04da429a8bf274de67925/versions/baseline.json)、
+[fastgltf port](https://github.com/microsoft/vcpkg/blob/67b9e21f86e3034657a04da429a8bf274de67925/ports/fastgltf/vcpkg.json)、
 [fastgltf 0.9.0 CMake](https://github.com/spnda/fastgltf/blob/v0.9.0/CMakeLists.txt)、
-[Stb 查找模块](https://github.com/microsoft/vcpkg/blob/62159a45e18f3a9ac0548628dcaf74fcb60c6ff9/ports/stb/FindStb.cmake)、
-[xxHash port](https://github.com/microsoft/vcpkg/blob/62159a45e18f3a9ac0548628dcaf74fcb60c6ff9/ports/xxhash/portfile.cmake)、
-[xxHash 0.8.3 CMake](https://github.com/Cyan4973/xxHash/blob/v0.8.3/cmake_unofficial/CMakeLists.txt)。
+[Stb 查找模块](https://github.com/microsoft/vcpkg/blob/67b9e21f86e3034657a04da429a8bf274de67925/ports/stb/FindStb.cmake)、
+[xxHash port](https://github.com/microsoft/vcpkg/blob/67b9e21f86e3034657a04da429a8bf274de67925/ports/xxhash/portfile.cmake)、
+[xxHash 0.8.4 CMake](https://github.com/Cyan4973/xxHash/blob/v0.8.4/build/cmake/CMakeLists.txt)。
+本次基线升级见 [0021](../development/0021-vcpkg-baseline-update.md)，旧选型版本留在历史记录中。
 
 ## 实现封装约定
 

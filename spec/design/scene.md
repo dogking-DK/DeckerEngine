@@ -1,7 +1,7 @@
 ---
 module: scene
 created_at: "2026-09-22T12:05:49+08:00"
-updated_at: "2026-09-22T13:42:16+08:00"
+updated_at: "2026-09-23T08:59:46+08:00"
 status: accepted
 ---
 
@@ -27,7 +27,8 @@ apply_snapshot(snapshot) 要求同 SceneId，内容相同返回 false；否则�
 engine/scene 建立 dk_scene / dk::scene，公开 include/dk/scene/SceneDocument.hpp。
 Pimpl 私有持有 flecs::world，PUBLIC 依赖 dk::core、dk::math、dk::io、dk::asset_types，
 PRIVATE 依赖 flecs 和 nlohmann-json。Scene 要求 math/io 开启，关闭时 CMake 明确报错。
-当前 vcpkg 锁定基线的 flecs 为 4.1.4；由已有 scene feature 提供，不变更基线。
+当前 vcpkg 锁定基线的 flecs 为 4.1.6；由已有 scene feature 提供，升级记录见
+[0021](../development/0021-vcpkg-baseline-update.md)。
 DK_BUILD_SCENE 默认 OFF，windows-dev 预设启用；启用时自动补充 scene feature。
 基础 bootstrap 和各独立 Foundation 命令显式关闭 Scene，避免隐式扩大依赖。
 

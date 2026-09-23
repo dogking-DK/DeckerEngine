@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T17:14:09+08:00"
+updated_at: "2026-09-23T09:04:11+08:00"
 status: accepted
 ---
 
@@ -90,8 +90,11 @@ CTest 保留 runner 冒烟验证，开发预设额外运行 Catch2 行为测试�
 ## vcpkg 策略
 
 使用 manifest mode，固定 builtin-baseline 为
-`62159a45e18f3a9ac0548628dcaf74fcb60c6ff9`（初始化时本机干净的 vcpkg HEAD）。
-依赖 feature 分为 foundation、scene、graphics、editor、scripting、tests，
+`67b9e21f86e3034657a04da429a8bf274de67925`（2026-09-23 查询的官方 master）。
+统一采用该基线中的最新 port 版本；不添加旧版本 override，也不在每次配置时跟随浮动 master。
+升级时先抓取官方索引，核对所有直接依赖、相关传递依赖及规划选型，再固定提交。
+本机 vcpkg 干净 checkout 只做 fast-forward，同步其 bootstrap 要求的工具版本。
+依赖 feature 分为 foundation、math、scene、commands、graphics、editor、scripting、tests，
 清单默认安装 Core 必需的 stduuid，可选库仍按 feature 选择。
 stduuid 在 Core 实现中使用，不暴露到公开头。
 数学模块使用独立 math feature 安装 eigen3，启用 DK_BUILD_MATH 时自动补充该组；
@@ -114,6 +117,12 @@ Slang 库；未来跨平台 shaderc 编译工具需单独处理 host 工具，�
 
 项目依赖缓存留在构建目录的 vcpkg_installed，忽略 build/cache/log 和 IDE 个人文件。
 更新 baseline 必须连同依赖变化、构建验证和编号开发记录一起提交。
+本次升级及版本表见 [0021](../development/0021-vcpkg-baseline-update.md)。实际安装 windows-dev
+已启用依赖，全部现有 feature 另作依赖解析检查；M4 选型同步新基线，接入仍在对应实施小节完成。
+验证按更新影响选择：fmt/spdlog 日志、flecs 场景/服务，以及 Catch2 使用者的构建和代表性用例；
+默认只使用 Debug，不因升级工具或索引而自动运行全部配置。
+协议进程测试按 runner 的 UTF-8 契约显式解码 stdout/stderr，不依赖 Windows 活动代码页
+或独立 CMake 脚本的默认 policy；往返用例同时核对预期中文名称，避免相同乱码被误判为一致。
 
 ## 留档与 skill
 

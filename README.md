@@ -226,6 +226,15 @@ JSON 由 Scene 私有使用，原规划的 GLM 已从清单移除。
 | scripting | lua、sol2 |
 | tests | catch2（已接入 Core、数学和 IO 单元测试） |
 
+当前依赖固定到 2026-09-23 核验的 vcpkg 官方基线
+`67b9e21f86e3034657a04da429a8bf274de67925`。全部包版本与升级验证见
+[0021 依赖升级记录](spec/development/0021-vcpkg-baseline-update.md)。已是该索引最新版本的包保持不变；
+历史阶段记录中的旧版本是当时的验证结果。
+在 vcpkg 仓库目录确认没有本地修改后执行 `git pull --ff-only`，并运行
+`.\bootstrap-vcpkg.bat -disableMetrics` 更新配套工具；完成后回到 DeckerEngine 目录，
+重新执行 `cmake --preset windows-dev`。
+项目配置依然按清单的固定 baseline 解析，不随本机索引自动漂移。
+
 需要预下载全部规划中的桌面依赖时，使用
 `cmake --preset windows-desktop-deps`。
 它会安装更多包，但不会启用尚未实现的引擎功能。按需选择组：
