@@ -23,5 +23,6 @@
 | 0019 | [开发辅助 skills](0019-development-skills.md) | project-foundation | completed |
 | 0020 | [M4 开发计划与设计准备](0020-m4-development-plan.md) | assets-runtime、assets-importers、foundation-jobs | completed（仅文档） |
 | 0021 | [vcpkg 全部依赖基线升级](0021-vcpkg-baseline-update.md) | project-foundation、assets-importers、assets-runtime、scene | completed |
+| 0022 | [Memory System 与 Tracy 设计](0022-memory-profiling-design.md) | foundation-memory、foundation-profiling、foundation-jobs、assets-runtime | completed（仅文档） |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

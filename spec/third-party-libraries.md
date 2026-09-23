@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-23T09:12:42+08:00"
+updated_at: "2026-09-23T11:41:34+08:00"
 status: accepted
 ---
 
@@ -37,6 +37,7 @@ status: accepted
 
 下表记录该基线对应的版本。标为“已集成”的库有实际 CMake 消费者；
 “清单预留”表示仅有依赖 feature；“M4 已选型”尚未加入项目清单。
+后新增的 M1.7 选型单独列出，未包含在 0021 当时的 22 包解析验证中。
 构建缓存中残留的未使用包不属于当前依赖清单，例如此前已移除的 GLM。
 
 ## 当前已集成
@@ -56,6 +57,21 @@ status: accepted
 实际依赖声明：[Core/日志 CMake](../engine/foundation/core/CMakeLists.txt)、
 [Math CMake](../engine/foundation/math/CMakeLists.txt)、[Scene CMake](../engine/scene/CMakeLists.txt)、
 [Commands CMake](../engine/framework/commands/CMakeLists.txt)、[单元测试 CMake](../tests/unit/CMakeLists.txt)。
+
+## M1.7 已选型，尚未接入
+
+| 库 / vcpkg port | 当前基线版本 | 计划用途 | 边界 |
+| --- | --- | --- | --- |
+| mimalloc / `mimalloc` | 3.5.3 | CPU 通用 heap；PMR、智能指针、arena/pool 的上游 | dk::memory PRIVATE；依赖 v3 多线程 heap 语义，MIT；不启用 override |
+| Tracy / `tracy` | 0.14.1 | CPU zone、线程名、heap 事件与内存曲线 | dk::profiling 封装；client BSD-3-Clause；profiling feature 按需开启 on-demand，默认不带 crash-handler/GUI |
+
+2026-09-23 另核对官方最新提交 `9e3427bc82738568947beb508e78231f99c04f4c` 的
+[mimalloc port](https://github.com/microsoft/vcpkg/blob/9e3427bc82738568947beb508e78231f99c04f4c/ports/mimalloc/vcpkg.json) 和
+[Tracy port](https://github.com/microsoft/vcpkg/blob/9e3427bc82738568947beb508e78231f99c04f4c/ports/tracy/vcpkg.json)，版本与当前固定基线一致。
+该核验不表示项目 baseline 已更新，也不表示这两个包已安装或完成链接/运行验证。
+实施 M1.7.1/2 时按版本规则重新核验，分别加入实际 feature/CMake 消费者。
+设计见 [内存系统](design/foundation-memory.md)、[性能分析](design/foundation-profiling.md)，记录见
+[0022](development/0022-memory-profiling-design.md)。
 
 ## M4 已选型，尚未接入
 

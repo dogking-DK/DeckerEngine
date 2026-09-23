@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-22T18:26:04+08:00"
+updated_at: "2026-09-23T11:41:34+08:00"
 status: accepted
 ---
 
@@ -27,6 +27,8 @@ M3.5 持续 stdio、同步任务查询和关闭已完成，M3 交付 A 验收见
 M4 的 [资产运行时](assets-runtime.md)、[导入器](assets-importers.md)、
 [CPU 作业](foundation-jobs.md) 设计稿和 [实施小节](../development/0020-m4-development-plan.md)
 已建立，尚未实现。其余模块在开始开发前另写专项设计。
+M4 之前新增 M1.7 [Memory System](foundation-memory.md) 与
+[Tracy 性能分析](foundation-profiling.md) 基础设施补充，目前仅完成设计，不包含在原 M1–M3 验收中。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，
@@ -36,7 +38,7 @@ M4 的 [资产运行时](assets-runtime.md)、[导入器](assets-importers.md)�
 
 | 目录 | 职责 | 依赖约束 |
 | --- | --- | --- |
-| engine/foundation | core、数学、IO、任务、元数据 | 不依赖 Scene、Vulkan、Editor |
+| engine/foundation | core、数学、IO；规划 memory、profiling、任务、元数据 | 不依赖 Scene、Vulkan、Editor；profiling 不反向依赖 memory |
 | engine/platform | 窗口、输入、SDL3 后端 | 可选，CPU 无窗口运行不依赖它 |
 | engine/geometry | AABB、射线、CPU BVH | 仅基础数学/数据 |
 | engine/assets | 资产类型、运行时、导入器 | 与设备资源和图资源分离 |
@@ -76,6 +78,9 @@ M4 的 [资产运行时](assets-runtime.md)、[导入器](assets-importers.md)�
    日志到 stderr。长任务需可查询、等待和取消，结果关联 revision/step/frame。
 8. Lua 做场景脚本，Slang 做 GPU 程序；两者用途独立。
    撤销/重做由命令层支持，并明确可回滚操作的范围。
+9. CPU MemorySystem 按 Runtime/tool 实例拥有，mimalloc v3 heap 按域管理；持久资源可跨线程，
+   scratch/local pool 归属线程。资源存活晚于所有容器和控制块；GPU 内存继续由 VMA 管理。
+   进程共享 Tracy 观测后端，heap backing 与 arena/pool logical 指标分开，不重复计为总内存。
 
 ## 目录与 target
 
@@ -89,7 +94,7 @@ M4 的 [资产运行时](assets-runtime.md)、[导入器](assets-importers.md)�
 ## 后续设计顺序
 
 工程基础 → Foundation/资产身份 → Scene/序列化 → Commands/服务/CPU Runtime →
-资产加载/导入 → Vulkan Device/Shader → GPU Graph → 场景渲染 → Editor/IPC →
+Memory/Tracy 补充 → 资产加载/导入 → Vulkan Device/Shader → GPU Graph → 场景渲染 → Editor/IPC →
 脚本自动化 → Physics 实验。
 可以按需求调整，但在编写模块实现前完成对应专项设计和编号开发记录。
 阶段依赖、交付节点和验收条件以 [开发 Roadmap](../roadmap.md) 为准。

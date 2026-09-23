@@ -8,6 +8,8 @@
 | foundation-math | [Eigen 数学与 Transform](foundation-math.md) | accepted | M1.2 基础数学；M1.3 TRS、仿射组合和逆变换 |
 | foundation-io | [工程路径与文件 IO](foundation-io.md) | accepted | M1.4 路径/字节 IO；M1.5 同目录临时文件与安全替换 |
 | foundation-integration | [Foundation 集成验收](foundation-integration.md) | accepted | M1.6 独立 CPU 示例、ID/变换/安全保存和跨进程重载 |
+| foundation-memory | [Memory System](foundation-memory.md) | draft | M1.7 mimalloc v3、PMR/智能指针、arena/pool、多线程生命周期；尚未实现 |
+| foundation-profiling | [Tracy 性能分析](foundation-profiling.md) | draft | M1.7 CPU/内存观测、采集开关和事件规则；尚未接入 |
 | scene | [场景文档](scene.md) | accepted | M2 flecs 身份、层级、快照、安全保存与重载 |
 | assets-types | [资产类型](assets-types.md) | accepted | M2.3 持久引用与种类 |
 | assets-runtime | [资产身份、缓存与加载](assets-runtime.md) | draft | M4.1/M4.3/M4.4 计划；尚未实现 |

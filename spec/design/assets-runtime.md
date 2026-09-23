@@ -1,7 +1,7 @@
 ---
 module: assets-runtime
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-23T08:51:49+08:00"
+updated_at: "2026-09-23T11:41:34+08:00"
 status: draft
 ---
 
@@ -24,7 +24,7 @@ GPU 上传、渲染资源和 GPU Ready 留到 M7。资产准备不修改实体�
 | 模块 | 计划 target | 职责与依赖 |
 | --- | --- | --- |
 | assets/types（已有） | dk::asset_types | 持久 ID/种类/引用，继续仅依赖 Core |
-| assets/data | dk::asset_data | 不可变 CPU 网格/材质/纹理值；依赖 types、math |
+| assets/data | dk::asset_data | 不可变 CPU 网格/材质/纹理值；依赖 types、math、memory，数据拥有其分配资源 |
 | assets/importers | dk::asset_importers | 源文件到 CPU 数据；依赖 data、IO，私有 fastgltf/stb_image |
 | assets/runtime | dk::asset_runtime | 元数据目录、缓存、加载请求/发布；按阶段依赖 types/data、IO、importers、jobs，私有 xxHash |
 | framework/services、operations | dk::asset_services、dk::asset_operations | Project 与资产目录适配、命令注册；复用现有服务分层 |
@@ -32,6 +32,10 @@ GPU 上传、渲染资源和 GPU Ready 留到 M7。资产准备不修改实体�
 资产底层不依赖 Scene、Commands、Vulkan 或 Editor。AssetService 从 ProjectDescription 构造
 独立目录快照；不能令 assets/runtime 反向包含 Project.hpp，或暴露 SceneService 的可变 Project。
 后台工作只持有输入快照和工作结果；运行时目录及 Ready 发布归属调用者线程。
+M1.7 [Memory](foundation-memory.md) 与 [Tracy](foundation-profiling.md) 是实施前置。
+Ready 数据和导入结果使用 Assets 域的 owning Buffer/容器，已有消费者可在 unload 后继续持有；
+解析临时空间使用当前执行线程的 ScratchScope，不将 scratch PMR 容器直接 move 到 Ready。
+内容哈希/导入/缓存/发布分别埋 CPU zone；heap 记录 backing，临时空间记录用量和高水位，避免重复统计。
 
 ## M4.1：身份与元数据
 
