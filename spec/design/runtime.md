@@ -1,15 +1,17 @@
 ---
 module: runtime
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-09-22T14:05:59+08:00"
+updated_at: "2026-09-23T16:44:00+08:00"
 status: accepted
 ---
 
 # CPU Runtime（M3.4）
 
 dk::runtime 位于 framework/runtime，拥有 SceneService 和 CommandRegistry；构造先创建服务，
-再注册操作，析构先销毁 registry，保证捕获引用有效。PUBLIC 依赖 services/commands，PRIVATE 依赖 operations。
+再注册操作，析构先销毁 registry，保证捕获引用有效。PUBLIC 依赖 services/commands，PRIVATE 依赖 operations/profiling。
 framework 和 Scene 同时启用才构建；不链接日志、窗口、GPU 或脚本。
+M1.7.1 为 create/dispatch 和 runner 入口增加可关闭的 [CPU zone](foundation-profiling.md)，
+dispatch 使用动态文本记录 method；不改变命令/schema/guard/stdout 契约。
 
 Runtime::create(existing_root) 捕获既有工程根；dispatch(method,params,auto_guard=false)
 为串行状态修改安全点，拒绝同实例重入。宿主必须在同一线程调用，未声明线程安全。

@@ -1,4 +1,5 @@
 #include <dk/io/File.hpp>
+#include <dk/profiling/Profiler.hpp>
 
 #include "IoInternal.hpp"
 
@@ -46,6 +47,7 @@ std::unexpected<Error> stream_error(std::string_view operation, std::string_view
 
 Result<ByteBuffer> read_file_bytes(const std::filesystem::path& path, std::size_t max_bytes)
 {
+    DK_PROFILE_ZONE("IO.Read");
     const auto display = detail::checked_io_path(path, "read_file_bytes");
     if (!display) {
         return std::unexpected(display.error());
@@ -88,6 +90,8 @@ Result<ByteBuffer> read_file_bytes(const std::filesystem::path& path, std::size_
 
 Result<void> write_file_bytes(const std::filesystem::path& path, std::span<const std::byte> bytes)
 {
+    DK_PROFILE_ZONE("IO.Write");
+    DK_PROFILE_ZONE_VALUE(bytes.size());
     const auto display = detail::checked_io_path(path, "write_file_bytes");
     if (!display) {
         return std::unexpected(display.error());

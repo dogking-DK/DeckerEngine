@@ -1,7 +1,7 @@
 ---
 module: foundation-memory
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-23T14:26:10+08:00"
+updated_at: "2026-09-23T16:44:00+08:00"
 status: draft
 ---
 
@@ -29,8 +29,9 @@ status: draft
   PUBLIC/PRIVATE 链接 dk::memory，不能用全局 include/link 注入。
 - 计划 `DK_BUILD_MEMORY` 开关及 `memory` vcpkg feature；实施 M1.7.2 时添加，禁用模块不安装 mimalloc。
 
-2026-09-23 核验：项目固定基线 `67b9e21f86e3034657a04da429a8bf274de67925` 和当时
+2026-09-23 初次核验：当时项目基线 `67b9e21f86e3034657a04da429a8bf274de67925` 和当时
 官方最新提交 `9e3427bc82738568947beb508e78231f99c04f4c` 均提供 **mimalloc 3.5.3 / MIT**。
+M1.7.1 升级到 33d78c1e 后 mimalloc 版本仍不变，尚未接入本模块；当前基线见三方库说明。
 实施时重新核验 [三方库版本规则](../third-party-libraries.md)，要求 mimalloc **v3** 语义。
 计划 `find_package(mimalloc 3 CONFIG REQUIRED)`，按 port 导出选择 `mimalloc-static` 或 `mimalloc`。
 不启用 override feature，不运行注入工具，不设置进程或线程默认 heap。

@@ -3,12 +3,18 @@
   "name": "decker-engine",
   "version-semver": "0.1.0",
   "description": "DeckerEngine modular C++ engine",
-  "builtin-baseline": "67b9e21f86e3034657a04da429a8bf274de67925",
+  "builtin-baseline": "33d78c1ed898a06938f31312167c7abefd229455",
   "dependencies": [
     "stduuid"
   ],
   "default-features": [],
   "features": {
+    "profiling": {
+      "description": "Optional Tracy CPU profiling client",
+      "dependencies": [
+        { "name": "tracy", "default-features": false, "features": ["on-demand"] }
+      ]
+    },
     "foundation": {
       "description": "Core logging and planned serialization dependencies",
       "dependencies": [

@@ -1,6 +1,6 @@
 add_executable(dk_run src/main.cpp)
 set_target_properties(dk_run PROPERTIES OUTPUT_NAME "dk-run")
-target_link_libraries(dk_run PRIVATE dk::core)
+target_link_libraries(dk_run PRIVATE dk::core dk::profiling)
 if(TARGET dk_runtime)
     target_link_libraries(dk_run PRIVATE dk::automation_transport)
     target_compile_definitions(dk_run PRIVATE DK_RUN_WITH_RUNTIME=1)

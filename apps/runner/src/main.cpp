@@ -1,4 +1,5 @@
 #include <dk/core/Version.hpp>
+#include <dk/profiling/Profiler.hpp>
 #ifdef DK_RUN_WITH_RUNTIME
 #include <dk/automation/JsonLines.hpp>
 #include <fstream>
@@ -85,6 +86,8 @@ template <typename Char> int entry(int argc, Char **argv)
 {
     try
     {
+        DK_PROFILE_THREAD_NAME("dk-run main");
+        DK_PROFILE_ZONE("Runner.Entry");
         std::vector<std::filesystem::path> args;
         for (int i = 1; i < argc; ++i)
             args.emplace_back(argv[i]);

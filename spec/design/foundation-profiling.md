@@ -1,8 +1,8 @@
 ---
 module: foundation-profiling
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-23T14:22:27+08:00"
-status: draft
+updated_at: "2026-09-23T16:38:00+08:00"
+status: accepted
 ---
 
 # Foundation 性能分析与 Tracy 接入设计
@@ -11,16 +11,19 @@ status: draft
 
 从 M1.7.1 提供可实际采集的 CPU 分析能力，再随 [Memory System](foundation-memory.md) 接入
 内存事件、使用量曲线与线程上下文。工具用于回答命令/IO/任务耗时、内存峰值、保留量与分配热点。
-本次只完成设计；尚未安装 Tracy、添加埋点或生成 capture，不声称已经测得性能改进。
+M1.7.1 已完成 CPU 接入、OFF/ON 定向验证和真实采集，见 [0023](../development/0023-tracy-cpu-profiling.md)。
+后续内存/GPU 埋点仍为规划。
+accepted 表示采用当前方案，不代表所有小节已验收或已经测得性能改进。
 
-2026-09-23 已核验项目固定基线 `67b9e21f86e3034657a04da429a8bf274de67925` 和官方最新提交
-`9e3427bc82738568947beb508e78231f99c04f4c`，均提供 **Tracy 0.14.1 / BSD-3-Clause（client）**。
-实施时按 [依赖政策](../third-party-libraries.md) 重新核验 vcpkg 最新版本。
+2026-09-23 实施核验官方最新提交 `33d78c1ed898a06938f31312167c7abefd229455`，
+提供 **Tracy 0.14.1 / BSD-3-Clause（client）**。旧固定基线 67b9e21f 实际为 0.13.1#1，
+初次设计误读本机工作树版本，现以固定提交的 baseline/port 内容更正，并按
+[依赖政策](../third-party-libraries.md) 在接入时升级基线。
 viewer/capture 工具与 client 使用匹配版本，不将网站缓存中的旧版号作为当前 registry 依据。
 
 ## 模块和构建方式
 
-计划目录 `engine/foundation/profiling`，target `dk_profiling / dk::profiling`，
+目录 `engine/foundation/profiling`，target `dk_profiling / dk::profiling`，
 头文件 `include/dk/profiling/Profiler.hpp`，实现 `src/Profiler.cpp`。模块不依赖 Memory、Core、日志或 Runtime。
 Memory/Jobs/IO/Runtime 的实现按需 PRIVATE 链接它；公开模板若需要埋点则明确 PUBLIC 传递。
 
@@ -28,20 +31,29 @@ Memory/Jobs/IO/Runtime 的实现按需 PRIVATE 链接它；公开模板若需要
 静态 SourceLocation，不能把所有调用都归到包装函数，也不能每进入一个 zone 就分配一个 Pimpl。
 启用时薄包装 Tracy 的 scope 宏，dk::profiling PUBLIC 链接 `Tracy::TracyClient` 以传递包装头所需声明；
 业务公开数据结构不保存 Tracy 类型。禁用时包装头无需 Tracy，宏不求值参数且不产生 client 链接。
+M1.7.1 固定 CPU 接口为 DK_PROFILE_ZONE、DK_PROFILE_ZONE_TEXT、DK_PROFILE_ZONE_VALUE、
+DK_PROFILE_FRAME、DK_PROFILE_THREAD_NAME，以及 enabled/is_connected/set_thread_name。
+无 Tracy 配置的 target 为 INTERFACE；ON 为包含线程名/连接状态适配的静态库。
+TEXT 接受可转为 string_view 的文本并只求值一次，保持临时 string 活到 Tracy 完成复制；
+空文本不发事件，超过 Tracy 字节上限的内容截到 65534 字节（边界可能切断 UTF-8 字符）。
+宏只在同一词法作用域内访问 zone，scope 不跨线程；ZONE/FRAME 名称必须使用静态期字符串。
+关闭时参数不求值由 DK_* 宏保证，普通 C++ 函数的实参仍遵循语言自身的求值规则。
+DK_PROFILE_MEMORY 待 M1.7.2 实现时再添加，首节不提供无效果的内存追踪开关。
 
-| 计划选项/配置 | 语义 |
+| 选项/配置（内存项待实现） | 语义 |
 | --- | --- |
 | DK_ENABLE_PROFILING=OFF | 默认轻量构建；不查找、安装或链接 Tracy；所有埋点编译消除 |
 | 专用 profiling preset | 开启分析，优先 RelWithDebInfo + PDB；优化下测量，Debug 用于行为调试 |
-| DK_PROFILE_MEMORY=ON | 仅在 profiling 开启时有效；启用 heap backing alloc/free 及内存计数 |
+| DK_PROFILE_MEMORY=ON（计划） | M1.7.2 提供；仅在 profiling 开启时有效，启用 heap backing alloc/free 及内存计数 |
 | DK_PROFILE_CALLSTACK_DEPTH=0 | 默认不采集每次分配/zone 调用栈；诊断 preset 可提高深度 |
 | profiling vcpkg feature | tracy，default-features=false，启用 on-demand；不自动构建 GUI 工具 |
 | 独立工具配置 | 按需 cli-tools / 匹配版本 viewer；与被测程序分开，不拉 GUI 依赖进入 CPU Runtime |
 
 通过 imported target 使用 port 编好的设置，不只在消费目标上定义宏却让 TracyClient 使用另一套配置。
 本次源码核验发现 v0.14.1 的 TRACY_ENABLE 默认 OFF，当前 portfile 没有显式传入 ON。
-M1.7.1 必须检查依赖构建配置和导出的 compile definitions；若届时官方 port 仍未修正，使用仓库内
-最小 overlay port 保留官方相同版本/源码校验/补丁，只补充 `-DTRACY_ENABLE=ON`，并记录维护差异。
+M1.7.1 已使用仓库内[最小 overlay port](../../cmake/vcpkg-ports/README.md)，保留官方相同版本/
+源码校验/补丁，只补充 `-DTRACY_ENABLE=ON`。配置时核验导出的 TRACY_ENABLE、TRACY_ON_DEMAND、
+TRACY_NO_CRASH_HANDLER；升级官方 port 时检查是否可以移除 overlay。
 不通过降级库或仅在消费端定义 TRACY_ENABLE 绕过；实际产物和 capture 验证前不推定可用。
 首版不启用 fibers，不安装 Tracy crash-handler，避免改变现有异常/崩溃处理。
 完整启动期 capture 若需要 non-on-demand，必须使用另一独立 build/install 配置重新构建 client；
@@ -54,8 +66,8 @@ M1.7.1 必须检查依赖构建配置和导出的 compile definitions；若届�
 
 ## 埋点接口与最早交付
 
-计划包装：`DK_PROFILE_ZONE("literal")`、`DK_PROFILE_ZONE_VALUE(id)`、
-`DK_PROFILE_FRAME("literal")`、`set_thread_name(...)`；内部提供 named allocation/free 和 plot 适配。
+CPU 包装：`DK_PROFILE_ZONE("literal")`、`DK_PROFILE_ZONE_VALUE(id)`、
+`DK_PROFILE_FRAME("literal")`、`set_thread_name(...)`；named allocation/free 和 plot 适配留到内存小节。
 静态名称表达稳定操作，例如 Runtime.Dispatch、IO.Read、Scene.Save；运行时 command/JobId 使用 zone value/text，
 不为每条请求制造新的 source location。禁用分析时，格式化文本等额外参数计算也必须消除。
 
@@ -110,7 +122,9 @@ alloc/free 事件当作正常防递归方案。Memory 正确性不依赖 viewer 
 短命工具通过有界测试握手在 capture 就绪后启动工作；正常 runner/CTest 不启用 TRACY_NO_EXIT，
 避免用户未打开 viewer 时进程无法退出。采集文件写入忽略目录 `out/profiling/`，
 记录输入、提交、编译配置、依赖版本、采集范围及是否包含启动前存活对象。
-本机 preset 可用官方环境变量限制 localhost；不修改 stdout 的 JSON-RPC 协议或添加性能日志。
+本机 preset 和采集脚本设置 TRACY_ONLY_LOCALHOST=1、TRACY_ONLY_IPV4=1；后者保证与
+工具使用的 127.0.0.1 一致，避免 localhost 只监听 ::1。直接从终端/VS 启动时须自行传入这些环境。
+不修改 stdout 的 JSON-RPC 协议或添加性能日志。
 
 关闭分析的目标是没有 Tracy client、额外线程与事件调用；预算/所有权检查仍是 Memory 自身逻辑。
 开启分析有事件缓存、同步和传输成本，内存分配事件在高频场景尤其需要测量。
@@ -125,6 +139,14 @@ v0.14.1 的 named memory 事件内部使用串行队列和锁；Memory 自身没
 M1.7.1 定向构建 OFF/ON 的 profiling 探针与受影响 runner/IO 链路：禁用后无依赖且参数不求值；
 开启后能采集真实 CPU zone、正确源码位置和线程名称；未连接/断开时正常结束且 stdout 保持协议。
 至少生成一次可由匹配 viewer/capture 工具读取的 capture，不能仅凭链接成功标记“性能分析可用”。
+
+当前采集入口为 [capture-profiling.ps1](../../scripts/capture-profiling.ps1)，工具安装与调用见
+[README](../../README.md#tracy-cpu-性能分析m171)。独立工具 manifest 与引擎保持同基线/overlay。
+脚本启动并管理自己的探针和工具进程，使用 IPv4 localhost，记录提交/工作区、配置和 workload；
+无连接/不退出时有超时和进程清理，失败也保存日志。探针通过受控等待避免零时长 zone，
+5 秒采集留出 Windows 调度粒度与最终元数据查询时间；这不是吞吐或绝对耗时基准。
+验收使用 csvexport 读回 134 个 CPU 区间，验证调用处位置、两个线程 ID、异常关闭、动态文本边界。
+线程命名通过包装调用接入，CSV 不展示线程名；未做 GUI 视觉验收，不声称已检验 viewer 中的名称显示。
 
 M1.7.2 起通过测试 sink 检验失败无 alloc、跨线程配对和同地址复用顺序，再用真实 Tracy capture
 验证 adapter；sink 不替代客户端验收。M1.7.4–5 验证 chunk 与 logical 曲线不重复累计。

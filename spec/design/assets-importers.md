@@ -1,7 +1,7 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-23T14:22:27+08:00"
+updated_at: "2026-09-23T16:44:00+08:00"
 status: draft
 ---
 
@@ -28,8 +28,10 @@ status: draft
 全工程版本政策与接入状态见 [三方库说明](../third-party-libraries.md)；
 对应模块开工时重新核验 vcpkg 最新版本，按该规则升级，以下版本保留当前基线的可追溯性。
 
-已读取本机 vcpkg 仓库在项目 builtin-baseline
-`67b9e21f86e3034657a04da429a8bf274de67925` 的 baseline/port 文件，记录如下：
+初次选型读取项目当时 builtin-baseline
+`67b9e21f86e3034657a04da429a8bf274de67925` 的 baseline/port 文件。
+M1.7.1 已升级到 `33d78c1ed898a06938f31312167c7abefd229455`，重新比较后下表版本均未变；
+本次未安装 M4 依赖或扩大到导入功能验证，见 [0023](../development/0023-tracy-cpu-profiling.md)。
 
 | 用途 | 库 / vcpkg 包 | 基线记录版本 | port 声明许可证 | 接入点 |
 | --- | --- | --- | --- | --- |

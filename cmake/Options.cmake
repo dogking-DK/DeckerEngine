@@ -10,6 +10,11 @@ option(DK_BUILD_EXAMPLES "Build examples whose module dependencies are enabled" 
 option(DK_BUILD_SCENE "Build the flecs scene document" OFF)
 option(DK_BUILD_FRAMEWORK "Build commands and available CPU application modules" OFF)
 option(DK_WARNINGS_AS_ERRORS "Treat DeckerEngine warnings as errors" OFF)
+option(DK_ENABLE_PROFILING "Enable Tracy CPU instrumentation" OFF)
+set(DK_PROFILE_CALLSTACK_DEPTH "0" CACHE STRING "Explicit CPU zone callstack depth (0 disables capture)")
+if(NOT DK_PROFILE_CALLSTACK_DEPTH MATCHES "^[0-9]+$" OR DK_PROFILE_CALLSTACK_DEPTH GREATER 64)
+    message(FATAL_ERROR "DK_PROFILE_CALLSTACK_DEPTH must be an integer from 0 to 64.")
+endif()
 option(DK_USE_VCPKG "Use the vcpkg manifest toolchain" ON)
 set(DK_VCPKG_FEATURES "foundation" CACHE STRING
     "Extra dependency groups to prepare; required groups are added by enabled targets")

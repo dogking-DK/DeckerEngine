@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-23T11:41:34+08:00"
+updated_at: "2026-09-23T16:34:00+08:00"
 status: accepted
 ---
 
@@ -29,15 +29,17 @@ status: accepted
 ## 当前版本基线与验证范围
 
 - 版本核验日期：2026-09-23。
-- builtin-baseline：`67b9e21f86e3034657a04da429a8bf274de67925`。
-- 来源：[官方固定索引](https://github.com/microsoft/vcpkg/blob/67b9e21f86e3034657a04da429a8bf274de67925/versions/baseline.json)。
+- builtin-baseline：`33d78c1ed898a06938f31312167c7abefd229455`。
+- 来源：[官方固定索引](https://github.com/microsoft/vcpkg/blob/33d78c1ed898a06938f31312167c7abefd229455/versions/baseline.json)。
 - Windows host/target triplet：`x64-windows`。
-- 最近升级：[0021](development/0021-vcpkg-baseline-update.md)。当前启用依赖已安装并完成定向 Debug 验证；
-  全部 feature 加 M4 选型共 22 个包已通过依赖解析，未接入模块未声明安装或功能验证通过。
+- 最近接入：[0023](development/0023-tracy-cpu-profiling.md)，Tracy 0.14.1 已安装并通过 CPU capture，
+  对直接受影响的 Runtime/IO 路径做 ON/OFF 定向验证；此前七个已集成库的版本未改变。
+  [0021](development/0021-vcpkg-baseline-update.md) 中的 Debug 测试和 22 包依赖解析是旧基线的历史证据，
+  本次不据此声明所有预留 feature 已在新基线构建或运行。
 
 下表记录该基线对应的版本。标为“已集成”的库有实际 CMake 消费者；
 “清单预留”表示仅有依赖 feature；“M4 已选型”尚未加入项目清单。
-后新增的 M1.7 选型单独列出，未包含在 0021 当时的 22 包解析验证中。
+M1.7 的 Tracy 与 mimalloc 未包含在 0021 当时的 22 包解析验证中。
 构建缓存中残留的未使用包不属于当前依赖清单，例如此前已移除的 GLM。
 
 ## 当前已集成
@@ -51,25 +53,29 @@ status: accepted
 | Eigen / `eigen3` | 5.0.1 | math | 向量、矩阵、四元数和 Transform；dk::math PUBLIC 传递 Eigen3::Eigen |
 | flecs / `flecs` | 4.1.6 | scene | SceneDocument 内部 ECS；由 Pimpl 持有，公共接口不暴露 flecs 句柄 |
 | Catch2 / `catch2` | 3.16.0 | tests | 单元测试与 CTest 测试发现；测试 target 私有链接，运行时模块不依赖它 |
+| Tracy / `tracy` | 0.14.1 | profiling | dk::profiling 的 PUBLIC 依赖；CPU zone、线程名、动态文本及采集，client BSD-3-Clause；on-demand、无 crash-handler/GUI，默认不开启 |
 
 对应设计：[Core/日志](design/foundation-core.md)、[数学](design/foundation-math.md)、
-[Scene](design/scene.md)、[Commands](design/commands.md)。
+[Scene](design/scene.md)、[Commands](design/commands.md)、[Profiling](design/foundation-profiling.md)。
 实际依赖声明：[Core/日志 CMake](../engine/foundation/core/CMakeLists.txt)、
 [Math CMake](../engine/foundation/math/CMakeLists.txt)、[Scene CMake](../engine/scene/CMakeLists.txt)、
-[Commands CMake](../engine/framework/commands/CMakeLists.txt)、[单元测试 CMake](../tests/unit/CMakeLists.txt)。
+[Commands CMake](../engine/framework/commands/CMakeLists.txt)、[单元测试 CMake](../tests/unit/CMakeLists.txt)、
+[Profiling CMake](../engine/foundation/profiling/CMakeLists.txt)。
+
+Tracy 的[同版本 overlay](../cmake/vcpkg-ports/README.md) 保留官方来源、源码哈希及补丁，
+仅显式设置 TRACY_ENABLE=ON；官方 port 尚未覆盖该版本的默认 OFF。
+[独立工具清单](../tools/profiling/vcpkg.json) 选择 cli-tools，使用同基线和 overlay 安装 capture/csvexport；
+不把工具端 capstone、zstd 等库加入引擎客户端依赖。更新 baseline 时同步两份清单并重新核对 overlay。
 
 ## M1.7 已选型，尚未接入
 
 | 库 / vcpkg port | 当前基线版本 | 计划用途 | 边界 |
 | --- | --- | --- | --- |
 | mimalloc / `mimalloc` | 3.5.3 | CPU 通用 heap；PMR、智能指针、arena/pool 的上游 | dk::memory PRIVATE；依赖 v3 多线程 heap 语义，MIT；不启用 override |
-| Tracy / `tracy` | 0.14.1 | CPU zone、线程名、heap 事件与内存曲线 | dk::profiling 封装；client BSD-3-Clause；profiling feature 按需开启 on-demand，默认不带 crash-handler/GUI |
 
-2026-09-23 另核对官方最新提交 `9e3427bc82738568947beb508e78231f99c04f4c` 的
-[mimalloc port](https://github.com/microsoft/vcpkg/blob/9e3427bc82738568947beb508e78231f99c04f4c/ports/mimalloc/vcpkg.json) 和
-[Tracy port](https://github.com/microsoft/vcpkg/blob/9e3427bc82738568947beb508e78231f99c04f4c/ports/tracy/vcpkg.json)，版本与当前固定基线一致。
-该核验不表示项目 baseline 已更新，也不表示这两个包已安装或完成链接/运行验证。
-实施 M1.7.1/2 时按版本规则重新核验，分别加入实际 feature/CMake 消费者。
+已核对本次固定提交的 mimalloc 仍为 3.5.3；尚未安装或加入 feature，M1.7.2 开始时重新核验。
+初次设计对 Tracy 的旧基线版本判断有误：67b9e21f 实际为 0.13.1#1，
+当前基线才是本次采用的 0.14.1，更正经过见 0023。
 设计见 [内存系统](design/foundation-memory.md)、[性能分析](design/foundation-profiling.md)，记录见
 [0022](development/0022-memory-profiling-design.md)。
 
@@ -109,6 +115,9 @@ M5/M7/M8/M9 的实施安排见 [Roadmap](roadmap.md)。
 | `vulkan-loader` | 1.4.357.0 | Windows Vulkan feature 的传递依赖，提供 loader；不等同于显卡驱动 |
 | `vcpkg-cmake` | 2025-08-07 | host 构建辅助，供 port 配置/编译/安装，当前已使用 |
 | `vcpkg-cmake-config` | 2026-07-21 | host 构建辅助，整理 CMake package 导出，当前已使用 |
+| `capstone` | 5.0.9 | Tracy 命令行工具的反汇编依赖，独立工具清单已安装 |
+| `zstd` | 1.5.7 | Tracy 工具的压缩依赖，独立工具清单已安装 |
+| `ppqsort` | 1.0.6#1 | Tracy 工具的排序依赖，独立工具清单已安装 |
 
 传递依赖随所选 feature/平台变化，以实际 vcpkg 解析计划为准；上述版本不是独立手工 pin。
 

@@ -9,6 +9,8 @@ CMakeLists.txt text eol=lf
 *.md text eol=lf
 *.ps1 text eol=crlf
 *.bat text eol=crlf
+# Preserve upstream patch context markers (including a space-only context line).
+cmake/vcpkg-ports/tracy/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof
 *.png binary
 *.jpg binary
 *.glb binary

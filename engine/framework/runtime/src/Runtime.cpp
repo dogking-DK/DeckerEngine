@@ -1,5 +1,6 @@
 #include <dk/operations/SceneOperations.hpp>
 #include <dk/runtime/Runtime.hpp>
+#include <dk/profiling/Profiler.hpp>
 
 namespace dk
 {
@@ -25,6 +26,7 @@ Json task_json(const TaskRecord &task)
 } // namespace
 Result<std::unique_ptr<Runtime>> Runtime::create(const std::filesystem::path &root)
 {
+    DK_PROFILE_ZONE("Runtime.Create");
     auto service = SceneService::create(root);
     if (!service)
         return std::unexpected(service.error());
@@ -104,6 +106,8 @@ bool Runtime::has_command(std::string_view method) const
 }
 Result<CommandExecution> Runtime::dispatch(std::string_view method, const Json &parameters, bool auto_guard)
 {
+    DK_PROFILE_ZONE("Runtime.Dispatch");
+    DK_PROFILE_ZONE_TEXT(method);
     if (stopping_)
         return std::unexpected(Error{ErrorCode::invalid_state, "Runtime is stopping"});
     if (!has_command(method))

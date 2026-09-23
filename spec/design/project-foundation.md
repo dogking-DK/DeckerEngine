@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-23T09:09:35+08:00"
+updated_at: "2026-09-23T16:34:00+08:00"
 status: accepted
 ---
 
@@ -38,6 +38,8 @@ M3.1 新增 DK_BUILD_FRAMEWORK（默认 OFF，windows-dev ON），构建独立 d
 commands feature 仅引入 JSON，场景关闭时不反向启用 Scene/Math/IO。
 M3.4 Scene 开启时继续装配 services/operations/runtime 与 automation/protocol/transport。
 bootstrap 和独立 Foundation/Scene 验证应显式关闭 FRAMEWORK，避免继承开发预设。
+M1.7.1 增加真实 dk::profiling 包装：OFF 为无 Tracy 依赖的 INTERFACE target，ON 为静态适配库。
+Runtime/IO/runner 按实现需要 PRIVATE 链接，构建开关及采集规则见 [Profiling 设计](foundation-profiling.md)。
 
 CMake 最低 3.28，C++23 target 使用要求向消费者传播，禁用编译器扩展。
 项目警告函数只作用于自身 target，不污染依赖。默认构建目录为 `out/build/<preset>`，
@@ -70,6 +72,8 @@ CTest 保留 runner 冒烟验证，开发预设额外运行 Catch2 行为测试�
   关闭日志/数学/IO/单元测试，构建目录为 out/build/windows-bootstrap-stduuid；
   此生成器要求 CMake 4.2 或更新。
 - `windows-dev`：相同生成器，开启 vcpkg 并选择 foundation feature。
+- `windows-profiling`：继承 windows-dev，启用 DK_ENABLE_PROFILING，build/test 使用 RelWithDebInfo；
+  环境限制 localhost/IPv4，手动启动程序时须自行传入同样环境。
 - `windows-desktop-deps`：准备后续桌面功能依赖；安装依赖不表示模块已实现。
 - `ninja-debug / ninja-release`：Ninja 构建入口，需调用者提供匹配的编译器环境。
 
@@ -90,12 +94,12 @@ CTest 保留 runner 冒烟验证，开发预设额外运行 Catch2 行为测试�
 ## vcpkg 策略
 
 使用 manifest mode，固定 builtin-baseline 为
-`67b9e21f86e3034657a04da429a8bf274de67925`（2026-09-23 查询的官方 master）。
+`33d78c1ed898a06938f31312167c7abefd229455`（2026-09-23 M1.7.1 查询的官方 master）。
 默认采用 vcpkg 官方收录的最新 port 版本，包括 port 修订；当前清单与维护规则集中见
 [三方库说明](../third-party-libraries.md)。默认不添加旧版本 override，也不在每次配置时跟随浮动 master。
 升级时先抓取官方索引，核对所有直接依赖、相关传递依赖及规划选型，再固定提交。
 本机 vcpkg 干净 checkout 只做 fast-forward，同步其 bootstrap 要求的工具版本。
-依赖 feature 分为 foundation、math、scene、commands、graphics、editor、scripting、tests，
+依赖 feature 分为 foundation、math、scene、commands、graphics、editor、scripting、tests、profiling，
 清单默认安装 Core 必需的 stduuid，可选库仍按 feature 选择。
 stduuid 在 Core 实现中使用，不暴露到公开头。
 数学模块使用独立 math feature 安装 eigen3，启用 DK_BUILD_MATH 时自动补充该组；
@@ -103,8 +107,11 @@ foundation 中移除未使用的 glm，保留日志及 JSON 依赖。M2 的 scen
 也声明 flecs/nlohmann-json，关闭日志的场景配置不需要 fmt/spdlog。
 dk::math 的公开 Eigen 类型要求 PUBLIC 传递 Eigen3::Eigen，详见
 [数学设计](foundation-math.md)。bootstrap 显式关闭数学，保持最小依赖构建。
-IO 通过默认开启的 DK_BUILD_IO 构建 dk::io，仅链接 dk::core，无额外依赖；
+IO 通过默认开启的 DK_BUILD_IO 构建 dk::io，PUBLIC 链接 dk::core，PRIVATE 链接可关闭的 dk::profiling；
 bootstrap 也关闭 IO，接口和验证见 [IO 设计](foundation-io.md)。
+profiling feature 选择 Tracy on-demand 且关闭默认 features；开启 DK_ENABLE_PROFILING 时自动补充。
+仓库同版本 overlay 仅补充客户端 TRACY_ENABLE=ON，不通过消费方宏掩盖禁用的依赖库。
+工具端清单独立位于 tools/profiling，不在引擎构建中启用 GUI/CLI 工具 feature。
 
 `DK_VCPKG_FEATURES` 在首次 `project()` 前映射到
 `VCPKG_MANIFEST_FEATURES`，并验证 feature 名。关闭 vcpkg 时不能选择 feature；
@@ -118,10 +125,12 @@ Slang 库；未来跨平台 shaderc 编译工具需单独处理 host 工具，�
 
 项目依赖缓存留在构建目录的 vcpkg_installed，忽略 build/cache/log 和 IDE 个人文件。
 更新 baseline 必须连同依赖变化、构建验证和编号开发记录一起提交。
-本次升级及版本表见 [0021](../development/0021-vcpkg-baseline-update.md)。实际安装 windows-dev
+此前升级及版本表见 [0021](../development/0021-vcpkg-baseline-update.md)。当时实际安装 windows-dev
 已启用依赖，全部现有 feature 另作依赖解析检查；M4 选型同步新基线，接入仍在对应实施小节完成。
 验证按更新影响选择：fmt/spdlog 日志、flecs 场景/服务，以及 Catch2 使用者的构建和代表性用例；
 默认只使用 Debug，不因升级工具或索引而自动运行全部配置。
+M1.7.1 接入与新基线证据见 [0023](../development/0023-tracy-cpu-profiling.md)；既有库版本未变，
+仅对 profiling 条件编译及直接受影响链路做 OFF/ON 验证，不重复全依赖回归。
 协议进程测试按 runner 的 UTF-8 契约显式解码 stdout/stderr，不依赖 Windows 活动代码页
 或独立 CMake 脚本的默认 policy；往返用例同时核对预期中文名称，避免相同乱码被误判为一致。
 

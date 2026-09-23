@@ -2,6 +2,7 @@
 #include "IoInternal.hpp"
 
 #include <dk/core/StableId.hpp>
+#include <dk/profiling/Profiler.hpp>
 
 #include <algorithm>
 #include <utility>
@@ -312,6 +313,8 @@ Result<void> write_file_bytes_atomic(const fs::path& path, std::span<const std::
 Result<void> write_file_bytes_atomic(const fs::path& path, std::span<const std::byte> bytes,
     const AtomicFileValidator& validator)
 {
+    DK_PROFILE_ZONE("IO.AtomicSave");
+    DK_PROFILE_ZONE_VALUE(bytes.size());
     auto ops = detail::make_atomic_write_ops();
     if (!ops) { return std::unexpected(unsupported("<platform>")); }
     return detail::write_file_bytes_atomic_impl(path, bytes, *ops, validator);

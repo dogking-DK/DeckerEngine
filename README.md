@@ -10,6 +10,7 @@ M3.1 已提供独立命令注册表、参数/结果 schema 校验及 commands.li
 M3.2 通过 dk::scene_services 和 dk::scene_operations 提供会话管理、场景编辑、查询与保存。
 M3.3 提供事务与有界历史；M3.4 的 dk-run 支持无窗口 CPU 批处理和 JSON-RPC。
 M3.5 已接入持续 stdio、同步任务查询与正常关闭，达到交付 A。
+M1.7.1 已接入可选 Tracy CPU 分析、Runtime/IO 埋点和受控采集；Memory System 后续小节待实现。
 渲染、物理、编辑器、网络/命名管道 IPC 和脚本模块尚未实现。
 
 ## 目录
@@ -25,7 +26,7 @@ DeckerEngine/
 ├── cmake/                     # 选项、toolchain 配置、编译警告
 ├── scripts/                   # 定向构建/测试和文档检查
 ├── engine/
-│   ├── foundation/            # core、math、io（已构建）；jobs、metadata 预留
+│   ├── foundation/            # core、math、io、profiling；memory、jobs、metadata 待实现
 │   ├── platform/              # 窗口和输入接口、SDL3
 │   ├── geometry/              # CPU 几何查询和 BVH
 │   ├── assets/                # types 已实现；加载、导入预留
@@ -38,7 +39,7 @@ DeckerEngine/
 │   ├── scripting/             # API、Lua
 │   └── editor/                # model、interaction、widgets、panels
 ├── apps/                      # runner CPU CLI；editor、ctl 预留
-├── tools/                     # assetc、shaderc
+├── tools/                     # profiling 工具依赖清单；assetc、shaderc 预留
 ├── sdk/python/                # 未来外部自动化客户端
 ├── shaders/common/            # 公共 Slang 模块
 ├── projects/demo/             # 示例资产、场景、脚本预留
@@ -226,11 +227,13 @@ JSON 由 Scene 私有使用，原规划的 GLM 已从清单移除。
 | editor | sdl3[vulkan]、imgui[docking-experimental,sdl3-binding,vulkan-binding] |
 | scripting | lua、sol2 |
 | tests | catch2（已接入 Core、数学和 IO 单元测试） |
+| profiling | tracy[on-demand]（关闭默认 features；启用 DK_ENABLE_PROFILING 时自动选择） |
 
 三方库默认采用 vcpkg 官方收录的最新版本（含 port 修订），完整用途、版本与接入状态见
 [三方库说明](spec/third-party-libraries.md)。当前依赖固定到 2026-09-23 核验的官方基线
-`67b9e21f86e3034657a04da429a8bf274de67925`，升级验证见
-[0021 依赖升级记录](spec/development/0021-vcpkg-baseline-update.md)。已是该索引最新版本的包保持不变；
+`33d78c1ed898a06938f31312167c7abefd229455`，本次 Tracy 接入见
+[0023](spec/development/0023-tracy-cpu-profiling.md)，此前升级见
+[0021](spec/development/0021-vcpkg-baseline-update.md)。已是该索引最新版本的包保持不变；
 历史阶段记录中的旧版本是当时的验证结果。
 在 vcpkg 仓库目录确认没有本地修改后执行 `git pull --ff-only`，并运行
 `.\bootstrap-vcpkg.bat -disableMetrics` 更新配套工具；完成后回到 DeckerEngine 目录，
@@ -253,6 +256,60 @@ Windows 使用 `x64-windows`，不使用全静态 CRT triplet。
 feature 选择在 `project()` 前映射到 `VCPKG_MANIFEST_FEATURES`，
 遵循 [vcpkg CMake 集成规范](https://learn.microsoft.com/en-us/vcpkg/users/buildsystems/cmake-integration)。
 更换生成器、triplet 或开关 vcpkg 时使用独立构建目录。
+
+## Tracy CPU 性能分析（M1.7.1）
+
+默认 `DK_ENABLE_PROFILING=OFF`，宏不求值参数，不链接或自动安装 Tracy。
+专用预设继承 windows-dev 的模块集合，以 RelWithDebInfo 编译并保留符号：
+
+```powershell
+cmake --preset windows-profiling -DDK_WARNINGS_AS_ERRORS=ON
+& ./scripts/verify.ps1 -BuildDir out/build/windows-profiling -Configuration RelWithDebInfo -Target @('dk_profiling_probe', 'dk_profiling_disabled_test', 'dk_run') -TestRegex '^dk\.(profiling\.|runtime\.|bootstrap\.version$)' -Reason 'CPU profiling 与 runner 协议'
+```
+
+启用 on-demand 后，连接前的事件不会保留。普通 runner 和测试无需启动 viewer 即可退出；
+已有埋点覆盖 Runner.Entry、Runtime.Create/Dispatch、IO.Read/Write/AtomicSave。
+手动运行被测程序时先设置下面的进程环境；preset 的环境不会自动传给从其他终端或 VS 启动的进程：
+
+```powershell
+$env:TRACY_ONLY_LOCALHOST = '1'
+$env:TRACY_ONLY_IPV4 = '1'
+$env:TRACY_NO_EXIT = '0'
+```
+
+客户端使用 Tracy 0.14.1。独立安装同版本命令行工具，不引入 GUI 依赖到引擎构建：
+
+```powershell
+& "$env:VCPKG_ROOT/vcpkg.exe" install --x-manifest-root=tools/profiling --x-install-root=out/profiling-tools/vcpkg_installed --overlay-ports=cmake/vcpkg-ports --triplet=x64-windows --host-triplet=x64-windows
+pwsh -NoProfile -File scripts/capture-profiling.ps1
+```
+
+[采集脚本](scripts/capture-profiling.ps1) 需要 PowerShell 7，使用本机 IPv4 端口 18086（可用 `-Port` 改写），
+在探针连接后运行有界工作负载，断开后验证正常退出；通过 tracy-csvexport 读回 `.tracy`，
+检查两个线程、嵌套区间、调用位置、异常退出和动态文本。日志、CSV、capture 与 summary.json
+保存在 `out/profiling/<本次运行>/`。这是采集正确性验证，探针有受控等待，不作为性能基准。
+交互查看可自行使用同版本 Tracy viewer 打开文件；本次验收使用命令行工具。
+
+模块链接 `dk::profiling` 后使用包装头，公开模板含埋点时需要 PUBLIC 传递依赖：
+
+```cpp
+#include <dk/profiling/Profiler.hpp>
+#include <string_view>
+
+void import_mesh(std::string_view asset_name)
+{
+    DK_PROFILE_ZONE("Assets.ImportMesh");
+    DK_PROFILE_ZONE_TEXT(asset_name); // 支持临时 string；关闭时连参数表达式也不执行
+    // 实际工作；同一词法作用域只放一个 zone，子块可继续嵌套。
+}
+```
+
+ZONE/FRAME 名称使用静态期字符串；TEXT 立即复制文本，空文本忽略，最多 65534 字节，截断按字节。
+线程命名使用 `DK_PROFILE_THREAD_NAME("worker")`；普通 `set_thread_name` 函数的实参仍按 C++ 规则求值。
+`DK_PROFILE_CALLSTACK_DEPTH` 默认 0，允许 0–64；按诊断需要增加深度会增加开销，尚无性能基准。
+内存事件开关待 M1.7.2 实现；GPU 和 Jobs 埋点尚未接入。
+依赖使用[最小 Tracy overlay](cmake/vcpkg-ports/README.md) 显式启用客户端，配置时核验导出的宏，
+避免只编译消费方埋点却链接禁用的 client。详见 [Profiling 设计](spec/design/foundation-profiling.md)。
 
 ## Ninja / 其他平台
 

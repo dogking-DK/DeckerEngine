@@ -60,6 +60,19 @@
       }
     },
     {
+      "name": "windows-profiling",
+      "inherits": "windows-dev",
+      "displayName": "Windows Tracy profiling (optimized with symbols)",
+      "cacheVariables": {
+        "DK_ENABLE_PROFILING": "ON",
+        "DK_PROFILE_CALLSTACK_DEPTH": "0"
+      },
+      "environment": {
+        "TRACY_ONLY_LOCALHOST": "1",
+        "TRACY_ONLY_IPV4": "1"
+      }
+    },
+    {
       "name": "windows-desktop-deps",
       "inherits": "windows-dev",
       "displayName": "Prepare all planned desktop dependencies",
@@ -84,6 +97,11 @@
     }
   ],
   "buildPresets": [
+    {
+      "name": "windows-profiling",
+      "configurePreset": "windows-profiling",
+      "configuration": "RelWithDebInfo"
+    },
     {
       "name": "windows-bootstrap-debug",
       "configurePreset": "windows-bootstrap",
@@ -114,6 +132,13 @@
     }
   ],
   "testPresets": [
+    {
+      "name": "windows-profiling",
+      "configurePreset": "windows-profiling",
+      "configuration": "RelWithDebInfo",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error" }
+    },
     {
       "name": "windows-bootstrap-debug",
       "configurePreset": "windows-bootstrap",

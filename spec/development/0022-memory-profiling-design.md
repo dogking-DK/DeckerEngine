@@ -1,7 +1,7 @@
 ---
 id: "0022"
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-23T14:26:10+08:00"
+updated_at: "2026-09-23T16:38:00+08:00"
 status: completed
 design_refs:
   - ../design/foundation-memory.md
@@ -39,8 +39,9 @@ design_refs:
 
 - 当前项目 baseline：`67b9e21f86e3034657a04da429a8bf274de67925`。
 - 本次 `git ls-remote origin refs/heads/master`：`9e3427bc82738568947beb508e78231f99c04f4c`。
-- 读取该提交两个 port，与本机基线均为 mimalloc 3.5.3、Tracy 0.14.1。
-  在线网页的浮动 master 缓存返回过旧版本，最终采用固定提交的官方原始文件，不更新项目基线。
+- 初次核验曾记为该提交与项目基线均是 mimalloc 3.5.3、Tracy 0.14.1。
+  M1.7.1 实施时发现 Tracy 的本机工作树版本被误当成固定基线内容：67b9e21f 实际为 0.13.1#1；
+  mimalloc 3.5.3 无误。此处保留设计经过并更正结论，准确升级和采集证据见 [0023](0023-tracy-cpu-profiling.md)。
 - 阅读 mimalloc v3 heap 文档、v3.5.3 公共头及 Tracy v0.14.1 手册/CMake/事件接口。
   v3 heap 可多线程分配，不采用 v1/v2 的创建线程限制；arena/pool 自身线程规则单独定义。
 - MemorySystem 为多实例，Tracy client 为进程共用；后者不掌管分配路由。
@@ -75,9 +76,9 @@ git diff --check 通过。范围为 memory/profiling/jobs、两份资产设计�
 
 ### 下一项实施
 
-M1.7 的所有实现与行为验证均待开始；两份新模块设计保持 draft。
-下一项 M1.7.1：固定 profiling 包装接口与 preset，接入 Tracy 并完成真实 CPU capture 和 OFF/ON 定向验收。
-实际开始时重新核验 vcpkg 最新版本、读取本设计并分配当时的下一个开发编号。
+本设计任务结束时，M1.7 实现均待开始，两份新模块设计均为 draft。
+后续 [0023](0023-tracy-cpu-profiling.md) 已完成 M1.7.1，profiling 转为 accepted，Memory 仍为 draft。
+当前下一项与验收范围以 [Roadmap](../roadmap.md#m17memory-与性能分析补充) 为准。
 arena/pool 默认参数与 profiling 开销由后续基准决定；不预先承诺速度收益。
 
 ## 修改记录
@@ -86,3 +87,4 @@ arena/pool 默认参数与 profiling 开销由后续基准决定；不预先承�
 - 2026-09-23T11:53:00+08:00：补充 client 启用风险与事件同步成本、局部资源关闭约定，完成定向文档验证。
 - 2026-09-23T14:22:27+08:00：按用户反馈补充框架自动绑定/任务路由及隐式日常接口，保留显式底层入口。
 - 2026-09-23T14:26:10+08:00：通过补充文档检查，明确最小上下文绑定随 M1.7.3 实施，不依赖后续集成小节。
+- 2026-09-23T16:38:00+08:00：更正初次核验的 Tracy 旧基线版本，链接 M1.7.1 实施记录。

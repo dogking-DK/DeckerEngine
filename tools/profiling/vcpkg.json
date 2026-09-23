@@ -1,0 +1,12 @@
+{
+  "name": "decker-profiling-tools",
+  "version-semver": "0.1.0",
+  "builtin-baseline": "33d78c1ed898a06938f31312167c7abefd229455",
+  "dependencies": [
+    {
+      "name": "tracy",
+      "default-features": false,
+      "features": ["cli-tools", "on-demand"]
+    }
+  ]
+}

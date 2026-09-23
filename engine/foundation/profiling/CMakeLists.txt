@@ -1,0 +1,23 @@
+if(DK_ENABLE_PROFILING)
+    find_package(Tracy CONFIG REQUIRED)
+    get_target_property(_dk_tracy_definitions Tracy::TracyClient INTERFACE_COMPILE_DEFINITIONS)
+    foreach(_dk_required IN ITEMS TRACY_ENABLE TRACY_ON_DEMAND TRACY_NO_CRASH_HANDLER)
+        if(NOT "${_dk_required}" IN_LIST _dk_tracy_definitions)
+            message(FATAL_ERROR "Tracy::TracyClient must be built with ${_dk_required}. Use the project overlay/features; consumer-only defines cannot enable a disabled client.")
+        endif()
+    endforeach()
+    add_library(dk_profiling STATIC src/Profiler.cpp)
+    target_link_libraries(dk_profiling PUBLIC Tracy::TracyClient)
+    target_compile_definitions(dk_profiling PUBLIC
+        DK_ENABLE_PROFILING=1 DK_PROFILE_CALLSTACK_DEPTH=${DK_PROFILE_CALLSTACK_DEPTH})
+    target_sources(dk_profiling PUBLIC FILE_SET HEADERS BASE_DIRS include FILES
+        include/dk/profiling/Profiler.hpp)
+    dk_target_defaults(dk_profiling)
+else()
+    add_library(dk_profiling INTERFACE)
+    target_compile_features(dk_profiling INTERFACE cxx_std_23)
+    target_compile_definitions(dk_profiling INTERFACE DK_ENABLE_PROFILING=0)
+    target_sources(dk_profiling INTERFACE FILE_SET HEADERS BASE_DIRS include FILES
+        include/dk/profiling/Profiler.hpp)
+endif()
+add_library(dk::profiling ALIAS dk_profiling)

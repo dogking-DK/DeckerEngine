@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-23T14:22:27+08:00"
+updated_at: "2026-09-23T16:38:00+08:00"
 status: accepted
 ---
 
@@ -28,7 +28,8 @@ M4 的 [资产运行时](assets-runtime.md)、[导入器](assets-importers.md)�
 [CPU 作业](foundation-jobs.md) 设计稿和 [实施小节](../development/0020-m4-development-plan.md)
 已建立，尚未实现。其余模块在开始开发前另写专项设计。
 M4 之前新增 M1.7 [Memory System](foundation-memory.md) 与
-[Tracy 性能分析](foundation-profiling.md) 基础设施补充，目前仅完成设计，不包含在原 M1–M3 验收中。
+[Tracy 性能分析](foundation-profiling.md) 基础设施补充，不包含在原 M1–M3 验收中。
+M1.7.1 的 CPU 包装、Runtime/IO 埋点、条件构建与真实 capture 已验收；Memory 及内存/GPU 事件仍待实现。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，
@@ -38,7 +39,7 @@ M4 之前新增 M1.7 [Memory System](foundation-memory.md) 与
 
 | 目录 | 职责 | 依赖约束 |
 | --- | --- | --- |
-| engine/foundation | core、数学、IO；规划 memory、profiling、任务、元数据 | 不依赖 Scene、Vulkan、Editor；profiling 不反向依赖 memory |
+| engine/foundation | core、数学、IO、可选 CPU profiling；规划 memory、任务、元数据 | 不依赖 Scene、Vulkan、Editor；profiling 不反向依赖 memory |
 | engine/platform | 窗口、输入、SDL3 后端 | 可选，CPU 无窗口运行不依赖它 |
 | engine/geometry | AABB、射线、CPU BVH | 仅基础数学/数据 |
 | engine/assets | 资产类型、运行时、导入器 | 与设备资源和图资源分离 |

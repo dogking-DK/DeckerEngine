@@ -1,3 +1,20 @@
+add_executable(dk_profiling_probe ProfilingProbe.cpp)
+target_link_libraries(dk_profiling_probe PRIVATE dk::profiling)
+find_package(Threads REQUIRED)
+target_link_libraries(dk_profiling_probe PRIVATE Threads::Threads)
+dk_target_defaults(dk_profiling_probe)
+add_test(NAME dk.profiling.smoke COMMAND dk_profiling_probe)
+set_tests_properties(dk.profiling.smoke PROPERTIES
+    TIMEOUT 15 PASS_REGULAR_EXPRESSION "profiling=(on|off);checksum=8128")
+
+# Compile in isolation even in the ON build: no Tracy include path or link usage.
+add_executable(dk_profiling_disabled_test ProfilingDisabledTest.cpp)
+target_include_directories(dk_profiling_disabled_test PRIVATE
+    "${PROJECT_SOURCE_DIR}/engine/foundation/profiling/include")
+target_compile_definitions(dk_profiling_disabled_test PRIVATE DK_ENABLE_PROFILING=0)
+dk_target_defaults(dk_profiling_disabled_test)
+add_test(NAME dk.profiling.disabled_no_side_effects COMMAND dk_profiling_disabled_test)
+
 if(TARGET dk_run)
     add_test(NAME dk.bootstrap.version COMMAND dk_run --version)
     string(REPLACE "." "\\." _dk_version_regex "${PROJECT_VERSION}")

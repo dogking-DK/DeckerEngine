@@ -1,7 +1,7 @@
 ---
 module: foundation-io
 created_at: "2026-09-22T11:06:07+08:00"
-updated_at: "2026-09-22T13:06:18+08:00"
+updated_at: "2026-09-23T16:44:00+08:00"
 status: accepted
 ---
 
@@ -12,8 +12,9 @@ status: accepted
 实施 [Roadmap](../roadmap.md) 的 M1.4 路径/二进制 IO 和 M1.5 安全保存；
 复用 [Core](foundation-core.md) 的 Result/Error。
 公开头 include/dk/io/Path.hpp、File.hpp，实现在 src。
-dk_io / dk::io PUBLIC 链接 dk::core；基础 IO 使用标准库，安全保存使用 Windows API，
-无新增 vcpkg 依赖。
+dk_io / dk::io PUBLIC 链接 dk::core；基础 IO 使用标准库，安全保存使用 Windows API。
+M1.7.1 增加 PRIVATE dk::profiling，为 read/write/atomic-save 记录 [CPU zone](foundation-profiling.md)，
+写入区间附带字节数；默认关闭时无 Tracy 依赖，不改变 IO/安全保存的成功与失败契约。
 DK_BUILD_IO 默认 ON；关闭时不创建 IO target/测试，bootstrap 显式关闭 IO。
 不依赖数学、日志、Scene、窗口或 GPU。
 

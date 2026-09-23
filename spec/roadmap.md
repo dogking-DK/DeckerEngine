@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-09-23T14:22:27+08:00"
+updated_at: "2026-09-23T16:38:00+08:00"
 status: accepted
 ---
 
@@ -28,7 +28,8 @@ M2.1–M2.4 已完成：flecs 文档、组件层级、工程/资产引用和 JSO
 M3.1–M3.5 已完成：统一命令、场景服务、内存事务/撤销重做、CPU CLI/stdio 和同步任务，
 交付 A 最终验收见 [0017](development/0017-stdio-delivery-a.md)。
 新增 M1.7 Memory/Tracy 基础设施补充，设计见 [0022](development/0022-memory-profiling-design.md)，
-实施待开始；原 M1–M3 验收不包含这项新增能力。默认先完成该补充，再推进 M4。
+M1.7.1 已完成，见 [0023](development/0023-tracy-cpu-profiling.md)，M1.7.2–7 待开始。
+原 M1–M3 验收不包含这项新增能力。默认先完成该补充，再推进 M4。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作；提早建立多线程内存契约与性能测量，复杂并行优化仍由测量驱动。
@@ -46,7 +47,7 @@ M3.1–M3.5 已完成：统一命令、场景服务、内存事务/撤销重做�
 | M1 Foundation 最小基础 | 错误、日志、稳定 ID、数学约定、文件 IO | M0 | 已完成，M1.1–M1.6 均验收；Windows 本地文件范围 |
 | M2 场景文档 | 实体、变换、层级、资产引用、保存与重载 | M1 | 已完成（M2.1–M2.4） |
 | M3 命令与 CPU Runtime | CLI/stdio 创建、修改、查询、保存场景 | M2 | 已完成（M3.1–M3.5，交付 A） |
-| M1.7 Foundation 补充 | Tracy、mimalloc heap、PMR/智能指针、arena/pool、多线程生命周期 | 原 M1、M3（现有链路埋点） | 设计稿已建立，M1.7.1–7 待开始 |
+| M1.7 Foundation 补充 | Tracy、mimalloc heap、PMR/智能指针、arena/pool、多线程生命周期 | 原 M1、M3（现有链路埋点） | 进行中：M1.7.1 已完成，M1.7.2–7 待开始 |
 | M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3、M1.7 | 设计稿已建立，实施待开始 |
 | M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、最小呈现 | M1、M1.7 | 待开始 |
 | M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 待开始 |
@@ -129,11 +130,11 @@ M9、M10 将这套基础扩展为可脚本化的渲染与物理实验平台。
 
 设计：[Memory System](design/foundation-memory.md)、[Tracy 接入](design/foundation-profiling.md)。
 选型为 mimalloc v3 和 Tracy，版本默认跟随 vcpkg 最新收录并固定验证基线。
-本次仅完成设计；以下所有实现、测试与采集均待执行。
+M1.7.1 已验收，证据见 [0023](development/0023-tracy-cpu-profiling.md)；后续内存实现和测量仍待执行。
 
 | 小节 | 范围 | 前置 | 独立验收 | 状态 |
 | --- | --- | --- | --- | --- |
-| M1.7.1 | dk::profiling、Tracy/vcpkg 开关、CPU zone/线程名、runner/IO 局部埋点 | 原 M1、M3 | OFF 无 Tracy 依赖与参数求值；ON 生成可读 capture；无 viewer 正常退出、stdout 兼容 | 待开始 |
+| M1.7.1 | dk::profiling、Tracy/vcpkg 开关、CPU zone/线程名、runner/IO 局部埋点 | 原 M1、M3 | OFF 无 Tracy 依赖与参数求值；ON 读回 134 区间/2 线程 capture；无 viewer 正常退出、stdout 兼容，见 0023 | 已完成 |
 | M1.7.2 | dk::memory、mimalloc v3、域/ResourceHandle、对齐 heap、预算和关闭闸门、Tracy backing 事件 | M1.7.1 | 对齐/溢出/失败回滚、多线程分配与异线程释放、事件配对及关闭竞争 | 待开始 |
 | M1.7.3 | PMR、拥有型 Allocator/Buffer、容器别名、隐式/显式智能指针与持久域作用域 | M1.7.2 | 构造失败、缺少上下文、路由嵌套恢复、allocator 传播、weak_ptr 控制块存活 | 待开始 |
 | M1.7.4 | ScratchArena、自动取得线程 scratch 的嵌套 ScratchScope、保留上限与用量曲线 | M1.7.3 | LIFO/代际/对齐、失败不破坏旧数据、先析构后 rewind、曲线与 backing 不重复 | 待开始 |
@@ -473,8 +474,9 @@ M3.3 已完成：默认 Debug/Release 各 143 通过、1 既有权限跳过，�
 M3.4 已完成：默认 Debug/Release 各 149 通过、1 既有权限跳过；独立 CPU Runtime 各 3/3，bootstrap 各 1/1。
 M3.5 已完成：最终默认 Debug/Release 各 152 通过、1 既有权限跳过；独立 CPU Runtime 各 4/4，
 bootstrap 各 1/1。真实持续 stdio 在 stdin 打开时即时响应、保存/关闭/EOF/重启均通过，交付 A 完成。
-下一项为 **M1.7.1 Tracy CPU 性能分析底座**；Memory/Tracy 设计稿已建立，代码实施尚未开始。
-先按 M1.7.1–7 完成基础设施补充，再继续 M4.1.1；本次设计请求不自动启动实现。
+**M1.7.1 已完成**：Tracy 0.14.1、CPU 包装、Runtime/IO 埋点、OFF/ON 定向测试与真实 capture。
+下一项为 **M1.7.2 mimalloc heap、域/ResourceHandle、预算/关闭闸门和 Tracy backing 事件**。
+先按 M1.7.2–7 完成基础设施补充，再继续 M4.1.1；每次默认仅推进一个独立小节。
 
 根目录 VS2026 生成脚本作为工程维护完成，见 [0018](development/0018-vs2026-generation-script.md)，不改变里程碑顺序。
 三个开发辅助 skill 与定向验证脚本已作为工程维护完成，见
@@ -483,7 +485,8 @@ M4 开发安排与三份设计稿见 [0020](development/0020-m4-development-plan
 该编号仅记录设计准备，不作为任何 M4 实现小节的完成证据。
 [0021](development/0021-vcpkg-baseline-update.md) 已完成依赖基线升级与库说明，
 [0022](development/0022-memory-profiling-design.md) 记录 Memory/Tracy 设计，不作为实现验收证据。
-当前下一可用开发编号为 **0023**；实际开工时重新扫描
+[0023](development/0023-tracy-cpu-profiling.md) 为 M1.7.1 的实现验收记录。
+当前下一可用开发编号为 **0024**；实际开工时重新扫描
 [开发目录](development/README.md)，取最大编号加一。
 重要设计准备或实际开发开始时创建编号记录，不预建未来小节的空日志；
 子阶段状态和验收证据在本文件及对应实施记录持续维护。

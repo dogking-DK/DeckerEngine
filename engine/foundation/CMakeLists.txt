@@ -1,6 +1,7 @@
 set(CMAKE_FOLDER "${CMAKE_FOLDER}/Foundation")
 
 add_subdirectory(core)
+add_subdirectory(profiling)
 if(DK_BUILD_MATH)
     add_subdirectory(math)
 endif()

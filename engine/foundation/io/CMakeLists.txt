@@ -7,5 +7,5 @@ target_sources(dk_io
         include/dk/io/Path.hpp
         include/dk/io/File.hpp
 )
-target_link_libraries(dk_io PUBLIC dk::core)
+target_link_libraries(dk_io PUBLIC dk::core PRIVATE dk::profiling)
 dk_target_defaults(dk_io)
