@@ -1,7 +1,7 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-23T08:51:49+08:00"
+updated_at: "2026-09-23T09:09:35+08:00"
 status: draft
 ---
 
@@ -19,6 +19,9 @@ status: draft
 导入器使用引擎提供的字节/依赖读取入口，不能绕过路径、大小限制自行访问网络或任意文件。
 
 ## 已确定的三方库与基线
+
+全工程版本政策与接入状态见 [三方库说明](../third-party-libraries.md)；
+对应模块开工时重新核验 vcpkg 最新版本，按该规则升级，以下版本保留当前基线的可追溯性。
 
 已读取本机 vcpkg 仓库在项目 builtin-baseline
 `67b9e21f86e3034657a04da429a8bf274de67925` 的 baseline/port 文件，记录如下：

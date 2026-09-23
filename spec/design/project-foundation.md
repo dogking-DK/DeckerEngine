@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-23T09:04:11+08:00"
+updated_at: "2026-09-23T09:09:35+08:00"
 status: accepted
 ---
 
@@ -91,7 +91,8 @@ CTest 保留 runner 冒烟验证，开发预设额外运行 Catch2 行为测试�
 
 使用 manifest mode，固定 builtin-baseline 为
 `67b9e21f86e3034657a04da429a8bf274de67925`（2026-09-23 查询的官方 master）。
-统一采用该基线中的最新 port 版本；不添加旧版本 override，也不在每次配置时跟随浮动 master。
+默认采用 vcpkg 官方收录的最新 port 版本，包括 port 修订；当前清单与维护规则集中见
+[三方库说明](../third-party-libraries.md)。默认不添加旧版本 override，也不在每次配置时跟随浮动 master。
 升级时先抓取官方索引，核对所有直接依赖、相关传递依赖及规划选型，再固定提交。
 本机 vcpkg 干净 checkout 只做 fast-forward，同步其 bootstrap 要求的工具版本。
 依赖 feature 分为 foundation、math、scene、commands、graphics、editor、scripting、tests，

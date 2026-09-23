@@ -8,6 +8,7 @@
 - [架构总览](design/architecture.md)
 - [开发 Roadmap](roadmap.md)：阶段依赖、交付物、验收条件和近期任务。
 - [工程基础设计](design/project-foundation.md)
+- [三方库说明](third-party-libraries.md)：当前版本、用途、接入状态和默认采用 vcpkg 最新版本的规则。
 - [设计模板](templates/design.md) / [开发记录模板](templates/development.md)
 - [开发留档 skill](../.agents/skills/decker-spec-workflow/SKILL.md)
 

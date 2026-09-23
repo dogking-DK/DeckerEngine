@@ -47,6 +47,7 @@ DeckerEngine/
 ├── examples/scene/            # CPU 场景创建与跨进程重载
 └── spec/
     ├── roadmap.md             # 阶段路线、依赖与验收条件
+    ├── third-party-libraries.md # 三方库用途、版本、状态与更新规则
     ├── design/                # 每个模块的设计文档
     ├── development/           # 按编号排序的开发记录
     ├── commands/              # 命令目录、参数、返回值和调用示例
@@ -226,8 +227,9 @@ JSON 由 Scene 私有使用，原规划的 GLM 已从清单移除。
 | scripting | lua、sol2 |
 | tests | catch2（已接入 Core、数学和 IO 单元测试） |
 
-当前依赖固定到 2026-09-23 核验的 vcpkg 官方基线
-`67b9e21f86e3034657a04da429a8bf274de67925`。全部包版本与升级验证见
+三方库默认采用 vcpkg 官方收录的最新版本（含 port 修订），完整用途、版本与接入状态见
+[三方库说明](spec/third-party-libraries.md)。当前依赖固定到 2026-09-23 核验的官方基线
+`67b9e21f86e3034657a04da429a8bf274de67925`，升级验证见
 [0021 依赖升级记录](spec/development/0021-vcpkg-baseline-update.md)。已是该索引最新版本的包保持不变；
 历史阶段记录中的旧版本是当时的验证结果。
 在 vcpkg 仓库目录确认没有本地修改后执行 `git pull --ff-only`，并运行

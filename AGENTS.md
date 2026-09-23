@@ -12,6 +12,9 @@ CMake target 使用 dk_* / dk::*，构建选项和宏使用 DK_*，程序使用 
 
 优先阅读 [架构总览](spec/design/architecture.md)、相关模块设计和最近开发记录。
 阶段目标、依赖和近期任务见 [开发 Roadmap](spec/roadmap.md)。
+三方库用途、版本和接入状态见 [三方库说明](spec/third-party-libraries.md)。
+新增或升级依赖默认采用 vcpkg 官方收录的最新版本（含 port 修订），核验后固定 builtin-baseline；
+同步该说明与相关设计/验证记录，日常构建不使用浮动版本。
 新增或变更命令时同步 [命令参考](spec/commands/README.md)，规则见 spec 规范。
 不把预留目录或依赖 feature 当作已实现能力。
 公开接口位于 include/dk/，内部实现位于 src/；
