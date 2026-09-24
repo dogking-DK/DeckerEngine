@@ -1,4 +1,5 @@
 find_package(stduuid CONFIG REQUIRED)
+find_package(magic_enum CONFIG REQUIRED)
 
 add_library(dk_core STATIC)
 add_library(dk::core ALIAS dk_core)
@@ -22,7 +23,7 @@ configure_file(
 target_include_directories(dk_core PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 dk_target_defaults(dk_core)
 
-target_link_libraries(dk_core PRIVATE stduuid)
+target_link_libraries(dk_core PRIVATE stduuid magic_enum::magic_enum)
 
 if(DK_BUILD_LOGGING)
     find_package(fmt CONFIG REQUIRED)

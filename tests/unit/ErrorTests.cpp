@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <memory>
+#include <array>
 #include <utility>
 #include <vector>
 
@@ -55,8 +56,13 @@ TEST_CASE("result supports void and move only values", "[error]")
 
 TEST_CASE("error names have stable fallback", "[error]")
 {
-    REQUIRE(dk::error_code_name(dk::ErrorCode::conflict) == "conflict");
-    REQUIRE(dk::error_code_name(dk::ErrorCode::io_error) == "io_error");
-    REQUIRE(dk::error_code_name(dk::ErrorCode::invalid_argument) == "invalid_argument");
-    REQUIRE(dk::error_code_name(static_cast<dk::ErrorCode>(999)) == "unknown");
+    // Golden wire names and numeric codes: do not derive expectations from reflection.
+    constexpr std::array<std::string_view, 7> names{"invalid_argument", "invalid_state", "not_found",
+        "io_error", "not_supported", "internal_error", "conflict"};
+    for (std::size_t i = 0; i < names.size(); ++i) {
+        REQUIRE(dk::error_code_name(static_cast<dk::ErrorCode>(i + 1)) == names[i]);
+    }
+    for (const auto value : {0u, 8u, 128u, 999u, 0xffffffffu}) {
+        REQUIRE(dk::error_code_name(static_cast<dk::ErrorCode>(value)) == "unknown");
+    }
 }

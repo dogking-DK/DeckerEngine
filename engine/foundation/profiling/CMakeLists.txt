@@ -1,5 +1,6 @@
 if(DK_ENABLE_PROFILING)
     find_package(Tracy CONFIG REQUIRED)
+    find_package(magic_enum CONFIG REQUIRED)
     get_target_property(_dk_tracy_definitions Tracy::TracyClient INTERFACE_COMPILE_DEFINITIONS)
     foreach(_dk_required IN ITEMS TRACY_ENABLE TRACY_ON_DEMAND TRACY_NO_CRASH_HANDLER)
         if(NOT "${_dk_required}" IN_LIST _dk_tracy_definitions)
@@ -7,7 +8,7 @@ if(DK_ENABLE_PROFILING)
         endif()
     endforeach()
     add_library(dk_profiling STATIC src/Profiler.cpp src/Memory.cpp)
-    target_link_libraries(dk_profiling PUBLIC Tracy::TracyClient)
+    target_link_libraries(dk_profiling PUBLIC Tracy::TracyClient PRIVATE magic_enum::magic_enum)
     target_compile_definitions(dk_profiling PUBLIC
         DK_ENABLE_PROFILING=1 DK_PROFILE_CALLSTACK_DEPTH=${DK_PROFILE_CALLSTACK_DEPTH}
         DK_PROFILE_MEMORY=$<BOOL:${DK_PROFILE_MEMORY}>)

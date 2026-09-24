@@ -1,7 +1,7 @@
 ---
 module: foundation-core
 created_at: "2026-09-22T09:41:24+08:00"
-updated_at: "2026-09-22T13:28:00+08:00"
+updated_at: "2026-09-24T10:21:18+08:00"
 status: accepted
 ---
 
@@ -18,7 +18,7 @@ stduuid 迁移见 [0003](../development/0003-stduuid-migration.md)。
 ## 边界、目录和 target
 
 - `engine/foundation/core/include/dk/core/` 提供公开头，src 提供实现。
-- `dk_core / dk::core`：版本、Error/Result、StableId。PRIVATE 链接 stduuid；
+- `dk_core / dk::core`：版本、Error/Result、StableId。PRIVATE 链接 stduuid、magic_enum；
   第三方类型只出现在实现文件中，不改变公开头的强类型接口。
 - `dk_logging / dk::logging`：Logger；PUBLIC 链接 dk::core 和 fmt::fmt
   （格式模板出现在公开头中），PRIVATE 链接 spdlog::spdlog。
@@ -27,6 +27,14 @@ stduuid 迁移见 [0003](../development/0003-stduuid-migration.md)。
   vcpkg 基线锁定的 stduuid 1.2.3 提供；使用默认功能，不启用 system-gen。
 
 ## 错误与 Result
+
+2026-09-24 枚举字符串迁移：引入 vcpkg `magic-enum` 0.9.8，`dk_core` PRIVATE 链接
+`magic_enum::magic_enum`。同名枚举文本通过 `enum_name` 取得，不再逐值手写字符串；
+公共 API 仍只暴露标准库类型，`error_code_name` 的未知值回退保持 `unknown`。
+当前被反射枚举均无别名且在默认 [-128,127] 范围；将来扩大数值范围须为所属类型配置
+`enum_range` 并补充边界用例，不全局扩大扫描区间。枚举名已经参与持久协议时，重命名须作为协议兼容变更评估。
+日志级别到 spdlog 的语义映射不是字符串反射，继续显式转换；面向人的错误说明也不替换为标识符。
+实现与核验记录见 [0028](../development/0028-magic-enum.md)。
 
 `ErrorCode` 使用明确整数值：invalid_argument=1、invalid_state=2、
 not_found=3、io_error=4、not_supported=5、internal_error=6、conflict=7。
@@ -112,7 +120,7 @@ spdlog 报告的写入/刷新错误经实例错误处理器转回 Result。
   DK_BUILD_TESTS=OFF 时不构建/安装单元测试。
 - 启用日志时 vcpkg 自动选择 foundation；启用单元测试时自动选择 tests，
   均在 project() 前完成 feature 选择。用户额外的依赖组仍保留。
-- stduuid 为 manifest 的基础依赖；不依赖 foundation/tests 等可选 feature。
+- stduuid、magic-enum 为 manifest 的基础依赖；不依赖 foundation/tests 等可选 feature。
 - windows-bootstrap 显式关闭日志/单元测试，通过 vcpkg 安装 stduuid，
   构建最小 core 和版本探针；新二进制目录 windows-bootstrap-stduuid 避免复用旧的无 toolchain 缓存。
   windows-dev/Ninja 默认包含日志和 Catch2 测试。

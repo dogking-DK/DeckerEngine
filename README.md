@@ -106,7 +106,7 @@ cmake --build out/build/windows-runtime-cpu --config Debug
 ctest --test-dir out/build/windows-runtime-cpu -C Debug --output-on-failure
 ```
 
-Release 替换配置名。该配置只装配 stduuid、Eigen、flecs、JSON，未链接窗口/GPU。
+Release 替换配置名。该配置装配 stduuid、magic-enum、Eigen、flecs、JSON，未链接窗口/GPU。
 
 ## 持续 stdio 服务
 
@@ -182,7 +182,7 @@ Release 替换配置名即可；此配置不构建 Scene、Eigen、IO、窗口�
 分组由 CMake 目录继承维护；未来工具 target 归入 `Tools`，空分组不会显示。
 已打开解决方案时，重新运行脚本后在 VS 接受重新加载提示；也可关闭并重新打开 `.slnx`。
 
-安装 vcpkg 并设置 `VCPKG_ROOT`；基础预设仅安装 Core 必需的 stduuid：
+安装 vcpkg 并设置 `VCPKG_ROOT`；基础预设安装 Core 必需的 stduuid 和 magic-enum：
 
 ```powershell
 cmake --preset windows-bootstrap
@@ -220,7 +220,7 @@ JSON 由 Scene 私有使用，原规划的 GLM 已从清单移除。
 
 | DK_VCPKG_FEATURES | vcpkg 依赖 |
 | --- | --- |
-| 始终安装（基础依赖） | stduuid（dk::core 私有使用） |
+| 始终安装（基础依赖） | stduuid、magic-enum 0.9.8（各消费者 PRIVATE 使用） |
 | foundation | fmt、spdlog、nlohmann-json |
 | math | eigen3（当前基线 5.0.1） |
 | memory | mimalloc 3.5.3（无 override；dk::memory 私有使用） |
@@ -238,6 +238,8 @@ JSON 由 Scene 私有使用，原规划的 GLM 已从清单移除。
 [0023](spec/development/0023-tracy-cpu-profiling.md)，此前升级见
 [0021](spec/development/0021-vcpkg-baseline-update.md)。已是该索引最新版本的包保持不变；
 历史阶段记录中的旧版本是当时的验证结果。
+2026-09-24 接入 magic-enum 时重新核验官方最新版本为 0.9.8，与固定基线一致；
+转换范围与兼容验证见 [0028](spec/development/0028-magic-enum.md)。
 在 vcpkg 仓库目录确认没有本地修改后执行 `git pull --ff-only`，并运行
 `.\bootstrap-vcpkg.bat -disableMetrics` 更新配套工具；完成后回到 DeckerEngine 目录，
 重新执行 `cmake --preset windows-dev`。
@@ -575,7 +577,7 @@ Release 使用 `ninja-release`。Windows 下需在 Developer PowerShell/命令�
 MSVC 环境；Linux/macOS 需自行准备支持 C++23 的编译器。
 这些入口需在目标平台另行验证；当前不承诺完整引擎的跨平台支持。
 
-只构建 Core 和版本探针、安装最小 stduuid 依赖时可以运行：
+只构建 Core 和版本探针、安装基础 stduuid/magic-enum 依赖时可以运行：
 
 ```sh
 cmake -S . -B out/build/local-stduuid -DDK_USE_VCPKG=ON -DDK_VCPKG_FEATURES= -DDK_BUILD_MEMORY=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_UNIT_TESTS=OFF
@@ -583,7 +585,7 @@ cmake --build out/build/local-stduuid --config Debug
 ctest --test-dir out/build/local-stduuid -C Debug --output-on-failure
 ```
 
-使用 `DK_USE_VCPKG=OFF` 时须自行提供 stduuid CMake package（例如设置
+使用 `DK_USE_VCPKG=OFF` 时须自行提供 stduuid 和 magic_enum CMake package（例如设置
 `CMAKE_PREFIX_PATH`），并提供已开启模块需要的其他依赖。
 个人路径和构建覆盖放到被 Git 忽略的 CMakeUserPresets.json。
 `DK_BUILD_RUNNER`、`DK_BUILD_TESTS`、`DK_BUILD_UNIT_TESTS`、
@@ -604,6 +606,12 @@ ID 为 128 位值，解析要求 36 字符的 8-4-4-4-12 格式，文本输出�
 默认 nil 由上层业务决定是否允许。日志使用方须链接 dk::logging，
 其 PUBLIC 依赖会传递 fmt。实例销毁前结束写入线程，需确认写入结果时检查 flush。
 完整接口、错误约定及限制见 [Core 设计](spec/design/foundation-core.md)。
+
+枚举与同名字符串使用 `magic_enum`，当前已用于错误码、资产种类（含严格解析和命令 schema）、
+命令 effect 与 Tracy 分类标签。现有 `error_code_name`、`asset_kind_name`、`effect_name` 接口及非法值行为保持不变；
+反射只在实现文件中使用，新消费者通过 `find_package(magic_enum CONFIG REQUIRED)` 和
+`target_link_libraries(... PRIVATE magic_enum::magic_enum)` 声明依赖。
+未来新增枚举超过默认 [-128,127] 范围、含同值别名或外部名称不同，须明确配置与兼容策略，不能直接套用默认反射。
 
 ## Eigen 基础数学（M1.2）
 
@@ -759,7 +767,8 @@ cmake --build out/build/windows-foundation --config Release
 ctest --test-dir out/build/windows-foundation -C Release --output-on-failure
 ```
 
-该配置仅安装 stduuid、Eigen 及 vcpkg 构建辅助包，Debug/Release 各 **15/15** 通过。
+M1.6 当时该配置安装 stduuid、Eigen 及 vcpkg 构建辅助包，Debug/Release 各 **15/15** 通过；
+当前基础依赖还包含 magic-enum，上述数字保留为当时验收结果。
 当前安全保存验收仍限 Windows 本地文件。
 详见 [集成设计](spec/design/foundation-integration.md) 和 [0008](spec/development/0008-foundation-integration.md)。
 

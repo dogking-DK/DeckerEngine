@@ -39,8 +39,10 @@ Json transform_schema()
 }
 Json asset_schema(bool record = false)
 {
+    auto kinds = Json::array();
+    for (const auto name : asset_kind_names()) { kinds.push_back(name); }
     auto properties =
-        Json{{"id", id_schema()}, {"kind", {{"type", "string"}, {"enum", {"mesh", "material", "texture"}}}}};
+        Json{{"id", id_schema()}, {"kind", {{"type", "string"}, {"enum", std::move(kinds)}}}};
     auto required = Json::array({"id", "kind"});
     if (record)
     {

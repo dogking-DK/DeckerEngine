@@ -1,15 +1,11 @@
 #include <dk/commands/CommandRegistry.hpp>
+#include <magic_enum/magic_enum.hpp>
 #include <stdexcept>
 
 namespace dk {
 std::string_view effect_name(CommandEffect effect) noexcept {
-    switch (effect) {
-    case CommandEffect::query: return "query";
-    case CommandEffect::memory_edit: return "memory_edit";
-    case CommandEffect::external: return "external";
-    case CommandEffect::control: return "control";
-    }
-    return "invalid";
+    const auto name = magic_enum::enum_name(effect);
+    return name.empty() ? "invalid" : name;
 }
 CommandRegistry::CommandRegistry() {
     auto r = add({"commands.list", "List registered commands", schema::object(), schema::array(Json::object())}, [this](const Json&) -> Result<Json> { return list(); });

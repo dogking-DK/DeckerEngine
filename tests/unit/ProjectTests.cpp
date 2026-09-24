@@ -18,6 +18,28 @@ std::string replace(std::string text, std::string_view from, std::string_view to
 }
 }
 
+TEST_CASE("asset kind reflection preserves wire names strict parsing and invalid values", "[scene][project]")
+{
+    const std::vector<std::string_view> expected{"mesh", "material", "texture"};
+    const auto names = dk::asset_kind_names();
+    REQUIRE(std::vector<std::string_view>(names.begin(), names.end()) == expected);
+    REQUIRE(dk::asset_kind_names().data() == names.data());
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        const auto kind = static_cast<dk::AssetKind>(i);
+        REQUIRE(dk::asset_kind_name(kind) == expected[i]);
+        REQUIRE(dk::parse_asset_kind(expected[i]).value() == kind);
+    }
+    for (const auto value : {-1, 3, 128, 999}) { REQUIRE(dk::asset_kind_name(static_cast<dk::AssetKind>(value)).empty()); }
+    for (const auto text : {std::string_view{}, std::string_view{"Mesh"}, std::string_view{" mesh"},
+            std::string_view{"mesh "}, std::string_view{"0"}, std::string_view{"unknown"},
+            std::string_view{"mesh\0suffix", 11}}) {
+        const auto parsed = dk::parse_asset_kind(text);
+        REQUIRE_FALSE(parsed);
+        REQUIRE(parsed.error().code == dk::ErrorCode::invalid_argument);
+        REQUIRE(parsed.error().message == "Unknown asset kind: " + std::string{text});
+    }
+}
+
 TEST_CASE("project protocol roundtrips Unicode and emits deterministically sorted asset records", "[scene][project]")
 {
     auto data = description();

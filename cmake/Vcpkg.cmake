@@ -50,7 +50,7 @@ set(VCPKG_MANIFEST_NO_DEFAULT_FEATURES ON)
 
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE OR CMAKE_TOOLCHAIN_FILE STREQUAL "")
     if(NOT DEFINED ENV{VCPKG_ROOT} OR "$ENV{VCPKG_ROOT}" STREQUAL "")
-        message(FATAL_ERROR "Set VCPKG_ROOT or supply the vcpkg toolchain. DK_USE_VCPKG=OFF requires externally installed packages, including stduuid.")
+        message(FATAL_ERROR "Set VCPKG_ROOT or supply the vcpkg toolchain. DK_USE_VCPKG=OFF requires externally installed packages, including stduuid and magic_enum.")
     endif()
     file(TO_CMAKE_PATH "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" _dk_vcpkg_toolchain)
     set(CMAKE_TOOLCHAIN_FILE "${_dk_vcpkg_toolchain}" CACHE FILEPATH "vcpkg toolchain")

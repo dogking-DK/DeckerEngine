@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-23T19:54:50+08:00"
+updated_at: "2026-09-24T10:21:18+08:00"
 status: accepted
 ---
 
@@ -28,12 +28,15 @@ status: accepted
 
 ## 当前版本基线与验证范围
 
-- 版本核验日期：2026-09-23。
+- 原有依赖版本核验日期：2026-09-23；新增 magic-enum 核验日期：2026-09-24。
 - builtin-baseline：`33d78c1ed898a06938f31312167c7abefd229455`。
 - 来源：[官方固定索引](https://github.com/microsoft/vcpkg/blob/33d78c1ed898a06938f31312167c7abefd229455/versions/baseline.json)。
 - Windows host/target triplet：`x64-windows`。
-- 最近接入：[0024](development/0024-mimalloc-heap.md)，mimalloc 3.5.3 已安装并通过多线程 heap 验证，
-  Tracy heap capture 已读回配对事件；本节重新核验的官方 master 不变，无须再升级基线。
+- 最近接入：[0028](development/0028-magic-enum.md)，magic-enum 0.9.8（MIT，header-only）。
+  官方 master [f907dc21](https://github.com/microsoft/vcpkg/blob/f907dc21e0e8699955b002d0fe7673de5db55fab/ports/magic-enum/vcpkg.json)
+  与固定基线条目版本一致，保留基线，不变更其余依赖；详见该记录的定向验证。
+- 此前 [0024](development/0024-mimalloc-heap.md)，mimalloc 3.5.3 已安装并通过多线程 heap 验证，
+  Tracy heap capture 已读回配对事件；该次重新核验的官方 master 不变，无须再升级基线。
   [0023](development/0023-tracy-cpu-profiling.md) 的 CPU capture 与 Runtime/IO 定向验证继续有效。
   [0021](development/0021-vcpkg-baseline-update.md) 中的 Debug 测试和 22 包依赖解析是旧基线的历史证据，
   本次不据此声明所有预留 feature 已在新基线构建或运行。
@@ -48,6 +51,7 @@ M1.7 的 Tracy 与 mimalloc 未包含在 0021 当时的 22 包解析验证中。
 | 库 / vcpkg port | 当前版本 | feature | 用途与接入边界 |
 | --- | --- | --- | --- |
 | stduuid / `stduuid` | 1.2.3 | 基础依赖，始终选择 | Core 的 UUID 生成、解析、格式化；由 dk::core 私有封装为强类型 ID |
+| magic_enum / `magic-enum` | 0.9.8 | 基础依赖，始终选择 | 枚举名称、字符串解析和枚举集合；dk::core、dk::asset_types、dk::commands、启用时的 dk::profiling PRIVATE，公开头不暴露三方类型 |
 | fmt / `fmt` | 12.2.0#1 | foundation | 日志格式化；dk::logging 的 PUBLIC 依赖，供日志模板接口使用 |
 | spdlog / `spdlog` | 1.17.0#1 | foundation | 日志级别、输出及文件 sink；dk::logging PRIVATE 依赖，使用默认 fmt/tz-offset features |
 | nlohmann-json / `nlohmann-json` | 3.12.0#2 | foundation、scene、commands | 场景/工程 JSON、命令 schema 和 JSON-RPC；Scene 私有使用，Commands 公开 Json 值类型 |

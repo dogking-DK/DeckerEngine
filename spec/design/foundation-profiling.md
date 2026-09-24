@@ -1,13 +1,19 @@
 ---
 module: foundation-profiling
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-23T19:54:50+08:00"
+updated_at: "2026-09-24T10:21:18+08:00"
 status: accepted
 ---
 
 # Foundation 性能分析与 Tracy 接入设计
 
 ## 目标、边界与版本
+
+2026-09-24 枚举字符串迁移：启用 profiling 时 PRIVATE 使用 magic_enum，HeapCategory/PoolKind
+的标签片段由反射得到；前后缀在编译期拼接到固定数组，保留 `dk/heap/*` 与 `dk/pool/*/*` 原名称。
+Tracy 保留名称指针，因此标签具有静态生命周期，每种分类唯一地址，hook 中不分配/格式化字符串。
+未知 HeapCategory 仍使用 other，未知 PoolKind 保留 shared 回退；不改变采样、计数与锁语义。
+关闭 profiling 的接口不引入 magic_enum 头文件；实现与采集验证见 [0028](../development/0028-magic-enum.md)。
 
 从 M1.7.1 提供可实际采集的 CPU 分析能力，再随 [Memory System](foundation-memory.md) 接入
 内存事件、使用量曲线与线程上下文。工具用于回答命令/IO/任务耗时、内存峰值、保留量与分配热点。

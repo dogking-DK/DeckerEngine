@@ -54,6 +54,23 @@ struct Session
     }
 };
 } // namespace
+TEST_CASE("asset kind discovery schemas preserve accepted names for parameters and results")
+{
+    Session s;
+    const auto edit = s.call("commands.describe", {{"name", "entity.set_assets"}});
+    const auto get = s.call("commands.describe", {{"name", "entity.get"}});
+    const auto create = s.call("commands.describe", {{"name", "scene.new"}});
+    const auto expected = Json::array({"mesh", "material", "texture"});
+    const auto& kind = edit["parameters"]["properties"]["assets"]["items"]["properties"]["kind"];
+    REQUIRE(kind["enum"] == expected);
+    REQUIRE(get["result"]["properties"]["assets"]["items"]["properties"]["kind"]["enum"] == expected);
+    REQUIRE(create["parameters"]["properties"]["assets"]["items"]["properties"]["kind"]["enum"] == expected);
+    REQUIRE(edit["effect"] == "memory_edit");
+    REQUIRE(get["effect"] == "query");
+    for (const auto& name : expected) { REQUIRE(schema::validate(kind, name)); }
+    for (const auto* name : {"Mesh", "unknown", "mesh ", "0"}) { REQUIRE_FALSE(schema::validate(kind, name)); }
+}
+
 TEST_CASE("scene commands create edit hierarchy query and persist")
 {
     Session s;

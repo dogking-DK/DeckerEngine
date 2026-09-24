@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-09-23T19:54:50+08:00"
+updated_at: "2026-09-24T10:21:18+08:00"
 status: accepted
 ---
 
@@ -498,7 +498,8 @@ M4 开发安排与三份设计稿见 [0020](development/0020-m4-development-plan
 [0025](development/0025-memory-ownership-routing.md) 为 M1.7.3 的实现验收记录。
 [0026](development/0026-scratch-arena.md) 为 M1.7.4 的实现验收记录。
 [0027](development/0027-memory-pools.md) 为 M1.7.5 的实现验收记录。
-当前下一可用开发编号为 **0028**；实际开工时重新扫描
+枚举反射依赖及字符串迁移单独记录于 [0028](development/0028-magic-enum.md)，不推进 M1.7.6。
+当前下一可用开发编号为 **0029**；实际开工时重新扫描
 [开发目录](development/README.md)，取最大编号加一。
 重要设计准备或实际开发开始时创建编号记录，不预建未来小节的空日志；
 子阶段状态和验收证据在本文件及对应实施记录持续维护。

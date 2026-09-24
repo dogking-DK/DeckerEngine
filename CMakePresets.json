@@ -32,7 +32,7 @@
     {
       "name": "windows-bootstrap",
       "inherits": "windows-base",
-      "displayName": "Windows bootstrap (minimal stduuid dependency)",
+      "displayName": "Windows bootstrap (stduuid and magic-enum)",
       "binaryDir": "${sourceDir}/out/build/windows-bootstrap-stduuid",
       "cacheVariables": {
         "DK_USE_VCPKG": "ON",

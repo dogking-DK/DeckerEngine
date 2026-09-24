@@ -1,7 +1,7 @@
 ---
 module: assets-types
 created_at: "2026-09-22T12:28:05+08:00"
-updated_at: "2026-09-22T18:26:04+08:00"
+updated_at: "2026-09-24T10:21:18+08:00"
 status: accepted
 ---
 
@@ -9,6 +9,9 @@ status: accepted
 
 engine/assets/types 提供 dk::asset_types，仅 PUBLIC 依赖 Core。
 AssetKind 固定 mesh/material/texture 三种持久文本值；未知值返回 invalid_argument。
+`dk::asset_types` PRIVATE 使用 magic_enum 生成名称与严格区分大小写的解析，未知枚举名称仍为空。
+`asset_kind_names()` 返回静态存储的只读 string_view span，供命令 schema 使用同一反射列表；
+不接受数字文本、首尾空白或嵌入 NUL，不在公开头文件暴露第三方类型。
 AssetReference={AssetId, AssetKind}，ID 必须非 nil；不包含句柄、指针、加载状态或设备资源。
 资产记录包含 ID、种类和工程相对路径；注册与文件诊断由 Project 负责。
 同一路径可拥有不同种类记录，身份仅由 AssetId 决定，重复 ID 被拒绝。

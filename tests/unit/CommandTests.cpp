@@ -3,6 +3,33 @@
 #include <limits>
 
 using namespace dk;
+TEST_CASE("effect reflection preserves discovery names and rejects unknown values") {
+    CommandRegistry commands;
+    const std::vector<std::string> names{"query", "memory_edit", "external", "control"};
+    auto handler = [](const Json&) -> Result<Json> { return Json::object(); };
+    for (std::size_t i = 0; i < names.size(); ++i) {
+        const auto effect = static_cast<CommandEffect>(i);
+        REQUIRE(effect_name(effect) == names[i]);
+        REQUIRE(commands.add({"test." + names[i], "Effect", schema::object(), schema::object(), effect}, handler));
+        const auto description = commands.execute("commands.describe", {{"name", "test." + names[i]}});
+        REQUIRE(description);
+        REQUIRE(description->at("effect") == names[i]);
+    }
+    const auto before = commands.list();
+    for (const auto value : {-1, 4, 128, 999}) {
+        const auto effect = static_cast<CommandEffect>(value);
+        REQUIRE(effect_name(effect) == "invalid");
+        const auto result = commands.add({"test.invalid", "Invalid effect", schema::object(), schema::object(), effect}, handler);
+        REQUIRE_FALSE(result);
+        REQUIRE(result.error().code == ErrorCode::invalid_argument);
+        REQUIRE(commands.list() == before);
+    }
+    for (const auto& item : before) {
+        const auto description = commands.describe(item.at("name").get<std::string>());
+        REQUIRE(description);
+        REQUIRE(item.at("effect") == description->at("effect"));
+    }
+}
 TEST_CASE("discovery is sorted and exposes executable schemas") {
     CommandRegistry commands;
     REQUIRE(commands.add({"test.echo", "Echo", schema::object({{"value", schema::string()}}, {"value"}), schema::string()}, [](const Json& p) -> Result<Json> { return p["value"]; }));

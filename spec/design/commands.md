@@ -1,7 +1,7 @@
 ---
 module: commands
 created_at: "2026-09-22T13:12:54+08:00"
-updated_at: "2026-09-22T17:00:46+08:00"
+updated_at: "2026-09-24T10:21:18+08:00"
 status: accepted
 ---
 
@@ -19,6 +19,9 @@ Scene 关闭时仍可单独构建 commands。bootstrap 与既有独立 Foundatio
 
 CommandDescriptor 包含稳定名称、说明、参数 schema、结果 schema、effect 和 undoable。
 effect 为 query/memory_edit/external/control，undoable 只允许 memory_edit。
+effect_name 改由 PRIVATE 依赖 magic_enum 反射，未知值仍返回 invalid，非法 effect 仍拒绝注册。
+Operations 的资产种类 schema 从 asset_kind_names() 构造，名称和参数/结果协议保持不变；
+不将 task 的 bool 状态或 JSON Schema 关键字改造为新的枚举。迁移见 [0028](../development/0028-magic-enum.md)。
 名称限 1–96 ASCII 字符，首字符字母，后续字母、数字、点、下划线；描述必填。
 注册时拒绝重复名称、无 handler、非法 schema；已注册描述由 registry 持有副本。
 

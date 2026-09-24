@@ -1,7 +1,7 @@
 ---
 module: command-reference-discovery
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-09-22T17:00:46+08:00"
+updated_at: "2026-09-24T10:21:18+08:00"
 status: accepted
 ---
 
@@ -15,6 +15,7 @@ status: accepted
 列出当前注册的命令，按名称排序。参数为 `{}`，可省略。
 返回数组，每项包含 `name`、`description`、`effect`、`undoable`。
 列表只包括当前运行时实际注册的能力。
+effect 的文本值为 `query`、`memory_edit`、`external`、`control`；与 commands.describe 使用同一来源。
 
 ```json
 {"jsonrpc":"2.0","id":1,"method":"commands.list"}
@@ -26,6 +27,7 @@ status: accepted
 返回 `name`、`description`、`effect`、`undoable`、`parameters`、`result`；
 后两个字段分别为参数和业务返回值的 schema。不存在的 name 返回 not_found（-32003）。
 这与请求一个未知 method 返回 -32601 不同。
+资产种类的参数/结果 schema 均列出 `mesh`、`material`、`texture`，区分大小写，不接受数字或首尾空白。
 
 ```json
 {"jsonrpc":"2.0","id":2,"method":"commands.describe","params":{"name":"entity.set_transform"}}

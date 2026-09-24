@@ -1,21 +1,20 @@
 #include <dk/assets/AssetReference.hpp>
+#include <magic_enum/magic_enum.hpp>
 #include <unordered_set>
 
 namespace dk {
 std::string_view asset_kind_name(AssetKind kind) noexcept
 {
-    switch (kind) {
-    case AssetKind::mesh: return "mesh";
-    case AssetKind::material: return "material";
-    case AssetKind::texture: return "texture";
-    }
-    return {};
+    return magic_enum::enum_name(kind);
+}
+std::span<const std::string_view> asset_kind_names() noexcept
+{
+    static constexpr auto names = magic_enum::enum_names<AssetKind>();
+    return names;
 }
 Result<AssetKind> parse_asset_kind(std::string_view text)
 {
-    for (const auto kind : {AssetKind::mesh, AssetKind::material, AssetKind::texture}) {
-        if (asset_kind_name(kind) == text) { return kind; }
-    }
+    if (const auto kind = magic_enum::enum_cast<AssetKind>(text)) { return *kind; }
     return std::unexpected(Error{ErrorCode::invalid_argument, "Unknown asset kind: " + std::string{text}, {}});
 }
 Result<void> validate_asset_references(std::span<const AssetReference> references)
