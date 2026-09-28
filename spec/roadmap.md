@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-09-28T16:15:12+08:00"
+updated_at: "2026-09-28T16:55:37+08:00"
 status: accepted
 ---
 
@@ -31,7 +31,8 @@ M3.1–M3.5 已完成：统一命令、场景服务、内存事务/撤销重做�
 M1.7.1–7 已完成，见 [0023](development/0023-tracy-cpu-profiling.md)、[0024](development/0024-mimalloc-heap.md)、
 [0025](development/0025-memory-ownership-routing.md)、[0026](development/0026-scratch-arena.md)、
 [0027](development/0027-memory-pools.md)、[0029](development/0029-memory-context-routing.md)、[0030](development/0030-memory-baseline.md)。
-原 M1–M3 验收不包含这项新增能力。该补充已完成；M4.1 身份/持久化与 M4.2 导入/离线工具均已完成，M4.3 和 M4.4 也已完成，下一项为 M5.1。
+原 M1–M3 验收不包含这项新增能力。该补充及 M4.1–4 均已完成。
+M5.1 Vulkan 设备与诊断已完成，见 [0042](development/0042-vulkan-device.md)，下一项为 M5.2。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作；提早建立多线程内存契约与性能测量，复杂并行优化仍由测量驱动。
@@ -51,7 +52,7 @@ M1.7.1–7 已完成，见 [0023](development/0023-tracy-cpu-profiling.md)、[00
 | M3 命令与 CPU Runtime | CLI/stdio 创建、修改、查询、保存场景 | M2 | 已完成（M3.1–M3.5，交付 A） |
 | M1.7 Foundation 补充 | Tracy、mimalloc heap、PMR/智能指针、arena/pool、多线程生命周期与性能基线 | 原 M1、M3（现有链路埋点） | 已完成：M1.7.1–7 均验收 |
 | M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3、M1.7 | 已完成：M4.1–4，证据 0031–0040 |
-| M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、最小呈现 | M1、M1.7 | 待开始 |
+| M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、最小呈现 | M1、M1.7 | 进行中：M5.1 已完成，M5.2–5 待开始 |
 | M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 待开始 |
 | M7 场景渲染 | 资产上传、场景提取、Pass、pipeline、可等待截图 | M3、M4、M6 | 待开始 |
 | M8 编辑器与进程控制 | 可编辑保存的视口；dk-ctl 操作运行中的程序 | M7 | 待开始 |
@@ -249,7 +250,7 @@ M1.7.6 先独立验收 token/恢复规则，不将尚未实现的调度器当作
 详细的 10 个实施小节、独立验收和开工决策见
 [0020 M4 开发计划](development/0020-m4-development-plan.md)。**M4.1 已完成**，见 [0031](development/0031-asset-metadata-catalog.md)
 及 [0032](development/0032-asset-commit-recovery.md)；M4.2 验收见 [0033](development/0033-cpu-mesh-import.md)、
-[0034](development/0034-textures-assetc.md)，M4.3 验收见 [0035](development/0035-asset-cache-publication.md)、[0036](development/0036-asset-cache-invalidation.md)；M4.4 验收见 [0040](development/0040-cpu-assets-delivery.md)，M4 完成，下一项 **M5.1**。
+[0034](development/0034-textures-assetc.md)，M4.3 验收见 [0035](development/0035-asset-cache-publication.md)、[0036](development/0036-asset-cache-invalidation.md)；M4.4 验收见 [0040](development/0040-cpu-assets-delivery.md)，M4 完成。后续设备验收见 M5.1。
 后续按 M4.x.y 顺序，每节记录实际证据后再关闭父阶段。设计稿不代表代码已实现。
 导入/加载使用 Memory 拥有型结果和局部 scratch，接入 Tracy 工作阶段与内存曲线；M4.4 仍先一个 worker。
 三方库已确定为 fastgltf、stb_image（stb port）、xxHash（XXH3-128），当前基线版本与封装约定见
@@ -278,14 +279,14 @@ CPU Ready 与未来 GPU Ready 分开。
 
 | 子阶段 | 范围 | 前置 | 验收与证据 | 状态 |
 | --- | --- | --- | --- | --- |
-| M5.1 | Vulkan 设备与诊断 | M1、M1.7 | 能力选择、队列、验证层、缺失设备错误可复现 | 待开始 |
+| M5.1 | Vulkan 设备与诊断 | M1、M1.7 | 能力/队列选择、验证消息、缺失设备和失败清理通过；RTX 4070 重复创建/销毁零验证错误，见 [0042](development/0042-vulkan-device.md) | 已完成 |
 | M5.2 | 资源与提交生命周期 | M5.1 | VMA Buffer/Image、上传/读回、完成跟踪、延迟释放及 Tracy GPU 接入边界 | 待开始 |
 | M5.3 | Slang 编译工具 | M5.2 | 图形/compute shader 编译、SPIR-V/反射与失败诊断 | 待开始 |
 | M5.4 | 离屏绘制与计算 | M5.3 | 读回图像/计算结果符合预期，验证层无相关错误 | 待开始 |
 | M5.5 | 窗口与呈现 | M5.4 | SDL3 swapchain、resize/最小化/重建；离屏路径独立可用 | 待开始 |
 
-**先写设计：** `graphics-device.md`、`graphics-shaders.md`、
-`platform.md`、`graphics-presentation.md`。
+**当前设计：** [graphics-device](design/graphics-device.md) 覆盖 M5.1。
+后续实施前扩展资源/提交设计，并建立 `graphics-shaders.md`、`platform.md`、`graphics-presentation.md`。
 
 **验收：** 编译一个图形 shader 和一个 compute shader；
 离屏生成小图像并读回、计算已知数据并校验；窗口路径能呈现和调整尺寸。
@@ -465,15 +466,16 @@ GPU 未完成前不释放状态，也不默认经 CPU 读回再上传。
 
 ## 当前执行边界与下一步
 
-M0–M4 以及 M1.7 Memory/Tracy 补充均已完成。当前可运行的 CPU 链路包括
+M0–M4、M1.7 Memory/Tracy 补充以及 M5.1 均已完成。当前可运行的 CPU 链路包括
 Foundation、Scene 持久化、命令/事务、batch/stdio、资产导入/缓存与异步 CPU Ready。
 各小阶段的验收条件与证据入口见上表；历史测试计数保留在[开发记录](development/README.md)，不作为日常固定回归套件。
 M4 的进程重启、取消和退出验收见 [0040](development/0040-cpu-assets-delivery.md)，
 Memory 的测量条件与限制见[基线报告](benchmarks/2026-09-28-memory.md)。
 
-下一项为 **M5.1 Vulkan 设备与诊断**。开始前先建立对应模块设计，
+M5.1 的无窗口设备、验证诊断及 CPU-only 隔离验收见 [0042](development/0042-vulkan-device.md)。
+下一项为 **M5.2 资源与提交生命周期**。开始前先扩展对应模块设计，
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
-已有 CPU 验收不代表 GPU、其他平台或跨文件断电原子性已经验证。
+M5.1 只验收设备生命周期，不代表 GPU 资源、渲染、其他平台或跨文件断电原子性已经验证。
 
 工程基础维护记录包括 [0018](development/0018-vs2026-generation-script.md)、
 [0019](development/0019-development-skills.md) 和 [0041](development/0041-ai-documentation-workflow.md)，不改变里程碑顺序。

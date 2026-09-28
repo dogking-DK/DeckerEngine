@@ -10,6 +10,10 @@
   ],
   "default-features": [],
   "features": {
+    "vulkan-device": {
+      "description": "Headless Vulkan device and diagnostics",
+      "dependencies": ["vulkan"]
+    },
     "asset-importers": {
       "description": "CPU glTF import pipeline",
       "dependencies": ["fastgltf", "stb", "nlohmann-json"]

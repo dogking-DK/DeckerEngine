@@ -4,7 +4,8 @@
 命名空间为 `dk`，CMake target 使用 `dk_*` / `dk::*`。
 
 当前提供 Foundation、Memory/Tracy、Scene 持久化、命令/事务、CPU Runtime、
-资产导入与缓存、有界 Jobs 和异步 CPU Ready。渲染、物理、编辑器、网络 IPC 与脚本尚未实现。
+资产导入与缓存、有界 Jobs、异步 CPU Ready，以及可选的无窗口 Vulkan 设备与诊断。
+渲染、物理、编辑器、网络 IPC 与脚本尚未实现。
 阶段状态、依赖和下一项统一见[开发 Roadmap](spec/roadmap.md)。
 
 ## 快速开始
@@ -30,6 +31,7 @@ cmake --build --preset windows-debug --target dk_run
 | batch、持续 stdio、命令层独立配置 | [Runtime 指南](spec/guides/runtime.md)、[命令参考](spec/commands/README.md) |
 | 登记、改名、导入、缓存、异步加载与作业 | [资产指南](spec/guides/assets.md) |
 | heap、拥有型容器、scratch、pool、线程上下文、Tracy | [Memory 指南](spec/guides/memory.md) |
+| 无窗口 Vulkan 设备、验证层与 GPU 探针 | [Graphics 指南](spec/guides/graphics.md) |
 | Core、数学、IO、Scene 与 CPU 示例 | [Foundation/Scene 指南](spec/guides/foundation.md) |
 | 实现 Mx.y 或修改已有模块 | [AGENTS.md](AGENTS.md)、[流程规范](spec/README.md)、[模块与源码索引](spec/design/README.md) |
 | 查找历史决策与验证证据 | [开发记录](spec/development/README.md)、[Memory 性能基线](spec/benchmarks/2026-09-28-memory.md) |
@@ -61,12 +63,13 @@ pwsh -NoProfile -File scripts/check-spec.ps1
 | engine/scene | 场景文档、组件、层级、工程与 JSON 持久化 |
 | engine/framework | commands、services、operations、runtime |
 | engine/automation | JSON-RPC 与 JSON Lines/stdio；网络和客户端 SDK 预留 |
+| engine/graphics/device | Vulkan 1.3 设备、能力/队列选择与诊断；其余 graphics 模块预留 |
 | apps/runner、tools/assetc | CPU 命令进程、离线资产工具 |
 | tools/profiling | 独立 Tracy 工具及内存 capture 检查器 |
-| examples、tests | CPU 示例、单元与集成测试；gpu/replay 预留 |
+| examples、tests | CPU 示例、单元与集成测试、独立 GPU 设备探针；replay 预留 |
 | spec、.agents/skills | 设计/指南/记录/命令文档、按任务加载的开发方法 |
 
-platform、geometry、graphics、render、physics、scripting、editor、shaderc 与 Python SDK
+platform、geometry、render、physics、scripting、editor、shaderc 与 Python SDK
 仍按 Roadmap 逐步接入；预留目录和安装依赖不代表已经实现。
 公开头位于各模块 `include/dk/`，内部实现位于 `src/`，依赖通过 target 声明。
 构建产物和个人环境留在 Git 忽略目录。

@@ -64,6 +64,14 @@
       }
     },
     {
+      "name": "windows-graphics",
+      "inherits": "windows-dev",
+      "displayName": "Windows headless Vulkan development",
+      "cacheVariables": {
+        "DK_BUILD_GRAPHICS_DEVICE": "ON"
+      }
+    },
+    {
       "name": "windows-profiling",
       "inherits": "windows-dev",
       "displayName": "Windows Tracy profiling (optimized with symbols)",
