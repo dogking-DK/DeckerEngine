@@ -1,3 +1,21 @@
+if(TARGET dk_shaderc)
+    add_test(NAME dk.shaderc.process COMMAND "${CMAKE_COMMAND}"
+        "-DSHADERC=$<TARGET_FILE:dk_shaderc>"
+        "-DFIXTURES=${PROJECT_SOURCE_DIR}/tests/fixtures/shaders"
+        "-DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-artifacts/$<CONFIG>"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/ShadercProcessTests.cmake")
+    set_tests_properties(dk.shaderc.process PROPERTIES TIMEOUT 120 LABELS "cpu")
+    if(WIN32)
+        add_test(NAME dk.shaderc.deployment COMMAND "${CMAKE_COMMAND}"
+            "-DSHADERC=$<TARGET_FILE:dk_shaderc>"
+            "-DSLANG=$<TARGET_FILE:slang::slang>"
+            "-DOPTIMIZER=$<TARGET_FILE:slang::slang-glslang>"
+            "-DSOURCE=${PROJECT_SOURCE_DIR}/shaders/common/transform.slang"
+            "-DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-artifacts/$<CONFIG>"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/ShadercDeploymentTests.cmake")
+        set_tests_properties(dk.shaderc.deployment PROPERTIES TIMEOUT 120 LABELS "cpu")
+    endif()
+endif()
 if(TARGET dk_assetc)
     add_test(NAME dk.assetc.process COMMAND "${CMAKE_COMMAND}"
         "-DASSETC=$<TARGET_FILE:dk_assetc>"

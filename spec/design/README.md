@@ -5,6 +5,7 @@
 | architecture | [整体架构](architecture.md) | accepted | 长期模块边界和依赖方向 | [模块目录](../../engine) | [流程/检查](../README.md) |
 | graphics-device | [Vulkan 设备与诊断](graphics-device.md) | accepted | M5.1 设备/诊断；Vulkan-Hpp RAII、volk、vk-bootstrap、VMA allocator | [Device](../../engine/graphics/device) | [device](../../tests/unit/CMakeLists.txt) |
 | graphics-resources | [Vulkan 资源与提交生命周期](graphics-resources.md) | accepted | M5.2 VMA 资源、上传/读回、完成与延迟释放 | [device](../../engine/graphics/device) | [graphics](../../tests/integration/CMakeLists.txt) |
+| graphics-shaders | [Slang 编译与反射](graphics-shaders.md) | accepted | M5.3 离线 SPIR-V、最小布局反射与诊断 | [shaders](../../engine/graphics/shaders) | [shaders](../../tests/unit/CMakeLists.txt) |
 | project-foundation | [工程基础](project-foundation.md) | accepted | Git、目录、CMake、vcpkg、构建探针与留档 | [CMake/构建](../../cmake) | [文档脚本回归](../../scripts/test-check-spec.ps1) |
 | foundation-core | [Core 基础](foundation-core.md) | accepted | 错误、日志、stduuid 稳定 ID 与验证 | [Core](../../engine/foundation/core) | [core / log_probe](../../tests/unit/CMakeLists.txt) |
 | foundation-math | [Eigen 数学与 Transform](foundation-math.md) | accepted | M1.2 基础数学；M1.3 TRS、仿射组合和逆变换 | [Math](../../engine/foundation/math) | [math](../../tests/unit/CMakeLists.txt) |

@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-09-28T17:14:37+08:00"
+updated_at: "2026-09-28T19:03:00+08:00"
 ---
 
 # 构建与依赖配置
@@ -57,8 +57,9 @@ ctest --preset windows-debug
 ```
 
 `windows-dev` 默认构建 Core、日志、Eigen 数学、IO、Scene、Memory、Jobs、CPU 资产导入/缓存、Framework 与 Catch2 单元测试。
-`windows-graphics` 继承该预设，显式启用 DK_BUILD_GRAPHICS_DEVICE 和 vulkan-device feature；
-无窗口设备与验证探针的运行方法见 [Graphics 指南](graphics.md)。默认开发预设仍不加载 Vulkan。
+`windows-graphics` 继承该预设，显式启用 DK_BUILD_GRAPHICS_DEVICE、DK_BUILD_GRAPHICS_SHADERS 及对应 feature；
+无窗口设备与验证探针的运行方法见 [Graphics 指南](graphics.md)。`windows-shaders` 单独构建无需 Vulkan 的
+离线编译库/工具，见 [Shader 指南](shaders.md)。默认开发预设不加载 Vulkan 或 Slang。
 `DK_BUILD_MEMORY` 默认 OFF，开发及 profiling 预设启用，自动选择 memory feature；bootstrap 保持关闭。
 `DK_BUILD_ASSET_RUNTIME` 默认 OFF，开发及 profiling 预设启用并选择 assets feature；要求 IO/Memory。
 关闭 Memory/IO 的配置也须关闭 ASSET_RUNTIME；Scene/Framework 可独立关闭，只有 Project 适配依赖它们。
@@ -80,6 +81,7 @@ JSON 由 Scene 私有使用，原规划的 GLM 已从清单移除。
 | asset-importers | fastgltf、stb、nlohmann-json |
 | commands | nlohmann-json |
 | vulkan-device | vulkan、volk、vk-bootstrap、vulkan-memory-allocator（DK_BUILD_GRAPHICS_DEVICE 自动选择，要求 Memory） |
+| shaders | shader-slang、nlohmann-json（DK_BUILD_GRAPHICS_SHADERS 自动选择，要求 Memory/IO） |
 | graphics | vulkan、volk、vk-bootstrap、vulkan-memory-allocator、shader-slang |
 | editor | sdl3[vulkan]、imgui[docking-experimental,sdl3-binding,vulkan-binding] |
 | scripting | lua、sol2 |
@@ -109,8 +111,8 @@ cmake --preset windows-dev "-DDK_VCPKG_FEATURES=foundation;scene"
 
 Slang 的 vcpkg 包名为 `shader-slang`，CMake package 为 `slang`。
 Windows 使用 `x64-windows`，不使用全静态 CRT triplet。
-此阶段仅预置 Slang 包，编译反射 API、shader 编译命令和跨平台 host 工具管理
-将在对应模块设计后接入。
+M5.3 已接入 Slang 编译反射 API 和 dk-shaderc；跨平台 host 工具管理尚未实现。
+Slang 标准模块/API binding 文件必须跟随运行库，构建通过 dk_deploy_slang 部署。
 
 feature 选择在 `project()` 前映射到 `VCPKG_MANIFEST_FEATURES`，
 遵循 [vcpkg CMake 集成规范](https://learn.microsoft.com/en-us/vcpkg/users/buildsystems/cmake-integration)。

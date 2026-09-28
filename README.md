@@ -32,6 +32,7 @@ cmake --build --preset windows-debug --target dk_run
 | 登记、改名、导入、缓存、异步加载与作业 | [资产指南](spec/guides/assets.md) |
 | heap、拥有型容器、scratch、pool、线程上下文、Tracy | [Memory 指南](spec/guides/memory.md) |
 | Vulkan 设备、资源上传/读回、提交与 GPU 探针 | [Graphics 指南](spec/guides/graphics.md) |
+| Slang 离线编译、SPIR-V、反射与 dk-shaderc | [Shader 指南](spec/guides/shaders.md) |
 | Core、数学、IO、Scene 与 CPU 示例 | [Foundation/Scene 指南](spec/guides/foundation.md) |
 | 实现 Mx.y 或修改已有模块 | [AGENTS.md](AGENTS.md)、[流程规范](spec/README.md)、[模块与源码索引](spec/design/README.md) |
 | 查找历史决策与验证证据 | [开发记录](spec/development/README.md)、[Memory 性能基线](spec/benchmarks/2026-09-28-memory.md) |
@@ -63,13 +64,14 @@ pwsh -NoProfile -File scripts/check-spec.ps1
 | engine/scene | 场景文档、组件、层级、工程与 JSON 持久化 |
 | engine/framework | commands、services、operations、runtime |
 | engine/automation | JSON-RPC 与 JSON Lines/stdio；网络和客户端 SDK 预留 |
-| engine/graphics/device | Vulkan 1.3 设备、能力/队列选择与诊断；其余 graphics 模块预留 |
+| engine/graphics/device、shaders | Vulkan 1.3 设备/资源/提交与离线 Slang 编译；Graph/呈现预留 |
 | apps/runner、tools/assetc | CPU 命令进程、离线资产工具 |
+| tools/shaderc、shaders/common | 独立 shader 编译工具、图形/compute 源码示例 |
 | tools/profiling | 独立 Tracy 工具及内存 capture 检查器 |
 | examples、tests | CPU 示例、单元与集成测试、独立 GPU 设备探针；replay 预留 |
 | spec、.agents/skills | 设计/指南/记录/命令文档、按任务加载的开发方法 |
 
-platform、geometry、render、physics、scripting、editor、shaderc 与 Python SDK
+platform、geometry、render、physics、scripting、editor 与 Python SDK
 仍按 Roadmap 逐步接入；预留目录和安装依赖不代表已经实现。
 公开头位于各模块 `include/dk/`，内部实现位于 `src/`，依赖通过 target 声明。
 构建产物和个人环境留在 Git 忽略目录。

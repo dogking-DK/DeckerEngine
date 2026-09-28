@@ -1,7 +1,7 @@
 set(CMAKE_FOLDER "Engine")
 
 add_subdirectory(foundation)
-if(DK_BUILD_GRAPHICS_DEVICE)
+if(DK_BUILD_GRAPHICS_DEVICE OR DK_BUILD_GRAPHICS_SHADERS)
     add_subdirectory(graphics)
 endif()
 if(DK_BUILD_SCENE OR DK_BUILD_ASSET_RUNTIME OR DK_BUILD_ASSET_IMPORTERS)

@@ -64,11 +64,23 @@
       }
     },
     {
+      "name": "windows-shaders",
+      "inherits": "windows-base",
+      "displayName": "Windows offline Slang compiler (no Vulkan)",
+      "cacheVariables": {
+        "DK_BUILD_MEMORY": "ON",
+        "DK_BUILD_GRAPHICS_SHADERS": "ON",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+        "VCPKG_HOST_TRIPLET": "x64-windows"
+      }
+    },
+    {
       "name": "windows-graphics",
       "inherits": "windows-dev",
       "displayName": "Windows headless Vulkan development",
       "cacheVariables": {
-        "DK_BUILD_GRAPHICS_DEVICE": "ON"
+        "DK_BUILD_GRAPHICS_DEVICE": "ON",
+        "DK_BUILD_GRAPHICS_SHADERS": "ON"
       }
     },
     {

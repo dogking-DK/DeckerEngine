@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-28T18:34:00+08:00"
+updated_at: "2026-09-28T19:12:00+08:00"
 status: accepted
 ---
 
@@ -105,7 +105,7 @@ M1.7.7 复用相同依赖完成重复工作负载与三配置采集基线；未�
 2026-09-28 接入时比较官方最新 port 与固定 baseline，fastgltf 0.9.0、stb 2024-07-29#1 一致，
 未扩大依赖升级。默认与独立 CPU 配置的实际链接/测试证据见 [0033](development/0033-cpu-mesh-import.md)、[0034](development/0034-textures-assetc.md)。
 
-## M5 设备依赖与接入状态
+## M5 设备与 Shader 依赖接入状态
 
 | 库 / vcpkg port | 当前版本 | feature | 当前用途 |
 | --- | --- | --- | --- |
@@ -114,6 +114,7 @@ M1.7.7 复用相同依赖完成重复工作负载与三配置采集基线；未�
 | volk / `volk` | 1.4.357.0 | vulkan-device / graphics | PRIVATE volk::volk，填充每实例/设备 table，执行不使用全局 vk* |
 | vk-bootstrap / `vk-bootstrap` | 1.4.357 | vulkan-device / graphics | PRIVATE vk-bootstrap::vk-bootstrap，内部适配 InstanceBuilder，保留自有选卡策略 |
 | Vulkan Memory Allocator / `vulkan-memory-allocator` | 3.4.0 | vulkan-device / graphics | PUBLIC GPUOpen::VulkanMemoryAllocator 头接口，私有 dk_graphics_vma 单一定义；Device allocator 与 M5.2 Buffer/Image 配对拥有、延迟释放 |
+| Slang / `shader-slang` | 2026.18 | shaders / graphics | dk::graphics_shaders PRIVATE slang::slang；SPIR-V 1.5、最小布局反射、dk-shaderc，独立于 Vulkan |
 
 2026-09-28 核验官方 vulkan、vulkan-headers、vulkan-loader port 与固定 baseline 一致，
 无需升级。头文件实际编译版本为 1.4.357.0；系统 loader 动态加载，不静态导入 Vulkan DLL，
@@ -136,11 +137,17 @@ M5.2 复用以上固定版本，新增资源、timeline 提交和映射/flush/in
 VMA allocation 随完成票据回收；Memory 控制块使用调用者资源。实现与验证见
 [0045](development/0045-graphics-resources-submission.md)，GPU Tracy context 仍未启用。
 
+2026-09-28 M5.3 核验 [shader-slang 官方 port](https://github.com/microsoft/vcpkg/blob/master/ports/shader-slang/vcpkg.json)
+为 2026.18、无 port 修订，与固定 baseline 一致。vcpkg 使用官方预编译动态库；
+运行库旁需部署 slang-glslang 优化器、slang-standard-module-*、slang.slang、gfx.slang，CMake 已处理。
+Slang COM 对象使用 ComPtr RAII，三方内部及短期适配分配使用默认分配器，返回产物使用 Memory heap。
+反射 JSON 私有复用 nlohmann-json 3.12.0#2，未改版本。实际离线编译/链接/部署证据见
+[0046](development/0046-slang-shader-compiler.md)。
+
 ## 清单预留，模块尚未实现
 
 | 库 / vcpkg port | 当前版本 | feature | 计划用途 |
 | --- | --- | --- | --- |
-| Slang / `shader-slang` | 2026.18 | graphics | Shader 编译、SPIR-V 和布局反射；CMake package 名为 slang |
 | SDL3 / `sdl3` | 3.4.16#1 | editor | 窗口与输入，选择 vulkan feature |
 | Dear ImGui / `imgui` | 1.92.9 | editor | 编辑器 UI，选择 docking-experimental、sdl3-binding、vulkan-binding |
 | Lua / `lua` | 5.5.1 | scripting | 内嵌场景脚本语言 |

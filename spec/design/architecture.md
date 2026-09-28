@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-28T18:34:00+08:00"
+updated_at: "2026-09-28T19:03:00+08:00"
 status: accepted
 ---
 
@@ -18,7 +18,8 @@ status: accepted
 ECS 使用 flecs，内嵌脚本计划用 Lua/sol2，外部自动化计划用 Python。
 当前 CPU 链路由 Foundation/Memory/Jobs、Scene、Commands/Services/Runtime 和 Assets 组成。
 graphics/device 提供独立可选的无窗口 Vulkan 设备、VMA 资源、提交/读回与延迟释放，不进入 CPU Runtime 的链接依赖；
-shader、Graph 和呈现尚未实现，具体边界见[设备设计](graphics-device.md) 与[资源设计](graphics-resources.md)。
+graphics/shaders 提供独立 CPU Slang 编译、SPIR-V 和最小反射，同样不进入 CPU Runtime 的链接依赖。
+Graph 和呈现尚未实现，具体边界见[设备设计](graphics-device.md)、[资源设计](graphics-resources.md) 与[Shader 设计](graphics-shaders.md)。
 模块接口与实现入口见[设计索引](README.md)，阶段状态和下一项统一见[Roadmap](../roadmap.md)，
 历史验收结果见[开发记录](../development/README.md)。
 Runtime 装配 Assets/Jobs heap 与线程上下文；worker 捕获拥有型路由并在安全点退休。

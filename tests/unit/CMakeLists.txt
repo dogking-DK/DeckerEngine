@@ -11,6 +11,18 @@ endif()
 dk_target_defaults(dk_core_tests)
 
 include(Catch)
+if(DK_BUILD_GRAPHICS_SHADERS)
+    find_package(nlohmann_json CONFIG REQUIRED)
+    add_executable(dk_shader_tests ShaderCompilerTests.cpp)
+    target_compile_definitions(dk_shader_tests PRIVATE
+        DK_TEST_SHADER_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures/shaders"
+        DK_COMMON_SHADER_DIR="${PROJECT_SOURCE_DIR}/shaders/common")
+    target_link_libraries(dk_shader_tests PRIVATE dk::graphics_shaders dk::io Catch2::Catch2WithMain nlohmann_json::nlohmann_json)
+    dk_target_defaults(dk_shader_tests)
+    dk_deploy_slang(dk_shader_tests)
+    catch_discover_tests(dk_shader_tests TEST_PREFIX "dk.shaders."
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 120 LABELS "cpu")
+endif()
 if(DK_BUILD_GRAPHICS_DEVICE)
     add_executable(dk_graphics_resource_tests GraphicsResourceTests.cpp)
     target_include_directories(dk_graphics_resource_tests PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")

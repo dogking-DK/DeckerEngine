@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-28T16:15:12+08:00"
+updated_at: "2026-09-28T19:03:00+08:00"
 status: accepted
 ---
 
@@ -102,7 +102,7 @@ CTest 保留 runner 冒烟验证，开发预设额外运行 Catch2 行为测试�
 [三方库说明](../third-party-libraries.md)。默认不添加旧版本 override，也不在每次配置时跟随浮动 master。
 升级时先抓取官方索引，核对所有直接依赖、相关传递依赖及规划选型，再固定提交。
 本机 vcpkg 干净 checkout 只做 fast-forward，同步其 bootstrap 要求的工具版本。
-依赖 feature 分为 foundation、math、memory、scene、commands、graphics、editor、scripting、tests、profiling，
+依赖 feature 按模块选择，包含 foundation、math、memory、scene、commands、graphics、vulkan-device、shaders、editor、scripting、tests、profiling 等，
 清单默认安装 Core 必需的 stduuid，可选库仍按 feature 选择。
 stduuid 在 Core 实现中使用，不暴露到公开头。
 数学模块使用独立 math feature 安装 eigen3，启用 DK_BUILD_MATH 时自动补充该组；
@@ -125,8 +125,9 @@ Tracy 同版本 overlay 补充客户端 TRACY_ENABLE=ON；mimalloc 同版本 ove
 不能将整个依赖集合全局链接到每个模块。
 
 Windows 使用动态库/动态 CRT 的 x64-windows triplet，与 Slang 预编译库适配。
-Slang 包名是 `shader-slang`，不是 `slang`。graphics feature 准备目标端
-Slang 库；未来跨平台 shaderc 编译工具需单独处理 host 工具，当前未承诺交叉编译。
+Slang 包名是 `shader-slang`，CMake package 是 `slang`。独立 shaders feature 供
+DK_BUILD_GRAPHICS_SHADERS 使用，不引入 Vulkan；graphics 保留聚合依赖。
+dk-shaderc 使用当前平台的 Slang 库，标准模块随可执行文件部署；当前未承诺交叉编译 host 工具管理。
 
 项目依赖缓存留在构建目录的 vcpkg_installed，忽略 build/cache/log 和 IDE 个人文件。
 更新 baseline 必须连同依赖变化、构建验证和编号开发记录一起提交。

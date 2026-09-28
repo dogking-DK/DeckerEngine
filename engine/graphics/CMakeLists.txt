@@ -1,2 +1,7 @@
 set(CMAKE_FOLDER "Engine/Graphics")
-add_subdirectory(device)
+if(DK_BUILD_GRAPHICS_DEVICE)
+    add_subdirectory(device)
+endif()
+if(DK_BUILD_GRAPHICS_SHADERS)
+    add_subdirectory(shaders)
+endif()

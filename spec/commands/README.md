@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-09-28T15:06:06+08:00"
+updated_at: "2026-09-28T19:03:00+08:00"
 status: accepted
 ---
 
@@ -11,6 +11,8 @@ status: accepted
 `windows-dev` 构建启用此功能，最小 bootstrap 仅提供 `--help/--version`。
 windows-dev 当前 33 条命令以实际 `commands.list` 为准；关闭 Jobs/Importers 时保留原 22 条。
 完整字段 schema 可通过 `commands.describe` 查询。
+
+独立离线 CLI 另见 [dk-shaderc 编译参数与输出](shaderc.md)；它不属于下列 Runtime 命令集。
 
 ## 按功能查找
 

@@ -1,0 +1,5 @@
+add_executable(dk_shaderc src/main.cpp)
+set_target_properties(dk_shaderc PROPERTIES OUTPUT_NAME dk-shaderc)
+target_link_libraries(dk_shaderc PRIVATE dk::graphics_shaders dk::io)
+dk_target_defaults(dk_shaderc)
+dk_deploy_slang(dk_shaderc)

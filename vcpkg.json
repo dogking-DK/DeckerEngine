@@ -10,6 +10,10 @@
   ],
   "default-features": [],
   "features": {
+    "shaders": {
+      "description": "Offline Slang SPIR-V compiler and reflection",
+      "dependencies": ["shader-slang", "nlohmann-json"]
+    },
     "vulkan-device": {
       "description": "Headless Vulkan device, dispatch, bootstrap and allocator",
       "dependencies": ["vulkan", "volk", "vk-bootstrap", "vulkan-memory-allocator"]
