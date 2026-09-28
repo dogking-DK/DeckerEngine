@@ -1,4 +1,4 @@
-# Tracy overlay
+# Same-version dependency overlays
 
 Copied from microsoft/vcpkg commit `33d78c1ed898a06938f31312167c7abefd229455`,
 `ports/tracy` (Tracy 0.14.1). The upstream port and its patches are preserved.
@@ -12,3 +12,7 @@ The copied port files are covered by the adjacent vcpkg LICENSE.txt.
 Their patch contents retain upstream context markers. The path-specific
 .gitattributes rule keeps LF and permits the required space-only context lines;
 normal source/document whitespace checks are unchanged.
+
+## mimalloc 3.5.3
+
+The official vcpkg 3.5.3 port, source SHA512 and existing patch are preserved. Only MI_WIN_REDIRECT=OFF is added: upstream enables the redirect DLL even when the override feature is off. DeckerEngine uses explicit per-domain heaps and must not inject CRT allocation hooks or emit redirect startup diagnostics. Memory builds enable this overlay; dependency version and builtin-baseline are unchanged. Check and remove this workaround when the official port makes the same guarantee. The copied port files share the adjacent vcpkg license.

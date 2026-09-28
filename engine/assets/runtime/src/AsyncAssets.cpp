@@ -16,7 +16,10 @@ struct AsyncAssets::Impl {
     Vector<Pending> pending;
     std::uint64_t session = 1;
     Impl(ProjectPaths p, JobQueue& q, Prepare fn) : paths(std::move(p)), queue(q), prepare(std::move(fn))
-    { slots.reserve(1024); pending.reserve(q.limits().active); }
+    {
+        if (q.limits().terminal < q.limits().active) throw std::invalid_argument("Asset queue terminal retention must cover active jobs");
+        slots.reserve(1024); pending.reserve(q.limits().active);
+    }
     Slot* find(std::string_view source) {
         const auto it = std::find_if(slots.begin(), slots.end(), [&](const Slot& s) { return s.source == source; });
         return it == slots.end() ? nullptr : &*it;
@@ -58,7 +61,12 @@ Result<JobId> AsyncAssets::import(std::string_view source, std::optional<double>
 AssetStatus AsyncAssets::status(AssetId id, std::string_view source) const
 {
     auto* slot = impl_->find(source);
-    AssetStatus result = slot ? slot->status : AssetStatus{}; result.id = id; return result;
+    AssetStatus result = slot ? slot->status : AssetStatus{}; result.id = id;
+    if (result.data && std::none_of(result.data->artifact.data.outputs.begin(), result.data->artifact.data.outputs.end(),
+        [&](const auto& output) { return output.id == id; })) {
+        result.state = AssetState::unloaded; result.data.reset(); result.ready_generation = 0;
+    }
+    return result;
 }
 Result<AssetStatus> AsyncAssets::load(AssetId id, std::string_view source)
 {

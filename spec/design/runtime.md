@@ -1,9 +1,33 @@
 ---
 module: runtime
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-09-23T16:44:00+08:00"
+updated_at: "2026-09-28T15:06:06+08:00"
 status: accepted
 ---
+
+## M4.4.3 接入约定
+
+Jobs+资产导入/运行时启用时装配独立 AsyncAssetService；每个实例拥有 MemorySystem、Assets/Jobs heap、
+主线程 ThreadContext、JobQueue 和 AsyncAssets。每次服务入口绑定 Assets ExecutionScope，worker 自动捕获。
+registry 先于服务销毁；关闭时先 join 队列再销毁候选/目录/上下文，最后关闭 MemorySystem。
+async_tasks 仍为 false；capabilities 新增 async_jobs、job_limits。关闭不保存 Scene。
+
+`assets.open(manifest, guard?)` 独立打开已有 Project 清单，不加载 Scene；替换活动目录必须匹配旧目录 guard。
+`assets.catalog(offset=0,limit=128)` 返回 guard、total、分页 records；这是 register/rename 的 guard 来源。
+import 可在目录未打开时工作，完成只发布 meta/cache；显式 register 将输出映射写入 Project。
+register/rename 成功后重置异步资产会话，取消旧代并释放 Ready；旧外部句柄仍有效。
+SceneService 记录其打开/保存的 manifest，并在同一清单的资产命令成功后同步只读 Project 资产映射，
+保留 Scene、document_id、revision、dirty、历史。project.save 执行前同步，避免覆盖刚登记映射；
+不同清单互不影响。目录会话不自动切换到 scene.new/load 的工程，调用者显式 assets.open。
+
+所有 jobs/assets 参数通过 Operations schema 注册。jobs.wait 的 timeout_ms 为 0–1000（默认 0），
+等待时 pump completion，不重入分派。运行时在 handler 前后检查队列 fatal，不能被通用 registry 包装为业务失败。
+RuntimeEvents 维护序列号和条件变量，输入队列与 worker 通知它；主线程先采样序列再 pump/pop/wait，避免丢失唤醒。
+
+Windows stdio 使用专用 ReadFile reader、最多 8 行队列、每行 1 MiB（超限继续读至换行再报错），
+reader 不触碰服务/stdout。退出置 stop、唤醒满队列，再重复 CancelSynchronousIo + 完成事件等待以覆盖
+“检查 stop 后、进入 ReadFile 前”的取消竞态，确认退出才 join，禁止 detach。EOF 与 shutdown 共用回收路径。
+批文件/内存流保留原入口，每行之间 pump；持久 stdio 新入口在没有后续输入时也发布后台完成。
 
 # CPU Runtime（M3.4）
 

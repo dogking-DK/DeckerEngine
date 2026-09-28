@@ -1,6 +1,10 @@
 #pragma once
 #include <dk/commands/CommandRegistry.hpp>
 #include <dk/services/SceneService.hpp>
+#include <dk/runtime/RuntimeEvents.hpp>
+#ifdef DK_RUNTIME_ASSETS
+#include <dk/services/AsyncAssetService.hpp>
+#endif
 
 namespace dk
 {
@@ -26,6 +30,8 @@ class Runtime final
     [[nodiscard]] Result<CommandExecution> dispatch(std::string_view method, const Json &parameters,
                                                     bool auto_guard = false);
     [[nodiscard]] bool has_command(std::string_view method) const;
+    [[nodiscard]] std::shared_ptr<RuntimeEvents> events() const { return events_; }
+    void pump();
     [[nodiscard]] bool stopping() const noexcept
     {
         return stopping_;
@@ -34,6 +40,10 @@ class Runtime final
   private:
     explicit Runtime(std::unique_ptr<SceneService> service) : service_{std::move(service)} {}
     std::unique_ptr<SceneService> service_;
+    std::shared_ptr<RuntimeEvents> events_ = std::make_shared<RuntimeEvents>();
+#ifdef DK_RUNTIME_ASSETS
+    std::unique_ptr<AsyncAssetService> assets_;
+#endif
     CommandRegistry commands_;
     bool dispatching_ = false;
     bool stopping_ = false;

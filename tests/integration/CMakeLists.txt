@@ -93,6 +93,14 @@ if(TARGET dk_asset_services AND WIN32)
 endif()
 if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
     find_program(DK_POWERSHELL NAMES pwsh powershell REQUIRED)
+    if(TARGET dk_asset_operations)
+        add_test(NAME dk.runtime.assets_stdio
+            COMMAND "${DK_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass
+                -File "${CMAKE_CURRENT_SOURCE_DIR}/RuntimeAssetsTest.ps1"
+                -Runner "$<TARGET_FILE:dk_run>" -Fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/assets"
+                -WorkDir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+        set_tests_properties(dk.runtime.assets_stdio PROPERTIES TIMEOUT 90)
+    endif()
     add_test(NAME dk.runtime.stdio_interactive
         COMMAND "${DK_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass
             -File "${CMAKE_CURRENT_SOURCE_DIR}/RuntimeStdioTest.ps1"

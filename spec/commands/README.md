@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-09-22T17:00:46+08:00"
+updated_at: "2026-09-28T15:06:06+08:00"
 status: accepted
 ---
 
@@ -9,7 +9,8 @@ status: accepted
 
 本目录供人和 AI 查阅当前可调用命令。适用于 M3 完成后的 CPU Runtime；
 `windows-dev` 构建启用此功能，最小 bootstrap 仅提供 `--help/--version`。
-当前 22 条命令以实际 `commands.list` 为准，完整字段 schema 可通过 `commands.describe` 查询。
+windows-dev 当前 33 条命令以实际 `commands.list` 为准；关闭 Jobs/Importers 时保留原 22 条。
+完整字段 schema 可通过 `commands.describe` 查询。
 
 ## 按功能查找
 
@@ -20,6 +21,8 @@ status: accepted
 | [实体](entity.md) | `entity.create`、`entity.get`、`entity.delete`、`entity.set_name`、`entity.set_transform`、`entity.set_parent`、`entity.set_assets` | 实体编辑和查询 |
 | [历史](history.md) | `history.status`、`history.undo`、`history.redo` | 内存撤销与重做 |
 | [运行时与任务](runtime.md) | `runtime.capabilities`、`runtime.shutdown`、`tasks.list`、`tasks.get` | 能力、同步任务和关闭 |
+| [CPU 资产](assets.md) | `assets.open`、`assets.catalog`、`assets.import`、`assets.register`、`assets.rename`、`assets.load`、`assets.status`、`assets.unload` | 目录会话、持久身份和 CPU Ready |
+| [后台作业](jobs.md) | `jobs.get`、`jobs.wait`、`jobs.cancel` | JobId 状态、等待和协作取消 |
 
 各参考页的“参数”指请求的 `params`，“返回”指响应的 `result.value`。
 所有示例使用 JSON-RPC；排版为多行的单个 JSON 对象，发送到 runner 时须压缩为一行。

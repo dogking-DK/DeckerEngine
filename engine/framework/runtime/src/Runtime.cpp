@@ -1,6 +1,9 @@
 #include <dk/operations/SceneOperations.hpp>
 #include <dk/runtime/Runtime.hpp>
 #include <dk/profiling/Profiler.hpp>
+#ifdef DK_RUNTIME_ASSETS
+#include <dk/operations/AssetOperations.hpp>
+#endif
 
 namespace dk
 {
@@ -31,6 +34,13 @@ Result<std::unique_ptr<Runtime>> Runtime::create(const std::filesystem::path &ro
     if (!service)
         return std::unexpected(service.error());
     auto runtime = std::unique_ptr<Runtime>(new Runtime(std::move(*service)));
+#ifdef DK_RUNTIME_ASSETS
+    auto assets = AsyncAssetService::create(root, [events = runtime->events_] { events->notify(); });
+    if (!assets) return std::unexpected(assets.error());
+    runtime->assets_ = std::move(*assets);
+    auto asset_commands = register_asset_commands(runtime->commands_, *runtime->assets_);
+    if (!asset_commands) return std::unexpected(asset_commands.error());
+#endif
     auto registered = register_scene_commands(runtime->commands_, *runtime->service_);
     if (!registered)
         return std::unexpected(registered.error());
@@ -46,19 +56,30 @@ Result<void> Runtime::register_runtime_commands()
                             schema::object(),
                             schema::object({{"protocol", schema::string()},
                                             {"async_tasks", schema::boolean()},
+                                            {"async_jobs", schema::boolean()},
+                                            {"job_limits", schema::nullable(schema::object({{"queued",schema::integer()},
+                                                {"active",schema::integer()},{"terminal",schema::integer()},
+                                                {"input_bytes",schema::integer()}},{"queued","active","terminal","input_bytes"}))},
                                             {"task_retention", schema::integer()},
                                             {"max_line_bytes", schema::integer()},
                                             {"max_batch_requests", schema::integer()},
                                             {"transactions", schema::boolean()},
                                             {"guard", schema::string()}},
-                                           {"protocol", "async_tasks", "task_retention", "max_line_bytes",
+                                           {"protocol", "async_tasks", "async_jobs", "job_limits", "task_retention", "max_line_bytes",
                                             "max_batch_requests", "transactions", "guard"})},
-                           [](const Json &) -> Result<Json>
+                           [this](const Json &) -> Result<Json>
                            {
-                               return Json{{"protocol", "jsonrpc-2.0-jsonl"}, {"async_tasks", false},
+                               Json value{{"protocol", "jsonrpc-2.0-jsonl"}, {"async_tasks", false},
                                            {"task_retention", 256},           {"max_line_bytes", 1024 * 1024},
                                            {"max_batch_requests", 128},       {"transactions", true},
                                            {"guard", "document_id+revision"}};
+                               value["async_jobs"] = false; value["job_limits"] = nullptr;
+#ifdef DK_RUNTIME_ASSETS
+                               const auto limits = assets_->limits(); value["async_jobs"] = true;
+                               value["job_limits"] = {{"queued",limits.queued},{"active",limits.active},
+                                   {"terminal",limits.terminal},{"input_bytes",limits.input_bytes}};
+#endif
+                               return value;
                            });
     if (!r)
         return r;
@@ -104,6 +125,11 @@ bool Runtime::has_command(std::string_view method) const
 {
     return commands_.describe(method).has_value();
 }
+void Runtime::pump() {
+#ifdef DK_RUNTIME_ASSETS
+    if (!stopping_) assets_->pump();
+#endif
+}
 Result<CommandExecution> Runtime::dispatch(std::string_view method, const Json &parameters, bool auto_guard)
 {
     DK_PROFILE_ZONE("Runtime.Dispatch");
@@ -116,6 +142,11 @@ Result<CommandExecution> Runtime::dispatch(std::string_view method, const Json &
         return std::unexpected(Error{ErrorCode::invalid_argument, "Named object parameters required"});
     if (dispatching_)
         return std::unexpected(Error{ErrorCode::invalid_state, "Runtime dispatch is not reentrant"});
+    pump();
+#ifdef DK_RUNTIME_ASSETS
+    auto synchronized = assets_->synchronize_scene(*service_);
+    if (!synchronized) return std::unexpected(synchronized.error());
+#endif
     dispatching_ = true;
     struct Reset
     {
@@ -132,9 +163,16 @@ Result<CommandExecution> Runtime::dispatch(std::string_view method, const Json &
         if (descriptor && (*descriptor)["parameters"].contains("properties") &&
             (*descriptor)["parameters"]["properties"].contains("guard"))
         {
+#ifdef DK_RUNTIME_ASSETS
+            if (method.starts_with("assets.")) {
+                if (auto catalog = assets_->catalog()) effective["guard"] = catalog_guard_json((*catalog)->catalog().guard());
+            } else
+#endif
+            {
             auto state = service_->state();
             if (state)
                 effective["guard"] = edit_guard_json({state->document_id, state->revision});
+            }
         }
     }
     auto id = TaskId::generate();
@@ -142,6 +180,17 @@ Result<CommandExecution> Runtime::dispatch(std::string_view method, const Json &
         return std::unexpected(id.error());
     TaskRecord task{*id, std::string(method), false, {}, {}};
     auto result = commands_.execute(method, effective);
+#ifdef DK_RUNTIME_ASSETS
+    assets_->rethrow_failure();
+    if (result && method == "project.save") {
+        auto refreshed = assets_->refresh_manifest(effective["manifest"].get<std::string>());
+        if (!refreshed) result = std::unexpected(refreshed.error());
+    }
+    if (result) {
+        auto sync = assets_->synchronize_scene(*service_);
+        if (!sync) result = std::unexpected(sync.error());
+    }
+#endif
     task.succeeded = result.has_value();
     if (!result)
         task.error_code = result.error().code;

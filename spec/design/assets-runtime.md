@@ -1,7 +1,7 @@
 ---
 module: assets-runtime
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T14:45:27+08:00"
+updated_at: "2026-09-28T15:10:27+08:00"
 status: accepted
 ---
 
@@ -297,6 +297,7 @@ importer 在文件读取、解析、primitive 与图片解码之间检查 stop_t
 所有方法在 owner 线程。每个 source 最多一份当前 slot，最多 1024 个 slot；输入作业按硬上限
 128 MiB 预留，单个 completion CPU 产物最多 256 MiB。slot 持有 generation、JobId、只读 CachedAsset，
 pending 持有 session/generation/source/id；pump 先拒绝旧代/旧会话，再提交磁盘、发布 Ready，最后确认 Job 成功。
+传入队列的 terminal 限额须不小于 active，保证一次 pump 不会淘汰尚未回收的完成记录。
 load 同源 Loading 复用作业、Ready 复用句柄；import 是显式重新构建，递增代次并取消旧请求。
 unload 清除当前拥有值并递增代次；外部 `shared_ptr<const CachedAsset>` 保持可读。
 reset_session 取消旧请求并清空 slot，generation/session 均检查溢出。未知 ID 不推断源路径，

@@ -69,7 +69,7 @@ int run(const std::vector<std::filesystem::path> &args)
     }
 #endif
     if (stdio)
-        return dk::run_json_lines(**runtime, std::cin, std::cout, std::cerr, false, true);
+        return dk::run_stdio(**runtime, std::cout, std::cerr);
     std::ifstream input(batch, std::ios::binary);
     if (!input)
     {

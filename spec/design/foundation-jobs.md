@@ -1,7 +1,7 @@
 ---
 module: foundation-jobs
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T14:36:48+08:00"
+updated_at: "2026-09-28T15:06:06+08:00"
 status: accepted
 ---
 
@@ -87,9 +87,9 @@ MemorySystem 在队列、服务和 completion 释放后关闭，Tracy client 晚
 正常 EOF 和 runtime.shutdown 共用关闭流程；stdout 响应先刷新，不自动保存场景。
 在有限本地输入、可完成 IO 下验证可退出；无法协作中断的解码/IO 可能延迟 join，不能承诺硬截止或强杀线程。
 
-## M4.4 计划命令
+## M4.4 命令接入
 
-下表为设计名称，尚未注册；不提前加入“已可调用”的命令参考。
+M4.4.3 已注册下表命令，另有 assets.open/catalog 管理独立目录会话；精确参数见 [资产](../commands/assets.md) 与 [作业](../commands/jobs.md)。
 实现时复用 AssetService/Operations 和现有 schema，不为每条资产命令写 JSON-RPC 特殊分支。
 
 | 命令 | 参数/结果方向 | effect |
@@ -104,7 +104,7 @@ MemorySystem 在队列、服务和 completion 释放后关闭，Tracy client 晚
 所有上述操作 undoable=false，不加入 scene.transaction。资产目录 guard 使用目录会话 ID/revision；
 不复用 Scene revision 保护清单变化。详细参数/分页/限额/result schema 在 M4.4.3 先更新本设计，
 实现后才新增 `spec/commands/assets.md`、`jobs.md`，并同步 discovery/runtime 能力说明。
-`runtime.capabilities` 计划增加 async_jobs 与作业限额；既有 async_tasks=false 保持其同步 TaskId 语义，
+`runtime.capabilities` 已增加 async_jobs 与作业限额；既有 async_tasks=false 保持其同步 TaskId 语义，
 不得改成 true 却继续返回仅有同步终态的 tasks.get。
 
 jobs.wait 在 Runtime 线程等待期间必须继续收集完成项，但不重入分派其他命令；

@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-28T14:20:37+08:00"
+updated_at: "2026-09-28T15:06:06+08:00"
 status: accepted
 ---
 
@@ -145,3 +145,5 @@ M5/M7/M8/M9 的实施安排见 [Roadmap](roadmap.md)。
 
 维护粒度遵循 [spec 规范](README.md)，构建策略见 [工程基础设计](design/project-foundation.md#vcpkg-策略)。
 本文维护当前清单和默认版本规则；构建脚本负责实际解析，开发记录保存每次验证证据。
+
+M4.4.3 [0039](development/0039-assets-jobs-commands.md) 发现官方 mimalloc 3.5.3 port 在 MI_OVERRIDE=OFF 时仍启用 MI_WIN_REDIRECT。新增[同版本 overlay](../cmake/vcpkg-ports/README.md)只设置 MI_WIN_REDIRECT=OFF，源码哈希、版本、基线保持不变；运行时不再加载 redirect DLL，不靠环境变量或 stderr 过滤。

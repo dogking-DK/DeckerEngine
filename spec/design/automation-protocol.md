@@ -1,7 +1,7 @@
 ---
 module: automation-protocol
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-09-22T14:05:59+08:00"
+updated_at: "2026-09-28T15:06:06+08:00"
 status: accepted
 ---
 
@@ -37,3 +37,5 @@ M3.5 stdio 使用完全相同的请求/响应格式，客户端从 result.value.
 持续服务遇到可恢复错误继续，EOF/shutdown 退出 0；--auto-guard 在 stdio 模式拒绝，退出 2。
 shutdown 所在协议 batch 会完成其余元素的错误响应，然后一次刷新并关闭；随后各行不再读取。
 任务终态和缓存定义见 [Runtime](runtime.md)。
+
+M4.4.3 Windows stdio 改为独立可取消 ReadFile reader（8 行队列）与 owner RuntimeEvents 循环，输入空闲时也可提交完成项；JSON-RPC envelope 与 TaskId 保持兼容。退出刷新响应后取消 reader 并 join，再回收 worker；实现细节见 [Runtime](runtime.md)。

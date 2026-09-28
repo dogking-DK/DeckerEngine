@@ -12,7 +12,7 @@ M3.3 提供事务与有界历史；M3.4 的 dk-run 支持无窗口 CPU 批处理
 M3.5 已接入持续 stdio、同步任务查询与正常关闭，达到交付 A。
 M1.7.1–6 已接入可选 Tracy 分析、mimalloc heap、PMR、拥有型接口、持久域路由、线程 scratch 和局部/共享 Pool。
 内存域支持预算、关闭闸门和跨线程释放；arena 支持嵌套回退，Pool 提供 ObjectPool、安全 trim 和用量曲线。
-RoutingToken 与 ThreadContextCache 支持跨线程重绑定、线程复用及安全点退休；Jobs/Runtime 自动装配留在后续阶段。
+RoutingToken 与 ThreadContextCache 支持跨线程重绑定、线程复用及安全点退休；Jobs/Runtime 已在 M4.4 自动装配。
 M1.7.7 已提供重复工作负载、三种 profiling 配置的真实采集对照与[性能基线](spec/benchmarks/2026-09-28-memory.md)，M1.7 全部完成。
 M4.1 已提供 meta v1、身份目录、登记提交、Project 替换、同目录改名及未完成操作恢复。
 M4.2–3 已提供静态 glTF/GLB CPU 导入、dk-assetc、内容缓存、依赖失效重建和有界显式清理。
@@ -31,7 +31,7 @@ DeckerEngine/
 ├── cmake/                     # 选项、toolchain 配置、编译警告
 ├── scripts/                   # 定向构建/测试和文档检查
 ├── engine/
-│   ├── foundation/            # core、math、io、profiling、memory/持久路由；jobs、metadata 待实现
+│   ├── foundation/            # core、math、io、profiling、memory/持久路由、jobs；metadata 待实现
 │   ├── platform/              # 窗口和输入接口、SDL3
 │   ├── geometry/              # CPU 几何查询和 BVH
 │   ├── assets/                # types、runtime 元数据/身份目录；加载、导入预留
@@ -105,7 +105,7 @@ stdout 每行一个 JSON 响应，result 含 task_id、status 和命令返回值
 仅构建 CPU Runtime、保留进程验收而关闭日志/示例/Catch2：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-runtime-cpu -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_WARNINGS_AS_ERRORS=ON -DDK_VCPKG_FEATURES=
+cmake --preset windows-dev -B out/build/windows-runtime-cpu -DDK_BUILD_JOBS=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_WARNINGS_AS_ERRORS=ON -DDK_VCPKG_FEATURES=
 cmake --build out/build/windows-runtime-cpu --config Debug
 ctest --test-dir out/build/windows-runtime-cpu -C Debug --output-on-failure
 ```
@@ -160,7 +160,7 @@ handler 契约错误分别返回结构化 Error。支持的 schema 子集与上�
 [命令设计](spec/design/commands.md)。
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-commands-only -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=ON -DDK_WARNINGS_AS_ERRORS=ON -DDK_VCPKG_FEATURES=
+cmake --preset windows-dev -B out/build/windows-commands-only -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_JOBS=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=ON -DDK_WARNINGS_AS_ERRORS=ON -DDK_VCPKG_FEATURES=
 cmake --build out/build/windows-commands-only --config Debug
 ctest --test-dir out/build/windows-commands-only -C Debug --output-on-failure
 ```
@@ -837,7 +837,7 @@ MSVC 环境；Linux/macOS 需自行准备支持 C++23 的编译器。
 只构建 Core 和版本探针、安装基础 stduuid/magic-enum 依赖时可以运行：
 
 ```sh
-cmake -S . -B out/build/local-stduuid -DDK_USE_VCPKG=ON -DDK_VCPKG_FEATURES= -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_UNIT_TESTS=OFF
+cmake -S . -B out/build/local-stduuid -DDK_USE_VCPKG=ON -DDK_VCPKG_FEATURES= -DDK_BUILD_JOBS=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_UNIT_TESTS=OFF
 cmake --build out/build/local-stduuid --config Debug
 ctest --test-dir out/build/local-stduuid -C Debug --output-on-failure
 ```
@@ -928,7 +928,7 @@ if (transform) {
 仅验证 Core/数学、关闭日志和 runner 的独立配置：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-math-only -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES=
+cmake --preset windows-dev -B out/build/windows-math-only -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_JOBS=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES=
 cmake --build out/build/windows-math-only --config Debug
 ctest --test-dir out/build/windows-math-only -C Debug --output-on-failure
 ```
@@ -972,7 +972,7 @@ if (root) {
 仅验证 Core/IO、关闭数学、日志和 runner，并开启警告即错误：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-io-only -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-io-only -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_JOBS=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-io-only --config Debug
 ctest --test-dir out/build/windows-io-only -C Debug --output-on-failure
 ```
@@ -1017,7 +1017,7 @@ M1.6 已通过：默认 Debug/Release 各 **100 项通过、1 项权限跳过**�
 无日志、runner、Catch2、窗口和 GPU 依赖的独立配置：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-foundation -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-foundation -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_JOBS=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-foundation --config Debug
 ctest --test-dir out/build/windows-foundation -C Debug --output-on-failure
 cmake --build out/build/windows-foundation --config Release
@@ -1054,7 +1054,7 @@ JSON 限制 16 MiB、64 层嵌套；拒绝未知版本、字段、重复键/ID �
 独立 Scene 配置（关闭日志、示例与 runner）：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-scene-only -DDK_BUILD_MATH=ON -DDK_BUILD_IO=ON -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-scene-only -DDK_BUILD_MATH=ON -DDK_BUILD_IO=ON -DDK_BUILD_JOBS=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-scene-only --config Debug
 ctest --test-dir out/build/windows-scene-only -C Debug --output-on-failure
 ```
@@ -1086,7 +1086,7 @@ Set-Content -LiteralPath out/demo-scene/mesh.bin -Value "M2 reference fixture"
 无日志、runner 和 Catch2 的场景示例配置：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-scene-cpu -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-scene-cpu -DDK_BUILD_JOBS=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-scene-cpu --config Debug
 ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
 ```
@@ -1125,3 +1125,9 @@ skill 位于仓库 `.agents/skills`，符合
 
 构建输出和个人环境被 .gitignore 排除。仓库已初始化 main 分支；
 当前变更和远程配置分别通过 git status 和 git remote -v 查看。
+
+### 异步 CPU 资产（M4.4）
+
+windows-dev 启用 DK_BUILD_JOBS=ON（依赖 Memory）及资产导入/运行时。dk-run --stdio 支持 assets.open/catalog/import/register/rename/load/status/unload 和 jobs.get/wait/cancel；TaskId 仍表示同步命令完成。stdin 空闲时继续发布后台结果；退出取消并 join，未完成作业须先 wait 再关闭输入。详见[资产命令](spec/commands/assets.md)与[作业命令](spec/commands/jobs.md)。
+
+Memory 构建使用同版本 mimalloc overlay 显式关闭 Windows redirect，不替换全局分配器。

@@ -15,6 +15,7 @@ int run_json_lines(Runtime &runtime, std::istream &input, std::ostream &output, 
     bool failed = false;
     while (!runtime.stopping())
     {
+        runtime.pump();
         std::string line;
         bool oversized = false, received = false;
         char ch = 0;

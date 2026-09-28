@@ -89,6 +89,13 @@ if(DK_BUILD_SCENE)
         add_executable(dk_protocol_tests ProtocolTests.cpp)
         target_link_libraries(dk_protocol_tests PRIVATE dk::automation_transport Catch2::Catch2WithMain)
         dk_target_defaults(dk_protocol_tests)
+        if(TARGET dk_asset_operations)
+            add_executable(dk_asset_command_tests AssetCommandTests.cpp)
+            target_link_libraries(dk_asset_command_tests PRIVATE dk::automation_transport Catch2::Catch2WithMain)
+            dk_target_defaults(dk_asset_command_tests)
+            catch_discover_tests(dk_asset_command_tests TEST_PREFIX "dk.asset_commands."
+                WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 60)
+        endif()
         catch_discover_tests(dk_protocol_tests TEST_PREFIX "dk.protocol."
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST)
         add_executable(dk_service_tests ServiceTests.cpp)

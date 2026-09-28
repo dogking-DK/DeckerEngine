@@ -1,9 +1,14 @@
 ---
 module: foundation-memory
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-28T10:17:43+08:00"
+updated_at: "2026-09-28T15:06:06+08:00"
 status: accepted
 ---
+
+M4.4.3 Runtime 接入发现官方 mimalloc 3.5.3 port 在 MI_OVERRIDE=OFF 时仍默认
+MI_WIN_REDIRECT=ON，导致 DLL 启动次序诊断和潜在全局重定向。仓库 overlay 保留官方
+3.5.3 源码 hash/feature/安装逻辑，只显式设置 MI_WIN_REDIRECT=OFF；不改 API、版本、baseline，
+不运行注入工具，不过滤 stderr，也不依赖调用者设置环境变量。仅 Memory 开启时启用该 overlay。
 
 # Foundation Memory System 设计
 

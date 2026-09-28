@@ -46,4 +46,6 @@
 
 | 0038 | [M4.4.2 异步资产状态](0038-async-asset-state.md) | assets-runtime, foundation-jobs | completed |
 
+| 0039 | [M4.4.3 服务与命令接入](0039-assets-jobs-commands.md) | runtime, application-services, foundation-jobs | completed |
+
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

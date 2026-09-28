@@ -66,6 +66,7 @@ Result<void> SceneService::new_scene(ProjectDescription description, std::option
         return std::unexpected(id.error());
     auto owned_project = std::make_unique<Project>(std::move(*project));
     project_ = std::move(owned_project);
+    manifest_.clear();
     document_ = std::move(*document);
     document_id_ = *id;
     undo_.clear();
@@ -87,7 +88,9 @@ Result<void> SceneService::load(const std::filesystem::path &manifest, std::opti
     if (!id)
         return std::unexpected(id.error());
     auto owned_project = std::make_unique<Project>(std::move(*project));
+    auto next_manifest = paths_.resolve(manifest); if (!next_manifest) return std::unexpected(next_manifest.error());
     project_ = std::move(owned_project);
+    manifest_ = std::move(*next_manifest);
     document_ = std::move(*document);
     document_id_ = *id;
     undo_.clear();
@@ -128,7 +131,24 @@ Result<void> SceneService::save_manifest(EditGuard guard, const std::filesystem:
     if (a == b)
         return std::unexpected(Error{ErrorCode::invalid_argument, "Manifest and scene paths must differ"});
 #endif
-    return save_project(*project_, manifest);
+    auto saved = save_project(*project_, manifest);
+    if (saved) manifest_ = std::move(*target);
+    return saved;
+}
+Result<void> SceneService::synchronize_assets(const Project& source, const std::filesystem::path& manifest)
+{
+    if (!project_ || manifest_.empty()) return {};
+    auto path = paths_.resolve(manifest); if (!path) return std::unexpected(path.error());
+    auto a = path->native(), b = manifest_.native();
+#ifdef _WIN32
+    std::transform(a.begin(), a.end(), a.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
+    std::transform(b.begin(), b.end(), b.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
+#endif
+    if (a != b || project_->description().assets == source.description().assets) return {};
+    auto description = project_->description(); description.assets = source.description().assets;
+    auto replacement = Project::create(paths_.root(), std::move(description));
+    if (!replacement) return std::unexpected(replacement.error());
+    project_ = std::make_unique<Project>(std::move(*replacement)); return {};
 }
 Result<std::optional<EntityId>> SceneService::apply_edit(SceneDocument &doc, const SceneEdit &edit) const
 {

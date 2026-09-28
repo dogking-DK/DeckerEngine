@@ -65,6 +65,18 @@ Result<void> AssetService::register_source(CatalogGuard guard, const Registratio
     if (changed) { project_.swap(project); bytes_.swap(next_bytes); }
     return {};
 }
+Result<void> AssetService::refresh_manifest()
+{
+    auto relative = path_from_utf8(manifest_); if (!relative) return std::unexpected(relative.error());
+    auto path = project_->paths().resolve(*relative); if (!path) return std::unexpected(path.error());
+    auto bytes = read_file_bytes(*path, 16 * 1024 * 1024); if (!bytes) return std::unexpected(bytes.error());
+    const std::string_view text{reinterpret_cast<const char*>(bytes->data()),bytes->size()};
+    auto parsed = parse_project(text); if (!parsed) return std::unexpected(parsed.error());
+    auto actual = serialize_project(*parsed), expected = serialize_project(project_->description());
+    if (!actual) return std::unexpected(actual.error()); if (!expected) return std::unexpected(expected.error());
+    if (*actual != *expected) return std::unexpected(Error{ErrorCode::conflict,"Project changed; reopen the asset catalog"});
+    String next{text.begin(),text.end()}; bytes_.swap(next); return {};
+}
 Result<void> AssetService::rename_source(CatalogGuard guard, std::string_view source, std::string_view target)
 {
     const auto checked = check_scene_paths(source, target);
