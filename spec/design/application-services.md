@@ -1,7 +1,7 @@
 ---
 module: application-services
 created_at: "2026-09-22T13:28:00+08:00"
-updated_at: "2026-09-28T15:06:06+08:00"
+updated_at: "2026-09-28T15:24:33+08:00"
 status: accepted
 ---
 
@@ -71,4 +71,4 @@ history.status 返回 undo_count/redo_count/logical_bytes；history.undo/redo �
 
 ## M4.4.3 资产服务
 
-AsyncAssetService 独立拥有 MemorySystem、Jobs 和 CPU 状态，通过 AssetOperations 注册 11 条命令。目录可独立 open；目录 guard 与 Scene guard 分离。SceneService 记录 manifest，同一清单的资产映射刷新不修改文档或历史。project.save 前同步映射，成功后刷新 AssetService 的等价清单字节快照，保留目录 guard。详细生命周期见 [Runtime](runtime.md)，命令见 [资产参考](../commands/assets.md)。
+AsyncAssetService 独立拥有 MemorySystem、Jobs 和 CPU 状态，通过 AssetOperations 注册 11 条命令。目录可独立 open；目录 guard 与 Scene guard 分离。SceneService 记录 manifest，同一清单的资产映射刷新不修改文档或历史。project.save 目标匹配活动目录时（含刚 new 的 Scene）先同步映射，成功后刷新工程 name/scene 和清单字节快照，资产映射不变则保留目录 guard。详细生命周期见 [Runtime](runtime.md)，命令见 [资产参考](../commands/assets.md)。

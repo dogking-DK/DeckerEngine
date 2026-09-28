@@ -86,4 +86,10 @@ TEST_CASE("catalog persistence synchronizes Scene mappings without changing docu
     CHECK_FALSE(c.call("scene.transaction",{{"commands",Json::array({{{"method","assets.unload"},{"params",{{"id",root}}}}})}},true));
     CHECK_FALSE(c.call("assets.open",{{"manifest","project.json"}}));
     auto reopened = c.value("assets.open",{{"manifest","project.json"},{"guard",guard}}); CHECK(reopened["guard"]["session_id"] != guard["session_id"]);
+    const auto catalog_before_new = c.value("assets.catalog");
+    c.value("scene.new",{{"name","New scene"},{"scene_file","new-scene.json"}},true);
+    c.value("scene.save",Json::object(),true); c.value("project.save",{{"manifest","project.json"}},true);
+    CHECK(c.value("assets.catalog") == catalog_before_new);
+    auto saved_new = Project::open(c.f.files.root,"project.json"); REQUIRE(saved_new);
+    CHECK(saved_new->description().name == "New scene"); CHECK(saved_new->description().assets.size() == 2);
 }

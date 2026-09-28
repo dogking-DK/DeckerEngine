@@ -20,7 +20,7 @@ public:
     [[nodiscard]] Result<JobWait> wait(JobId, std::chrono::milliseconds timeout);
     [[nodiscard]] Result<JobCancel> cancel(JobId);
     [[nodiscard]] JobLimits limits() const noexcept;
-    [[nodiscard]] Result<void> synchronize_scene(SceneService&) const;
+    [[nodiscard]] Result<void> synchronize_scene(SceneService&, std::optional<std::string_view> saving_to = {}) const;
     [[nodiscard]] Result<void> refresh_manifest(std::string_view manifest);
     void pump();
     void rethrow_failure() const;

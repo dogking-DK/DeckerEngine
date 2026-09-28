@@ -158,3 +158,31 @@ TEST_CASE("queue publication exception is fatal and close reclaims unacknowledge
     CHECK_THROWS_AS(queue.rethrow_failure(), std::runtime_error); queue.close();
     CHECK(queue.query(*id)->state == JobState::cancelled);
 }
+TEST_CASE("queue retains bounded diagnostics and summaries instead of large result storage")
+{
+    Environment env; JobQueue queue(env.queue_heap);
+    auto failed = queue.submit([](std::stop_token) -> Result<JobQueue::Payload> {
+        return std::unexpected(Error{ErrorCode::io_error,std::string(65536,'x'),std::vector<std::string>(64,std::string(8192,'y'))});
+    }, 1); REQUIRE(failed); auto error = complete(queue,*failed); REQUIRE(error.error);
+    CHECK(error.error->message.size() == 4096); CHECK(error.error->context.size() == 8);
+    CHECK(error.error->context[0].size() == 512);
+    auto success = queue.submit([](std::stop_token) -> Result<JobQueue::Payload> { return payload(); }, 1); REQUIRE(success);
+    auto result = complete(queue,*success,[](JobId,const auto&) -> Result<std::string> { return std::string(65536,'z'); });
+    CHECK(result.summary.size() == 4096);
+    auto unicode = queue.submit([](std::stop_token) -> Result<JobQueue::Payload> {
+        std::string text; for (int i = 0; i < 2000; ++i) text += "中";
+        return std::unexpected(Error{ErrorCode::io_error,text,{text}});
+    }, 1); REQUIRE(unicode); auto unicode_error = complete(queue,*unicode); REQUIRE(unicode_error.error);
+    CHECK(unicode_error.error->message.ends_with("中")); CHECK(unicode_error.error->context[0].ends_with("中"));
+}
+TEST_CASE("queue close applies terminal retention to cancelled active records")
+{
+    Environment env; JobQueue queue(env.queue_heap,{2,2,1,8}); std::latch started{1};
+    auto first = queue.submit([&](std::stop_token stop) -> Result<JobQueue::Payload> {
+        std::mutex m; std::condition_variable_any cv; std::unique_lock lock(m); started.count_down();
+        cv.wait(lock,stop,[] { return false; }); return payload();
+    },1); REQUIRE(first); started.wait();
+    auto second = queue.submit([](std::stop_token) -> Result<JobQueue::Payload> { return payload(); },1); REQUIRE(second);
+    queue.close(); CHECK_FALSE(queue.query(*first));
+    REQUIRE(queue.query(*second)); CHECK(queue.query(*second)->state == JobState::cancelled);
+}

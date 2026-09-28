@@ -14,7 +14,7 @@ public:
     [[nodiscard]] const AssetCatalog& catalog() const noexcept { return catalog_; }
     [[nodiscard]] Result<void> register_source(CatalogGuard guard, const RegistrationRequest& request);
     [[nodiscard]] Result<void> rename_source(CatalogGuard guard, std::string_view source, std::string_view target);
-    // Refresh bytes after a semantically identical SceneService project.save.
+    // Refresh Project fields/bytes after SceneService project.save; mappings must match.
     [[nodiscard]] Result<void> refresh_manifest();
 private:
     [[nodiscard]] Result<void> check_scene_paths(std::string_view source, std::string_view target) const;

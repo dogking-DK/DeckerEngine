@@ -79,7 +79,7 @@ class SceneService final
     [[nodiscard]] Result<void> undo(EditGuard guard);
     [[nodiscard]] Result<void> redo(EditGuard guard);
     // Refresh only mappings for the same manifest; Scene state/history are untouched.
-    [[nodiscard]] Result<void> synchronize_assets(const Project&, const std::filesystem::path& manifest);
+    [[nodiscard]] Result<void> synchronize_assets(const Project&, const std::filesystem::path& manifest, bool saving_to_manifest = false);
 
   private:
     explicit SceneService(ProjectPaths paths, HistoryLimits limits)

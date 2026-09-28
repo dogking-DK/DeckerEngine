@@ -48,4 +48,6 @@
 
 | 0039 | [M4.4.3 服务与命令接入](0039-assets-jobs-commands.md) | runtime, application-services, foundation-jobs | completed |
 
+| 0040 | [M4.4.4 CPU 资产交付验收](0040-cpu-assets-delivery.md) | assets-runtime, foundation-jobs, runtime | completed |
+
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

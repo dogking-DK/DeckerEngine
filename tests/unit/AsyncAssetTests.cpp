@@ -62,6 +62,7 @@ TEST_CASE("async load shares loading and ready handles survive unload and memory
         auto ready = assets.status(root,source); REQUIRE(ready.data); CHECK(ready.state == dk::AssetState::ready);
         CHECK(ready.ready_generation == ready.generation); CHECK(ready.data->cache_hit);
         CHECK(assets.load(root,source)->data == ready.data);
+        CHECK(assets.status(dk::AssetId::generate().value(),source).state == dk::AssetState::unloaded);
         auto unloaded = assets.unload(root,source); REQUIRE(unloaded); CHECK(unloaded->state == dk::AssetState::unloaded);
         CHECK_FALSE(unloaded->data); CHECK(ready.data->artifact.data.mesh.primitives[0].positions.size() == 3);
         queue.close(); return ready.data;

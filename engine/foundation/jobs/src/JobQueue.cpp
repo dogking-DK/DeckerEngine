@@ -11,11 +11,21 @@
 namespace dk {
 namespace {
 Error missing() { return {ErrorCode::not_found, "Job is unknown or no longer retained"}; }
+std::string clipped(std::string_view text, std::size_t limit)
+{
+    auto n = std::min(text.size(),limit);
+    // Preserve an existing UTF-8 sequence at the truncation boundary.
+    while (n && n < text.size() && (static_cast<unsigned char>(text[n]) & 0xc0U) == 0x80U) --n;
+    return std::string{text.substr(0,n)};
+}
 void bound(Error& error)
 {
-    error.message.resize(std::min(error.message.size(), std::size_t{4096}));
-    if (error.context.size() > 8) error.context.resize(8);
-    for (auto& text : error.context) text.resize(std::min(text.size(), std::size_t{512}));
+    auto message = clipped(error.message,4096);
+    std::vector<std::string> context;
+    context.reserve(std::min(error.context.size(), std::size_t{8}));
+    for (std::size_t i = 0; i < error.context.size() && i < 8; ++i)
+        context.push_back(clipped(error.context[i],512));
+    error.message.swap(message); error.context.swap(context); // Release excess capacity, not only logical size.
 }
 }
 struct JobQueue::Impl {
@@ -195,6 +205,7 @@ std::size_t JobQueue::drain(const Consumer& consumer)
     s.consuming = true;
     struct Reset { bool& b; ~Reset() { b = false; } } reset{s.consuming};
     std::size_t count = 0;
+    try {
     for (;;) {
         std::shared_ptr<Impl::Record> record;
         std::optional<Result<Payload>> result;
@@ -220,7 +231,7 @@ std::size_t JobQueue::drain(const Consumer& consumer)
             }
             else cancelled = true;
         }
-        if (published) published->resize(std::min(published->size(), std::size_t{4096}));
+        if (published) { auto summary = clipped(*published,4096); published->swap(summary); }
         else bound(published.error());
         // Release the large payload before exposing terminal state.
         result.reset();
@@ -233,6 +244,10 @@ std::size_t JobQueue::drain(const Consumer& consumer)
             s.finish(*record, cancelled ? JobState::cancelled : published ? JobState::succeeded : JobState::failed);
         }
         ++count; s.signal();
+    }
+    } catch (...) {
+        { std::lock_guard lock(s.mutex); s.fatal = std::current_exception(); s.closing = true; ++s.sequence; }
+        s.signal(); throw;
     }
     return count;
 }
@@ -273,10 +288,16 @@ void JobQueue::close() noexcept
     if (s.worker.joinable()) s.worker.join();
     for (auto& record : s.records) {
         record->work = {}; record->token = {}; record->completion.reset();
-        std::lock_guard lock(s.mutex);
-        if (!terminal(record->view.state)) record->view.state = JobState::cancelled;
     }
-    { std::lock_guard lock(s.mutex); s.pending.clear(); s.active = 0; s.bytes = 0; ++s.sequence; }
+    {
+        std::lock_guard lock(s.mutex);
+        while (s.active) {
+            const auto it = std::find_if(s.records.begin(), s.records.end(), [](const auto& r) { return !terminal(r->view.state); });
+            const auto record = *it;
+            s.finish(*record, JobState::cancelled);
+        }
+        s.pending.clear(); ++s.sequence;
+    }
     s.signal();
 }
 } // namespace dk

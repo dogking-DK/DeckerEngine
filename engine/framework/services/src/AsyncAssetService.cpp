@@ -112,9 +112,16 @@ Result<void> AsyncAssetService::refresh_manifest(std::string_view manifest) {
     if (std::filesystem::equivalent(*pa,*pb,error) && !error) return s.catalog->refresh_manifest();
     return {};
 }
-Result<void> AsyncAssetService::synchronize_scene(SceneService& scene) const {
+Result<void> AsyncAssetService::synchronize_scene(SceneService& scene, std::optional<std::string_view> saving_to) const {
     if (!impl_->catalog) return {};
     auto name = path_from_utf8(impl_->manifest); if (!name) return std::unexpected(name.error());
-    return scene.synchronize_assets(impl_->catalog->project(), *name);
+    if (saving_to) {
+        auto target = path_from_utf8(*saving_to); if (!target) return std::unexpected(target.error());
+        auto a = impl_->paths.resolve(*target), b = impl_->paths.resolve(*name);
+        if (!a) return std::unexpected(a.error()); if (!b) return std::unexpected(b.error());
+        std::error_code error;
+        if (!std::filesystem::equivalent(*a,*b,error) || error) return {};
+    }
+    return scene.synchronize_assets(impl_->catalog->project(), *name, saving_to.has_value());
 }
 }

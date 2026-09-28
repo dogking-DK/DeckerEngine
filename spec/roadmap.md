@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-09-28T14:20:37+08:00"
+updated_at: "2026-09-28T15:24:33+08:00"
 status: accepted
 ---
 
@@ -31,7 +31,7 @@ M3.1–M3.5 已完成：统一命令、场景服务、内存事务/撤销重做�
 M1.7.1–7 已完成，见 [0023](development/0023-tracy-cpu-profiling.md)、[0024](development/0024-mimalloc-heap.md)、
 [0025](development/0025-memory-ownership-routing.md)、[0026](development/0026-scratch-arena.md)、
 [0027](development/0027-memory-pools.md)、[0029](development/0029-memory-context-routing.md)、[0030](development/0030-memory-baseline.md)。
-原 M1–M3 验收不包含这项新增能力。该补充已完成；M4.1 身份/持久化与 M4.2 导入/离线工具均已完成，M4.3 也已完成，下一项为 M4.4.1。
+原 M1–M3 验收不包含这项新增能力。该补充已完成；M4.1 身份/持久化与 M4.2 导入/离线工具均已完成，M4.3 和 M4.4 也已完成，下一项为 M5.1。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作；提早建立多线程内存契约与性能测量，复杂并行优化仍由测量驱动。
@@ -50,7 +50,7 @@ M1.7.1–7 已完成，见 [0023](development/0023-tracy-cpu-profiling.md)、[00
 | M2 场景文档 | 实体、变换、层级、资产引用、保存与重载 | M1 | 已完成（M2.1–M2.4） |
 | M3 命令与 CPU Runtime | CLI/stdio 创建、修改、查询、保存场景 | M2 | 已完成（M3.1–M3.5，交付 A） |
 | M1.7 Foundation 补充 | Tracy、mimalloc heap、PMR/智能指针、arena/pool、多线程生命周期与性能基线 | 原 M1、M3（现有链路埋点） | 已完成：M1.7.1–7 均验收 |
-| M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3、M1.7 | 进行中：M4.1–3 已完成，M4.4 待开始 |
+| M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3、M1.7 | 已完成：M4.1–4，证据 0031–0040 |
 | M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、最小呈现 | M1、M1.7 | 待开始 |
 | M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 待开始 |
 | M7 场景渲染 | 资产上传、场景提取、Pass、pipeline、可等待截图 | M3、M4、M6 | 待开始 |
@@ -242,14 +242,14 @@ M1.7.6 先独立验收 token/恢复规则，不将尚未实现的调度器当作
 | M4.1 | 资产身份与导入契约（M4.1.1–2） | M3、M1.7 | meta/目录、登记提交/改名、Project 替换、多文件补偿及重启恢复通过，见 0031、0032 | 已完成 |
 | M4.2 | 首个网格导入与 assetc（M4.2.1–2） | M4.1 | CPU 网格/材质/纹理、产物 v1、assetc 真进程及失败保护通过，见 0033、0034 | 已完成 |
 | M4.3 | 缓存和依赖失效（M4.3.1–2） | M4.2 | 内容键/命中/current、失效/损坏/删除重建与有界清理通过，见 0035、0036 | 已完成 |
-| M4.4 | 异步加载与任务生命周期（M4.4.1–4） | M4.3 | 队列；资产状态；服务/命令；CPU 进程闭环和退出 | 待开始 |
+| M4.4 | 异步加载与任务生命周期（M4.4.1–4） | M4.3 | 队列、资产状态、33 条命令、CPU 进程闭环及退出通过，见 0037–0040 | 已完成 |
 
 **设计稿已建立：** [资产身份/缓存/加载](design/assets-runtime.md)、
 [导入器/assetc](design/assets-importers.md)、[任务队列](design/foundation-jobs.md)。
 详细的 10 个实施小节、独立验收和开工决策见
 [0020 M4 开发计划](development/0020-m4-development-plan.md)。**M4.1 已完成**，见 [0031](development/0031-asset-metadata-catalog.md)
 及 [0032](development/0032-asset-commit-recovery.md)；M4.2 验收见 [0033](development/0033-cpu-mesh-import.md)、
-[0034](development/0034-textures-assetc.md)，M4.3 验收见 [0035](development/0035-asset-cache-publication.md)、[0036](development/0036-asset-cache-invalidation.md)，下一项 **M4.4.1**。
+[0034](development/0034-textures-assetc.md)，M4.3 验收见 [0035](development/0035-asset-cache-publication.md)、[0036](development/0036-asset-cache-invalidation.md)；M4.4 验收见 [0040](development/0040-cpu-assets-delivery.md)，M4 完成，下一项 **M5.1**。
 后续按 M4.x.y 顺序，每节记录实际证据后再关闭父阶段。设计稿不代表代码已实现。
 导入/加载使用 Memory 拥有型结果和局部 scratch，接入 Tracy 工作阶段与内存曲线；M4.4 仍先一个 worker。
 三方库已确定为 fastgltf、stb_image（stb port）、xxHash（XXH3-128），当前基线版本与封装约定见
@@ -488,8 +488,8 @@ bootstrap 各 1/1。真实持续 stdio 在 stdin 打开时即时响应、保存/
 **M1.7.6 已完成**：ThreadContext local pool 装配、RoutingToken、worker context 缓存退休、双系统关闭与延迟释放。
 **M1.7.7 已完成**：重复矩阵与 owning 结果交接管线、三配置真实采集、性能基线和完整聚合表。
 M1.7 全部完成。**M4.1 已完成**：meta v1、身份目录、登记提交、只读 Project 替换、同目录改名和未完成操作恢复。
-**M4.2 已完成**：CPU 网格/材质/纹理、版本化产物和 dk-assetc；**M4.3 已完成**：内容缓存、失效重建与显式清理；下一项为 **M4.4.1 CPU 工作队列**。
-每次默认仅推进一个独立小节，本次用户指定的整个 M4.2 已按两个小节分别验收。
+**M4.2 已完成**：CPU 网格/材质/纹理、版本化产物和 dk-assetc；**M4.3 已完成**：内容缓存、失效重建与显式清理；**M4.4 已完成**：有界 Jobs、异步 CPU Ready、命令与进程重启/回收；下一项为 **M5.1 Vulkan 设备与诊断**。
+每次默认仅推进一个独立小节，本次用户指定的整个 M4.4 已按四个小节分别验收。
 
 根目录 VS2026 生成脚本作为工程维护完成，见 [0018](development/0018-vs2026-generation-script.md)，不改变里程碑顺序。
 三个开发辅助 skill 与定向验证脚本已作为工程维护完成，见
@@ -509,7 +509,7 @@ M4 开发安排与三份设计稿见 [0020](development/0020-m4-development-plan
 [0031](development/0031-asset-metadata-catalog.md) 为 M4.1.1 的实现验收记录。
 [0032](development/0032-asset-commit-recovery.md) 为 M4.1.2 的实现验收记录。
 [0033](development/0033-cpu-mesh-import.md)、[0034](development/0034-textures-assetc.md) 为 M4.2 两个小节的验收记录。
-当前下一可用开发编号为 **0037**；实际开工时重新扫描
+当前下一可用开发编号为 **0041**；实际开工时重新扫描
 [开发目录](development/README.md)，取最大编号加一。
 重要设计准备或实际开发开始时创建编号记录，不预建未来小节的空日志；
 子阶段状态和验收证据在本文件及对应实施记录持续维护。
@@ -549,3 +549,5 @@ Linux/macOS 扩展与发布打包也需要独立的平台验收，不由已有 N
 - [设计目录](design/README.md)
 - [开发目录](development/README.md)
 - [开发留档 skill](../.agents/skills/decker-spec-workflow/SKILL.md)
+
+M4.4 实际验收：[0037](development/0037-cpu-job-queue.md) 队列、[0038](development/0038-async-asset-state.md) 状态、[0039](development/0039-assets-jobs-commands.md) 命令、[0040](development/0040-cpu-assets-delivery.md) CPU 交付。仅运行受影响测试；GPU Ready/硬抢占/超长路径不在本次范围。

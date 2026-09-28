@@ -179,6 +179,12 @@ Result<CommandExecution> Runtime::dispatch(std::string_view method, const Json &
     if (!id)
         return std::unexpected(id.error());
     TaskRecord task{*id, std::string(method), false, {}, {}};
+#ifdef DK_RUNTIME_ASSETS
+    if (method == "project.save" && effective.contains("manifest") && effective["manifest"].is_string()) {
+        auto sync = assets_->synchronize_scene(*service_, effective["manifest"].get_ref<const std::string&>());
+        if (!sync) return std::unexpected(sync.error());
+    }
+#endif
     auto result = commands_.execute(method, effective);
 #ifdef DK_RUNTIME_ASSETS
     assets_->rethrow_failure();

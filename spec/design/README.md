@@ -12,9 +12,9 @@
 | foundation-profiling | [Tracy 性能分析](foundation-profiling.md) | accepted | CPU、heap 事件、arena/pool 曲线与三配置开销基线已完成；GPU 观测待实现 |
 | scene | [场景文档](scene.md) | accepted | M2 flecs 身份、层级、快照、安全保存与重载 |
 | assets-types | [资产类型](assets-types.md) | accepted | M2.3 持久引用与种类 |
-| assets-runtime | [资产身份、缓存与加载](assets-runtime.md) | accepted | M4.1 身份/持久化、M4.2 CPU 编译/产物、M4.3 缓存/失效清理完成；异步加载待实现 |
+| assets-runtime | [资产身份、缓存与加载](assets-runtime.md) | accepted | M4.1–4 身份/持久化、CPU 产物、缓存、异步 Ready 和生命周期完成 |
 | assets-importers | [静态 glTF 导入与 assetc](assets-importers.md) | accepted | M4.2 静态网格/材质/纹理导入、CPU 产物 v1 和离线工具已完成 |
-| foundation-jobs | [CPU 队列与后台作业](foundation-jobs.md) | draft | M4.4 JobId、取消/等待/退出与命令接入计划 |
+| foundation-jobs | [CPU 队列与后台作业](foundation-jobs.md) | accepted | M4.4 有界 JobId 队列、取消/等待/退出与命令接入完成 |
 | project-format | [工程格式](project-format.md) | accepted | M2.3 版本清单、路径与文件诊断 |
 | commands | [命令注册](commands.md) | accepted | M3.1 schema、注册与能力发现 |
 | application-services | [场景应用服务](application-services.md) | accepted | M3.2 文档会话/命令；M3.3 事务/撤销重做 |

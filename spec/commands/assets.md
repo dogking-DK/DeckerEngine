@@ -1,7 +1,7 @@
 ---
 module: asset-command-reference
 created_at: "2026-09-28T15:02:00+08:00"
-updated_at: "2026-09-28T15:02:00+08:00"
+updated_at: "2026-09-28T15:24:33+08:00"
 status: accepted
 ---
 
@@ -41,7 +41,7 @@ state 为 unloaded/loading/ready/failed；job_id 为活动 JobId 或 null；arti
 `{root_id,key,cache_hit}` 或 null；error 为 `{code,message,context}` 或 null。不返回大块 CPU 字节。
 接受取消时，终态变 cancelled，资产在主线程回收后变 unloaded；业务错误变 failed，可再次 load 重试。
 
-同一清单的资产映射会同步到 SceneService，保留文档 revision/dirty/历史；project.save 不覆盖新映射。
+同一清单的资产映射会同步到 SceneService，保留文档 revision/dirty/历史；project.save 不覆盖新映射（也适用于刚 new 的 Scene 保存到活动目录清单）。
 不同清单互不影响。外部直接改动清单会使持久操作冲突，需要重新 open。
 常见错误：invalid_argument（路径/数值/schema）、invalid_state（未 open/容量满/恢复未完成）、
 not_found（文件或 ID 缺失）、conflict（旧 guard/输入变化/身份冲突）、io_error（写入失败）。

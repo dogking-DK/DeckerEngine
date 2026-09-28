@@ -15,7 +15,7 @@ M1.7.1–6 已接入可选 Tracy 分析、mimalloc heap、PMR、拥有型接口�
 RoutingToken 与 ThreadContextCache 支持跨线程重绑定、线程复用及安全点退休；Jobs/Runtime 已在 M4.4 自动装配。
 M1.7.7 已提供重复工作负载、三种 profiling 配置的真实采集对照与[性能基线](spec/benchmarks/2026-09-28-memory.md)，M1.7 全部完成。
 M4.1 已提供 meta v1、身份目录、登记提交、Project 替换、同目录改名及未完成操作恢复。
-M4.2–3 已提供静态 glTF/GLB CPU 导入、dk-assetc、内容缓存、依赖失效重建和有界显式清理。
+M4.2–3 已提供静态 glTF/GLB CPU 导入、dk-assetc、内容缓存、依赖失效重建和有界显式清理。M4.4 已完成有界后台队列、CPU Ready、资产/作业命令、无输入完成发布及进程重启/退出闭环。
 渲染、物理、编辑器、网络/命名管道 IPC 和脚本模块尚未实现。
 
 ## 目录
@@ -1095,7 +1095,7 @@ ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
 
 M1.6 与 M2.1–M2.4 已完成并分节本地提交。最终默认 Debug/Release 各 128 通过、
 1 项既有符号链接权限跳过；独立 Scene 配置各 104 通过、1 跳过，纯 CPU 示例各 16/16。
-上述计数为当时验收记录；M3 交付 A、M1.7.1–7、M4.1 和 M4.2 均已完成，M4.3 也已完成，当前下一项为 M4.4.1 CPU 工作队列。
+上述计数为当时验收记录；M3 交付 A、M1.7.1–7、M4.1 和 M4.2 均已完成，M4.3 和 M4.4 也已完成，当前下一项为 M5.1 Vulkan 设备与诊断。
 
 开发前先看 [AGENTS.md](AGENTS.md) 和 [spec 规范](spec/README.md)：
 先创建/更新模块设计，然后实现；过程中持续更新编号开发记录。
@@ -1131,3 +1131,9 @@ skill 位于仓库 `.agents/skills`，符合
 windows-dev 启用 DK_BUILD_JOBS=ON（依赖 Memory）及资产导入/运行时。dk-run --stdio 支持 assets.open/catalog/import/register/rename/load/status/unload 和 jobs.get/wait/cancel；TaskId 仍表示同步命令完成。stdin 空闲时继续发布后台结果；退出取消并 join，未完成作业须先 wait 再关闭输入。详见[资产命令](spec/commands/assets.md)与[作业命令](spec/commands/jobs.md)。
 
 Memory 构建使用同版本 mimalloc overlay 显式关闭 Windows redirect，不替换全局分配器。
+
+M4.4 验收记录：[0040](spec/development/0040-cpu-assets-delivery.md)。复现真实 CPU 进程链路：
+
+```powershell
+& ./scripts/verify.ps1 -Target @('dk_run') -TestRegex '^dk\.runtime\.assets_stdio$' -Reason 'CPU asset delivery end-to-end'
+```

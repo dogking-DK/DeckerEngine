@@ -72,10 +72,11 @@ Result<void> AssetService::refresh_manifest()
     auto bytes = read_file_bytes(*path, 16 * 1024 * 1024); if (!bytes) return std::unexpected(bytes.error());
     const std::string_view text{reinterpret_cast<const char*>(bytes->data()),bytes->size()};
     auto parsed = parse_project(text); if (!parsed) return std::unexpected(parsed.error());
-    auto actual = serialize_project(*parsed), expected = serialize_project(project_->description());
-    if (!actual) return std::unexpected(actual.error()); if (!expected) return std::unexpected(expected.error());
-    if (*actual != *expected) return std::unexpected(Error{ErrorCode::conflict,"Project changed; reopen the asset catalog"});
-    String next{text.begin(),text.end()}; bytes_.swap(next); return {};
+    if (parsed->assets != project_->description().assets)
+        return std::unexpected(Error{ErrorCode::conflict,"Asset mappings changed; reopen the asset catalog"});
+    auto project = Project::create(project_->paths().root(),std::move(*parsed)); if (!project) return std::unexpected(project.error());
+    auto next_project = std::make_unique<Project>(std::move(*project));
+    String next{text.begin(),text.end()}; bytes_.swap(next); project_.swap(next_project); return {};
 }
 Result<void> AssetService::rename_source(CatalogGuard guard, std::string_view source, std::string_view target)
 {

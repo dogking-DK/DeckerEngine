@@ -1,7 +1,7 @@
 ---
 module: assets-runtime
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T15:10:27+08:00"
+updated_at: "2026-09-28T15:24:33+08:00"
 status: accepted
 ---
 
@@ -13,7 +13,7 @@ M4.1 已实现 meta v1、身份目录、登记提交、受控改名和恢复，�
 及 [0032](../development/0032-asset-commit-recovery.md)。M4.2 的同步 CPU 编译/产物读回已完成，
 见 [0034](../development/0034-textures-assetc.md)。M4.3.1 内容键、同步命中与 current 发布已实现，见
 [0035](../development/0035-asset-cache-publication.md)。M4.3.2 已完成失效/损坏/删除重建与有界清理，
-见 [0036](../development/0036-asset-cache-invalidation.md)；M4.4 尚未实施。原有
+见 [0036](../development/0036-asset-cache-invalidation.md)；M4.4 的 Jobs、异步状态、命令及 CPU 进程闭环已完成，见 [0040](../development/0040-cpu-assets-delivery.md)。原有
 [AssetReference](../../engine/assets/types/include/dk/assets/AssetReference.hpp) 和
 [Project](../../engine/scene/include/dk/scene/Project.hpp) 的注册、类型与文件存在性校验保持兼容。
 分步计划见 [0020](../development/0020-m4-development-plan.md)。
@@ -23,15 +23,15 @@ GPU 上传、渲染资源和 GPU Ready 留到 M7。资产准备不修改实体�
 
 ## 目录、所有者与依赖
 
-types、data、importers、runtime 的身份/同步编译部分及 asset_services 已实现；Jobs 在对应小节才添加：
+types、data、importers、runtime、asset_services、asset_operations 和 Jobs 已实现：
 
 | 模块 | 计划 target | 职责与依赖 |
 | --- | --- | --- |
 | assets/types（已有） | dk::asset_types | 持久 ID/种类/引用，继续仅依赖 Core |
 | assets/data | dk::asset_data | 不可变 CPU 网格/材质/纹理值；依赖 types、math、memory，数据拥有其分配资源 |
 | assets/importers | dk::asset_importers | 源文件到 CPU 数据；依赖 data、IO，私有 fastgltf/stb_image |
-| assets/runtime | dk::asset_runtime | 元数据/目录/持久化/恢复，PUBLIC types、IO、Memory，PRIVATE JSON、xxHash、profiling；启用 importers 时增加 PUBLIC importers、CPU 编译/产物及缓存/清理，Jobs 待实现 |
-| framework/services、operations | dk::asset_services、dk::asset_operations | services 已提供 Project 适配及 AssetService 提交/改名；命令及 operations 尚未实现 |
+| assets/runtime | dk::asset_runtime | 元数据/目录/持久化/恢复，PUBLIC types、IO、Memory，PRIVATE JSON、xxHash、profiling；启用 importers 时增加 PUBLIC importers、CPU 编译/产物及缓存/清理；启用 Jobs 时增加 PUBLIC jobs 与 AsyncAssets |
+| framework/services、operations | dk::asset_services、dk::asset_operations | services 已提供 Project 适配及 AssetService 提交/改名；AsyncAssetService 自动装配 Memory/Jobs，AssetOperations 注册目录与作业命令 |
 
 资产底层不依赖 Scene、Commands、Vulkan 或 Editor。AssetService 从 ProjectDescription 构造
 独立目录快照；不能令 assets/runtime 反向包含 Project.hpp，或暴露 SceneService 的可变 Project。
@@ -201,7 +201,7 @@ M4.3.1 已复用此格式/验证器实现内容键、缓存命中和 current 索
 增加 `compile_cached_asset(paths, {source, optional unit_scale})`，返回 key、产物相对目录、
 cache_hit、miss_reason、JSON 摘要和已验证的拥有型 CpuArtifact；使用既有导入硬预算。
 `dk-assetc cache --project-root ROOT --source REL [--unit-scale NUMBER]` 复用此入口。
-原 `import --output` 保留独立导出语义。当前没有 Jobs/Ready，调用者绑定 Assets 域与 scratch 并串行化同工程写入。
+原 `import --output` 保留独立导出语义。本节同步接口本身不代表 Ready；M4.4 异步层复用 prepare/publish。调用者绑定 Assets 域与 scratch 并串行化同工程写入。
 
 key 编码 v1 为 XXH3-128 的带类型字段流：每字段 `tag:u8, length:u64le, payload`；
 整数 u64le、unit_scale 为 IEEE754 binary64 位模式 little-endian，字符串为严格 UTF-8，ID 为规范小写 UUID 文本。

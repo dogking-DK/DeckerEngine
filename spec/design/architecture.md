@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-28T14:20:37+08:00"
+updated_at: "2026-09-28T15:24:33+08:00"
 status: accepted
 ---
 
@@ -32,7 +32,7 @@ M4.2 已实现静态 glTF/GLB CPU 网格、材质、PNG/JPEG 纹理、产物 v1 
 见 [0033](../development/0033-cpu-mesh-import.md)、[0034](../development/0034-textures-assetc.md)。
 M4.3 已实现内容键、缓存命中/current 发布、依赖失效重建与显式有界清理，见
 [0035](../development/0035-asset-cache-publication.md)、[0036](../development/0036-asset-cache-invalidation.md)。
-Jobs/异步 Ready 尚未实现。其余模块在开始开发前另写专项设计。
+M4.4 已实现有界 Jobs、异步 CPU Ready、资产/作业命令、可取消 stdio 输入及重启/退出闭环，见 [0037](../development/0037-cpu-job-queue.md)–[0040](../development/0040-cpu-assets-delivery.md)。M4 已验收，下一项 M5.1；其余模块在开始开发前另写专项设计。
 M4 之前新增 M1.7 [Memory System](foundation-memory.md) 与
 [Tracy 性能分析](foundation-profiling.md) 基础设施补充，不包含在原 M1–M3 验收中。
 M1.7.1 的 CPU 包装、Runtime/IO 埋点、条件构建与真实 capture 已验收；M1.7.2 的多实例 heap、
@@ -42,7 +42,7 @@ M1.7.5 的局部/共享 Pool、ObjectPool、受控 trim 与用量曲线已验收
 M1.7.6 的 ThreadContext local pool 装配、拥有型 RoutingToken、worker 缓存退休与多系统关闭已验收，
 见 [0029](../development/0029-memory-context-routing.md)。M1.7.7 的重复工作负载与三配置采集基线已完成，
 见 [0030](../development/0030-memory-baseline.md) 和[基线报告](../benchmarks/2026-09-28-memory.md)；M1.7 全部验收。GPU 事件留在后续阶段。
-既有 Runtime 尚未自动装配内存上下文，真正 Jobs 捕获/执行接入在 M4.4。
+Runtime 已在 M4.4 自动装配 Assets/Jobs heap 与线程上下文，worker 捕获拥有型路由并在安全点退休。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，

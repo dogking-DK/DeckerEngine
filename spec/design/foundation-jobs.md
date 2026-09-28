@@ -1,7 +1,7 @@
 ---
 module: foundation-jobs
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T15:06:06+08:00"
+updated_at: "2026-09-28T15:29:44+08:00"
 status: accepted
 ---
 
@@ -73,7 +73,7 @@ SceneService 和 Runtime::dispatch 继续单线程调用。worker 不持有它�
 命令注册表或 stdout。资产结果携带目录会话/generation，晚到结果由所有者拒绝，见
 [资产运行时](assets-runtime.md)。
 
-Runtime 需要在没有新 stdin 请求时也能收集完成项。M4.4.3 将当前阻塞式读取改为有界输入队列：
+Runtime 在没有新 stdin 请求时也会收集完成项。M4.4.3 已将 Windows stdio 读取改为有界输入队列：
 读取侧只接收行，Runtime 所在线程等待“输入/完成/关闭”事件并串行分派/发布。
 不能在每次来一条命令时才让作业完成，也不能让 worker 绕过安全点写业务状态。
 Windows 读取取消/EOF 唤醒方案在该小节先做最小进程验证，再接入业务，禁止用 detach 隐藏退出问题。
@@ -102,8 +102,8 @@ M4.4.3 已注册下表命令，另有 assets.open/catalog 管理独立目录会�
 | jobs.get / jobs.wait / jobs.cancel | JobId，wait 带有界 timeout → 状态/超时或取消是否接受 | query / query / control |
 
 所有上述操作 undoable=false，不加入 scene.transaction。资产目录 guard 使用目录会话 ID/revision；
-不复用 Scene revision 保护清单变化。详细参数/分页/限额/result schema 在 M4.4.3 先更新本设计，
-实现后才新增 `spec/commands/assets.md`、`jobs.md`，并同步 discovery/runtime 能力说明。
+不复用 Scene revision 保护清单变化。详细参数、分页、限额和 result schema 已同步到
+[资产命令](../commands/assets.md)、[作业命令](../commands/jobs.md) 及 discovery/runtime 能力说明。
 `runtime.capabilities` 已增加 async_jobs 与作业限额；既有 async_tasks=false 保持其同步 TaskId 语义，
 不得改成 true 却继续返回仅有同步终态的 tasks.get。
 
@@ -121,3 +121,5 @@ M4.4.3–4 验证命令 schema/发现和真实 stdio：stdin 保持打开时后�
 
 关联：[M3 Runtime](runtime.md)、[协议](automation-protocol.md)、
 [开发安排](../development/0020-m4-development-plan.md)。
+
+M4.4.4 确认诊断/摘要裁剪会释放多余 capacity，并保持 UTF-8 截断边界；close 将活动作业转为终态时仍执行保留上限。独立 CPU 和完整进程验收见 [0040](../development/0040-cpu-assets-delivery.md)。

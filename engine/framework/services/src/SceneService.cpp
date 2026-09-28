@@ -135,16 +135,16 @@ Result<void> SceneService::save_manifest(EditGuard guard, const std::filesystem:
     if (saved) manifest_ = std::move(*target);
     return saved;
 }
-Result<void> SceneService::synchronize_assets(const Project& source, const std::filesystem::path& manifest)
+Result<void> SceneService::synchronize_assets(const Project& source, const std::filesystem::path& manifest, bool saving_to_manifest)
 {
-    if (!project_ || manifest_.empty()) return {};
+    if (!project_ || (manifest_.empty() && !saving_to_manifest)) return {};
     auto path = paths_.resolve(manifest); if (!path) return std::unexpected(path.error());
     auto a = path->native(), b = manifest_.native();
 #ifdef _WIN32
     std::transform(a.begin(), a.end(), a.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
     std::transform(b.begin(), b.end(), b.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
 #endif
-    if (a != b || project_->description().assets == source.description().assets) return {};
+    if ((!saving_to_manifest && a != b) || project_->description().assets == source.description().assets) return {};
     auto description = project_->description(); description.assets = source.description().assets;
     auto replacement = Project::create(paths_.root(), std::move(description));
     if (!replacement) return std::unexpected(replacement.error());

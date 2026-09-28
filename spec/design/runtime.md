@@ -1,7 +1,7 @@
 ---
 module: runtime
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-09-28T15:06:06+08:00"
+updated_at: "2026-09-28T15:24:33+08:00"
 status: accepted
 ---
 
@@ -19,6 +19,9 @@ register/rename 成功后重置异步资产会话，取消旧代并释放 Ready�
 SceneService 记录其打开/保存的 manifest，并在同一清单的资产命令成功后同步只读 Project 资产映射，
 保留 Scene、document_id、revision、dirty、历史。project.save 执行前同步，避免覆盖刚登记映射；
 不同清单互不影响。目录会话不自动切换到 scene.new/load 的工程，调用者显式 assets.open。
+验收补充：project.save 的目标匹配活动资产清单时，即使 Scene 刚 new 也先合入当前目录映射；
+保存成功可更新工程 name/scene 字段和清单字节快照，资产映射未变则目录 guard 保持。
+这样不会先覆盖映射再因快照不符报错；使用新目录须显式 assets.open。
 
 所有 jobs/assets 参数通过 Operations schema 注册。jobs.wait 的 timeout_ms 为 0–1000（默认 0），
 等待时 pump completion，不重入分派。运行时在 handler 前后检查队列 fatal，不能被通用 registry 包装为业务失败。
