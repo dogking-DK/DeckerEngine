@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-09-28T10:17:43+08:00"
+updated_at: "2026-09-28T10:52:48+08:00"
 status: accepted
 ---
 
@@ -31,7 +31,7 @@ M3.1–M3.5 已完成：统一命令、场景服务、内存事务/撤销重做�
 M1.7.1–7 已完成，见 [0023](development/0023-tracy-cpu-profiling.md)、[0024](development/0024-mimalloc-heap.md)、
 [0025](development/0025-memory-ownership-routing.md)、[0026](development/0026-scratch-arena.md)、
 [0027](development/0027-memory-pools.md)、[0029](development/0029-memory-context-routing.md)、[0030](development/0030-memory-baseline.md)。
-原 M1–M3 验收不包含这项新增能力。该补充已完成，下一项为 M4.1.1。
+原 M1–M3 验收不包含这项新增能力。该补充已完成；M4.1.1 元数据与身份目录也已完成，下一项为 M4.1.2。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作；提早建立多线程内存契约与性能测量，复杂并行优化仍由测量驱动。
@@ -50,7 +50,7 @@ M1.7.1–7 已完成，见 [0023](development/0023-tracy-cpu-profiling.md)、[00
 | M2 场景文档 | 实体、变换、层级、资产引用、保存与重载 | M1 | 已完成（M2.1–M2.4） |
 | M3 命令与 CPU Runtime | CLI/stdio 创建、修改、查询、保存场景 | M2 | 已完成（M3.1–M3.5，交付 A） |
 | M1.7 Foundation 补充 | Tracy、mimalloc heap、PMR/智能指针、arena/pool、多线程生命周期与性能基线 | 原 M1、M3（现有链路埋点） | 已完成：M1.7.1–7 均验收 |
-| M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3、M1.7 | 设计稿已建立，实施待开始 |
+| M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3、M1.7 | 进行中：M4.1.1 已完成，其余小节待开始 |
 | M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、最小呈现 | M1、M1.7 | 待开始 |
 | M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 待开始 |
 | M7 场景渲染 | 资产上传、场景提取、Pass、pipeline、可等待截图 | M3、M4、M6 | 待开始 |
@@ -239,7 +239,7 @@ M1.7.6 先独立验收 token/恢复规则，不将尚未实现的调度器当作
 
 | 子阶段 | 范围 | 前置 | 验收与证据 | 状态 |
 | --- | --- | --- | --- | --- |
-| M4.1 | 资产身份与导入契约（M4.1.1–2） | M3、M1.7 | meta/登记候选；多文件提交与改名保留 ID、失败可诊断恢复 | 待开始 |
+| M4.1 | 资产身份与导入契约（M4.1.1–2） | M3、M1.7 | meta/登记候选与 Project 适配通过，见 0031；多文件提交与改名待实现 | 进行中：M4.1.1 完成，M4.1.2 待开始 |
 | M4.2 | 首个网格导入与 assetc（M4.2.1–2） | M4.1 | CPU 网格/材质；纹理与离线进程，非法数据有定位错误 | 待开始 |
 | M4.3 | 缓存和依赖失效（M4.3.1–2） | M4.2 | 内容键/发布；失效/删除/损坏重建且 ID 不变 | 待开始 |
 | M4.4 | 异步加载与任务生命周期（M4.4.1–4） | M4.3 | 队列；资产状态；服务/命令；CPU 进程闭环和退出 | 待开始 |
@@ -247,7 +247,7 @@ M1.7.6 先独立验收 token/恢复规则，不将尚未实现的调度器当作
 **设计稿已建立：** [资产身份/缓存/加载](design/assets-runtime.md)、
 [导入器/assetc](design/assets-importers.md)、[任务队列](design/foundation-jobs.md)。
 详细的 10 个实施小节、独立验收和开工决策见
-[0020 M4 开发计划](development/0020-m4-development-plan.md)。完成 M1.7 后从 **M4.1.1** 开始；
+[0020 M4 开发计划](development/0020-m4-development-plan.md)。**M4.1.1 已完成**，见 [0031](development/0031-asset-metadata-catalog.md)；下一项 **M4.1.2**。
 后续按 M4.x.y 顺序，每节记录实际证据后再关闭父阶段。设计稿不代表代码已实现。
 导入/加载使用 Memory 拥有型结果和局部 scratch，接入 Tracy 工作阶段与内存曲线；M4.4 仍先一个 worker。
 三方库已确定为 fastgltf、stb_image（stb port）、xxHash（XXH3-128），当前基线版本与封装约定见
@@ -485,7 +485,8 @@ bootstrap 各 1/1。真实持续 stdio 在 stdin 打开时即时响应、保存/
 **M1.7.5 已完成**：LocalPool/SharedPool、ObjectPool、拥有型 pool allocator、受控 trim 与用量曲线。
 **M1.7.6 已完成**：ThreadContext local pool 装配、RoutingToken、worker context 缓存退休、双系统关闭与延迟释放。
 **M1.7.7 已完成**：重复矩阵与 owning 结果交接管线、三配置真实采集、性能基线和完整聚合表。
-M1.7 全部完成，下一项为 **M4.1.1 元数据与身份目录**；每次默认仅推进一个独立小节。
+M1.7 全部完成。**M4.1.1 已完成**：meta v1、只读身份目录、登记候选及 Project v1 适配。
+下一项为 **M4.1.2 登记提交与受控改名**；每次默认仅推进一个独立小节。
 
 根目录 VS2026 生成脚本作为工程维护完成，见 [0018](development/0018-vs2026-generation-script.md)，不改变里程碑顺序。
 三个开发辅助 skill 与定向验证脚本已作为工程维护完成，见
@@ -502,7 +503,8 @@ M4 开发安排与三份设计稿见 [0020](development/0020-m4-development-plan
 枚举反射依赖及字符串迁移单独记录于 [0028](development/0028-magic-enum.md)，不推进 M1.7.6。
 [0029](development/0029-memory-context-routing.md) 为 M1.7.6 的实现验收记录。
 [0030](development/0030-memory-baseline.md) 为 M1.7.7 的实现验收记录。
-当前下一可用开发编号为 **0031**；实际开工时重新扫描
+[0031](development/0031-asset-metadata-catalog.md) 为 M4.1.1 的实现验收记录。
+当前下一可用开发编号为 **0032**；实际开工时重新扫描
 [开发目录](development/README.md)，取最大编号加一。
 重要设计准备或实际开发开始时创建编号记录，不预建未来小节的空日志；
 子阶段状态和验收证据在本文件及对应实施记录持续维护。

@@ -11,6 +11,7 @@
 | Eigen 基础数学/Transform | dk_math_tests | `^dk\.math\.` |
 | 路径、字节 IO、原子保存 | dk_io_tests | `^dk\.io\.` |
 | Scene、Project、JSON 持久化 | dk_scene_tests | `^dk\.scene\.` |
+| Asset meta/身份目录、Project 登记候选 | dk_asset_tests | `^dk\.assets\.` |
 | 命令注册、schema | dk_commands_tests | `^dk\.commands\.` |
 | 服务、事务、历史、Operations | dk_service_tests | `^dk\.services\.` |
 | JSON-RPC、JSON Lines、任务 | dk_protocol_tests | `^dk\.protocol\.` |

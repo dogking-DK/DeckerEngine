@@ -1,7 +1,7 @@
 ---
 module: project-format
 created_at: "2026-09-22T12:28:05+08:00"
-updated_at: "2026-09-22T18:26:04+08:00"
+updated_at: "2026-09-28T10:52:48+08:00"
 status: accepted
 ---
 
@@ -46,14 +46,17 @@ Scene 文件持久化由 [Scene M2.4](scene.md) 规定；此接口不修改资�
 文件写入在 M2.4 通过 Foundation atomic writer 提供；M2.3 只返回编码文本和读取。
 不提供 schema 迁移、资产解码或持续文件监视。
 
-## M4 衔接（设计阶段）
+## M4 衔接
 
 M4 保持 v1 清单和已有无 meta 工程可读取；assets 的 path 仍指向源文件，不能改作缓存路径。
-计划由 AssetService 显式登记 meta/子资产后，构造候选 ProjectDescription 并整体替换只读 Project，
+M4.1.1 的 `dk::asset_services` 提供 `make_asset_catalog`、`prepare_asset_registration`，
+将 Project 转为独立目录并构造完整候选 ProjectDescription，经 Project::create 再次验证后返回新只读 Project，
 不对外暴露可变索引。相同源路径的子资产用不同 AssetId 登记，种类与 meta 映射须一致。
 目录更新使用独立会话/revision；已有 Scene 内容、revision、dirty 与历史不因缓存加载而改变。
 清单与 sidecar 的多文件写入、受控改名和失败恢复见 [资产运行时设计稿](assets-runtime.md)。
-上述扩展尚未实现，不能由已有 resolve_asset 的成功推断导入成功或 CPU Ready。
+本阶段准备不会修改旧 Project/目录、Scene 或任何磁盘文件；持久提交与发布在 M4.1.2 实现。
+旧无 meta 工程仍可正常打开和做引用/文件校验；显式首次登记可采用唯一同源 mesh ID，多条旧记录拒绝歧义。
+验收见 [0031](../development/0031-asset-metadata-catalog.md)。resolve_asset 成功不表示导入成功或 CPU Ready。
 
 参考：[nlohmann parse](https://json.nlohmann.me/api/basic_json/parse/)、
 [parser callback](https://json.nlohmann.me/api/basic_json/parser_callback_t/)、

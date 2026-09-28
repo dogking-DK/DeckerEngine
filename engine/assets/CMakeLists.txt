@@ -1,3 +1,6 @@
 set(CMAKE_FOLDER "${CMAKE_FOLDER}/Assets")
 
 add_subdirectory(types)
+if(DK_BUILD_ASSET_RUNTIME)
+    add_subdirectory(runtime)
+endif()

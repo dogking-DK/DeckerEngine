@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-28T10:17:43+08:00"
+updated_at: "2026-09-28T10:52:48+08:00"
 status: accepted
 ---
 
@@ -32,6 +32,8 @@ status: accepted
 - builtin-baseline：`33d78c1ed898a06938f31312167c7abefd229455`。
 - 来源：[官方固定索引](https://github.com/microsoft/vcpkg/blob/33d78c1ed898a06938f31312167c7abefd229455/versions/baseline.json)。
 - Windows host/target triplet：`x64-windows`。
+- M4.1.1 的 assets feature 复用 nlohmann-json 3.12.0#2；资产底层同时复用既有 types/IO/Memory，
+  无新包或版本变化，固定 baseline 不变；见 [0031](development/0031-asset-metadata-catalog.md)。
 - 最近接入：[0028](development/0028-magic-enum.md)，magic-enum 0.9.8（MIT，header-only）。
   官方 master [f907dc21](https://github.com/microsoft/vcpkg/blob/f907dc21e0e8699955b002d0fe7673de5db55fab/ports/magic-enum/vcpkg.json)
   与固定基线条目版本一致，保留基线，不变更其余依赖；详见该记录的定向验证。

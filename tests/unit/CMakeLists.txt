@@ -11,6 +11,18 @@ endif()
 dk_target_defaults(dk_core_tests)
 
 include(Catch)
+if(DK_BUILD_ASSET_RUNTIME)
+    find_package(nlohmann_json CONFIG REQUIRED)
+    add_executable(dk_asset_tests AssetMetadataTests.cpp AssetCatalogTests.cpp)
+    target_link_libraries(dk_asset_tests PRIVATE dk::asset_runtime Catch2::Catch2WithMain nlohmann_json::nlohmann_json)
+    if(TARGET dk_asset_services)
+        target_sources(dk_asset_tests PRIVATE AssetRegistrationTests.cpp)
+        target_link_libraries(dk_asset_tests PRIVATE dk::asset_services)
+    endif()
+    dk_target_defaults(dk_asset_tests)
+    catch_discover_tests(dk_asset_tests TEST_PREFIX "dk.assets."
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 120)
+endif()
 if(DK_BUILD_MEMORY)
     add_executable(dk_memory_tests
         "${PROJECT_SOURCE_DIR}/engine/foundation/memory/tests/MemoryTests.cpp"

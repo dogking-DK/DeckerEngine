@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-28T10:17:43+08:00"
+updated_at: "2026-09-28T10:52:48+08:00"
 status: accepted
 ---
 
@@ -26,7 +26,8 @@ M3.3 的内存事务/撤销重做和 M3.4 [CPU Runtime](runtime.md)、[JSON-RPC 
 M3.5 持续 stdio、同步任务查询和关闭已完成，M3 交付 A 验收见 [0017](../development/0017-stdio-delivery-a.md)。
 M4 的 [资产运行时](assets-runtime.md)、[导入器](assets-importers.md)、
 [CPU 作业](foundation-jobs.md) 设计稿和 [实施小节](../development/0020-m4-development-plan.md)
-已建立，尚未实现。其余模块在开始开发前另写专项设计。
+已建立；M4.1.1 已实现 meta v1、身份目录、登记候选和 Project 适配，见 [0031](../development/0031-asset-metadata-catalog.md)。
+持久登记、导入、缓存和 Jobs 尚未实现。其余模块在开始开发前另写专项设计。
 M4 之前新增 M1.7 [Memory System](foundation-memory.md) 与
 [Tracy 性能分析](foundation-profiling.md) 基础设施补充，不包含在原 M1–M3 验收中。
 M1.7.1 的 CPU 包装、Runtime/IO 埋点、条件构建与真实 capture 已验收；M1.7.2 的多实例 heap、

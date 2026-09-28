@@ -10,6 +10,10 @@
   ],
   "default-features": [],
   "features": {
+    "assets": {
+      "description": "Asset metadata and catalog serialization",
+      "dependencies": ["nlohmann-json"]
+    },
     "memory": {
       "description": "Multi-instance CPU heap resources",
       "dependencies": [{ "name": "mimalloc", "default-features": false }]

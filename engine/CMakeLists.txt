@@ -1,8 +1,10 @@
 set(CMAKE_FOLDER "Engine")
 
 add_subdirectory(foundation)
-if(DK_BUILD_SCENE)
+if(DK_BUILD_SCENE OR DK_BUILD_ASSET_RUNTIME)
     add_subdirectory(assets)
+endif()
+if(DK_BUILD_SCENE)
     add_subdirectory(scene)
 endif()
 # Other module directories are reserved. Add their CMakeLists after module design.
