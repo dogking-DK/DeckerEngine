@@ -30,12 +30,13 @@ struct Fake {
     Fake() { REQUIRE(active == nullptr); active = this; }
     ~Fake() { active = nullptr; }
     VkResult instance_result = VK_SUCCESS, device_result = VK_SUCCESS, messenger_result = VK_SUCCESS;
+    VkResult allocator_result = VK_SUCCESS;
     VkResult enumerate_result = VK_SUCCESS;
     bool empty = false, null_queue = false, incomplete_once = false, incomplete_always = false;
     bool layer = true, debug = true;
     std::uint32_t loader_version = device_api_version;
     memory::ResourceHandle close_resource;
-    int fills = 0, creates = 0;
+    int fills = 0, creates = 0, alternate_creates = 0;
     std::string destroyed;
     VkDebugUtilsMessengerCreateInfoEXT callback_info{};
     bool feature_contract = false;
@@ -98,7 +99,23 @@ struct Fake {
     }
     static VKAPI_ATTR void VKAPI_CALL queue(VkDevice, std::uint32_t, std::uint32_t, VkQueue* value)
     { *value = active->null_queue ? VK_NULL_HANDLE : handle<VkQueue>(5); }
-    static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL device_proc(VkDevice, const char*) { return nullptr; }
+    static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL device_proc(VkDevice, const char* name) { return resolve(VK_NULL_HANDLE, name); }
+    static VkResult create_allocator(const VmaAllocatorCreateInfo* info, VmaAllocator* output)
+    {
+        REQUIRE(info->instance != VK_NULL_HANDLE);
+        REQUIRE(info->device != VK_NULL_HANDLE);
+        REQUIRE(info->vulkanApiVersion == VK_API_VERSION_1_2);
+        if (active->allocator_result == VK_SUCCESS) *output = handle<VmaAllocator>(6);
+        return active->allocator_result;
+    }
+    static void destroy_allocator(VmaAllocator) { active->destroyed += 'A'; }
+    static VKAPI_ATTR VkResult VKAPI_CALL alternate_instance(const VkInstanceCreateInfo*, const VkAllocationCallbacks*, VkInstance*)
+    { ++active->alternate_creates; return VK_ERROR_INITIALIZATION_FAILED; }
+    static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL alternate_resolve(VkInstance instance_handle, const char* name)
+    {
+        if (std::strcmp(name, "vkCreateInstance") == 0) return reinterpret_cast<PFN_vkVoidFunction>(alternate_instance);
+        return resolve(instance_handle, name);
+    }
     static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL resolve(VkInstance, const char* name)
     {
 #define DK_FAKE_PROC(vk, function) if (std::strcmp(name, #vk) == 0) return reinterpret_cast<PFN_vkVoidFunction>(function)
@@ -120,8 +137,11 @@ struct Fake {
 #undef DK_FAKE_PROC
         return nullptr;
     }
-    Result<Device> create(memory::ResourceHandle resource, DeviceOptions options = {})
-    { return graphics::detail::DeviceAccess::create(resource, options, resolve); }
+    Result<Device> create(memory::ResourceHandle resource, DeviceOptions options = {}, PFN_vkGetInstanceProcAddr resolver = resolve)
+    {
+        const graphics::detail::DeviceAccess::AllocatorApi api{create_allocator, destroy_allocator};
+        return graphics::detail::DeviceAccess::create(resource, options, resolver, &api);
+    }
 };
 }
 
@@ -201,6 +221,7 @@ TEST_CASE("device cleans instance and messenger on absent devices and creation f
     SECTION("enumeration fails") { fake.enumerate_result = VK_ERROR_INITIALIZATION_FAILED; message = "vkEnumeratePhysicalDevices"; }
     SECTION("device fails") { fake.device_result = VK_ERROR_OUT_OF_DEVICE_MEMORY; message = "vkCreateDevice failed: VK_ERROR_OUT_OF_DEVICE_MEMORY (-2)"; }
     SECTION("queue missing") { fake.null_queue = true; expected = "DMI"; message = "vkGetDeviceQueue"; }
+    SECTION("allocator fails") { fake.allocator_result = VK_ERROR_OUT_OF_HOST_MEMORY; expected = "DMI"; message = "vmaCreateAllocator failed: VK_ERROR_OUT_OF_HOST_MEMORY (-1)"; }
     auto result = fake.create(memory.resource);
     REQUIRE_FALSE(result);
     REQUIRE(result.error().message.find(message) != std::string::npos);
@@ -215,7 +236,7 @@ TEST_CASE("device bounds changing enumeration and retries incomplete lists")
     SECTION("recovers") {
         fake.incomplete_once = true;
         { auto result = fake.create(memory.resource); REQUIRE(result); REQUIRE(fake.fills == 2); }
-        REQUIRE(fake.destroyed == "DMI");
+        REQUIRE(fake.destroyed == "ADMI");
     }
     SECTION("bounded failure") {
         fake.incomplete_always = true;
@@ -257,7 +278,7 @@ TEST_CASE("device reports optional validation absence")
     };
     { auto result = fake.create(memory.resource, options); REQUIRE(result); REQUIRE_FALSE(result->validation_enabled()); }
     REQUIRE(diagnostics == 1);
-    REQUIRE(fake.destroyed == "DI");
+    REQUIRE(fake.destroyed == "ADI");
 }
 
 TEST_CASE("device move retains stable callbacks and destroys in reverse order")
@@ -280,7 +301,7 @@ TEST_CASE("device move retains stable callbacks and destroys in reverse order")
         REQUIRE(moved.validation_errors() == 1);
         REQUIRE(diagnostic_id == 42);
     }
-    REQUIRE(fake.destroyed == "DMI");
+    REQUIRE(fake.destroyed == "ADMI");
     REQUIRE(memory.resource.snapshot().live_allocations == 0);
 }
 
@@ -291,5 +312,22 @@ TEST_CASE("allocation exception after instance creation cleans native resources"
     fake.close_resource = memory.resource;
     REQUIRE_THROWS_AS(fake.create(memory.resource), std::bad_alloc);
     REQUIRE(fake.destroyed == "MI");
+    REQUIRE(memory.resource.snapshot().live_allocations == 0);
+}
+
+TEST_CASE("bootstrap uses current loader after an earlier instance was destroyed")
+{
+    Memory memory;
+    Fake fake;
+    DeviceOptions options;
+    options.validation = ValidationMode::disabled;
+    { auto first = fake.create(memory.resource, options); REQUIRE(first); }
+    options.validation = ValidationMode::required;
+    const auto second = fake.create(memory.resource, options, Fake::alternate_resolve);
+    REQUIRE_FALSE(second);
+    REQUIRE(second.error().message.find("VK_ERROR_INITIALIZATION_FAILED") != std::string::npos);
+    REQUIRE(fake.creates == 1);
+    REQUIRE(fake.alternate_creates == 1);
+    REQUIRE(fake.destroyed == "ADI");
     REQUIRE(memory.resource.snapshot().live_allocations == 0);
 }

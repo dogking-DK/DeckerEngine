@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-09-28T16:55:37+08:00"
+updated_at: "2026-09-28T17:14:37+08:00"
 ---
 
 # 构建与依赖配置
@@ -79,8 +79,8 @@ JSON 由 Scene 私有使用，原规划的 GLM 已从清单移除。
 | assets | nlohmann-json、xxhash（关闭默认 features） |
 | asset-importers | fastgltf、stb、nlohmann-json |
 | commands | nlohmann-json |
-| vulkan-device | vulkan（DK_BUILD_GRAPHICS_DEVICE 自动选择，要求 Memory） |
-| graphics | vulkan、vulkan-memory-allocator、shader-slang |
+| vulkan-device | vulkan、volk、vk-bootstrap、vulkan-memory-allocator（DK_BUILD_GRAPHICS_DEVICE 自动选择，要求 Memory） |
+| graphics | vulkan、volk、vk-bootstrap、vulkan-memory-allocator、shader-slang |
 | editor | sdl3[vulkan]、imgui[docking-experimental,sdl3-binding,vulkan-binding] |
 | scripting | lua、sol2 |
 | tests | catch2（已接入 Core、数学和 IO 单元测试） |

@@ -35,7 +35,7 @@
 | Runtime 的 batch/stdio 进程行为 | dk_run | `^dk\.runtime\.` |
 | CLI 版本 | dk_run | `^dk\.bootstrap\.version$` |
 | Vulkan 设备策略、缺失环境和失败清理（无需 GPU） | dk_device_tests | `^dk\.device\.unit\.` |
-| Vulkan 真设备、验证消息与重复销毁 | dk_device_probe | `^dk\.device\.gpu_`（gpu label；77 为跳过） |
+| Vulkan 真设备、验证消息、VMA 分配与双设备销毁 | dk_device_probe | `^dk\.device\.gpu_`（gpu label；77 为跳过） |
 | Foundation 进程示例 | dk_foundation_demo | `^dk\.foundation\.` |
 | Scene 跨进程往返 | dk_scene_demo | `^dk\.scene_demo\.` |
 

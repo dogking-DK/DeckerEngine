@@ -11,8 +11,8 @@
   "default-features": [],
   "features": {
     "vulkan-device": {
-      "description": "Headless Vulkan device and diagnostics",
-      "dependencies": ["vulkan"]
+      "description": "Headless Vulkan device, dispatch, bootstrap and allocator",
+      "dependencies": ["vulkan", "volk", "vk-bootstrap", "vulkan-memory-allocator"]
     },
     "asset-importers": {
       "description": "CPU glTF import pipeline",
@@ -61,6 +61,8 @@
       "description": "Vulkan device, allocator and Slang compiler/runtime",
       "dependencies": [
         "vulkan",
+        "volk",
+        "vk-bootstrap",
         "vulkan-memory-allocator",
         "shader-slang"
       ]

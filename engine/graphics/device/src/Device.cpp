@@ -1,9 +1,12 @@
 #include "DeviceInternal.hpp"
+#include "Bootstrap.hpp"
 #include <dk/profiling/Profiler.hpp>
+#include <volk.h>
 
 #include <atomic>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -74,21 +77,75 @@ struct Loader {
         return resolver;
     }
 };
+
+// volk's loading entry points use globals internally. Keep them inside a short
+// serialized scope; each Device owns complete tables used outside this scope.
+std::mutex volk_mutex;
+void load_instance_table(PFN_vkGetInstanceProcAddr resolver, VkInstance instance, VolkInstanceTable& table)
+{
+    const std::lock_guard lock(volk_mutex);
+    volkInitializeCustom(resolver);
+    volkLoadInstanceTable(&table, instance);
+    volkFinalize();
+}
+void load_device_table(PFN_vkGetInstanceProcAddr resolver, PFN_vkGetDeviceProcAddr device_resolver,
+                       VkDevice device, VolkDeviceTable& table)
+{
+    const std::lock_guard lock(volk_mutex);
+    volkInitializeCustom(resolver);
+    ::vkGetDeviceProcAddr = device_resolver;
+    volkLoadDeviceTable(&table, device);
+    volkFinalize();
+}
+VmaVulkanFunctions allocator_functions(const VolkInstanceTable& instance, const VolkDeviceTable& device)
+{
+    VmaVulkanFunctions functions{};
+#define DK_VMA_INSTANCE(name) functions.name = instance.name
+#define DK_VMA_DEVICE(name) functions.name = device.name
+    DK_VMA_INSTANCE(vkGetPhysicalDeviceProperties);
+    DK_VMA_INSTANCE(vkGetPhysicalDeviceMemoryProperties);
+    DK_VMA_DEVICE(vkAllocateMemory);
+    DK_VMA_DEVICE(vkFreeMemory);
+    DK_VMA_DEVICE(vkMapMemory);
+    DK_VMA_DEVICE(vkUnmapMemory);
+    DK_VMA_DEVICE(vkFlushMappedMemoryRanges);
+    DK_VMA_DEVICE(vkInvalidateMappedMemoryRanges);
+    DK_VMA_DEVICE(vkBindBufferMemory);
+    DK_VMA_DEVICE(vkBindImageMemory);
+    DK_VMA_DEVICE(vkGetBufferMemoryRequirements);
+    DK_VMA_DEVICE(vkGetImageMemoryRequirements);
+    DK_VMA_DEVICE(vkCreateBuffer);
+    DK_VMA_DEVICE(vkDestroyBuffer);
+    DK_VMA_DEVICE(vkCreateImage);
+    DK_VMA_DEVICE(vkDestroyImage);
+    DK_VMA_DEVICE(vkCmdCopyBuffer);
+#undef DK_VMA_INSTANCE
+#undef DK_VMA_DEVICE
+    functions.vkGetBufferMemoryRequirements2KHR = device.vkGetBufferMemoryRequirements2;
+    functions.vkGetImageMemoryRequirements2KHR = device.vkGetImageMemoryRequirements2;
+    functions.vkBindBufferMemory2KHR = device.vkBindBufferMemory2;
+    functions.vkBindImageMemory2KHR = device.vkBindImageMemory2;
+    functions.vkGetPhysicalDeviceMemoryProperties2KHR = instance.vkGetPhysicalDeviceMemoryProperties2;
+    functions.vkGetPhysicalDeviceProperties2KHR = instance.vkGetPhysicalDeviceProperties2;
+    return functions;
+}
 } // namespace
 
 struct Device::Impl {
     explicit Impl(memory::ResourceHandle resource) : info(resource) {}
     Loader loader;
+    detail::InstanceOwner instance_owner;
+    VolkInstanceTable instance_table{};
+    VolkDeviceTable device_table{};
+    VmaAllocator allocator = VK_NULL_HANDLE;
+    detail::DeviceAccess::AllocatorApi allocator_api;
     PFN_vkGetInstanceProcAddr get_instance_proc = nullptr;
     PFN_vkGetDeviceProcAddr get_device_proc = nullptr;
-    PFN_vkDestroyInstance destroy_instance = nullptr;
     PFN_vkDestroyDevice destroy_device = nullptr;
-    PFN_vkDestroyDebugUtilsMessengerEXT destroy_messenger = nullptr;
     VkInstance instance = VK_NULL_HANDLE;
     VkPhysicalDevice physical = VK_NULL_HANDLE;
     VkDevice device = VK_NULL_HANDLE;
     VkQueue queue = VK_NULL_HANDLE;
-    VkDebugUtilsMessengerEXT messenger = VK_NULL_HANDLE;
     std::uint32_t family = 0;
     AdapterInfo info;
     bool validation = false;
@@ -98,9 +155,10 @@ struct Device::Impl {
 
     ~Impl()
     {
+        if (allocator) allocator_api.destroy(allocator);
         if (device && destroy_device) destroy_device(device, nullptr);
-        if (messenger && destroy_messenger) destroy_messenger(instance, messenger, nullptr);
-        if (instance && destroy_instance) destroy_instance(instance, nullptr);
+        // Explicit reset keeps callback sink/counters alive through teardown.
+        instance_owner.reset();
     }
     void report(const Diagnostic& diagnostic) noexcept
     {
@@ -127,7 +185,7 @@ Result<Device> Device::create(memory::ResourceHandle resource, const DeviceOptio
 { return detail::DeviceAccess::create(std::move(resource), options, nullptr); }
 
 Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, const DeviceOptions& options,
-                                           PFN_vkGetInstanceProcAddr resolver)
+                                           PFN_vkGetInstanceProcAddr resolver, const AllocatorApi* allocator_api)
 {
     DK_PROFILE_ZONE("graphics.device.create");
     if (!resource || resource.state() != memory::ResourceState::open)
@@ -137,6 +195,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     if (auto policy = select_validation(options.validation, true, true); !policy)
         return std::unexpected(policy.error());
     auto impl = memory::make_unique_in<Device::Impl>(resource, resource);
+    if (allocator_api) impl->allocator_api = *allocator_api;
     impl->sink = options.diagnostic_sink;
     impl->sink_data = options.diagnostic_user_data;
     if (!resolver) {
@@ -190,43 +249,21 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     debug_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     debug_info.pfnUserCallback = Device::Impl::callback;
     debug_info.pUserData = impl.get();
-    VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};
-    app.pApplicationName = "DeckerEngine";
-    app.pEngineName = "DeckerEngine";
-    app.apiVersion = device_api_version;
-    VkInstanceCreateInfo instance_info{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
-    instance_info.pApplicationInfo = &app;
-    constexpr const char* debug_extension = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
-    if (impl->validation) {
-        instance_info.pNext = &debug_info;
-        instance_info.enabledLayerCount = 1;
-        instance_info.ppEnabledLayerNames = &layer_name;
-        instance_info.enabledExtensionCount = 1;
-        instance_info.ppEnabledExtensionNames = &debug_extension;
-    }
-    auto result = create_instance(&instance_info, nullptr, &impl->instance);
-    if (result != VK_SUCCESS) { impl->instance = VK_NULL_HANDLE; return std::unexpected(vk_error("vkCreateInstance", result)); }
+    const auto bootstrapped = detail::bootstrap_instance(resolver, impl->validation, debug_info, impl->instance_owner);
+    if (!bootstrapped) return std::unexpected(bootstrapped.error());
+    impl->instance = impl->instance_owner.instance;
+    load_instance_table(resolver, impl->instance, impl->instance_table);
     const auto instance_proc = [&](const char* name) { return resolver(impl->instance, name); };
-    impl->destroy_instance = reinterpret_cast<PFN_vkDestroyInstance>(instance_proc("vkDestroyInstance"));
     impl->destroy_device = reinterpret_cast<PFN_vkDestroyDevice>(instance_proc("vkDestroyDevice"));
-    impl->get_device_proc = reinterpret_cast<PFN_vkGetDeviceProcAddr>(instance_proc("vkGetDeviceProcAddr"));
-    const auto physical_fn = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(instance_proc("vkEnumeratePhysicalDevices"));
-    const auto properties_fn = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties2>(instance_proc("vkGetPhysicalDeviceProperties2"));
-    const auto features_fn = reinterpret_cast<PFN_vkGetPhysicalDeviceFeatures2>(instance_proc("vkGetPhysicalDeviceFeatures2"));
-    const auto queues_fn = reinterpret_cast<PFN_vkGetPhysicalDeviceQueueFamilyProperties>(instance_proc("vkGetPhysicalDeviceQueueFamilyProperties"));
-    const auto create_device = reinterpret_cast<PFN_vkCreateDevice>(instance_proc("vkCreateDevice"));
-    const auto get_queue = reinterpret_cast<PFN_vkGetDeviceQueue>(instance_proc("vkGetDeviceQueue"));
-    if (!impl->destroy_instance || !impl->destroy_device || !impl->get_device_proc || !physical_fn ||
-        !properties_fn || !features_fn || !queues_fn || !create_device || !get_queue)
+    impl->get_device_proc = impl->instance_table.vkGetDeviceProcAddr;
+    const auto physical_fn = impl->instance_table.vkEnumeratePhysicalDevices;
+    const auto properties_fn = impl->instance_table.vkGetPhysicalDeviceProperties2;
+    const auto features_fn = impl->instance_table.vkGetPhysicalDeviceFeatures2;
+    const auto queues_fn = impl->instance_table.vkGetPhysicalDeviceQueueFamilyProperties;
+    const auto create_device = impl->instance_table.vkCreateDevice;
+    if (!impl->instance_owner.destroy_instance || !impl->destroy_device || !impl->get_device_proc || !physical_fn ||
+        !properties_fn || !features_fn || !queues_fn || !create_device)
         return std::unexpected(Error{ErrorCode::internal_error, "Vulkan instance is missing required API 1.3 entry points"});
-    if (impl->validation) {
-        const auto create_debug = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(instance_proc("vkCreateDebugUtilsMessengerEXT"));
-        impl->destroy_messenger = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(instance_proc("vkDestroyDebugUtilsMessengerEXT"));
-        if (!create_debug || !impl->destroy_messenger)
-            return std::unexpected(Error{ErrorCode::internal_error, "Vulkan debug utils entry points unavailable"});
-        result = create_debug(impl->instance, &debug_info, nullptr, &impl->messenger);
-        if (result != VK_SUCCESS) { impl->messenger = VK_NULL_HANDLE; return std::unexpected(vk_error("vkCreateDebugUtilsMessengerEXT", result)); }
-    }
     auto physicals = enumerate<VkPhysicalDevice>(resource, "vkEnumeratePhysicalDevices",
         [&](std::uint32_t* count, VkPhysicalDevice* data) { return physical_fn(impl->instance, count, data); });
     if (!physicals) return std::unexpected(physicals.error());
@@ -277,10 +314,25 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     device_info.pNext = &features12;
     device_info.queueCreateInfoCount = 1;
     device_info.pQueueCreateInfos = &queue_info;
-    result = create_device(impl->physical, &device_info, nullptr, &impl->device);
+    auto result = create_device(impl->physical, &device_info, nullptr, &impl->device);
     if (result != VK_SUCCESS) { impl->device = VK_NULL_HANDLE; return std::unexpected(vk_error("vkCreateDevice", result)); }
-    get_queue(impl->device, impl->family, 0, &impl->queue);
+    load_device_table(resolver, impl->get_device_proc, impl->device, impl->device_table);
+    if (!impl->device_table.vkDestroyDevice || !impl->device_table.vkGetDeviceQueue)
+        return std::unexpected(Error{ErrorCode::internal_error, "Vulkan device is missing required entry points"});
+    impl->destroy_device = impl->device_table.vkDestroyDevice;
+    impl->device_table.vkGetDeviceQueue(impl->device, impl->family, 0, &impl->queue);
     if (!impl->queue) return std::unexpected(Error{ErrorCode::internal_error, "vkGetDeviceQueue returned a null queue"});
+    const auto functions = allocator_functions(impl->instance_table, impl->device_table);
+    VmaAllocatorCreateInfo allocator_info{};
+    allocator_info.instance = impl->instance;
+    allocator_info.physicalDevice = impl->physical;
+    allocator_info.device = impl->device;
+    // M5.1 does not enable maintenance4. VMA's 1.2 path only uses features
+    // already enabled, even though the underlying device API is 1.3.
+    allocator_info.vulkanApiVersion = VK_API_VERSION_1_2;
+    allocator_info.pVulkanFunctions = &functions;
+    result = impl->allocator_api.create(&allocator_info, &impl->allocator);
+    if (result != VK_SUCCESS) { impl->allocator = VK_NULL_HANDLE; return std::unexpected(vk_error("vmaCreateAllocator", result)); }
     return Device{std::move(impl)};
 }
 
@@ -292,6 +344,7 @@ VkInstance Device::instance() const noexcept { return impl_->instance; }
 VkPhysicalDevice Device::physical_device() const noexcept { return impl_->physical; }
 VkDevice Device::native_device() const noexcept { return impl_->device; }
 VkQueue Device::queue() const noexcept { return impl_->queue; }
+VmaAllocator Device::allocator() const noexcept { return impl_->allocator; }
 std::uint32_t Device::queue_family() const noexcept { return impl_->family; }
 const AdapterInfo& Device::adapter() const noexcept { return impl_->info; }
 bool Device::validation_enabled() const noexcept { return impl_->validation; }

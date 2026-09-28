@@ -4,6 +4,7 @@
 #include <dk/memory/Containers.hpp>
 #include <dk/memory/SmartPtr.hpp>
 #include <vulkan/vulkan_core.h>
+#include <vk_mem_alloc.h>
 
 #include <filesystem>
 #include <optional>
@@ -65,6 +66,8 @@ public:
     [[nodiscard]] VkPhysicalDevice physical_device() const noexcept;
     [[nodiscard]] VkDevice native_device() const noexcept;
     [[nodiscard]] VkQueue queue() const noexcept;
+    // Borrowed allocator. Release every allocation before destroying this Device.
+    [[nodiscard]] VmaAllocator allocator() const noexcept;
     [[nodiscard]] std::uint32_t queue_family() const noexcept;
     [[nodiscard]] const AdapterInfo& adapter() const noexcept;
     [[nodiscard]] bool validation_enabled() const noexcept;

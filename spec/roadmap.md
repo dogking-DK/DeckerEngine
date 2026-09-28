@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-09-28T16:55:37+08:00"
+updated_at: "2026-09-28T17:14:37+08:00"
 status: accepted
 ---
 
@@ -286,6 +286,8 @@ CPU Ready 与未来 GPU Ready 分开。
 | M5.5 | 窗口与呈现 | M5.4 | SDL3 swapchain、resize/最小化/重建；离屏路径独立可用 | 待开始 |
 
 **当前设计：** [graphics-device](design/graphics-device.md) 覆盖 M5.1。
+volk、vk-bootstrap 和 VMA allocator 接入见 [0043](development/0043-vulkan-libraries.md)；
+allocator 与 buffer smoke 不代表 M5.2 的拥有型资源、提交、完成跟踪和延迟销毁已完成。
 后续实施前扩展资源/提交设计，并建立 `graphics-shaders.md`、`platform.md`、`graphics-presentation.md`。
 
 **验收：** 编译一个图形 shader 和一个 compute shader；

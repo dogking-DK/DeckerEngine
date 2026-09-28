@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-28T16:55:37+08:00"
+updated_at: "2026-09-28T17:14:37+08:00"
 status: accepted
 ---
 
@@ -110,18 +110,27 @@ M1.7.7 复用相同依赖完成重复工作负载与三配置采集基线；未�
 | 库 / vcpkg port | 当前版本 | feature | 当前用途 |
 | --- | --- | --- | --- |
 | Vulkan / `vulkan` | 2023-12-17 | vulkan-device；graphics 保留 | M5.1 准备头文件/loader；dk::graphics_device PUBLIC 使用 Vulkan::Headers |
+| volk / `volk` | 1.4.357.0 | vulkan-device / graphics | PRIVATE volk::volk，填充每实例/设备 table，执行不使用全局 vk* |
+| vk-bootstrap / `vk-bootstrap` | 1.4.357 | vulkan-device / graphics | PRIVATE vk-bootstrap::vk-bootstrap，内部适配 InstanceBuilder，保留自有选卡策略 |
+| Vulkan Memory Allocator / `vulkan-memory-allocator` | 3.4.0 | vulkan-device / graphics | PUBLIC GPUOpen::VulkanMemoryAllocator 头接口，私有 dk_graphics_vma 单一定义；Device 拥有 allocator |
 
 2026-09-28 核验官方 vulkan、vulkan-headers、vulkan-loader port 与固定 baseline 一致，
 无需升级。头文件实际编译版本为 1.4.357.0；系统 loader 动态加载，不静态导入 Vulkan DLL，
 Windows 默认从 System32 加载。实际设备验收使用系统 loader/SDK 验证层 1.4.321，
 不是对 vcpkg loader 1.4.357.0 二进制的运行验收。vcpkg 不负责驱动或验证层安装。
 Windows MSVC/CRT、设备和诊断证据见 [0042](development/0042-vulkan-device.md)。
+同日核验 [volk port](https://github.com/microsoft/vcpkg/blob/master/ports/volk/vcpkg.json)、
+[vk-bootstrap port](https://github.com/microsoft/vcpkg/blob/master/ports/vk-bootstrap/vcpkg.json) 和
+[VMA port](https://github.com/microsoft/vcpkg/blob/master/ports/vulkan-memory-allocator/vcpkg.json)，
+均为上述版本且无额外 port 修订，与 baseline 一致，不引入 override 或浮动依赖。
+实际编译/双设备/VMA buffer 验收见 [0043](development/0043-vulkan-libraries.md)。
+VMA 静态和动态函数自动装载均关闭，函数由当前 volk table 显式注入；使用 API 1.2 路径，
+不隐式启用尚未请求的 maintenance4。三方内部 CPU 元数据使用其默认分配器。
 
 ## 清单预留，模块尚未实现
 
 | 库 / vcpkg port | 当前版本 | feature | 计划用途 |
 | --- | --- | --- | --- |
-| Vulkan Memory Allocator / `vulkan-memory-allocator` | 3.4.0 | graphics | Vulkan Buffer/Image 内存分配 |
 | Slang / `shader-slang` | 2026.18 | graphics | Shader 编译、SPIR-V 和布局反射；CMake package 名为 slang |
 | SDL3 / `sdl3` | 3.4.16#1 | editor | 窗口与输入，选择 vulkan feature |
 | Dear ImGui / `imgui` | 1.92.9 | editor | 编辑器 UI，选择 docking-experimental、sdl3-binding、vulkan-binding |
