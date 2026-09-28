@@ -17,6 +17,25 @@ void diagnostic(void* data, const dk::graphics::Diagnostic& message) noexcept
         std::fprintf(stderr, "%.*s: %.*s\n", static_cast<int>(message.name.size()), message.name.data(),
             static_cast<int>(message.message.size()), message.message.data());
 }
+bool raii_smoke(const dk::graphics::Device& device)
+{
+    try {
+        const auto& logical = device.logical_device();
+        vk::raii::Fence fence{logical, vk::FenceCreateInfo{vk::FenceCreateFlagBits::eSignaled}};
+        if (fence.getStatus() != vk::Result::eSuccess) return false;
+        logical.resetFences(*fence);
+        if (fence.getStatus() != vk::Result::eNotReady) return false;
+        vk::raii::CommandPool pool{logical,
+            vk::CommandPoolCreateInfo{vk::CommandPoolCreateFlagBits::eTransient, device.queue_family()}};
+        auto moved = std::move(pool);
+        if (*pool || !*moved) return false;
+        moved.reset({});
+        return true;
+    } catch (const vk::SystemError& error) {
+        std::fprintf(stderr, "RAII probe: %s\n", error.what());
+        return false;
+    }
+}
 bool allocator_smoke(const dk::graphics::Device& device)
 {
     if (!device.allocator()) return false;
@@ -74,26 +93,26 @@ int main(int argc, char** argv)
         std::optional<dk::graphics::Device> device{std::move(*created)};
         const auto& info = device->adapter();
         std::printf("round=%d GPU=%s vendor=%u device=%u API=%u.%u.%u driver=%s (%s) driverRaw=%u queueFamily=%u validation=%s\n",
-            round, info.properties.deviceName, info.properties.vendorID, info.properties.deviceID,
+            round, info.properties.deviceName.data(), info.properties.vendorID, info.properties.deviceID,
             VK_API_VERSION_MAJOR(info.properties.apiVersion), VK_API_VERSION_MINOR(info.properties.apiVersion), VK_API_VERSION_PATCH(info.properties.apiVersion),
-            info.driver.driverName, info.driver.driverInfo, info.properties.driverVersion, device->queue_family(), device->validation_enabled() ? "on" : "off");
-        if (!device->instance() || !device->physical_device() || !device->native_device() || !device->queue() ||
+            info.driver.driverName.data(), info.driver.driverInfo.data(), info.properties.driverVersion, device->queue_family(), device->validation_enabled() ? "on" : "off");
+        if (!*device->instance() || !*device->physical_device() || !*device->logical_device() || !*device->queue() ||
             !device->device_proc("vkDeviceWaitIdle")) return 1;
         if (validation) {
-            auto submit = reinterpret_cast<PFN_vkSubmitDebugUtilsMessageEXT>(device->instance_proc("vkSubmitDebugUtilsMessageEXT"));
-            if (!submit) return 1;
-            VkDebugUtilsMessengerCallbackDataEXT data{VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CALLBACK_DATA_EXT};
+            if (!device->instance_proc("vkSubmitDebugUtilsMessageEXT")) return 1;
+            vk::DebugUtilsMessengerCallbackDataEXT data{};
             data.pMessageIdName = "dk.device.probe";
             data.pMessage = "Device diagnostic routing probe";
-            submit(device->instance(), VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT, VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT, &data);
+            device->instance().submitDebugUtilsMessageEXT(vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo,
+                vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral, data);
         }
         auto peer = dk::graphics::Device::create(*resource, options);
-        if (!peer || peer->instance() == device->instance() || peer->native_device() == device->native_device() ||
+        if (!peer || *peer->instance() == *device->instance() || peer->native_device() == device->native_device() ||
             peer->allocator() == device->allocator()) return 1;
-        if (!allocator_smoke(*device) || !allocator_smoke(*peer)) return 1;
+        if (!raii_smoke(*device) || !raii_smoke(*peer) || !allocator_smoke(*device) || !allocator_smoke(*peer)) return 1;
         device.reset();
-        if (!allocator_smoke(*peer)) return 1;
-        std::printf("VMA round=%d buffer map/flush/invalidate/free passed; peer survived first device destruction\n", round);
+        if (!raii_smoke(*peer) || !allocator_smoke(*peer)) return 1;
+        std::printf("RAII/VMA round=%d fence/pool and buffer map/flush/invalidate/free passed; peer survived first device destruction\n", round);
     }
     // The sink survives native teardown so destruction diagnostics are included.
     std::printf("errors=%u warnings=%u routed=%u liveAllocations=%zu\n", diagnostics.errors.load(), diagnostics.warnings.load(), diagnostics.probes.load(), resource->snapshot().live_allocations);

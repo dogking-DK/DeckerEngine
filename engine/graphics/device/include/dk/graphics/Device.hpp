@@ -3,7 +3,7 @@
 #include <dk/core/Result.hpp>
 #include <dk/memory/Containers.hpp>
 #include <dk/memory/SmartPtr.hpp>
-#include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan_raii.hpp>
 #include <vk_mem_alloc.h>
 
 #include <filesystem>
@@ -34,13 +34,13 @@ struct DeviceOptions {
 };
 
 struct AdapterInfo {
-    explicit AdapterInfo(memory::ResourceHandle resource) : queues(memory::Allocator<VkQueueFamilyProperties>{resource}) {}
-    VkPhysicalDeviceProperties properties{};
-    VkPhysicalDeviceDriverProperties driver{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
+    explicit AdapterInfo(memory::ResourceHandle resource) : queues(memory::Allocator<vk::QueueFamilyProperties>{resource}) {}
+    vk::PhysicalDeviceProperties properties{};
+    vk::PhysicalDeviceDriverProperties driver{};
     bool timeline_semaphore = false;
     bool synchronization2 = false;
     bool dynamic_rendering = false;
-    Vector<VkQueueFamilyProperties> queues;
+    Vector<vk::QueueFamilyProperties> queues;
 };
 struct AdapterSelection { std::uint32_t adapter_index; std::uint32_t queue_family; };
 // Pure policy functions; no loader, instance, or GPU is needed.
@@ -60,12 +60,15 @@ public:
     Device(const Device&) = delete;
     Device& operator=(const Device&) = delete;
 
-    // Borrowed handles/function pointers. Consumer synchronizes all access and
+    // Borrowed RAII objects/function pointers. Consumer synchronizes access and
     // destroys children/completes submitted work before this owner is destroyed.
-    [[nodiscard]] VkInstance instance() const noexcept;
-    [[nodiscard]] VkPhysicalDevice physical_device() const noexcept;
+    // Dereference for vk::* handles; never give those handles another owner.
+    [[nodiscard]] const vk::raii::Instance& instance() const noexcept;
+    [[nodiscard]] const vk::raii::PhysicalDevice& physical_device() const noexcept;
+    [[nodiscard]] const vk::raii::Device& logical_device() const noexcept;
+    [[nodiscard]] const vk::raii::Queue& queue() const noexcept;
+    // Borrowed C handle for interoperability (e.g. VMA).
     [[nodiscard]] VkDevice native_device() const noexcept;
-    [[nodiscard]] VkQueue queue() const noexcept;
     // Borrowed allocator. Release every allocation before destroying this Device.
     [[nodiscard]] VmaAllocator allocator() const noexcept;
     [[nodiscard]] std::uint32_t queue_family() const noexcept;

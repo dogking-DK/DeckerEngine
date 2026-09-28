@@ -1,7 +1,7 @@
 ---
 module: graphics-device
 created_at: "2026-09-28T16:38:00+08:00"
-updated_at: "2026-09-28T17:14:37+08:00"
+updated_at: "2026-09-28T17:38:13+08:00"
 status: accepted
 ---
 
@@ -13,6 +13,7 @@ M5.1 提供无窗口 instance、physical device、logical device 和单队列底
 不创建 surface/swapchain、Buffer/Image、提交系统或 shader；这些属于 M5.2–5。
 源码位于 [device](../../engine/graphics/device)，target 为 dk_graphics_device / dk::graphics_device。
 PUBLIC 依赖 Core、Memory、Vulkan::Headers、VMA 头接口并传递 VK_NO_PROTOTYPES，
+以及 VULKAN_HPP_ENABLE_DYNAMIC_LOADER_TOOL=0 / VULKAN_HPP_NO_DEFAULT_DISPATCHER；
 PRIVATE 使用 Profiling、volk、vk-bootstrap 和平台动态库 API；
 不依赖 Scene、Assets、Framework、SDL 或 Slang。CPU runner 不链接该模块。
 DK_BUILD_GRAPHICS_DEVICE 默认 OFF，windows-graphics 预设显式开启；vulkan-device feature
@@ -20,8 +21,13 @@ DK_BUILD_GRAPHICS_DEVICE 默认 OFF，windows-graphics 预设显式开启；vulk
 
 ## 能力和接口
 
-公开 [Device.hpp](../../engine/graphics/device/include/dk/graphics/Device.hpp) 使用 Vulkan 类型，
+公开 [Device.hpp](../../engine/graphics/device/include/dk/graphics/Device.hpp) 使用 Vulkan-Hpp 类型，
 不引入跨 API RHI。Device::create 接受调用者 Memory resource 和 DeviceOptions，返回拥有型 Device。
+包含 vulkan/vulkan_raii.hpp（同时引入 vulkan.hpp），普通 Vulkan 对象使用 vk::raii 所有权。
+instance()/physical_device()/logical_device()/queue() 返回只读 vk::raii 引用，
+便于消费者直接创建 vk::raii 子资源；解引用得到借用 vk::* 句柄，C API 边界显式转换为 Vk*。
+native_device() 保留为 C 互操作便利接口。禁止从借用句柄重新构造拥有型 RAII 对象。
+AdapterInfo 的属性与队列快照使用 vk::* 值类型；诊断 callback 和 VMA 保留 C API 类型。
 最低 API 固定 Vulkan 1.3；必须具有 timelineSemaphore、synchronization2、dynamicRendering，
 一个 queueCount > 0 且同时支持 graphics/compute 的 family（按规范也支持 transfer）。
 只启用这三项 feature，创建该 family 的第 0 个队列，不要求 present 或任何 device extension。
@@ -43,23 +49,31 @@ callback 覆盖 instance 创建/销毁及 device 生命周期，转发 severity�
 
 ## 所有权、发布与失败
 
-每个 Device 独立持有 loader、volk instance/device table、instance、messenger、device、queue 和 VMA allocator。
+每个 Device 独立持有 loader、volk instance/device table、vk::raii::Context/Instance/
+DebugUtilsMessengerEXT/PhysicalDevice/Device/Queue 和 VMA allocator。
+Context 显式使用该 loader 的 resolver；Hpp 每对象 dispatcher 与 volk table 独立，
+不启用 Hpp 隐式动态 loader 或全局默认 dispatcher。成员声明顺序保证诊断状态和 loader
+晚于所有 Vulkan 对象销毁，Impl 无需手写 vkDestroy* 析构流程。
 volk 的全局装载操作仅在私有 mutex 内用于填充本地 table，执行和销毁不读取全局 Vulkan 函数指针。
 vk-bootstrap 只用于 InstanceBuilder：保留本项目的选卡、队列和 feature 策略。
 该版本缓存进程级函数指针，内部适配器用稳定转发函数与线程局部的创建上下文连接实际 loader，
 保证不同 loader 与多实例不误用首次初始化的 resolver；builder 调用串行，业务执行不串行。
 适配器在原生创建成功时立即接管 instance/messenger，覆盖 builder 在后续失败或分配异常时没有返回句柄的情况。
+此临时 C 交接 guard 在 Hpp dispatcher 分配成功后将所有权转入 vk::raii；device 创建采用相同的
+短期 guard，防止原生创建成功而 Hpp 接管分配失败时泄漏。正常寿命由 vk::raii 管理。
 vk-bootstrap 的对象不暴露到公开接口，不调用其依赖缓存 instance 函数的其他 builder/selector。
 动态加载系统 Vulkan loader（Windows 默认 System32/vulkan-1.dll），缺少 loader 可返回 Error，
 避免进程装载前失败；显式绝对 loader 路径用于部署和可复现诊断，不改变全局搜索路径。
 引擎 owning CPU 对象和枚举容器使用调用者 resource；错误字符串为 Core 的标准分配边界。
-vk-bootstrap/VMA 的内部 CPU 元数据以及驱动/验证层 host allocation 使用各库默认 allocator，
+Vulkan-Hpp dispatcher、vk-bootstrap/VMA 的内部 CPU 元数据以及驱动/验证层 host allocation 使用各库默认 allocator，
 不声称归入 Memory 域。VMA 在单个私有翻译单元编译，关闭静态/动态函数自动装载，
 显式从当前 volk table 填入 Vulkan 函数；不依赖 Vulkan 导入库或全局 vk* 符号。
 VMA 配置 API 1.2 路径（底层设备仍为 1.3），避免使用本阶段尚未启用的 maintenance4；
 三方 implementation 独立为 dk_graphics_vma 编译，不把其警告开关施加到引擎代码。
 Device::allocator() 借用 VmaAllocator，所有 allocation 必须先于 Device 销毁；
 本次只提供 allocator 接入，Buffer/Image 拥有型封装、提交和完成跟踪仍属 M5.2。
+VMA allocator 使用专用 RAII owner；VMA 创建的 buffer/image 必须经 VMA 配对销毁，
+不可同时让 vk::raii::Buffer/Image 拥有同一句柄，避免重复释放。
 
 create 在 loader→instance→messenger→选择→device→queue→VMA allocator 全部成功后才发布。
 任意失败或 C++ 分配异常沿 RAII 逆序销毁已创建对象；bad_alloc 保持 Memory 标准异常约定。
@@ -69,6 +83,8 @@ Device 不可复制，可移动拥有型包装；Impl 不移动，保证 callbac
 原生句柄仅借用，后续消费者须在销毁前完成工作和销毁所有子资源，外部同步 queue/device 访问。
 getInstanceProcAddr/getDeviceProcAddr 入口供后续模块装载函数，句柄/函数不能活过 Device。
 VkResult 错误保留操作名、符号名和原始数值；Device lost 不自动重建。
+设备工厂保留显式 VkResult 检查、Memory 枚举容器和有界重试；消费方直接使用 Hpp RAII 方法时
+遵循其默认 vk::SystemError 异常约定。std::bad_alloc 不转换为 Vulkan 错误。
 
 ## 验证计划
 
@@ -77,6 +93,8 @@ CPU 单元验证能力缺失、显式索引、优先级、queueCount/queue flags
 不增加生产公开的故障注入开关。缺失 loader 路径走真实动态加载失败。
 独立 GPU probe 验证 repeated create/destroy、句柄/队列、驱动报告、验证消息投递及销毁后零错误。
 增加两实例交叠寿命与 VMA buffer 分配/映射/flush/invalidate/释放 smoke；单元覆盖 allocator 创建失败回收。
+补充 C→Hpp 接管异常与移动赋值回收验证；GPU probe 直接通过公开 RAII device 创建/移动/销毁
+fence、command pool，并在另一 Device 销毁后继续调用 RAII，确认 dispatcher 与父对象寿命。
 验证 probe 缺少环境时 CTest 返回 77（跳过），非环境错误必须失败；另设不要求验证层的设备 probe。
 CPU-only 预设构建 runner 并执行版本/CPU 进程用例，检查无 Vulkan 运行时链接。
 
@@ -91,4 +109,6 @@ API 依据为 Khronos [初始化](https://docs.vulkan.org/spec/latest/chapters/i
 [验证层](https://docs.vulkan.org/guide/latest/validation_overview.html)。
 volk 1.4.357.0、vk-bootstrap 1.4.357、VMA 3.4.0 官方 port 与 baseline 一致。
 关联 [架构](architecture.md)、[Memory](foundation-memory.md)、[0042](../development/0042-vulkan-device.md)、
-[0043](../development/0043-vulkan-libraries.md)。
+[0043](../development/0043-vulkan-libraries.md)、[0044](../development/0044-vulkan-hpp-raii.md)。
+Vulkan-Hpp 随固定 vulkan-headers 1.4.357.0 提供；参考官方
+[RAII 指南](https://github.com/KhronosGroup/Vulkan-Hpp/blob/main/docs/VkRaiiProgrammingGuide.md)。

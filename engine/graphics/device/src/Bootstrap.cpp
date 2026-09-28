@@ -63,6 +63,19 @@ void InstanceOwner::reset() noexcept
     messenger = VK_NULL_HANDLE;
     instance = VK_NULL_HANDLE;
 }
+void InstanceOwner::adopt(const vk::raii::Context& context, vk::raii::Instance& target,
+                          vk::raii::DebugUtilsMessengerEXT& target_messenger)
+{
+    // Instance adoption allocates a dispatcher. Retain native ownership until
+    // that succeeds. Messenger adoption and the following moves do not allocate.
+    vk::raii::Instance owned{context, instance};
+    vk::raii::DebugUtilsMessengerEXT owned_messenger{nullptr};
+    if (messenger) owned_messenger = vk::raii::DebugUtilsMessengerEXT{owned, messenger};
+    instance = VK_NULL_HANDLE;
+    messenger = VK_NULL_HANDLE;
+    target = std::move(owned);
+    target_messenger = std::move(owned_messenger);
+}
 Result<void> bootstrap_instance(PFN_vkGetInstanceProcAddr resolver, bool validation,
     const VkDebugUtilsMessengerCreateInfoEXT& debug, InstanceOwner& owner)
 {

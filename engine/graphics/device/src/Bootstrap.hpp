@@ -2,8 +2,8 @@
 #include <dk/graphics/Device.hpp>
 
 namespace dk::graphics::detail {
-// Takes ownership immediately when the native calls succeed, including when
-// vk-bootstrap subsequently returns an error or throws before returning handles.
+// Temporary C API handoff guard, only until vk::raii has acquired the handles.
+// Also covers vk-bootstrap failing/throwing without returning created handles.
 struct InstanceOwner {
     InstanceOwner() = default;
     InstanceOwner(const InstanceOwner&) = delete;
@@ -14,6 +14,8 @@ struct InstanceOwner {
     PFN_vkDestroyDebugUtilsMessengerEXT destroy_messenger = nullptr;
     ~InstanceOwner();
     void reset() noexcept;
+    void adopt(const vk::raii::Context& context, vk::raii::Instance& target,
+               vk::raii::DebugUtilsMessengerEXT& target_messenger);
 };
 Result<void> bootstrap_instance(PFN_vkGetInstanceProcAddr resolver, bool validation,
     const VkDebugUtilsMessengerCreateInfoEXT& debug, InstanceOwner& owner);

@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-28T17:14:37+08:00"
+updated_at: "2026-09-28T17:37:00+08:00"
 status: accepted
 ---
 
@@ -110,6 +110,7 @@ M1.7.7 复用相同依赖完成重复工作负载与三配置采集基线；未�
 | 库 / vcpkg port | 当前版本 | feature | 当前用途 |
 | --- | --- | --- | --- |
 | Vulkan / `vulkan` | 2023-12-17 | vulkan-device；graphics 保留 | M5.1 准备头文件/loader；dk::graphics_device PUBLIC 使用 Vulkan::Headers |
+| Vulkan-Hpp / `vulkan-headers` | 1.4.357.0 | vulkan-device / graphics 传递提供 | PUBLIC vulkan_raii.hpp；普通 Vulkan 对象使用 vk::raii，独立 dispatcher，无全局默认表 |
 | volk / `volk` | 1.4.357.0 | vulkan-device / graphics | PRIVATE volk::volk，填充每实例/设备 table，执行不使用全局 vk* |
 | vk-bootstrap / `vk-bootstrap` | 1.4.357 | vulkan-device / graphics | PRIVATE vk-bootstrap::vk-bootstrap，内部适配 InstanceBuilder，保留自有选卡策略 |
 | Vulkan Memory Allocator / `vulkan-memory-allocator` | 3.4.0 | vulkan-device / graphics | PUBLIC GPUOpen::VulkanMemoryAllocator 头接口，私有 dk_graphics_vma 单一定义；Device 拥有 allocator |
@@ -126,6 +127,11 @@ Windows MSVC/CRT、设备和诊断证据见 [0042](development/0042-vulkan-devic
 实际编译/双设备/VMA buffer 验收见 [0043](development/0043-vulkan-libraries.md)。
 VMA 静态和动态函数自动装载均关闭，函数由当前 volk table 显式注入；使用 API 1.2 路径，
 不隐式启用尚未请求的 maintenance4。三方内部 CPU 元数据使用其默认分配器。
+Vulkan-Hpp 已随上述 headers 安装，不新增官方已标记 deprecated 的
+[vulkan-hpp port](https://github.com/microsoft/vcpkg/blob/master/ports/vulkan-hpp/vcpkg.json)。
+2026-09-28 再次核验 [headers port](https://github.com/microsoft/vcpkg/blob/master/ports/vulkan-headers/vcpkg.json)
+仍为 1.4.357.0，无 port 修订，固定 baseline 保持；RAII 接入见 [0044](development/0044-vulkan-hpp-raii.md)。
+Hpp dispatcher 使用默认 CPU 分配器；VMA 分配资源不与 Hpp 重复拥有。
 
 ## 清单预留，模块尚未实现
 
@@ -144,7 +150,7 @@ M5/M7/M8/M9 的实施安排见 [Roadmap](roadmap.md)。
 
 | vcpkg port | 当前版本 | 来源与用途 |
 | --- | --- | --- |
-| `vulkan-headers` | 1.4.357.0 | vulkan-device/graphics 的传递依赖，M5.1 通过 Vulkan::Headers 接入 |
+| `vulkan-headers` | 1.4.357.0 | vulkan-device/graphics 的传递依赖，M5.1 通过 Vulkan::Headers 接入，包含 Vulkan-Hpp / RAII |
 | `vulkan-loader` | 1.4.357.0 | Windows Vulkan 依赖组准备的 loader；M5.1 默认运行系统 loader，不等同于显卡驱动 |
 | `vcpkg-cmake` | 2025-08-07 | host 构建辅助，供 port 配置/编译/安装，当前已使用 |
 | `vcpkg-cmake-config` | 2026-07-21 | host 构建辅助，整理 CMake package 导出，当前已使用 |

@@ -35,22 +35,22 @@ Result<AdapterSelection> select_adapter(std::span<const AdapterInfo> adapters, s
         std::optional<std::uint32_t> family;
         for (std::size_t q = 0; q < adapter.queues.size(); ++q) {
             const auto& queue = adapter.queues[q];
-            constexpr auto flags = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT;
+            constexpr auto flags = vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute;
             if (queue.queueCount > 0 && (queue.queueFlags & flags) == flags) {
                 family = static_cast<std::uint32_t>(q); break;
             }
         }
         require(family.has_value(), "graphics+compute queue");
         if (!missing.empty()) {
-            failure.context.push_back("adapter[" + std::to_string(i) + "] " + adapter.properties.deviceName + ": " + missing);
+            failure.context.push_back("adapter[" + std::to_string(i) + "] " + adapter.properties.deviceName.data() + ": " + missing);
             continue;
         }
         int rank = 0;
         switch (adapter.properties.deviceType) {
-        case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: rank = 4; break;
-        case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: rank = 3; break;
-        case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: rank = 2; break;
-        case VK_PHYSICAL_DEVICE_TYPE_CPU: rank = 1; break;
+        case vk::PhysicalDeviceType::eDiscreteGpu: rank = 4; break;
+        case vk::PhysicalDeviceType::eIntegratedGpu: rank = 3; break;
+        case vk::PhysicalDeviceType::eVirtualGpu: rank = 2; break;
+        case vk::PhysicalDeviceType::eCpu: rank = 1; break;
         default: break;
         }
         if (rank > best_rank) { selected = AdapterSelection{static_cast<std::uint32_t>(i), *family}; best_rank = rank; }

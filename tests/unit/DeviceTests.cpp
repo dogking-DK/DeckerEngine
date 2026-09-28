@@ -8,20 +8,20 @@
 using namespace dk;
 using namespace dk::graphics;
 namespace {
-template<std::size_t N, std::size_t M> void copy_name(char (&target)[N], const char (&source)[M])
-{ static_assert(M <= N); std::memcpy(target, source, M); }
+template<class T, std::size_t M> void copy_name(T& target, const char (&source)[M])
+{ static_assert(M <= sizeof(T)); std::memcpy(std::data(target), source, M); }
 struct Memory {
     memory::MemorySystem system = [] { auto result = memory::MemorySystem::create(); REQUIRE(result); return std::move(*result); }();
     memory::ResourceHandle resource = [&] { auto result = system.create_heap({"device-tests", memory::DomainCategory::render}); REQUIRE(result); return *result; }();
 };
-AdapterInfo suitable(memory::ResourceHandle resource, VkPhysicalDeviceType type = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+AdapterInfo suitable(memory::ResourceHandle resource, vk::PhysicalDeviceType type = vk::PhysicalDeviceType::eDiscreteGpu)
 {
     AdapterInfo info{resource};
     info.properties.apiVersion = device_api_version;
     info.properties.deviceType = type;
     copy_name(info.properties.deviceName, "test adapter");
     info.timeline_semaphore = info.synchronization2 = info.dynamic_rendering = true;
-    info.queues.push_back({VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 1, 64, {1, 1, 1}});
+    info.queues.push_back({vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute, 1, 64, {1, 1, 1}});
     return info;
 }
 template<class T> T handle(std::uintptr_t value) { return reinterpret_cast<T>(value); }
@@ -34,6 +34,8 @@ struct Fake {
     VkResult enumerate_result = VK_SUCCESS;
     bool empty = false, null_queue = false, incomplete_once = false, incomplete_always = false;
     bool layer = true, debug = true;
+    bool throw_instance_adoption = false, throw_device_adoption = false, teardown_callback = false;
+    int device_queue_lookups = 0;
     std::uint32_t loader_version = device_api_version;
     memory::ResourceHandle close_resource;
     int fills = 0, creates = 0, alternate_creates = 0;
@@ -52,7 +54,16 @@ struct Fake {
         if (active->instance_result == VK_SUCCESS) *value = handle<VkInstance>(1);
         return active->instance_result;
     }
-    static VKAPI_ATTR void VKAPI_CALL destroy_instance(VkInstance, const VkAllocationCallbacks*) { active->destroyed += 'I'; }
+    static VKAPI_ATTR void VKAPI_CALL destroy_instance(VkInstance, const VkAllocationCallbacks*)
+    {
+        if (active->teardown_callback) {
+            VkDebugUtilsMessengerCallbackDataEXT data{VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CALLBACK_DATA_EXT};
+            data.messageIdNumber = 99;
+            active->callback_info.pfnUserCallback(VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
+                VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT, &data, active->callback_info.pUserData);
+        }
+        active->destroyed += 'I';
+    }
     static VKAPI_ATTR void VKAPI_CALL destroy_device(VkDevice, const VkAllocationCallbacks*) { active->destroyed += 'D'; }
     static VKAPI_ATTR void VKAPI_CALL destroy_messenger(VkInstance, VkDebugUtilsMessengerEXT, const VkAllocationCallbacks*) { active->destroyed += 'M'; }
     static VKAPI_ATTR VkResult VKAPI_CALL messenger(VkInstance, const VkDebugUtilsMessengerCreateInfoEXT* info, const VkAllocationCallbacks*, VkDebugUtilsMessengerEXT* value)
@@ -99,7 +110,12 @@ struct Fake {
     }
     static VKAPI_ATTR void VKAPI_CALL queue(VkDevice, std::uint32_t, std::uint32_t, VkQueue* value)
     { *value = active->null_queue ? VK_NULL_HANDLE : handle<VkQueue>(5); }
-    static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL device_proc(VkDevice, const char* name) { return resolve(VK_NULL_HANDLE, name); }
+    static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL device_proc(VkDevice, const char* name)
+    {
+        if (std::strcmp(name, "vkGetDeviceQueue") == 0 && ++active->device_queue_lookups == 2 && active->throw_device_adoption)
+            throw std::bad_alloc{}; // Second pass is Hpp adoption, after volk filled its table.
+        return resolve(VK_NULL_HANDLE, name);
+    }
     static VkResult create_allocator(const VmaAllocatorCreateInfo* info, VmaAllocator* output)
     {
         REQUIRE(info->instance != VK_NULL_HANDLE);
@@ -118,6 +134,8 @@ struct Fake {
     }
     static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL resolve(VkInstance, const char* name)
     {
+        if (active->throw_instance_adoption && std::strcmp(name, "vkGetPhysicalDeviceFeatures") == 0)
+            throw std::bad_alloc{}; // Simulate allocation failure while constructing the Hpp dispatcher.
 #define DK_FAKE_PROC(vk, function) if (std::strcmp(name, #vk) == 0) return reinterpret_cast<PFN_vkVoidFunction>(function)
         DK_FAKE_PROC(vkEnumerateInstanceVersion, version);
         DK_FAKE_PROC(vkEnumerateInstanceLayerProperties, layers);
@@ -148,7 +166,7 @@ struct Fake {
 TEST_CASE("adapter selection ranks suitable devices and honors explicit choice")
 {
     Memory memory;
-    std::array adapters{suitable(memory.resource, VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU), suitable(memory.resource), suitable(memory.resource)};
+    std::array adapters{suitable(memory.resource, vk::PhysicalDeviceType::eIntegratedGpu), suitable(memory.resource), suitable(memory.resource)};
     REQUIRE(select_adapter(adapters)->adapter_index == 1);
     REQUIRE(select_adapter(adapters, 0)->adapter_index == 0);
     adapters[1].dynamic_rendering = false;
@@ -180,10 +198,10 @@ TEST_CASE("queue selection requires one graphics compute family and allows impli
     Memory memory;
     std::array adapters{suitable(memory.resource)};
     auto& queues = adapters[0].queues;
-    queues[0].queueFlags = VK_QUEUE_GRAPHICS_BIT;
-    queues.push_back({VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT, 1, 0, {1, 1, 1}});
+    queues[0].queueFlags = vk::QueueFlagBits::eGraphics;
+    queues.push_back({vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eTransfer, 1, 0, {1, 1, 1}});
     REQUIRE_FALSE(select_adapter(adapters));
-    queues.push_back({VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 1, 0, {1, 1, 1}});
+    queues.push_back({vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute, 1, 0, {1, 1, 1}});
     REQUIRE(select_adapter(adapters)->queue_family == 2);
 }
 
@@ -285,6 +303,7 @@ TEST_CASE("device move retains stable callbacks and destroys in reverse order")
 {
     Memory memory;
     Fake fake;
+    fake.teardown_callback = true;
     int diagnostic_id = 0;
     DeviceOptions options;
     options.diagnostic_user_data = &diagnostic_id;
@@ -293,7 +312,7 @@ TEST_CASE("device move retains stable callbacks and destroys in reverse order")
         auto result = fake.create(memory.resource, options); REQUIRE(result);
         auto moved = std::move(*result);
         REQUIRE(fake.feature_contract);
-        REQUIRE(moved.queue() != VK_NULL_HANDLE);
+        REQUIRE(static_cast<bool>(*moved.queue()));
         VkDebugUtilsMessengerCallbackDataEXT data{VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CALLBACK_DATA_EXT};
         data.messageIdNumber = 42; data.pMessageIdName = "test"; data.pMessage = "test diagnostic";
         REQUIRE(fake.callback_info.pfnUserCallback(VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
@@ -302,6 +321,7 @@ TEST_CASE("device move retains stable callbacks and destroys in reverse order")
         REQUIRE(diagnostic_id == 42);
     }
     REQUIRE(fake.destroyed == "ADMI");
+    REQUIRE(diagnostic_id == 99);
     REQUIRE(memory.resource.snapshot().live_allocations == 0);
 }
 
@@ -329,5 +349,36 @@ TEST_CASE("bootstrap uses current loader after an earlier instance was destroyed
     REQUIRE(fake.creates == 1);
     REQUIRE(fake.alternate_creates == 1);
     REQUIRE(fake.destroyed == "ADI");
+    REQUIRE(memory.resource.snapshot().live_allocations == 0);
+}
+
+TEST_CASE("Hpp adoption exceptions release native handles exactly once")
+{
+    Memory memory;
+    Fake fake;
+    std::string expected;
+    SECTION("instance dispatcher") { fake.throw_instance_adoption = true; expected = "MI"; }
+    SECTION("device dispatcher") { fake.throw_device_adoption = true; expected = "DMI"; }
+    REQUIRE_THROWS_AS(fake.create(memory.resource), std::bad_alloc);
+    REQUIRE(fake.destroyed == expected);
+    REQUIRE(memory.resource.snapshot().live_allocations == 0);
+}
+
+TEST_CASE("device move assignment releases previous owner and preserves RAII references")
+{
+    Memory memory;
+    Fake fake;
+    {
+        auto first = fake.create(memory.resource); REQUIRE(first);
+        auto second = fake.create(memory.resource); REQUIRE(second);
+        const auto* device = &second->logical_device();
+        const auto* instance = &second->instance();
+        *first = std::move(*second);
+        REQUIRE(fake.destroyed == "ADMI");
+        REQUIRE(&first->logical_device() == device);
+        REQUIRE(&first->instance() == instance);
+        REQUIRE(static_cast<VkDevice>(*first->logical_device()) == first->native_device());
+    }
+    REQUIRE(fake.destroyed == "ADMIADMI");
     REQUIRE(memory.resource.snapshot().live_allocations == 0);
 }

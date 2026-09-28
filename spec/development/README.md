@@ -45,5 +45,6 @@
 | 0041 | [AI 文档入口与开发协作优化](0041-ai-documentation-workflow.md) | project-foundation, foundation-memory, runtime | completed |
 | 0042 | [M5.1 Vulkan 设备与诊断](0042-vulkan-device.md) | graphics-device | completed |
 | 0043 | [volk、vk-bootstrap 和 VMA](0043-vulkan-libraries.md) | graphics-device | completed |
+| 0044 | [Vulkan-Hpp RAII 所有权](0044-vulkan-hpp-raii.md) | graphics-device | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。
