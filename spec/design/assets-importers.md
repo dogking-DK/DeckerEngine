@@ -1,15 +1,15 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T11:32:11+08:00"
-status: draft
+updated_at: "2026-09-28T12:39:21+08:00"
+status: accepted
 ---
 
 # M4 静态 glTF 导入与 assetc 设计
 
 ## 范围和依赖
 
-此为 M4.2 实施设计稿，尚无导入器或 dk-assetc 实现。目标是得到可查询的 CPU 数据，
+M4.2.1 已实现 CPU 网格/材质候选导入，见 [0033](../development/0033-cpu-mesh-import.md)；纹理和 dk-assetc 尚未实现。目标是得到可查询的 CPU 数据，
 不是 glTF 场景编辑器。身份/缓存遵循 [资产运行时](assets-runtime.md)，小节安排见
 [0020](../development/0020-m4-development-plan.md)。
 
@@ -100,6 +100,29 @@ nodes 的摆放不烘焙到 mesh，也不创建实体；包含节点时输出“
 NORMAL 缺失时保留缺失标记，首版不生成平滑法线；baseColorTexture 存在时要求 TEXCOORD_0。
 
 ## CPU 数据与数值约定
+
+### M4.2.1 实施契约
+
+增加可选 `DK_BUILD_ASSET_IMPORTERS`（要求 Math/Memory/IO；独立于 Scene/Framework/Runtime）。
+`asset_data` PUBLIC types/math/memory；`asset_importers` PUBLIC data/IO，PRIVATE fastgltf/JSON/profiling。
+完整开发预设启用，vcpkg `asset-importers` feature 选择 fastgltf；固定 baseline 不变。
+返回纯候选 `ImportResult`，拥有 mesh、materials、output identities、输入文件快照和诊断；
+调用方可作为 const 值/共享拥有值发布。不写 meta、Project 或磁盘产物，不改变 Scene。
+输入为 ProjectPaths、源相对路径、旧 output 映射和 unit_scale；缺失映射生成新 UUID，已有映射保留。
+只输出被该 mesh 使用的材质/纹理（mesh/0、material/N、texture/N）；旧映射已无对应输出时返回 not_found，
+不会把旧 ID 指向其他 selector。默认材质使用内置数值，无 nil 资产引用。
+M4.2.1 遇到有效 baseColorTexture 返回 not_supported，M4.2.2 完成关联和解码。
+
+默认硬上限：源 16 MiB、单依赖 64 MiB、全部输入 128 MiB、CPU 数值载荷输出 256 MiB（不含容器/JSON 管理开销），
+累计顶点 1000000、索引 3000000、primitive 4096、材质/纹理及 output 总数 10000；
+图片每边 8192、单图 64 MiB RGBA、累计 RGBA 128 MiB。可通过 ImportLimits 降低，不允许提高硬上限。
+读取/解析前限制源与依赖，算术先除法检查再相乘；顶点/索引/解码预算在分配前扣除。
+UTF-8 JSON 先做结构/重复键/深度（64）检查，拒绝所有扩展、稀疏、skin/animation/morph；
+手动解码和约束 URI 后由 IO 读取，fastgltf 不启用自动外部 IO，不解析 data URI。
+经过 buffer/view/accessor 范围、步长/对齐、类型、索引和数值校验后才调用 fastgltf accessor 工具。
+结果为 dk 拥有型容器，临时解析/索引使用局部对象和 ScratchScope；宿主须装配带 scratch 的 ThreadContext。
+三方内部标准分配不宣称被接管。
+任何 Result 失败或异常都销毁候选并保持输入/文件不变；ContextError/bad_alloc 沿用 Memory 约定。
 
 计划公开头文件位于 `engine/assets/data/include/dk/assets/`，使用 dk 类型，不暴露解析器对象。
 

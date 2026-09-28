@@ -55,6 +55,7 @@
       "cacheVariables": {
         "DK_BUILD_MEMORY": "ON",
         "DK_BUILD_ASSET_RUNTIME": "ON",
+        "DK_BUILD_ASSET_IMPORTERS": "ON",
         "DK_BUILD_SCENE": "ON",
         "DK_BUILD_FRAMEWORK": "ON",
         "VCPKG_TARGET_TRIPLET": "x64-windows",

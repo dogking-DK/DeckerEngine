@@ -1,7 +1,7 @@
 set(CMAKE_FOLDER "Engine")
 
 add_subdirectory(foundation)
-if(DK_BUILD_SCENE OR DK_BUILD_ASSET_RUNTIME)
+if(DK_BUILD_SCENE OR DK_BUILD_ASSET_RUNTIME OR DK_BUILD_ASSET_IMPORTERS)
     add_subdirectory(assets)
 endif()
 if(DK_BUILD_SCENE)

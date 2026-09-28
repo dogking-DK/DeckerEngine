@@ -10,6 +10,10 @@
   ],
   "default-features": [],
   "features": {
+    "asset-importers": {
+      "description": "CPU glTF import pipeline",
+      "dependencies": ["fastgltf", "nlohmann-json"]
+    },
     "assets": {
       "description": "Asset metadata, catalog persistence and content digests",
       "dependencies": ["nlohmann-json", { "name": "xxhash", "default-features": false }]

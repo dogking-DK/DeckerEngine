@@ -1,0 +1,7 @@
+if(NOT TARGET dk::math OR NOT TARGET dk::memory OR NOT TARGET dk::io)
+    message(FATAL_ERROR "DK_BUILD_ASSET_IMPORTERS requires Math, Memory and IO")
+endif()
+add_library(dk_asset_data INTERFACE)
+add_library(dk::asset_data ALIAS dk_asset_data)
+target_sources(dk_asset_data INTERFACE FILE_SET HEADERS BASE_DIRS include FILES include/dk/assets/CpuData.hpp)
+target_link_libraries(dk_asset_data INTERFACE dk::asset_types dk::math dk::memory)

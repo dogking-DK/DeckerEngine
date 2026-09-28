@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-28T11:32:11+08:00"
+updated_at: "2026-09-28T12:39:21+08:00"
 status: accepted
 ---
 
@@ -94,7 +94,7 @@ M1.7.7 复用相同依赖完成重复工作负载与三配置采集基线；未�
 
 | 库 / vcpkg port | 当前基线版本 | 计划用途 | 边界 |
 | --- | --- | --- | --- |
-| fastgltf / `fastgltf` | 0.9.0 | 静态 glTF/GLB 解析、accessor 提取 | 导入器私有依赖，数据转换为引擎拥有的 CPU 值 |
+| fastgltf / `fastgltf` | 0.9.0 | 静态 glTF/GLB 解析、accessor 提取 | M4.2.1 已集成，PRIVATE fastgltf::fastgltf；传递 simdjson 4.6.11，固定 baseline 不变 |
 | stb_image / `stb` | 2024-07-29#1 | PNG/JPEG 解码到 RGBA8；该 port 的 stb_image 为 2.30 | 单一实现翻译单元，使用内存输入，限制支持格式 |
 | xxHash / `xxhash` | 0.8.4 | 恢复记录文件摘要；后续资源变化检测与缓存键 | M4.1.2 已集成 XXH3-128/内部 ContentDigest，未启用 xxhsum feature；缓存尚未实现 |
 | simdjson / `simdjson` | 4.6.11 | fastgltf 的传递解析依赖 | 不替换引擎公开的 nlohmann-json 接口，不作为新直接依赖重复声明 |

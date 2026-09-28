@@ -104,7 +104,7 @@ stdout 每行一个 JSON 响应，result 含 task_id、status 和命令返回值
 仅构建 CPU Runtime、保留进程验收而关闭日志/示例/Catch2：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-runtime-cpu -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_WARNINGS_AS_ERRORS=ON -DDK_VCPKG_FEATURES=
+cmake --preset windows-dev -B out/build/windows-runtime-cpu -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_WARNINGS_AS_ERRORS=ON -DDK_VCPKG_FEATURES=
 cmake --build out/build/windows-runtime-cpu --config Debug
 ctest --test-dir out/build/windows-runtime-cpu -C Debug --output-on-failure
 ```
@@ -159,7 +159,7 @@ handler 契约错误分别返回结构化 Error。支持的 schema 子集与上�
 [命令设计](spec/design/commands.md)。
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-commands-only -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=ON -DDK_WARNINGS_AS_ERRORS=ON -DDK_VCPKG_FEATURES=
+cmake --preset windows-dev -B out/build/windows-commands-only -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=ON -DDK_WARNINGS_AS_ERRORS=ON -DDK_VCPKG_FEATURES=
 cmake --build out/build/windows-commands-only --config Debug
 ctest --test-dir out/build/windows-commands-only -C Debug --output-on-failure
 ```
@@ -339,12 +339,21 @@ Windows 本地盘、同步单写者下，操作记录保存在 `.decker/asset-op
 不含 Scene/Framework 的独立验证：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-assets-only -DDK_BUILD_ASSET_RUNTIME=ON -DDK_BUILD_MEMORY=ON -DDK_BUILD_SCENE=OFF -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-assets-only -DDK_BUILD_ASSET_RUNTIME=ON -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_MEMORY=ON -DDK_BUILD_SCENE=OFF -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 & ./scripts/verify.ps1 -BuildDir out/build/windows-assets-only -Target dk_asset_tests -TestRegex '^dk\.assets\.' -Reason '独立资产底层'
 ```
 
 设计、错误边界和证据见 [assets-runtime](spec/design/assets-runtime.md)、[0031](spec/development/0031-asset-metadata-catalog.md)
 及 [0032](spec/development/0032-asset-commit-recovery.md)。摘要采用 xxHash 0.8.4，作为资产底层私有依赖。
+
+## CPU 网格导入（M4.2.1）
+
+CPU 网格导入（M4.2.1）由 `DK_BUILD_ASSET_IMPORTERS` 启用，要求 Math/Memory/IO，
+提供 [GltfImporter.hpp](engine/assets/importers/include/dk/assets/GltfImporter.hpp) 和拥有型 CPU 数据。
+`import_gltf(paths, {source, old_output_identities, unit_scale})` 只产生候选，不写文件。
+调用者装配 `ThreadContext{memory_system, scratch_heap}` 并绑定 Assets 持久域；返回值可跨 scope 存活。
+支持的格式子集、预算和诊断见[导入设计](spec/design/assets-importers.md)，测试入口为
+`scripts/verify.ps1 -Target dk_import_tests -TestRegex '^dk\.import\.' -Reason 'CPU glTF 导入'`。
 
 ## Memory heap（M1.7.2）
 
@@ -744,7 +753,7 @@ MSVC 环境；Linux/macOS 需自行准备支持 C++23 的编译器。
 只构建 Core 和版本探针、安装基础 stduuid/magic-enum 依赖时可以运行：
 
 ```sh
-cmake -S . -B out/build/local-stduuid -DDK_USE_VCPKG=ON -DDK_VCPKG_FEATURES= -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_UNIT_TESTS=OFF
+cmake -S . -B out/build/local-stduuid -DDK_USE_VCPKG=ON -DDK_VCPKG_FEATURES= -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_UNIT_TESTS=OFF
 cmake --build out/build/local-stduuid --config Debug
 ctest --test-dir out/build/local-stduuid -C Debug --output-on-failure
 ```
@@ -835,7 +844,7 @@ if (transform) {
 仅验证 Core/数学、关闭日志和 runner 的独立配置：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-math-only -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES=
+cmake --preset windows-dev -B out/build/windows-math-only -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_IO=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES=
 cmake --build out/build/windows-math-only --config Debug
 ctest --test-dir out/build/windows-math-only -C Debug --output-on-failure
 ```
@@ -879,7 +888,7 @@ if (root) {
 仅验证 Core/IO、关闭数学、日志和 runner，并开启警告即错误：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-io-only -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-io-only -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_MATH=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-io-only --config Debug
 ctest --test-dir out/build/windows-io-only -C Debug --output-on-failure
 ```
@@ -924,7 +933,7 @@ M1.6 已通过：默认 Debug/Release 各 **100 项通过、1 项权限跳过**�
 无日志、runner、Catch2、窗口和 GPU 依赖的独立配置：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-foundation -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-foundation -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_SCENE=OFF -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-foundation --config Debug
 ctest --test-dir out/build/windows-foundation -C Debug --output-on-failure
 cmake --build out/build/windows-foundation --config Release
@@ -961,7 +970,7 @@ JSON 限制 16 MiB、64 层嵌套；拒绝未知版本、字段、重复键/ID �
 独立 Scene 配置（关闭日志、示例与 runner）：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-scene-only -DDK_BUILD_MATH=ON -DDK_BUILD_IO=ON -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-scene-only -DDK_BUILD_MATH=ON -DDK_BUILD_IO=ON -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-scene-only --config Debug
 ctest --test-dir out/build/windows-scene-only -C Debug --output-on-failure
 ```
@@ -993,7 +1002,7 @@ Set-Content -LiteralPath out/demo-scene/mesh.bin -Value "M2 reference fixture"
 无日志、runner 和 Catch2 的场景示例配置：
 
 ```powershell
-cmake --preset windows-dev -B out/build/windows-scene-cpu -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-dev -B out/build/windows-scene-cpu -DDK_BUILD_MEMORY=OFF -DDK_BUILD_ASSET_RUNTIME=OFF -DDK_BUILD_ASSET_IMPORTERS=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_RUNNER=OFF -DDK_BUILD_UNIT_TESTS=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
 cmake --build out/build/windows-scene-cpu --config Debug
 ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
 ```
@@ -1002,7 +1011,7 @@ ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
 
 M1.6 与 M2.1–M2.4 已完成并分节本地提交。最终默认 Debug/Release 各 128 通过、
 1 项既有符号链接权限跳过；独立 Scene 配置各 104 通过、1 跳过，纯 CPU 示例各 16/16。
-上述计数为当时验收记录；M3 交付 A、M1.7.1–7 和 M4.1 也已完成，当前下一项为 M4.2.1。
+上述计数为当时验收记录；M3 交付 A、M1.7.1–7 和 M4.1 也已完成，M4.2.1 网格导入也已完成，当前下一项为 M4.2.2。
 
 开发前先看 [AGENTS.md](AGENTS.md) 和 [spec 规范](spec/README.md)：
 先创建/更新模块设计，然后实现；过程中持续更新编号开发记录。
