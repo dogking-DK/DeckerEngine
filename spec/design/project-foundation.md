@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-23T17:48:09+08:00"
+updated_at: "2026-09-28T16:15:12+08:00"
 status: accepted
 ---
 
@@ -26,14 +26,14 @@ engine/foundation/core 是首个真实静态库 `dk_core`，别名 `dk::core`。
 无参数或 `--help` 输出当前骨架用法；不支持的参数在 stderr 报错并返回 2。
 该程序始终链接 dk::core；FRAMEWORK 与 Scene 开启时链接 automation_transport → protocol → runtime。
 M3.4 runner 诊断直接写 stderr，不依赖可选 logging；最小 bootstrap 仍保留原功能范围。
-其他应用、模块和工具只预留目录并注明未实现。
+dk-assetc 已提供 CPU 离线资产导入；其他应用和规划模块的当前接入范围见[模块索引](README.md)。
 
 DK_BUILD_EXAMPLES 默认 ON；当前 math/io 同时启用时建立独立 dk-foundation-demo，
 不满足依赖时跳过，不反向开启模块。bootstrap 关闭示例。
 示例跨进程 CTest 不依赖 runner 或 Catch2，详见 [集成设计](foundation-integration.md)。
 M2 开发预设启用 DK_BUILD_SCENE（选项自身默认 OFF），构建 dk::asset_types/dk::scene。
 Scene 要求 math/io 同时开启；启用示例时增加 dk-scene-demo 及独立进程验收。
-bootstrap 和独立 Foundation 配置显式关闭 Scene；README 保留最新可复现命令。
+bootstrap 和独立 Foundation 配置显式关闭 Scene；[使用指南](../../README.md#按任务阅读)保留可复现命令。
 M3.1 新增 DK_BUILD_FRAMEWORK（默认 OFF，windows-dev ON），构建独立 dk::commands；
 commands feature 仅引入 JSON，场景关闭时不反向启用 Scene/Math/IO。
 M3.4 Scene 开启时继续装配 services/operations/runtime 与 automation/protocol/transport。
@@ -114,7 +114,8 @@ IO 通过默认开启的 DK_BUILD_IO 构建 dk::io，PUBLIC 链接 dk::core，PR
 bootstrap 也关闭 IO，接口和验证见 [IO 设计](foundation-io.md)。
 profiling feature 选择 Tracy on-demand 且关闭默认 features；开启 DK_ENABLE_PROFILING 时自动补充。
 memory feature 选择 mimalloc 3.5.3 且关闭默认 features；开启 DK_BUILD_MEMORY 时自动补充，不启用 override。
-仓库同版本 overlay 仅补充客户端 TRACY_ENABLE=ON，不通过消费方宏掩盖禁用的依赖库。
+Tracy 同版本 overlay 补充客户端 TRACY_ENABLE=ON；mimalloc 同版本 overlay 关闭 MI_WIN_REDIRECT，
+不通过消费方宏或过滤 stderr 掩盖依赖配置。具体状态见[三方库说明](../third-party-libraries.md)。
 工具端清单独立位于 tools/profiling，不在引擎构建中启用 GUI/CLI 工具 feature。
 
 `DK_VCPKG_FEATURES` 在首次 `project()` 前映射到
@@ -170,6 +171,28 @@ scripts/check-spec.ps1 将现有临时文档检查提升为仓库脚本，检查
 这三个 skill 不新增常驻 agent、并行委派或逐次小改留档要求。
 验证采用辅助脚本的正常/失败/零匹配/跳过案例、真实局部测试及 skill 格式/链接检查。
 本组改动合并记录到 [0019](../development/0019-development-skills.md)，不推进 M4。
+
+## 文档入口与一致性检查
+
+维护记录：[0041](../development/0041-ai-documentation-workflow.md)。根 AGENTS 保留稳定约束和路由，
+spec/README 是流程规范；README 保留快速开始和导航，长命令与使用示例按主题置于 spec/guides。
+Roadmap 维护阶段状态和依赖，模块设计描述当前契约，编号记录保存历史决策与当次验证证据。
+设计索引补充源码/测试入口；最近记录通过其 design_refs 定位，不维护另一份“最新编号”表。
+既有四个 skill 按需读取；状态参考补充异步发布、关闭回收和缓存恢复方法，不复制具体 API。
+协作约定放在 spec 流程中，仅在已授权使用多 agent 时适用，不自动启动并行任务。
+
+check-spec 保持只读、无需配置引擎或安装 Markdown/YAML 依赖：
+
+- 默认扫描 README、AGENTS、spec、skills，限定 Path 时只扫描指定 Markdown；全局索引、编号与测试入口检查仍执行。
+- 在本仓库的行式元数据约定下检查 module/id/status、时间与 design_refs；校验设计/开发索引与文件一一对应、状态一致。
+- 忽略 fenced code 后检查本地文件链接和断开的表格行；不把代码示例当成文档链接或表格。
+- 对测试选择表的 target 检查源码中的字面 add_executable 注册，并检查 tests 下注册的测试程序都有入口。
+  这只是静态入口覆盖，不解析 CMake 条件或推断 regex 完整性；实际可用性、名称和命中数仍由 verify/CTest 核对。
+- 不验证远端页面、Markdown 锚点或自然语言语义，不以脚本通过代替设计审阅。
+
+脚本验证采用临时独立仓库夹具，覆盖正常文档、索引遗漏/状态失配、错误引用、断表、未登记测试入口等行为；
+PowerShell 7 和 Windows PowerShell 5.1 各运行一次。文档移动核对命令块保留与链接更新，
+不改变 C++、构建选项或可执行示例行为，因此不运行引擎回归。
 
 ## 验证计划与取舍
 

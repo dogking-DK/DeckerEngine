@@ -1,7 +1,7 @@
 ---
 module: foundation-integration
 created_at: "2026-09-22T11:52:43+08:00"
-updated_at: "2026-09-22T11:52:43+08:00"
+updated_at: "2026-09-28T16:00:00+08:00"
 status: accepted
 ---
 
@@ -59,8 +59,8 @@ CTest 驱动实际示例进程，各案例创建构建目录内独立测试工�
 验证 save/load 跨进程 ID、矩阵派生结果一致、二次保存覆盖且无临时残留；
 验证损坏文件（ID/nil/版本/截断/非有限/非仿射/奇异/尾随数据/超限）、
 缺失文件/父目录、越界路径、参数错误的退出码、stderr 上下文、stdout 留空且不改写文件。
-全量 Debug/Release 回归，同时新建无日志/runner/Catch2 的 CPU 示例配置，
-分别验证 Debug/Release，仅依赖 stduuid、Eigen 及 vcpkg 构建辅助包。
+按受影响场景选择 CPU 示例进程测试；涉及依赖边界时验证无日志/runner/Catch2 的独立配置，
+仅依赖 stduuid、Eigen 及 vcpkg 构建辅助包。历史双配置结果见开发记录。
 重新检查 bootstrap 示例关闭与版本探针；既有符号链接权限跳过仍如实记录。
 
 ## 相关记录

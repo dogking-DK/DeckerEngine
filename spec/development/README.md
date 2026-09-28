@@ -34,20 +34,14 @@
 | 0030 | [重复工作负载与性能基线](0030-memory-baseline.md) | foundation-memory, foundation-profiling | completed |
 | 0031 | [M4.1.1 元数据与身份目录](0031-asset-metadata-catalog.md) | assets-runtime, assets-types, project-format | completed |
 | 0032 | [M4.1.2 登记提交与受控改名](0032-asset-commit-recovery.md) | assets-runtime, project-format | completed |
-
 | 0033 | [M4.2.1 CPU 数据与网格导入](0033-cpu-mesh-import.md) | assets-importers, assets-runtime | completed |
 | 0034 | [M4.2.2 纹理与离线工具](0034-textures-assetc.md) | assets-importers, assets-runtime | completed |
-
 | 0035 | [M4.3.1 内容键与产物发布](0035-asset-cache-publication.md) | assets-runtime, assets-importers | completed |
-
 | 0036 | [M4.3.2 失效、重建与显式清理](0036-asset-cache-invalidation.md) | assets-runtime, assets-importers | completed |
-
 | 0037 | [M4.4.1 CPU 工作队列](0037-cpu-job-queue.md) | foundation-jobs, foundation-memory | completed |
-
 | 0038 | [M4.4.2 异步资产状态](0038-async-asset-state.md) | assets-runtime, foundation-jobs | completed |
-
 | 0039 | [M4.4.3 服务与命令接入](0039-assets-jobs-commands.md) | runtime, application-services, foundation-jobs | completed |
-
 | 0040 | [M4.4.4 CPU 资产交付验收](0040-cpu-assets-delivery.md) | assets-runtime, foundation-jobs, runtime | completed |
+| 0041 | [AI 文档入口与开发协作优化](0041-ai-documentation-workflow.md) | project-foundation, foundation-memory, runtime | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

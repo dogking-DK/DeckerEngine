@@ -1,7 +1,7 @@
 ---
 module: foundation-io
 created_at: "2026-09-22T11:06:07+08:00"
-updated_at: "2026-09-23T16:44:00+08:00"
+updated_at: "2026-09-28T16:00:00+08:00"
 status: accepted
 ---
 
@@ -127,7 +127,7 @@ File.hpp 增加 write_file_bytes_atomic(path, span<const byte>) -> Result<void>�
 内部操作接口仅由 IO 自身实现/测试引用，不作为其他引擎模块的依赖。
 覆盖候选碰撞及耗尽、短写/零进展、Windows 共享冲突/只读文件、
 中文/空/大字节序列、无父目录、非法目标、重复保存、错误诊断。
-Debug/Release 全量和仅 Core/IO（警告即错误）回归后同步 0007 与 roadmap。
+按受影响 IO/安全保存行为回归；涉及依赖边界时补充仅 Core/IO（警告即错误）配置。历史证据见 0007。
 
 ## M1.4 实施记录
 
@@ -138,7 +138,7 @@ Debug/Release 全量和仅 Core/IO（警告即错误）回归后同步 0007 与 
    空文件、所有字节值、跨块 IO、缩短覆盖、精确上限/超限、
    缺失文件/父目录、目录误用、Windows 文件共享冲突。
 4. 测试产物位于构建目录 test-artifacts/<config>/io 独立子目录。
-5. Debug/Release 全量回归、关闭数学/日志/runner 的独立 IO 配置和 bootstrap；
+5. 执行受影响 IO 用例；依赖变化时补充关闭数学/日志/runner 的独立 IO 配置或 bootstrap；
    如实记录未验证的平台与故障。
 6. 完成后同步文档并单独本地提交 M1.4，不推送远程。下一阶段为 M1.5。
 

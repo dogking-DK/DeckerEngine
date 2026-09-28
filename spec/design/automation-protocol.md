@@ -1,15 +1,15 @@
 ---
 module: automation-protocol
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-09-28T15:06:06+08:00"
+updated_at: "2026-09-28T16:00:00+08:00"
 status: accepted
 ---
 
-# JSON-RPC 与行传输（M3.4）
+# JSON-RPC 与行传输
 
 dk::automation_protocol 实现 [JSON-RPC 2.0](https://www.jsonrpc.org/specification) 请求分派，
 PUBLIC 依赖 dk::runtime。dk::automation_transport 提供流循环，PRIVATE/ PUBLIC 依赖协议按公开接口声明。
-M3.4 为文件批处理，M3.5 复用同一协议并接入持续 stdio/同步任务状态；不建立 TCP/命名管道。
+文件批处理与持续 stdio 复用同一协议和同步命令任务状态；不建立 TCP/命名管道。
 
 请求为 {jsonrpc:"2.0",method:string,params?:object,id?:string|integer|null}；
 id 整数限 int64 范围，拒绝浮点、bool、数组/对象；字符串最多 256 个 UTF-8 字节。
@@ -38,4 +38,4 @@ M3.5 stdio 使用完全相同的请求/响应格式，客户端从 result.value.
 shutdown 所在协议 batch 会完成其余元素的错误响应，然后一次刷新并关闭；随后各行不再读取。
 任务终态和缓存定义见 [Runtime](runtime.md)。
 
-M4.4.3 Windows stdio 改为独立可取消 ReadFile reader（8 行队列）与 owner RuntimeEvents 循环，输入空闲时也可提交完成项；JSON-RPC envelope 与 TaskId 保持兼容。退出刷新响应后取消 reader 并 join，再回收 worker；实现细节见 [Runtime](runtime.md)。
+Windows stdio 使用独立可取消 ReadFile reader（8 行队列）与 owner RuntimeEvents 循环，输入空闲时也可提交完成项；JSON-RPC envelope 与 TaskId 保持兼容。退出刷新响应后取消 reader 并 join，再回收 worker；实现细节见 [Runtime](runtime.md)。

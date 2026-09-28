@@ -1,7 +1,7 @@
 ---
 module: foundation-math
 created_at: "2026-09-22T10:28:51+08:00"
-updated_at: "2026-09-22T10:55:54+08:00"
+updated_at: "2026-09-28T16:00:00+08:00"
 status: accepted
 ---
 
@@ -133,7 +133,7 @@ float/double 都验证默认单位值、明确的 T/R/S 顺序、四元数归一
 父子和三级组合、含剪切矩阵的保留与往返逆、镜像、
 零缩放正向可用/求逆拒绝、病态矩阵拒绝、极端均匀缩放、
 非有限/非仿射输入拒绝、组合/点/方向/求逆溢出错误和输入不变性。
-项目 Debug/Release 全量回归，另验证关闭日志/runner 的数学配置。
+按受影响数学行为定向回归；依赖边界变化时验证关闭日志/runner 的数学配置。
 M1.3 完成后下一项为 M1.4 文件 IO，不在本次实现 IO。
 
 M1.3 已验收：Windows Debug/Release 各 60 项通过，
@@ -155,7 +155,7 @@ M1.3 已验收：Windows Debug/Release 各 60 项通过，
 4. float/double 验证坐标手性、列向量/列主序、点与方向、复合顺序、
    角度往返、归一化、极大/极小输入、非有限/零失败路径、四元数顺序、
    q/-q 旋转等价和标准容器使用。
-5. Windows Debug/Release 开启项目 warnings-as-errors，运行 Core 与数学全部测试；
+5. 在所选 Windows 配置开启 warnings-as-errors，运行受影响的数学与 Core 用例；
    额外验证关闭数学的 bootstrap 及无日志的独立数学配置。
 6. 完成 M1.2 后停在明确交付边界；M1.3 先扩展设计再实施，不将整个 M1 标为完成。
 

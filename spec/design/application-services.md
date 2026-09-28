@@ -1,11 +1,11 @@
 ---
 module: application-services
 created_at: "2026-09-22T13:28:00+08:00"
-updated_at: "2026-09-28T15:24:33+08:00"
+updated_at: "2026-09-28T16:00:00+08:00"
 status: accepted
 ---
 
-# 场景服务和编辑操作（M3.2）
+# 场景与资产应用服务
 
 services 提供 dk::scene_services，PUBLIC 依赖 Scene；operations 提供 dk::scene_operations，
 PUBLIC 依赖 commands 和 services。framework 与 Scene 同时开启时构建；没有窗口、GPU 或传输依赖。
@@ -37,18 +37,17 @@ revision 和 dirty 沿用 Scene 语义；无变化操作不递增。new/load、�
 所有 UUID 必须为规范非 nil 字符串；revision 必须为非负整数且不溢出 uint64。
 TRS 为 translation[3]、rotation[x,y,z,w]、scale[3]；所有数值有限，服务/Scene 完成语义校验。
 set_assets 先确认注册种类和文件，再执行单次修改。JSON schema 禁止未知字段。
-编辑使用 Edit variant（创建/删除/改名/变换/父级/资产），为 M3.3 批量事务复用。
-M3.2 每条编辑对应一次 Scene 调用；M3.3 改为统一的内存事务，Runtime 留待后续小节。
-服务活得比引用它的 registry 更久；不存在全局单例和后台线程。
+单条与批量编辑复用 Edit variant（创建/删除/改名/变换/父级/资产）和统一内存事务。
+服务活得比引用它的 registry 更久；SceneService 本身不启动后台线程，资产 worker 由下述资产服务拥有。
 
 ## 验证
 
 通过同一注册表完成父子创建、名称/变换/资产编辑、查询、保存和重载；
 检查 stale revision、会话 ID 更换、失败加载、非叶删除、循环父级、缺失资源均不破坏状态。
-默认 Debug/Release 回归，独立命令配置保持可构建。
+按受影响服务/事务和命令边界选择定向测试；涉及条件编译时检查独立命令配置。
 记录：[0014](../development/0014-scene-services.md)。
 
-## M3.3 事务和历史
+## 事务和历史
 
 edit_batch(guard, edits) 限 1–128 条。先快照并构建独立暂存文档，在暂存文档顺序编辑；
 中途失败丢弃暂存结果，真实文档和历史不变。成功将内容作为一个提交，真实 revision 只加 1。
@@ -69,6 +68,6 @@ history.status 返回 undo_count/redo_count/logical_bytes；history.undo/redo �
 验证失败回滚、稳定 ID、层级恢复、no-op/redo、资产失踪后撤销、预算淘汰、revision 上限和保存状态。
 记录：[0015](../development/0015-transactions-history.md)。
 
-## M4.4.3 资产服务
+## 资产服务
 
 AsyncAssetService 独立拥有 MemorySystem、Jobs 和 CPU 状态，通过 AssetOperations 注册 11 条命令。目录可独立 open；目录 guard 与 Scene guard 分离。SceneService 记录 manifest，同一清单的资产映射刷新不修改文档或历史。project.save 目标匹配活动目录时（含刚 new 的 Scene）先同步映射，成功后刷新工程 name/scene 和清单字节快照，资产映射不变则保留目录 guard。详细生命周期见 [Runtime](runtime.md)，命令见 [资产参考](../commands/assets.md)。

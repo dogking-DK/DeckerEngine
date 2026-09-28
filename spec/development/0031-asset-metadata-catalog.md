@@ -1,7 +1,7 @@
 ---
 id: "0031"
 created_at: "2026-09-28T10:29:00+08:00"
-updated_at: "2026-09-28T10:54:16+08:00"
+updated_at: "2026-09-28T16:00:00+08:00"
 status: completed
 design_refs:
   - ../design/assets-runtime.md
@@ -61,7 +61,7 @@ IO/JSON DOM、查找临时容器和旧 Project 边界复用标准存储，未建
 ## 验证结果
 
 Windows x64 / MSVC 19.51.36257.0，Debug，`/W4 /WX`。相关配置/验证命令已写入
-[README](../../README.md#资产元数据与登记候选m411)，下列证据均由 scripts/verify.ps1 产生：
+[README](../guides/assets.md#资产元数据登记与改名m41)，下列证据均由 scripts/verify.ps1 产生：
 
 | 检查 | 结果 | 证据目录 |
 | --- | --- | --- |

@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-28T15:24:33+08:00"
+updated_at: "2026-09-28T16:00:00+08:00"
 status: accepted
 ---
 
@@ -16,33 +16,11 @@ status: accepted
 
 技术方向：C++23、Eigen、Vulkan、Slang、SDL3、ImGui、CMake、vcpkg；
 ECS 使用 flecs，内嵌脚本计划用 Lua/sol2，外部自动化计划用 Python。
-已实现工程骨架、Core 错误/日志/稳定 ID、Eigen 基础数学、仿射 Transform、
-工程路径、二进制文件 IO 和 Windows 同目录安全保存，已通过独立 CPU 示例的集成验收。
-M1 完成，M2 已接入 flecs 场景文档、组件层级、工程/资产引用和 JSON 安全保存/重载，
-见 [Scene 设计](scene.md)、[工程协议](project-format.md) 和 [资产类型](assets-types.md)。
-M3.1 已接入独立 [命令层](commands.md)，供后续服务和自动化共用契约。
-M3.2 [场景服务与操作层](application-services.md) 已提供会话 guard、实体编辑、分页查询与保存。
-M3.3 的内存事务/撤销重做和 M3.4 [CPU Runtime](runtime.md)、[JSON-RPC 批处理](automation-protocol.md) 已通过进程验收。
-M3.5 持续 stdio、同步任务查询和关闭已完成，M3 交付 A 验收见 [0017](../development/0017-stdio-delivery-a.md)。
-M4 的 [资产运行时](assets-runtime.md)、[导入器](assets-importers.md)、
-[CPU 作业](foundation-jobs.md) 设计稿和 [实施小节](../development/0020-m4-development-plan.md)
-已建立；M4.1 已实现 meta v1、身份目录、登记候选和 Project 适配，见 [0031](../development/0031-asset-metadata-catalog.md)，
-以及持久登记、同目录改名、多文件补偿/恢复与 XXH3-128 摘要，见 [0032](../development/0032-asset-commit-recovery.md)。
-M4.2 已实现静态 glTF/GLB CPU 网格、材质、PNG/JPEG 纹理、产物 v1 和独立 dk-assetc，
-见 [0033](../development/0033-cpu-mesh-import.md)、[0034](../development/0034-textures-assetc.md)。
-M4.3 已实现内容键、缓存命中/current 发布、依赖失效重建与显式有界清理，见
-[0035](../development/0035-asset-cache-publication.md)、[0036](../development/0036-asset-cache-invalidation.md)。
-M4.4 已实现有界 Jobs、异步 CPU Ready、资产/作业命令、可取消 stdio 输入及重启/退出闭环，见 [0037](../development/0037-cpu-job-queue.md)–[0040](../development/0040-cpu-assets-delivery.md)。M4 已验收，下一项 M5.1；其余模块在开始开发前另写专项设计。
-M4 之前新增 M1.7 [Memory System](foundation-memory.md) 与
-[Tracy 性能分析](foundation-profiling.md) 基础设施补充，不包含在原 M1–M3 验收中。
-M1.7.1 的 CPU 包装、Runtime/IO 埋点、条件构建与真实 capture 已验收；M1.7.2 的多实例 heap、
-预算、关闭闸门及 backing 内存事件已验收。M1.7.3 的 PMR、拥有型容器/智能指针、最小 context 与
-持久域路由已验收。M1.7.4 的 ScratchArena、自动嵌套作用域、保留上限与 Tracy 曲线已验收；
-M1.7.5 的局部/共享 Pool、ObjectPool、受控 trim 与用量曲线已验收；
-M1.7.6 的 ThreadContext local pool 装配、拥有型 RoutingToken、worker 缓存退休与多系统关闭已验收，
-见 [0029](../development/0029-memory-context-routing.md)。M1.7.7 的重复工作负载与三配置采集基线已完成，
-见 [0030](../development/0030-memory-baseline.md) 和[基线报告](../benchmarks/2026-09-28-memory.md)；M1.7 全部验收。GPU 事件留在后续阶段。
-Runtime 已在 M4.4 自动装配 Assets/Jobs heap 与线程上下文，worker 捕获拥有型路由并在安全点退休。
+当前 CPU 链路由 Foundation/Memory/Jobs、Scene、Commands/Services/Runtime 和 Assets 组成。
+模块接口与实现入口见[设计索引](README.md)，阶段状态和下一项统一见[Roadmap](../roadmap.md)，
+历史验收结果见[开发记录](../development/README.md)。
+Runtime 装配 Assets/Jobs heap 与线程上下文；worker 捕获拥有型路由并在安全点退休。
+窗口、GPU、编辑器和脚本按后续阶段接入，预留目录不代表已有能力。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，
@@ -52,7 +30,7 @@ Runtime 已在 M4.4 自动装配 Assets/Jobs heap 与线程上下文，worker �
 
 | 目录 | 职责 | 依赖约束 |
 | --- | --- | --- |
-| engine/foundation | core、数学、IO、可选 profiling、memory heap/拥有型接口/scratch/pool；规划任务、元数据 | 不依赖 Scene、Vulkan、Editor；profiling 不反向依赖 memory |
+| engine/foundation | core、数学、IO、profiling、memory、CPU jobs；metadata 预留 | 不依赖 Scene、Vulkan、Editor；profiling 不反向依赖 memory |
 | engine/platform | 窗口、输入、SDL3 后端 | 可选，CPU 无窗口运行不依赖它 |
 | engine/geometry | AABB、射线、CPU BVH | 仅基础数学/数据 |
 | engine/assets | 资产类型、运行时、导入器 | 与设备资源和图资源分离 |
@@ -65,8 +43,7 @@ Runtime 已在 M4.4 自动装配 Assets/Jobs heap 与线程上下文，worker �
 | engine/scripting | 脚本 API 和 Lua 绑定 | 经命令/服务操作引擎 |
 | engine/editor | 模型、交互、控件、面板 | 经命令/服务修改状态 |
 
-`apps/editor`、`apps/runner`、`apps/ctl` 分别计划为
-`dk-editor`、`dk-run`、`dk-ctl`。
+`apps/runner` 已提供 `dk-run`；`apps/editor`、`apps/ctl` 分别预留 `dk-editor`、`dk-ctl`。
 `tools/assetc` 和 `tools/shaderc` 为离线工具；
 `sdk/python` 为外部客户端，`shaders/common` 为公共 Slang 模块。
 `projects/demo` 预留示例资产、场景和脚本。
@@ -111,7 +88,7 @@ Runtime 已在 M4.4 自动装配 Assets/Jobs heap 与线程上下文，worker �
 工程基础 → Foundation/资产身份 → Scene/序列化 → Commands/服务/CPU Runtime →
 Memory/Tracy 补充 → 资产加载/导入 → Vulkan Device/Shader → GPU Graph → 场景渲染 → Editor/IPC →
 脚本自动化 → Physics 实验。
-可以按需求调整，但在编写模块实现前完成对应专项设计和编号开发记录。
+可以按需求调整；实现前维护模块设计，开发记录粒度遵循 [spec 规范](../README.md)。
 阶段依赖、交付节点和验收条件以 [开发 Roadmap](../roadmap.md) 为准。
 每个里程碑细分为可独立验收的 Mx.y 小阶段，默认单次开发只推进一个。
 

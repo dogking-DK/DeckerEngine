@@ -1,7 +1,7 @@
 ---
 module: scene
 created_at: "2026-09-22T12:05:49+08:00"
-updated_at: "2026-09-23T08:59:46+08:00"
+updated_at: "2026-09-28T16:00:00+08:00"
 status: accepted
 ---
 
@@ -65,7 +65,7 @@ C++ 异常路径销毁已建实体、回收索引项，提交后才更新 revisi
 验证自动/指定 SceneId、nil 拒绝、生成/导入实体 ID、重复/缺失编辑状态不变、
 真实 ECS/索引一致、删除后旧 ID 不会指向新实体、跨文档隔离、排序与反复创建/销毁。
 消费者测试只 include dk 头并链接 dk::scene，确认 flecs 私有依赖和 DLL 布署。
-Debug/Release 全量回归；独立仅 Core/Scene/Catch2（关闭数学/IO/日志/示例/runner）
+按受影响身份/生命周期行为定向回归；依赖变化时补充独立 Core/Scene/Catch2（关闭数学/IO/日志/示例/runner）
 验证 M2.1 边界。M2.2 引入数学后再调整独立配置。
 
 ## 组件与层级（M2.2）
@@ -93,7 +93,7 @@ destroy_entity 仅允许叶节点，非叶拒绝且不改变 revision；调用�
 层级编辑 O(N+E)，尚不做脏子树增量更新。普通创建、名称和叶删除无需重建整个 world。
 
 验证多级传播、非均匀缩放剪切、负/零缩放、规范化、重挂/解绑、无操作、
-缺失实体、坏名称、循环、非叶删除、溢出回退和属性描述；默认 Debug/Release 回归，
+缺失实体、坏名称、循环、非叶删除、溢出回退和属性描述；选择本次受影响用例，
 独立 Scene 配置加入数学并继续以警告即错误构建。
 
 ## 场景协议、快照与安全重载（M2.4）
@@ -136,7 +136,7 @@ IO 增加带验证器的 atomic writer 重载，验证器只读临时路径，�
 验收覆盖包含父子/剪切/资产/Unicode 的文件往返，子在父前、重复/坏版本、
 循环/孤儿/缺失资源、失败重载保留旧对象与 revision/dirty、旧快照保存、
 跨实例快照拒绝、最大 revision、真实文件共享冲突、验证器失败和异常清理。
-默认与最小 Scene Debug/Release 回归，并运行独立 CPU 场景进程示例闭环。
+选择相关 Scene 用例和独立 CPU 场景进程闭环；条件编译变化时补充最小 Scene 配置。
 
 examples/scene 提供 dk-scene-demo create/load ROOT，要求已有根目录和 mesh.bin 引用占位文件。
 create 生成父子实体并覆盖 scene.json/project.json；两文件各自原子，非多文件事务。

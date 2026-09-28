@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-09-28T15:24:33+08:00"
+updated_at: "2026-09-28T16:15:12+08:00"
 status: accepted
 ---
 
@@ -465,54 +465,21 @@ GPU 未完成前不释放状态，也不默认经 CPU 读回再上传。
 
 ## 当前执行边界与下一步
 
-已完成 **M1.6 Foundation 集成验收**，设计见 [foundation-integration.md](design/foundation-integration.md)，
-记录见 [0008](development/0008-foundation-integration.md)。原 M1.1–M1.6 在当前 Windows 本地文件范围内完成。
-CPU 示例串联 ID、仿射变换与安全保存/重载；15 项进程集成测试在无日志/runner/Catch2 的
-Debug/Release 配置通过。既有符号链接测试因权限跳过，其他平台和断电恢复不在已验证范围。
+M0–M4 以及 M1.7 Memory/Tracy 补充均已完成。当前可运行的 CPU 链路包括
+Foundation、Scene 持久化、命令/事务、batch/stdio、资产导入/缓存与异步 CPU Ready。
+各小阶段的验收条件与证据入口见上表；历史测试计数保留在[开发记录](development/README.md)，不作为日常固定回归套件。
+M4 的进程重启、取消和退出验收见 [0040](development/0040-cpu-assets-delivery.md)，
+Memory 的测量条件与限制见[基线报告](benchmarks/2026-09-28-memory.md)。
 
-M2.1–M2.4 已按连续授权完成，每节均先设计、单独记录、验证和详细本地提交。
-默认 Debug/Release 各 128 通过、1 项既有权限跳过；无日志/runner/示例配置各 104 通过、1 跳过；
-无日志/runner/Catch2 CPU 示例配置各 16/16。快照精度、旧 revision 保存和失败状态保护均通过。
-用户授权的 M3 全部小节已逐节设计、留档、测试并详细本地提交。
-M3.1 已完成：默认 Debug/Release 各 133 通过、1 既有权限跳过；独立命令层各 15/15。
-M3.2 已完成：默认 Debug/Release 各 137 通过、1 既有权限跳过；独立命令层各 16/16。
-M3.3 已完成：默认 Debug/Release 各 143 通过、1 既有权限跳过，原子事务与有界历史通过。
-M3.4 已完成：默认 Debug/Release 各 149 通过、1 既有权限跳过；独立 CPU Runtime 各 3/3，bootstrap 各 1/1。
-M3.5 已完成：最终默认 Debug/Release 各 152 通过、1 既有权限跳过；独立 CPU Runtime 各 4/4，
-bootstrap 各 1/1。真实持续 stdio 在 stdin 打开时即时响应、保存/关闭/EOF/重启均通过，交付 A 完成。
-**M1.7.1 已完成**：Tracy 0.14.1、CPU 包装、Runtime/IO 埋点、OFF/ON 定向测试与真实 capture。
-**M1.7.2 已完成**：mimalloc 3.5.3 heap、域/ResourceHandle、预算/关闭闸门与 Tracy backing 事件。
-**M1.7.3 已完成**：PMR、拥有型 Allocator/Buffer、容器与智能指针、最小线程 context 和持久域路由。
-**M1.7.4 已完成**：ScratchArena、自动嵌套 ScratchScope、保留上限、PMR 临时容器与 Tracy 用量曲线。
-**M1.7.5 已完成**：LocalPool/SharedPool、ObjectPool、拥有型 pool allocator、受控 trim 与用量曲线。
-**M1.7.6 已完成**：ThreadContext local pool 装配、RoutingToken、worker context 缓存退休、双系统关闭与延迟释放。
-**M1.7.7 已完成**：重复矩阵与 owning 结果交接管线、三配置真实采集、性能基线和完整聚合表。
-M1.7 全部完成。**M4.1 已完成**：meta v1、身份目录、登记提交、只读 Project 替换、同目录改名和未完成操作恢复。
-**M4.2 已完成**：CPU 网格/材质/纹理、版本化产物和 dk-assetc；**M4.3 已完成**：内容缓存、失效重建与显式清理；**M4.4 已完成**：有界 Jobs、异步 CPU Ready、命令与进程重启/回收；下一项为 **M5.1 Vulkan 设备与诊断**。
-每次默认仅推进一个独立小节，本次用户指定的整个 M4.4 已按四个小节分别验收。
+下一项为 **M5.1 Vulkan 设备与诊断**。开始前先建立对应模块设计，
+默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
+已有 CPU 验收不代表 GPU、其他平台或跨文件断电原子性已经验证。
 
-根目录 VS2026 生成脚本作为工程维护完成，见 [0018](development/0018-vs2026-generation-script.md)，不改变里程碑顺序。
-三个开发辅助 skill 与定向验证脚本已作为工程维护完成，见
-[0019](development/0019-development-skills.md)，不改变里程碑顺序。
-M4 开发安排与三份设计稿见 [0020](development/0020-m4-development-plan.md)，
-该编号仅记录设计准备，不作为任何 M4 实现小节的完成证据。
-[0021](development/0021-vcpkg-baseline-update.md) 已完成依赖基线升级与库说明，
-[0022](development/0022-memory-profiling-design.md) 记录 Memory/Tracy 设计，不作为实现验收证据。
-[0023](development/0023-tracy-cpu-profiling.md) 为 M1.7.1 的实现验收记录。
-[0024](development/0024-mimalloc-heap.md) 为 M1.7.2 的实现验收记录。
-[0025](development/0025-memory-ownership-routing.md) 为 M1.7.3 的实现验收记录。
-[0026](development/0026-scratch-arena.md) 为 M1.7.4 的实现验收记录。
-[0027](development/0027-memory-pools.md) 为 M1.7.5 的实现验收记录。
-枚举反射依赖及字符串迁移单独记录于 [0028](development/0028-magic-enum.md)，不推进 M1.7.6。
-[0029](development/0029-memory-context-routing.md) 为 M1.7.6 的实现验收记录。
-[0030](development/0030-memory-baseline.md) 为 M1.7.7 的实现验收记录。
-[0031](development/0031-asset-metadata-catalog.md) 为 M4.1.1 的实现验收记录。
-[0032](development/0032-asset-commit-recovery.md) 为 M4.1.2 的实现验收记录。
-[0033](development/0033-cpu-mesh-import.md)、[0034](development/0034-textures-assetc.md) 为 M4.2 两个小节的验收记录。
-当前下一可用开发编号为 **0041**；实际开工时重新扫描
-[开发目录](development/README.md)，取最大编号加一。
-重要设计准备或实际开发开始时创建编号记录，不预建未来小节的空日志；
-子阶段状态和验收证据在本文件及对应实施记录持续维护。
+工程基础维护记录包括 [0018](development/0018-vs2026-generation-script.md)、
+[0019](development/0019-development-skills.md) 和 [0041](development/0041-ai-documentation-workflow.md)，不改变里程碑顺序。
+设计准备记录与实现验收分开：[0020](development/0020-m4-development-plan.md)、
+[0022](development/0022-memory-profiling-design.md) 本身不作为实现完成证据。
+开发编号在实际创建记录时扫描目录取最大值加一，不在导航文档预写下一编号。
 
 ## 全阶段完成标准
 

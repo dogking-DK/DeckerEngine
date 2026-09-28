@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-28T15:06:06+08:00"
+updated_at: "2026-09-28T16:15:12+08:00"
 status: accepted
 ---
 
@@ -9,7 +9,7 @@ status: accepted
 
 本文集中说明三方库的用途、当前版本、接入状态和版本维护规则。
 依赖声明以 [vcpkg.json](../vcpkg.json) 为准，实际模块选择见
-[CMake 映射](../cmake/Vcpkg.cmake)，构建入口见 [README](../README.md#vcpkg-开发配置)。
+[CMake 映射](../cmake/Vcpkg.cmake)，构建入口见 [构建指南](guides/build.md#vcpkg-开发配置)。
 模块内部的封装和接口约定继续放在对应设计中；历史升级过程见开发记录。
 
 ## 版本规则

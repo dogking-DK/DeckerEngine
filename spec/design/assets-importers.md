@@ -1,7 +1,7 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T14:45:27+08:00"
+updated_at: "2026-09-28T16:00:00+08:00"
 status: accepted
 ---
 
@@ -194,7 +194,7 @@ dk-assetc import --project-root ROOT --source assets/model.glb --output imported
 M4.4 的 AssetService 提供有版本检查的清单适配。M4.2.2 先固定并验证 CPU 产物 v1，
 无缓存时写入独立输出目录；M4.3 复用该格式并增加内容键/current 索引，不能暂用对象内存 dump。
 根目录与输入使用 IO 路径约定，Windows 原生参数兼容 Unicode；退出 0 成功、1 导入失败、
-2 参数错误、3 致命基础设施错误。flags/help 与可执行夹具示例见[根 README](../../README.md#cpu-导入与离线工具m42)。
+2 参数错误、3 致命基础设施错误。flags/help 与可执行夹具示例见[根 README](../guides/assets.md#cpu-导入与离线工具m42)。
 
 ## 验证与演进
 

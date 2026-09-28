@@ -1,7 +1,7 @@
 ---
 module: commands
 created_at: "2026-09-22T13:12:54+08:00"
-updated_at: "2026-09-24T10:21:18+08:00"
+updated_at: "2026-09-28T16:00:00+08:00"
 status: accepted
 ---
 
@@ -58,7 +58,7 @@ parse_command_json 拒绝重复键、坏 UTF-8、非 JSON 数值及尾随文本�
 没有动态插件卸载、并发注册、后台任务、Scene 行为或传输层。
 
 验证独立 commands 构建、发现排序、重复/坏注册、嵌套 schema、未知/缺失字段、
-整数/Unicode/非有限边界、坏结果与异常错误，以及默认 Debug/Release 回归。
+整数/Unicode/非有限边界、坏结果与异常错误；按本次行为选择相关用例和配置。
 
 参考：[JSON Schema 对象](https://json-schema.org/understanding-json-schema/reference/object)；
 记录：[0013](../development/0013-command-registry.md)。

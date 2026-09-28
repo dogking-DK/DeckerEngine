@@ -10,13 +10,25 @@
 | stdout/stderr 日志分离 | dk_log_probe | `^dk\.core\.log_stream_separation$` |
 | Eigen 基础数学/Transform | dk_math_tests | `^dk\.math\.` |
 | 路径、字节 IO、原子保存 | dk_io_tests | `^dk\.io\.` |
+| Memory heap、拥有型接口、arena/pool、context/token | dk_memory_tests | `^dk\.memory\.`（探针/benchmark 另见下列入口） |
+| heap 分配/跨线程释放与采集探针 | dk_memory_probe | `^dk\.memory\.probe$` |
+| ScratchArena 用量与采集探针 | dk_arena_probe | `^dk\.memory\.arena_probe$` |
+| Pool 复用与采集探针 | dk_pool_probe | `^dk\.memory\.pool_probe$` |
+| 多系统上下文与 worker 退休探针 | dk_context_probe | `^dk\.memory\.context_probe$` |
+| 重复工作负载 smoke、参数/部分失败 | dk_memory_benchmark | `^dk\.memory\.benchmark_` |
+| CPU profiling 探针 | dk_profiling_probe | `^dk\.profiling\.smoke$` |
+| profiling 关闭时无副作用 | dk_profiling_disabled_test | `^dk\.profiling\.disabled_no_side_effects$` |
+| Jobs 排队、取消、完成、关闭与保留上限 | dk_jobs_tests | `^dk\.jobs\.` |
 | Scene、Project、JSON 持久化 | dk_scene_tests | `^dk\.scene\.` |
-| Asset meta/身份目录、登记/改名/补偿、Project 发布 | dk_asset_tests | `^dk\.assets\.(asset |catalog |content digest|metadata |project )` |
+| Asset meta/身份目录、登记/改名/补偿、Project 发布 | dk_asset_tests | `^dk\.assets\.`（restart 探针另见下行） |
 | Asset 未完成操作的跨进程恢复（Windows/Services） | dk_asset_recovery_probe | `^dk\.assets\.restart_` |
 | CPU glTF 网格/纹理导入与预算 | dk_import_tests | `^dk\.import\.` |
 | CPU 产物编解码、meta/发布失败保护 | dk_asset_pipeline_tests | `^dk\.pipeline\.` |
 | assetc Unicode/JSON/重导入真实进程 | dk_assetc | `^dk\.assetc\.` |
 | 资产缓存 key/命中/发布/失效清理 | dk_asset_cache_tests | `^dk\.cache\.` |
+| 异步资产候选、取消/代际、owner 发布与 Ready 寿命 | dk_async_asset_tests | `^dk\.async_assets\.` |
+| 资产/作业命令 schema、guard 与服务接入 | dk_asset_command_tests | `^dk\.asset_commands\.` |
+| CPU 资产真实 stdio、重启与关闭 | dk_run | `^dk\.runtime\.assets_stdio$` |
 | 命令注册、schema | dk_commands_tests | `^dk\.commands\.` |
 | 服务、事务、历史、Operations | dk_service_tests | `^dk\.services\.` |
 | JSON-RPC、JSON Lines、任务 | dk_protocol_tests | `^dk\.protocol\.` |
@@ -26,8 +38,12 @@
 | Scene 跨进程往返 | dk_scene_demo | `^dk\.scene_demo\.` |
 
 Core 查找范围包含单独的日志探针：选择该用例时也要构建 dk_log_probe。
+Memory 范围同时包含多个探针和 benchmark；Assets 范围包含 restart 探针。
+先按候选测试名缩小筛选，或补齐所选程序的构建 target；不能仅构建单元测试后运行整个前缀。
 float/double 参数化用例需保留与改动相关的两种类型；不要因为名称相似漏掉实际受影响用例。
-只有在对应构建选项开启时才存在相关 target；完整开发预设为 windows-dev，其他配置查 README。
+只有在对应构建选项开启时才存在相关 target；完整开发预设为 windows-dev，其他配置见[构建指南](../../../../spec/guides/build.md)。
+新增/删除测试程序时同步此表；check-spec 静态校验 target 存在及 tests 目录的程序覆盖。
+它不解析 CMake 条件、验证所有 regex 或替代实际 CTest 枚举。Tracy capture/readback 的额外工具见[Memory 指南](../../../../spec/guides/memory.md)。
 
 ## 按影响选择
 

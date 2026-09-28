@@ -1,7 +1,7 @@
 ---
 module: project-format
 created_at: "2026-09-22T12:28:05+08:00"
-updated_at: "2026-09-28T11:32:11+08:00"
+updated_at: "2026-09-28T16:00:00+08:00"
 status: accepted
 ---
 
@@ -42,7 +42,7 @@ Scene 文件持久化由 [Scene M2.4](scene.md) 规定；此接口不修改资�
 
 验证 JSON 往返/确定输出、版本与类型、重复键/ID、nil、路径越界、超限/深度、
 非法 UTF-8、引用错误保留场景 revision、真实 Unicode 工程根/文件以及缺失诊断。
-默认 Debug/Release 回归，最小 Scene 配置新增 IO/JSON；无日志或 GPU 依赖。
+按格式/持久化变更选择定向回归；最小 Scene 配置包含 IO/JSON，无日志或 GPU 依赖。
 文件写入在 M2.4 通过 Foundation atomic writer 提供；M2.3 只返回编码文本和读取。
 不提供 schema 迁移、资产解码或持续文件监视。
 

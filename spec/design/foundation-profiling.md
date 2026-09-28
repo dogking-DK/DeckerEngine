@@ -1,7 +1,7 @@
 ---
 module: foundation-profiling
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-28T10:17:43+08:00"
+updated_at: "2026-09-28T16:15:12+08:00"
 status: accepted
 ---
 
@@ -169,14 +169,14 @@ M1.7.7 使用独立 benchmark 进程和 `benchmark-memory.ps1` 完成可重复�
 client 的 RequestShutdown/HasShutdownFinished 排空事件，再退出，capture 不使用可能截断负载的固定秒数。
 这仅用于测试工具的进程级关闭，不增加运行中 MemorySystem/Runtime 关闭全局 profiler 的能力。
 事件/曲线由 inspector 的 benchmark 模式核对，CPU 区间由 csvexport 独立验证；指标口径见
-[Memory 测量契约](foundation-memory.md#m177-重复工作负载与测量契约)，开发记录见 [0030](../development/0030-memory-baseline.md)。
+[Memory 测量契约](foundation-memory.md#重复工作负载与测量)，开发记录见 [0030](../development/0030-memory-baseline.md)。
 
 M1.7.1 定向构建 OFF/ON 的 profiling 探针与受影响 runner/IO 链路：禁用后无依赖且参数不求值；
 开启后能采集真实 CPU zone、正确源码位置和线程名称；未连接/断开时正常结束且 stdout 保持协议。
 至少生成一次可由匹配 viewer/capture 工具读取的 capture，不能仅凭链接成功标记“性能分析可用”。
 
 当前采集入口为 [capture-profiling.ps1](../../scripts/capture-profiling.ps1)，工具安装与调用见
-[README](../../README.md#tracy-cpu-性能分析m171)。独立工具 manifest 与引擎保持同基线/overlay。
+[README](../guides/memory.md#tracy-cpu-性能分析m171)。独立工具 manifest 与引擎保持同基线/overlay。
 脚本启动并管理自己的探针和工具进程，使用 IPv4 localhost，记录提交/工作区、配置和 workload；
 无连接/不退出时有超时和进程清理，失败也保存日志。探针通过受控等待避免零时长 zone，
 5 秒采集留出 Windows 调度粒度与最终元数据查询时间；这不是吞吐或绝对耗时基准。

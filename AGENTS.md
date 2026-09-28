@@ -10,7 +10,8 @@ CMake target 使用 dk_* / dk::*，构建选项和宏使用 DK_*，程序使用 
 小型修改可合并到相关记录，简单补丁可免写开发日志；具体粒度以 spec 规范为准。
 只读分析无需新建开发记录。
 
-优先阅读 [架构总览](spec/design/architecture.md)、相关模块设计和最近开发记录。
+从 [模块与源码索引](spec/design/README.md) 定位相关设计、实现和测试；
+优先阅读架构边界、相关模块设计和最近关联开发记录，已读取且未变化的内容无需重复加载。
 阶段目标、依赖和近期任务见 [开发 Roadmap](spec/roadmap.md)。
 三方库用途、版本和接入状态见 [三方库说明](spec/third-party-libraries.md)。
 新增或升级依赖默认采用 vcpkg 官方收录的最新版本（含 port 修订），核验后固定 builtin-baseline；
@@ -20,7 +21,7 @@ CMake target 使用 dk_* / dk::*，构建选项和宏使用 DK_*，程序使用 
 公开接口位于 include/dk/，内部实现位于 src/；
 模块依赖通过 target 的 PUBLIC/PRIVATE/INTERFACE 表达，不使用全局 include/link。
 
-构建和验证命令见 [README.md](README.md)。修改后执行与改动相关的验证，
+构建配置见 [构建指南](spec/guides/build.md)，测试入口见 [选择表](.agents/skills/decker-build-verify/references/test-selection.md)。修改后执行与改动相关的验证，
 并在开发记录或交付说明中区分通过、失败与未运行的检查。
 默认只验证目标功能及直接受影响链路，不固定执行全量或 Debug/Release 双配置。
 按任务使用以下 skill，具体操作仍以模块设计和命令文档为准：

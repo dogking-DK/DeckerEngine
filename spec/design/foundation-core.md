@@ -1,7 +1,7 @@
 ---
 module: foundation-core
 created_at: "2026-09-22T09:41:24+08:00"
-updated_at: "2026-09-24T10:21:18+08:00"
+updated_at: "2026-09-28T16:00:00+08:00"
 status: accepted
 ---
 
@@ -125,7 +125,7 @@ spdlog 报告的写入/刷新错误经实例错误处理器转回 Result。
   构建最小 core 和版本探针；新二进制目录 windows-bootstrap-stduuid 避免复用旧的无 toolchain 缓存。
   windows-dev/Ninja 默认包含日志和 Catch2 测试。
 - runner 在日志启用时通过 dk::logging 记录非法参数，帮助/版本的 stdout 保持兼容。
-- Catch2/CTest 分别在 Debug/Release 验证错误传播、ID 格式和类型隔离、日志输出及生命周期。
+- Catch2/CTest 按本次影响验证错误传播、ID 格式和类型隔离、日志输出及生命周期；配置遵循定向验证约定。
   独立子进程探针分离捕获 stdout/stderr，检查协议输出未被日志污染。
 - 文件日志测试保留在构建目录的 test-artifacts 下以便失败排查，不写入源码目录。
 
@@ -138,11 +138,11 @@ spdlog 报告的写入/刷新错误经实例错误处理器转回 Result。
 4. 验证日志过滤、格式化/原始文本、Unicode 文件路径、初始化失败、
    无输出配置、显式 flush、析构后内容、独立实例和并发写入；
    子进程确认 stdout/stderr 分离。
-5. 执行 Windows 开发 Debug/Release 与 bootstrap 兼容验证；
+5. 执行 Windows 定向验证；涉及最小依赖边界时补充 bootstrap；
    实际链接 fmt/spdlog/Catch2 后记录工具链兼容性。
 6. 更新 Roadmap 为 M1 部分完成，数学与 IO 仍待开发。
 7. stduuid 迁移保持公开接口和原测试，补充库互操作/严格输入格式回归，
-   重新执行开发及最小构建的 Debug/Release 验证。
+   重新验证受影响目标及最小构建的相关行为。
 
 ## 参考
 

@@ -6,7 +6,7 @@ description: "Select and run focused build/test verification for DeckerEngine ch
 # DeckerEngine 定向验证
 
 先确定本次目标行为和直接受影响的调用链，再选择验证范围。只读解释无需执行测试。
-目录位置以仓库根为准；构建方式见 [README](../../../README.md)，
+目录位置以仓库根为准；配置方式见 [构建指南](../../../spec/guides/build.md)，
 局部 target/测试入口见 [选择参考](references/test-selection.md)，只读取本次相关部分。
 
 ## 选择与执行
@@ -17,7 +17,7 @@ description: "Select and run focused build/test verification for DeckerEngine ch
    仅在优化、断言、条件编译或工具链差异影响本次行为时补充 Release/独立配置。
    用户明确要求全量，或有具体全局影响且已说明理由时才扩大范围；不要求每次提交或阶段结束固定跑全量。
 3. 确认每个选中测试的程序和进程夹具都被构建目标覆盖。使用已有、选项正确的构建目录；
-   首次配置按 README 执行，不为绕过失败关闭模块、换编译器或清理缓存。
+   首次配置按构建指南执行，不为绕过失败关闭模块、换编译器或清理缓存。
 4. 使用版本化 [verify.ps1](../../../scripts/verify.ps1)，显式传入 Target 和 TestRegex；
    需要人工枚举时使用 `ctest --test-dir <build-dir> -C Debug -N -R '<regex>'`。
    构建失败立即停止，不能用旧二进制提供通过证据；零匹配不是通过。
@@ -47,4 +47,6 @@ summary 记录提交、工作区状态、配置、目标、实际选中的测试
 
 纯文档使用 [check-spec.ps1](../../../scripts/check-spec.ps1)；可用 `-Path @('README.md', 'spec/commands/entity.md')`
 限制 Markdown 扫描。文档中的可执行示例变更只运行相关示例，不因此触发引擎全量回归。
+全局索引和测试入口一致性仍会检查；新增/删除测试程序时同步选择表。
+仅移动示例、修改文档相对链接时可核对命令块原样保留，无需重复运行未改变的引擎示例。
 是否留开发记录遵循 [spec 规范](../../../spec/README.md)，此 skill 不额外分配编号。

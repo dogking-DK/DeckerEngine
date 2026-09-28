@@ -1,7 +1,7 @@
 ---
 id: "0034"
 created_at: "2026-09-28T12:40:00+08:00"
-updated_at: "2026-09-28T13:11:52+08:00"
+updated_at: "2026-09-28T16:00:00+08:00"
 status: completed
 design_refs:
   - ../design/assets-importers.md
@@ -63,7 +63,7 @@ verify.ps1 原先把它与 stdout JSON 合并。已修正脚本为 discovery.jso
 保留原诊断，不过滤/吞掉错误、不改变退出码或测试选择。所选程序功能测试全部通过，mimalloc 仍为现有
 MI_OVERRIDE=OFF 包；未在本任务更改 allocator 依赖/链接政策。该现象不影响 CLI 的 stdout JSON。
 
-复现命令和独立配置见 [README](../../README.md#cpu-导入与离线工具m42)。默认目标为
+复现命令和独立配置见 [README](../guides/assets.md#cpu-导入与离线工具m42)。默认目标为
 `dk_import_tests, dk_asset_pipeline_tests, dk_assetc`，筛选 `^dk\.(import|pipeline|assetc)\.`。
 README 复制夹具的示例实际执行通过，产生 meta 与完整 CPU 产物（out/assetc-demo-573d92a6848742bdacc7871b96dc8bd9）。
 定向文档检查：11 个 Markdown / 337 个本地链接、时间戳/编号/清单检查通过；git diff --check 通过。
