@@ -42,4 +42,6 @@
 
 | 0036 | [M4.3.2 失效、重建与显式清理](0036-asset-cache-invalidation.md) | assets-runtime, assets-importers | completed |
 
+| 0037 | [M4.4.1 CPU 工作队列](0037-cpu-job-queue.md) | foundation-jobs, foundation-memory | completed |
+
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

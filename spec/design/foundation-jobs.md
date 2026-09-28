@@ -1,15 +1,15 @@
 ---
 module: foundation-jobs
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T10:17:43+08:00"
-status: draft
+updated_at: "2026-09-28T14:36:48+08:00"
+status: accepted
 ---
 
 # M4 CPU 工作队列与后台任务设计
 
 ## 目标和边界
 
-用于 M4.4 的本地 CPU 导入/加载，尚未实现。`engine/foundation/jobs` 提供计划 target
+用于 M4.4 的本地 CPU 导入/加载。M4.4.1 已实现 `engine/foundation/jobs` target
 `dk_jobs / dk::jobs`，依赖 Core、Memory 和标准库线程设施，私有使用 Profiling；不依赖 Scene、资产、JSON、Runtime 或 GPU。
 首版一个可关闭的 worker + 有界队列，std::jthread/stop_token/条件变量；不建设协程、任务图或 work stealing。
 它支持协作取消，不保证能抢占三方解码器或阻塞的系统 IO。
@@ -31,7 +31,7 @@ submit 自动捕获当前系统/持久域的拥有型 RoutingToken；队列本�
 执行记录，JobId 表示后台作业；提交命令成功不表示资产成功。保留 M3 的响应 envelope 和同步任务查询语义。
 
 概念接口：`submit(work)`、`request_cancel(id)`、`query(id)`、`wait(id,deadline)`、
-`drain_completions()`、`close()`。实际公开签名在 M4.4.1 固定；拒绝提交时返回 Result 错误，不分配可查询 JobId。
+`drain_completions()`、`close()`。实际公开签名见 `dk/jobs/JobQueue.hpp`；拒绝提交时返回 Result 错误，不分配可查询 JobId。
 work 接收 stop_token，返回拥有结果的 completion；用户回调不在队列互斥锁下运行。
 
 状态为 queued → running → succeeded/failed/cancelled；pending publication 属于 running，
@@ -51,6 +51,21 @@ work 接收 stop_token，返回拥有结果的 completion；用户回调不在�
 结果摘要或错误，不保留无限增长的网格/图片。活动作业不可淘汰，终态按有限数量保留。
 队列长度、总活动数、终态保留数和输入字节预算须在 M4.4.1 公共 Limits 中明确并测试。
 普通 dk::Error 归入 failed；异常在线程边界收敛并通知宿主，资源耗尽不能被包装成可继续正常运行的业务失败。
+
+### M4.4.1 固定接口
+
+`JobQueue(resource, JobLimits)` 在创建线程作为 owner；submit/cancel/drain/close 仅 owner 调用，
+query/wait/change_sequence/wait_change 可跨线程。默认 queued=16、active=17、terminal=256、
+input_bytes=512 MiB；每次 submit 显式申报所拥有输入的字节数，合计不超过预算，不能靠零申报绕过。
+队列不反射任意 C++ closure，调用者负责准确申报；资产适配另有文件/产物限额。
+`Work(stop_token) -> Result<shared_ptr<const void>>` 只返回拥有型数据；
+`drain(Consumer(JobId, payload) -> Result<string>)` 在 owner 确认发布，摘要最多 4096 字节。
+错误正文/上下文也截断为有限元数据。completion 数量由 active 限额约束；终态释放 payload、work、token。
+无消费者或取消的完成项不调用发布。owner 串行化取消/发布，不允许 consumer 重入队列写操作。
+wait 不消费完成项；宿主用 change sequence + deadline 等待并 drain，不丢失完成唤醒。
+worker 每次安全点清空自己的 ThreadContextCache（包括闲置前），同系统不同域可重新装配 scratch。
+所有未知异常（包括 bad_alloc）保存 exception_ptr，并停止接收；owner drain/rethrow_failure 原样重抛，
+不能将基础设施异常伪装成业务失败。close 不抛出，取消并 join，释放所有未发布拥有值。
 
 ## 主线程发布与关闭
 

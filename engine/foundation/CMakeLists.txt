@@ -11,4 +11,6 @@ endif()
 if(DK_BUILD_IO)
     add_subdirectory(io)
 endif()
-# jobs and metadata will become targets as their modules are implemented.
+if(DK_BUILD_JOBS)
+    add_subdirectory(jobs)
+endif()

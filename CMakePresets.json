@@ -54,6 +54,7 @@
       "displayName": "Windows development (foundation dependencies)",
       "cacheVariables": {
         "DK_BUILD_MEMORY": "ON",
+        "DK_BUILD_JOBS": "ON",
         "DK_BUILD_ASSET_RUNTIME": "ON",
         "DK_BUILD_ASSET_IMPORTERS": "ON",
         "DK_BUILD_SCENE": "ON",
