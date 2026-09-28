@@ -33,5 +33,6 @@
 | 0029 | [线程上下文、拥有型路由与关闭集成](0029-memory-context-routing.md) | foundation-memory, foundation-profiling | completed |
 | 0030 | [重复工作负载与性能基线](0030-memory-baseline.md) | foundation-memory, foundation-profiling | completed |
 | 0031 | [M4.1.1 元数据与身份目录](0031-asset-metadata-catalog.md) | assets-runtime, assets-types, project-format | completed |
+| 0032 | [M4.1.2 登记提交与受控改名](0032-asset-commit-recovery.md) | assets-runtime, project-format | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

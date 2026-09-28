@@ -12,7 +12,7 @@
 | foundation-profiling | [Tracy 性能分析](foundation-profiling.md) | accepted | CPU、heap 事件、arena/pool 曲线与三配置开销基线已完成；GPU 观测待实现 |
 | scene | [场景文档](scene.md) | accepted | M2 flecs 身份、层级、快照、安全保存与重载 |
 | assets-types | [资产类型](assets-types.md) | accepted | M2.3 持久引用与种类 |
-| assets-runtime | [资产身份、缓存与加载](assets-runtime.md) | accepted | M4.1.1 meta/只读目录/登记候选与 Project 适配已完成；持久提交、缓存与加载待实现 |
+| assets-runtime | [资产身份、缓存与加载](assets-runtime.md) | accepted | M4.1 meta/目录、登记提交/改名、Project 替换及恢复已完成；缓存与加载待实现 |
 | assets-importers | [静态 glTF 导入与 assetc](assets-importers.md) | draft | M4.2 格式子集、CPU 数据和离线工具计划 |
 | foundation-jobs | [CPU 队列与后台作业](foundation-jobs.md) | draft | M4.4 JobId、取消/等待/退出与命令接入计划 |
 | project-format | [工程格式](project-format.md) | accepted | M2.3 版本清单、路径与文件诊断 |

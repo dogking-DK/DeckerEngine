@@ -1,6 +1,7 @@
 #pragma once
 #include <dk/assets/Metadata.hpp>
 #include <dk/io/Path.hpp>
+#include <dk/assets/Persistence.hpp>
 #include <optional>
 
 namespace dk {
@@ -28,7 +29,7 @@ struct RegistrationRequest {
 };
 
 // An immutable preparation result, not proof of a durable registration.
-// M4.1.2 will consume this plus the candidate Project and publish only after persistence.
+// Commit consumes this plus a manifest update and publishes only after persistence.
 class RegistrationCandidate {
 public:
     [[nodiscard]] CatalogGuard base_guard() const noexcept { return base_; }
@@ -67,11 +68,31 @@ public:
     [[nodiscard]] Result<RegistrationCandidate> prepare_registration(CatalogGuard guard, const RegistrationRequest& request) const;
     // Read-only preflight: no files, directory revisions, or Project instances are changed.
     [[nodiscard]] Result<void> validate_registration(const RegistrationCandidate& candidate) const;
+    [[nodiscard]] Result<void> commit_registration(RegistrationCandidate candidate, const AssetManifestUpdate& manifest);
+    // Rename candidates reuse the registration value shape; source() is the OLD path,
+    // records() contains the NEW paths. Only prepare_rename can build a RenameCandidate.
+    class RenameCandidate {
+    public:
+        [[nodiscard]] CatalogGuard base_guard() const noexcept { return registration_.base_guard(); }
+        [[nodiscard]] CatalogGuard next_guard() const noexcept { return registration_.next_guard(); }
+        [[nodiscard]] std::string_view source() const noexcept { return registration_.source(); }
+        [[nodiscard]] std::string_view target() const noexcept { return target_; }
+        [[nodiscard]] std::span<const AssetCatalogRecord> records() const noexcept { return registration_.records(); }
+    private:
+        friend class AssetCatalog;
+        RenameCandidate(RegistrationCandidate value, String target) : registration_(std::move(value)), target_(std::move(target)) {}
+        RegistrationCandidate registration_;
+        String target_;
+    };
+    [[nodiscard]] Result<RenameCandidate> prepare_rename(CatalogGuard guard, std::string_view source, std::string_view target) const;
+    [[nodiscard]] Result<void> commit_rename(RenameCandidate candidate, const AssetManifestUpdate& manifest);
+    [[nodiscard]] bool needs_recovery() const noexcept { return needs_recovery_; }
 private:
     AssetCatalog(ProjectPaths paths, Vector<AssetCatalogRecord> records, CatalogGuard guard)
         : paths_(std::move(paths)), records_(std::move(records)), guard_(guard) {}
     ProjectPaths paths_;
     Vector<AssetCatalogRecord> records_;
     CatalogGuard guard_;
+    bool needs_recovery_ = false;
 };
 } // namespace dk

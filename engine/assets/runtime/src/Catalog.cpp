@@ -1,6 +1,7 @@
 #include <dk/assets/Catalog.hpp>
 #include <dk/io/File.hpp>
 #include "AssetInternal.hpp"
+#include "AssetPersistenceInternal.hpp"
 #include <algorithm>
 #include <limits>
 #include <map>
@@ -170,5 +171,70 @@ Result<void> AssetCatalog::validate_registration(const RegistrationCandidate& ca
     });
     if (!result) { return std::unexpected(result.error()); }
     return {};
+}
+Result<void> AssetCatalog::commit_registration(RegistrationCandidate candidate, const AssetManifestUpdate& manifest)
+{
+    return attempt<void>("AssetCatalog.commit_registration", [&] {
+        require(!needs_recovery_, "Catalog requires recovery and reopen", ErrorCode::invalid_state);
+        take(check_asset_operations(paths_.root()));
+        take(validate_registration(candidate));
+        validate_asset_operation_paths(paths_, candidate.source(), candidate.source(), manifest.path);
+        // Even a semantic no-op must reject a stale manifest and unsafe file paths.
+        const auto path = persistent_path(paths_, manifest.path);
+        const auto bytes = take(read_file_bytes(path, 16 * 1024 * 1024));
+        require(std::string_view{reinterpret_cast<const char*>(bytes.data()), bytes.size()} == manifest.before,
+            "Manifest changed before commit", ErrorCode::conflict);
+        for (const auto& record : records_) {
+            require(!same_path(relative_path(record.path), relative_path(std::string{candidate.source()} + ".meta")),
+                "Sidecar path is owned by another catalog asset", ErrorCode::conflict);
+        }
+        if (!candidate.changed()) { return; }
+        const auto encoded = take(serialize_asset_meta(candidate.metadata()));
+        take(commit_asset_files(paths_, candidate.source(), candidate.source(), candidate.expected_meta_bytes(), encoded, manifest, needs_recovery_));
+        records_.swap(candidate.records_); guard_ = candidate.next_guard();
+    });
+}
+Result<AssetCatalog::RenameCandidate> AssetCatalog::prepare_rename(CatalogGuard guard, std::string_view source, std::string_view target) const
+{
+    return attempt<RenameCandidate>("AssetCatalog.prepare_rename", [&] {
+        take(check_guard(guard));
+        require(!needs_recovery_, "Catalog requires recovery and reopen", ErrorCode::invalid_state);
+        const auto from = persistent_path(paths_, source), to = persistent_path(paths_, target);
+        require(target.size() <= 4091 && from.parent_path() == to.parent_path() && from.extension() == to.extension(),
+            "Rename requires same directory and extension");
+        require(!same_path(from, to), "Equivalent rename paths", ErrorCode::conflict);
+        // Catalog conflicts include missing files reserved by another record.
+        for (const auto& record : records_) {
+            require(!same_path(relative_path(record.path), relative_path(target)), "Rename target is registered", ErrorCode::conflict);
+            require(!same_path(relative_path(record.path), relative_path(std::string{source} + ".meta"))
+                && !same_path(relative_path(record.path), relative_path(std::string{target} + ".meta")),
+                "Sidecar path is owned by another catalog asset", ErrorCode::conflict);
+        }
+        std::error_code error;
+        const bool target_exists = std::filesystem::exists(to, error);
+        require(!error, "Cannot inspect rename target", ErrorCode::io_error);
+        require(!target_exists, "Rename target exists", ErrorCode::conflict);
+        const bool meta_exists = std::filesystem::exists(persistent_path(paths_, std::string{target} + ".meta"), error);
+        require(!error, "Cannot inspect rename sidecar", ErrorCode::io_error);
+        require(!meta_exists, "Rename sidecar target exists", ErrorCode::conflict);
+        auto original = read_sidecar(paths_, source);
+        require(original.has_value(), "Rename requires existing meta", ErrorCode::not_found);
+        auto meta = take(parse_asset_meta(*original)); check_records_against_meta(records_, source, meta);
+        auto records = records_; bool found = false;
+        for (auto& record : records) { if (record.path == source) { record.path = owned(target); found = true; } }
+        require(found, "Rename source is not registered", ErrorCode::not_found);
+        auto next = guard_; require(next.revision != std::numeric_limits<std::uint64_t>::max(), "Catalog revision exhausted", ErrorCode::invalid_state); ++next.revision;
+        return RenameCandidate{RegistrationCandidate{guard_, next, owned(source), std::move(meta), std::move(records), std::move(original)}, owned(target)};
+    });
+}
+Result<void> AssetCatalog::commit_rename(RenameCandidate candidate, const AssetManifestUpdate& manifest)
+{
+    return attempt<void>("AssetCatalog.commit_rename", [&] {
+        auto& registration = candidate.registration_;
+        take(validate_registration(registration));
+        take(commit_asset_files(paths_, candidate.source(), candidate.target(), registration.expected_meta_bytes(),
+            *registration.expected_meta_bytes(), manifest, needs_recovery_));
+        records_.swap(registration.records_); guard_ = registration.next_guard();
+    });
 }
 } // namespace dk

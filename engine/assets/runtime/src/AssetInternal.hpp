@@ -12,9 +12,13 @@ inline void require(bool condition, std::string message, ErrorCode code = ErrorC
 { if (!condition) { throw Failure{Error{code, std::move(message)}}; } }
 template<class T> T take(Result<T> result)
 { if (!result) { throw Failure{std::move(result.error())}; } return std::move(*result); }
+inline void take(Result<void> result) { if (!result) { throw Failure{std::move(result.error())}; } }
 template<class T, class F> Result<T> attempt(std::string operation, F&& function)
 {
-    try { return function(); }
+    try {
+        if constexpr (std::is_void_v<T>) { function(); return {}; }
+        else { return function(); }
+    }
     catch (const Failure& failure) { return std::unexpected(failure.error.with_context(std::move(operation))); }
     catch (const nlohmann::json::exception& failure) {
         return std::unexpected(Error{ErrorCode::invalid_argument, failure.what(), {std::move(operation)}});

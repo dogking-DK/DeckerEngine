@@ -1,7 +1,7 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-23T16:44:00+08:00"
+updated_at: "2026-09-28T11:32:11+08:00"
 status: draft
 ---
 
@@ -40,7 +40,8 @@ M1.7.1 已升级到 `33d78c1ed898a06938f31312167c7abefd229455`，重新比较后
 | XXH3-128 内容摘要 | xxHash / xxhash | 0.8.4 | BSD-2-Clause | 资产管线内部 ContentDigest 封装，见运行时设计 |
 | fastgltf 的传递依赖 | simdjson / simdjson | 4.6.11 | (Apache-2.0 OR MIT) AND BSL-1.0 AND BSD-3-Clause | 由 fastgltf port 引入 |
 
-这些是当前基线数据，不是已安装/编译通过的声明；实施时记录实际解析结果与兼容性。
+xxHash 0.8.4 已在 M4.1.2 核验官方最新 port 并接入 runtime 私有依赖，见 [0032](../development/0032-asset-commit-recovery.md)。
+其余是当前基线数据，不是已安装/编译通过的声明；实施时记录实际解析结果与兼容性。
 JSON 清单继续使用 nlohmann-json，ID 继续使用 stduuid，数学继续使用 Eigen；
 工作队列使用标准库。simdjson 属于导入器依赖，不替换引擎的 JSON 接口。
 

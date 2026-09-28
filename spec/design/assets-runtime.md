@@ -1,7 +1,7 @@
 ---
 module: assets-runtime
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T10:52:48+08:00"
+updated_at: "2026-09-28T11:32:11+08:00"
 status: accepted
 ---
 
@@ -9,8 +9,8 @@ status: accepted
 
 ## 范围与当前基线
 
-M4.1.1 已实现 meta v1、只读身份目录、登记候选及 Project 适配，见 [0031](../development/0031-asset-metadata-catalog.md)。
-M4.1.2/M4.3/M4.4 仍为后续设计，未实施。原有
+M4.1 已实现 meta v1、身份目录、登记提交、受控改名和恢复，见 [0031](../development/0031-asset-metadata-catalog.md)
+及 [0032](../development/0032-asset-commit-recovery.md)。M4.3/M4.4 仍为后续设计，未实施。原有
 [AssetReference](../../engine/assets/types/include/dk/assets/AssetReference.hpp) 和
 [Project](../../engine/scene/include/dk/scene/Project.hpp) 的注册、类型与文件存在性校验保持兼容。
 分步计划见 [0020](../development/0020-m4-development-plan.md)。
@@ -20,15 +20,15 @@ GPU 上传、渲染资源和 GPU Ready 留到 M7。资产准备不修改实体�
 
 ## 目录、所有者与依赖
 
-types、runtime 的 M4.1.1 部分及 asset_services 适配已实现；其余 target 在对应小节才添加：
+types、runtime 的 M4.1 部分及 asset_services 已实现；其余 target 在对应小节才添加：
 
 | 模块 | 计划 target | 职责与依赖 |
 | --- | --- | --- |
 | assets/types（已有） | dk::asset_types | 持久 ID/种类/引用，继续仅依赖 Core |
 | assets/data | dk::asset_data | 不可变 CPU 网格/材质/纹理值；依赖 types、math、memory，数据拥有其分配资源 |
 | assets/importers | dk::asset_importers | 源文件到 CPU 数据；依赖 data、IO，私有 fastgltf/stb_image |
-| assets/runtime | dk::asset_runtime | 已实现元数据/只读目录，PUBLIC types、IO、Memory，PRIVATE JSON；缓存/加载后续增加 data/importers/jobs/xxHash |
-| framework/services、operations | dk::asset_services、dk::asset_operations | services 已提供只读 Project 适配；命令及 operations 尚未实现 |
+| assets/runtime | dk::asset_runtime | 已实现元数据/目录/持久化/恢复，PUBLIC types、IO、Memory，PRIVATE JSON、xxHash、profiling；缓存/加载后续增加 data/importers/jobs |
+| framework/services、operations | dk::asset_services、dk::asset_operations | services 已提供 Project 适配及 AssetService 提交/改名；命令及 operations 尚未实现 |
 
 资产底层不依赖 Scene、Commands、Vulkan 或 Editor。AssetService 从 ProjectDescription 构造
 独立目录快照；不能令 assets/runtime 反向包含 Project.hpp，或暴露 SceneService 的可变 Project。
@@ -73,8 +73,7 @@ AssetService 在入口绑定当前 Runtime 的 Assets 域，内部函数自动�
   同一未提交候选须由调用者保留；未落盘的新候选不会因重复 prepare 自动复用随机 ID。
   `validate_registration` 检查 guard 和实际 sidecar 字节仍匹配，源仍为普通文件；sidecar 字节或存在性变化返回 conflict，
   缺失源返回 not_found，非普通文件/IO 故障保留对应诊断。
-  这些是 M4.1.2 提交输入/前置契约，尚无能写文件或发布 revision 的 commit/rename 实现；
-  将来仍须在多文件操作记录和完整 Project 保存完成后才发布，不能把 validate 的成功当作提交。
+  这些是 M4.1.2 提交输入/前置契约；commit/rename 按下节协议持久化后发布，不能把 validate 的成功当作提交。
 - `make_asset_catalog(Project)` 和 `prepare_asset_registration(Project, catalog, guard, request)` 位于服务适配层。
   要求 root 和旧资产记录与目录一致，构造候选 ProjectDescription 后再次 `Project::create`；
   返回拥有型 candidate + 新只读 Project，原 Project/Scene/revision/history 不变。
@@ -85,6 +84,47 @@ AssetService 在入口绑定当前 Runtime 的 Assets 域，内部函数自动�
 定向测试覆盖严格 codec/预算、首次与显式采用旧 ID、重复/增量候选、缺失/损坏 meta、
 ID/kind/path/大小写冲突、过期 guard/sidecar、候选失败不修改原目录/Project/文件，以及资源持有与预算失败。
 旧无 meta Project 的打开、解析、引用校验继续有效。开发记录见 [0031](../development/0031-asset-metadata-catalog.md)。
+
+### M4.1.2 提交与恢复契约
+
+`AssetCatalog` 增加登记提交、改名候选/提交及 needs_recovery 闸门；服务层 `AssetService`
+从已保存的 Project manifest 打开，拥有独立 Project/目录，准备完整只读 Project 后调用底层提交，
+最终以不分配的 swap 发布 Project。底层只接收 manifest 路径及预期/新 UTF-8 字节，不依赖 Scene。
+入口仍由宿主绑定 Assets 内存域。成功改变目录 revision +1，no-op 不写文件、不增加 revision；
+旧 guard 拒绝。Scene 的内容、revision、dirty、历史完全不参与。服务返回的借用引用在成功变更后失效。
+
+采用单写者、同步 Windows 本地盘协议。每个工程最多一个 `.decker/asset-operations/pending.json`：
+严格 JSON v1（format=`DeckerAssetOperation`、version=1、algorithm=`xxh3-128-v1`、
+kind=`registration`/`rename`、source、target、source_digest、meta、manifest）。
+meta/manifest 包含 path、before、after；每个 image 为 null（文件缺失）或 `{text,digest}`。
+manifest 的两份 image 必须存在，meta after 必须存在，rename 的两份 meta image 完全相同。
+source/target 是源相对路径，登记 target=source；meta.path=source+`.meta`。
+路径必须互不冲突，不允许进入 `.decker`；manifest 不得与任一源/sidecar 重叠。
+目录层拒绝 sidecar 与其他已登记资产路径重叠，服务层拒绝任一相关路径与 Scene 路径重叠（含当前未创建文件）。
+记录限 128 MiB、嵌套 16 层，meta image 限 2 MiB，manifest image 限 16 MiB；
+拒绝重复/未知字段、非法 UTF-8、未知版本/算法和摘要不匹配，不执行部分解析的记录。
+摘要使用固定参数 XXH3-128 的 canonical 大端 16 字节/32 位小写 hex，源文件以 64 KiB 分块读取。
+
+提交顺序：全部候选/序列化/内存分配与文件前置校验 → 原子写记录 →
+登记替换 meta，或改名 source 再改名 meta → 原子替换 manifest → 校验最终文件 →
+移除操作记录（持久提交点）→ 不分配地发布目录与 Project。现存 meta 的 no-op 保留原始字节。
+同目录且同扩展名改名保留全部 ID/settings；拒绝大小写等价名称、跨目录、覆盖目标文件和目标目录记录。
+持久入口拒绝 Windows reparse point、非常规文件名及父目录别名，避免跨根写入和路径别名覆盖。
+不修改 glTF 内容及其外部 URI，不提供跨目录移动。
+
+文件错误发生在持久提交点之前时，按 manifest → meta → source 逆序补偿；
+补偿前先检查所有文件均处于记录的 before/after 状态，外部变化一律 conflict，保留未知内容。
+新建 sidecar 只在摘要等于本次 after 时删除；移动不允许覆盖。补偿失败同时返回原错误、
+恢复错误和记录路径，保留记录并阻止该实例后续写入。异常（如 OOM）若发生在记录写入后，
+保留记录并关闭写闸门，不承诺异常时在线补偿。任何残留/未知操作目录文件都阻止打开和新提交。
+`recover_asset_operations(root)` 显式检查并回滚未完成操作，包含 manifest 已替换但记录尚存的情况；
+全部状态明确才执行，恢复本身可重试，成功移除记录后须重新打开服务（新 session/revision=0）。
+不凭记录中的阶段猜测是否成功，也不删除未知临时文件。记录被外部破坏时保留并诊断。
+记录不是安全边界，不承诺恶意文件抵抗、跨文件原子性、任意断电一致性或多进程并发隔离。
+
+内部每次操作的故障注入点覆盖写记录、源改名、meta 写入/改名、manifest 替换、提交清理及对应回滚。
+测试同时覆盖真实文件故障、补偿失败/重试、外部冲突、进程终止后的恢复、哈希已知向量/分块一致性，
+以及只读 Project 替换、所有 ID 和 Scene 状态保持。新增 PRIVATE xxHash::xxhash，固定 vcpkg baseline。
 
 ### 文件职责
 
@@ -112,8 +152,8 @@ ID/kind/path/大小写冲突、过期 guard/sidecar、候选失败不修改原�
 分配 ID，完整验证后发布，不能每次导入重新编号。首版以源内索引定位子资产，名称只作诊断；
 不承诺导出器重排数组后仍能识别同一个语义对象，重排需显式检查/重映射，不能靠名称猜测。
 
-已实现 `inspect_source`、`prepare_registration`、`validate_registration`；
-`commit_registration`、`rename_source` 留待 M4.1.2 固定持久接口并实现。输入/输出均为 dk 值类型与 Result，
+已实现 `inspect_source`、`prepare_registration`、`validate_registration`、`commit_registration`、
+`prepare_rename`/`commit_rename`；服务入口为 `AssetService::register_source`/`rename_source`。输入/输出均为 dk 值类型与 Result，
 不暴露 JSON 或导入器内部对象。目录快照携带会话 ID 和单调 catalog revision，更新需要匹配两者。
 
 三方库和固定基线核验集中见 [选型说明](assets-importers.md#已确定的三方库与基线)。
@@ -125,7 +165,8 @@ xxHash 的 XXH3-128 在 M4.1.2 首次用于恢复记录的文件摘要，M4.3 �
 已有无 meta 的 M2 工程仍可做文件校验和场景保存/加载。进入 M4 托管链路时必须显式登记：
 可无歧义采用已有单个 mesh AssetId；已有 ID/kind/path 与 meta 冲突时返回 conflict，不能静默覆盖。
 新的 ProjectDescription 先经 Project::create 校验，提交时整体替换只读 Project；不引入可变索引后门。
-持久清单更新复用 save_project；目录 revision 与 Scene revision 分离，加载/重命名不伪造场景编辑。
+持久清单由服务层 serialize_project/Project::create 验证，底层复用带读回验证的 IO atomic writer；
+目录 revision 与 Scene revision 分离，加载/重命名不伪造场景编辑。
 
 `.meta` 和 Project 清单是两个持久文件。登记/重命名先准备候选、校验版本和目标冲突，
 再保存带前后路径及摘要的操作记录；文件变更成功且清单替换完成后，才发布内存目录。
@@ -154,7 +195,8 @@ xxHash 的 XXH3-128 在 M4.1.2 首次用于恢复记录的文件摘要，M4.3 �
 禁止无分隔地拼接字符串，不将时间戳、线程完成顺序或进程地址混入 key。
 依据：[xxHash 0.8.4 的 XXH3-128、流式与规范编码接口](https://github.com/Cyan4973/xxHash/blob/v0.8.4/xxhash.h)。
 
-缓存 manifest 与恢复记录显式保存 `hash_algorithm: "xxh3-128"` 和各自格式版本，禁止把其他算法的摘要
+计划缓存 manifest 保存 `hash_algorithm: "xxh3-128"`；M4.1.2 恢复记录使用 `algorithm: "xxh3-128-v1"`，
+均有各自格式版本，禁止把其他算法的摘要
 当作当前摘要解释。缓存算法/版本不兼容时视为未命中并重建，保留未知条目；恢复记录算法未知时返回
 not_supported 并保留记录，不猜测文件状态或自动删除。首版不维护双摘要，也不自动切换算法。
 XXH3-128 用于本地内容变化与缓存意外损坏检测，不提供密码学抗碰撞或真实性认证；

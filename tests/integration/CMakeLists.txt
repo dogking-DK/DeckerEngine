@@ -61,6 +61,21 @@ if(TARGET dk_run)
     set_tests_properties(dk.bootstrap.version PROPERTIES
         PASS_REGULAR_EXPRESSION "DeckerEngine ${_dk_version_regex}")
 endif()
+if(TARGET dk_asset_services AND WIN32)
+    add_executable(dk_asset_recovery_probe AssetRecoveryProbe.cpp)
+    target_include_directories(dk_asset_recovery_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/assets/runtime/src")
+    target_link_libraries(dk_asset_recovery_probe PRIVATE dk::asset_services)
+    dk_target_defaults(dk_asset_recovery_probe)
+    foreach(kind IN ITEMS registration rename)
+        foreach(point IN ITEMS source meta manifest finish)
+            add_test(NAME dk.assets.restart_${kind}_${point}
+                COMMAND "${CMAKE_COMMAND}" "-DPROBE=$<TARGET_FILE:dk_asset_recovery_probe>"
+                    "-DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-artifacts/$<CONFIG>/assets"
+                    "-DKIND=${kind}" "-DPOINT=${point}" -P "${CMAKE_CURRENT_SOURCE_DIR}/AssetRecoveryTest.cmake")
+            set_tests_properties(dk.assets.restart_${kind}_${point} PROPERTIES TIMEOUT 30)
+        endforeach()
+    endforeach()
+endif()
 if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
     find_program(DK_POWERSHELL NAMES pwsh powershell REQUIRED)
     add_test(NAME dk.runtime.stdio_interactive

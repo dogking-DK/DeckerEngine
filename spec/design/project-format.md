@@ -1,7 +1,7 @@
 ---
 module: project-format
 created_at: "2026-09-22T12:28:05+08:00"
-updated_at: "2026-09-28T10:52:48+08:00"
+updated_at: "2026-09-28T11:32:11+08:00"
 status: accepted
 ---
 
@@ -54,7 +54,13 @@ M4.1.1 的 `dk::asset_services` 提供 `make_asset_catalog`、`prepare_asset_reg
 不对外暴露可变索引。相同源路径的子资产用不同 AssetId 登记，种类与 meta 映射须一致。
 目录更新使用独立会话/revision；已有 Scene 内容、revision、dirty 与历史不因缓存加载而改变。
 清单与 sidecar 的多文件写入、受控改名和失败恢复见 [资产运行时设计稿](assets-runtime.md)。
-本阶段准备不会修改旧 Project/目录、Scene 或任何磁盘文件；持久提交与发布在 M4.1.2 实现。
+候选准备不会修改旧 Project/目录、Scene 或任何磁盘文件。
+M4.1.2 的 `AssetService::open` 从已有清单打开独立所有者，`register_source`/`rename_source`
+先构造并验证新 Project，通过底层操作记录/文件补偿后，无分配地替换整个只读 Project。
+不会改变 Scene 内容、revision、dirty 或历史；清单/资产/sidecar 与 Scene 路径重叠时拒绝操作。
+有未完成记录时打开/写入失败；显式 `recover_asset_operations` 成功后重新打开（新会话）。
+借用 Project/目录引用在成功变更后失效，调用方应重新获取；不自动替换其他 SceneService 持有的 Project。
+失败、重启和平台限制见 [0032](../development/0032-asset-commit-recovery.md)。
 旧无 meta 工程仍可正常打开和做引用/文件校验；显式首次登记可采用唯一同源 mesh ID，多条旧记录拒绝歧义。
 验收见 [0031](../development/0031-asset-metadata-catalog.md)。resolve_asset 成功不表示导入成功或 CPU Ready。
 

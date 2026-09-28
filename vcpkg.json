@@ -11,8 +11,8 @@
   "default-features": [],
   "features": {
     "assets": {
-      "description": "Asset metadata and catalog serialization",
-      "dependencies": ["nlohmann-json"]
+      "description": "Asset metadata, catalog persistence and content digests",
+      "dependencies": ["nlohmann-json", { "name": "xxhash", "default-features": false }]
     },
     "memory": {
       "description": "Multi-instance CPU heap resources",

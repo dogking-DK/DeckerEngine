@@ -14,7 +14,7 @@ M1.7.1–6 已接入可选 Tracy 分析、mimalloc heap、PMR、拥有型接口�
 内存域支持预算、关闭闸门和跨线程释放；arena 支持嵌套回退，Pool 提供 ObjectPool、安全 trim 和用量曲线。
 RoutingToken 与 ThreadContextCache 支持跨线程重绑定、线程复用及安全点退休；Jobs/Runtime 自动装配留在后续阶段。
 M1.7.7 已提供重复工作负载、三种 profiling 配置的真实采集对照与[性能基线](spec/benchmarks/2026-09-28-memory.md)，M1.7 全部完成。
-M4.1.1 已提供 meta v1、只读身份目录、登记候选与 Project v1 适配；持久登记与改名将在 M4.1.2 实现。
+M4.1 已提供 meta v1、身份目录、登记提交、Project 替换、同目录改名及未完成操作恢复。
 渲染、物理、编辑器、网络/命名管道 IPC 和脚本模块尚未实现。
 
 ## 目录
@@ -268,7 +268,7 @@ feature 选择在 `project()` 前映射到 `VCPKG_MANIFEST_FEATURES`，
 遵循 [vcpkg CMake 集成规范](https://learn.microsoft.com/en-us/vcpkg/users/buildsystems/cmake-integration)。
 更换生成器、triplet 或开关 vcpkg 时使用独立构建目录。
 
-## 资产元数据与登记候选（M4.1.1）
+## 资产元数据、登记与改名（M4.1）
 
 `dk::asset_runtime` 提供 [Metadata.hpp](engine/assets/runtime/include/dk/assets/Metadata.hpp) 和
 [Catalog.hpp](engine/assets/runtime/include/dk/assets/Catalog.hpp)；Project 适配位于
@@ -277,7 +277,7 @@ feature 选择在 `project()` 前映射到 `VCPKG_MANIFEST_FEATURES`，
 
 ```powershell
 cmake --preset windows-dev -DDK_WARNINGS_AS_ERRORS=ON
-& ./scripts/verify.ps1 -Target @('dk_asset_tests','dk_scene_tests') -TestRegex '^dk\.(assets\.|scene\.(project |asset kind |scene asset references ))' -Reason '元数据身份候选与旧工程兼容'
+& ./scripts/verify.ps1 -Target @('dk_asset_tests','dk_asset_recovery_probe') -TestRegex '^dk\.assets\.' -Reason '元数据、身份提交及重启恢复'
 ```
 
 调用入口先绑定 MemorySystem 的持久 Assets 域；新元数据/目录/候选中的 `dk::String/Vector` 拥有分配资源。
@@ -311,7 +311,30 @@ JSON 严格拒绝重复键、未知字段、非法 UTF-8/ID、错误类型和版
 目录会话/版本与 Scene revision 分离；候选含 base/next guard、新只读 Project、meta 和原 sidecar 字节。
 `validate_registration` 只检查目录 guard、源文件与 sidecar 是否仍匹配，不能代替磁盘提交或隔离外部并发修改。
 语义相同的候选不增加 next revision。失败/异常不改旧 Project/目录/Scene/文件；ContextError 和 bad_alloc 沿用 Memory 约定。
-多文件提交、恢复日志、改名、glTF 解码及 CPU Ready 留在后续阶段。本阶段没有新增命令。
+以上失败保证针对纯候选。M4.1.2 提供持久提交与恢复；glTF 解码及 CPU Ready 留在后续阶段。没有新增命令。
+
+完整提交使用 [AssetService.hpp](engine/framework/services/include/dk/services/AssetService.hpp)。
+在已绑定 Assets 域、已有保存的 project.json 和普通 glTF 源文件时：
+
+```cpp
+auto service = dk::AssetService::open(root, "project.json");
+if (!service) return std::unexpected(service.error());
+auto saved = service->register_source(service->catalog().guard(), request);
+if (!saved) return saved;
+return service->rename_source(service->catalog().guard(), "assets/model.gltf", "assets/renamed.gltf");
+```
+
+成功提交才替换 Project/目录，目录 revision 增加 1；重复 no-op 不写文件、不增加版本。
+服务返回的借用引用在成功变更后失效。所有子资产 ID 保持，Scene 内容/revision/dirty/历史不变。
+改名仅支持同目录、同扩展名，拒绝已有目标、大小写等价名称、与 Scene 或其他资产占用路径重叠。
+首次登记仍需显式 create_or_adopt；新 Project 先用既有 save_project 保存再打开服务。
+
+Windows 本地盘、同步单写者下，操作记录保存在 `.decker/asset-operations/pending.json`。
+文件故障先补偿；补偿失败返回原错误、恢复诊断和记录路径，并设置 `catalog().needs_recovery()`。
+重启发现记录时拒绝打开。用户/宿主显式调用 `dk::recover_asset_operations(root)`，
+成功后重新打开服务；恢复仅回滚可识别的 before/after 文件，外部修改或未知文件保留并报错。
+记录写入后的异常也关闭写闸门，交给显式恢复。目录和父路径拒绝 reparse point、硬链接和短名称别名。
+不承诺跨文件原子性、任意断电持久化或并发写隔离；`.decker` 恢复记录不能当作缓存删除。
 
 不含 Scene/Framework 的独立验证：
 
@@ -320,7 +343,8 @@ cmake --preset windows-dev -B out/build/windows-assets-only -DDK_BUILD_ASSET_RUN
 & ./scripts/verify.ps1 -BuildDir out/build/windows-assets-only -Target dk_asset_tests -TestRegex '^dk\.assets\.' -Reason '独立资产底层'
 ```
 
-设计、错误边界和证据见 [assets-runtime](spec/design/assets-runtime.md) 与 [0031](spec/development/0031-asset-metadata-catalog.md)。
+设计、错误边界和证据见 [assets-runtime](spec/design/assets-runtime.md)、[0031](spec/development/0031-asset-metadata-catalog.md)
+及 [0032](spec/development/0032-asset-commit-recovery.md)。摘要采用 xxHash 0.8.4，作为资产底层私有依赖。
 
 ## Memory heap（M1.7.2）
 
@@ -978,7 +1002,7 @@ ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
 
 M1.6 与 M2.1–M2.4 已完成并分节本地提交。最终默认 Debug/Release 各 128 通过、
 1 项既有符号链接权限跳过；独立 Scene 配置各 104 通过、1 跳过，纯 CPU 示例各 16/16。
-上述计数为当时验收记录；M3 交付 A、M1.7.1–7 和 M4.1.1 也已完成，当前下一项为 M4.1.2。
+上述计数为当时验收记录；M3 交付 A、M1.7.1–7 和 M4.1 也已完成，当前下一项为 M4.2.1。
 
 开发前先看 [AGENTS.md](AGENTS.md) 和 [spec 规范](spec/README.md)：
 先创建/更新模块设计，然后实现；过程中持续更新编号开发记录。

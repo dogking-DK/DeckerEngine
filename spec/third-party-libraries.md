@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-28T10:52:48+08:00"
+updated_at: "2026-09-28T11:32:11+08:00"
 status: accepted
 ---
 
@@ -34,7 +34,10 @@ status: accepted
 - Windows host/target triplet：`x64-windows`。
 - M4.1.1 的 assets feature 复用 nlohmann-json 3.12.0#2；资产底层同时复用既有 types/IO/Memory，
   无新包或版本变化，固定 baseline 不变；见 [0031](development/0031-asset-metadata-catalog.md)。
-- 最近接入：[0028](development/0028-magic-enum.md)，magic-enum 0.9.8（MIT，header-only）。
+- 最近接入：[0032](development/0032-asset-commit-recovery.md)，xxHash 0.8.4（BSD-2-Clause，port #0）。
+  2026-09-28 直接核验[官方 port](https://github.com/microsoft/vcpkg/blob/00be06124721b0fa2fb451982e707f81b3b06e5a/ports/xxhash/vcpkg.json)
+  与固定 baseline 一致；assets feature 安装并 PRIVATE 链接 `xxHash::xxhash`，未启用 xxhsum，未升级其他包。
+- 此前 [0028](development/0028-magic-enum.md)，magic-enum 0.9.8（MIT，header-only）。
   官方 master [f907dc21](https://github.com/microsoft/vcpkg/blob/f907dc21e0e8699955b002d0fe7673de5db55fab/ports/magic-enum/vcpkg.json)
   与固定基线条目版本一致，保留基线，不变更其余依赖；详见该记录的定向验证。
 - 此前 [0024](development/0024-mimalloc-heap.md)，mimalloc 3.5.3 已安装并通过多线程 heap 验证，
@@ -87,18 +90,18 @@ M1.7.7 复用相同依赖完成重复工作负载与三配置采集基线；未�
 内存 capture 检查器独立复用 Tracy 工具依赖和同版本源码，不成为引擎运行时依赖，见
 [工具说明](../tools/profiling/README.md)。
 
-## M4 已选型，尚未接入
+## M4 依赖与接入状态
 
 | 库 / vcpkg port | 当前基线版本 | 计划用途 | 边界 |
 | --- | --- | --- | --- |
 | fastgltf / `fastgltf` | 0.9.0 | 静态 glTF/GLB 解析、accessor 提取 | 导入器私有依赖，数据转换为引擎拥有的 CPU 值 |
 | stb_image / `stb` | 2024-07-29#1 | PNG/JPEG 解码到 RGBA8；该 port 的 stb_image 为 2.30 | 单一实现翻译单元，使用内存输入，限制支持格式 |
-| xxHash / `xxhash` | 0.8.4 | 恢复记录文件摘要、资源变化检测与缓存键 | 选用 XXH3-128，内部 ContentDigest 封装；不启用 xxhsum feature |
+| xxHash / `xxhash` | 0.8.4 | 恢复记录文件摘要；后续资源变化检测与缓存键 | M4.1.2 已集成 XXH3-128/内部 ContentDigest，未启用 xxhsum feature；缓存尚未实现 |
 | simdjson / `simdjson` | 4.6.11 | fastgltf 的传递解析依赖 | 不替换引擎公开的 nlohmann-json 接口，不作为新直接依赖重复声明 |
 
 接入顺序和格式限制见 [M4 导入器设计](design/assets-importers.md)、
 [资产运行时设计](design/assets-runtime.md) 及 [M4 开发计划](development/0020-m4-development-plan.md)。
-使用对应模块时才增加依赖 feature 和 CMake target；已选型不表示已有导入器或摘要实现。
+使用对应模块时才增加依赖 feature 和 CMake target；除已实现的摘要封装外，导入器相关库仍只是选型。
 
 ## 清单预留，模块尚未实现
 

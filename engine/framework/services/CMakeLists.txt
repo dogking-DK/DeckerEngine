@@ -4,10 +4,10 @@ target_sources(dk_scene_services PUBLIC FILE_SET HEADERS BASE_DIRS include FILES
 target_link_libraries(dk_scene_services PUBLIC dk::scene)
 dk_target_defaults(dk_scene_services)
 if(TARGET dk_asset_runtime)
-    add_library(dk_asset_services STATIC src/AssetRegistration.cpp)
+    add_library(dk_asset_services STATIC src/AssetRegistration.cpp src/AssetService.cpp)
     add_library(dk::asset_services ALIAS dk_asset_services)
     target_sources(dk_asset_services PUBLIC FILE_SET HEADERS BASE_DIRS include FILES
-        include/dk/services/AssetRegistration.hpp)
+        include/dk/services/AssetRegistration.hpp include/dk/services/AssetService.hpp)
     target_link_libraries(dk_asset_services PUBLIC dk::scene dk::asset_runtime)
     dk_target_defaults(dk_asset_services)
 endif()
