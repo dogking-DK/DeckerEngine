@@ -12,6 +12,12 @@ dk_target_defaults(dk_core_tests)
 
 include(Catch)
 if(DK_BUILD_GRAPHICS_DEVICE)
+    add_executable(dk_graphics_resource_tests GraphicsResourceTests.cpp)
+    target_include_directories(dk_graphics_resource_tests PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
+    target_link_libraries(dk_graphics_resource_tests PRIVATE dk::graphics_device Catch2::Catch2WithMain)
+    dk_target_defaults(dk_graphics_resource_tests)
+    catch_discover_tests(dk_graphics_resource_tests TEST_PREFIX "dk.graphics.unit."
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 30 LABELS "cpu")
     add_executable(dk_device_tests DeviceTests.cpp)
     target_include_directories(dk_device_tests PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
     target_link_libraries(dk_device_tests PRIVATE dk::graphics_device Catch2::Catch2WithMain)

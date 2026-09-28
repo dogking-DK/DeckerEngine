@@ -1,7 +1,7 @@
 ---
 module: graphics-device
 created_at: "2026-09-28T16:38:00+08:00"
-updated_at: "2026-09-28T17:38:13+08:00"
+updated_at: "2026-09-28T18:34:00+08:00"
 status: accepted
 ---
 
@@ -10,7 +10,8 @@ status: accepted
 ## 目标与边界
 
 M5.1 提供无窗口 instance、physical device、logical device 和单队列底座。
-不创建 surface/swapchain、Buffer/Image、提交系统或 shader；这些属于 M5.2–5。
+Device 自身不创建 surface/swapchain、Buffer/Image、提交系统或 shader；M5.2 的拥有型资源与队列
+由同 target 的 [资源与提交接口](graphics-resources.md) 提供，窗口/shader 属后续阶段。
 源码位于 [device](../../engine/graphics/device)，target 为 dk_graphics_device / dk::graphics_device。
 PUBLIC 依赖 Core、Memory、Vulkan::Headers、VMA 头接口并传递 VK_NO_PROTOTYPES，
 以及 VULKAN_HPP_ENABLE_DYNAMIC_LOADER_TOOL=0 / VULKAN_HPP_NO_DEFAULT_DISPATCHER；
@@ -71,7 +72,8 @@ Vulkan-Hpp dispatcher、vk-bootstrap/VMA 的内部 CPU 元数据以及驱动/验
 VMA 配置 API 1.2 路径（底层设备仍为 1.3），避免使用本阶段尚未启用的 maintenance4；
 三方 implementation 独立为 dk_graphics_vma 编译，不把其警告开关施加到引擎代码。
 Device::allocator() 借用 VmaAllocator，所有 allocation 必须先于 Device 销毁；
-本次只提供 allocator 接入，Buffer/Image 拥有型封装、提交和完成跟踪仍属 M5.2。
+Device 层只提供 allocator 接入；M5.2 的 SubmissionQueue 消费 Device 并将设备寿命延长到所有资源释放，
+Buffer/Image、提交与完成跟踪见 [资源设计](graphics-resources.md)。
 VMA allocator 使用专用 RAII owner；VMA 创建的 buffer/image 必须经 VMA 配对销毁，
 不可同时让 vk::raii::Buffer/Image 拥有同一句柄，避免重复释放。
 

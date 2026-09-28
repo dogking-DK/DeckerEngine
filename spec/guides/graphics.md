@@ -1,12 +1,12 @@
 ---
 created_at: "2026-09-28T16:49:00+08:00"
-updated_at: "2026-09-28T17:37:00+08:00"
+updated_at: "2026-09-28T18:34:00+08:00"
 ---
 
-# Vulkan 设备与诊断
+# Vulkan 设备、资源与提交
 
-[返回项目入口](../../README.md)。当前提供 M5.1 设备底座；尚无绘制、资源提交、shader 或窗口。
-接口与生命周期见 [设备设计](../design/graphics-device.md)。
+[返回项目入口](../../README.md)。当前提供设备、VMA Buffer/Image、单队列提交、上传/读回与延迟释放；
+尚无绘制、shader 或窗口。接口与生命周期见 [设备设计](../design/graphics-device.md) 和[资源设计](../design/graphics-resources.md)。
 
 ## 配置和运行
 
@@ -18,6 +18,7 @@ vcpkg 提供编译头文件和 loader 包，不安装显卡驱动或验证层。
 ```powershell
 cmake --preset windows-graphics
 & ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Target @('dk_device_tests', 'dk_device_probe') -TestRegex '^dk\.device\.' -Reason '验证 Vulkan 设备与诊断'
+& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Target @('dk_graphics_resource_tests', 'dk_graphics_resource_probe') -TestRegex '^dk\.graphics\.' -Reason '验证资源、提交和数据往返'
 ```
 
 windows-graphics 继承 CPU 开发预设，额外开启 DK_BUILD_GRAPHICS_DEVICE；默认 windows-dev 保持 CPU-only。
@@ -87,10 +88,65 @@ RAII 引用和解引用后的 vk::* 句柄均借用；不得重新包装为另�
 不要覆盖这些编译定义。VMA 使用 Vulkan 1.2 API 路径，设备仍要求 Vulkan 1.3。
 引擎对象/容器使用 Memory heap；Hpp dispatcher、vk-bootstrap/VMA 的内部 CPU 元数据使用三方默认分配器，
 不计入该 heap 的用量。GPU allocation 由 VMA 单独统计。
-本阶段不提供提交或等待封装，不能把析构当作隐式 wait-idle。
+底层 Device 不提供提交或隐式等待；以下 SubmissionQueue 提供提交与等待，且会在最终析构时排空自身工作。
 错误包含 Vulkan 操作名、VkResult 符号与数值。loader_path 留空使用系统 loader；
 绝对路径可用于部署或复现缺失 loader，不能传相对路径。
 
 初始设备验收见 [0042](../development/0042-vulkan-device.md)，三方接入和 VMA 结果见
 [0043](../development/0043-vulkan-libraries.md)，Hpp RAII 迁移见 [0044](../development/0044-vulkan-hpp-raii.md)。
-当前只交付设备和 allocator 接入，M5.2 资源封装/提交仍待实现。
+M5.2 的资源与提交验收见 [0045](../development/0045-graphics-resources-submission.md)。
+
+## 上传与读回
+
+文件包含 `<dk/graphics/Resources.hpp>` 和 `<array>`，在上述 Device 创建成功后消费设备：
+
+```cpp
+auto queue = dk::graphics::SubmissionQueue::create(*heap, std::move(*device), 3);
+if (!queue) return 1;
+std::array<std::byte, 64> input{}, output{};
+input.fill(std::byte{0x5a});
+using dk::graphics::BufferMemory;
+const auto usage = vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst;
+auto upload = queue->create_buffer({input.size(), usage, BufferMemory::upload});
+auto gpu = queue->create_buffer({input.size(), usage, BufferMemory::device});
+auto readback = queue->create_buffer({input.size(), usage, BufferMemory::readback});
+if (!upload || !gpu || !readback || !upload->write(0, input)) return 1;
+auto batch = queue->begin();
+if (!batch) return 1;
+if (!batch->copy(*upload, *gpu, input.size()) || !batch->copy(*gpu, *readback, input.size())) return 1;
+auto ticket = queue->submit(std::move(*batch));
+if (!ticket) return 1;
+auto completed = queue->wait(*ticket);
+if (!completed || !*completed || !readback->read(0, output) || output != input) return 1;
+if (!queue->close()) return 1;
+```
+
+创建队列后不再使用移后的 Device；queue.device() 只借用设备。factory 预检失败不消费设备，
+开始创建后发生失败则销毁已消费设备。队列、资源和相关 Vulkan 访问由调用者串行执行，
+不要绕过队列提交/重置内部 command buffer 或 signal 内部 timeline。
+
+Image 使用 `create_image({width, height})`，默认 RGBA8、transfer src/dst + sampled。
+`batch.copy_to_image(upload, image)` 与 `copy_to_buffer(image, readback)` 复制整图，缓冲至少 width×height×4 字节，
+自动处理 transfer layout；`transition(image, vk::ImageLayout::eShaderReadOnlyOptimal)` 可将其准备为只读布局。
+支持单 mip/layer 二维 RGBA8 UNORM/SRGB、BGRA8 UNORM、R32_UINT/FLOAT；其他格式和复杂 subresource 待扩展。
+
+begin() 在固定槽（1–64）用尽时返回 conflict；调用 poll() 或 wait() 确认完成后才复用。
+wait 的超时单位为 ns，返回 false 时资源仍在使用；默认等待无超时。票据不能跨队列使用。
+Buffer 的 CPU 访问在录制和 pending 期间被拒绝，wait/poll 回收引用后才允许访问。
+VMA 负责 non-coherent flush/invalidate；flush 失败不保证已写 host 字节回滚。
+
+丢弃 batch 会取消未提交录制；提交失败不更新票据或 image 全局布局。一个 image 同时只能由一个 batch 录制，
+成功提交后即可在同队列下一批继续使用。包装提前销毁时队列保留 allocation 到 GPU 完成；
+buffer/image 可晚于 queue 销毁，它们会继续持有设备，因此诊断 sink 和 Memory 系统也须保持存活。
+close() 遇录制中的 batch 返回 conflict；成功后拒绝新工作。队列最终析构等待 pending 工作，
+device lost 为终态；其他等待失败保留资源以供重试。API 的 bad_alloc 不转换为 GPU 成功/完成。
+
+内置同步以正确性为先，采用保守 barrier；目前未做异步传输队列或 barrier 合并优化。
+手工录制可借用 batch.command_buffer()，必须先 retain 所有使用资源，并经 transition 更新 image 布局。
+该路径不追踪手工创建的 image view/pipeline 等子对象，调用者须将它们保持到票据完成。
+
+资源 GPU 探针每次验证 16 轮 buffer/image 往返、5 种格式、提交失败/超时/等待错误、跨队列拒绝、
+延迟释放和关闭。验证用例通过环境设置开启 Khronos 同步验证（兼容旧 SDK 的 VK_LAYER_VALIDATE_SYNC
+和新版本的 VK_VALIDATION_VALIDATE_SYNC），无环境返回 77；不将跳过当通过。
+Tracy 当前标记 CPU 创建/submit/wait/collect；GPU query/context 的寿命契约已确定，
+GPU timestamp zone/capture 尚未启用，见[接入边界](../design/graphics-resources.md#tracy-gpu-接入边界)。

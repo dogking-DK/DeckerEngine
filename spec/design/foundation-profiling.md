@@ -1,7 +1,7 @@
 ---
 module: foundation-profiling
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-28T16:15:12+08:00"
+updated_at: "2026-09-28T18:34:00+08:00"
 status: accepted
 ---
 
@@ -22,6 +22,9 @@ M1.7.2 已提供 heap backing 事件与真实配对采集，见 [0024](../develo
 M1.7.4 已接入 arena 用量曲线，见 [0026](../development/0026-scratch-arena.md)；M1.7.5 已接入 pool 曲线，
 见 [0027](../development/0027-memory-pools.md)。M1.7.6 已验收双系统共享 client、缓存退休与延迟释放，
 见 [0029](../development/0029-memory-context-routing.md)。GPU 埋点仍为规划。
+M5.2 已在 graphics 标记资源创建/录制/submit/wait/collect 的 CPU zone；
+GPU context、每槽 query 和延迟回收的接入契约见[资源设计](graphics-resources.md#tracy-gpu-接入边界)，
+尚未启用 GPU timestamp zone/capture，不使 foundation 依赖 Vulkan。
 accepted 表示采用当前方案，不代表所有小节已验收或已经测得性能改进。
 
 2026-09-23 实施核验官方最新提交 `33d78c1ed898a06938f31312167c7abefd229455`，

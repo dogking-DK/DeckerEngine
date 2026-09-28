@@ -14,6 +14,17 @@ if(TARGET dk_assetc)
 endif()
 
 if(DK_BUILD_GRAPHICS_DEVICE)
+    add_executable(dk_graphics_resource_probe GraphicsResourceProbe.cpp)
+    set_target_properties(dk_graphics_resource_probe PROPERTIES OUTPUT_NAME "dk-graphics-resource-probe")
+    target_include_directories(dk_graphics_resource_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
+    target_link_libraries(dk_graphics_resource_probe PRIVATE dk::graphics_device)
+    dk_target_defaults(dk_graphics_resource_probe)
+    add_test(NAME dk.graphics.gpu_resources COMMAND dk_graphics_resource_probe)
+    add_test(NAME dk.graphics.gpu_resources_validation COMMAND dk_graphics_resource_probe --validation)
+    set_tests_properties(dk.graphics.gpu_resources dk.graphics.gpu_resources_validation PROPERTIES TIMEOUT 120 SKIP_RETURN_CODE 77 LABELS "gpu")
+    # SDK 1.4.321 uses VK_LAYER_; newer validation layers use VK_VALIDATION_.
+    set_tests_properties(dk.graphics.gpu_resources_validation PROPERTIES ENVIRONMENT
+        "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
     add_executable(dk_device_probe DeviceProbe.cpp)
     set_target_properties(dk_device_probe PROPERTIES OUTPUT_NAME "dk-device-probe")
     target_link_libraries(dk_device_probe PRIVATE dk::graphics_device)

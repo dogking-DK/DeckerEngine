@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-28T17:37:00+08:00"
+updated_at: "2026-09-28T18:34:00+08:00"
 status: accepted
 ---
 
@@ -113,7 +113,7 @@ M1.7.7 复用相同依赖完成重复工作负载与三配置采集基线；未�
 | Vulkan-Hpp / `vulkan-headers` | 1.4.357.0 | vulkan-device / graphics 传递提供 | PUBLIC vulkan_raii.hpp；普通 Vulkan 对象使用 vk::raii，独立 dispatcher，无全局默认表 |
 | volk / `volk` | 1.4.357.0 | vulkan-device / graphics | PRIVATE volk::volk，填充每实例/设备 table，执行不使用全局 vk* |
 | vk-bootstrap / `vk-bootstrap` | 1.4.357 | vulkan-device / graphics | PRIVATE vk-bootstrap::vk-bootstrap，内部适配 InstanceBuilder，保留自有选卡策略 |
-| Vulkan Memory Allocator / `vulkan-memory-allocator` | 3.4.0 | vulkan-device / graphics | PUBLIC GPUOpen::VulkanMemoryAllocator 头接口，私有 dk_graphics_vma 单一定义；Device 拥有 allocator |
+| Vulkan Memory Allocator / `vulkan-memory-allocator` | 3.4.0 | vulkan-device / graphics | PUBLIC GPUOpen::VulkanMemoryAllocator 头接口，私有 dk_graphics_vma 单一定义；Device allocator 与 M5.2 Buffer/Image 配对拥有、延迟释放 |
 
 2026-09-28 核验官方 vulkan、vulkan-headers、vulkan-loader port 与固定 baseline 一致，
 无需升级。头文件实际编译版本为 1.4.357.0；系统 loader 动态加载，不静态导入 Vulkan DLL，
@@ -132,6 +132,9 @@ Vulkan-Hpp 已随上述 headers 安装，不新增官方已标记 deprecated 的
 2026-09-28 再次核验 [headers port](https://github.com/microsoft/vcpkg/blob/master/ports/vulkan-headers/vcpkg.json)
 仍为 1.4.357.0，无 port 修订，固定 baseline 保持；RAII 接入见 [0044](development/0044-vulkan-hpp-raii.md)。
 Hpp dispatcher 使用默认 CPU 分配器；VMA 分配资源不与 Hpp 重复拥有。
+M5.2 复用以上固定版本，新增资源、timeline 提交和映射/flush/invalidate 消费者；未新增/升级包。
+VMA allocation 随完成票据回收；Memory 控制块使用调用者资源。实现与验证见
+[0045](development/0045-graphics-resources-submission.md)，GPU Tracy context 仍未启用。
 
 ## 清单预留，模块尚未实现
 
