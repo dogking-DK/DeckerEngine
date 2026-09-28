@@ -44,4 +44,6 @@
 
 | 0037 | [M4.4.1 CPU 工作队列](0037-cpu-job-queue.md) | foundation-jobs, foundation-memory | completed |
 
+| 0038 | [M4.4.2 异步资产状态](0038-async-asset-state.md) | assets-runtime, foundation-jobs | completed |
+
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

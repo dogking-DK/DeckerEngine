@@ -14,4 +14,9 @@ if(TARGET dk_asset_importers)
     target_sources(dk_asset_runtime PRIVATE src/CpuArtifact.cpp src/AssetCompiler.cpp src/CacheFormat.cpp src/AssetCache.cpp src/CacheClean.cpp
         PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/assets/CpuArtifact.hpp include/dk/assets/AssetCompiler.hpp include/dk/assets/AssetCache.hpp)
     target_link_libraries(dk_asset_runtime PUBLIC dk::asset_importers)
+    if(TARGET dk_jobs)
+        target_sources(dk_asset_runtime PRIVATE src/AsyncAssets.cpp
+            PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/assets/AsyncAssets.hpp)
+        target_link_libraries(dk_asset_runtime PUBLIC dk::jobs)
+    endif()
 endif()

@@ -106,8 +106,10 @@ public:
     std::pmr::set<std::string, std::less<>> used_keys{memory::current_scratch_resource()};
     std::string location = "source";
     Importer(const ProjectPaths& p, const GltfImportRequest& r) : paths(p), request(r) {}
+    void checkpoint() const { require(!request.stop.stop_requested(), "Import cancelled", ErrorCode::invalid_state); }
     std::span<const std::byte> read(std::string_view name, std::size_t limit)
     {
+        checkpoint();
         if (const auto found = inputs.find(name); found != inputs.end()) { return result.inputs[found->second].bytes; }
         const auto path = take(paths.resolve(normalized(name)));
         std::error_code error; const auto status = std::filesystem::status(path, error);
@@ -116,6 +118,7 @@ public:
         require(std::filesystem::is_regular_file(status), "Expected regular dependency: " + std::string{name});
         const auto remaining = request.limits.input_bytes - input_used;
         auto bytes = take(read_file_bytes(path, std::min(limit, remaining)));
+        checkpoint();
         consume(input_used, bytes.size(), request.limits.input_bytes, "input");
         const auto index = result.inputs.size(); result.inputs.push_back({owned(name), Vector<std::byte>{bytes.begin(), bytes.end()}});
         inputs.emplace(name, index); return result.inputs.back().bytes;
@@ -170,7 +173,9 @@ public:
             bytes = std::span<const std::byte>{buffer.data(),buffer.size()}.subspan(view.byteOffset,view.byteLength);
             origin = std::string{request.source} + "#image/" + std::to_string(image_index);
         }
+        checkpoint();
         auto decoded = decode_image(bytes,origin,image.value("mimeType",std::string{}),request.limits,texture_used,output_used);
+        checkpoint();
         if (definition.contains("sampler")) {
             const auto& sampler = json.at("samplers").at(definition["sampler"].get<std::size_t>());
             const auto filter = [](unsigned value, bool min) { require(value == 9728 || value == 9729 || (min && value >= 9984 && value <= 9987), "Invalid sampler filter"); return static_cast<TextureFilter>(value); };
@@ -192,6 +197,7 @@ public:
         require(extension == ".gltf" || extension == ".glb", "Expected glTF/GLB source", ErrorCode::not_supported);
         const auto source_bytes = read(request.source, request.limits.source_bytes); const auto decoded = container(source_bytes);
         const auto json = parse(decoded.json);
+        checkpoint();
         require(json.contains("meshes") && json["meshes"].size() == 1, "Exactly one mesh is supported", ErrorCode::not_supported);
         require(json["meshes"][0].contains("primitives") && json["meshes"][0]["primitives"].is_array()
             && !json["meshes"][0]["primitives"].empty() && json["meshes"][0]["primitives"].size() <= request.limits.primitives, "Invalid primitive count");
@@ -208,6 +214,7 @@ public:
         require(data.error() == fastgltf::Error::None, "Cannot prepare glTF bytes");
         fastgltf::Parser parser;
         auto parsed = parser.loadGltf(data.get(), {}, fastgltf::Options::None);
+        checkpoint();
         require(parsed.error() == fastgltf::Error::None, "fastgltf: " + std::string{fastgltf::getErrorMessage(parsed.error())});
         auto& asset = parsed.get();
         for (std::size_t i = 0; i < asset.buffers.size(); ++i) {
@@ -226,6 +233,7 @@ public:
         result.unit_scale = request.unit_scale; result.mesh.id = identity("mesh/0", AssetKind::mesh);
         std::map<std::size_t, AssetId> materials;
         for (std::size_t p = 0; p < asset.meshes[0].primitives.size(); ++p) {
+            checkpoint();
             DK_PROFILE_ZONE("Assets.DecodePrimitive"); location = "mesh/0/primitive/" + std::to_string(p);
             const auto& primitive = asset.meshes[0].primitives[p]; require(primitive.type == fastgltf::PrimitiveType::Triangles, "Only TRIANGLES supported", ErrorCode::not_supported);
             for (const auto& attr : primitive.attributes) { require(attr.name == "POSITION" || attr.name == "NORMAL" || attr.name == "TEXCOORD_0", "Unsupported attribute: " + std::string{attr.name}, ErrorCode::not_supported); }

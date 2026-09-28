@@ -78,7 +78,7 @@ void move(const fs::path& from, const fs::path& to)
 #endif
 }
 struct StagedEntry {
-    const ProjectPaths& paths;
+    ProjectPaths paths;
     std::string temporary, destination;
     std::array<std::pair<std::string, ContentDigest>, 3> files;
     bool active = false, published = false;
@@ -114,10 +114,64 @@ void summarize(CachedAsset& result)
         {"outputs", std::move(outputs)}, {"inputs", std::move(inputs)}, {"diagnostics", std::move(diagnostics)}}.dump() + '\n');
 }
 }
+struct PreparedCachedAsset::Impl {
+    ProjectPaths paths;
+    CachedAsset result;
+    std::string meta_name, current, after_meta, after_index;
+    std::optional<std::string> before_meta, before_index;
+    bool meta_changed = false, used = false;
+    std::unique_ptr<StagedEntry> stage;
+    void unchanged() const {
+        require(optional_cache_text(persistent_path(paths, meta_name), asset_meta_byte_limit) == before_meta
+            && optional_cache_text(persistent_path(paths, current), cache_index_limit) == before_index,
+            "Metadata/current changed during cache build", ErrorCode::conflict);
+    }
+};
+PreparedCachedAsset::PreparedCachedAsset(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+PreparedCachedAsset::~PreparedCachedAsset() = default;
+PreparedCachedAsset::PreparedCachedAsset(PreparedCachedAsset&&) noexcept = default;
+PreparedCachedAsset& PreparedCachedAsset::operator=(PreparedCachedAsset&&) noexcept = default;
+const CachedAsset& PreparedCachedAsset::value() const { return impl_->result; }
+Result<CachedAsset> PreparedCachedAsset::publish() const
+{
+    return attempt<CachedAsset>("publish_cached_asset", [&] {
+        require(impl_ && !impl_->used, "Cache candidate already consumed", ErrorCode::invalid_state);
+        auto& c = *impl_; c.used = true; bool identity_committed = false;
+        try {
+            verify_cache_inputs(c.paths, c.result.artifact.inputs); c.unchanged();
+            take(check_asset_operations(c.paths.root()));
+            if (c.result.cache_hit) return std::move(c.result);
+            cache_step(CacheStep::metadata); c.unchanged();
+            if (c.meta_changed) write_cache_text(persistent_path(c.paths, c.meta_name), c.after_meta);
+            identity_committed = true; c.stage->active = false;
+            cache_step(CacheStep::current);
+            require(optional_cache_text(persistent_path(c.paths, c.current), cache_index_limit) == c.before_index,
+                "Current changed before commit", ErrorCode::conflict);
+            require(optional_cache_text(persistent_path(c.paths, c.meta_name), asset_meta_byte_limit)
+                == (c.meta_changed ? std::optional{c.after_meta} : c.before_meta),
+                "Metadata changed before current commit", ErrorCode::conflict);
+            write_cache_text(persistent_path(c.paths, c.current), c.after_index);
+            return std::move(c.result);
+        } catch (const Failure& failure) {
+            if (identity_committed) throw Failure{failure.error.with_context(
+                "identity committed; current unchanged; complete artifact: " + std::string{c.result.directory})};
+            if (c.stage && !c.stage->cleanup()) throw Failure{failure.error.with_context("Cache cleanup incomplete: " + std::string{c.stage->name()})};
+            throw;
+        }
+    });
+}
 Result<CachedAsset> compile_cached_asset(const ProjectPaths& paths, const AssetCacheRequest& request)
 {
+    auto candidate = prepare_cached_asset(paths, request);
+    if (!candidate) return std::unexpected(candidate.error());
+    return candidate->publish();
+}
+Result<PreparedCachedAsset> prepare_cached_asset(const ProjectPaths& paths, const AssetCacheRequest& request, std::stop_token stop)
+{
     DK_PROFILE_ZONE("Assets.CacheCompile");
-    return attempt<CachedAsset>("compile_cached_asset", [&] {
+    return attempt<PreparedCachedAsset>("prepare_cached_asset", [&] {
+        const auto checkpoint = [&] { require(!stop.stop_requested(), "Asset preparation cancelled", ErrorCode::invalid_state); };
+        checkpoint();
         take(check_asset_operations(paths.root())); ordinary_cache_input(paths, request.source);
         const auto meta_name = std::string{request.source} + ".meta";
         const auto before_meta = optional_cache_text(persistent_path(paths, meta_name), asset_meta_byte_limit);
@@ -148,7 +202,9 @@ Result<CachedAsset> compile_cached_asset(const ProjectPaths& paths, const AssetC
                     require(optional_cache_text(persistent_path(paths, meta_name), asset_meta_byte_limit) == before_meta
                         && optional_cache_text(persistent_path(paths, current_name(index.root)), cache_index_limit) == before_index,
                         "Metadata/current changed during cache hit", ErrorCode::conflict);
-                    return result;
+                    checkpoint();
+                    return PreparedCachedAsset{std::make_unique<PreparedCachedAsset::Impl>(PreparedCachedAsset::Impl{
+                        paths, std::move(result), meta_name, current_name(index.root), {}, {}, before_meta, before_index, false, false, {}})};
                 }
                 miss = probe.error().message;
             }
@@ -156,7 +212,9 @@ Result<CachedAsset> compile_cached_asset(const ProjectPaths& paths, const AssetC
         cache_step(CacheStep::import);
         Vector<OutputIdentity> identities;
         if (previous) { for (const auto& o : previous->outputs) { identities.push_back({o.key, o.id, o.kind}); } }
-        auto imported = take(import_gltf(paths, {request.source, identities, scale}));
+        checkpoint();
+        auto imported = take(import_gltf(paths, {request.source, identities, scale, {}, stop}));
+        checkpoint();
         CacheDescriptor d; d.source = std::string{request.source}; d.metadata.root_id = imported.mesh.id; d.metadata.unit_scale = scale;
         for (const auto& o : imported.outputs) { d.metadata.outputs.push_back({o.key, o.id, o.kind}); }
         for (const auto& input : imported.inputs) { d.inputs.push_back({input.path, owned(content_digest(input.bytes).hex()), input.bytes.size()}); }
@@ -172,14 +230,15 @@ Result<CachedAsset> compile_cached_asset(const ProjectPaths& paths, const AssetC
         const bool meta_changed = !previous || take(serialize_asset_meta(*previous)) != after_meta;
         const auto after_index = index_json({imported.mesh.id, std::string{request.source}, key, build});
         require(after_index.size() <= cache_index_limit, "Cache index byte limit");
-        StagedEntry stage{paths, std::string{cache_root} + "/tmp/" + build, destination,
-            {{{"data.bin", content_digest(encoded.bytes)}, {"manifest.json", hash_text(encoded.manifest)}, {"entry.json", hash_text(entry_text)}}}};
+        auto stage_owner = std::make_unique<StagedEntry>(StagedEntry{paths, std::string{cache_root} + "/tmp/" + build, destination,
+            {{{"data.bin", content_digest(encoded.bytes)}, {"manifest.json", hash_text(encoded.manifest)}, {"entry.json", hash_text(entry_text)}}}});
+        auto& stage = *stage_owner;
         directory(paths, std::string{cache_root} + "/tmp");
         directory(paths, std::string{cache_root} + "/entries/" + key);
         directory(paths, std::string{cache_root} + "/current");
         std::error_code error;
         require(fs::create_directory(persistent_path(paths, stage.temporary), error) && !error, "Cannot create cache staging", ErrorCode::io_error);
-        stage.active = true; bool identity_committed = false;
+        stage.active = true;
         try {
             take(write_file_bytes_atomic(persistent_path(paths, stage.temporary + "/data.bin"), encoded.bytes));
             write_cache_text(persistent_path(paths, stage.temporary + "/manifest.json"), encoded.manifest);
@@ -192,20 +251,14 @@ Result<CachedAsset> compile_cached_asset(const ProjectPaths& paths, const AssetC
                     && optional_cache_text(persistent_path(paths, current), cache_index_limit) == before_index,
                     "Metadata/current changed during cache build", ErrorCode::conflict);
             };
-            cache_step(CacheStep::validate_inputs); verify_cache_inputs(paths, d.inputs); unchanged();
+            checkpoint(); cache_step(CacheStep::validate_inputs); verify_cache_inputs(paths, d.inputs); unchanged();
             take(check_asset_operations(paths.root())); cache_step(CacheStep::publish);
             move(persistent_path(paths, stage.temporary), persistent_path(paths, destination)); stage.published = true;
-            cache_step(CacheStep::metadata); unchanged();
-            if (meta_changed) { write_cache_text(persistent_path(paths, meta_name), after_meta); }
-            identity_committed = true; stage.active = false; // Complete artifact remains if current fails.
-            cache_step(CacheStep::current);
-            require(optional_cache_text(persistent_path(paths, current), cache_index_limit) == before_index, "Current changed before commit", ErrorCode::conflict);
-            require(optional_cache_text(persistent_path(paths, meta_name), asset_meta_byte_limit)
-                == (meta_changed ? std::optional{std::string{after_meta}} : before_meta), "Metadata changed before current commit", ErrorCode::conflict);
-            write_cache_text(persistent_path(paths, current), after_index);
-            return result;
+            checkpoint();
+            return PreparedCachedAsset{std::make_unique<PreparedCachedAsset::Impl>(PreparedCachedAsset::Impl{
+                paths, std::move(result), meta_name, current, std::string{after_meta}, after_index, before_meta, before_index,
+                meta_changed, false, std::move(stage_owner)})};
         } catch (const Failure& failure) {
-            if (identity_committed) { throw Failure{failure.error.with_context("identity committed; current unchanged; complete artifact: " + destination)}; }
             if (!stage.cleanup()) { throw Failure{failure.error.with_context("Cache cleanup incomplete: " + std::string{stage.name()})}; }
             throw;
         }

@@ -2,6 +2,7 @@
 #include <dk/assets/CpuData.hpp>
 #include <dk/io/Path.hpp>
 #include <span>
+#include <stop_token>
 
 namespace dk {
 // Callers may lower, but not raise, these hard limits. All byte counts are aggregate.
@@ -16,6 +17,7 @@ struct GltfImportRequest {
     std::span<const OutputIdentity> identities;
     double unit_scale = 1;
     ImportLimits limits;
+    std::stop_token stop;
 };
 // Pure candidate: no writes or changes to existing metadata, Project, Scene or published data.
 // Requires a bound persistent memory context with scratch; ContextError/bad_alloc propagate.

@@ -1,7 +1,7 @@
 ---
 module: assets-runtime
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T14:20:37+08:00"
+updated_at: "2026-09-28T14:45:27+08:00"
 status: accepted
 ---
 
@@ -284,6 +284,24 @@ M4 的源依赖为 buffer/图片文件，不递归解释任意其他资产工程
 异步目录/只读句柄和 unload 语义由 M4.4 实现，禁止把本阶段同步结果声称为 CPU Ready。
 
 ## M4.4：加载状态与发布
+
+### M4.4.2 实施接口与提交边界
+
+缓存新增 `prepare_cached_asset(paths, request, stop_token)`，后台只读源/meta/current，
+生成并读回完整不可变产物，不写 meta/current；`PreparedCachedAsset::publish()` 仅 owner 调用一次，
+复核输入和原 meta/current，才执行身份与 current 提交。未发布候选析构只清理本次拥有且未改动的文件。
+同步 `compile_cached_asset` 复用 prepare/publish；既有 meta 已提交/current 失败的部分保证保持。
+importer 在文件读取、解析、primitive 与图片解码之间检查 stop_token；三方调用内部不抢占。
+
+可选 Jobs 构建下提供 `AsyncAssets`（无 Scene/Framework 依赖），借用生命周期更长的 JobQueue，
+所有方法在 owner 线程。每个 source 最多一份当前 slot，最多 1024 个 slot；输入作业按硬上限
+128 MiB 预留，单个 completion CPU 产物最多 256 MiB。slot 持有 generation、JobId、只读 CachedAsset，
+pending 持有 session/generation/source/id；pump 先拒绝旧代/旧会话，再提交磁盘、发布 Ready，最后确认 Job 成功。
+load 同源 Loading 复用作业、Ready 复用句柄；import 是显式重新构建，递增代次并取消旧请求。
+unload 清除当前拥有值并递增代次；外部 `shared_ptr<const CachedAsset>` 保持可读。
+reset_session 取消旧请求并清空 slot，generation/session 均检查溢出。未知 ID 不推断源路径，
+由上层已登记目录提供 (id, source)，查询未加载登记项返回 Unloaded。
+后台不捕获 AsyncAssets 或任何服务的裸引用。普通失败在 pump 后变 Failed；取消变 Unloaded。
 
 查询描述 `AssetId/kind/state/request_generation/ready_generation/diagnostic`，
 结果句柄包含 AssetId、产物 key 和只读数据所有权；CPU Ready 不等于 GPU 可用。

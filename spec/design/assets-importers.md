@@ -1,7 +1,7 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T14:20:37+08:00"
+updated_at: "2026-09-28T14:45:27+08:00"
 status: accepted
 ---
 
@@ -205,3 +205,5 @@ M4.4 的 AssetService 提供有版本检查的清单适配。M4.2.2 先固定并
 
 发布前检查图片失败是否保留旧 meta 映射与已发布产物；导入器只产生候选，由资产管线控制提交。
 子资产删除留下明确缺失诊断，已有引用不自动指向新资产。多 mesh/更多材质通道按后续需求单独扩展。
+
+M4.4.2 在 GltfImportRequest 中加入可选 stop_token，读取、解析、primitive 和纹理解码之间协作检查；取消不抢占三方调用。
