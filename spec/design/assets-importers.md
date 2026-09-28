@@ -1,7 +1,7 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T13:10:57+08:00"
+updated_at: "2026-09-28T14:20:37+08:00"
 status: accepted
 ---
 
@@ -16,7 +16,7 @@ M4.2 已实现 CPU 网格/材质/纹理导入与 dk-assetc，见 [0033](../devel
 
 `dk::asset_importers` 依赖 asset_data、IO；解析器、图像解码和 JSON 为 PRIVATE 依赖。
 按用户选型，glTF/GLB 使用 fastgltf，PNG/JPEG 使用 stb_image，内容摘要使用 xxHash 的 XXH3-128。
-这些库已接入并完成定向功能验证；缓存和异步加载尚未实现。
+这些库已接入并完成定向功能验证；M4.3 同步缓存/失效清理已实现，异步加载留在 M4.4。
 导入器使用引擎提供的字节/依赖读取入口，不能绕过路径、大小限制自行访问网络或任意文件。
 实施前完成 M1.7 [Memory](foundation-memory.md) / [Tracy](foundation-profiling.md)。服务/任务入口绑定
 当前 Runtime 的 Assets 持久路由；普通导入函数通过隐式工厂/容器和 scratch 工厂取用资源，不层层传 thread/heap。
@@ -180,7 +180,8 @@ meta 仍是持久身份来源，失败/中断不宣称输出已注册。已有 `
 新增内部故障点验证输出发布后/meta 提交前失败与输入变化，真实进程验证 UTF-8 JSON/stdout、Unicode 参数和退出码。
 
 工具位于 tools/assetc，target `dk_assetc`，程序 `dk-assetc`。复用同一资产管线，
-不链接 framework Runtime、渲染器或窗口。先完成单源同步导入，再由 M4.3 接入可复用缓存。
+不链接 framework Runtime、渲染器或窗口。M4.3 已增加 cache/cache-clean 子命令，
+缓存的 key/提交/清理边界见[资产运行时](assets-runtime.md#m431-实施契约)，import 仍用于独立目录导出。
 
 调用形式：
 

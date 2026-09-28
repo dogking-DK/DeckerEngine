@@ -13,17 +13,19 @@ void diagnostic(const dk::Error& error) { std::cerr << dk::error_code_name(error
 int run(const std::vector<std::string>& args)
 {
     constexpr auto usage = "Usage: dk-assetc import --project-root ROOT --source REL --output REL [--unit-scale NUMBER]\n"
-        "       dk-assetc cache --project-root ROOT --source REL [--unit-scale NUMBER]\n";
+        "       dk-assetc cache --project-root ROOT --source REL [--unit-scale NUMBER]\n"
+        "       dk-assetc cache-clean --project-root ROOT\n";
     if (args.size() == 1 && args[0] == "--help") { std::cerr << usage; return 0; }
-    if (args.empty() || (args[0] != "import" && args[0] != "cache") || args.size() % 2 != 1) { std::cerr << usage; return 2; }
+    if (args.empty() || (args[0] != "import" && args[0] != "cache" && args[0] != "cache-clean") || args.size() % 2 != 1) { std::cerr << usage; return 2; }
     std::map<std::string, std::string> options;
     for (std::size_t i = 1; i < args.size(); i += 2) {
         const auto& key = args[i];
         if ((key != "--project-root" && key != "--source" && key != "--output" && key != "--unit-scale")
             || args[i + 1].empty() || !options.emplace(key, args[i + 1]).second) { std::cerr << usage; return 2; }
     }
-    if (!options.contains("--project-root") || !options.contains("--source")
-        || (options.contains("--output") != (args[0] == "import"))) { std::cerr << usage; return 2; }
+    const bool clean = args[0] == "cache-clean";
+    if (!options.contains("--project-root") || (options.contains("--source") != !clean)
+        || (options.contains("--output") != (args[0] == "import")) || (clean && options.size() != 1)) { std::cerr << usage; return 2; }
     std::optional<double> scale;
     if (options.contains("--unit-scale")) {
         const auto& text = options.at("--unit-scale"); double value = 0;
@@ -42,6 +44,13 @@ int run(const std::vector<std::string>& args)
     if (!root) { diagnostic(root.error()); return 1; }
     const auto paths = dk::ProjectPaths::create(*root);
     if (!paths) { diagnostic(paths.error()); return 1; }
+    if (clean) {
+        const auto result = dk::clean_asset_cache(*paths);
+        if (!result) { diagnostic(result.error()); return 1; }
+        std::cout << result->summary_json;
+        if (result->failed) { std::cerr << "Cache cleanup partially failed; see JSON diagnostics\n"; return 1; }
+        return 0;
+    }
     if (args[0] == "cache") {
         const auto result = dk::compile_cached_asset(*paths, {options.at("--source"), scale});
         if (!result) { diagnostic(result.error()); return 1; }

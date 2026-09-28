@@ -40,4 +40,6 @@
 
 | 0035 | [M4.3.1 内容键与产物发布](0035-asset-cache-publication.md) | assets-runtime, assets-importers | completed |
 
+| 0036 | [M4.3.2 失效、重建与显式清理](0036-asset-cache-invalidation.md) | assets-runtime, assets-importers | completed |
+
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

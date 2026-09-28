@@ -36,7 +36,7 @@ struct CacheEntry { CacheDescriptor descriptor; CpuArtifact artifact; std::strin
 void write_cache_text(const std::filesystem::path&, std::string_view);
 void ordinary_cache_input(const ProjectPaths&, std::string_view);
 void verify_cache_inputs(const ProjectPaths&, std::span<const InputFingerprint>);
-enum class CacheStep { import, validate_inputs, publish, metadata, current, hit, clean };
+enum class CacheStep { import, validate_inputs, publish, metadata, current, hit, clean, clean_file };
 using CacheHook = std::function<Result<void>(CacheStep)>;
 class ScopedCacheHook {
 public:

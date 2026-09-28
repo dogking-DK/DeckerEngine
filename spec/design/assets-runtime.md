@@ -1,7 +1,7 @@
 ---
 module: assets-runtime
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T14:08:22+08:00"
+updated_at: "2026-09-28T14:20:37+08:00"
 status: accepted
 ---
 
@@ -12,7 +12,8 @@ status: accepted
 M4.1 已实现 meta v1、身份目录、登记提交、受控改名和恢复，见 [0031](../development/0031-asset-metadata-catalog.md)
 及 [0032](../development/0032-asset-commit-recovery.md)。M4.2 的同步 CPU 编译/产物读回已完成，
 见 [0034](../development/0034-textures-assetc.md)。M4.3.1 内容键、同步命中与 current 发布已实现，见
-[0035](../development/0035-asset-cache-publication.md)；M4.3.2 清理和 M4.4 仍待完成。原有
+[0035](../development/0035-asset-cache-publication.md)。M4.3.2 已完成失效/损坏/删除重建与有界清理，
+见 [0036](../development/0036-asset-cache-invalidation.md)；M4.4 尚未实施。原有
 [AssetReference](../../engine/assets/types/include/dk/assets/AssetReference.hpp) 和
 [Project](../../engine/scene/include/dk/scene/Project.hpp) 的注册、类型与文件存在性校验保持兼容。
 分步计划见 [0020](../development/0020-m4-development-plan.md)。
@@ -29,7 +30,7 @@ types、data、importers、runtime 的身份/同步编译部分及 asset_service
 | assets/types（已有） | dk::asset_types | 持久 ID/种类/引用，继续仅依赖 Core |
 | assets/data | dk::asset_data | 不可变 CPU 网格/材质/纹理值；依赖 types、math、memory，数据拥有其分配资源 |
 | assets/importers | dk::asset_importers | 源文件到 CPU 数据；依赖 data、IO，私有 fastgltf/stb_image |
-| assets/runtime | dk::asset_runtime | 元数据/目录/持久化/恢复，PUBLIC types、IO、Memory，PRIVATE JSON、xxHash、profiling；启用 importers 时增加 PUBLIC importers 与 CPU 产物/编译接口，Jobs 待实现 |
+| assets/runtime | dk::asset_runtime | 元数据/目录/持久化/恢复，PUBLIC types、IO、Memory，PRIVATE JSON、xxHash、profiling；启用 importers 时增加 PUBLIC importers、CPU 编译/产物及缓存/清理，Jobs 待实现 |
 | framework/services、operations | dk::asset_services、dk::asset_operations | services 已提供 Project 适配及 AssetService 提交/改名；命令及 operations 尚未实现 |
 
 资产底层不依赖 Scene、Commands、Vulkan 或 Editor。AssetService 从 ProjectDescription 构造
@@ -220,6 +221,8 @@ current format=`DeckerAssetCacheCurrent`/version=1，保存 algorithm、root_id�
 entry/manifest 各 16 MiB，current 16 KiB；JSON 禁重复键、深度超 64，沿用产物 v1 和源/输入硬预算。
 
 命中要求 current/entry/产物全部兼容且摘要、ID 映射、设置和源路径匹配，全部源/依赖当前内容摘要匹配。
+首版通过 current 查询，不搜索旧版本或孤立条目；current 丢失时会重新导入到新的 build。
+显式 cache 请求可替换该源不兼容/损坏的 current，旧未知条目仍保留；清理不能自行猜测坏索引。
 命中读回 CPU 数据但不调用 glTF 解码器、不写 meta/current；mtime/大小一致仍读内容。
 失效只触发一次显式同步重建：源/依赖读取与 key 来自 importer 同一快照，发布前再次检查输入和旧 meta/current，
 变化返回 conflict，不无限重试。未知版本或损坏条目保留，并在 miss_reason 中说明。
@@ -230,12 +233,20 @@ meta 已提交而 current 失败时保留合法 meta 与完整孤立产物，错
 重试继续复用 ID。不会报告缓存成功或 Ready；这沿用 M4.2 身份提交，明确不承诺多文件事务/断电原子性。
 所有成功返回值在提交前构造；已有 M4.1 未恢复操作时禁止缓存写入。
 
-### M4.3.2 实施方向
+### M4.3.2 实施契约
 
 补齐仅图片/源/参数变化、删除/损坏/未知版本重建的验收，并实现显式未引用缓存清理。
 清理前读取所有 current；任何不可识别索引都拒绝删除。只删除完整可识别且未被任何 current 引用的 build，
 保留未知条目、外部改动、源/meta/Project 与 `.decker/asset-operations`；不做递归任意目录删除或 LRU。
-具体清理边界在 0036 开工前补充，本小节不新增依赖。
+入口 `clean_asset_cache(paths, scan_limit=10000)` / `dk-assetc cache-clean --project-root ROOT`。
+只扫描本格式的 entries（key/build 两层），不扫描 tmp 或其他版本目录；预算允许降低，不能提高。
+先有界枚举全部 current 和 entries，确认全部索引可解析且文件名匹配 root_id，再形成候选；超预算/坏索引时尚未删除。
+每个候选要求恰好 entry.json/manifest.json/data.bin 三个普通文件、当前版本、摘要/产物/身份完整有效；
+未知、损坏、额外文件、链接、改写后的条目均保留并给诊断。删除前再次确认 current 集合/字节及候选文件摘要。
+只 remove 三个验证过的文件和随后空目录，不递归删除、不删除 key 桶/源/meta/Project/恢复日志。
+结果包含 removed/retained/skipped/failed 计数及诊断；逐条删除不是事务，中途 IO 失败可留下部分旧缓存，
+返回 failed 并记录已删除项，源与当前引用始终不动。OOM 同样不承诺撤销已经完成的缓存回收。
+测试注入清理前冲突与逐文件 IO 失败；同工程单写者约定继续适用，不引入 LRU、目录监视或新依赖。
 
 缓存按输入内容寻址，key 为以下规范化输入的 XXH3-128：摘要算法标识、缓存格式版本、导入器实现版本、
 支持的契约版本、settings、源字节摘要、按稳定顺序排列的依赖 URI/字节摘要，以及输出 ID 映射。
@@ -269,8 +280,8 @@ M4 的源依赖为 buffer/图片文件，不递归解释任意其他资产工程
 源与 meta 从不由缓存清理删除；失败或取消只清理本次拥有的临时文件。
 
 删除缓存后的下次导入必须重建相同 ID；损坏条目视为无效并报告重建原因。
-首版仅支持显式清理未使用磁盘条目，不做复杂 LRU。内存句柄拥有只读数据，卸载只解除目录拥有权，
-已有消费者仍可读到原代数据，最后一个持有者释放后回收；禁止悬空引用。
+首版已支持显式清理可验证的未使用磁盘条目，不做复杂 LRU。拥有型 CPU 返回值在清理磁盘后仍可读取；
+异步目录/只读句柄和 unload 语义由 M4.4 实现，禁止把本阶段同步结果声称为 CPU Ready。
 
 ## M4.4：加载状态与发布
 

@@ -11,7 +11,7 @@ target_sources(dk_asset_runtime PRIVATE src/Metadata.cpp src/Catalog.cpp src/Con
 target_link_libraries(dk_asset_runtime PUBLIC dk::asset_types dk::io dk::memory PRIVATE dk::profiling nlohmann_json::nlohmann_json xxHash::xxhash)
 dk_target_defaults(dk_asset_runtime)
 if(TARGET dk_asset_importers)
-    target_sources(dk_asset_runtime PRIVATE src/CpuArtifact.cpp src/AssetCompiler.cpp src/CacheFormat.cpp src/AssetCache.cpp
+    target_sources(dk_asset_runtime PRIVATE src/CpuArtifact.cpp src/AssetCompiler.cpp src/CacheFormat.cpp src/AssetCache.cpp src/CacheClean.cpp
         PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/assets/CpuArtifact.hpp include/dk/assets/AssetCompiler.hpp include/dk/assets/AssetCache.hpp)
     target_link_libraries(dk_asset_runtime PUBLIC dk::asset_importers)
 endif()

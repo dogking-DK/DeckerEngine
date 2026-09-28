@@ -15,6 +15,7 @@ M1.7.1–6 已接入可选 Tracy 分析、mimalloc heap、PMR、拥有型接口�
 RoutingToken 与 ThreadContextCache 支持跨线程重绑定、线程复用及安全点退休；Jobs/Runtime 自动装配留在后续阶段。
 M1.7.7 已提供重复工作负载、三种 profiling 配置的真实采集对照与[性能基线](spec/benchmarks/2026-09-28-memory.md)，M1.7 全部完成。
 M4.1 已提供 meta v1、身份目录、登记提交、Project 替换、同目录改名及未完成操作恢复。
+M4.2–3 已提供静态 glTF/GLB CPU 导入、dk-assetc、内容缓存、依赖失效重建和有界显式清理。
 渲染、物理、编辑器、网络/命名管道 IPC 和脚本模块尚未实现。
 
 ## 目录
@@ -416,6 +417,27 @@ unit_scale 默认沿用合法 meta；重建保留 AssetId。无 meta 时成功�
 ```
 
 设计/验收见 [资产缓存](spec/design/assets-runtime.md#m431-实施契约)、[0035](spec/development/0035-asset-cache-publication.md)。
+
+显式回收未引用的旧缓存：
+
+```powershell
+.\out\build\windows-dev\bin\Debug\dk-assetc.exe cache-clean --project-root $assetDemo
+```
+
+清理先检查所有 current，再删除完整可识别且未引用的 build。坏索引会拒绝清理；未知版本、坏条目、
+额外文件、链接与 tmp 目录保留。只删除验证过的缓存文件，不碰源/meta/Project/恢复记录。
+`DeckerAssetCacheCleanResult` JSON 包含 removed/retained/skipped/failed 与 diagnostics。
+清理是逐条进行的，中途文件 IO 失败可能只完成部分回收；此时仍输出 JSON 报告并返回 1，stderr 说明失败。
+前置检查失败只输出 stderr。API 可把默认 10000 的扫描预算调低；超限在开始删除前拒绝。
+
+M4.3 在独立 CPU 配置的验证命令（配置方式沿用上文）：
+
+```powershell
+& ./scripts/verify.ps1 -BuildDir out/build/windows-assetc-only -Target @('dk_asset_cache_tests','dk_assetc') -TestRegex '^dk\.(cache\.|assetc\.)' -Reason 'M4.3 内容缓存、失效重建及清理'
+```
+
+失效/清理证据见 [0036](spec/development/0036-asset-cache-invalidation.md)。缓存没有 LRU、文件监视或跨进程写锁，
+异步作业和 CPU Ready 留在 M4.4；当前命中以 current 指向的版本为准，索引丢失会重新导入。
 
 ## Memory heap（M1.7.2）
 
@@ -1073,7 +1095,7 @@ ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
 
 M1.6 与 M2.1–M2.4 已完成并分节本地提交。最终默认 Debug/Release 各 128 通过、
 1 项既有符号链接权限跳过；独立 Scene 配置各 104 通过、1 跳过，纯 CPU 示例各 16/16。
-上述计数为当时验收记录；M3 交付 A、M1.7.1–7、M4.1 和 M4.2 均已完成，M4.3.1 也已完成，当前下一项为 M4.3.2 失效与重建。
+上述计数为当时验收记录；M3 交付 A、M1.7.1–7、M4.1 和 M4.2 均已完成，M4.3 也已完成，当前下一项为 M4.4.1 CPU 工作队列。
 
 开发前先看 [AGENTS.md](AGENTS.md) 和 [spec 规范](spec/README.md)：
 先创建/更新模块设计，然后实现；过程中持续更新编号开发记录。

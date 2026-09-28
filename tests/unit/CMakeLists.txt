@@ -27,7 +27,7 @@ if(DK_BUILD_ASSET_IMPORTERS)
         dk_target_defaults(dk_asset_pipeline_tests)
         catch_discover_tests(dk_asset_pipeline_tests TEST_PREFIX "dk.pipeline."
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 120)
-        add_executable(dk_asset_cache_tests AssetCacheTests.cpp)
+        add_executable(dk_asset_cache_tests AssetCacheTests.cpp AssetCacheInvalidationTests.cpp)
         target_compile_definitions(dk_asset_cache_tests PRIVATE DK_TEST_ASSET_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures/assets")
         target_include_directories(dk_asset_cache_tests PRIVATE "${PROJECT_SOURCE_DIR}/engine/assets/runtime/src")
         target_link_libraries(dk_asset_cache_tests PRIVATE dk::asset_runtime Catch2::Catch2WithMain nlohmann_json::nlohmann_json)
