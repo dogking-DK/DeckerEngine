@@ -2,6 +2,20 @@ add_executable(dk_profiling_probe ProfilingProbe.cpp)
 target_link_libraries(dk_profiling_probe PRIVATE dk::profiling)
 find_package(Threads REQUIRED)
 if(DK_BUILD_MEMORY)
+    add_executable(dk_memory_benchmark MemoryBenchmark.cpp)
+    target_link_libraries(dk_memory_benchmark PRIVATE dk::memory dk::profiling Threads::Threads)
+    target_compile_definitions(dk_memory_benchmark PRIVATE DK_BENCH_CONFIGURATION="$<CONFIG>")
+    dk_target_defaults(dk_memory_benchmark)
+    add_test(NAME dk.memory.benchmark_smoke COMMAND dk_memory_benchmark)
+    set_tests_properties(dk.memory.benchmark_smoke PROPERTIES
+        TIMEOUT 60 PASS_REGULAR_EXPRESSION "\"status\":\"passed\",\"case_count\":40")
+    add_test(NAME dk.memory.benchmark_invalid_argument COMMAND "${CMAKE_COMMAND}"
+        "-DBENCHMARK=$<TARGET_FILE:dk_memory_benchmark>" -DARGUMENT=--rounds -DVALUE=0
+        "-DEXPECTED=invalid bounded benchmark parameter" -P "${CMAKE_CURRENT_SOURCE_DIR}/MemoryBenchmarkFailure.cmake")
+    add_test(NAME dk.memory.benchmark_partial_failure COMMAND "${CMAKE_COMMAND}"
+        "-DBENCHMARK=$<TARGET_FILE:dk_memory_benchmark>" -DARGUMENT=--allocation-budget -DVALUE=64
+        "-DEXPECTED=heap allocation" -P "${CMAKE_CURRENT_SOURCE_DIR}/MemoryBenchmarkFailure.cmake")
+    set_tests_properties(dk.memory.benchmark_invalid_argument dk.memory.benchmark_partial_failure PROPERTIES TIMEOUT 15)
     add_executable(dk_context_probe ContextProbe.cpp)
     target_link_libraries(dk_context_probe PRIVATE dk::memory dk::profiling Threads::Threads)
     dk_target_defaults(dk_context_probe)

@@ -1,7 +1,7 @@
 ---
 module: foundation-profiling
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-28T09:27:13+08:00"
+updated_at: "2026-09-28T10:17:43+08:00"
 status: accepted
 ---
 
@@ -163,6 +163,13 @@ v0.14.1 的 named memory 事件内部使用串行队列和锁；Memory 自身没
 不使用带全量追踪的数据声称无追踪版本的绝对吞吐。
 
 ## 验证与实施顺序
+
+M1.7.7 使用独立 benchmark 进程和 `benchmark-memory.ps1` 完成可重复的 OFF/CPU-only/Memory 基线。
+两种开启配置都先连接再开始负载；计时结束且全部 zone/资源已销毁后，独立程序显式调用固定 Tracy 0.14.1
+client 的 RequestShutdown/HasShutdownFinished 排空事件，再退出，capture 不使用可能截断负载的固定秒数。
+这仅用于测试工具的进程级关闭，不增加运行中 MemorySystem/Runtime 关闭全局 profiler 的能力。
+事件/曲线由 inspector 的 benchmark 模式核对，CPU 区间由 csvexport 独立验证；指标口径见
+[Memory 测量契约](foundation-memory.md#m177-重复工作负载与测量契约)，开发记录见 [0030](../development/0030-memory-baseline.md)。
 
 M1.7.1 定向构建 OFF/ON 的 profiling 探针与受影响 runner/IO 链路：禁用后无依赖且参数不求值；
 开启后能采集真实 CPU zone、正确源码位置和线程名称；未连接/断开时正常结束且 stdout 保持协议。

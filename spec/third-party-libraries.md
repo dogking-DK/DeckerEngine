@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-28T09:27:13+08:00"
+updated_at: "2026-09-28T10:17:43+08:00"
 status: accepted
 ---
 
@@ -81,6 +81,7 @@ Tracy 记录 backing 事件与 scratch 用量曲线。M1.7.5 已用标准 PMR po
 上游继续为 mimalloc heap，新增 pool 曲线；未新增三方依赖或修改版本。MSVC Debug 构造元数据兼容见 Memory 设计。
 M1.7.6 增加 ThreadContext local pool、拥有型 RoutingToken、线程缓存退休及双系统关闭探针，
 继续复用现有 mimalloc/Tracy 和标准线程设施；版本及固定基线保持不变，验收见 [0029](development/0029-memory-context-routing.md)。
+M1.7.7 复用相同依赖完成重复工作负载与三配置采集基线；未增加 benchmark 库或更改版本，见 [0030](development/0030-memory-baseline.md)。
 内存 capture 检查器独立复用 Tracy 工具依赖和同版本源码，不成为引擎运行时依赖，见
 [工具说明](../tools/profiling/README.md)。
 

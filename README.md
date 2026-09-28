@@ -13,6 +13,7 @@ M3.5 已接入持续 stdio、同步任务查询与正常关闭，达到交付 A�
 M1.7.1–6 已接入可选 Tracy 分析、mimalloc heap、PMR、拥有型接口、持久域路由、线程 scratch 和局部/共享 Pool。
 内存域支持预算、关闭闸门和跨线程释放；arena 支持嵌套回退，Pool 提供 ObjectPool、安全 trim 和用量曲线。
 RoutingToken 与 ThreadContextCache 支持跨线程重绑定、线程复用及安全点退休；Jobs/Runtime 自动装配留在后续阶段。
+M1.7.7 已提供重复工作负载、三种 profiling 配置的真实采集对照与[性能基线](spec/benchmarks/2026-09-28-memory.md)，M1.7 全部完成。
 渲染、物理、编辑器、网络/命名管道 IPC 和脚本模块尚未实现。
 
 ## 目录
@@ -553,7 +554,41 @@ token 不阻止系统关闭，Closing 后禁止新的绑定/分配。已移交�
 ```
 
 采集前在对应目录构建 `dk_context_probe` 的 RelWithDebInfo，以及 [独立 inspector](tools/profiling/README.md)。
-实现/验证记录见 [0029](spec/development/0029-memory-context-routing.md)；下一项为 M1.7.7 重复工作负载和性能基线。
+实现/验证记录见 [0029](spec/development/0029-memory-context-routing.md)；重复工作负载和性能基线见下一节。
+
+## Memory 重复工作负载与性能基线（M1.7.7）
+
+`dk_memory_benchmark` 使用确定性数据校验 heap、heap PMR、arena、local/shared pool 的成批申请/回收，
+并运行 scratch/local pool 临时对象转 owning 容器的跨线程管线。它是独立 CPU 合成负载，不要求 M4 Jobs 或资产导入器。
+默认直接运行是快速 smoke；参数为 `--rounds`、`--warmup`、`--batch`、`--max-threads`，
+仅用于故障验证的 `--allocation-budget` 限制矩阵 heap，失败必须清理后退出。`--capture` 等待本地 Tracy 连接。
+
+先配置三个同优化级别的目录；已有正确配置可直接构建：
+
+```powershell
+cmake --preset windows-dev -DDK_ENABLE_PROFILING=OFF -DDK_PROFILE_MEMORY=ON -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-profiling -B out/build/windows-profiling-cpu-only -DDK_PROFILE_MEMORY=OFF -DDK_WARNINGS_AS_ERRORS=ON
+cmake --preset windows-profiling -DDK_PROFILE_MEMORY=ON -DDK_WARNINGS_AS_ERRORS=ON
+& ./scripts/verify.ps1 -Configuration RelWithDebInfo -Target dk_memory_benchmark -TestRegex '^dk\.memory\.benchmark_' -Reason '优化 OFF 基线及正确性'
+& ./scripts/verify.ps1 -BuildDir out/build/windows-profiling-cpu-only -Configuration RelWithDebInfo -Target dk_memory_benchmark -TestRegex '^dk\.memory\.benchmark_' -Reason 'CPU-only 基线及正确性'
+& ./scripts/verify.ps1 -BuildDir out/build/windows-profiling -Configuration RelWithDebInfo -Target dk_memory_benchmark -TestRegex '^dk\.memory\.benchmark_' -Reason 'CPU+Memory 基线及正确性'
+```
+
+按 [工具说明](tools/profiling/README.md) 准备匹配的 capture/csvexport/inspector 后运行：
+
+```powershell
+pwsh -NoProfile -File scripts/benchmark-memory.ps1 -Rounds 512 -Warmup 32 -Batch 16 -MaxThreads 32 -Repetitions 3
+```
+
+`MaxThreads` 替换为本机 N；省略时默认为逻辑处理器数（最多 128）。脚本检查编译器、配置、profiling 开关和输入，
+依次执行 OFF/CPU/Memory，并按重复轮次轮换顺序；不自动配置/构建，也不并发运行测量。
+每个进程覆盖去重后的 1/2/4/N 线程、32/8、256/64、4096/256 字节/对齐；arena/local pool 仅同线程回收。
+三配置逐场景 checksum 必须一致，全部资源最终归零；采集逐次检查 backing 计数、跨线程 free、CPU 区间和曲线。
+
+结果写入 `out/benchmarks/<run>/`：原始 JSONL、trace/CPU CSV、环境与二进制 SHA256、`baseline.csv/json` 和 `report.md`。
+吞吐以校验过的逻辑请求计，管线以结果数计；latency 是各 worker 的 batch 分布。
+跨线程计时包含 barrier，arena 按批回收；峰值/保留量不等于 RSS。CPU/Memory 实际连接采集，开销含本地采集器竞争。
+正式结果与限制见 [基线报告](spec/benchmarks/2026-09-28-memory.md) 和 [0030](spec/development/0030-memory-baseline.md)。
 
 ## Tracy CPU 性能分析（M1.7.1）
 
@@ -885,7 +920,7 @@ ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
 
 M1.6 与 M2.1–M2.4 已完成并分节本地提交。最终默认 Debug/Release 各 128 通过、
 1 项既有符号链接权限跳过；独立 Scene 配置各 104 通过、1 跳过，纯 CPU 示例各 16/16。
-上述计数为当时验收记录；M3 交付 A 及 M1.7.1–6 也已完成，当前下一项为 M1.7.7。
+上述计数为当时验收记录；M3 交付 A 及 M1.7.1–7 也已完成，当前下一项为 M4.1.1。
 
 开发前先看 [AGENTS.md](AGENTS.md) 和 [spec 规范](spec/README.md)：
 先创建/更新模块设计，然后实现；过程中持续更新编号开发记录。

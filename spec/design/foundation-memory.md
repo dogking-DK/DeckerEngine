@@ -1,7 +1,7 @@
 ---
 module: foundation-memory
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-28T09:27:13+08:00"
+updated_at: "2026-09-28T10:17:43+08:00"
 status: accepted
 ---
 
@@ -18,6 +18,35 @@ status: accepted
 嵌套 ScratchScope 与用量曲线，见 [0026](../development/0026-scratch-arena.md)。M1.7.5 提供局部/共享 Pool、
 ObjectPool 与受控 trim，见 [0027](../development/0027-memory-pools.md)。
 M1.7.6 的 context 装配、拥有型 token 和线程缓存实施见 [0029](../development/0029-memory-context-routing.md)。
+
+## M1.7.7 重复工作负载与测量契约
+
+开发记录 [0030](../development/0030-memory-baseline.md)，已验收[首份基线](../benchmarks/2026-09-28-memory.md)。新增独立 `dk_memory_benchmark` 和运行脚本，
+复用现有库/Tracy，不引入 benchmark 依赖，不修改分配策略或以未经测量的假设调整默认 chunk/pool 参数。
+
+- 矩阵以固定数据模式成批申请、校验首尾载荷、回收，比较 heap、heap PMR、arena、local/shared pool；
+  尺寸/对齐为 32/8、256/64、4096/256，线程为去重后的 1/2/4/N，N 默认硬件逻辑线程数（记录实际值）。
+  同线程覆盖五种策略；跨线程由环形相邻 worker 释放，仅覆盖 heap/PMR/shared pool 和至少两个线程。
+  每 case 独立系统/heap，worker 及 scratch/local pool 创建在 owner 线程，shared pool 为同 case 线程共享。
+- 预热与测量轮数、batch、重复次数可设置且有界；元数据、线程创建、预热、统计汇总、trim/析构在计时外。
+  计时包含分配、确定性首尾写入/校验、回收、每批时钟读取与末端同步；跨线程额外包含每轮两次 barrier，
+  不将差值解释为单次 remote free 成本。arena 每 batch 一个 checkpoint/rewind，表示成批生命周期，不声称等价于逐块回收。
+- 输出 JSONL：每 case 的请求数、校验和、并行墙钟吞吐、各 worker batch 延迟 p50/p95/p99、
+  单 heap 精确 backing 峰值和清理前保留量、局部 logical peak 总和（非同时峰值）、清理后零存活/零 backing。
+  管线拥有两个 heap，其 peak 字段明确标为各域峰值之和，不当作同时总峰值；retained 仅表示局部缓存。
+  快照/counter 含预热，时间和 latency 仅计测量轮；这些字节不是 RSS，不把 arena/pool logical 与 heap backing 相加。
+  错误或关闭未归零使进程失败；worker 故障仍经过同步点，先释放已发布块再报告，避免部分失败挂住其他线程。
+- 补充重复导入形状的 CPU 管线：路由 token + worker cache，scratch 暂存、local ObjectPool 中间对象、
+  owning 容器/shared 结果跨线程交接；逐轮校验，验证局部缓存达到稳定保留量、worker 退出清空及 weak 控制块延迟释放。
+  仅合成数据，不宣称已实现 M4 导入器/Jobs 或引擎代表性帧时间。
+- OFF、CPU-only、CPU+Memory 使用同一 RelWithDebInfo 编译器/选项/输入，后两者必须实际连接 Tracy。
+  脚本按重复轮次轮换配置顺序，顺序运行，不并发采集影响基线；保存原始逐次 JSONL、capture/readback、
+  环境/CPU/OS/版本/baseline/构建配置/二进制哈希、聚合表和报告。默认三次重复，给出吞吐中位数与范围，
+  CPU/OFF、Memory/OFF 耗时比，不设置跨硬件速度阈值；不得用 Debug 或未连接的 on-demand 路径作为采集开销。
+
+定向验收先执行小规模矩阵/管线 smoke，再运行完整三配置基线；对每次 trace 核对独立 heap 累计申请计数、
+全部 alloc/free 配对、跨线程释放和局部曲线归零，CPU-only 必须无内存事件/曲线。原始大文件留 out，
+将可审阅的机器信息、完整聚合数据和结论纳入版本化基线报告；不代替其他平台、sanitizer 或硬件稳态测量。
 
 ## M1.7.6 实施细化
 

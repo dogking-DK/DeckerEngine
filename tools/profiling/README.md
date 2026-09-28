@@ -107,3 +107,19 @@ probe 的独立 heap 快照计数写入 `context-measurements.json`；inspector 
 `context <measurement.json>`，核对三类 backing 计数、全部配对、三次异线程释放、8 条 scratch/local pool 曲线归零。
 sampled-peak 保留历史峰值。禁用内存采集时应无内存事件和曲线，CPU 任务/关闭区间仍存在。
 这是生命周期验收，性能基线属于 M1.7.7；记录见 [0029](../../spec/development/0029-memory-context-routing.md)。
+
+## M1.7.7 重复负载与基线
+
+[benchmark-memory.ps1](../../scripts/benchmark-memory.ps1) 独立于固定时长的 smoke capture 脚本。
+它要求先构建同优化级别的三种 `dk_memory_benchmark`，步骤见 [README](../../README.md#memory-重复工作负载与性能基线m177)。
+默认 512 测量轮、32 预热轮、batch 16、三次重复；N 为本机逻辑线程数，运行时可显式覆盖。
+OFF 不启动 collector；CPU/Memory 每次建立独立连接，负载结束后排空固定版本 Tracy client，capture 自动结束。
+整个测量顺序运行；程序和工具超时/异常时保存失败摘要并清理本次启动的进程，不回退到未连接测量。
+
+inspector 的额外参数为 `benchmark <inspection-input.json>`，输入来自独立资源快照累计计数，
+检查总数/分类、全部配对、raw heap/PMR/管线的跨线程释放下界和 12 条局部曲线。
+共享池的 backing 线程归属与具体 chunk 数可随 STL 和调度变化，不写死；每次记录和核对实际值。
+CPU-only 必须无内存事件和曲线；csvexport 另核对 case/batch/pipeline/import 区间数。
+`summary.json` 保存 CPU/OS/内存/电源计划、编译器/优化选项、依赖基线、二进制与 DLL 哈希和每次检查结果。
+`baseline.csv` 保存各配置完整矩阵的吞吐中位数/范围、batch 分位延迟、峰值/保留量和相对 OFF 耗时比。
+原始文件留 out，版本化报告见 [2026-09-28 基线](../../spec/benchmarks/2026-09-28-memory.md)。

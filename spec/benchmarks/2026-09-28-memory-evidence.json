@@ -1,0 +1,656 @@
+{
+  "schema": 1,
+  "status": "passed",
+  "run": "out/benchmarks/20260928-101009-1c340ec3",
+  "started_at": "2026-09-28T10:10:09.576798+08:00",
+  "finished_at": "2026-09-28T10:13:18.9254854+08:00",
+  "base_commit": "0767666e82b1ecd09e68f18ba63113779c693f8c",
+  "configuration": "RelWithDebInfo",
+  "rounds": 512,
+  "warmup": 32,
+  "batch": 16,
+  "max_threads": 32,
+  "repetitions": 3,
+  "machine": {
+    "processors": [
+      {
+        "Name": "AMD Ryzen 9 7940HX with Radeon Graphics        ",
+        "NumberOfCores": 16,
+        "NumberOfLogicalProcessors": 32
+      }
+    ],
+    "os": {
+      "Caption": "Microsoft Windows 11 专业版",
+      "Version": "10.0.26200",
+      "BuildNumber": "26200",
+      "TotalVisibleMemorySize": 49509280
+    },
+    "process_architecture": "X64",
+    "logical_processors": 32,
+    "power_plan": "电源方案 GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (平衡)"
+  },
+  "vcpkg_baseline": "33d78c1ed898a06938f31312167c7abefd229455",
+  "tools_version": "tracy-csvexport 0.14.1 / unknown",
+  "sources": [
+    {
+      "path": "tests/integration/MemoryBenchmark.cpp",
+      "sha256": "ACCEFF3832AB5A7517DFCB08A295C7F24590B46F0549F613C1968D4E0F45D6D3"
+    },
+    {
+      "path": "scripts/benchmark-memory.ps1",
+      "sha256": "377E59E6A878C33A89072DA2881B030216E28AED0CBC39A47417FE5736D46B44"
+    },
+    {
+      "path": "tools/profiling/inspector/MemoryTraceInspector.cpp",
+      "sha256": "E7BD7E033CCC73B39997AAB5F39B3BBA0FC081AF08A6E2FBDD05EE33064EC034"
+    }
+  ],
+  "builds": {
+    "off": {
+      "directory": "D:\\resource\\code\\DeckerEngine\\out\\build\\windows-dev",
+      "binary": "D:\\resource\\code\\DeckerEngine\\out\\build\\windows-dev\\bin\\RelWithDebInfo\\dk_memory_benchmark.exe",
+      "sha256": "2BB69E63CB89AD4A93D104D330C6EA6974630AD4651EAE9B5D2391C76F04E85B",
+      "settings": {
+        "CMAKE_CXX_COMPILER": null,
+        "CMAKE_GENERATOR": "Visual Studio 18 2026",
+        "CMAKE_GENERATOR_PLATFORM": "x64",
+        "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "/O2 /Ob1 /DNDEBUG",
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
+      },
+      "profiling": "OFF",
+      "memory": "ON",
+      "runtime_dlls": [
+        {
+          "name": "mimalloc-redirect.dll",
+          "sha256": "BC3DFDF51FBC80B88CB62CDB6A6784ECC894164BDD4AE7F3885048D870809491"
+        },
+        {
+          "name": "mimalloc.dll",
+          "sha256": "3E442F0DE95E16E1A9F4462EEEA9F3D1613FDF53DFBCDE7D3FDC6B77B58DB45A"
+        }
+      ]
+    },
+    "cpu": {
+      "directory": "D:\\resource\\code\\DeckerEngine\\out\\build\\windows-profiling-cpu-only",
+      "binary": "D:\\resource\\code\\DeckerEngine\\out\\build\\windows-profiling-cpu-only\\bin\\RelWithDebInfo\\dk_memory_benchmark.exe",
+      "sha256": "6BDFB86BA9287573197A77BF83B4FEC3534A54E529E1F7B0E3718EFE603F017E",
+      "settings": {
+        "CMAKE_CXX_COMPILER": null,
+        "CMAKE_GENERATOR": "Visual Studio 18 2026",
+        "CMAKE_GENERATOR_PLATFORM": "x64",
+        "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "/O2 /Ob1 /DNDEBUG",
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
+      },
+      "profiling": "ON",
+      "memory": "OFF",
+      "runtime_dlls": [
+        {
+          "name": "mimalloc-redirect.dll",
+          "sha256": "BC3DFDF51FBC80B88CB62CDB6A6784ECC894164BDD4AE7F3885048D870809491"
+        },
+        {
+          "name": "mimalloc.dll",
+          "sha256": "3E442F0DE95E16E1A9F4462EEEA9F3D1613FDF53DFBCDE7D3FDC6B77B58DB45A"
+        },
+        {
+          "name": "TracyClient.dll",
+          "sha256": "10FA974BBB3032235C74EE846AF13D3B4FA2A10CEED6A0A2CCFF70D7BA2FC011"
+        }
+      ]
+    },
+    "memory": {
+      "directory": "D:\\resource\\code\\DeckerEngine\\out\\build\\windows-profiling",
+      "binary": "D:\\resource\\code\\DeckerEngine\\out\\build\\windows-profiling\\bin\\RelWithDebInfo\\dk_memory_benchmark.exe",
+      "sha256": "FEA83840E279A080979E137062F0F13000922FB8EE830CA9257BE3517866235B",
+      "settings": {
+        "CMAKE_CXX_COMPILER": null,
+        "CMAKE_GENERATOR": "Visual Studio 18 2026",
+        "CMAKE_GENERATOR_PLATFORM": "x64",
+        "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "/O2 /Ob1 /DNDEBUG",
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
+      },
+      "profiling": "ON",
+      "memory": "ON",
+      "runtime_dlls": [
+        {
+          "name": "flecs.dll",
+          "sha256": "17CFDED63AEF5BC6BF6ECB6F7BE8EF0B097144133AF91E9311D11F3AC918DA87"
+        },
+        {
+          "name": "mimalloc-redirect.dll",
+          "sha256": "BC3DFDF51FBC80B88CB62CDB6A6784ECC894164BDD4AE7F3885048D870809491"
+        },
+        {
+          "name": "mimalloc.dll",
+          "sha256": "3E442F0DE95E16E1A9F4462EEEA9F3D1613FDF53DFBCDE7D3FDC6B77B58DB45A"
+        },
+        {
+          "name": "TracyClient.dll",
+          "sha256": "10FA974BBB3032235C74EE846AF13D3B4FA2A10CEED6A0A2CCFF70D7BA2FC011"
+        }
+      ]
+    }
+  },
+  "aggregate_sha256": "DADF36921EE69D6EF913BF989C27A89B11188DE8842D8B8A137D8051DB3D37CC",
+  "runs": [
+    {
+      "mode": "off",
+      "repetition": 1,
+      "metadata": {
+        "kind": "metadata",
+        "schema": 1,
+        "configuration": "RelWithDebInfo",
+        "profiling": false,
+        "memory": false,
+        "connected": false,
+        "hardware_threads": 32,
+        "rounds": 512,
+        "warmup": 32,
+        "batch": 16,
+        "max_threads": 32,
+        "allocation_budget": 0,
+        "msvc_full_ver": 195136257
+      },
+      "cases": 88,
+      "cpu_zones": 0,
+      "inspection": null
+    },
+    {
+      "mode": "cpu",
+      "repetition": 1,
+      "metadata": {
+        "kind": "metadata",
+        "schema": 1,
+        "configuration": "RelWithDebInfo",
+        "profiling": true,
+        "memory": false,
+        "connected": true,
+        "hardware_threads": 32,
+        "rounds": 512,
+        "warmup": 32,
+        "batch": 16,
+        "max_threads": 32,
+        "allocation_budget": 0,
+        "msvc_full_ver": 195136257
+      },
+      "cases": 88,
+      "cpu_zones": 596475,
+      "inspection": {
+        "allocations": 0,
+        "benchmark_plots": [],
+        "context_plots": [],
+        "cross_thread_frees": 0,
+        "memory_enabled": false,
+        "pool_plots": [],
+        "pools": [],
+        "scratch_plots": [],
+        "status": "passed"
+      }
+    },
+    {
+      "mode": "memory",
+      "repetition": 1,
+      "metadata": {
+        "kind": "metadata",
+        "schema": 1,
+        "configuration": "RelWithDebInfo",
+        "profiling": true,
+        "memory": true,
+        "connected": true,
+        "hardware_threads": 32,
+        "rounds": 512,
+        "warmup": 32,
+        "batch": 16,
+        "max_threads": 32,
+        "allocation_budget": 0,
+        "msvc_full_ver": 195136257
+      },
+      "cases": 88,
+      "cpu_zones": 596505,
+      "inspection": {
+        "allocations": 4049708,
+        "benchmark_plots": [
+          {
+            "final": 0.0,
+            "name": "dk/pool/shared/live",
+            "peak": 2097152.0,
+            "samples": 147
+          },
+          {
+            "final": 0.0,
+            "name": "dk/pool/shared/backing",
+            "peak": 4424792.0,
+            "samples": 147
+          },
+          {
+            "final": 0.0,
+            "name": "dk/pool/shared/idle-backing",
+            "peak": 262248.0,
+            "samples": 147
+          },
+          {
+            "final": 2097152.0,
+            "name": "dk/pool/shared/sampled-peak",
+            "peak": 2097152.0,
+            "samples": 147
+          },
+          {
+            "final": 0.0,
+            "name": "dk/pool/local/live",
+            "peak": 2097152.0,
+            "samples": 1014
+          },
+          {
+            "final": 0.0,
+            "name": "dk/pool/local/backing",
+            "peak": 7346944.0,
+            "samples": 1014
+          },
+          {
+            "final": 0.0,
+            "name": "dk/pool/local/idle-backing",
+            "peak": 4197632.0,
+            "samples": 1014
+          },
+          {
+            "final": 2097152.0,
+            "name": "dk/pool/local/sampled-peak",
+            "peak": 2097152.0,
+            "samples": 1014
+          },
+          {
+            "final": 0.0,
+            "name": "dk/scratch/used",
+            "peak": 1134592.0,
+            "samples": 256886
+          },
+          {
+            "final": 0.0,
+            "name": "dk/scratch/retained",
+            "peak": 2097152.0,
+            "samples": 256886
+          },
+          {
+            "final": 0.0,
+            "name": "dk/scratch/backing",
+            "peak": 2097152.0,
+            "samples": 256886
+          },
+          {
+            "final": 1134592.0,
+            "name": "dk/scratch/sampled-peak",
+            "peak": 1134592.0,
+            "samples": 256886
+          }
+        ],
+        "context_plots": [],
+        "cross_thread_frees": 2011282,
+        "memory_enabled": true,
+        "pool_plots": [],
+        "pools": [
+          {
+            "allocations": 4048620,
+            "bytes": 8395999160,
+            "live_bytes": 0,
+            "name": "dk/heap/jobs"
+          },
+          {
+            "allocations": 1088,
+            "bytes": 1153280,
+            "live_bytes": 0,
+            "name": "dk/heap/assets"
+          }
+        ],
+        "scratch_plots": [],
+        "status": "passed"
+      }
+    },
+    {
+      "mode": "cpu",
+      "repetition": 2,
+      "metadata": {
+        "kind": "metadata",
+        "schema": 1,
+        "configuration": "RelWithDebInfo",
+        "profiling": true,
+        "memory": false,
+        "connected": true,
+        "hardware_threads": 32,
+        "rounds": 512,
+        "warmup": 32,
+        "batch": 16,
+        "max_threads": 32,
+        "allocation_budget": 0,
+        "msvc_full_ver": 195136257
+      },
+      "cases": 88,
+      "cpu_zones": 596527,
+      "inspection": {
+        "allocations": 0,
+        "benchmark_plots": [],
+        "context_plots": [],
+        "cross_thread_frees": 0,
+        "memory_enabled": false,
+        "pool_plots": [],
+        "pools": [],
+        "scratch_plots": [],
+        "status": "passed"
+      }
+    },
+    {
+      "mode": "memory",
+      "repetition": 2,
+      "metadata": {
+        "kind": "metadata",
+        "schema": 1,
+        "configuration": "RelWithDebInfo",
+        "profiling": true,
+        "memory": true,
+        "connected": true,
+        "hardware_threads": 32,
+        "rounds": 512,
+        "warmup": 32,
+        "batch": 16,
+        "max_threads": 32,
+        "allocation_budget": 0,
+        "msvc_full_ver": 195136257
+      },
+      "cases": 88,
+      "cpu_zones": 596517,
+      "inspection": {
+        "allocations": 4049720,
+        "benchmark_plots": [
+          {
+            "final": 0.0,
+            "name": "dk/pool/shared/live",
+            "peak": 2097152.0,
+            "samples": 147
+          },
+          {
+            "final": 0.0,
+            "name": "dk/pool/shared/backing",
+            "peak": 4424792.0,
+            "samples": 147
+          },
+          {
+            "final": 0.0,
+            "name": "dk/pool/shared/idle-backing",
+            "peak": 262248.0,
+            "samples": 147
+          },
+          {
+            "final": 2097152.0,
+            "name": "dk/pool/shared/sampled-peak",
+            "peak": 2097152.0,
+            "samples": 147
+          },
+          {
+            "final": 0.0,
+            "name": "dk/pool/local/live",
+            "peak": 2097152.0,
+            "samples": 1014
+          },
+          {
+            "final": 0.0,
+            "name": "dk/pool/local/backing",
+            "peak": 7346944.0,
+            "samples": 1014
+          },
+          {
+            "final": 0.0,
+            "name": "dk/pool/local/idle-backing",
+            "peak": 4197632.0,
+            "samples": 1014
+          },
+          {
+            "final": 2097152.0,
+            "name": "dk/pool/local/sampled-peak",
+            "peak": 2097152.0,
+            "samples": 1014
+          },
+          {
+            "final": 0.0,
+            "name": "dk/scratch/used",
+            "peak": 1323008.0,
+            "samples": 256886
+          },
+          {
+            "final": 0.0,
+            "name": "dk/scratch/retained",
+            "peak": 2097152.0,
+            "samples": 256886
+          },
+          {
+            "final": 0.0,
+            "name": "dk/scratch/backing",
+            "peak": 2097152.0,
+            "samples": 256886
+          },
+          {
+            "final": 1323008.0,
+            "name": "dk/scratch/sampled-peak",
+            "peak": 1323008.0,
+            "samples": 256886
+          }
+        ],
+        "context_plots": [],
+        "cross_thread_frees": 2011298,
+        "memory_enabled": true,
+        "pool_plots": [],
+        "pools": [
+          {
+            "allocations": 4048632,
+            "bytes": 8395199064,
+            "live_bytes": 0,
+            "name": "dk/heap/jobs"
+          },
+          {
+            "allocations": 1088,
+            "bytes": 1153280,
+            "live_bytes": 0,
+            "name": "dk/heap/assets"
+          }
+        ],
+        "scratch_plots": [],
+        "status": "passed"
+      }
+    },
+    {
+      "mode": "off",
+      "repetition": 2,
+      "metadata": {
+        "kind": "metadata",
+        "schema": 1,
+        "configuration": "RelWithDebInfo",
+        "profiling": false,
+        "memory": false,
+        "connected": false,
+        "hardware_threads": 32,
+        "rounds": 512,
+        "warmup": 32,
+        "batch": 16,
+        "max_threads": 32,
+        "allocation_budget": 0,
+        "msvc_full_ver": 195136257
+      },
+      "cases": 88,
+      "cpu_zones": 0,
+      "inspection": null
+    },
+    {
+      "mode": "memory",
+      "repetition": 3,
+      "metadata": {
+        "kind": "metadata",
+        "schema": 1,
+        "configuration": "RelWithDebInfo",
+        "profiling": true,
+        "memory": true,
+        "connected": true,
+        "hardware_threads": 32,
+        "rounds": 512,
+        "warmup": 32,
+        "batch": 16,
+        "max_threads": 32,
+        "allocation_budget": 0,
+        "msvc_full_ver": 195136257
+      },
+      "cases": 88,
+      "cpu_zones": 596498,
+      "inspection": {
+        "allocations": 4049701,
+        "benchmark_plots": [
+          {
+            "final": 0.0,
+            "name": "dk/pool/shared/live",
+            "peak": 2097152.0,
+            "samples": 147
+          },
+          {
+            "final": 0.0,
+            "name": "dk/pool/shared/backing",
+            "peak": 4424792.0,
+            "samples": 147
+          },
+          {
+            "final": 0.0,
+            "name": "dk/pool/shared/idle-backing",
+            "peak": 262248.0,
+            "samples": 147
+          },
+          {
+            "final": 2097152.0,
+            "name": "dk/pool/shared/sampled-peak",
+            "peak": 2097152.0,
+            "samples": 147
+          },
+          {
+            "final": 0.0,
+            "name": "dk/pool/local/live",
+            "peak": 2097152.0,
+            "samples": 1014
+          },
+          {
+            "final": 0.0,
+            "name": "dk/pool/local/backing",
+            "peak": 7346944.0,
+            "samples": 1014
+          },
+          {
+            "final": 0.0,
+            "name": "dk/pool/local/idle-backing",
+            "peak": 4197632.0,
+            "samples": 1014
+          },
+          {
+            "final": 2097152.0,
+            "name": "dk/pool/local/sampled-peak",
+            "peak": 2097152.0,
+            "samples": 1014
+          },
+          {
+            "final": 0.0,
+            "name": "dk/scratch/used",
+            "peak": 1204224.0,
+            "samples": 256886
+          },
+          {
+            "final": 0.0,
+            "name": "dk/scratch/retained",
+            "peak": 2097152.0,
+            "samples": 256886
+          },
+          {
+            "final": 0.0,
+            "name": "dk/scratch/backing",
+            "peak": 2097152.0,
+            "samples": 256886
+          },
+          {
+            "final": 1204224.0,
+            "name": "dk/scratch/sampled-peak",
+            "peak": 1204224.0,
+            "samples": 256886
+          }
+        ],
+        "context_plots": [],
+        "cross_thread_frees": 2011268,
+        "memory_enabled": true,
+        "pool_plots": [],
+        "pools": [
+          {
+            "allocations": 4048613,
+            "bytes": 8396850736,
+            "live_bytes": 0,
+            "name": "dk/heap/jobs"
+          },
+          {
+            "allocations": 1088,
+            "bytes": 1153280,
+            "live_bytes": 0,
+            "name": "dk/heap/assets"
+          }
+        ],
+        "scratch_plots": [],
+        "status": "passed"
+      }
+    },
+    {
+      "mode": "off",
+      "repetition": 3,
+      "metadata": {
+        "kind": "metadata",
+        "schema": 1,
+        "configuration": "RelWithDebInfo",
+        "profiling": false,
+        "memory": false,
+        "connected": false,
+        "hardware_threads": 32,
+        "rounds": 512,
+        "warmup": 32,
+        "batch": 16,
+        "max_threads": 32,
+        "allocation_budget": 0,
+        "msvc_full_ver": 195136257
+      },
+      "cases": 88,
+      "cpu_zones": 0,
+      "inspection": null
+    },
+    {
+      "mode": "cpu",
+      "repetition": 3,
+      "metadata": {
+        "kind": "metadata",
+        "schema": 1,
+        "configuration": "RelWithDebInfo",
+        "profiling": true,
+        "memory": false,
+        "connected": true,
+        "hardware_threads": 32,
+        "rounds": 512,
+        "warmup": 32,
+        "batch": 16,
+        "max_threads": 32,
+        "allocation_budget": 0,
+        "msvc_full_ver": 195136257
+      },
+      "cases": 88,
+      "cpu_zones": 596469,
+      "inspection": {
+        "allocations": 0,
+        "benchmark_plots": [],
+        "context_plots": [],
+        "cross_thread_frees": 0,
+        "memory_enabled": false,
+        "pool_plots": [],
+        "pools": [],
+        "scratch_plots": [],
+        "status": "passed"
+      }
+    }
+  ]
+}
