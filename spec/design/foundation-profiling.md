@@ -1,7 +1,7 @@
 ---
 module: foundation-profiling
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-24T10:21:18+08:00"
+updated_at: "2026-09-28T09:27:13+08:00"
 status: accepted
 ---
 
@@ -20,7 +20,8 @@ Tracy 保留名称指针，因此标签具有静态生命周期，每种分类�
 M1.7.1 已完成 CPU 接入、OFF/ON 定向验证和真实采集，见 [0023](../development/0023-tracy-cpu-profiling.md)。
 M1.7.2 已提供 heap backing 事件与真实配对采集，见 [0024](../development/0024-mimalloc-heap.md)。
 M1.7.4 已接入 arena 用量曲线，见 [0026](../development/0026-scratch-arena.md)；M1.7.5 已接入 pool 曲线，
-见 [0027](../development/0027-memory-pools.md)。GPU 埋点仍为规划。
+见 [0027](../development/0027-memory-pools.md)。M1.7.6 已验收双系统共享 client、缓存退休与延迟释放，
+见 [0029](../development/0029-memory-context-routing.md)。GPU 埋点仍为规划。
 accepted 表示采用当前方案，不代表所有小节已验收或已经测得性能改进。
 
 2026-09-23 实施核验官方最新提交 `33d78c1ed898a06938f31312167c7abefd229455`，
@@ -187,7 +188,12 @@ M1.7.5 的 `-Mode pool/pool-disabled` 使用 192 次对象申请及异线程释�
 标准池的 chunk 数量/布局按 STL 与配置变化，probe 输出独立计数，inspector 比对实际 backing 事件和八条曲线。
 当前 MSVC RelWithDebInfo 实测 21 次上游申请/6064 累计字节、全部配对、8 次异线程 backing 释放；
 两模式均 25 个 CPU 区间/2 线程，关闭内存采集时无内存事件或 pool 曲线。具体证据见 0027。
-M1.7.6 验证多 Runtime 共用 client、其中一个关闭不影响另一实例、延迟释放仍记录。
+M1.7.6 的 `-Mode context/context-disabled` 以两个独立 MemorySystem 模拟宿主实例，共用一个 client：
+关闭 A 并在 worker 退休其 context 后，B 仍执行任务；worker 退出后在主线程释放 A 结果和 weak 控制块。
+真实采集为 11 次 backing 申请、全部配对、3 次异线程释放、15 个 CPU 区间/2 线程。
+4 条 scratch 和 4 条 local pool 曲线的当前用量归零，sampled-peak 保留；内存禁用采集为 0 事件/0 曲线。
+probe 输出独立 heap 计数供 inspector 比对，不固定 STL chunk 布局；首轮缺少 idle 采样点已修正。
+本节没有为既有 Runtime 自动装配 Memory，也未实现 Jobs 调度器；证据见 0029。
 针对实际条件编译路径验证 OFF/ON 是必要范围，不扩大为全引擎双配置回归。
 
 参考：[Tracy v0.14.1 手册](https://github.com/wolfpld/tracy/blob/v0.14.1/manual/tracy.tex)、

@@ -15,6 +15,7 @@ if(DK_BUILD_MEMORY)
     add_executable(dk_memory_tests
         "${PROJECT_SOURCE_DIR}/engine/foundation/memory/tests/MemoryTests.cpp"
         "${PROJECT_SOURCE_DIR}/engine/foundation/memory/tests/OwnershipTests.cpp"
+        "${PROJECT_SOURCE_DIR}/engine/foundation/memory/tests/ContextTests.cpp"
         "${PROJECT_SOURCE_DIR}/engine/foundation/memory/tests/ArenaTests.cpp"
         "${PROJECT_SOURCE_DIR}/engine/foundation/memory/tests/PoolTests.cpp")
     target_include_directories(dk_memory_tests PRIVATE "${PROJECT_SOURCE_DIR}/engine/foundation/memory/src")

@@ -1,7 +1,7 @@
 ---
 module: foundation-jobs
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-23T14:22:27+08:00"
+updated_at: "2026-09-28T09:27:13+08:00"
 status: draft
 ---
 
@@ -13,9 +13,10 @@ status: draft
 `dk_jobs / dk::jobs`，依赖 Core、Memory 和标准库线程设施，私有使用 Profiling；不依赖 Scene、资产、JSON、Runtime 或 GPU。
 首版一个可关闭的 worker + 有界队列，std::jthread/stop_token/条件变量；不建设协程、任务图或 work stealing。
 它支持协作取消，不保证能抢占三方解码器或阻塞的系统 IO。
-前置为 M1.7 [内存系统](foundation-memory.md) 与 [Tracy](foundation-profiling.md)，两者目前均未实现。
+前置为 M1.7 [内存系统](foundation-memory.md) 与 [Tracy](foundation-profiling.md)，
+目前已提供 heap、拥有型接口、scratch/pool、RoutingToken/ThreadContextCache 和采集探针；性能基线在 M1.7.7。
 submit 自动捕获当前系统/持久域的拥有型 RoutingToken；队列本身使用独立资源。
-每个 worker 在自身线程按 SystemId/generation 建立 ThreadContext，执行前绑定 ExecutionScope 和 ScratchScope，
+每个 worker 在自身线程通过 ThreadContextCache 按不复用的 SystemId 建立 ThreadContext，执行前绑定 ExecutionScope 和 ScratchScope，
 结束/异常后恢复旧路由；业务回调无需逐层接收 thread/heap。token 不包含提交线程的 arena 或 context，
 系统已 Closing 时不再启动任务；queued 取消直接释放 token。跨 Runtime 共用 worker 不得残留上一个任务的域。
 共享队列和 completion

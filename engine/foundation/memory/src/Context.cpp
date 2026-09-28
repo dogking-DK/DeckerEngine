@@ -9,6 +9,20 @@ ThreadContext& current_context()
     if (!current) { throw ContextError{ContextErrorCode::missing_context}; }
     return current->context;
 }
+ResourceHandle validated_resource(const RoutingToken& token)
+{
+    const auto valid = token.try_validate();
+    if (!valid) { throw ContextError{valid.error()}; }
+    return token.resource();
+}
+bool same_options(const ThreadContextOptions& a, const ThreadContextOptions& b) noexcept
+{
+    return a.scratch_upstream == b.scratch_upstream && a.local_pool_upstream == b.local_pool_upstream
+        && a.scratch_options.chunk_bytes == b.scratch_options.chunk_bytes
+        && a.scratch_options.max_retained_bytes == b.scratch_options.max_retained_bytes
+        && a.local_pool_options.max_blocks_per_chunk == b.local_pool_options.max_blocks_per_chunk
+        && a.local_pool_options.largest_required_pool_block == b.local_pool_options.largest_required_pool_block;
+}
 }
 const char* ContextError::what() const noexcept
 {
@@ -20,6 +34,9 @@ const char* ContextError::what() const noexcept
     case ContextErrorCode::closing: return "Memory system or resource is closing";
     case ContextErrorCode::missing_scratch: return "Thread context has no scratch arena";
     case ContextErrorCode::missing_scope: return "No scratch scope is bound";
+    case ContextErrorCode::missing_pool: return "Thread context has no local pool";
+    case ContextErrorCode::invalid_token: return "Invalid memory routing token";
+    case ContextErrorCode::configuration_mismatch: return "Cached thread context has a different configuration";
     }
     return "Memory context error";
 }
@@ -44,6 +61,8 @@ detail::RoutingFrame::~RoutingFrame()
 }
 ExecutionScope::ExecutionScope(ThreadContext& context, ResourceHandle resource)
     : frame_(context, std::move(resource)) {}
+ExecutionScope::ExecutionScope(ThreadContext& context, const RoutingToken& token)
+    : frame_(context, validated_resource(token)) {}
 DomainScope::DomainScope(ResourceHandle resource) : frame_(current_context(), std::move(resource))
 {
     frame_.scratch = frame_.previous->scratch;
@@ -63,13 +82,32 @@ ResourceHandle current_resource()
     if (!result) { throw ContextError{result.error()}; }
     return std::move(*result);
 }
+RoutingToken RoutingToken::capture() { return from_resource(current_resource()); }
 ThreadContext::ThreadContext(MemorySystem& system, ResourceHandle upstream, ScratchOptions options)
     : ThreadContext(system)
 {
     if (!upstream) { throw ContextError{ContextErrorCode::invalid_resource}; }
     if (system_id() != upstream.system_id()) { throw ContextError{ContextErrorCode::wrong_system}; }
     if (upstream.state() != ResourceState::open) { throw ContextError{ContextErrorCode::closing}; }
-    scratch_ = std::make_unique<ScratchArena>(std::move(upstream), options);
+    configure({std::move(upstream), options, {}, {}});
+}
+ThreadContext::ThreadContext(MemorySystem& system, ThreadContextOptions options) : ThreadContext(system)
+{ configure(std::move(options)); }
+ThreadContext::ThreadContext(const RoutingToken& token, ThreadContextOptions options) : ThreadContext(token.system_)
+{
+    (void)validated_resource(token);
+    configure(std::move(options));
+}
+void ThreadContext::configure(ThreadContextOptions options)
+{
+    for (const auto& upstream : {options.scratch_upstream, options.local_pool_upstream}) {
+        if (!upstream) { continue; }
+        if (system_id() != upstream.system_id()) { throw ContextError{ContextErrorCode::wrong_system}; }
+        if (upstream.state() != ResourceState::open) { throw ContextError{ContextErrorCode::closing}; }
+    }
+    if (options.scratch_upstream) { scratch_ = std::make_unique<ScratchArena>(options.scratch_upstream, options.scratch_options); }
+    if (options.local_pool_upstream) { local_pool_ = std::make_unique<LocalPoolResource>(options.local_pool_upstream, options.local_pool_options); }
+    options_ = std::move(options);
 }
 ScratchArena& ThreadContext::scratch()
 {
@@ -78,6 +116,64 @@ ScratchArena& ThreadContext::scratch()
     if (!scratch_) { throw ContextError{ContextErrorCode::missing_scratch}; }
     return *scratch_;
 }
+LocalPoolResource& ThreadContext::local_pool()
+{
+    if (thread_ != std::this_thread::get_id()) { throw ContextError{ContextErrorCode::wrong_thread}; }
+    if (state() != ResourceState::open) { throw ContextError{ContextErrorCode::closing}; }
+    if (!local_pool_) { throw ContextError{ContextErrorCode::missing_pool}; }
+    return *local_pool_;
+}
+LocalPoolResource& current_local_pool() { return current_context().local_pool(); }
+bool ThreadContext::idle() const
+{
+    if (scopes_ || (scratch_ && scratch_->snapshot().active_scopes)) { return false; }
+    if (local_pool_) {
+        const auto snapshot = local_pool_->snapshot();
+        if (snapshot.live_allocations || snapshot.active_operations) { return false; }
+    }
+    return true;
+}
+ThreadContextCache::~ThreadContextCache()
+{
+    if (thread_ != std::this_thread::get_id()) { std::terminate(); }
+    // Each ThreadContext enforces that every borrowed scope/object has ended.
+}
+std::size_t ThreadContextCache::size() const
+{
+    if (thread_ != std::this_thread::get_id()) { throw ContextError{ContextErrorCode::wrong_thread}; }
+    return contexts_.size();
+}
+ThreadContext& ThreadContextCache::acquire(const RoutingToken& token, ThreadContextOptions options)
+{
+    if (thread_ != std::this_thread::get_id()) { throw ContextError{ContextErrorCode::wrong_thread}; }
+    (void)validated_resource(token);
+    for (const auto& context : contexts_) {
+        if (context->system_id() != token.system_id()) { continue; }
+        if (!same_options(context->options_, options)) { throw ContextError{ContextErrorCode::configuration_mismatch}; }
+        for (const auto& upstream : {options.scratch_upstream, options.local_pool_upstream}) {
+            if (upstream && upstream.state() != ResourceState::open) { throw ContextError{ContextErrorCode::closing}; }
+        }
+        return *context;
+    }
+    auto candidate = std::unique_ptr<ThreadContext>{new ThreadContext{token, std::move(options)}};
+    auto& result = *candidate;
+    contexts_.push_back(std::move(candidate)); // Only publish a fully configured context.
+    return result;
+}
+std::expected<ContextRetirement, ContextErrorCode> ThreadContextCache::retire(bool all) noexcept
+{
+    if (thread_ != std::this_thread::get_id()) { return std::unexpected(ContextErrorCode::wrong_thread); }
+    ContextRetirement result;
+    for (auto it = contexts_.begin(); it != contexts_.end();) {
+        if (!all && (*it)->state() == ResourceState::open) { ++it; continue; }
+        if (!(*it)->idle()) { ++result.busy; ++it; continue; }
+        it = contexts_.erase(it);
+        ++result.retired;
+    }
+    return result;
+}
+std::expected<ContextRetirement, ContextErrorCode> ThreadContextCache::try_retire_closed() noexcept { return retire(false); }
+std::expected<ContextRetirement, ContextErrorCode> ThreadContextCache::try_clear() noexcept { return retire(true); }
 ScratchScope::ScratchScope(ScratchArena& arena) : arena_(&arena)
 {
     auto result = arena.try_checkpoint();

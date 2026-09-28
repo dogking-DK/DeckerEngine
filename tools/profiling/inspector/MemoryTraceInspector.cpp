@@ -15,17 +15,25 @@ int main(int argc, char** argv)
 {
     const bool arena = argc == 4 && std::strcmp(argv[3], "arena") == 0;
     const bool pool = argc == 5 && std::strcmp(argv[3], "pool") == 0;
-    if ((argc != 3 && !arena && !pool) || (std::strcmp(argv[2], "on") && std::strcmp(argv[2], "off"))) { return 2; }
+    const bool context = argc == 5 && std::strcmp(argv[3], "context") == 0;
+    if ((argc != 3 && !arena && !pool && !context) || (std::strcmp(argv[2], "on") && std::strcmp(argv[2], "off"))) { return 2; }
     const bool expected = std::strcmp(argv[2], "on") == 0;
     try {
         nlohmann::json measured;
-        if (pool) {
+        if (pool || context) {
             std::ifstream input{argv[4]}; input >> measured;
+        }
+        if (pool) {
             if (measured.at("requests") != 192 || measured.at("memory_enabled") != expected
                 || measured.at("backing_allocations").get<std::size_t>() == 0
                 || measured.at("backing_allocations").get<std::size_t>() >= 192) {
                 throw std::runtime_error("invalid pool probe measurements");
             }
+        }
+        if (context && (measured.at("systems") != 2 || measured.at("tasks") != 3
+            || measured.at("memory_enabled") != expected || measured.at("assets_allocations") != 2
+            || measured.at("scene_allocations") != 3 || measured.at("jobs_allocations").get<std::size_t>() == 0)) {
+            throw std::runtime_error("invalid context probe measurements");
         }
         auto file = std::unique_ptr<tracy::FileRead>{tracy::FileRead::Open(argv[1])};
         if (!file) { throw std::runtime_error("cannot open capture"); }
@@ -54,7 +62,14 @@ int main(int argc, char** argv)
             counts[name].first += count; counts[name].second += bytes; total += count;
             pools.push_back({{"name", name}, {"allocations", count}, {"bytes", bytes}, {"live_bytes", memory.usage}});
         }
-        if (expected && pool) {
+        if (expected && context) {
+            if (total != measured.at("backing_allocations").get<std::size_t>() || counts.size() != 3 || cross_thread != 3
+                || counts["dk/heap/assets"].first != measured.at("assets_allocations").get<std::size_t>()
+                || counts["dk/heap/scene"].first != measured.at("scene_allocations").get<std::size_t>()
+                || counts["dk/heap/jobs"].first != measured.at("jobs_allocations").get<std::size_t>()) {
+                throw std::runtime_error("context capture differs from independent heap counts or delayed cross-thread frees");
+            }
+        } else if (expected && pool) {
             if (total != measured.at("backing_allocations").get<std::size_t>() || counts.size() != 1
                 || counts["dk/heap/jobs"].second != measured.at("backing_bytes_total").get<std::uint64_t>()) {
                 throw std::runtime_error("pool capture must match backing measurements without per-object duplicates");
@@ -83,25 +98,35 @@ int main(int argc, char** argv)
                 {"dk/pool/local/idle-backing", {measured.at("local_idle_peak").get<double>(), 0}},
                 {"dk/pool/shared/idle-backing", {measured.at("shared_idle_peak").get<double>(), 0}}};
         }
+        if (context) {
+            expected_plots = {
+                {"dk/scratch/used", {}}, {"dk/scratch/retained", {}}, {"dk/scratch/backing", {}}, {"dk/scratch/sampled-peak", {}},
+                {"dk/pool/local/live", {}}, {"dk/pool/local/backing", {}}, {"dk/pool/local/idle-backing", {}},
+                {"dk/pool/local/sampled-peak", {}}};
+        }
         for (const auto* plot : worker.GetPlots()) {
             if (plot->type != tracy::PlotType::User) { continue; }
             const std::string name = worker.GetString(plot->name);
             if (!name.starts_with("dk/scratch/") && !name.starts_with("dk/pool/")) { continue; }
-            if (!expected || (!arena && !pool)) { throw std::runtime_error("unexpected memory curve"); }
+            if (!expected || (!arena && !pool && !context)) { throw std::runtime_error("unexpected memory curve"); }
             const auto match = expected_plots.find(name);
             if (match == expected_plots.end() || plot->data.empty() || plot->min < 0
-                || plot->max != match->second.first || plot->data.back().val != match->second.second
+                || (!context && (plot->max != match->second.first || plot->data.back().val != match->second.second))
                 || plot->format != tracy::PlotValueFormatting::Memory) {
                 throw std::runtime_error("memory curve peak, final value or format differs from workload: " + name);
+            }
+            if (context && (plot->max <= 0 || plot->data.back().val != (name.ends_with("sampled-peak") ? plot->max : 0))) {
+                throw std::runtime_error("context retirement did not clear local memory curves: " + name);
             }
             plots.push_back({{"name", name}, {"samples", plot->data.size()}, {"peak", plot->max}, {"final", plot->data.back().val}});
             expected_plots.erase(match);
         }
-        if (expected && (arena || pool) && !expected_plots.empty()) { throw std::runtime_error("missing memory curves"); }
+        if (expected && (arena || pool || context) && !expected_plots.empty()) { throw std::runtime_error("missing memory curves"); }
         std::cout << nlohmann::json{{"status", "passed"}, {"memory_enabled", expected}, {"allocations", total},
             {"cross_thread_frees", cross_thread}, {"pools", pools},
-            {"scratch_plots", pool ? nlohmann::json::array() : plots},
-            {"pool_plots", pool ? plots : nlohmann::json::array()}}.dump(2) << '\n';
+            {"scratch_plots", (pool || context) ? nlohmann::json::array() : plots},
+            {"pool_plots", pool ? plots : nlohmann::json::array()},
+            {"context_plots", context ? plots : nlohmann::json::array()}}.dump(2) << '\n';
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n'; return 1;

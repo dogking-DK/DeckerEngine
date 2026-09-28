@@ -79,6 +79,7 @@ public:
 
 private:
     friend class MemorySystem;
+    friend class RoutingToken;
     explicit ResourceHandle(std::shared_ptr<detail::ResourceControl> control) noexcept;
     std::shared_ptr<detail::ResourceControl> control_;
 };

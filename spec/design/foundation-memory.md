@@ -1,7 +1,7 @@
 ---
 module: foundation-memory
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-23T19:54:50+08:00"
+updated_at: "2026-09-28T09:27:13+08:00"
 status: accepted
 ---
 
@@ -16,7 +16,38 @@ status: accepted
 [0024](../development/0024-mimalloc-heap.md)。M1.7.3 已完成 PMR、Buffer、拥有型分配器/智能指针与
 最小 context/持久域路由，见 [0025](../development/0025-memory-ownership-routing.md)。M1.7.4 提供 ScratchArena、
 嵌套 ScratchScope 与用量曲线，见 [0026](../development/0026-scratch-arena.md)。M1.7.5 提供局部/共享 Pool、
-ObjectPool 与受控 trim，见 [0027](../development/0027-memory-pools.md)；context 装配及任务路由仍待实现。
+ObjectPool 与受控 trim，见 [0027](../development/0027-memory-pools.md)。
+M1.7.6 的 context 装配、拥有型 token 和线程缓存实施见 [0029](../development/0029-memory-context-routing.md)。
+
+## M1.7.6 实施细化
+
+- `ThreadContextOptions` 独立指定 scratch/local pool 上游及选项；空上游表示未配置。
+  两者必须属于 context 系统。保留原来的最小和 scratch-only 构造方式；新增 `local_pool()` 与
+  `current_local_pool()` 借用接口，Closing 后拒绝新的路由查询，已有借用仍能释放。
+  context 在 owner 线程先销毁 local pool/scratch，再解除系统 lease；局部对象不得逃逸。
+- `RoutingToken::capture()` 捕获当前持久域；`from_resource()` 显式选择资源且不修改 TLS。
+  token 只拥有 SystemState 和持久 ResourceHandle，不含 context、arena、pool 或 TLS 地址。
+  默认 token 无效；复制可跨线程传递，同一对象的赋值仍需外部同步。token 不计 active_contexts，
+  不阻止 Closing/Closed，执行绑定前检查资源与系统 Open；队列取消只需丢弃 token。
+- 系统没有重开/reset，SystemId 进程内不复用，因此 token/cache 以该身份和拥有型 control 校验，
+  不增加无实际失效事件的 generation 字段。缓存删除后重建是新 context；旧 token 仍代表原持久域，
+  不引用已退休 context。未来若支持同一系统重开，必须先增加系统 generation 并失效旧 token。
+- `ThreadContextCache` 由执行器显式拥有且只能在 owner 线程使用；`acquire(token, options)` 按系统复用
+  稳定 context，已有项必须使用相同配置，否则 configuration_mismatch。候选构造完毕再插入，失败不发布缓存项。
+  系统注册 mutex 移到共享 SystemState，保证 token 路径登记 context 与 begin_close/try_close 串行，
+  无需借用可能先析构的 MemorySystem 包装对象。ExecutionScope 增加 token 重绑定入口。
+- `try_retire_closed()` 在所属线程安全点删除 Closing/Closed 系统的闲置项；`try_clear()` 清理所有闲置项。
+  返回 retired/busy 数量，允许清掉其他闲置系统；活动 execution/domain frame、scratch checkpoint 或 local pool
+  活块使该项保持原状并报告 busy。错线程返回 wrong_thread 且不改缓存。借用 context/resource 引用在清除后失效，
+  缓存析构前必须结束所有 scope/局部借用；析构负责余下闲置项，绝不跨线程强制清理。
+- executor 的最小调用顺序为 acquire → ExecutionScope(context, token) → ScratchScope → 回调；
+  正常、异常、运行中协作取消均按栈逆序恢复，安全点退休；未执行的取消不 acquire。
+  本节用 std::jthread 探针实现该调用顺序，不新增 Jobs/Runtime 自动装配或任务状态机。
+
+验收包括两个系统/多个持久域复用同一 worker、嵌套与异常恢复、缺绑定/无效 token/错线程/配置冲突、
+候选构造失败不留 lease、活动缓存退休 busy、Closing 入场与登记竞争、worker 退出及系统包装析构后的结果/weak 释放。
+Tracy 同一连接采集两系统，关闭 A 后 B 继续分配，A 结果在 worker 退出后释放；核对 backing 配对与局部曲线归零。
+使用 memory 定向 Debug 回归和 profiling probe 的 RelWithDebInfo 条件路径；性能对照报告留在 M1.7.7。
 
 ## M1.7.5 实施细化
 
@@ -216,8 +247,8 @@ flowchart TD
 `ThreadContext` 在所属线程创建和销毁，绑定一个 MemorySystem，持有该线程的 scratch/local pool。
 一个线程可以使用多个系统的独立 context。框架通过 ExecutionScope 绑定当前 context 和持久资源域，
 业务函数通过线程局部路由获取，无需层层传递 thread/heap；显式资源接口仍供底层和测试使用。
-TLS 只指向当前 RAII 路由栈帧，不拥有一个进程全局 MemorySystem；栈帧持有有效的 context lease 和资源 handle，
-以 SystemId + generation 校验身份。退出/异常时恢复前一帧，不保留已结束作用域的裸 context 缓存。
+TLS 只指向当前 RAII 路由栈帧，不拥有一个进程全局 MemorySystem；栈帧借用有效的 context lease 并持有资源 handle，
+以不复用的 SystemId 校验身份。退出/异常时恢复前一帧，不保留已结束作用域的裸 context 缓存。
 MemorySystem 不创建 worker，也不替 Jobs 执行 join。
 
 | 资源 | 分配线程 | 释放线程 | 回收时机 / 用途 |
@@ -280,7 +311,7 @@ scratch 的工作归属可由任务 zone 关联，但 heap backing 始终记到�
   嵌套调用另一 Runtime 时须建立该 Runtime 的 ExecutionScope，退出后恢复原系统和域。
 - 没有绑定上下文时，隐式工厂/默认 allocator 不偷偷选进程全局 General。`try_current_resource()`
   返回 missing_context；普通接口抛固定消息、不动态分配诊断字符串的 ContextError。
-  错误系统/失效 generation 同样明确拒绝，Debug/Release 行为一致。显式 `_in`/Allocator 仍可直接使用活资源。
+  错误系统/关闭 token 同样明确拒绝，Debug/Release 行为一致。显式 `_in`/Allocator 仍可直接使用活资源。
 - implicit allocator 只在构造时查询 TLS，之后的扩容/释放使用保存的 ResourceHandle。
   例如在 Assets 内创建 vector，移动到主线程 Scene 作用域后扩容，仍记入 Assets；不会在 free 时重查当前域。
   copy/move/swap 继续遵守拥有型 allocator 的既定传播规则；跨域复制需显式目标 allocator/clone_to。
@@ -295,7 +326,7 @@ scratch 的工作归属可由任务 zone 关联，但 heap backing 始终记到�
 
 ### 异步和线程复用
 
-Jobs 的 submit 捕获拥有型 RoutingToken，内容为系统控制存活凭据、SystemId/generation 和持久
+后续 Jobs 的 submit 捕获拥有型 RoutingToken，内容为系统控制存活凭据、不复用的 SystemId 和持久
 ResourceHandle；显式 JobOptions 可覆盖路由。不捕获提交线程的 ThreadContext、arena、TLS 帧或 checkpoint。
 任务队列节点属于队列自己的资源，任务输出默认属于捕获的资源，两者不是一笔归属。
 
@@ -304,7 +335,7 @@ worker 根据 token 找到/创建自己在该系统下的 ThreadContext，建立
 token 保持控制对象存活但不能阻止系统进入 Closing，也不能重新开启它；开始执行前再次检查状态。
 嵌套提交继承当前持久域，多个 Runtime 复用同一 worker 时按 token 切换，不能继承上一次任务残留域。
 
-ThreadContext 由执行器在所属线程管理，缓存按 SystemId/generation 区分；系统退休时在该线程安全点
+ThreadContext 由执行器在所属线程管理，缓存按不复用的 SystemId 区分；系统退休时在该线程安全点
 清理相关缓存项，worker 退出时清理余下 context。关闭期间不能让闲置缓存永久挡住 MemorySystem::try_close。
 Memory 的 M1.7.6 用标准线程探针验证此契约，真正 Jobs 自动捕获/恢复在 M4.4 落实。
 外部 std::thread/三方线程不会自动继承 TLS，需通过引擎线程入口或显式作用域绑定一次。
@@ -312,14 +343,15 @@ Memory 的 M1.7.6 用标准线程探针验证此契约，真正 Jobs 自动捕�
 
 ## 公共接口与资源存活
 
-以下为总体接口形状，含后续小节，非可编译示例；实际 M1.7.3–4 用法见
+以下为已实现的接口概览，非可编译示例；实际用法见
 [README](../../README.md#拥有型内存与持久域路由m173)。
 
 ```cpp
 namespace dk::memory {
   class MemorySystem;        // create_heap、begin_close、try_close
   class ResourceHandle;      // 持有稳定 ResourceControl；只用于持久、线程安全资源
-  class ThreadContext;       // 可选 scratch 上游；local_pool() 待后续实现
+  class ThreadContext;       // 可选 scratch/local pool 上游与同线程 lease
+  class ThreadContextCache;  // owner 线程按系统复用与安全点退休
   class ExecutionScope;      // 框架绑定执行线程/系统/持久资源
   class DomainScope;         // 在同一系统内覆盖默认持久资源
   class RoutingToken;        // 拥有型任务路由；不包含线程局部资源
@@ -477,7 +509,7 @@ Thread sanitizer/ASan 仅在支持的构建配置实际执行后记录，不能�
 按 [Roadmap M1.7](../roadmap.md#m17memory-与性能分析补充) 的七个小节实施：
 Tracy CPU 底座 → heap → PMR/智能指针与持久路由 → arena → pool → context/任务路由/关闭集成 → 场景测量。
 M1.7.3 已交付 ThreadContext/ExecutionScope 的最小线程与系统绑定，此时不包含 arena/pool；
-M1.7.4 已增加线程 scratch，M1.7.5 已增加独立 pool，M1.7.6 完成 context 装配、token、缓存退休与多系统组合验收。
+M1.7.4 已增加线程 scratch，M1.7.5 已增加独立 pool，M1.7.6 增加 context 装配、token、缓存退休与多系统探针。
 生命周期闸门、拥有型 handle 和最小记账从 heap 首节就具备，不能留到最后补救悬空资源。
 首轮只在受控示例与新 M4 的大块数据/临时工作中采用，不批量改变 M1–M3 公共容器 ABI。
 Tracy 的现有 Runtime/IO 埋点可先接入，不需要等待容器迁移。

@@ -59,6 +59,7 @@ detail::EventSink default_sink() noexcept
 namespace detail {
 struct SystemState {
     SystemId id;
+    std::mutex registry_mutex; // Shared with token-based context registration, even after wrapper destruction.
     std::atomic<ResourceState> state{ResourceState::open};
     std::atomic<std::size_t> contexts{0};
     Backend backend;
@@ -206,7 +207,6 @@ Backend mimalloc_backend() noexcept
 
 struct MemorySystem::Impl {
     std::shared_ptr<detail::SystemState> shared;
-    std::mutex registry_mutex;
     std::vector<std::shared_ptr<detail::ResourceControl>> resources;
     DomainId next_domain = 1;
     explicit Impl(std::shared_ptr<detail::SystemState> state) : shared(std::move(state)) {}
@@ -219,7 +219,7 @@ struct MemorySystem::Impl {
     }
     CloseResult close() noexcept
     {
-        std::lock_guard lock{registry_mutex};
+        std::lock_guard lock{shared->registry_mutex};
         begin_close_locked();
         CloseResult result;
         result.active_contexts = shared->contexts.load(std::memory_order_acquire);
@@ -270,7 +270,7 @@ std::expected<ResourceHandle, AllocationError> MemorySystem::create_heap(HeapOpt
     if (static_cast<unsigned>(options.category) > static_cast<unsigned>(DomainCategory::other)) {
         return std::unexpected(AllocationError::invalid_argument);
     }
-    std::lock_guard lock{impl_->registry_mutex};
+    std::lock_guard lock{impl_->shared->registry_mutex};
     if (state() != ResourceState::open) { return std::unexpected(AllocationError::closing); }
     if (impl_->next_domain == (std::numeric_limits<DomainId>::max)()) { return std::unexpected(AllocationError::limit_exceeded); }
     try {
@@ -286,27 +286,49 @@ std::expected<ResourceHandle, AllocationError> MemorySystem::create_heap(HeapOpt
 void MemorySystem::begin_close() noexcept
 {
     if (!impl_) { return; }
-    std::lock_guard lock{impl_->registry_mutex};
+    std::lock_guard lock{impl_->shared->registry_mutex};
     impl_->begin_close_locked();
 }
 CloseResult MemorySystem::try_close() noexcept { return impl_ ? impl_->close() : CloseResult{}; }
 
-ThreadContext::ThreadContext(MemorySystem& system) : thread_(std::this_thread::get_id())
+ThreadContext::ThreadContext(MemorySystem& system)
+    : ThreadContext(system.impl_ ? system.impl_->shared : nullptr) {}
+ThreadContext::ThreadContext(std::shared_ptr<detail::SystemState> system) : thread_(std::this_thread::get_id())
 {
-    if (!system.impl_) { throw ContextError{ContextErrorCode::invalid_resource}; }
-    std::lock_guard lock{system.impl_->registry_mutex};
-    if (system.state() != ResourceState::open) { throw ContextError{ContextErrorCode::closing}; }
-    system_ = system.impl_->shared;
+    if (!system) { throw ContextError{ContextErrorCode::invalid_resource}; }
+    std::lock_guard lock{system->registry_mutex};
+    if (system->state.load() != ResourceState::open) { throw ContextError{ContextErrorCode::closing}; }
+    system_ = std::move(system);
     system_->contexts.fetch_add(1, std::memory_order_release);
 }
 ThreadContext::~ThreadContext()
 {
     if (thread_ != std::this_thread::get_id() || scopes_ != 0) { std::terminate(); }
-    scratch_.reset(); // Drop chunk backing while the context lease still prevents system close.
+    local_pool_.reset();
+    scratch_.reset(); // Drop all local backing while the context lease still prevents system close.
     system_->contexts.fetch_sub(1, std::memory_order_release);
 }
 SystemId ThreadContext::system_id() const noexcept { return system_->id; }
 ResourceState ThreadContext::state() const noexcept { return system_->state.load(); }
+
+RoutingToken RoutingToken::from_resource(ResourceHandle resource)
+{
+    if (!resource) { throw ContextError{ContextErrorCode::invalid_resource}; }
+    RoutingToken token;
+    token.system_ = resource.control_->system;
+    token.resource_ = std::move(resource);
+    const auto valid = token.try_validate();
+    if (!valid) { throw ContextError{valid.error()}; }
+    return token;
+}
+std::expected<void, ContextErrorCode> RoutingToken::try_validate() const noexcept
+{
+    if (!*this) { return std::unexpected(ContextErrorCode::invalid_token); }
+    if (system_->state.load() != ResourceState::open || resource_.state() != ResourceState::open) {
+        return std::unexpected(ContextErrorCode::closing);
+    }
+    return {};
+}
 
 ResourceHandle::ResourceHandle(std::shared_ptr<detail::ResourceControl> control) noexcept : control_(std::move(control)) {}
 SystemId ResourceHandle::system_id() const noexcept { return control_ ? control_->system->id : 0; }

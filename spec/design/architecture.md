@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-23T19:54:50+08:00"
+updated_at: "2026-09-28T09:27:13+08:00"
 status: accepted
 ---
 
@@ -33,7 +33,9 @@ M1.7.1 的 CPU 包装、Runtime/IO 埋点、条件构建与真实 capture 已验
 预算、关闭闸门及 backing 内存事件已验收。M1.7.3 的 PMR、拥有型容器/智能指针、最小 context 与
 持久域路由已验收。M1.7.4 的 ScratchArena、自动嵌套作用域、保留上限与 Tracy 曲线已验收；
 M1.7.5 的局部/共享 Pool、ObjectPool、受控 trim 与用量曲线已验收；
-context/任务路由集成和 GPU 事件仍待后续小节。既有 Runtime 尚未自动装配内存上下文。
+M1.7.6 的 ThreadContext local pool 装配、拥有型 RoutingToken、worker 缓存退休与多系统关闭已验收，
+见 [0029](../development/0029-memory-context-routing.md)。M1.7.7 性能基线与后续 GPU 事件仍待实施。
+既有 Runtime 尚未自动装配内存上下文，真正 Jobs 捕获/执行接入在 M4.4。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，

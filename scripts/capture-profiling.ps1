@@ -4,7 +4,7 @@ param(
     [string]$BuildDir = 'out/build/windows-profiling',
     [string]$Configuration = 'RelWithDebInfo',
     [string]$ToolsDir = 'out/profiling-tools/vcpkg_installed/x64-windows/tools/tracy',
-    [ValidateSet('cpu', 'memory', 'memory-disabled', 'arena', 'arena-disabled', 'pool', 'pool-disabled')][string]$Mode = 'cpu',
+    [ValidateSet('cpu', 'memory', 'memory-disabled', 'arena', 'arena-disabled', 'pool', 'pool-disabled', 'context', 'context-disabled')][string]$Mode = 'cpu',
     [string]$MemoryInspector = 'out/profiling-tools/inspector/bin/Release/dk-memory-trace-inspect.exe',
     [ValidateRange(1024, 65535)][int]$Port = 18086
 )
@@ -17,7 +17,8 @@ function Resolve-RepoPath([string]$Path) {
 }
 $arenaMode = $Mode -like 'arena*'
 $poolMode = $Mode -like 'pool*'
-$probeName = if ($Mode -eq 'cpu') { 'dk_profiling_probe' } elseif ($arenaMode) { 'dk_arena_probe' } elseif ($poolMode) { 'dk_pool_probe' } else { 'dk_memory_probe' }
+$contextMode = $Mode -like 'context*'
+$probeName = if ($Mode -eq 'cpu') { 'dk_profiling_probe' } elseif ($arenaMode) { 'dk_arena_probe' } elseif ($poolMode) { 'dk_pool_probe' } elseif ($contextMode) { 'dk_context_probe' } else { 'dk_memory_probe' }
 $probe = Join-Path (Resolve-RepoPath $BuildDir) "bin/$Configuration/$probeName.exe"
 $capture = Join-Path (Resolve-RepoPath $ToolsDir) 'tracy-capture.exe'
 $exporter = Join-Path (Resolve-RepoPath $ToolsDir) 'tracy-csvexport.exe'
@@ -52,6 +53,7 @@ if ($Mode -ne 'cpu') {
 }
 if ($arenaMode) { $summary.workload = '102 arena requests; 3 backing chunks; 2 threads; nested rewind, retention and reset; 4 aggregate scratch plots' }
 if ($poolMode) { $summary.workload = '192 local/shared pool requests; 2 threads; foreign object frees and trim; 8 pool plots; STL backing compared with independent probe counters' }
+if ($contextMode) { $summary.workload = '2 systems on one reused worker; 3 tasks; retire closing A while B continues; worker exit then delayed result/weak frees; 8 local curves' }
 
 function Start-Tool([string]$Name, [string]$Executable, [string[]]$Arguments) {
     $info = [Diagnostics.ProcessStartInfo]::new()
@@ -107,9 +109,9 @@ try {
     $null = Finish-Tool $captureProcess
     $probeOutput = Finish-Tool $probeProcess
     if ($Mode -ne 'cpu') {
-        $expected = if ($Mode -in @('memory', 'arena', 'pool')) { 'on' } else { 'off' }
+        $expected = if ($Mode -in @('memory', 'arena', 'pool', 'context')) { 'on' } else { 'off' }
         $expectedOutput = if ($arenaMode) { "arena=$expected;chunks=3;requests=102" } else { "memory=$expected;allocations=36" }
-        if (-not $poolMode -and $probeOutput.Trim() -ne $expectedOutput) { throw "Unexpected probe output: $probeOutput" }
+        if (-not $poolMode -and -not $contextMode -and $probeOutput.Trim() -ne $expectedOutput) { throw "Unexpected probe output: $probeOutput" }
         $inspectArgs = @($tracePath, $expected)
         if ($arenaMode) { $inspectArgs += 'arena' }
         if ($poolMode) {
@@ -120,10 +122,37 @@ try {
             [IO.File]::WriteAllText($measurementFile, $probeOutput)
             $inspectArgs += @('pool', $measurementFile)
         }
+        if ($contextMode) {
+            $contextMeasurement = $probeOutput | ConvertFrom-Json
+            if ($contextMeasurement.status -ne 'passed' -or $contextMeasurement.systems -ne 2 -or $contextMeasurement.tasks -ne 3 -or
+                $contextMeasurement.memory_enabled -ne ($expected -eq 'on')) { throw 'Unexpected context probe output' }
+            $measurementFile = Join-Path $runDir 'context-measurements.json'
+            [IO.File]::WriteAllText($measurementFile, $probeOutput)
+            $inspectArgs += @('context', $measurementFile)
+        }
         $json = Finish-Tool (Start-Tool 'memory-inspect' (Resolve-RepoPath $MemoryInspector) $inspectArgs)
         $inspection = $json | ConvertFrom-Json
         if ($inspection.status -ne 'passed') { throw 'Memory capture inspection failed' }
         $summary.memory_inspection = $inspection
+        if ($contextMode) {
+            $contextCsv = Finish-Tool (Start-Tool 'export' $exporter @('-u', $tracePath))
+            [IO.File]::WriteAllText((Join-Path $runDir 'cpu-zones.csv'), $contextCsv)
+            $contextZones = @($contextCsv | ConvertFrom-Csv)
+            foreach ($zoneCount in @(
+                @{ Name = 'Context.Probe'; Count = 1 }, @{ Name = 'Context.Worker'; Count = 1 },
+                @{ Name = 'Context.Task'; Count = 3 }, @{ Name = 'Context.DelayedFree'; Count = 1 }
+            )) {
+                if (@($contextZones | Where-Object name -EQ $zoneCount.Name).Count -ne $zoneCount.Count) {
+                    throw "Unexpected context CPU zone count: $($zoneCount.Name)"
+                }
+            }
+            foreach ($zone in $contextZones) {
+                if ([long]$zone.exec_time_ns -lt 0 -or [int]$zone.src_line -le 0) { throw 'Unclosed or misplaced context CPU zone' }
+            }
+            $summary.cpu_zones = $contextZones.Count
+            $summary.thread_count = @($contextZones.thread | Sort-Object -Unique).Count
+            if ($summary.thread_count -ne 2) { throw 'Unexpected context CPU tracks' }
+        }
         if ($arenaMode) {
             $arenaCsv = Finish-Tool (Start-Tool 'export' $exporter @('-u', $tracePath))
             [IO.File]::WriteAllText((Join-Path $runDir 'cpu-zones.csv'), $arenaCsv)

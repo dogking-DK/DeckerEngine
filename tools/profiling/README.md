@@ -92,3 +92,18 @@ MSVC RelWithDebInfo 本次结果为 21 次上游申请、25 区间、2 线程；
 M1.7.2 的实际验证与限制见 [0024](../../spec/development/0024-mimalloc-heap.md)。
 M1.7.4 的 arena 曲线与禁用验证见 [0026](../../spec/development/0026-scratch-arena.md)。
 M1.7.5 的 pool 验证与 MSVC Debug 构造兼容处理见 [0027](../../spec/development/0027-memory-pools.md)。
+
+M1.7.6 context/关闭集成采集：先在 profiling 和 cpu-only 目录分别构建 `dk_context_probe` 的 RelWithDebInfo，
+重新构建 inspector，然后运行：
+
+```powershell
+& ./scripts/capture-profiling.ps1 -Mode context -Port 18093
+& ./scripts/capture-profiling.ps1 -Mode context-disabled -BuildDir out/build/windows-profiling-cpu-only -Port 18094
+```
+
+标准线程在同一 Tracy client 内执行两个系统的三次任务。A 进入 Closing 后，在 worker 退休其 context，
+B 继续执行；worker 退出后主线程释放 A 的 Buffer/shared/weak 结果，再关闭 B。
+probe 的独立 heap 快照计数写入 `context-measurements.json`；inspector 的额外参数为
+`context <measurement.json>`，核对三类 backing 计数、全部配对、三次异线程释放、8 条 scratch/local pool 曲线归零。
+sampled-peak 保留历史峰值。禁用内存采集时应无内存事件和曲线，CPU 任务/关闭区间仍存在。
+这是生命周期验收，性能基线属于 M1.7.7；记录见 [0029](../../spec/development/0029-memory-context-routing.md)。

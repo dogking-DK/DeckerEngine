@@ -10,8 +10,9 @@ M3.1 已提供独立命令注册表、参数/结果 schema 校验及 commands.li
 M3.2 通过 dk::scene_services 和 dk::scene_operations 提供会话管理、场景编辑、查询与保存。
 M3.3 提供事务与有界历史；M3.4 的 dk-run 支持无窗口 CPU 批处理和 JSON-RPC。
 M3.5 已接入持续 stdio、同步任务查询与正常关闭，达到交付 A。
-M1.7.1–5 已接入可选 Tracy 分析、mimalloc heap、PMR、拥有型接口、持久域路由、线程 scratch 和局部/共享 Pool。
-内存域支持预算、关闭闸门和跨线程释放；arena 支持嵌套回退，Pool 提供 ObjectPool、安全 trim 和用量曲线。任务路由待后续小节。
+M1.7.1–6 已接入可选 Tracy 分析、mimalloc heap、PMR、拥有型接口、持久域路由、线程 scratch 和局部/共享 Pool。
+内存域支持预算、关闭闸门和跨线程释放；arena 支持嵌套回退，Pool 提供 ObjectPool、安全 trim 和用量曲线。
+RoutingToken 与 ThreadContextCache 支持跨线程重绑定、线程复用及安全点退休；Jobs/Runtime 自动装配留在后续阶段。
 渲染、物理、编辑器、网络/命名管道 IPC 和脚本模块尚未实现。
 
 ## 目录
@@ -506,7 +507,53 @@ idle_backing 仅在完全空闲时报告保留量，不能当作活跃池的可�
 ```
 
 独立采集工具准备见 [Profiling 工具](tools/profiling/README.md)，验收见 [0027](spec/development/0027-memory-pools.md)。
-下一项为 M1.7.6：context/拥有型任务路由、线程复用和关闭集成；本节未自动装配既有 Runtime/Jobs。
+ThreadContext 的 local pool 装配、拥有型任务路由与关闭集成见下一节。
+
+## 线程上下文与拥有型任务路由（M1.7.6）
+
+`RoutingToken::capture()` 保存当前持久资源和系统所有权；`from_resource(handle)` 显式选择路由。
+token 可复制到另一个线程，不携带提交线程的 arena、pool、context 或 TLS 帧；没有隐式绑定时 capture 抛 ContextError。
+worker 显式拥有 `ThreadContextCache`，按系统复用稳定 context，并在入口配置本线程局部资源：
+
+```cpp
+// 提交端已有 ExecutionScope；local_heap 是同系统的持久 heap handle。
+auto token = dk::memory::RoutingToken::capture();
+// 在 worker 自身线程创建 cache，并在每次回调建立以下作用域：
+dk::memory::ThreadContextCache cache;
+dk::memory::ThreadContextOptions options{
+    .scratch_upstream = local_heap,
+    .local_pool_upstream = local_heap,
+};
+{
+    auto& context = cache.acquire(token, options);
+    dk::memory::ExecutionScope execution{context, token};
+    dk::memory::ScratchScope scratch;
+    auto temporary = dk::memory::scratch_vector<int>();
+    temporary.resize(32, 7);
+    dk::memory::ObjectPool<int> objects{dk::memory::current_local_pool()};
+    auto local = objects.make(temporary.front());
+    // 持久结果使用拥有型容器/Buffer/智能指针，捕获 token 的持久域。
+} // 回调结束、异常或协作取消均先析构局部对象，再回退 scratch/路由。
+auto retired = cache.try_retire_closed(); // owner 线程安全点，返回 retired/busy；保留 Open 项。
+```
+
+完整可执行的双系统示例为 [ContextProbe.cpp](tests/integration/ContextProbe.cpp)。
+同系统缓存复用要求相同的 `ThreadContextOptions`，配置冲突明确报错；`try_clear()` 可先清理闲置项再换配置。
+两种清理都保留有 execution/domain scope、scratch checkpoint 或 pool 活块的 busy 项。
+借用 context/resource 引用在清理后失效，所有局部对象必须同线程且早于 cache 析构；cache 不可复制/移动。
+
+token 不阻止系统关闭，Closing 后禁止新的绑定/分配。已移交的 owning 结果及 weak 控制块可在 worker 退出后释放；
+释放后重试 `MemorySystem::try_close()`。未执行的取消直接丢弃 token，不创建 context。
+框架必须在所属线程安全点退休关闭系统的缓存；Memory 不创建/唤醒/join worker，也不实现 Jobs 调度。
+
+```powershell
+& ./scripts/verify.ps1 -Target @('dk_memory_tests','dk_context_probe') -TestRegex '^dk\.memory\.context' -Reason '线程路由、缓存退休与多系统关闭'
+& ./scripts/capture-profiling.ps1 -Mode context -Port 18093
+& ./scripts/capture-profiling.ps1 -Mode context-disabled -BuildDir out/build/windows-profiling-cpu-only -Port 18094
+```
+
+采集前在对应目录构建 `dk_context_probe` 的 RelWithDebInfo，以及 [独立 inspector](tools/profiling/README.md)。
+实现/验证记录见 [0029](spec/development/0029-memory-context-routing.md)；下一项为 M1.7.7 重复工作负载和性能基线。
 
 ## Tracy CPU 性能分析（M1.7.1）
 
@@ -838,7 +885,7 @@ ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
 
 M1.6 与 M2.1–M2.4 已完成并分节本地提交。最终默认 Debug/Release 各 128 通过、
 1 项既有符号链接权限跳过；独立 Scene 配置各 104 通过、1 跳过，纯 CPU 示例各 16/16。
-上述计数为当时验收记录；M3 交付 A 及 M1.7.1–5 也已完成，当前下一项为 M1.7.6。
+上述计数为当时验收记录；M3 交付 A 及 M1.7.1–6 也已完成，当前下一项为 M1.7.7。
 
 开发前先看 [AGENTS.md](AGENTS.md) 和 [spec 规范](spec/README.md)：
 先创建/更新模块设计，然后实现；过程中持续更新编号开发记录。

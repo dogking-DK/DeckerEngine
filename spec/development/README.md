@@ -30,5 +30,6 @@
 | 0026 | [M1.7.4 ScratchArena 与线程临时作用域](0026-scratch-arena.md) | foundation-memory, foundation-profiling | completed |
 | 0027 | [M1.7.5 Pool、ObjectPool 与受控 trim](0027-memory-pools.md) | foundation-memory, foundation-profiling | completed |
 | 0028 | [magic_enum 与枚举字符串迁移](0028-magic-enum.md) | foundation-core, assets-types, commands, foundation-profiling | completed |
+| 0029 | [线程上下文、拥有型路由与关闭集成](0029-memory-context-routing.md) | foundation-memory, foundation-profiling | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。
