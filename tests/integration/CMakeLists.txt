@@ -5,6 +5,12 @@ if(TARGET dk_assetc)
         "-DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-artifacts/$<CONFIG>"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/AssetcProcessTests.cmake")
     set_tests_properties(dk.assetc.process PROPERTIES TIMEOUT 120)
+    add_test(NAME dk.assetc.cache_process COMMAND "${CMAKE_COMMAND}"
+        "-DASSETC=$<TARGET_FILE:dk_assetc>"
+        "-DFIXTURES=${PROJECT_SOURCE_DIR}/tests/fixtures/assets"
+        "-DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-artifacts/$<CONFIG>"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/AssetCacheProcessTests.cmake")
+    set_tests_properties(dk.assetc.cache_process PROPERTIES TIMEOUT 120)
 endif()
 
 add_executable(dk_profiling_probe ProfilingProbe.cpp)

@@ -357,7 +357,7 @@ CPU 网格/材质/纹理导入由 `DK_BUILD_ASSET_IMPORTERS` 启用，要求 Mat
 
 同时启用 `DK_BUILD_ASSET_RUNTIME` 后提供 `dk_assetc` target（程序 `dk-assetc`），
 以及 [compile_asset](engine/assets/runtime/include/dk/assets/AssetCompiler.hpp) / [load_cpu_artifact](engine/assets/runtime/include/dk/assets/CpuArtifact.hpp)。
-导入单 mesh glTF/GLB、基础材质及 PNG/JPEG base color，产物为拥有型 CPU 数据，尚无缓存或异步 Ready。
+导入单 mesh glTF/GLB、基础材质及 PNG/JPEG base color，产物为拥有型 CPU 数据；另有下述同步缓存入口，尚无异步 Ready。
 
 ```text
 dk-assetc import --project-root ROOT --source REL --output REL [--unit-scale NUMBER]
@@ -391,6 +391,31 @@ cmake --preset windows-dev -B out/build/windows-assetc-only -DDK_BUILD_ASSET_RUN
 ```
 
 验收见 [0033](spec/development/0033-cpu-mesh-import.md) / [0034](spec/development/0034-textures-assetc.md)。
+
+## 内容缓存（M4.3）
+
+[compile_cached_asset](engine/assets/runtime/include/dk/assets/AssetCache.hpp) 与离线工具共用缓存管线：
+
+```text
+dk-assetc cache --project-root ROOT --source REL [--unit-scale NUMBER]
+```
+
+source/设置/输出 ID/导入版本和全部依赖字节决定 key，重复请求核验内容并读回已有 CPU 数据，不重新解码。
+结果为 `DeckerAssetCacheResult` v1 JSON，包含 key、directory、cache_hit、miss_reason、root_id、outputs、inputs、diagnostics。
+目录固定在 `.decker/cache/assets/v1/`，`current/<root-id>.json` 选择不可变的 `entries/<key>/<build-id>/`。
+未知或损坏条目不会被覆盖；显式 cache 请求重建后可以替换该源的坏 current 索引。
+unit_scale 默认沿用合法 meta；重建保留 AssetId。无 meta 时成功导入后生成身份；不修改 Project/Scene。
+同工程写入需串行化。先提交合法 meta，再原子提交 current；若第二步失败，错误明确报告
+`identity committed; current unchanged`，保留合法 meta、完整孤立产物和旧索引以便重试。
+
+可在前述 `$assetDemo` 演示目录上连续运行两次以下命令，第二次返回 `cache_hit: true`：
+
+```powershell
+.\out\build\windows-dev\bin\Debug\dk-assetc.exe cache --project-root $assetDemo --source triangle.gltf
+& ./scripts/verify.ps1 -Target @('dk_asset_cache_tests','dk_assetc') -TestRegex '^dk\.(cache\.|assetc\.)' -Reason '内容缓存与离线进程'
+```
+
+设计/验收见 [资产缓存](spec/design/assets-runtime.md#m431-实施契约)、[0035](spec/development/0035-asset-cache-publication.md)。
 
 ## Memory heap（M1.7.2）
 
@@ -1048,7 +1073,7 @@ ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
 
 M1.6 与 M2.1–M2.4 已完成并分节本地提交。最终默认 Debug/Release 各 128 通过、
 1 项既有符号链接权限跳过；独立 Scene 配置各 104 通过、1 跳过，纯 CPU 示例各 16/16。
-上述计数为当时验收记录；M3 交付 A、M1.7.1–7、M4.1 和 M4.2 均已完成，当前下一项为 M4.3.1 内容键与产物发布。
+上述计数为当时验收记录；M3 交付 A、M1.7.1–7、M4.1 和 M4.2 均已完成，M4.3.1 也已完成，当前下一项为 M4.3.2 失效与重建。
 
 开发前先看 [AGENTS.md](AGENTS.md) 和 [spec 规范](spec/README.md)：
 先创建/更新模块设计，然后实现；过程中持续更新编号开发记录。

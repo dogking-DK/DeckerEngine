@@ -16,6 +16,7 @@
 | CPU glTF 网格/纹理导入与预算 | dk_import_tests | `^dk\.import\.` |
 | CPU 产物编解码、meta/发布失败保护 | dk_asset_pipeline_tests | `^dk\.pipeline\.` |
 | assetc Unicode/JSON/重导入真实进程 | dk_assetc | `^dk\.assetc\.` |
+| 资产缓存 key/命中/发布/失效清理 | dk_asset_cache_tests | `^dk\.cache\.` |
 | 命令注册、schema | dk_commands_tests | `^dk\.commands\.` |
 | 服务、事务、历史、Operations | dk_service_tests | `^dk\.services\.` |
 | JSON-RPC、JSON Lines、任务 | dk_protocol_tests | `^dk\.protocol\.` |

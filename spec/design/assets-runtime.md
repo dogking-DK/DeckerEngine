@@ -1,7 +1,7 @@
 ---
 module: assets-runtime
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T13:10:57+08:00"
+updated_at: "2026-09-28T14:08:22+08:00"
 status: accepted
 ---
 
@@ -11,7 +11,8 @@ status: accepted
 
 M4.1 已实现 meta v1、身份目录、登记提交、受控改名和恢复，见 [0031](../development/0031-asset-metadata-catalog.md)
 及 [0032](../development/0032-asset-commit-recovery.md)。M4.2 的同步 CPU 编译/产物读回已完成，
-见 [0034](../development/0034-textures-assetc.md)。M4.3/M4.4 仍为后续设计，未实施。原有
+见 [0034](../development/0034-textures-assetc.md)。M4.3.1 内容键、同步命中与 current 发布已实现，见
+[0035](../development/0035-asset-cache-publication.md)；M4.3.2 清理和 M4.4 仍待完成。原有
 [AssetReference](../../engine/assets/types/include/dk/assets/AssetReference.hpp) 和
 [Project](../../engine/scene/include/dk/scene/Project.hpp) 的注册、类型与文件存在性校验保持兼容。
 分步计划见 [0020](../development/0020-m4-development-plan.md)。
@@ -190,11 +191,53 @@ xxHash 的 XXH3-128 在 M4.1.2 首次用于恢复记录的文件摘要，M4.3 �
 有未恢复操作时拒绝写入。同工程外部写入需串行化，进程中断可留下孤立目录，不宣称跨文件原子。
 CPU manifest v1、little-endian 数据布局、摘要/读取预算和失败清理约定见
 [导入器实施契约](assets-importers.md#m422-实施契约)。未知版本/算法只读拒绝并保留原文件。
-M4.3 必须复用此格式/验证器，不能直接序列化对象内存；尚没有内容键、缓存命中或 current 索引。
+M4.3.1 已复用此格式/验证器实现内容键、缓存命中和 current 索引，未直接序列化对象内存。
 
 ## M4.3：缓存与依赖
 
-缓存按输入内容寻址，计划 key 为以下规范化输入的 XXH3-128：摘要算法标识、缓存格式版本、导入器实现版本、
+### M4.3.1 实施契约
+
+增加 `compile_cached_asset(paths, {source, optional unit_scale})`，返回 key、产物相对目录、
+cache_hit、miss_reason、JSON 摘要和已验证的拥有型 CpuArtifact；使用既有导入硬预算。
+`dk-assetc cache --project-root ROOT --source REL [--unit-scale NUMBER]` 复用此入口。
+原 `import --output` 保留独立导出语义。当前没有 Jobs/Ready，调用者绑定 Assets 域与 scratch 并串行化同工程写入。
+
+key 编码 v1 为 XXH3-128 的带类型字段流：每字段 `tag:u8, length:u64le, payload`；
+整数 u64le、unit_scale 为 IEEE754 binary64 位模式 little-endian，字符串为严格 UTF-8，ID 为规范小写 UUID 文本。
+固定顺序为 domain、algorithm=`xxh3-128-v1`、cache/artifact/importer implementation/contract 版本（均 1）、
+importer=`gltf-static`、source 工程相对路径、unit_scale、按 selector 排序的 output（selector/kind/ID），
+按路径排序的 input（规范路径/字节数/规范摘要）；数组先编码长度。源也在 input 中。
+键生成验证完整 meta、输入唯一且含 source，并对排序后字段编码，禁止依赖 JSON 对象遍历次序或 mtime。
+实现版本只由程序常量指定，不接受 CLI 自称版本。新增版本会失效，不更换 AssetId。
+
+磁盘范围固定 `.decker/cache/assets/v1/`，包括 `entries/<key>/<build-uuid>/`、`tmp/<build-uuid>/` 和
+`current/<root-id>.json`。key 是内容版本；build UUID 只用于物理发布，不参与 key。
+每次构建在独占 tmp 目录生成 M4.2 的 manifest.json/data.bin，再加 entry.json，完整读回后以不覆盖改名发布。
+采用 key 下的不可变 build 目录，是为同 key 损坏或未知格式时仍能重建而不覆盖旧内容；正常命中不生成新 build。
+entry format=`DeckerAssetCacheEntry`/version=1，保存 algorithm、key、build、descriptor、manifest_digest。
+current format=`DeckerAssetCacheCurrent`/version=1，保存 algorithm、root_id、source、key、build；
+路径只从校验过的 key/UUID 构造，不信任持久文件中的任意目录字符串。
+entry/manifest 各 16 MiB，current 16 KiB；JSON 禁重复键、深度超 64，沿用产物 v1 和源/输入硬预算。
+
+命中要求 current/entry/产物全部兼容且摘要、ID 映射、设置和源路径匹配，全部源/依赖当前内容摘要匹配。
+命中读回 CPU 数据但不调用 glTF 解码器、不写 meta/current；mtime/大小一致仍读内容。
+失效只触发一次显式同步重建：源/依赖读取与 key 来自 importer 同一快照，发布前再次检查输入和旧 meta/current，
+变化返回 conflict，不无限重试。未知版本或损坏条目保留，并在 miss_reason 中说明。
+
+提交有两个明确步骤：先发布完整产物、原子提交合法 meta 身份/设置，再原子替换 current（缓存提交点）。
+current 写入前失败始终保留旧索引；meta 提交前失败清理本次拥有且未改动的文件。
+meta 已提交而 current 失败时保留合法 meta 与完整孤立产物，错误附 `identity committed; current unchanged`，
+重试继续复用 ID。不会报告缓存成功或 Ready；这沿用 M4.2 身份提交，明确不承诺多文件事务/断电原子性。
+所有成功返回值在提交前构造；已有 M4.1 未恢复操作时禁止缓存写入。
+
+### M4.3.2 实施方向
+
+补齐仅图片/源/参数变化、删除/损坏/未知版本重建的验收，并实现显式未引用缓存清理。
+清理前读取所有 current；任何不可识别索引都拒绝删除。只删除完整可识别且未被任何 current 引用的 build，
+保留未知条目、外部改动、源/meta/Project 与 `.decker/asset-operations`；不做递归任意目录删除或 LRU。
+具体清理边界在 0036 开工前补充，本小节不新增依赖。
+
+缓存按输入内容寻址，key 为以下规范化输入的 XXH3-128：摘要算法标识、缓存格式版本、导入器实现版本、
 支持的契约版本、settings、源字节摘要、按稳定顺序排列的依赖 URI/字节摘要，以及输出 ID 映射。
 不使用 mtime/大小作为唯一正确性依据。散列实现确定为 xxHash，采用 `XXH3_128bits` 默认参数，
 不使用随机 seed 或自定义 secret。摘要固定 16 字节，对外文本为 32 个小写十六进制字符。
@@ -208,7 +251,7 @@ M4.3 必须复用此格式/验证器，不能直接序列化对象内存；尚�
 禁止无分隔地拼接字符串，不将时间戳、线程完成顺序或进程地址混入 key。
 依据：[xxHash 0.8.4 的 XXH3-128、流式与规范编码接口](https://github.com/Cyan4973/xxHash/blob/v0.8.4/xxhash.h)。
 
-计划缓存 manifest 保存 `hash_algorithm: "xxh3-128"`；M4.1.2 恢复记录使用 `algorithm: "xxh3-128-v1"`，
+缓存 entry/current 使用 `algorithm: "xxh3-128-v1"`，CPU manifest 与 M4.1.2 恢复记录也使用该版本化算法标识，
 均有各自格式版本，禁止把其他算法的摘要
 当作当前摘要解释。缓存算法/版本不兼容时视为未命中并重建，保留未知条目；恢复记录算法未知时返回
 not_supported 并保留记录，不猜测文件状态或自动删除。首版不维护双摘要，也不自动切换算法。
