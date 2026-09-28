@@ -12,7 +12,7 @@
   "features": {
     "asset-importers": {
       "description": "CPU glTF import pipeline",
-      "dependencies": ["fastgltf", "nlohmann-json"]
+      "dependencies": ["fastgltf", "stb", "nlohmann-json"]
     },
     "assets": {
       "description": "Asset metadata, catalog persistence and content digests",

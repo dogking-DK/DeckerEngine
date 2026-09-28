@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-28T12:39:21+08:00"
+updated_at: "2026-09-28T13:10:57+08:00"
 status: accepted
 ---
 
@@ -59,7 +59,7 @@ M1.7 的 Tracy 与 mimalloc 未包含在 0021 当时的 22 包解析验证中。
 | magic_enum / `magic-enum` | 0.9.8 | 基础依赖，始终选择 | 枚举名称、字符串解析和枚举集合；dk::core、dk::asset_types、dk::commands、启用时的 dk::profiling PRIVATE，公开头不暴露三方类型 |
 | fmt / `fmt` | 12.2.0#1 | foundation | 日志格式化；dk::logging 的 PUBLIC 依赖，供日志模板接口使用 |
 | spdlog / `spdlog` | 1.17.0#1 | foundation | 日志级别、输出及文件 sink；dk::logging PRIVATE 依赖，使用默认 fmt/tz-offset features |
-| nlohmann-json / `nlohmann-json` | 3.12.0#2 | foundation、scene、commands | 场景/工程 JSON、命令 schema 和 JSON-RPC；Scene 私有使用，Commands 公开 Json 值类型 |
+| nlohmann-json / `nlohmann-json` | 3.12.0#2 | foundation、scene、commands、asset-runtime、asset-importers | 场景/工程/资产 JSON、命令 schema 和 JSON-RPC；Scene/Assets 私有使用，Commands 公开 Json 值类型 |
 | Eigen / `eigen3` | 5.0.1 | math | 向量、矩阵、四元数和 Transform；dk::math PUBLIC 传递 Eigen3::Eigen |
 | flecs / `flecs` | 4.1.6 | scene | SceneDocument 内部 ECS；由 Pimpl 持有，公共接口不暴露 flecs 句柄 |
 | Catch2 / `catch2` | 3.16.0 | tests | 单元测试与 CTest 测试发现；测试 target 私有链接，运行时模块不依赖它 |
@@ -95,13 +95,15 @@ M1.7.7 复用相同依赖完成重复工作负载与三配置采集基线；未�
 | 库 / vcpkg port | 当前基线版本 | 计划用途 | 边界 |
 | --- | --- | --- | --- |
 | fastgltf / `fastgltf` | 0.9.0 | 静态 glTF/GLB 解析、accessor 提取 | M4.2.1 已集成，PRIVATE fastgltf::fastgltf；传递 simdjson 4.6.11，固定 baseline 不变 |
-| stb_image / `stb` | 2024-07-29#1 | PNG/JPEG 解码到 RGBA8；该 port 的 stb_image 为 2.30 | 单一实现翻译单元，使用内存输入，限制支持格式 |
+| stb_image / `stb` | 2024-07-29#1 | PNG/JPEG 解码到 RGBA8；该 port 的 stb_image 为 2.30 | M4.2.2 已集成；asset-importers feature，SYSTEM PRIVATE 头目录，单一实现翻译单元与有预算的内存输入 |
 | xxHash / `xxhash` | 0.8.4 | 恢复记录文件摘要；后续资源变化检测与缓存键 | M4.1.2 已集成 XXH3-128/内部 ContentDigest，未启用 xxhsum feature；缓存尚未实现 |
 | simdjson / `simdjson` | 4.6.11 | fastgltf 的传递解析依赖 | 不替换引擎公开的 nlohmann-json 接口，不作为新直接依赖重复声明 |
 
 接入顺序和格式限制见 [M4 导入器设计](design/assets-importers.md)、
 [资产运行时设计](design/assets-runtime.md) 及 [M4 开发计划](development/0020-m4-development-plan.md)。
-使用对应模块时才增加依赖 feature 和 CMake target；除已实现的摘要封装外，导入器相关库仍只是选型。
+使用对应模块时自动选择依赖 feature 和 CMake target；xxHash、fastgltf、stb 均已实际集成。
+2026-09-28 接入时比较官方最新 port 与固定 baseline，fastgltf 0.9.0、stb 2024-07-29#1 一致，
+未扩大依赖升级。默认与独立 CPU 配置的实际链接/测试证据见 [0033](development/0033-cpu-mesh-import.md)、[0034](development/0034-textures-assetc.md)。
 
 ## 清单预留，模块尚未实现
 

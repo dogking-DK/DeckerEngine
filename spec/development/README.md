@@ -36,5 +36,6 @@
 | 0032 | [M4.1.2 登记提交与受控改名](0032-asset-commit-recovery.md) | assets-runtime, project-format | completed |
 
 | 0033 | [M4.2.1 CPU 数据与网格导入](0033-cpu-mesh-import.md) | assets-importers, assets-runtime | completed |
+| 0034 | [M4.2.2 纹理与离线工具](0034-textures-assetc.md) | assets-importers, assets-runtime | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

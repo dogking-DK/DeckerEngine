@@ -1,7 +1,7 @@
 ---
 module: assets-runtime
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T11:32:11+08:00"
+updated_at: "2026-09-28T13:10:57+08:00"
 status: accepted
 ---
 
@@ -10,7 +10,8 @@ status: accepted
 ## 范围与当前基线
 
 M4.1 已实现 meta v1、身份目录、登记提交、受控改名和恢复，见 [0031](../development/0031-asset-metadata-catalog.md)
-及 [0032](../development/0032-asset-commit-recovery.md)。M4.3/M4.4 仍为后续设计，未实施。原有
+及 [0032](../development/0032-asset-commit-recovery.md)。M4.2 的同步 CPU 编译/产物读回已完成，
+见 [0034](../development/0034-textures-assetc.md)。M4.3/M4.4 仍为后续设计，未实施。原有
 [AssetReference](../../engine/assets/types/include/dk/assets/AssetReference.hpp) 和
 [Project](../../engine/scene/include/dk/scene/Project.hpp) 的注册、类型与文件存在性校验保持兼容。
 分步计划见 [0020](../development/0020-m4-development-plan.md)。
@@ -20,14 +21,14 @@ GPU 上传、渲染资源和 GPU Ready 留到 M7。资产准备不修改实体�
 
 ## 目录、所有者与依赖
 
-types、runtime 的 M4.1 部分及 asset_services 已实现；其余 target 在对应小节才添加：
+types、data、importers、runtime 的身份/同步编译部分及 asset_services 已实现；Jobs 在对应小节才添加：
 
 | 模块 | 计划 target | 职责与依赖 |
 | --- | --- | --- |
 | assets/types（已有） | dk::asset_types | 持久 ID/种类/引用，继续仅依赖 Core |
 | assets/data | dk::asset_data | 不可变 CPU 网格/材质/纹理值；依赖 types、math、memory，数据拥有其分配资源 |
 | assets/importers | dk::asset_importers | 源文件到 CPU 数据；依赖 data、IO，私有 fastgltf/stb_image |
-| assets/runtime | dk::asset_runtime | 已实现元数据/目录/持久化/恢复，PUBLIC types、IO、Memory，PRIVATE JSON、xxHash、profiling；缓存/加载后续增加 data/importers/jobs |
+| assets/runtime | dk::asset_runtime | 元数据/目录/持久化/恢复，PUBLIC types、IO、Memory，PRIVATE JSON、xxHash、profiling；启用 importers 时增加 PUBLIC importers 与 CPU 产物/编译接口，Jobs 待实现 |
 | framework/services、operations | dk::asset_services、dk::asset_operations | services 已提供 Project 适配及 AssetService 提交/改名；命令及 operations 尚未实现 |
 
 资产底层不依赖 Scene、Commands、Vulkan 或 Editor。AssetService 从 ProjectDescription 构造
@@ -178,6 +179,18 @@ xxHash 的 XXH3-128 在 M4.1.2 首次用于恢复记录的文件摘要，M4.3 �
 重命名首版只允许**同目录、保持扩展名的文件改名**，同时处理源、meta 和所有相关 Project 路径，
 保留全部 AssetId。大小写等价改名按平台语义拒绝，跨目录移动与 URI 重写延后。
 目标已存在、meta 丢失/损坏、重复 ID 或未恢复操作均拒绝；外部单独移动源文件须诊断，不补造身份。
+
+## M4.2：同步编译与 CPU 产物
+
+`compile_asset` 和 `load_cpu_artifact` 仅在 runtime+importers 同时启用时构建；
+`dk-assetc` 创建自身 MemorySystem、Assets 域和带 scratch 的 ThreadContext，调用相同底层入口。
+源/依赖快照和拥有型 CPU 结果来自 import_gltf，编译器复用合法旧 meta 的 ID 与默认 unit_scale，
+写入新目录后完整读回验证，重新核对输入/旧 meta，再独占改名发布、最后原子提交 meta。
+没有 Project 或 Scene 依赖，不会写清单或发布内存目录/Ready；不与 M4.1 的 Project 操作恢复混用。
+有未恢复操作时拒绝写入。同工程外部写入需串行化，进程中断可留下孤立目录，不宣称跨文件原子。
+CPU manifest v1、little-endian 数据布局、摘要/读取预算和失败清理约定见
+[导入器实施契约](assets-importers.md#m422-实施契约)。未知版本/算法只读拒绝并保留原文件。
+M4.3 必须复用此格式/验证器，不能直接序列化对象内存；尚没有内容键、缓存命中或 current 索引。
 
 ## M4.3：缓存与依赖
 

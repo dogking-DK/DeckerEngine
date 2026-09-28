@@ -346,14 +346,51 @@ cmake --preset windows-dev -B out/build/windows-assets-only -DDK_BUILD_ASSET_RUN
 设计、错误边界和证据见 [assets-runtime](spec/design/assets-runtime.md)、[0031](spec/development/0031-asset-metadata-catalog.md)
 及 [0032](spec/development/0032-asset-commit-recovery.md)。摘要采用 xxHash 0.8.4，作为资产底层私有依赖。
 
-## CPU 网格导入（M4.2.1）
+## CPU 导入与离线工具（M4.2）
 
-CPU 网格导入（M4.2.1）由 `DK_BUILD_ASSET_IMPORTERS` 启用，要求 Math/Memory/IO，
+CPU 网格/材质/纹理导入由 `DK_BUILD_ASSET_IMPORTERS` 启用，要求 Math/Memory/IO，
 提供 [GltfImporter.hpp](engine/assets/importers/include/dk/assets/GltfImporter.hpp) 和拥有型 CPU 数据。
 `import_gltf(paths, {source, old_output_identities, unit_scale})` 只产生候选，不写文件。
 调用者装配 `ThreadContext{memory_system, scratch_heap}` 并绑定 Assets 持久域；返回值可跨 scope 存活。
 支持的格式子集、预算和诊断见[导入设计](spec/design/assets-importers.md)，测试入口为
 `scripts/verify.ps1 -Target dk_import_tests -TestRegex '^dk\.import\.' -Reason 'CPU glTF 导入'`。
+
+同时启用 `DK_BUILD_ASSET_RUNTIME` 后提供 `dk_assetc` target（程序 `dk-assetc`），
+以及 [compile_asset](engine/assets/runtime/include/dk/assets/AssetCompiler.hpp) / [load_cpu_artifact](engine/assets/runtime/include/dk/assets/CpuArtifact.hpp)。
+导入单 mesh glTF/GLB、基础材质及 PNG/JPEG base color，产物为拥有型 CPU 数据，尚无缓存或异步 Ready。
+
+```text
+dk-assetc import --project-root ROOT --source REL --output REL [--unit-scale NUMBER]
+```
+
+ROOT 必须存在；source/output 是工程内规范相对路径，output 必须不存在且父目录已存在。
+拒绝覆盖或 `.decker` 保留路径。unit_scale 为正有限数，默认沿用旧 meta，没有时取 1。
+成功产生 `output/manifest.json` 和 `output/data.bin`，最后创建/更新 `source.meta`；重复导入到新目录复用输出 ID。
+不会修改 Project/Scene 清单。失败保留旧 meta/产物；同工程写入由调用者串行执行。
+进程中断可能留下孤立产物，尚不提供跨文件断电原子性。
+
+stdout 只输出 UTF-8 JSON 摘要：format/version、source/output、root_id、unit_scale、
+outputs（key/id/kind）、inputs（path/bytes/digest）及 diagnostics。错误和 `--help` 输出到 stderr。
+退出码：0 成功（含 help），1 导入/文件失败，2 参数错误，3 基础设施异常。
+
+以下例子复制自制夹具到新的演示目录，保留源码夹具：
+
+```powershell
+cmake --build out/build/windows-dev --config Debug --target dk_assetc
+$assetDemo = Join-Path 'out' ('assetc-demo-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $assetDemo | Out-Null
+Copy-Item tests/fixtures/assets/triangle.gltf,tests/fixtures/assets/triangle.bin,tests/fixtures/assets/rgba.png -Destination $assetDemo
+.\out\build\windows-dev\bin\Debug\dk-assetc.exe import --project-root $assetDemo --source triangle.gltf --output cpu --unit-scale 1
+```
+
+独立工具配置（不依赖 Scene/Framework/日志/runner），以及完整 M4.2 定向验证：
+
+```powershell
+cmake --preset windows-dev -B out/build/windows-assetc-only -DDK_BUILD_ASSET_RUNTIME=ON -DDK_BUILD_ASSET_IMPORTERS=ON -DDK_BUILD_MEMORY=ON -DDK_BUILD_MATH=ON -DDK_BUILD_IO=ON -DDK_BUILD_SCENE=OFF -DDK_BUILD_FRAMEWORK=OFF -DDK_BUILD_LOGGING=OFF -DDK_BUILD_EXAMPLES=OFF -DDK_BUILD_RUNNER=OFF -DDK_VCPKG_FEATURES= -DDK_WARNINGS_AS_ERRORS=ON
+& ./scripts/verify.ps1 -BuildDir out/build/windows-assetc-only -Target @('dk_import_tests','dk_asset_pipeline_tests','dk_assetc') -TestRegex '^dk\.(import|pipeline|assetc)\.' -Reason 'M4.2 独立离线资产管线'
+```
+
+验收见 [0033](spec/development/0033-cpu-mesh-import.md) / [0034](spec/development/0034-textures-assetc.md)。
 
 ## Memory heap（M1.7.2）
 
@@ -1011,7 +1048,7 @@ ctest --test-dir out/build/windows-scene-cpu -C Debug --output-on-failure
 
 M1.6 与 M2.1–M2.4 已完成并分节本地提交。最终默认 Debug/Release 各 128 通过、
 1 项既有符号链接权限跳过；独立 Scene 配置各 104 通过、1 跳过，纯 CPU 示例各 16/16。
-上述计数为当时验收记录；M3 交付 A、M1.7.1–7 和 M4.1 也已完成，M4.2.1 网格导入也已完成，当前下一项为 M4.2.2。
+上述计数为当时验收记录；M3 交付 A、M1.7.1–7、M4.1 和 M4.2 均已完成，当前下一项为 M4.3.1 内容键与产物发布。
 
 开发前先看 [AGENTS.md](AGENTS.md) 和 [spec 规范](spec/README.md)：
 先创建/更新模块设计，然后实现；过程中持续更新编号开发记录。

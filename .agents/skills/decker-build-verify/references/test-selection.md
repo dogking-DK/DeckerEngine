@@ -13,7 +13,9 @@
 | Scene、Project、JSON 持久化 | dk_scene_tests | `^dk\.scene\.` |
 | Asset meta/身份目录、登记/改名/补偿、Project 发布 | dk_asset_tests | `^dk\.assets\.(asset |catalog |content digest|metadata |project )` |
 | Asset 未完成操作的跨进程恢复（Windows/Services） | dk_asset_recovery_probe | `^dk\.assets\.restart_` |
-| CPU glTF 导入与预算 | dk_import_tests | `^dk\.import\.` |
+| CPU glTF 网格/纹理导入与预算 | dk_import_tests | `^dk\.import\.` |
+| CPU 产物编解码、meta/发布失败保护 | dk_asset_pipeline_tests | `^dk\.pipeline\.` |
+| assetc Unicode/JSON/重导入真实进程 | dk_assetc | `^dk\.assetc\.` |
 | 命令注册、schema | dk_commands_tests | `^dk\.commands\.` |
 | 服务、事务、历史、Operations | dk_service_tests | `^dk\.services\.` |
 | JSON-RPC、JSON Lines、任务 | dk_protocol_tests | `^dk\.protocol\.` |

@@ -25,12 +25,29 @@ struct MaterialData {
     bool double_sided = false;
     std::optional<AssetId> base_color_texture;
 };
-struct ImportResult {
+enum class TextureFilter : std::uint32_t { nearest = 9728, linear = 9729, nearest_mipmap_nearest = 9984,
+    linear_mipmap_nearest = 9985, nearest_mipmap_linear = 9986, linear_mipmap_linear = 9987 };
+enum class TextureWrap : std::uint32_t { clamp = 33071, mirrored_repeat = 33648, repeat = 10497 };
+struct TextureSampler {
+    std::optional<TextureFilter> min_filter, mag_filter;
+    TextureWrap wrap_s = TextureWrap::repeat, wrap_t = TextureWrap::repeat;
+};
+struct TextureData {
+    AssetId id;
+    std::uint32_t width = 0, height = 0;
+    Vector<std::byte> rgba8; // sRGB, top row first, unchanged UV convention.
+    TextureSampler sampler;
+    String origin;
+};
+struct CpuAsset {
     MeshData mesh;
     Vector<MaterialData> materials;
+    Vector<TextureData> textures;
     Vector<OutputIdentity> outputs;
-    Vector<InputSnapshot> inputs; // Source first; exact owned bytes, no mutable parser views.
     Vector<String> diagnostics;
     double unit_scale = 1;
+};
+struct ImportResult : CpuAsset {
+    Vector<InputSnapshot> inputs; // Source first; exact owned bytes, no mutable parser views.
 };
 } // namespace dk

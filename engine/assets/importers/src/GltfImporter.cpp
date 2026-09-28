@@ -5,6 +5,7 @@
 #include <fastgltf/core.hpp>
 #include <fastgltf/tools.hpp>
 #include "ImportInternal.hpp"
+#include "StbImageDecoder.hpp"
 #include <algorithm>
 #include <map>
 #include <set>
@@ -99,6 +100,8 @@ public:
     const GltfImportRequest& request;
     ImportResult result;
     std::size_t input_used = 0, output_used = 0, vertices_used = 0, indices_used = 0;
+    std::size_t texture_used = 0;
+    std::map<std::size_t, AssetId> textures;
     std::map<std::string, std::size_t, std::less<>> inputs;
     std::pmr::set<std::string, std::less<>> used_keys{memory::current_scratch_resource()};
     std::string location = "source";
@@ -147,6 +150,37 @@ public:
         range(a.byteOffset, element, view.byteLength, "accessor element");
         require(a.count - 1 <= (view.byteLength - a.byteOffset - element) / stride, "Accessor exceeds bufferView");
         return a;
+    }
+    AssetId texture(const Json& json, const fastgltf::Asset& asset, const std::filesystem::path& source, std::size_t index)
+    {
+        if (const auto found = textures.find(index); found != textures.end()) { return found->second; }
+        location = "texture/" + std::to_string(index);
+        const auto& definition = json.at("textures").at(index);
+        const auto image_index = definition.at("source").get<std::size_t>();
+        location += "/image/" + std::to_string(image_index);
+        const auto& image = json.at("images").at(image_index); std::span<const std::byte> bytes; std::string origin;
+        if (image.contains("uri")) {
+            require(!image.contains("bufferView"), "Image has multiple sources");
+            origin = resolve_uri(paths,source,image["uri"].get<std::string>()); bytes = read(origin,request.limits.dependency_bytes);
+        } else {
+            require(image.contains("mimeType"), "Embedded image MIME required");
+            const auto view_index = image.at("bufferView").get<std::size_t>(); require(view_index < asset.bufferViews.size(), "Image bufferView out of range");
+            const auto& view = asset.bufferViews[view_index]; require(!view.byteStride, "Image bufferView must not have stride");
+            const auto& buffer = std::get<fastgltf::sources::ByteView>(asset.buffers[view.bufferIndex].data).bytes;
+            bytes = std::span<const std::byte>{buffer.data(),buffer.size()}.subspan(view.byteOffset,view.byteLength);
+            origin = std::string{request.source} + "#image/" + std::to_string(image_index);
+        }
+        auto decoded = decode_image(bytes,origin,image.value("mimeType",std::string{}),request.limits,texture_used,output_used);
+        if (definition.contains("sampler")) {
+            const auto& sampler = json.at("samplers").at(definition["sampler"].get<std::size_t>());
+            const auto filter = [](unsigned value, bool min) { require(value == 9728 || value == 9729 || (min && value >= 9984 && value <= 9987), "Invalid sampler filter"); return static_cast<TextureFilter>(value); };
+            const auto wrap = [](unsigned value) { require(value == 10497 || value == 33071 || value == 33648, "Invalid sampler wrap"); return static_cast<TextureWrap>(value); };
+            if (sampler.contains("minFilter")) { decoded.sampler.min_filter = filter(sampler["minFilter"].get<unsigned>(),true); }
+            if (sampler.contains("magFilter")) { decoded.sampler.mag_filter = filter(sampler["magFilter"].get<unsigned>(),false); }
+            decoded.sampler.wrap_s = wrap(sampler.value("wrapS",10497U)); decoded.sampler.wrap_t = wrap(sampler.value("wrapT",10497U));
+        }
+        decoded.id = identity("texture/" + std::to_string(index),AssetKind::texture);
+        const auto id = decoded.id; result.textures.push_back(std::move(decoded)); textures.emplace(index,id); return id;
     }
     ImportResult run()
     {
@@ -236,8 +270,11 @@ public:
                 if (!materials.contains(index)) {
                     location = "material/" + std::to_string(index); const auto& m = asset.materials[index];
                     require(!m.normalTexture && !m.occlusionTexture && !m.emissiveTexture && !m.pbrData.metallicRoughnessTexture, "Unsupported material texture channel", ErrorCode::not_supported);
-                    require(!m.pbrData.baseColorTexture, "Texture import is not available in M4.2.1", ErrorCode::not_supported);
                     MaterialData material; material.id = identity(location, AssetKind::material);
+                    if (m.pbrData.baseColorTexture) {
+                        require(m.pbrData.baseColorTexture->texCoordIndex == 0, "Only UV0 supported", ErrorCode::not_supported);
+                        material.base_color_texture = texture(json,asset,source,m.pbrData.baseColorTexture->textureIndex);
+                    }
                     for (std::size_t c = 0; c < 4; ++c) { material.base_color[static_cast<Eigen::Index>(c)] = m.pbrData.baseColorFactor[c]; }
                     for (std::size_t c = 0; c < 3; ++c) { material.emissive[static_cast<Eigen::Index>(c)] = m.emissiveFactor[c]; }
                     material.metallic = m.pbrData.metallicFactor; material.roughness = m.pbrData.roughnessFactor; material.alpha_cutoff = m.alphaCutoff;
@@ -251,6 +288,7 @@ public:
                     materials.emplace(index, material.id); result.materials.push_back(std::move(material));
                 }
                 out.material = materials.at(index);
+                require(!asset.materials[index].pbrData.baseColorTexture || !out.texcoords.empty(), "baseColorTexture requires TEXCOORD_0");
             }
             result.mesh.primitives.push_back(std::move(out));
         }

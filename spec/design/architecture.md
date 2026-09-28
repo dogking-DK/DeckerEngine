@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-28T11:32:11+08:00"
+updated_at: "2026-09-28T13:10:57+08:00"
 status: accepted
 ---
 
@@ -28,7 +28,9 @@ M4 的 [资产运行时](assets-runtime.md)、[导入器](assets-importers.md)�
 [CPU 作业](foundation-jobs.md) 设计稿和 [实施小节](../development/0020-m4-development-plan.md)
 已建立；M4.1 已实现 meta v1、身份目录、登记候选和 Project 适配，见 [0031](../development/0031-asset-metadata-catalog.md)，
 以及持久登记、同目录改名、多文件补偿/恢复与 XXH3-128 摘要，见 [0032](../development/0032-asset-commit-recovery.md)。
-导入、缓存和 Jobs 尚未实现。其余模块在开始开发前另写专项设计。
+M4.2 已实现静态 glTF/GLB CPU 网格、材质、PNG/JPEG 纹理、产物 v1 和独立 dk-assetc，
+见 [0033](../development/0033-cpu-mesh-import.md)、[0034](../development/0034-textures-assetc.md)。
+缓存和 Jobs 尚未实现。其余模块在开始开发前另写专项设计。
 M4 之前新增 M1.7 [Memory System](foundation-memory.md) 与
 [Tracy 性能分析](foundation-profiling.md) 基础设施补充，不包含在原 M1–M3 验收中。
 M1.7.1 的 CPU 包装、Runtime/IO 埋点、条件构建与真实 capture 已验收；M1.7.2 的多实例 heap、

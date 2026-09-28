@@ -55,13 +55,17 @@ $summary = [ordered]@{
     error = $null
 }
 
-function Invoke-Logged([string]$Command, [string[]]$Arguments, [string]$Log) {
+function Invoke-Logged([string]$Command, [string[]]$Arguments, [string]$Log, [string]$ErrorLog = '') {
     # Native stderr may be a PowerShell error record even on a successful command.
     $ErrorActionPreference = 'Continue'
     $PSNativeCommandUseErrorActionPreference = $false
-    & $Command @Arguments *> $Log
+    if ($ErrorLog) { & $Command @Arguments 1> $Log 2> $ErrorLog }
+    else { & $Command @Arguments *> $Log }
     $nativeExit = $LASTEXITCODE
-    if ($nativeExit -ne 0) { Get-Content -LiteralPath $Log -Tail 30 | Out-Host }
+    if ($nativeExit -ne 0) {
+        Get-Content -LiteralPath $Log -Tail 30 | Out-Host
+        if ($ErrorLog) { Get-Content -LiteralPath $ErrorLog -Tail 30 | Out-Host }
+    }
     return $nativeExit
 }
 
@@ -87,7 +91,9 @@ try {
     $testArgs = @('--test-dir', $BuildDir, '-C', $Configuration)
     if (-not $Full) { $testArgs += @('-R', $TestRegex) }
     $discoveryLog = Join-Path $logDir 'discovery.json'
-    if ((Invoke-Logged $ctest ($testArgs + @('--show-only=json-v1')) $discoveryLog) -ne 0) {
+    # Test discovery can emit DLL/CTest diagnostics on stderr; keep stdout valid JSON.
+    $discoveryErrorLog = Join-Path $logDir 'discovery-stderr.log'
+    if ((Invoke-Logged $ctest ($testArgs + @('--show-only=json-v1')) $discoveryLog $discoveryErrorLog) -ne 0) {
         throw 'CTest discovery failed; tests were not run.'
     }
     $discovery = Get-Content -LiteralPath $discoveryLog -Raw | ConvertFrom-Json
