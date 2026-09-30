@@ -1,7 +1,7 @@
 ---
 module: graphics-shaders
 created_at: "2026-09-28T19:00:00+08:00"
-updated_at: "2026-09-30T09:24:00+08:00"
+updated_at: "2026-09-30T10:18:48+08:00"
 status: accepted
 ---
 
@@ -14,6 +14,10 @@ vertex、fragment 或 compute 入口，产出 SPIR-V 1.5、布局反射及诊断
 IO、Profiling、Slang 和 JSON，不依赖 Device、Vulkan loader、窗口或 GPU。
 管线创建、shader module、执行/读回由 [M5.4 离屏模块](graphics-offscreen.md) 消费本模块产物；
 热重载、缓存、特化、ray tracing、自动管线布局合并不在此阶段。
+
+[M5.5 使用层设计稿](graphics-vulkan.md) 规划将 CompiledShader/最小反射数据提取为独立 shader_types，
+使 Device 的 GPU 工厂可消费产物而不链接 Slang；ShaderCompiler.hpp 保留类型重导出。
+跨阶段布局合并归 Vulkan 使用层，离线编译/产物 schema 保持本页契约；上述提取与合并尚未实现。
 
 ## 接口与参数约定
 

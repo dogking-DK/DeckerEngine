@@ -1,7 +1,7 @@
 ---
 module: graphics-offscreen
 created_at: "2026-09-30T09:00:00+08:00"
-updated_at: "2026-09-30T09:28:00+08:00"
+updated_at: "2026-09-30T10:18:48+08:00"
 status: accepted
 ---
 
@@ -14,6 +14,10 @@ M5.4 将 [Device/资源提交](graphics-resources.md) 与 [Slang 产物](graphic
 要求 Device/Shaders 已启用；windows-graphics 开启，默认 CPU 与离线 Shader 配置不引入此模块。
 复用现有固定依赖；不新增包、Runtime 命令、窗口、swapchain、Graph 或第二套通用渲染架构。
 这是同步、单队列的底座验证入口；正式业务调度留给 M6/M7。
+
+[M5.5 使用层设计稿](graphics-vulkan.md) 规划把本模块手写的 view/pipeline/descriptor、命令录制和
+GPU 对象保活下沉至 device 使用层；本模块保留操作组合、结果验证和现有同步 API。
+迁移安排在 M5.5.5，尚未实施；下文的 Work 所有权、每次建管线和 draw/dispatch 限制仍反映当前行为。
 
 ## 接口与数据
 

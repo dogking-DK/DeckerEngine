@@ -1,7 +1,7 @@
 ---
 module: graphics-device
 created_at: "2026-09-28T16:38:00+08:00"
-updated_at: "2026-09-30T09:37:00+08:00"
+updated_at: "2026-09-30T10:18:48+08:00"
 status: accepted
 ---
 
@@ -21,6 +21,11 @@ DK_BUILD_GRAPHICS_DEVICE 默认 OFF，windows-graphics 预设显式开启；vulk
 准备 vulkan、volk、vk-bootstrap、vulkan-memory-allocator。原 graphics feature 保留为全部规划桌面依赖的安装入口。
 
 ## 能力和接口
+
+本页描述当前设备契约。[M5.5 使用层设计稿](graphics-vulkan.md) 规划在同 target 增加对象工厂、
+管线/绑定和 encoder，并提取独立 shader 产物类型；尚未改变以下接口和依赖。
+实施后普通消费者经工厂使用 Vulkan，公开 RAII 借用接口保留为底层互操作入口；
+Device 继续只管理初始化/能力，不承载全部对象创建方法。
 
 公开 [Device.hpp](../../engine/graphics/device/include/dk/graphics/Device.hpp) 使用 Vulkan-Hpp 类型，
 不引入跨 API RHI。Device::create 接受调用者 Memory resource 和 DeviceOptions，返回拥有型 Device。

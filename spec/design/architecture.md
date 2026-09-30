@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-30T09:24:00+08:00"
+updated_at: "2026-09-30T10:18:48+08:00"
 status: accepted
 ---
 
@@ -22,6 +22,8 @@ graphics/shaders 提供独立 CPU Slang 编译、SPIR-V 和最小反射，同样
 graphics/offscreen 组合上述模块，提供同步离屏 draw/dispatch/readback 验证入口，同样独立于 CPU Runtime。
 Graph 和呈现尚未实现，具体边界见[设备设计](graphics-device.md)、[资源设计](graphics-resources.md)、
 [Shader 设计](graphics-shaders.md) 和[离屏设计](graphics-offscreen.md)。
+新增 [Vulkan 使用层设计稿](graphics-vulkan.md) 规划在窗口之前统一对象/管线/绑定/录制/传输封装；
+提取无 Slang/Vulkan 依赖的 shader 产物类型，Graph 后续复用使用层执行接口。上述扩展尚未实现。
 模块接口与实现入口见[设计索引](README.md)，阶段状态和下一项统一见[Roadmap](../roadmap.md)，
 历史验收结果见[开发记录](../development/README.md)。
 Runtime 装配 Assets/Jobs heap 与线程上下文；worker 捕获拥有型路由并在安全点退休。
@@ -62,6 +64,8 @@ Runtime 装配 Assets/Jobs heap 与线程上下文；worker 捕获拥有型路�
    三者分别管理。Scene 保存资产引用，不保存设备指针。
 3. `graphics/graph` 统一调度绘制、计算、上传、读回和 GPU 物理。
    Pass 声明局部算法，pipeline 负责组合，Graph 负责依赖、同步和执行。
+   M5.5 规划的 Vulkan 使用层负责对象、局部状态校验、录制与提交寿命；Graph 生成同步计划，
+   经同一使用层执行，不复制 Vulkan 底层封装，也不把 Pass 排序下放给使用层。
 4. 临时、持久、历史、外部 GPU 资源分开；历史资源按视图区分。
    设备资源释放必须等待相关 GPU 工作完成。首版以单队列正确性为先。
 5. 物理求解和可视化分离；粒子/网格由求解器连续数据存储管理。
