@@ -1,13 +1,13 @@
 ---
 created_at: "2026-09-28T19:03:00+08:00"
-updated_at: "2026-09-28T19:12:00+08:00"
+updated_at: "2026-09-30T09:24:00+08:00"
 ---
 
 # Slang 离线编译
 
 [返回项目入口](../../README.md)。M5.3 提供 `dk::graphics_shaders` 和 `dk-shaderc`，
 编译 vertex、fragment、compute 到 SPIR-V 1.5，并返回最小布局反射。
-工具无需 Vulkan loader、驱动、GPU 或窗口；执行产物的管线与读回属于 M5.4。
+工具无需 Vulkan loader、驱动、GPU 或窗口；执行产物的管线与读回见 [M5.4 离屏指南](offscreen.md)。
 
 ## 构建和验证
 
@@ -17,7 +17,7 @@ cmake --preset windows-shaders -DDK_WARNINGS_AS_ERRORS=ON
 ```
 
 独立预设启用 DK_BUILD_GRAPHICS_SHADERS、Memory 和 IO，自动选择 `shaders` feature，Device 保持关闭。
-`windows-graphics` 同时启用 Device 和 Shaders，默认 `windows-dev` 不启用这两个模块。
+`windows-graphics` 同时启用 Device、Shaders 和 Offscreen，默认 `windows-dev` 不启用这些模块。
 固定 vcpkg shader-slang 2026.18，动态 CRT。构建会复制 `slang-compiler.dll`、`slang-glslang.dll`（SPIR-V 优化器）、
 `slang-standard-module-*`、`slang.slang` 和 `gfx.slang` 到程序旁；移动程序时也须保留这些文件及其 DLL 依赖。
 自定义可执行目标链接 `dk::graphics_shaders` 后调用 `dk_deploy_slang(target)` 部署 Slang 数据。
@@ -34,9 +34,11 @@ $shaderc = '.\out\build\windows-shaders\bin\Debug\dk-shaderc.exe'
 & $shaderc compile --source shaders/common/transform.slang --entry computeMain --stage compute --output out/shaders/transform.comp.spv > out/shaders/transform.comp.json
 ```
 
-[triangle.slang](../../shaders/common/triangle.slang) 含使用 SV_VertexID 的彩色三角形 vertex/fragment；
+[triangle.slang](../../shaders/common/triangle.slang) 含使用 SV_VulkanVertexID 的彩色三角形 vertex/fragment；
 [transform.slang](../../shaders/common/transform.slang) 使用 64×1×1 线程组、两个 storage buffer 和 16 字节 push constant。
-本阶段验证编译、SPIR-V 和反射，不把这些示例称为已执行的绘制/compute。
+SV_VulkanVertexID 直接使用 Vulkan VertexIndex，避免 SV_VertexID 引入 BaseVertex/shaderDrawParameters 额外特性；
+映射见 [Slang SPIR-V 文档](https://docs.shader-slang.org/en/latest/external/slang/docs/user-guide/a2-01-spirv-target-specific.html)。
+M5.3 负责编译、SPIR-V 和反射；示例的实际 GPU 执行与读回已由 [M5.4](../development/0047-offscreen-execution.md) 验证。
 JSON 重定向文件与 SPIR-V 没有共同原子提交，自动化脚本必须检查 `$LASTEXITCODE`。
 
 ## C++ 调用

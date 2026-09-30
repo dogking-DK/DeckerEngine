@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-28T19:03:00+08:00"
+updated_at: "2026-09-30T09:24:00+08:00"
 status: accepted
 ---
 
@@ -19,11 +19,13 @@ ECS 使用 flecs，内嵌脚本计划用 Lua/sol2，外部自动化计划用 Pyt
 当前 CPU 链路由 Foundation/Memory/Jobs、Scene、Commands/Services/Runtime 和 Assets 组成。
 graphics/device 提供独立可选的无窗口 Vulkan 设备、VMA 资源、提交/读回与延迟释放，不进入 CPU Runtime 的链接依赖；
 graphics/shaders 提供独立 CPU Slang 编译、SPIR-V 和最小反射，同样不进入 CPU Runtime 的链接依赖。
-Graph 和呈现尚未实现，具体边界见[设备设计](graphics-device.md)、[资源设计](graphics-resources.md) 与[Shader 设计](graphics-shaders.md)。
+graphics/offscreen 组合上述模块，提供同步离屏 draw/dispatch/readback 验证入口，同样独立于 CPU Runtime。
+Graph 和呈现尚未实现，具体边界见[设备设计](graphics-device.md)、[资源设计](graphics-resources.md)、
+[Shader 设计](graphics-shaders.md) 和[离屏设计](graphics-offscreen.md)。
 模块接口与实现入口见[设计索引](README.md)，阶段状态和下一项统一见[Roadmap](../roadmap.md)，
 历史验收结果见[开发记录](../development/README.md)。
 Runtime 装配 Assets/Jobs heap 与线程上下文；worker 捕获拥有型路由并在安全点退休。
-窗口、GPU 渲染、编辑器和脚本按后续阶段接入，预留目录不代表已有能力。
+窗口、场景渲染、编辑器和脚本按后续阶段接入，预留目录不代表已有能力。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，
@@ -38,7 +40,7 @@ Runtime 装配 Assets/Jobs heap 与线程上下文；worker 捕获拥有型路�
 | engine/geometry | AABB、射线、CPU BVH | 仅基础数学/数据 |
 | engine/assets | 资产类型、运行时、导入器 | 与设备资源和图资源分离 |
 | engine/scene | 组件、层级、序列化、迁移 | 基础层与资产引用，不持有 Vulkan 资源 |
-| engine/graphics | device、presentation、shaders、graph | 图核心不依赖具体 Pass 或场景 |
+| engine/graphics | device、shaders、offscreen；presentation、graph 预留 | 离屏底座不依赖场景，正式业务后续统一进入 Graph |
 | engine/render | 数据、GPU 缓存、Pass、pipeline | 使用 Graph；不依赖 Editor |
 | engine/physics | 接口、CPU/GPU 求解器 | CPU 不依赖 Vulkan；GPU 可用 Device/Graph |
 | engine/framework | commands、services、operations、runtime | 应用服务与模块装配；通用命令层保持独立 |

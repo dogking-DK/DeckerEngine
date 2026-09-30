@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-09-28T19:06:00+08:00"
+updated_at: "2026-09-30T09:26:00+08:00"
 status: accepted
 ---
 
@@ -32,8 +32,9 @@ M1.7.1–7 已完成，见 [0023](development/0023-tracy-cpu-profiling.md)、[00
 [0025](development/0025-memory-ownership-routing.md)、[0026](development/0026-scratch-arena.md)、
 [0027](development/0027-memory-pools.md)、[0029](development/0029-memory-context-routing.md)、[0030](development/0030-memory-baseline.md)。
 原 M1–M3 验收不包含这项新增能力。该补充及 M4.1–4 均已完成。
-M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译已完成，见 [0042](development/0042-vulkan-device.md)、
-[0045](development/0045-graphics-resources-submission.md)、[0046](development/0046-slang-shader-compiler.md)，下一项为 M5.4。
+M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘制与计算已完成，见 [0042](development/0042-vulkan-device.md)、
+[0045](development/0045-graphics-resources-submission.md)、[0046](development/0046-slang-shader-compiler.md)、
+[0047](development/0047-offscreen-execution.md)，下一项为 M5.5。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作；提早建立多线程内存契约与性能测量，复杂并行优化仍由测量驱动。
@@ -53,7 +54,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译已完成，见 [
 | M3 命令与 CPU Runtime | CLI/stdio 创建、修改、查询、保存场景 | M2 | 已完成（M3.1–M3.5，交付 A） |
 | M1.7 Foundation 补充 | Tracy、mimalloc heap、PMR/智能指针、arena/pool、多线程生命周期与性能基线 | 原 M1、M3（现有链路埋点） | 已完成：M1.7.1–7 均验收 |
 | M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3、M1.7 | 已完成：M4.1–4，证据 0031–0040 |
-| M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、最小呈现 | M1、M1.7 | 进行中：M5.1–3 已完成，M5.4–5 待开始 |
+| M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、最小呈现 | M1、M1.7 | 进行中：M5.1–4 已完成，M5.5 待开始 |
 | M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 待开始 |
 | M7 场景渲染 | 资产上传、场景提取、Pass、pipeline、可等待截图 | M3、M4、M6 | 待开始 |
 | M8 编辑器与进程控制 | 可编辑保存的视口；dk-ctl 操作运行中的程序 | M7 | 待开始 |
@@ -283,16 +284,16 @@ CPU Ready 与未来 GPU Ready 分开。
 | M5.1 | Vulkan 设备与诊断 | M1、M1.7 | 能力/队列选择、验证消息、缺失设备和失败清理通过；RTX 4070 重复创建/销毁零验证错误，见 [0042](development/0042-vulkan-device.md) | 已完成 |
 | M5.2 | 资源与提交生命周期 | M5.1 | VMA Buffer/Image、5 种格式上传/读回、timeline/槽复用、延迟释放和失败保护通过；Tracy GPU 寿命边界已定义，见 [0045](development/0045-graphics-resources-submission.md) | 已完成 |
 | M5.3 | Slang 编译工具 | M5.2 | vertex/fragment/compute SPIR-V、反射、诊断和 dk-shaderc 离线发布通过；独立无 Vulkan 配置，见 [0046](development/0046-slang-shader-compiler.md) | 已完成 |
-| M5.4 | 离屏绘制与计算 | M5.3 | 读回图像/计算结果符合预期，验证层无相关错误 | 待开始 |
+| M5.4 | 离屏绘制与计算 | M5.3 | 三角形逐像素/compute 数据读回、RAII pending 寿命和失败恢复通过；同步验证零警告/错误，见 [0047](development/0047-offscreen-execution.md) | 已完成 |
 | M5.5 | 窗口与呈现 | M5.4 | SDL3 swapchain、resize/最小化/重建；离屏路径独立可用 | 待开始 |
 
 **当前设计：** [graphics-device](design/graphics-device.md) 覆盖 M5.1，[graphics-resources](design/graphics-resources.md) 覆盖 M5.2，
-[graphics-shaders](design/graphics-shaders.md) 覆盖 M5.3。
+[graphics-shaders](design/graphics-shaders.md) 覆盖 M5.3，[graphics-offscreen](design/graphics-offscreen.md) 覆盖 M5.4。
 volk、vk-bootstrap 和 VMA allocator 接入见 [0043](development/0043-vulkan-libraries.md)；
 Vulkan-Hpp RAII 所有权与消费接口见 [0044](development/0044-vulkan-hpp-raii.md)。
 M5.2 的拥有型资源、提交、完成跟踪和延迟释放已通过专门验收；Tracy GPU query/context 寿命约定已明确，
-实际 GPU timestamp zone/capture 尚未启用。M5.3 离线编译和布局反射已验收；
-后续实施前补充离屏绘制设计，并建立 `platform.md`、`graphics-presentation.md`。
+实际 GPU timestamp zone/capture 尚未启用。M5.3 离线编译和布局反射、M5.4 真实绘制/计算读回已验收；
+后续窗口实施前建立 `platform.md`、`graphics-presentation.md`。
 
 **验收：** 编译一个图形 shader 和一个 compute shader；
 离屏生成小图像并读回、计算已知数据并校验；窗口路径能呈现和调整尺寸。
@@ -472,7 +473,7 @@ GPU 未完成前不释放状态，也不默认经 CPU 读回再上传。
 
 ## 当前执行边界与下一步
 
-M0–M4、M1.7 Memory/Tracy 补充以及 M5.1–3 均已完成。当前可运行的 CPU 链路包括
+M0–M4、M1.7 Memory/Tracy 补充以及 M5.1–4 均已完成。当前可运行的 CPU 链路包括
 Foundation、Scene 持久化、命令/事务、batch/stdio、资产导入/缓存与异步 CPU Ready。
 各小阶段的验收条件与证据入口见上表；历史测试计数保留在[开发记录](development/README.md)，不作为日常固定回归套件。
 M4 的进程重启、取消和退出验收见 [0040](development/0040-cpu-assets-delivery.md)，
@@ -481,9 +482,10 @@ Memory 的测量条件与限制见[基线报告](benchmarks/2026-09-28-memory.md
 M5.1 的无窗口设备、验证诊断及 CPU-only 隔离验收见 [0042](development/0042-vulkan-device.md)。
 M5.2 的 VMA Buffer/Image、单队列提交/读回与延迟释放验收见 [0045](development/0045-graphics-resources-submission.md)。
 M5.3 的 Slang 编译、SPIR-V/反射、诊断和离线工具验收见 [0046](development/0046-slang-shader-compiler.md)。
-下一项为 **M5.4 离屏绘制与计算**。开始前先建立对应模块设计，
+M5.4 的离屏 draw/dispatch/readback、同步验证与对象寿命验收见 [0047](development/0047-offscreen-execution.md)。
+下一项为 **M5.5 窗口与呈现**。开始前先建立对应模块设计，
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
-M5.1–3 验收不代表 GPU 绘制/compute 执行、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
+M5.1–4 验收不代表窗口呈现、场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 
 工程基础维护记录包括 [0018](development/0018-vs2026-generation-script.md)、
 [0019](development/0019-development-skills.md) 和 [0041](development/0041-ai-documentation-workflow.md)，不改变里程碑顺序。

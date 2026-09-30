@@ -31,6 +31,22 @@ if(TARGET dk_assetc)
     set_tests_properties(dk.assetc.cache_process PROPERTIES TIMEOUT 120)
 endif()
 
+if(DK_BUILD_GRAPHICS_OFFSCREEN)
+    add_executable(dk_offscreen_probe OffscreenProbe.cpp)
+    set_target_properties(dk_offscreen_probe PROPERTIES OUTPUT_NAME "dk-offscreen-probe")
+    target_compile_definitions(dk_offscreen_probe PRIVATE DK_COMMON_SHADER_DIR="${PROJECT_SOURCE_DIR}/shaders/common")
+    target_include_directories(dk_offscreen_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/offscreen/src"
+        "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
+    target_link_libraries(dk_offscreen_probe PRIVATE dk::graphics_offscreen)
+    dk_target_defaults(dk_offscreen_probe)
+    dk_deploy_slang(dk_offscreen_probe)
+    add_test(NAME dk.offscreen.gpu_execute COMMAND dk_offscreen_probe)
+    add_test(NAME dk.offscreen.gpu_validation COMMAND dk_offscreen_probe --validation)
+    set_tests_properties(dk.offscreen.gpu_execute dk.offscreen.gpu_validation PROPERTIES
+        TIMEOUT 120 SKIP_RETURN_CODE 77 LABELS "gpu" WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(dk.offscreen.gpu_validation PROPERTIES ENVIRONMENT
+        "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+endif()
 if(DK_BUILD_GRAPHICS_DEVICE)
     add_executable(dk_graphics_resource_probe GraphicsResourceProbe.cpp)
     set_target_properties(dk_graphics_resource_probe PROPERTIES OUTPUT_NAME "dk-graphics-resource-probe")

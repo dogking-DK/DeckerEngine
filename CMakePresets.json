@@ -80,7 +80,8 @@
       "displayName": "Windows headless Vulkan development",
       "cacheVariables": {
         "DK_BUILD_GRAPHICS_DEVICE": "ON",
-        "DK_BUILD_GRAPHICS_SHADERS": "ON"
+        "DK_BUILD_GRAPHICS_SHADERS": "ON",
+        "DK_BUILD_GRAPHICS_OFFSCREEN": "ON"
       }
     },
     {

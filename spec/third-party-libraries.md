@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-28T19:12:00+08:00"
+updated_at: "2026-09-30T09:24:00+08:00"
 status: accepted
 ---
 
@@ -143,6 +143,10 @@ VMA allocation 随完成票据回收；Memory 控制块使用调用者资源。�
 Slang COM 对象使用 ComPtr RAII，三方内部及短期适配分配使用默认分配器，返回产物使用 Memory heap。
 反射 JSON 私有复用 nlohmann-json 3.12.0#2，未改版本。实际离线编译/链接/部署证据见
 [0046](development/0046-slang-shader-compiler.md)。
+
+M5.4 复用以上固定版本，无新增/升级包或 baseline 变化。dk::graphics_offscreen PUBLIC 组合 Device/Shaders，
+以 vk::raii 管理 ShaderModule、Pipeline/Layout、DescriptorSetLayout/Pool/Set 和 ImageView；
+VMA 继续独占 Buffer/Image 内存所有权。离屏绘制/compute 和同步验证证据见 [0047](development/0047-offscreen-execution.md)。
 
 ## 清单预留，模块尚未实现
 

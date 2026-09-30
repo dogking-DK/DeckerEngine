@@ -48,5 +48,6 @@
 | 0044 | [Vulkan-Hpp RAII 所有权](0044-vulkan-hpp-raii.md) | graphics-device | completed |
 | 0045 | [M5.2 资源与提交生命周期](0045-graphics-resources-submission.md) | graphics-resources, graphics-device | completed |
 | 0046 | [M5.3 Slang 编译工具](0046-slang-shader-compiler.md) | graphics-shaders | completed |
+| 0047 | [M5.4 离屏绘制与计算](0047-offscreen-execution.md) | graphics-offscreen, graphics-resources, graphics-shaders | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

@@ -1,7 +1,7 @@
 ---
 module: graphics-shaders
 created_at: "2026-09-28T19:00:00+08:00"
-updated_at: "2026-09-28T19:12:00+08:00"
+updated_at: "2026-09-30T09:24:00+08:00"
 status: accepted
 ---
 
@@ -12,7 +12,8 @@ status: accepted
 M5.3 提供 `dk::graphics_shaders` 和 `dk-shaderc`：单次编译一个 `.slang` 文件中的一个具名
 vertex、fragment 或 compute 入口，产出 SPIR-V 1.5、布局反射及诊断。模块只依赖 Core、Memory、
 IO、Profiling、Slang 和 JSON，不依赖 Device、Vulkan loader、窗口或 GPU。
-管线创建、shader module、执行/读回属 M5.4；热重载、缓存、特化、ray tracing、自动管线布局合并不在此阶段。
+管线创建、shader module、执行/读回由 [M5.4 离屏模块](graphics-offscreen.md) 消费本模块产物；
+热重载、缓存、特化、ray tracing、自动管线布局合并不在此阶段。
 
 ## 接口与参数约定
 
@@ -45,7 +46,7 @@ Windows 文件发布复用 IO 同目录临时文件替换契约；其他平台�
 ## 构建与验证计划
 
 `DK_BUILD_GRAPHICS_SHADERS` 独立开关及 `shaders` vcpkg feature，要求 Memory/IO；
-`windows-shaders` 提供独立离线构建，`windows-graphics` 同时启用 Device/Shaders。固定 baseline 对应
+`windows-shaders` 提供独立离线构建，`windows-graphics` 同时启用 Device/Shaders/Offscreen。固定 baseline 对应
 shader-slang 2026.18（官方当前 port，无修订），不改变 CPU runner 依赖。
 部署 Slang DLL 时同时复制 SPIR-V 优化器运行库 slang-glslang、官方要求的 standard modules 和 API binding 文件。
 编译前检查 SPIRV_OPT 后端可用性；缺失时报错，不能接受上游缺后端仍返回产物的降级行为。

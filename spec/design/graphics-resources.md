@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-09-28T18:38:00+08:00"
+updated_at: "2026-09-30T09:24:00+08:00"
 status: accepted
 ---
 
@@ -12,7 +12,8 @@ status: accepted
 M5.2 在 [设备底座](graphics-device.md) 上交付 VMA Buffer/Image、上传/读回、单队列提交、
 完成票据、固定提交槽和延迟回收。实现位于 engine/graphics/device，继续使用 dk::graphics_device；
 公开 Resources.hpp，不新增依赖或 feature。普通 Vulkan 所有权使用 vk::raii；VMA 资源配对释放。
-不涉及 shader、绘制、窗口、Graph、多队列或后台提交线程。
+该模块不涉及 shader、绘制、窗口、Graph、多队列或后台提交线程。
+[离屏模块](graphics-offscreen.md) 在此之上管理管线、描述符和 image view 至提交完成。
 
 ## 接口与数据
 

@@ -40,6 +40,8 @@
 | VMA 上传/读回、timeline、延迟释放与提交失败 | dk_graphics_resource_probe | `^dk\.graphics\.gpu_`（gpu label；77 为跳过） |
 | Slang 三阶段编译、反射、诊断与 Memory 寿命（无需 GPU） | dk_shader_tests | `^dk\.shaders\.` |
 | shaderc Unicode/include/import/宏、原子输出与隔离部署 | dk_shaderc | `^dk\.shaderc\.` |
+| 离屏 draw/dispatch 参数、SPIR-V/布局和设备限制（无需 GPU） | dk_offscreen_tests | `^dk\.offscreen\.unit\.` |
+| 离屏绘制/计算读回、管线寿命与同步验证 | dk_offscreen_probe | `^dk\.offscreen\.gpu_`（gpu label；77 为跳过） |
 | Foundation 进程示例 | dk_foundation_demo | `^dk\.foundation\.` |
 | Scene 跨进程往返 | dk_scene_demo | `^dk\.scene_demo\.` |
 

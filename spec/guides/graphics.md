@@ -1,12 +1,13 @@
 ---
 created_at: "2026-09-28T16:49:00+08:00"
-updated_at: "2026-09-28T19:03:00+08:00"
+updated_at: "2026-09-30T09:24:00+08:00"
 ---
 
 # Vulkan 设备、资源与提交
 
 [返回项目入口](../../README.md)。当前提供设备、VMA Buffer/Image、单队列提交、上传/读回与延迟释放；
-尚无绘制或窗口；离线 shader 编译见 [Shader 指南](shaders.md)。接口与生命周期见 [设备设计](../design/graphics-device.md) 和[资源设计](../design/graphics-resources.md)。
+离线 shader 编译见 [Shader 指南](shaders.md)，真实 draw/dispatch/readback 见[离屏指南](offscreen.md)。
+窗口呈现尚未实现。接口与生命周期见 [设备设计](../design/graphics-device.md) 和[资源设计](../design/graphics-resources.md)。
 
 ## 配置和运行
 
@@ -21,7 +22,7 @@ cmake --preset windows-graphics
 & ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Target @('dk_graphics_resource_tests', 'dk_graphics_resource_probe') -TestRegex '^dk\.graphics\.' -Reason '验证资源、提交和数据往返'
 ```
 
-windows-graphics 继承 CPU 开发预设，额外开启 DK_BUILD_GRAPHICS_DEVICE 和 DK_BUILD_GRAPHICS_SHADERS；默认 windows-dev 保持 CPU-only。
+windows-graphics 继承 CPU 开发预设，额外开启 DK_BUILD_GRAPHICS_DEVICE、DK_BUILD_GRAPHICS_SHADERS 和 DK_BUILD_GRAPHICS_OFFSCREEN；默认 windows-dev 保持 CPU-only。
 设备模块需要 DK_BUILD_MEMORY。vulkan-device feature 安装 Vulkan、volk、vk-bootstrap 和 VMA；
 独立 shaders feature 安装 Slang，SDL 尚未启用。volk 提供函数表，vk-bootstrap 构建 instance，VMA 管理设备内存分配。
 Vulkan-Hpp 随 vulkan-headers 提供；使用 vulkan_raii.hpp 的 vk::raii 管理普通 Vulkan 对象。
