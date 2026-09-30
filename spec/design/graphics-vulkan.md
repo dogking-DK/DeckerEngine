@@ -1,7 +1,7 @@
 ---
 module: graphics-vulkan
 created_at: "2026-09-30T10:18:48+08:00"
-updated_at: "2026-09-30T11:46:20+08:00"
+updated_at: "2026-09-30T12:06:23+08:00"
 status: accepted
 ---
 
@@ -90,6 +90,8 @@ VMA 对象保持专用销毁方式，普通对象内部继续使用 vk::raii，�
 
 首版不引入全局缓存：显式持有 Pipeline/Sampler/Layout 即可复用，避免每次 dispatch 重建。
 描述符池按队列域分页、有容量上限、耗尽返回可定位错误；每个分配持有 pool page。
+M5.5.2 首版上限为 64 页、每页 32 个同类 descriptor 数量的 set、单 set 4096 个 descriptor；
+设备限制仍需同时满足。页由活跃 BindingSet 拥有，队列只保存弱目录；释放后可复用目录位置。
 池只有全部 allocation 释放后才能重置/回收；不按 CPU 帧号 reset。
 使用 Hpp DescriptorSet owner 时池启用 `eFreeDescriptorSet`，释放顺序为 set→pool→device；
 后续若改为整页释放，须同时换成非拥有型 set，不能混用两种释放策略。

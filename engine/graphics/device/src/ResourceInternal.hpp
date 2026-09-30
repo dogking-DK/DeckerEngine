@@ -3,6 +3,7 @@
 #include <algorithm>
 
 namespace dk::graphics::detail {
+struct PoolPage;
 struct DeviceLifetime {
     explicit DeviceLifetime(Device&& value) : device(std::move(value)) {}
     Device device;
@@ -46,11 +47,13 @@ inline void release_uses(Vector<Use>& uses, bool recording) noexcept
 }
 struct QueueState {
     QueueState(memory::ResourceHandle resource_value, std::shared_ptr<DeviceLifetime> device_value)
-        : resource(std::move(resource_value)), owner(std::move(device_value)), slots(memory::Allocator<Slot>{resource}) {}
+        : resource(std::move(resource_value)), owner(std::move(device_value)), slots(memory::Allocator<Slot>{resource}),
+          descriptor_pages(memory::Allocator<std::weak_ptr<PoolPage>>{resource}) {}
     memory::ResourceHandle resource;
     std::shared_ptr<DeviceLifetime> owner;
     vk::raii::Semaphore timeline{nullptr};
     Vector<Slot> slots;
+    Vector<std::weak_ptr<PoolPage>> descriptor_pages;
     SubmissionApi api;
     std::uint64_t submitted = 0, completed = 0;
     bool closed = false;

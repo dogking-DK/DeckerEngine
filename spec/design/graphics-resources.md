@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-09-30T11:46:20+08:00"
+updated_at: "2026-09-30T12:06:23+08:00"
 status: accepted
 ---
 
@@ -19,6 +19,10 @@ M5.2 在 [设备底座](graphics-device.md) 上交付 VMA Buffer/Image、上传/
 M5.5.1 的 GpuObjects.hpp 提供 ResourceFactory、ImageView/Sampler/ShaderModule，
 工厂以 weak queue 借用身份拒绝失效/关闭调用，普通对象独立保活 device，view 保活 image。
 ShaderModule 复制入口/阶段/反射，原始编译产物可在工厂返回后释放；不在设备模块链接 Slang。
+M5.5.2 增加 Pipeline.hpp/Bindings.hpp：跨阶段布局合并、可复用 graphics/compute 管线、
+不可变 BindingSet，支持多个 set、固定数组、uniform/storage buffer、sampled/storage image 和 sampler。
+管线持有布局、绑定持有布局/池/资源；这些寿命引用不将 Buffer 标为 recording/pending 忙状态。
+描述符池页的固定上限与类型化接口见使用层设计，首次录制保留在 M5.5.3 接入。
 encoder、资源访问状态与子资源范围、staging 和完成后读回接口按后续小节实施。
 本页单 mip/layer、全图布局、手工 retain 和保守 copy barrier 仍是当前契约；
 各 M5.5.x 实施时逐节更新本页，保持唯一提交点、timeout 保活和无资源→队列引用环的约束。

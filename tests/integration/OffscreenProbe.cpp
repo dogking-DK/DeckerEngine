@@ -2,6 +2,7 @@
 #include <dk/memory/MemorySystem.hpp>
 #include "OffscreenPolicy.hpp"
 #include "SubmissionInternal.hpp"
+#include "ObjectInternal.hpp"
 #include <atomic>
 #include <cmath>
 #include <cstdio>
@@ -16,6 +17,7 @@ using namespace dk;
 using namespace dk::graphics;
 namespace {
 void require(bool condition, const char* message) { if (!condition) throw std::runtime_error(message); }
+void take(Result<void>&& result) { if (!result) throw std::runtime_error(result.error().message); }
 template<class T> T take(Result<T>&& result)
 {
     if (!result) throw std::runtime_error(result.error().message);
@@ -157,6 +159,111 @@ void failure_lifetimes(OffscreenExecutor& executor, const CompiledShader& vertex
     require(executor.stats().pending_slots == 1 && allocations(executor) == 6, "compute timeout released GPU owners");
     require(take(executor.drain()) && allocations(executor) == 0, "compute drain left GPU owners");
 }
+void pipeline_bindings(memory::ResourceHandle resource, const DeviceOptions& options,
+    const CompiledShader& vertex, const CompiledShader& fragment)
+{
+    auto queue = take(SubmissionQueue::create(resource, take(Device::create(resource, options))));
+    auto factory = queue.resources();
+    const auto source = std::filesystem::path{DK_COMMON_SHADER_DIR}.parent_path().parent_path() / "tests/fixtures/shaders/usage-bindings.slang";
+    auto artifact = take(compile_shader({source, "computeMain", ShaderStage::compute}, resource));
+    auto shader = take(factory.create_shader(artifact));
+    const std::array shader_list{&shader};
+    auto layout = take(factory.create_pipeline_layout(shader_list));
+    auto equivalent = take(factory.create_pipeline_layout(shader_list));
+    require(layout.compatible_for_set(equivalent, 2), "equivalent layout rejected");
+    auto pipeline = take(factory.create_compute_pipeline({&shader, &layout}));
+    auto repeated = take(factory.create_compute_pipeline({&shader, &layout}));
+    auto vs = take(factory.create_shader(vertex));
+    auto fs = take(factory.create_shader(fragment));
+    const std::array graphics_shaders{&vs, &fs};
+    auto graphics_layout = take(factory.create_pipeline_layout(graphics_shaders));
+    auto graphics = take(factory.create_graphics_pipeline({&vs, &fs, &graphics_layout}));
+    require(!factory.create_compute_pipeline({&shader, &graphics_layout}), "incomplete pipeline layout accepted");
+    require(!factory.create_compute_pipeline({&vs, &layout}), "wrong pipeline stage accepted");
+
+    auto sampled = take(factory.create_image({4, 4}));
+    auto output_image = take(factory.create_image({4, 4, vk::Format::eR8G8B8A8Unorm,
+        vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eTransferSrc}));
+    auto sampled_view = take(factory.create_view(sampled));
+    auto output_view = take(factory.create_view(output_image));
+    auto sampler = take(factory.create_sampler());
+    auto uniform = take(factory.create_buffer({16, vk::BufferUsageFlagBits::eUniformBuffer, BufferMemory::upload}));
+    auto storage = take(factory.create_buffer({64, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc}));
+    const std::array<float,4> scale{1,1,1,1};
+    take(uniform.write(0, std::as_bytes(std::span{scale})));
+    const std::array<BindingWrite,4> set1_writes{{
+        {0, 0, ImageBinding{&sampled_view}}, {0, 1, ImageBinding{&sampled_view}},
+        {0, 2, ImageBinding{&sampled_view}}, {3, 0, SamplerBinding{&sampler}}}};
+    const std::array<BindingWrite,3> set2_writes{{
+        {0, 0, BufferBinding{&storage}}, {1, 0, ImageBinding{&output_view, vk::ImageLayout::eGeneral}},
+        {4, 0, BufferBinding{&uniform}}}};
+    auto bindings1 = take(factory.create_bindings(layout, 1, set1_writes));
+    auto bindings2 = take(factory.create_bindings(layout, 2, set2_writes));
+    auto replacement = take(factory.create_bindings(layout, 2, set2_writes));
+    require(bindings2.handle() != replacement.handle(), "immutable replacement reused live descriptor set");
+    // A lifetime reference from bindings does not make uniform bytes busy.
+    take(uniform.write(0, std::as_bytes(std::span{scale})));
+    require(!factory.create_bindings(layout, 1, std::span{set1_writes}.first(3)), "missing array element accepted");
+    auto duplicate = set1_writes;
+    duplicate[1] = duplicate[0];
+    require(!factory.create_bindings(layout, 1, duplicate), "duplicate array element accepted");
+    auto invalid = set2_writes;
+    invalid[2].resource = BufferBinding{&uniform, 1, 15};
+    require(!factory.create_bindings(layout, 2, invalid), "misaligned uniform range accepted");
+    graphics::detail::ObjectAccess::fail_creation(factory, VK_ERROR_OUT_OF_HOST_MEMORY);
+    require(!factory.create_bindings(layout, 2, set2_writes), "descriptor post-create failure ignored");
+    // Allocate across a page boundary, then free and reuse independently of frame numbers.
+    Vector<BindingSet> many{memory::Allocator<BindingSet>{resource}};
+    for (unsigned i = 0; i < 40; ++i) many.push_back(take(factory.create_bindings(layout, 2, set2_writes)));
+    many.clear();
+    bool exhausted = false;
+    for (unsigned i = 0; i < 2048; ++i) {
+        auto next = factory.create_bindings(layout, 2, set2_writes);
+        if (!next) {
+            require(next.error().code == ErrorCode::conflict, "descriptor capacity returned unexpected failure");
+            exhausted = true;
+            break;
+        }
+        many.push_back(std::move(*next));
+    }
+    require(exhausted, "descriptor pool directory was unbounded");
+    many.clear();
+    auto recovered = take(factory.create_bindings(layout, 2, set2_writes));
+
+    std::array<std::uint32_t,16> red{};
+    red.fill(0xff0000ffu);
+    auto upload = take(factory.create_buffer({64, vk::BufferUsageFlagBits::eTransferSrc, BufferMemory::upload}));
+    auto readback = take(factory.create_buffer({64, vk::BufferUsageFlagBits::eTransferDst, BufferMemory::readback}));
+    auto image_readback = take(factory.create_buffer({64, vk::BufferUsageFlagBits::eTransferDst, BufferMemory::readback}));
+    take(upload.write(0, std::as_bytes(std::span{red})));
+    for (unsigned repeat = 0; repeat < 2; ++repeat) {
+        auto batch = take(queue.begin());
+        take(batch.copy_to_image(upload, sampled));
+        take(batch.transition(sampled, vk::ImageLayout::eShaderReadOnlyOptimal));
+        take(batch.transition(output_image, vk::ImageLayout::eGeneral));
+        take(batch.retain(uniform));
+        take(batch.retain(storage));
+        const auto& command = batch.command_buffer();
+        command.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline.handle());
+        const std::array sets{bindings1.handle(), bindings2.handle()};
+        command.bindDescriptorSets(vk::PipelineBindPoint::eCompute, layout.handle(), 1, sets, {});
+        command.dispatch(4, 4, 1);
+        take(batch.copy(storage, readback, 64));
+        take(batch.copy_to_buffer(output_image, image_readback));
+        auto ticket = take(queue.submit(std::move(batch)));
+        require(take(queue.wait(ticket)), "pipeline binding dispatch did not complete");
+        std::array<float,16> floats{};
+        std::array<std::uint32_t,16> pixels{};
+        take(readback.read(0, std::as_writable_bytes(std::span{floats})));
+        take(image_readback.read(0, std::as_writable_bytes(std::span{pixels})));
+        for (auto value : floats) require(value == 1, "multi-set buffer result mismatch");
+        require(pixels == red, "sampled/storage image result mismatch");
+    }
+    shader = {};
+    layout = {};
+    require(bool(pipeline.handle()) && bool(bindings2.handle()), "pipeline/binding lost owned layout");
+    take(queue.close());
+}
 } // namespace
 
 int main(int argc, char** argv)
@@ -195,6 +302,7 @@ int main(int argc, char** argv)
             auto fragment = take(compile_shader({sources / "triangle.slang", "fragmentMain", ShaderStage::fragment}, resource));
             auto compute = take(compile_shader({sources / "transform.slang", "computeMain", ShaderStage::compute}, resource));
             std::printf("Slang=%s target=spirv_1_5 matrix=row_major entries=vertexMain,fragmentMain,computeMain\n", compute.compiler.c_str());
+            pipeline_bindings(resource, options, vertex, fragment);
             for (unsigned round = 0; round < 3; ++round) {
                 auto device = round == 0 ? std::move(*first_device) : take(Device::create(resource, options));
                 auto executor = intercepted(resource, std::move(device));

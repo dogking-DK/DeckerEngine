@@ -1,6 +1,7 @@
 #pragma once
 #include "ResourceInternal.hpp"
 #include <dk/graphics/GpuObjects.hpp>
+#include <dk/graphics/Bindings.hpp>
 
 namespace dk::graphics::detail {
 struct ObjectState {
@@ -38,10 +39,65 @@ struct ObjectAccess {
     static const auto& state(const ImageView& value) { return value.state_; }
     static const auto& state(const Sampler& value) { return value.state_; }
     static const auto& state(const ShaderModule& value) { return value.state_; }
+    static const auto& state(const PipelineLayout& value) { return value.state_; }
+    static const auto& state(const ComputePipeline& value) { return value.state_; }
+    static const auto& state(const GraphicsPipeline& value) { return value.state_; }
+    static const auto& state(const BindingSet& value) { return value.state_; }
     static void fail_creation(const ResourceFactory& factory, VkResult result) {
         if (auto queue = factory.queue_.lock()) queue->object_creation_failure = result;
     }
 };
+struct LayoutState : ObjectState {
+    LayoutState(std::shared_ptr<DeviceLifetime> device, memory::ResourceHandle resource)
+        : ObjectState(std::move(device)), bindings(memory::Allocator<LayoutBinding>{resource}),
+          push(memory::Allocator<vk::PushConstantRange>{resource}), sets(memory::Allocator<vk::raii::DescriptorSetLayout>{resource}) {}
+    Vector<LayoutBinding> bindings;
+    Vector<vk::PushConstantRange> push;
+    Vector<vk::raii::DescriptorSetLayout> sets;
+    vk::raii::PipelineLayout layout{nullptr};
+};
+struct PipelineState : ObjectState {
+    PipelineState(std::shared_ptr<DeviceLifetime> device, memory::ResourceHandle resource, std::shared_ptr<LayoutState> layout_value)
+        : ObjectState(std::move(device)), layout(std::move(layout_value)),
+          vertex_bindings(memory::Allocator<vk::VertexInputBindingDescription>{resource}),
+          vertex_attributes(memory::Allocator<vk::VertexInputAttributeDescription>{resource}) {}
+    std::shared_ptr<LayoutState> layout;
+    vk::PipelineBindPoint point = vk::PipelineBindPoint::eCompute;
+    std::array<std::uint32_t, 3> group{};
+    vk::Format color_format = vk::Format::eUndefined, depth_format = vk::Format::eUndefined;
+    vk::PrimitiveTopology topology = vk::PrimitiveTopology::eTriangleList;
+    Vector<vk::VertexInputBindingDescription> vertex_bindings;
+    Vector<vk::VertexInputAttributeDescription> vertex_attributes;
+    vk::raii::Pipeline pipeline{nullptr};
+};
+struct PoolPage : ObjectState {
+    using ObjectState::ObjectState;
+    std::uint32_t allocations = 0;
+    std::array<std::uint32_t, 5> counts{};
+    vk::raii::DescriptorPool pool{nullptr};
+};
+struct BoundResource {
+    LayoutBinding binding;
+    std::uint32_t element = 0;
+    std::shared_ptr<ResourceState> buffer;
+    std::shared_ptr<ViewState> view;
+    std::shared_ptr<SamplerState> sampler;
+    vk::DeviceSize offset = 0, size = 0;
+    vk::ImageLayout image_layout = vk::ImageLayout::eUndefined;
+};
+struct BindingState : ObjectState {
+    BindingState(std::shared_ptr<DeviceLifetime> device, memory::ResourceHandle resource)
+        : ObjectState(std::move(device)), resources(memory::Allocator<BoundResource>{resource}) {}
+    std::shared_ptr<LayoutState> layout;
+    std::shared_ptr<PoolPage> page;
+    Vector<BoundResource> resources;
+    std::uint32_t set_index = 0;
+    vk::raii::DescriptorSet set{nullptr};
+    ~BindingState() { set.clear(); if (page) --page->allocations; }
+};
+[[nodiscard]] bool compatible_layouts(const LayoutState& left, const LayoutState& right, std::uint32_t set) noexcept;
+[[nodiscard]] vk::ShaderStageFlagBits native_stage(ShaderStage stage) noexcept;
+[[nodiscard]] vk::DescriptorType native_descriptor(ShaderDescriptorType type) noexcept;
 inline Result<void> object_creation_status(QueueState& queue, const char* operation)
 {
     const auto result = std::exchange(queue.object_creation_failure, VK_SUCCESS);

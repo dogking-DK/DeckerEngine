@@ -3,6 +3,13 @@
 #include <dk/graphics/ShaderArtifact.hpp>
 
 namespace dk::graphics {
+class PipelineLayout;
+class GraphicsPipeline;
+class ComputePipeline;
+class BindingSet;
+struct GraphicsPipelineDesc;
+struct ComputePipelineDesc;
+struct BindingWrite;
 namespace detail { struct ViewState; struct SamplerState; struct ShaderState; struct ObjectAccess; }
 struct ImageViewDesc {
     vk::ImageViewType type = vk::ImageViewType::e2D;
@@ -73,6 +80,11 @@ public:
     [[nodiscard]] Result<ImageView> create_view(const Image& image, const ImageViewDesc& description = {}) const;
     [[nodiscard]] Result<Sampler> create_sampler(const SamplerDesc& description = {}) const;
     [[nodiscard]] Result<ShaderModule> create_shader(const CompiledShader& shader) const;
+    [[nodiscard]] Result<PipelineLayout> create_pipeline_layout(std::span<const ShaderModule* const> shaders) const;
+    [[nodiscard]] Result<GraphicsPipeline> create_graphics_pipeline(const GraphicsPipelineDesc& description) const;
+    [[nodiscard]] Result<ComputePipeline> create_compute_pipeline(const ComputePipelineDesc& description) const;
+    [[nodiscard]] Result<BindingSet> create_bindings(const PipelineLayout& layout, std::uint32_t set,
+        std::span<const BindingWrite> writes) const;
 private:
     friend class SubmissionQueue;
     friend struct detail::ObjectAccess;

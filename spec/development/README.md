@@ -51,5 +51,6 @@
 | 0047 | [M5.4 离屏绘制与计算](0047-offscreen-execution.md) | graphics-offscreen, graphics-resources, graphics-shaders | completed |
 | 0048 | [Vulkan 1.4 运行基线](0048-vulkan-14-baseline.md) | graphics-device | completed |
 | 0049 | [M5.5.1 对象工厂与寿命基础](0049-vulkan-object-foundation.md) | graphics-vulkan, graphics-device, graphics-resources, graphics-shaders | completed |
+| 0050 | [M5.5.2 管线与绑定](0050-vulkan-pipelines-bindings.md) | graphics-vulkan, graphics-resources | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

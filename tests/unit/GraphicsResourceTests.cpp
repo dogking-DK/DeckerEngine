@@ -1,4 +1,6 @@
 #include "ResourcePolicy.hpp"
+#include "PipelinePolicy.hpp"
+#include <dk/memory/MemorySystem.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 using namespace dk::graphics;
@@ -69,4 +71,43 @@ TEST_CASE("empty resource and batch operations reject without native calls")
     REQUIRE_FALSE(batch.retain(image));
     REQUIRE_FALSE(batch.copy(buffer, buffer, 4));
     REQUIRE_THROWS_AS(batch.command_buffer(), std::logic_error);
+}
+TEST_CASE("pipeline interfaces merge stages preserve array counts and reject conflicts")
+{
+    auto system = std::move(dk::memory::MemorySystem::create().value());
+    auto heap = system.create_heap({"layout-tests", dk::memory::DomainCategory::render}).value();
+    vk::PhysicalDeviceLimits limits{};
+    limits.maxBoundDescriptorSets = 4;
+    limits.maxPushConstantsSize = 128;
+    limits.maxDescriptorSetUniformBuffers = limits.maxPerStageDescriptorUniformBuffers = 16;
+    limits.maxDescriptorSetStorageBuffers = limits.maxPerStageDescriptorStorageBuffers = 16;
+    limits.maxDescriptorSetSampledImages = limits.maxPerStageDescriptorSampledImages = 16;
+    limits.maxDescriptorSetStorageImages = limits.maxPerStageDescriptorStorageImages = 16;
+    limits.maxDescriptorSetSamplers = limits.maxPerStageDescriptorSamplers = 16;
+    limits.maxPerStageResources = 32;
+    std::array<policy::ReflectedBinding, 1> a{{{2, 3, ShaderDescriptorType::uniform_buffer, 2, 16}}};
+    std::array<policy::ReflectedBinding, 1> b{{{2, 3, ShaderDescriptorType::uniform_buffer, 2, 32}}};
+    const std::array<ShaderPushConstant, 2> push_a{{{0, 4}, {16, 4}}};
+    const std::array<ShaderPushConstant, 1> push_b{{{0, 20}}};
+    const std::array views{policy::ShaderLayoutView{ShaderStage::vertex, a, push_a},
+        policy::ShaderLayoutView{ShaderStage::fragment, b, push_b}};
+    auto merged = policy::merge_interfaces(heap, views, limits);
+    REQUIRE(merged);
+    REQUIRE(merged->bindings.size() == 1);
+    REQUIRE(merged->bindings[0].count == 2);
+    REQUIRE(merged->bindings[0].minimum_buffer_size == 32);
+    REQUIRE(merged->bindings[0].stages == (vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment));
+    REQUIRE(merged->push.size() == 1);
+    REQUIRE(merged->push[0].size == 20);
+    b[0].count = 3;
+    REQUIRE_FALSE(policy::merge_interfaces(heap, views, limits));
+    b[0].count = 2;
+    b[0].type = ShaderDescriptorType::storage_buffer;
+    REQUIRE_FALSE(policy::merge_interfaces(heap, views, limits));
+    b[0].type = ShaderDescriptorType::uniform_buffer;
+    limits.maxPerStageDescriptorUniformBuffers = 1;
+    REQUIRE_FALSE(policy::merge_interfaces(heap, views, limits));
+    limits.maxPerStageDescriptorUniformBuffers = 16;
+    limits.maxPushConstantsSize = 16;
+    REQUIRE_FALSE(policy::merge_interfaces(heap, views, limits));
 }
