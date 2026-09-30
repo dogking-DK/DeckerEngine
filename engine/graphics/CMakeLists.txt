@@ -1,4 +1,7 @@
 set(CMAKE_FOLDER "Engine/Graphics")
+if(DK_BUILD_GRAPHICS_DEVICE OR DK_BUILD_GRAPHICS_SHADERS)
+    add_subdirectory(shader-types)
+endif()
 if(DK_BUILD_GRAPHICS_DEVICE)
     add_subdirectory(device)
 endif()

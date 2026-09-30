@@ -18,6 +18,7 @@ struct ImageDesc {
 namespace detail { struct ResourceState; struct QueueState; struct BatchState; struct SubmissionAccess; }
 class CommandBatch;
 class SubmissionQueue;
+class ResourceFactory;
 
 // VMA owners. Native handles are borrowed; submitted batches retain allocations.
 // All accesses to a queue and its resources must be externally serialized.
@@ -36,6 +37,7 @@ public:
 private:
     friend class SubmissionQueue;
     friend class CommandBatch;
+    friend class ResourceFactory;
     explicit Buffer(std::shared_ptr<detail::ResourceState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::ResourceState> state_;
 };
@@ -54,6 +56,7 @@ public:
 private:
     friend class SubmissionQueue;
     friend class CommandBatch;
+    friend class ResourceFactory;
     explicit Image(std::shared_ptr<detail::ResourceState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::ResourceState> state_;
 };
@@ -106,6 +109,7 @@ public:
     SubmissionQueue(const SubmissionQueue&) = delete;
     SubmissionQueue& operator=(const SubmissionQueue&) = delete;
     [[nodiscard]] const Device& device() const noexcept;
+    [[nodiscard]] ResourceFactory resources() const noexcept;
     [[nodiscard]] Result<Buffer> create_buffer(const BufferDesc& description);
     [[nodiscard]] Result<Image> create_image(const ImageDesc& description);
     [[nodiscard]] Result<CommandBatch> begin();
@@ -117,6 +121,7 @@ public:
     [[nodiscard]] SubmissionStats stats() const noexcept;
 private:
     friend struct detail::SubmissionAccess;
+    friend class ResourceFactory;
     explicit SubmissionQueue(std::shared_ptr<detail::QueueState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::QueueState> state_;
 };

@@ -7,7 +7,7 @@ add_library(dk_graphics_shaders STATIC src/ShaderCompiler.cpp)
 add_library(dk::graphics_shaders ALIAS dk_graphics_shaders)
 target_sources(dk_graphics_shaders PUBLIC FILE_SET HEADERS BASE_DIRS include FILES
     include/dk/graphics/ShaderCompiler.hpp)
-target_link_libraries(dk_graphics_shaders PUBLIC dk::core dk::memory
+target_link_libraries(dk_graphics_shaders PUBLIC dk::graphics_shader_types
     PRIVATE dk::io dk::profiling slang::slang nlohmann_json::nlohmann_json)
 dk_target_defaults(dk_graphics_shaders)
 

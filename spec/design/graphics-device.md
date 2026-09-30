@@ -1,7 +1,7 @@
 ---
 module: graphics-device
 created_at: "2026-09-28T16:38:00+08:00"
-updated_at: "2026-09-30T10:18:48+08:00"
+updated_at: "2026-09-30T11:46:20+08:00"
 status: accepted
 ---
 
@@ -13,7 +13,7 @@ M5.1 提供无窗口 instance、physical device、logical device 和单队列底
 Device 自身不创建 surface/swapchain、Buffer/Image、提交系统或 shader；M5.2 的拥有型资源与队列
 由同 target 的 [资源与提交接口](graphics-resources.md) 提供，窗口/shader 属后续阶段。
 源码位于 [device](../../engine/graphics/device)，target 为 dk_graphics_device / dk::graphics_device。
-PUBLIC 依赖 Core、Memory、Vulkan::Headers、VMA 头接口并传递 VK_NO_PROTOTYPES，
+PUBLIC 依赖 Core、Memory、shader_types、Vulkan::Headers、VMA 头接口并传递 VK_NO_PROTOTYPES，
 以及 VULKAN_HPP_ENABLE_DYNAMIC_LOADER_TOOL=0 / VULKAN_HPP_NO_DEFAULT_DISPATCHER；
 PRIVATE 使用 Profiling、volk、vk-bootstrap 和平台动态库 API；
 不依赖 Scene、Assets、Framework、SDL 或 Slang。CPU runner 不链接该模块。
@@ -22,10 +22,10 @@ DK_BUILD_GRAPHICS_DEVICE 默认 OFF，windows-graphics 预设显式开启；vulk
 
 ## 能力和接口
 
-本页描述当前设备契约。[M5.5 使用层设计稿](graphics-vulkan.md) 规划在同 target 增加对象工厂、
-管线/绑定和 encoder，并提取独立 shader 产物类型；尚未改变以下接口和依赖。
-实施后普通消费者经工厂使用 Vulkan，公开 RAII 借用接口保留为底层互操作入口；
-Device 继续只管理初始化/能力，不承载全部对象创建方法。
+本页描述当前设备契约。[M5.5 使用层设计](graphics-vulkan.md) 在同 target 扩展使用接口。
+M5.5.1 已加入 `SubmissionQueue::resources()` 工厂及 ImageView/Sampler/ShaderModule，
+独立 shader_types 不链接 Slang；管线/绑定与 encoder 按后续小节实施。
+公开 RAII 借用接口保留为底层互操作入口；Device 继续只管理初始化/能力。
 
 公开 [Device.hpp](../../engine/graphics/device/include/dk/graphics/Device.hpp) 使用 Vulkan-Hpp 类型，
 不引入跨 API RHI。Device::create 接受调用者 Memory resource 和 DeviceOptions，返回拥有型 Device。

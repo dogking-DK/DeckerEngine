@@ -134,32 +134,6 @@ Result<void> reflect(slang::ProgramLayout* layout, CompiledShader& output)
 }
 } // namespace
 
-std::string_view shader_stage_name(ShaderStage stage) noexcept
-{
-    switch (stage) {
-    case ShaderStage::vertex: return "vertex";
-    case ShaderStage::fragment: return "fragment";
-    case ShaderStage::compute: return "compute";
-    }
-    return "unknown";
-}
-std::string_view shader_descriptor_name(ShaderDescriptorType type) noexcept
-{
-    switch (type) {
-    case ShaderDescriptorType::uniform_buffer: return "uniform_buffer";
-    case ShaderDescriptorType::storage_buffer: return "storage_buffer";
-    case ShaderDescriptorType::sampled_image: return "sampled_image";
-    case ShaderDescriptorType::storage_image: return "storage_image";
-    case ShaderDescriptorType::sampler: return "sampler";
-    }
-    return "unknown";
-}
-CompiledShader::CompiledShader(memory::ResourceHandle resource)
-    : spirv(memory::Allocator<std::uint32_t>{resource}), entry(memory::Allocator<char>{resource}),
-      compiler(memory::Allocator<char>{resource}), diagnostics(memory::Allocator<char>{resource}),
-      bindings(memory::Allocator<ShaderBinding>{resource}), push_constants(memory::Allocator<ShaderPushConstant>{resource}),
-      dependencies(memory::Allocator<String>{resource}) {}
-
 Result<CompiledShader> compile_shader(const ShaderCompileRequest& request, memory::ResourceHandle resource)
 {
     DK_PROFILE_ZONE("Shader.compile");

@@ -7,7 +7,7 @@
 | graphics-resources | [Vulkan 资源与提交生命周期](graphics-resources.md) | accepted | M5.2 VMA 资源、上传/读回、完成与延迟释放 | [device](../../engine/graphics/device) | [graphics](../../tests/integration/CMakeLists.txt) |
 | graphics-shaders | [Slang 编译与反射](graphics-shaders.md) | accepted | M5.3 离线 SPIR-V、最小布局反射与诊断 | [shaders](../../engine/graphics/shaders) | [shaders](../../tests/unit/CMakeLists.txt) |
 | graphics-offscreen | [离屏绘制与计算](graphics-offscreen.md) | accepted | M5.4 draw/dispatch/readback 与完成保护 | [offscreen](../../engine/graphics/offscreen) | [offscreen](../../tests/integration/CMakeLists.txt) |
-| graphics-vulkan | [Vulkan 使用层封装](graphics-vulkan.md) | draft | M5.5 对象/管线/绑定/录制/同步/传输与离屏迁移设计，尚未实现 | [现有 device](../../engine/graphics/device)、[offscreen](../../engine/graphics/offscreen) | [现有单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt)；新增验证待实施 |
+| graphics-vulkan | [Vulkan 使用层封装](graphics-vulkan.md) | accepted | M5.5 对象/管线/绑定/录制/同步/传输与离屏迁移契约；实现进度见 Roadmap | [device](../../engine/graphics/device)、[offscreen](../../engine/graphics/offscreen) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | project-foundation | [工程基础](project-foundation.md) | accepted | Git、目录、CMake、vcpkg、构建探针与留档 | [CMake/构建](../../cmake) | [文档脚本回归](../../scripts/test-check-spec.ps1) |
 | foundation-core | [Core 基础](foundation-core.md) | accepted | 错误、日志、stduuid 稳定 ID 与验证 | [Core](../../engine/foundation/core) | [core / log_probe](../../tests/unit/CMakeLists.txt) |
 | foundation-math | [Eigen 数学与 Transform](foundation-math.md) | accepted | M1.2 基础数学；M1.3 TRS、仿射组合和逆变换 | [Math](../../engine/foundation/math) | [math](../../tests/unit/CMakeLists.txt) |

@@ -1,8 +1,8 @@
 ---
 module: graphics-vulkan
 created_at: "2026-09-30T10:18:48+08:00"
-updated_at: "2026-09-30T10:26:05+08:00"
-status: draft
+updated_at: "2026-09-30T11:46:20+08:00"
+status: accepted
 ---
 
 # Vulkan 使用层封装设计
@@ -10,7 +10,7 @@ status: draft
 ## 目标与现状
 
 本设计对应新增的 **M5.5 Vulkan 使用层封装**，位于已完成的离屏验收之后、窗口呈现之前。
-本次只交付设计和实施计划；下文新增类型、接口、目录和行为均待实现，现行契约仍以
+本方案进入逐节实现；各节完成与验证状态见 Roadmap，未完成部分仍为实施目标，现行契约以
 [设备](graphics-device.md)、[资源提交](graphics-resources.md)、[Shader](graphics-shaders.md)
 和[离屏](graphics-offscreen.md)设计为准。阶段状态与编号迁移统一见 [Roadmap](../roadmap.md)。
 
@@ -44,7 +44,7 @@ status: draft
 
 shader_types 是产物定义的提取，不改变 SPIR-V、JSON schema 或离线编译行为。
 设备工厂因此能直接接收编译产物并校验布局，而只创建 Vulkan 资源的程序无需链接 Slang。
-只有实际实施时才创建 target；CPU-only runner 和独立 shader 配置的隔离约束保持。
+M5.5.1 已创建该 target；CPU-only runner 和独立 shader 配置的隔离约束保持。
 
 device 内按职责拆分公开头与 `.cpp`：保留 Device.hpp/Resources.hpp，新增
 `GpuObjects.hpp`、`Pipeline.hpp`、`Bindings.hpp`、`CommandEncoder.hpp`、`Transfer.hpp`。
@@ -310,4 +310,5 @@ RAII 内部所有权与 descriptor pool 释放策略参考
 关联现行契约：[整体架构](architecture.md)、[设备](graphics-device.md)、[资源与提交](graphics-resources.md)、
 [Shader](graphics-shaders.md)、[离屏](graphics-offscreen.md)。现状证据见
 [0045](../development/0045-graphics-resources-submission.md)、[0047](../development/0047-offscreen-execution.md)
-和 [0048](../development/0048-vulkan-14-baseline.md)；本次纯设计修订不分配实现开发记录。
+和 [0048](../development/0048-vulkan-14-baseline.md)。实现记录从
+[0049 M5.5.1](../development/0049-vulkan-object-foundation.md) 开始，后续各节独立留档。

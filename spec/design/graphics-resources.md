@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-09-30T10:18:48+08:00"
+updated_at: "2026-09-30T11:46:20+08:00"
 status: accepted
 ---
 
@@ -15,8 +15,11 @@ M5.2 在 [设备底座](graphics-device.md) 上交付 VMA Buffer/Image、上传/
 该模块不涉及 shader、绘制、窗口、Graph、多队列或后台提交线程。
 [离屏模块](graphics-offscreen.md) 在此之上管理管线、描述符和 image view 至提交完成。
 
-[M5.5 使用层设计稿](graphics-vulkan.md) 规划将保留机制扩展到全部 GPU 对象，增加工厂/encoder、
-资源访问状态与子资源范围、staging 和完成后读回接口；这些扩展尚未实现。
+[M5.5 使用层设计](graphics-vulkan.md) 扩展全部 GPU 对象保留和常用操作。
+M5.5.1 的 GpuObjects.hpp 提供 ResourceFactory、ImageView/Sampler/ShaderModule，
+工厂以 weak queue 借用身份拒绝失效/关闭调用，普通对象独立保活 device，view 保活 image。
+ShaderModule 复制入口/阶段/反射，原始编译产物可在工厂返回后释放；不在设备模块链接 Slang。
+encoder、资源访问状态与子资源范围、staging 和完成后读回接口按后续小节实施。
 本页单 mip/layer、全图布局、手工 retain 和保守 copy barrier 仍是当前契约；
 各 M5.5.x 实施时逐节更新本页，保持唯一提交点、timeout 保活和无资源→队列引用环的约束。
 

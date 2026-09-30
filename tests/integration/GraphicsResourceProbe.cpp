@@ -1,6 +1,7 @@
 #include <dk/graphics/Resources.hpp>
 #include <dk/memory/MemorySystem.hpp>
 #include "SubmissionInternal.hpp"
+#include "ObjectInternal.hpp"
 #include <array>
 #include <atomic>
 #include <cstdio>
@@ -183,6 +184,60 @@ void late_lifetime(memory::ResourceHandle resource, const DeviceOptions& options
     }
     retained = CommandBatch{}; // Last batch releases its queue, without a lifetime cycle.
 }
+void object_factory(memory::ResourceHandle resource, const DeviceOptions& options)
+{
+    Sampler sampler;
+    ShaderModule shader;
+    ImageView view;
+    ResourceFactory expired;
+    {
+        auto owner = queue(resource, options);
+        auto factory = owner.resources();
+        expired = factory;
+        auto image = take(factory.create_image({8, 8}));
+        view = take(factory.create_view(image));
+        image = Image{};
+        require(allocations(owner) == 1, "view did not retain image allocation");
+        auto peer = queue(resource, options);
+        auto foreign = take(peer.create_image({8, 8}));
+        require(!factory.create_view(foreign), "foreign image accepted by factory");
+        SamplerDesc invalid;
+        invalid.max_lod = -1;
+        require(!factory.create_sampler(invalid), "negative sampler LOD accepted");
+        sampler = take(factory.create_sampler());
+        sampler = take(factory.create_sampler()); // Move assignment must destroy previous sampler.
+        CompiledShader artifact{resource};
+        artifact.entry = "main";
+        artifact.thread_group_size = {1, 1, 1};
+        artifact.spirv = {0x07230203, 0x00010500, 0, 6, 0,
+            0x00020011, 1, 0x0003000e, 0, 1,
+            0x0005000f, 5, 4, 0x6e69616d, 0,
+            0x00060010, 4, 17, 1, 1, 1,
+            0x00020013, 1, 0x00030021, 2, 1,
+            0x00050036, 1, 4, 0, 2, 0x000200f8, 5, 0x000100fd, 0x00010038};
+        shader = take(factory.create_shader(artifact));
+        const auto live = resource.snapshot().live_allocations;
+        graphics::detail::ObjectAccess::fail_creation(factory, VK_ERROR_OUT_OF_HOST_MEMORY);
+        require(!factory.create_view(foreign), "foreign view accepted before fault seam");
+        require(!factory.create_sampler(), "post-create failure was ignored");
+        require(resource.snapshot().live_allocations == live, "failed creation leaked object state");
+        graphics::detail::ObjectAccess::fail_creation(factory, VK_ERROR_OUT_OF_HOST_MEMORY);
+        require(!factory.create_shader(artifact), "shader post-create failure was ignored");
+        require(resource.snapshot().live_allocations == live, "failed shader creation leaked");
+        check(owner.close());
+        require(!factory.create_sampler(), "closed factory accepted new object");
+    }
+    require(!expired.create_sampler(), "factory outlived queue and accepted work");
+    expired = {};
+    require(shader.entry() == "main" && bool(shader.handle()) && bool(view.handle()), "owned metadata or handles lost");
+    view = {}; // Now only non-VMA objects retain the first device.
+    {
+        auto peer = queue(resource, options);
+        auto other = take(peer.resources().create_sampler());
+    }
+    shader = {};
+    sampler = {}; // Correct dispatcher and device must still be alive here.
+}
 void allocation_failure(memory::MemorySystem& system, const DeviceOptions& options)
 {
     auto resource = take(system.create_heap({"graphics-failure", memory::DomainCategory::render}));
@@ -270,6 +325,7 @@ int main(int argc, char** argv)
                 static_cast<unsigned long long>(owner.stats().completed), owner.stats().pending_slots, allocations(owner));
         }
         late_lifetime(resource, options);
+        object_factory(resource, options);
         allocation_failure(system, options);
         submit_without_cpu_allocation(system, options);
         lost_device(resource, options);
