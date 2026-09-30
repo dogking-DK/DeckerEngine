@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-30T09:26:00+08:00"
-updated_at: "2026-09-30T09:26:00+08:00"
+updated_at: "2026-09-30T09:44:00+08:00"
 ---
 
 # 离屏绘制、计算与读回
@@ -12,8 +12,9 @@ updated_at: "2026-09-30T09:26:00+08:00"
 
 ## 构建与运行
 
-需要同一 Vulkan 1.3 队列支持 graphics/compute，以及 timelineSemaphore、synchronization2、dynamicRendering。
+需要 Vulkan 1.4 loader/显卡与同一 graphics/compute 队列，以及 timelineSemaphore、synchronization2、dynamicRendering、maintenance4。
 验证用例需要 Vulkan SDK 的 Khronos 验证层。默认 CPU 和独立离线 Shader 预设不启用此模块。
+旧 AMD 隐式层的 1.3 版本警告及进程内隔离方法见 [Graphics 指南](graphics.md)。
 
 ```powershell
 cmake --preset windows-graphics -DDK_WARNINGS_AS_ERRORS=ON

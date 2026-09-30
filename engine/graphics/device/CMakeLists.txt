@@ -1,7 +1,7 @@
 if(NOT DK_BUILD_MEMORY)
     message(FATAL_ERROR "DK_BUILD_GRAPHICS_DEVICE requires DK_BUILD_MEMORY")
 endif()
-find_package(VulkanHeaders CONFIG REQUIRED)
+find_package(VulkanHeaders 1.4 CONFIG REQUIRED)
 find_package(volk CONFIG REQUIRED)
 find_package(vk-bootstrap CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)

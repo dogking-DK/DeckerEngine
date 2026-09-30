@@ -1,7 +1,7 @@
 ---
 module: graphics-device
 created_at: "2026-09-28T16:38:00+08:00"
-updated_at: "2026-09-28T18:34:00+08:00"
+updated_at: "2026-09-30T09:37:00+08:00"
 status: accepted
 ---
 
@@ -29,9 +29,12 @@ instance()/physical_device()/logical_device()/queue() 返回只读 vk::raii 引�
 便于消费者直接创建 vk::raii 子资源；解引用得到借用 vk::* 句柄，C API 边界显式转换为 Vk*。
 native_device() 保留为 C 互操作便利接口。禁止从借用句柄重新构造拥有型 RAII 对象。
 AdapterInfo 的属性与队列快照使用 vk::* 值类型；诊断 callback 和 VMA 保留 C API 类型。
-最低 API 固定 Vulkan 1.3；必须具有 timelineSemaphore、synchronization2、dynamicRendering，
+最低 API 固定 Vulkan 1.4（VK_API_VERSION_1_4，patch=0）；loader 与物理设备都必须满足，低版本不降级。
+InstanceBuilder 使用同一版本，不将 headers 的 patch 版本当作最低驱动补丁要求。
+必须具有 timelineSemaphore、synchronization2、dynamicRendering、maintenance4，
 一个 queueCount > 0 且同时支持 graphics/compute 的 family（按规范也支持 transfer）。
-只启用这三项 feature，创建该 family 的第 0 个队列，不要求 present 或任何 device extension。
+只启用这四项 feature，创建该 family 的第 0 个队列，不要求 present 或任何 device extension。
+maintenance4 用于 VMA 的设备内存需求查询；API 1.4 并不自动启用所有可选 feature。
 这些条件为下一阶段资源/同步与离屏动态渲染提供基线，不代表已实现相应业务。
 
 AdapterInfo 是能力快照，包含属性、驱动名/信息、feature 与队列。
@@ -69,7 +72,8 @@ vk-bootstrap 的对象不暴露到公开接口，不调用其依赖缓存 instan
 Vulkan-Hpp dispatcher、vk-bootstrap/VMA 的内部 CPU 元数据以及驱动/验证层 host allocation 使用各库默认 allocator，
 不声称归入 Memory 域。VMA 在单个私有翻译单元编译，关闭静态/动态函数自动装载，
 显式从当前 volk table 填入 Vulkan 函数；不依赖 Vulkan 导入库或全局 vk* 符号。
-VMA 配置 API 1.2 路径（底层设备仍为 1.3），避免使用本阶段尚未启用的 maintenance4；
+VMA 配置与设备一致的 API 1.4，显式传入 vkGetDeviceBufferMemoryRequirements / vkGetDeviceImageMemoryRequirements，
+先检查并启用 maintenance4，再交付 allocator；缺少这两个核心入口时失败并按 RAII 逆序回收。
 三方 implementation 独立为 dk_graphics_vma 编译，不把其警告开关施加到引擎代码。
 Device::allocator() 借用 VmaAllocator，所有 allocation 必须先于 Device 销毁；
 Device 层只提供 allocator 接入；M5.2 的 SubmissionQueue 消费 Device 并将设备寿命延长到所有资源释放，
@@ -91,6 +95,7 @@ VkResult 错误保留操作名、符号名和原始数值；Device lost 不自�
 ## 验证计划
 
 CPU 单元验证能力缺失、显式索引、优先级、queueCount/queue flags、validation 策略；
+覆盖 loader/显卡 1.3 拒绝、1.4.0 接受、缺 maintenance4、Instance/VMA 版本一致及 VMA 入口缺失清理。
 内部 fake loader dispatch 确定性验证无设备、instance/device 创建失败和逆序清理，
 不增加生产公开的故障注入开关。缺失 loader 路径走真实动态加载失败。
 独立 GPU probe 验证 repeated create/destroy、句柄/队列、驱动报告、验证消息投递及销毁后零错误。
@@ -112,5 +117,6 @@ API 依据为 Khronos [初始化](https://docs.vulkan.org/spec/latest/chapters/i
 volk 1.4.357.0、vk-bootstrap 1.4.357、VMA 3.4.0 官方 port 与 baseline 一致。
 关联 [架构](architecture.md)、[Memory](foundation-memory.md)、[0042](../development/0042-vulkan-device.md)、
 [0043](../development/0043-vulkan-libraries.md)、[0044](../development/0044-vulkan-hpp-raii.md)。
+Vulkan 1.4 基线切换见 [0048](../development/0048-vulkan-14-baseline.md)。
 Vulkan-Hpp 随固定 vulkan-headers 1.4.357.0 提供；参考官方
 [RAII 指南](https://github.com/KhronosGroup/Vulkan-Hpp/blob/main/docs/VkRaiiProgrammingGuide.md)。

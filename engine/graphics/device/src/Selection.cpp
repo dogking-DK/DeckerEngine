@@ -28,10 +28,11 @@ Result<AdapterSelection> select_adapter(std::span<const AdapterInfo> adapters, s
         const auto& adapter = adapters[i];
         std::string missing;
         const auto require = [&](bool condition, const char* reason) { if (!condition) { missing += reason; missing += "; "; } };
-        require(VK_API_VERSION_VARIANT(adapter.properties.apiVersion) == 0 && adapter.properties.apiVersion >= device_api_version, "Vulkan 1.3");
+        require(VK_API_VERSION_VARIANT(adapter.properties.apiVersion) == 0 && adapter.properties.apiVersion >= device_api_version, "Vulkan 1.4");
         require(adapter.timeline_semaphore, "timelineSemaphore");
         require(adapter.synchronization2, "synchronization2");
         require(adapter.dynamic_rendering, "dynamicRendering");
+        require(adapter.maintenance4, "maintenance4");
         std::optional<std::uint32_t> family;
         for (std::size_t q = 0; q < adapter.queues.size(); ++q) {
             const auto& queue = adapter.queues[q];

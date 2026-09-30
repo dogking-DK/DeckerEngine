@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:49:00+08:00"
-updated_at: "2026-09-30T09:24:00+08:00"
+updated_at: "2026-09-30T09:44:00+08:00"
 ---
 
 # Vulkan 设备、资源与提交
@@ -11,8 +11,10 @@ updated_at: "2026-09-30T09:24:00+08:00"
 
 ## 配置和运行
 
-Windows x64 使用支持 Vulkan 1.3 的驱动。需要同一队列支持 graphics/compute，
-以及 timelineSemaphore、synchronization2、dynamicRendering。
+Windows x64 使用支持 Vulkan 1.4 的 loader 和显卡驱动。需要同一队列支持 graphics/compute，
+以及 timelineSemaphore、synchronization2、dynamicRendering、maintenance4。
+创建 instance 与 VMA 均使用 VK_API_VERSION_1_4；1.3 及更低版本明确拒绝，不自动降级。
+1.4.0 即满足 API 版本门槛，headers/SDK 的 patch 版本不作为额外最低驱动要求。
 验证层测试还需要安装 Vulkan SDK 的 VK_LAYER_KHRONOS_validation 和 EXT_debug_utils。
 vcpkg 提供编译头文件和 loader 包，不安装显卡驱动或验证层。
 
@@ -40,6 +42,23 @@ Vulkan-Hpp 随 vulkan-headers 提供；使用 vulkan_raii.hpp 的 vk::raii 管�
 CTest 的两个探针标记 gpu，无必需设备或验证环境时返回 77 并显示 Skipped；跳过不代表 GPU 验证通过。
 实际设备创建错误、诊断错误、消息未投递或未释放分配返回 1。
 CPU 策略/模拟失败测试不加载 GPU，可单独筛选 `^dk\.device\.unit\.` 并仅构建 dk_device_tests。
+
+若本机出现 `VK_LAYER_AMD_switchable_graphics uses API version 1.3`，这是旧 AMD 隐式层的声明与 1.4 应用不匹配。
+本机已核实该层的 manifest 提供 `DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1=1`；可仅在验证进程内使用，
+Khronos 显式验证层及同步验证仍保持开启。测试仍统计全部诊断，不过滤该警告：
+
+```powershell
+$previousAmdLayer = $env:DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1
+try {
+    $env:DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1 = '1'
+    & ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Target @('dk_device_probe', 'dk_graphics_resource_probe', 'dk_offscreen_probe') -TestRegex '^dk\.(device\.gpu_validation|graphics\.gpu_resources_validation|offscreen\.gpu_validation)$' -Reason '隔离旧 AMD 隐式层并验证 Vulkan 1.4'
+} finally {
+    $env:DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1 = $previousAmdLayer
+}
+```
+
+该开关是本机驱动 manifest 的约定；其他机器先核对自身环境。这里不修改系统注册表、持久环境变量、SDK 或驱动。
+Loader 通用的 `VK_LOADER_LAYERS_DISABLE` 在本机还会产生 forced-disabled warning，因此没有用它作为零诊断验收环境。
 
 ## 嵌入模块
 
@@ -86,7 +105,7 @@ RAII 引用和解引用后的 vk::* 句柄均借用；不得重新包装为另�
 不要自行销毁 allocator。VMA 创建的 buffer/image 由 VMA 配对释放，不能再交给 vk::raii::Buffer/Image 销毁。
 引擎 target 传递 VK_NO_PROTOTYPES、VULKAN_HPP_ENABLE_DYNAMIC_LOADER_TOOL=0 和 VULKAN_HPP_NO_DEFAULT_DISPATCHER；
 优先通过 RAII 方法调用，特殊 C 扩展可用 Device 的 proc 接口。不依赖 volk/Hpp 全局函数表，
-不要覆盖这些编译定义。VMA 使用 Vulkan 1.2 API 路径，设备仍要求 Vulkan 1.3。
+不要覆盖这些编译定义。VMA 使用 Vulkan 1.4 API 路径，maintenance4 显式启用，核心内存需求查询由 volk table 注入。
 引擎对象/容器使用 Memory heap；Hpp dispatcher、vk-bootstrap/VMA 的内部 CPU 元数据使用三方默认分配器，
 不计入该 heap 的用量。GPU allocation 由 VMA 单独统计。
 底层 Device 不提供提交或隐式等待；以下 SubmissionQueue 提供提交与等待，且会在最终析构时排空自身工作。
@@ -96,6 +115,7 @@ RAII 引用和解引用后的 vk::* 句柄均借用；不得重新包装为另�
 初始设备验收见 [0042](../development/0042-vulkan-device.md)，三方接入和 VMA 结果见
 [0043](../development/0043-vulkan-libraries.md)，Hpp RAII 迁移见 [0044](../development/0044-vulkan-hpp-raii.md)。
 M5.2 的资源与提交验收见 [0045](../development/0045-graphics-resources-submission.md)。
+Vulkan 1.4 基线与 VMA 查询验证见 [0048](../development/0048-vulkan-14-baseline.md)。
 
 ## 上传与读回
 

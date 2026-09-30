@@ -65,7 +65,7 @@ pwsh -NoProfile -File scripts/check-spec.ps1
 | engine/scene | 场景文档、组件、层级、工程与 JSON 持久化 |
 | engine/framework | commands、services、operations、runtime |
 | engine/automation | JSON-RPC 与 JSON Lines/stdio；网络和客户端 SDK 预留 |
-| engine/graphics/device、shaders、offscreen | Vulkan 1.3 设备/资源/提交、Slang 编译与离屏执行；Graph/呈现预留 |
+| engine/graphics/device、shaders、offscreen | Vulkan 1.4 设备/资源/提交、Slang 编译与离屏执行；Graph/呈现预留 |
 | apps/runner、tools/assetc | CPU 命令进程、离线资产工具 |
 | tools/shaderc、shaders/common | 独立 shader 编译工具、图形/compute 源码示例 |
 | tools/profiling | 独立 Tracy 工具及内存 capture 检查器 |

@@ -53,6 +53,19 @@ bool allocator_smoke(const dk::graphics::Device& device)
         VmaAllocationCreateInfo allocation{};
         allocation.usage = VMA_MEMORY_USAGE_AUTO;
         allocation.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+        // Exercise VMA's maintenance4 path before creating the actual resource.
+        std::uint32_t memory_type = 0;
+        if (vmaFindMemoryTypeIndexForBufferInfo(buffer.allocator, &info, &allocation, &memory_type) != VK_SUCCESS) return false;
+        VkImageCreateInfo image{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+        image.imageType = VK_IMAGE_TYPE_2D;
+        image.format = VK_FORMAT_R8G8B8A8_UNORM;
+        image.extent = {16, 16, 1};
+        image.mipLevels = image.arrayLayers = 1;
+        image.samples = VK_SAMPLE_COUNT_1_BIT;
+        image.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        VmaAllocationCreateInfo image_allocation{};
+        image_allocation.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+        if (vmaFindMemoryTypeIndexForImageInfo(buffer.allocator, &image, &image_allocation, &memory_type) != VK_SUCCESS) return false;
         if (vmaCreateBuffer(buffer.allocator, &info, &allocation, &buffer.buffer, &buffer.allocation, nullptr) != VK_SUCCESS) return false;
         void* mapped = nullptr;
         if (vmaMapMemory(buffer.allocator, buffer.allocation, &mapped) != VK_SUCCESS) return false;
@@ -96,6 +109,8 @@ int main(int argc, char** argv)
             round, info.properties.deviceName.data(), info.properties.vendorID, info.properties.deviceID,
             VK_API_VERSION_MAJOR(info.properties.apiVersion), VK_API_VERSION_MINOR(info.properties.apiVersion), VK_API_VERSION_PATCH(info.properties.apiVersion),
             info.driver.driverName.data(), info.driver.driverInfo.data(), info.properties.driverVersion, device->queue_family(), device->validation_enabled() ? "on" : "off");
+        std::printf("configuredAPI=%u.%u maintenance4=%s\n", VK_API_VERSION_MAJOR(dk::graphics::device_api_version),
+            VK_API_VERSION_MINOR(dk::graphics::device_api_version), info.maintenance4 ? "on" : "off");
         if (!*device->instance() || !*device->physical_device() || !*device->logical_device() || !*device->queue() ||
             !device->device_proc("vkDeviceWaitIdle")) return 1;
         if (validation) {

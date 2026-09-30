@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-30T09:24:00+08:00"
+updated_at: "2026-09-30T09:40:00+08:00"
 status: accepted
 ---
 
@@ -126,8 +126,8 @@ Windows MSVC/CRT、设备和诊断证据见 [0042](development/0042-vulkan-devic
 [VMA port](https://github.com/microsoft/vcpkg/blob/master/ports/vulkan-memory-allocator/vcpkg.json)，
 均为上述版本且无额外 port 修订，与 baseline 一致，不引入 override 或浮动依赖。
 实际编译/双设备/VMA buffer 验收见 [0043](development/0043-vulkan-libraries.md)。
-VMA 静态和动态函数自动装载均关闭，函数由当前 volk table 显式注入；使用 API 1.2 路径，
-不隐式启用尚未请求的 maintenance4。三方内部 CPU 元数据使用其默认分配器。
+VMA 静态和动态函数自动装载均关闭，函数由当前 volk table 显式注入；使用 API 1.4 路径，
+设备显式启用 maintenance4，注入核心 buffer/image 内存需求查询。三方内部 CPU 元数据使用其默认分配器。
 Vulkan-Hpp 已随上述 headers 安装，不新增官方已标记 deprecated 的
 [vulkan-hpp port](https://github.com/microsoft/vcpkg/blob/master/ports/vulkan-hpp/vcpkg.json)。
 2026-09-28 再次核验 [headers port](https://github.com/microsoft/vcpkg/blob/master/ports/vulkan-headers/vcpkg.json)
@@ -147,6 +147,12 @@ Slang COM 对象使用 ComPtr RAII，三方内部及短期适配分配使用默�
 M5.4 复用以上固定版本，无新增/升级包或 baseline 变化。dk::graphics_offscreen PUBLIC 组合 Device/Shaders，
 以 vk::raii 管理 ShaderModule、Pipeline/Layout、DescriptorSetLayout/Pool/Set 和 ImageView；
 VMA 继续独占 Buffer/Image 内存所有权。离屏绘制/compute 和同步验证证据见 [0047](development/0047-offscreen-execution.md)。
+
+2026-09-30 按用户要求将运行 API 基线统一为 Vulkan 1.4，CMake 要求 VulkanHeaders >= 1.4；
+官方 [headers port](https://github.com/microsoft/vcpkg/blob/master/ports/vulkan-headers/vcpkg.json) 仍为 1.4.357.0，
+[VMA port](https://github.com/microsoft/vcpkg/blob/master/ports/vulkan-memory-allocator/vcpkg.json) 仍为 3.4.0，均无 port 修订。
+现有固定依赖已支持 1.4，因此不修改 baseline、不浮动跟随 Khronos patch，也不安装/升级本机 SDK 或驱动。
+配置、特性与 GPU 验证见 [0048](development/0048-vulkan-14-baseline.md)。
 
 ## 清单预留，模块尚未实现
 

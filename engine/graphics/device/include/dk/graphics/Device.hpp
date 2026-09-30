@@ -12,7 +12,8 @@
 
 namespace dk::graphics {
 
-inline constexpr std::uint32_t device_api_version = VK_API_VERSION_1_3;
+// Runtime API baseline, not the Vulkan header/SDK patch version.
+inline constexpr std::uint32_t device_api_version = VK_API_VERSION_1_4;
 enum class ValidationMode { disabled, if_available, required };
 
 struct Diagnostic {
@@ -40,6 +41,7 @@ struct AdapterInfo {
     bool timeline_semaphore = false;
     bool synchronization2 = false;
     bool dynamic_rendering = false;
+    bool maintenance4 = false;
     Vector<vk::QueueFamilyProperties> queues;
 };
 struct AdapterSelection { std::uint32_t adapter_index; std::uint32_t queue_family; };

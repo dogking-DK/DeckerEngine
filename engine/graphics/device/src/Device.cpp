@@ -123,6 +123,8 @@ VmaVulkanFunctions allocator_functions(const VolkInstanceTable& instance, const 
     DK_VMA_DEVICE(vkCreateImage);
     DK_VMA_DEVICE(vkDestroyImage);
     DK_VMA_DEVICE(vkCmdCopyBuffer);
+    DK_VMA_DEVICE(vkGetDeviceBufferMemoryRequirements);
+    DK_VMA_DEVICE(vkGetDeviceImageMemoryRequirements);
 #undef DK_VMA_INSTANCE
 #undef DK_VMA_DEVICE
     functions.vkGetBufferMemoryRequirements2KHR = device.vkGetBufferMemoryRequirements2;
@@ -218,7 +220,8 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
         const auto result = version_fn(&version);
         if (result != VK_SUCCESS) return std::unexpected(vk_error("vkEnumerateInstanceVersion", result));
     }
-    if (version < device_api_version) return std::unexpected(Error{ErrorCode::not_supported, "Vulkan loader must support API 1.3"});
+    if (VK_API_VERSION_VARIANT(version) != 0 || version < device_api_version)
+        return std::unexpected(Error{ErrorCode::not_supported, "Vulkan loader must support API 1.4"});
     const auto layers_fn = reinterpret_cast<PFN_vkEnumerateInstanceLayerProperties>(global("vkEnumerateInstanceLayerProperties"));
     const auto extensions_fn = reinterpret_cast<PFN_vkEnumerateInstanceExtensionProperties>(global("vkEnumerateInstanceExtensionProperties"));
     const auto create_instance = reinterpret_cast<PFN_vkCreateInstance>(global("vkCreateInstance"));
@@ -274,7 +277,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     const auto create_device = impl->instance_table.vkCreateDevice;
     if (!destroy_device || !impl->get_device_proc || !physical_fn ||
         !properties_fn || !features_fn || !queues_fn || !create_device)
-        return std::unexpected(Error{ErrorCode::internal_error, "Vulkan instance is missing required API 1.3 entry points"});
+        return std::unexpected(Error{ErrorCode::internal_error, "Vulkan instance is missing required API 1.4 entry points"});
     auto physicals = enumerate<VkPhysicalDevice>(resource, "vkEnumeratePhysicalDevices",
         [&](std::uint32_t* count, VkPhysicalDevice* data) { return physical_fn(native_instance, count, data); });
     if (!physicals) return std::unexpected(physicals.error());
@@ -286,7 +289,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
         info.properties = properties.properties;
         // Old physical devices are still reported/rejected, but must not receive
         // feature/property structures introduced after their advertised API.
-        if (info.properties.apiVersion >= device_api_version) {
+        if (VK_API_VERSION_VARIANT(info.properties.apiVersion) == 0 && info.properties.apiVersion >= device_api_version) {
             info.driver = physical_device.getProperties2<vk::PhysicalDeviceProperties2,
                 vk::PhysicalDeviceDriverProperties>().get<vk::PhysicalDeviceDriverProperties>();
             info.driver.pNext = nullptr;
@@ -297,6 +300,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
             info.timeline_semaphore = features12.timelineSemaphore == VK_TRUE;
             info.synchronization2 = features13.synchronization2 == VK_TRUE;
             info.dynamic_rendering = features13.dynamicRendering == VK_TRUE;
+            info.maintenance4 = features13.maintenance4 == VK_TRUE;
         }
         std::uint32_t count = 0;
         queues_fn(physical, &count, nullptr);
@@ -321,6 +325,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     vk::PhysicalDeviceVulkan13Features features13{};
     features13.synchronization2 = VK_TRUE;
     features13.dynamicRendering = VK_TRUE;
+    features13.maintenance4 = VK_TRUE;
     vk::PhysicalDeviceVulkan12Features features12{};
     features12.timelineSemaphore = VK_TRUE;
     features12.pNext = &features13;
@@ -334,6 +339,8 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     load_device_table(resolver, impl->get_device_proc, pending_device.handle, impl->device_table);
     if (!impl->device_table.vkDestroyDevice || !impl->device_table.vkGetDeviceQueue)
         return std::unexpected(Error{ErrorCode::internal_error, "Vulkan device is missing required entry points"});
+    if (!impl->device_table.vkGetDeviceBufferMemoryRequirements || !impl->device_table.vkGetDeviceImageMemoryRequirements)
+        return std::unexpected(Error{ErrorCode::internal_error, "Vulkan 1.4 device is missing maintenance4 memory requirement entry points"});
     impl->device = vk::raii::Device{impl->physical, pending_device.handle};
     pending_device.handle = VK_NULL_HANDLE;
     impl->queue = impl->device.getQueue(impl->family, 0);
@@ -343,9 +350,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     allocator_info.instance = native_instance;
     allocator_info.physicalDevice = native_physical;
     allocator_info.device = static_cast<VkDevice>(*impl->device);
-    // M5.1 does not enable maintenance4. VMA's 1.2 path only uses features
-    // already enabled, even though the underlying device API is 1.3.
-    allocator_info.vulkanApiVersion = VK_API_VERSION_1_2;
+    allocator_info.vulkanApiVersion = device_api_version;
     allocator_info.pVulkanFunctions = &functions;
     result = impl->allocator.api.create(&allocator_info, &impl->allocator.handle);
     if (result != VK_SUCCESS) { impl->allocator.handle = VK_NULL_HANDLE; return std::unexpected(vk_error("vmaCreateAllocator", result)); }

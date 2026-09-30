@@ -20,7 +20,7 @@ AdapterInfo suitable(memory::ResourceHandle resource, vk::PhysicalDeviceType typ
     info.properties.apiVersion = device_api_version;
     info.properties.deviceType = type;
     copy_name(info.properties.deviceName, "test adapter");
-    info.timeline_semaphore = info.synchronization2 = info.dynamic_rendering = true;
+    info.timeline_semaphore = info.synchronization2 = info.dynamic_rendering = info.maintenance4 = true;
     info.queues.push_back({vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute, 1, 64, {1, 1, 1}});
     return info;
 }
@@ -37,6 +37,9 @@ struct Fake {
     bool throw_instance_adoption = false, throw_device_adoption = false, teardown_callback = false;
     int device_queue_lookups = 0;
     std::uint32_t loader_version = device_api_version;
+    std::uint32_t physical_version = device_api_version;
+    bool maintenance4 = true, buffer_requirements = true, image_requirements = true;
+    int feature_queries = 0, device_creates = 0;
     memory::ResourceHandle close_resource;
     int fills = 0, creates = 0, alternate_creates = 0;
     std::string destroyed;
@@ -50,6 +53,7 @@ struct Fake {
     static VKAPI_ATTR VkResult VKAPI_CALL instance(const VkInstanceCreateInfo* info, const VkAllocationCallbacks*, VkInstance* value)
     {
         ++active->creates;
+        REQUIRE(info->pApplicationInfo->apiVersion == VK_API_VERSION_1_4);
         if (info->pNext) active->callback_info = *static_cast<const VkDebugUtilsMessengerCreateInfoEXT*>(info->pNext);
         if (active->instance_result == VK_SUCCESS) *value = handle<VkInstance>(1);
         return active->instance_result;
@@ -84,25 +88,28 @@ struct Fake {
     }
     static VKAPI_ATTR void VKAPI_CALL properties(VkPhysicalDevice, VkPhysicalDeviceProperties2* value)
     {
-        value->properties.apiVersion = device_api_version;
+        value->properties.apiVersion = active->physical_version;
         copy_name(value->properties.deviceName, "fake GPU");
         if (active->close_resource) active->close_resource.begin_close();
     }
     static VKAPI_ATTR void VKAPI_CALL features(VkPhysicalDevice, VkPhysicalDeviceFeatures2* value)
     {
+        ++active->feature_queries;
         auto* f12 = static_cast<VkPhysicalDeviceVulkan12Features*>(value->pNext);
         auto* f13 = static_cast<VkPhysicalDeviceVulkan13Features*>(f12->pNext);
         f12->timelineSemaphore = VK_TRUE;
         f13->synchronization2 = f13->dynamicRendering = VK_TRUE;
+        f13->maintenance4 = active->maintenance4 ? VK_TRUE : VK_FALSE;
     }
     static VKAPI_ATTR void VKAPI_CALL queues(VkPhysicalDevice, std::uint32_t* count, VkQueueFamilyProperties* data)
     { *count = 1; if (data) data[0] = {VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 1, 64, {1, 1, 1}}; }
     static VKAPI_ATTR VkResult VKAPI_CALL device(VkPhysicalDevice, const VkDeviceCreateInfo* info, const VkAllocationCallbacks*, VkDevice* value)
     {
+        ++active->device_creates;
         const auto* f12 = static_cast<const VkPhysicalDeviceVulkan12Features*>(info->pNext);
         const auto* f13 = static_cast<const VkPhysicalDeviceVulkan13Features*>(f12->pNext);
         active->feature_contract = f12->timelineSemaphore && f13->synchronization2 && f13->dynamicRendering &&
-            !f12->bufferDeviceAddress && !f13->maintenance4 && info->enabledExtensionCount == 0 &&
+            !f12->bufferDeviceAddress && f13->maintenance4 && info->enabledExtensionCount == 0 &&
             info->queueCreateInfoCount == 1 && info->pQueueCreateInfos->queueCount == 1 &&
             info->pQueueCreateInfos->queueFamilyIndex == 0 && *info->pQueueCreateInfos->pQueuePriorities == 1.0f;
         if (active->device_result == VK_SUCCESS) *value = handle<VkDevice>(3);
@@ -110,6 +117,8 @@ struct Fake {
     }
     static VKAPI_ATTR void VKAPI_CALL queue(VkDevice, std::uint32_t, std::uint32_t, VkQueue* value)
     { *value = active->null_queue ? VK_NULL_HANDLE : handle<VkQueue>(5); }
+    static VKAPI_ATTR void VKAPI_CALL buffer_memory_requirements(VkDevice, const VkDeviceBufferMemoryRequirements*, VkMemoryRequirements2*) {}
+    static VKAPI_ATTR void VKAPI_CALL image_memory_requirements(VkDevice, const VkDeviceImageMemoryRequirements*, VkMemoryRequirements2*) {}
     static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL device_proc(VkDevice, const char* name)
     {
         if (std::strcmp(name, "vkGetDeviceQueue") == 0 && ++active->device_queue_lookups == 2 && active->throw_device_adoption)
@@ -120,7 +129,9 @@ struct Fake {
     {
         REQUIRE(info->instance != VK_NULL_HANDLE);
         REQUIRE(info->device != VK_NULL_HANDLE);
-        REQUIRE(info->vulkanApiVersion == VK_API_VERSION_1_2);
+        REQUIRE(info->vulkanApiVersion == VK_API_VERSION_1_4);
+        REQUIRE(info->pVulkanFunctions->vkGetDeviceBufferMemoryRequirements == buffer_memory_requirements);
+        REQUIRE(info->pVulkanFunctions->vkGetDeviceImageMemoryRequirements == image_memory_requirements);
         if (active->allocator_result == VK_SUCCESS) *output = handle<VmaAllocator>(6);
         return active->allocator_result;
     }
@@ -134,6 +145,10 @@ struct Fake {
     }
     static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL resolve(VkInstance, const char* name)
     {
+        if (std::strcmp(name, "vkGetDeviceBufferMemoryRequirements") == 0)
+            return active->buffer_requirements ? reinterpret_cast<PFN_vkVoidFunction>(buffer_memory_requirements) : nullptr;
+        if (std::strcmp(name, "vkGetDeviceImageMemoryRequirements") == 0)
+            return active->image_requirements ? reinterpret_cast<PFN_vkVoidFunction>(image_memory_requirements) : nullptr;
         if (active->throw_instance_adoption && std::strcmp(name, "vkGetPhysicalDeviceFeatures") == 0)
             throw std::bad_alloc{}; // Simulate allocation failure while constructing the Hpp dispatcher.
 #define DK_FAKE_PROC(vk, function) if (std::strcmp(name, #vk) == 0) return reinterpret_cast<PFN_vkVoidFunction>(function)
@@ -183,13 +198,13 @@ TEST_CASE("adapter rejection explains every missing requirement")
     Memory memory;
     std::array adapters{suitable(memory.resource)};
     auto& adapter = adapters[0];
-    adapter.properties.apiVersion = VK_API_VERSION_1_2;
-    adapter.timeline_semaphore = adapter.synchronization2 = adapter.dynamic_rendering = false;
+    adapter.properties.apiVersion = VK_API_VERSION_1_3;
+    adapter.timeline_semaphore = adapter.synchronization2 = adapter.dynamic_rendering = adapter.maintenance4 = false;
     adapter.queues[0].queueCount = 0;
     auto result = select_adapter(adapters);
     REQUIRE_FALSE(result);
     const auto& reasons = result.error().context[0];
-    for (const auto* expected : {"Vulkan 1.3", "timelineSemaphore", "synchronization2", "dynamicRendering", "graphics+compute queue"})
+    for (const auto* expected : {"Vulkan 1.4", "timelineSemaphore", "synchronization2", "dynamicRendering", "maintenance4", "graphics+compute queue"})
         REQUIRE(reasons.find(expected) != std::string::npos);
 }
 
@@ -239,6 +254,8 @@ TEST_CASE("device cleans instance and messenger on absent devices and creation f
     SECTION("enumeration fails") { fake.enumerate_result = VK_ERROR_INITIALIZATION_FAILED; message = "vkEnumeratePhysicalDevices"; }
     SECTION("device fails") { fake.device_result = VK_ERROR_OUT_OF_DEVICE_MEMORY; message = "vkCreateDevice failed: VK_ERROR_OUT_OF_DEVICE_MEMORY (-2)"; }
     SECTION("queue missing") { fake.null_queue = true; expected = "DMI"; message = "vkGetDeviceQueue"; }
+    SECTION("buffer requirements missing") { fake.buffer_requirements = false; expected = "DMI"; message = "maintenance4 memory requirement entry points"; }
+    SECTION("image requirements missing") { fake.image_requirements = false; expected = "DMI"; message = "maintenance4 memory requirement entry points"; }
     SECTION("allocator fails") { fake.allocator_result = VK_ERROR_OUT_OF_HOST_MEMORY; expected = "DMI"; message = "vmaCreateAllocator failed: VK_ERROR_OUT_OF_HOST_MEMORY (-1)"; }
     auto result = fake.create(memory.resource);
     REQUIRE_FALSE(result);
@@ -273,13 +290,42 @@ TEST_CASE("device rejects unsupported loader and missing required validation bef
     Fake fake;
     DeviceOptions options;
     options.validation = ValidationMode::required;
-    SECTION("old loader") { fake.loader_version = VK_API_VERSION_1_2; }
+    SECTION("old loader") { fake.loader_version = VK_MAKE_API_VERSION(0, 1, 3, 4095); }
+    SECTION("different variant") { fake.loader_version = VK_MAKE_API_VERSION(1, 1, 4, 0); }
     SECTION("missing layer") { fake.layer = false; }
     SECTION("missing debug utils") { fake.debug = false; }
     auto result = fake.create(memory.resource, options);
     REQUIRE_FALSE(result);
     REQUIRE(result.error().code == ErrorCode::not_supported);
     REQUIRE(fake.creates == 0);
+    REQUIRE(memory.resource.snapshot().live_allocations == 0);
+}
+
+TEST_CASE("device enforces Vulkan 1.4 without requiring the header patch version")
+{
+    Memory memory;
+    Fake fake;
+    bool accepted = true;
+    SECTION("1.4.0 baseline") { fake.loader_version = fake.physical_version = VK_API_VERSION_1_4; }
+    SECTION("1.4 newer patch") { fake.physical_version = VK_MAKE_API_VERSION(0, 1, 4, 1); }
+    SECTION("1.3 device rejected") { fake.physical_version = VK_MAKE_API_VERSION(0, 1, 3, 4095); accepted = false; }
+    SECTION("different device variant") { fake.physical_version = VK_MAKE_API_VERSION(1, 1, 4, 0); accepted = false; }
+    SECTION("maintenance4 missing") { fake.maintenance4 = false; accepted = false; }
+    {
+        auto result = fake.create(memory.resource);
+        REQUIRE(result.has_value() == accepted);
+        if (accepted) {
+            REQUIRE(fake.feature_contract);
+            REQUIRE(result->adapter().maintenance4);
+        } else {
+            REQUIRE(result.error().code == ErrorCode::not_supported);
+            REQUIRE(fake.device_creates == 0);
+            const bool compatible = VK_API_VERSION_VARIANT(fake.physical_version) == 0 && fake.physical_version >= VK_API_VERSION_1_4;
+            REQUIRE(fake.feature_queries == (compatible ? 1 : 0));
+            REQUIRE(result.error().context[0].find(compatible ? "maintenance4" : "Vulkan 1.4") != std::string::npos);
+        }
+    }
+    REQUIRE(fake.destroyed == (accepted ? "ADMI" : "MI"));
     REQUIRE(memory.resource.snapshot().live_allocations == 0);
 }
 
