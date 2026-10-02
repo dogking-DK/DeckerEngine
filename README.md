@@ -5,6 +5,7 @@
 
 当前提供 Foundation、Memory/Tracy、Scene 持久化、命令/事务、CPU Runtime、
 资产导入与缓存、有界 Jobs、异步 CPU Ready，以及可选的 Vulkan 使用层（对象/管线/绑定/录制/同步/传输）、Slang 编译、离屏绘制/计算读回，以及 SDL3 窗口与 Vulkan 呈现。
+GPU Graph 提供资源/Pass 声明与 CPU 结构校验，执行计划和 GPU 执行尚未实现。
 场景渲染、物理、编辑器、网络 IPC 与脚本尚未实现。
 阶段状态、依赖和下一项统一见[开发 Roadmap](spec/roadmap.md)。
 
@@ -34,6 +35,7 @@ cmake --build --preset windows-debug --target dk_run
 | Vulkan 使用层、上传/读回、绘制/计算与 GPU 探针 | [Graphics 指南](spec/guides/graphics.md) |
 | Slang 离线编译、SPIR-V、反射与 dk-shaderc | [Shader 指南](spec/guides/shaders.md) |
 | 离屏三角形、compute 与结果读回 | [离屏指南](spec/guides/offscreen.md) |
+| GPU Graph 资源/Pass 声明与结构校验 | [Graph 指南](spec/guides/graph.md) |
 | SDL3 窗口三角形、缩放/最小化与交换链恢复 | [呈现指南](spec/guides/presentation.md) |
 | Core、数学、IO、Scene 与 CPU 示例 | [Foundation/Scene 指南](spec/guides/foundation.md) |
 | 实现 Mx.y 或修改已有模块 | [AGENTS.md](AGENTS.md)、[流程规范](spec/README.md)、[模块与源码索引](spec/design/README.md) |

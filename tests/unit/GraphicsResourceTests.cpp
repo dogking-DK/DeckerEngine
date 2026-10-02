@@ -1,4 +1,5 @@
 #include "ResourcePolicy.hpp"
+#include <dk/graphics/ResourceValidation.hpp>
 #include "PipelinePolicy.hpp"
 #include "CommandInternal.hpp"
 #include <dk/memory/MemorySystem.hpp>
@@ -133,4 +134,25 @@ TEST_CASE("image subresource and pitched copy validation rejects invalid footpri
     REQUIRE(policy::stage_covers(vk::PipelineStageFlagBits2::eAllGraphics,vk::PipelineStageFlagBits2::eVertexAttributeInput));
     REQUIRE_FALSE(policy::stage_covers(vk::PipelineStageFlagBits2::eAllGraphics,vk::PipelineStageFlagBits2::eComputeShader));
     REQUIRE_FALSE(policy::stage_covers(vk::PipelineStageFlagBits2::eAllGraphics,vk::PipelineStageFlagBits2::eCopy));
+}
+
+TEST_CASE("pure access validation normalizes ranges and rejects unknown raw flag bits")
+{
+    const BufferDesc buffer{64};
+    AccessDescription use{{vk::PipelineStageFlagBits2::eCopy, vk::AccessFlagBits2::eTransferRead}, 16};
+    const auto normalized = validate_buffer_access(buffer, use);
+    REQUIRE(normalized);
+    CHECK(normalized->offset == 16);
+    CHECK(normalized->size == 48);
+    CHECK(use.size == VK_WHOLE_SIZE);
+    use.state.access = vk::AccessFlags2{1ull << 63};
+    CHECK_FALSE(validate_buffer_access(buffer, use));
+    use.state.access = vk::AccessFlagBits2::eTransferRead;
+    use.state.stages = vk::PipelineStageFlags2{1ull << 63};
+    CHECK_FALSE(validate_buffer_access(buffer, use));
+    use.state.stages = vk::PipelineStageFlagBits2::eCopy;
+    use.state.layout = vk::ImageLayout::eTransferSrcOptimal;
+    CHECK(validate_image_access({4, 4}, use));
+    use.state.access = vk::AccessFlags2{1ull << 63};
+    CHECK_FALSE(validate_image_access({4, 4}, use));
 }

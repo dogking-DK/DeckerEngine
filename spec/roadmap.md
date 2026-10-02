@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-02T22:46:00+08:00"
+updated_at: "2026-10-02T23:30:11+08:00"
 status: accepted
 ---
 
@@ -36,7 +36,8 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 [0045](development/0045-graphics-resources-submission.md)、[0046](development/0046-slang-shader-compiler.md)、
 [0047](development/0047-offscreen-execution.md)。M5.5.1–5 使用层封装及离屏迁移已完成，见
 [0053](development/0053-vulkan-offscreen-migration.md)。M5.6 窗口与呈现完成，见
-[0056](development/0056-presentation-recovery.md)；M5 已全部验收，下一项为 M6.1 图声明与结构校验。
+[0056](development/0056-presentation-recovery.md)；M5 已全部验收。M6.1 图声明与结构校验完成，见
+[0057](development/0057-graph-declarations.md)；下一项为 M6.2 依赖编译与资源生命周期。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作；提早建立多线程内存契约与性能测量，复杂并行优化仍由测量驱动。
@@ -57,7 +58,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M1.7 Foundation 补充 | Tracy、mimalloc heap、PMR/智能指针、arena/pool、多线程生命周期与性能基线 | 原 M1、M3（现有链路埋点） | 已完成：M1.7.1–7 均验收 |
 | M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3、M1.7 | 已完成：M4.1–4，证据 0031–0040 |
 | M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、Vulkan 使用层、最小呈现 | M1、M1.7 | 已完成：M5.1–6 均验收，见 0042–0056 |
-| M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 待开始 |
+| M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 进行中：M6.1 已完成，M6.2–4 待开始 |
 | M7 场景渲染 | 资产上传、场景提取、Pass、pipeline、可等待截图 | M3、M4、M6 | 待开始 |
 | M8 编辑器与进程控制 | 可编辑保存的视口；dk-ctl 操作运行中的程序 | M7 | 待开始 |
 | M9 脚本与自动化 SDK | Lua 场景脚本、Python 客户端、批处理与重放 | M3；集成验收需要 M8 | 待开始 |
@@ -356,12 +357,12 @@ shader 热重载、跨平台交叉编译、多 GPU 暂缓。
 
 | 子阶段 | 范围 | 前置 | 验收与证据 | 状态 |
 | --- | --- | --- | --- | --- |
-| M6.1 | 图声明与结构校验 | M5 | 资源/Pass 契约可表达；非法引用与循环在提交前拒绝 | 待开始 |
+| M6.1 | 图声明与结构校验 | M5 | 资源/Pass 声明、句柄/内容/循环校验与失败保护通过，见 [0057](development/0057-graph-declarations.md) | 已完成 |
 | M6.2 | 依赖编译与资源生命周期 | M6.1 | 拓扑排序、裁剪及 transient 分配计划可检查 | 待开始 |
 | M6.3 | 单队列同步与执行 | M6.2 | barrier、layout、外部状态与完成跟踪通过 GPU 验证 | 待开始 |
 | M6.4 | 样例迁移与诊断 | M6.3 | upload/compute/draw/readback 全部进入图，重复运行和 M5 结果回归通过 | 待开始 |
 
-**先写设计：** `graphics-graph.md`。
+**当前设计：** [GPU Graph](design/graphics-graph.md)。M6.1 只提供 CPU 声明与校验，编译计划和 GPU 执行尚未实现。
 
 **验收：** upload → compute → draw → readback 的小图正确执行；
 写后读、布局转换、外部状态、重复执行和生命周期有测试。
@@ -519,7 +520,8 @@ M5.4 的离屏 draw/dispatch/readback、同步验证与对象寿命验收见 [00
 [M5.5 Vulkan 使用层封装](design/graphics-vulkan.md) 的 M5.5.1–5 已全部完成并独立提交，
 最终验收见 [0053](development/0053-vulkan-offscreen-migration.md)。
 M5.6 窗口呈现、交换链同步与恢复、独立离屏和 CPU 回归见 [0056](development/0056-presentation-recovery.md)。
-下一项为 **M6.1 图声明与结构校验**。开工前建立 graphics-graph 设计；
+M6.1 图声明与结构校验完成，见 [0057](development/0057-graph-declarations.md)。
+下一项为 **M6.2 依赖编译与资源生命周期**：拓扑排序、裁剪和 transient 分配计划；
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 

@@ -1,11 +1,19 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-02T22:46:00+08:00"
+updated_at: "2026-10-02T23:30:11+08:00"
 status: accepted
 ---
 
 # Vulkan 资源与提交生命周期
+
+## CPU 描述与访问校验
+
+ResourceValidation.hpp 提供 AccessDescription、validate_buffer/image_description、
+validate_buffer/image_access 及 access_reads/writes。Graph 声明与 CommandBatch::prepare
+共用同一 stage/access/usage/layout/range 策略，buffer VK_WHOLE_SIZE 返回精确范围。
+这些纯函数不创建/查询设备，不证明硬件能力或当前资源内容；后者仍由创建与录制账本校验。
+Graph 自己约束图身份、依赖和内容声明，见 [Graph 设计](graphics-graph.md)。
 
 ## 目标、边界与依赖
 

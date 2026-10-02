@@ -11,6 +11,13 @@ endif()
 dk_target_defaults(dk_core_tests)
 
 include(Catch)
+if(DK_BUILD_GRAPHICS_GRAPH)
+    add_executable(dk_graph_tests GraphTests.cpp)
+    target_link_libraries(dk_graph_tests PRIVATE dk::graphics_graph Catch2::Catch2WithMain)
+    dk_target_defaults(dk_graph_tests)
+    catch_discover_tests(dk_graph_tests TEST_PREFIX "dk.graph."
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 30 LABELS "cpu")
+endif()
 if(DK_BUILD_GRAPHICS_PRESENTATION)
     add_executable(dk_presentation_tests PresentationTests.cpp)
     target_include_directories(dk_presentation_tests PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/presentation/src")
