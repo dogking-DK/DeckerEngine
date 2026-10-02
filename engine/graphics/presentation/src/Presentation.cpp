@@ -232,7 +232,11 @@ Presenter::~Presenter() = default;
 Presenter::Presenter(Presenter&&) noexcept = default;
 Presenter& Presenter::operator=(Presenter&&) noexcept = default;
 SubmissionQueue& Presenter::queue() noexcept { return state_->queue; }
-PresentationStats Presenter::stats() const noexcept { return state_->stats; }
+PresentationStats Presenter::stats() const noexcept {
+    auto result = state_->stats;
+    result.failed = result.failed || state_->lost();
+    return result;
+}
 Result<void> Presenter::request_rebuild() {
     if (auto valid = state_->accepting(); !valid) return valid;
     state_->stats.needs_rebuild = true;
@@ -344,6 +348,7 @@ Result<void> Presenter::close()
     if (auto closed = state_->queue.close(); !closed && !state_->lost()) return closed;
     state_->generation.reset();
     state_->stats.closed = true;
+    if (state_->lost()) return std::unexpected(Error{ErrorCode::invalid_state, "closed a lost presentation device"});
     return {};
 }
 } // namespace dk::graphics

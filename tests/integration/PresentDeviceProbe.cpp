@@ -1,6 +1,7 @@
 #include <dk/graphics/PresentDevice.hpp>
 #include <dk/memory/MemorySystem.hpp>
 #include <cstdio>
+#include <atomic>
 
 int main()
 {
@@ -8,8 +9,7 @@ int main()
     if (!system) return 1;
     auto heap = system->create_heap({"present-device", dk::memory::DomainCategory::render});
     if (!heap) return 1;
-    std::uint64_t errors = 0, warnings = 0;
-    struct Counts { std::uint64_t& errors; std::uint64_t& warnings; } counts{errors,warnings};
+    struct Counts { std::atomic<std::uint64_t> errors = 0, warnings = 0; } counts;
     dk::graphics::DeviceOptions options;
     options.validation = dk::graphics::ValidationMode::required;
     options.diagnostic_user_data = &counts;
@@ -33,7 +33,7 @@ int main()
         if (!device->surface() || !device->adapter().swapchain_maintenance1 || !device->adapter().present_queues[device->queue_family()]) return 1;
         std::printf("GPU=%s queue=%u maintenance1=1\n", device->adapter().properties.deviceName.data(), device->queue_family());
     }
-    std::printf("errors=%llu warnings=%llu liveAllocations=%zu\n", static_cast<unsigned long long>(errors),
-        static_cast<unsigned long long>(warnings), heap->snapshot().live_allocations);
-    return errors == 0 && warnings == 0 && heap->snapshot().live_allocations == 0 && system->try_close().closed() ? 0 : 1;
+    std::printf("errors=%llu warnings=%llu liveAllocations=%zu\n", static_cast<unsigned long long>(counts.errors.load()),
+        static_cast<unsigned long long>(counts.warnings.load()), heap->snapshot().live_allocations);
+    return counts.errors == 0 && counts.warnings == 0 && heap->snapshot().live_allocations == 0 && system->try_close().closed() ? 0 : 1;
 }

@@ -57,3 +57,11 @@ TEST_CASE("present failure classification preserves enqueued waits") {
     CHECK_FALSE(detail::present_enqueued(VK_ERROR_OUT_OF_DEVICE_MEMORY));
     CHECK_FALSE(detail::present_enqueued(VK_ERROR_DEVICE_LOST));
 }
+TEST_CASE("presentation invalid inputs are rejected before window or loader access") {
+    auto result = Presenter::create({}, {}, {}, {0});
+    REQUIRE_FALSE(result);
+    CHECK(result.error().code == dk::ErrorCode::invalid_argument);
+    CHECK_FALSE(Presenter::create({}, {}, {}, {9}));
+    CHECK_FALSE(create_present_device({}, {}));
+    CHECK_FALSE(Frame{});
+}

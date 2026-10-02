@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-02T22:20:00+08:00"
+updated_at: "2026-10-02T22:46:00+08:00"
 status: accepted
 ---
 
@@ -35,7 +35,7 @@ BufferDesc 指定大小、Vulkan usage、device/upload/readback 内存用途；C
 通过 VMA map、flush/invalidate、unmap 配对处理，设备用途不能直接访问。
 map/范围/角色失败不写用户数据；read 的 invalidate 失败不修改输出；write 的 flush 失败时
 host 内存可能已写入，不保证字节回滚，也不会因此自动提交 GPU 工作。
-ImageDesc 提供多 mip/layer、sample=1 的二维 image，view 支持 2D/2D array。color 支持 RGBA8 UNORM/SRGB、BGRA8 UNORM、
+ImageDesc 提供多 mip/layer、sample=1 的二维 image，view 支持 2D/2D array。color 支持 RGBA8 UNORM/SRGB、BGRA8 UNORM/SRGB、
 R32_UINT/R32_SFLOAT，均为每像素 4 字节；D32_SFLOAT 只支持 depth attachment/sampling，拒绝 byte copy。
 检查 extent、mip/layer、字节数溢出、usage 和设备 format 能力；Image::state(mip,layer) 替代单值 layout 查询，Buffer::state() 返回整对象的已提交状态。
 Buffer/Image 的 vk::* 句柄只借用，不得额外销毁；VMA allocation 不公开。

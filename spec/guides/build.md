@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-09-30T09:24:00+08:00"
+updated_at: "2026-10-02T22:38:00+08:00"
 ---
 
 # 构建与依赖配置
@@ -61,6 +61,8 @@ ctest --preset windows-debug
 Offscreen 要求前两个模块，复用其 feature。设备/资源和离屏探针见 [Graphics 指南](graphics.md)、[离屏指南](offscreen.md)。
 `windows-shaders` 单独构建无需 Vulkan 的
 离线编译库/工具，见 [Shader 指南](shaders.md)。默认开发预设不加载 Vulkan 或 Slang。
+`windows-presentation` 继承 windows-graphics 并显式启用 DK_BUILD_PLATFORM、DK_BUILD_GRAPHICS_PRESENTATION；
+独立 platform feature 只引入 SDL3[vulkan]，窗口运行方法见 [呈现指南](presentation.md)。
 `DK_BUILD_MEMORY` 默认 OFF，开发及 profiling 预设启用，自动选择 memory feature；bootstrap 保持关闭。
 `DK_BUILD_ASSET_RUNTIME` 默认 OFF，开发及 profiling 预设启用并选择 assets feature；要求 IO/Memory。
 关闭 Memory/IO 的配置也须关闭 ASSET_RUNTIME；Scene/Framework 可独立关闭，只有 Project 适配依赖它们。
@@ -84,7 +86,8 @@ JSON 由 Scene 私有使用，原规划的 GLM 已从清单移除。
 | vulkan-device | vulkan、volk、vk-bootstrap、vulkan-memory-allocator（DK_BUILD_GRAPHICS_DEVICE 自动选择，要求 Memory） |
 | shaders | shader-slang、nlohmann-json（DK_BUILD_GRAPHICS_SHADERS 自动选择，要求 Memory/IO） |
 | graphics | vulkan、volk、vk-bootstrap、vulkan-memory-allocator、shader-slang |
-| editor | sdl3[vulkan]、imgui[docking-experimental,sdl3-binding,vulkan-binding] |
+| platform | sdl3[vulkan]（DK_BUILD_PLATFORM 自动选择；不含 ImGui） |
+| editor | sdl3[vulkan]、imgui[docking-experimental,sdl3-binding,vulkan-binding]（编辑器仍预留） |
 | scripting | lua、sol2 |
 | tests | catch2（已接入 Core、数学和 IO 单元测试） |
 | profiling | tracy[on-demand]（关闭默认 features；启用 DK_ENABLE_PROFILING 时自动选择） |

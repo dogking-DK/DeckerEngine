@@ -1,7 +1,7 @@
 ---
 module: platform
 created_at: "2026-10-02T21:40:00+08:00"
-updated_at: "2026-10-02T21:40:00+08:00"
+updated_at: "2026-10-02T22:46:00+08:00"
 status: accepted
 ---
 
@@ -37,6 +37,6 @@ SDL video 子系统按共享 lease 成对 InitSubSystem/QuitSubSystem；最后�
 ## 验证
 
 参数、错误线程、双窗口事件隔离、重复创建/销毁、实际像素 resize/minimize/restore 与 Memory 回收。
-平台探针不需要 Vulkan 设备；缺少桌面环境明确跳过。首先验收 Windows x64。
+平台探针不需要 Vulkan 设备；窗口初始化失败明确报错，不将缺失桌面当作通过。首先验收 Windows x64。
 
 相关：[架构](architecture.md)、[呈现](graphics-presentation.md)、[0054](../development/0054-window-device.md)。

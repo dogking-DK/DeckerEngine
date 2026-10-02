@@ -1,0 +1,6 @@
+add_executable(dk_presentation_demo src/main.cpp)
+set_target_properties(dk_presentation_demo PROPERTIES OUTPUT_NAME dk-presentation-demo)
+target_compile_definitions(dk_presentation_demo PRIVATE DK_COMMON_SHADER_DIR="${PROJECT_SOURCE_DIR}/shaders/common")
+target_link_libraries(dk_presentation_demo PRIVATE dk::graphics_presentation dk::graphics_shaders)
+dk_target_defaults(dk_presentation_demo)
+dk_deploy_slang(dk_presentation_demo)

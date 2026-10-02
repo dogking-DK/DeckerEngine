@@ -42,7 +42,8 @@ struct ResourceBarrier;
 struct RenderingDesc;
 struct ImageCopyRegion;
 
-// VMA owners. Native handles are borrowed; submitted batches retain allocations.
+// Buffer owns VMA memory; Image owns VMA memory or a presentation generation.
+// Native handles are borrowed; submitted batches retain the corresponding owner.
 // All accesses to a queue and its resources must be externally serialized.
 class Buffer final {
 public:

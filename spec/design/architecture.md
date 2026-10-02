@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-02T21:26:00+08:00"
+updated_at: "2026-10-02T22:38:00+08:00"
 status: accepted
 ---
 
@@ -20,14 +20,15 @@ ECS 使用 flecs，内嵌脚本计划用 Lua/sol2，外部自动化计划用 Pyt
 graphics/device 提供独立可选的无窗口 Vulkan 设备、VMA 资源、提交/读回与延迟释放，不进入 CPU Runtime 的链接依赖；
 graphics/shaders 提供独立 CPU Slang 编译、SPIR-V 和最小反射，同样不进入 CPU Runtime 的链接依赖。
 graphics/offscreen 组合上述模块，提供同步离屏 draw/dispatch/readback 验证入口，同样独立于 CPU Runtime。
-Graph 和呈现尚未实现，具体边界见[设备设计](graphics-device.md)、[资源设计](graphics-resources.md)、
-[Shader 设计](graphics-shaders.md) 和[离屏设计](graphics-offscreen.md)。
+platform 提供 SDL3 窗口/事件，graphics/presentation 提供独立可选的窗口设备、交换链及帧恢复，
+复用 graphics/device 使用层；两者不进入 CPU Runtime 或 Offscreen 依赖。Graph 尚未实现。具体边界见[设备设计](graphics-device.md)、[资源设计](graphics-resources.md)、
+[Shader 设计](graphics-shaders.md)、[离屏设计](graphics-offscreen.md)、[窗口设计](platform.md) 和[呈现设计](graphics-presentation.md)。
 [Vulkan 使用层](graphics-vulkan.md) 统一对象/管线/绑定/录制/同步与传输，Offscreen 通过该接口执行；
 无 Slang/Vulkan 依赖的 shader-types 保存编译产物，设备模块无需链接编译器。Graph 后续复用同一执行与状态接口。
 模块接口与实现入口见[设计索引](README.md)，阶段状态和下一项统一见[Roadmap](../roadmap.md)，
 历史验收结果见[开发记录](../development/README.md)。
 Runtime 装配 Assets/Jobs heap 与线程上下文；worker 捕获拥有型路由并在安全点退休。
-窗口、场景渲染、编辑器和脚本按后续阶段接入，预留目录不代表已有能力。
+场景渲染、编辑器和脚本按后续阶段接入，预留目录不代表已有能力。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，
@@ -38,11 +39,11 @@ Runtime 装配 Assets/Jobs heap 与线程上下文；worker 捕获拥有型路�
 | 目录 | 职责 | 依赖约束 |
 | --- | --- | --- |
 | engine/foundation | core、数学、IO、profiling、memory、CPU jobs；metadata 预留 | 不依赖 Scene、Vulkan、Editor；profiling 不反向依赖 memory |
-| engine/platform | 窗口、输入、SDL3 后端 | 可选，CPU 无窗口运行不依赖它 |
+| engine/platform | 窗口、事件、SDL3 后端；完整输入映射后续接入 | 可选，CPU 无窗口运行不依赖它 |
 | engine/geometry | AABB、射线、CPU BVH | 仅基础数学/数据 |
 | engine/assets | 资产类型、运行时、导入器 | 与设备资源和图资源分离 |
 | engine/scene | 组件、层级、序列化、迁移 | 基础层与资产引用，不持有 Vulkan 资源 |
-| engine/graphics | device、shaders、offscreen；presentation、graph 预留 | 离屏底座不依赖场景，正式业务后续统一进入 Graph |
+| engine/graphics | device、shaders、offscreen、presentation；graph 预留 | 离屏底座不依赖场景，正式业务后续统一进入 Graph |
 | engine/render | 数据、GPU 缓存、Pass、pipeline | 使用 Graph；不依赖 Editor |
 | engine/physics | 接口、CPU/GPU 求解器 | CPU 不依赖 Vulkan；GPU 可用 Device/Graph |
 | engine/framework | commands、services、operations、runtime | 应用服务与模块装配；通用命令层保持独立 |

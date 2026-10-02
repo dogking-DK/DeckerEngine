@@ -6,6 +6,8 @@
 namespace dk::graphics {
 Result<Device> create_present_device(memory::ResourceHandle resource, const platform::Window& window, const DeviceOptions& options)
 {
+    if (!resource || resource.state() != memory::ResourceState::open)
+        return std::unexpected(Error{ErrorCode::invalid_argument, "presentation requires an open Memory resource"});
     if (!options.loader_path.empty()) return std::unexpected(Error{ErrorCode::invalid_argument, "SDL presentation requires the system Vulkan loader"});
     auto native = platform::detail::WindowAccess::native(window);
     if (!native) return std::unexpected(native.error());
@@ -16,8 +18,6 @@ Result<Device> create_present_device(memory::ResourceHandle resource, const plat
     if (!names || !count) return std::unexpected(Error{ErrorCode::not_supported, std::string("SDL Vulkan extensions: ") + SDL_GetError()});
     Vector<const char*> extensions{memory::Allocator<const char*>{resource}};
     extensions.assign(names, names + count);
-    extensions.push_back(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
-    extensions.push_back(VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME);
     auto configured = options;
     configured.surface.instance_extensions = extensions;
     configured.surface.owner = platform::detail::WindowAccess::lifetime(window);

@@ -1,7 +1,7 @@
 ---
 module: graphics-presentation
 created_at: "2026-10-02T21:40:00+08:00"
-updated_at: "2026-10-02T22:00:00+08:00"
+updated_at: "2026-10-02T22:38:00+08:00"
 status: accepted
 ---
 
@@ -49,6 +49,7 @@ typed view/encoder/提交保活链保留图像及代际，兼容已完成 M5.5 �
 ## 状态机、同步与恢复
 
 - acquire 使用有限超时；TIMEOUT/NOT_READY 返回 retry，无帧、无状态发布。
+  timeout 限制获取与各槽等待；需要重建时先阻塞排空旧代际，不承诺整个 acquire 在该时限内返回。
 - 零像素或最小化返回 suspended，避免创建零尺寸交换链；恢复后重建。
 - OUT_OF_DATE 标记重建并返回 retry；SUBOPTIMAL 允许本帧呈现，下一 acquire 重建。
 - 每个在途槽保存 acquire semaphore、获取 fence、render-finished semaphore、present fence 和 timeline ticket。
@@ -60,7 +61,8 @@ typed view/encoder/提交保活链保留图像及代际，兼容已完成 M5.5 �
   Vulkan oldSwapchain 一经传入创建即退休，不能承诺失败回滚；本实现明确进入 needs-rebuild，
   中途失败清理候选/退休代际，下次从无活动交换链重试。成功才发布完整新代际。
 - surface lost / device lost 进入终态，拒绝新帧；调用者销毁后重新创建窗口设备链。
-  close 幂等，拒绝仍有活动 Frame；析构完成受控排空，无未知完成状态的强制销毁。
+  close 正常完成后幂等，拒绝仍有活动 Frame；首次关闭 lost device 返回错误并标记 closed。
+  析构完成受控排空；若驱动返回无法确定是否入队的未知错误，保留对象并 fail-stop，不强制销毁未知完成状态。
 
 窗口、Presenter、Frame、queue 及最终对象释放全部在主线程串行；native 互操作需遵守原有外部同步约定。
 第一版使用 FIFO、BGRA/RGBA 8-bit sRGB 或 UNORM、单 color attachment、sample=1；

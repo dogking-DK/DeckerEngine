@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:49:00+08:00"
-updated_at: "2026-10-02T21:26:00+08:00"
+updated_at: "2026-10-02T22:38:00+08:00"
 ---
 
 # Vulkan 使用层：资源、管线、录制与提交
@@ -245,3 +245,9 @@ buffer 按整对象保守跟踪，image 按 mip/layer；ResourceUse.full_overwri
 end、提交或 batch 移动后，旧 encoder 返回 invalid_state；移动打开 rendering 的 batch 会使批次 invalid。
 单次 dispatch 与传输组合方法在已经发出命令后失败也使批次 invalid，应放弃后新建。普通 bind/retain 负责保活，不能代替同步。
 接口仍是 Vulkan 专用：保留格式、usage 和 stage/access 值类型；不包含窗口呈现、Graph 调度、多队列、MSAA 或 bindless。
+
+## 窗口呈现
+
+窗口路径使用独立的 platform/presentation 模块与 windows-presentation 预设。
+Presenter/Frame 复用这里的 factory、encoder 与 readback；交换链和呈现完成归属 Presentation。
+窗口三角形、resize/minimize 与错误恢复见 [呈现指南](presentation.md)。windows-graphics 保持离屏配置。

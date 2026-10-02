@@ -41,6 +41,12 @@ if(DK_BUILD_PLATFORM)
     add_test(NAME dk.platform.windows COMMAND dk_platform_probe)
     set_tests_properties(dk.platform.windows PROPERTIES TIMEOUT 30 LABELS "desktop")
 endif()
+if(TARGET dk_presentation_demo)
+    add_test(NAME dk.presentation.example_smoke COMMAND dk_presentation_demo --validation --frames 8)
+    set_tests_properties(dk.presentation.example_smoke PROPERTIES TIMEOUT 60 SKIP_RETURN_CODE 77 LABELS "gpu;desktop"
+        PASS_REGULAR_EXPRESSION "presented=8.*errors=0 warnings=0"
+        ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+endif()
 if(DK_BUILD_GRAPHICS_PRESENTATION)
     add_executable(dk_present_device_probe PresentDeviceProbe.cpp)
     target_link_libraries(dk_present_device_probe PRIVATE dk::graphics_presentation)
@@ -50,11 +56,14 @@ if(DK_BUILD_GRAPHICS_PRESENTATION)
     if(DK_BUILD_GRAPHICS_SHADERS)
         add_executable(dk_presentation_probe PresentationProbe.cpp)
         target_compile_definitions(dk_presentation_probe PRIVATE DK_COMMON_SHADER_DIR="${PROJECT_SOURCE_DIR}/shaders/common")
+        target_include_directories(dk_presentation_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/presentation/src"
+            "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
         target_link_libraries(dk_presentation_probe PRIVATE dk::graphics_presentation dk::graphics_shaders)
         dk_target_defaults(dk_presentation_probe)
         dk_deploy_slang(dk_presentation_probe)
         add_test(NAME dk.presentation.frames_validation COMMAND dk_presentation_probe)
-        set_tests_properties(dk.presentation.frames_validation PROPERTIES TIMEOUT 120 SKIP_RETURN_CODE 77 LABELS "gpu;desktop"
+        add_test(NAME dk.presentation.recovery_validation COMMAND dk_presentation_probe --recovery)
+        set_tests_properties(dk.presentation.frames_validation dk.presentation.recovery_validation PROPERTIES TIMEOUT 120 SKIP_RETURN_CODE 77 LABELS "gpu;desktop"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
     endif()
 endif()

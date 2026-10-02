@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-02T22:20:00+08:00"
+updated_at: "2026-10-02T22:46:00+08:00"
 status: accepted
 ---
 
@@ -35,7 +35,8 @@ M1.7.1–7 已完成，见 [0023](development/0023-tracy-cpu-profiling.md)、[00
 M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘制与计算已完成，见 [0042](development/0042-vulkan-device.md)、
 [0045](development/0045-graphics-resources-submission.md)、[0046](development/0046-slang-shader-compiler.md)、
 [0047](development/0047-offscreen-execution.md)。M5.5.1–5 使用层封装及离屏迁移已完成，见
-[0053](development/0053-vulkan-offscreen-migration.md)；下一项为 M5.6 窗口与呈现。
+[0053](development/0053-vulkan-offscreen-migration.md)。M5.6 窗口与呈现完成，见
+[0056](development/0056-presentation-recovery.md)；M5 已全部验收，下一项为 M6.1 图声明与结构校验。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作；提早建立多线程内存契约与性能测量，复杂并行优化仍由测量驱动。
@@ -55,7 +56,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M3 命令与 CPU Runtime | CLI/stdio 创建、修改、查询、保存场景 | M2 | 已完成（M3.1–M3.5，交付 A） |
 | M1.7 Foundation 补充 | Tracy、mimalloc heap、PMR/智能指针、arena/pool、多线程生命周期与性能基线 | 原 M1、M3（现有链路埋点） | 已完成：M1.7.1–7 均验收 |
 | M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3、M1.7 | 已完成：M4.1–4，证据 0031–0040 |
-| M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、Vulkan 使用层、最小呈现 | M1、M1.7 | 进行中：M5.1–5 已完成，M5.6 待开始 |
+| M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、Vulkan 使用层、最小呈现 | M1、M1.7 | 已完成：M5.1–6 均验收，见 0042–0056 |
 | M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 待开始 |
 | M7 场景渲染 | 资产上传、场景提取、Pass、pipeline、可等待截图 | M3、M4、M6 | 待开始 |
 | M8 编辑器与进程控制 | 可编辑保存的视口；dk-ctl 操作运行中的程序 | M7 | 待开始 |
@@ -289,7 +290,7 @@ CPU Ready 与未来 GPU Ready 分开。
 | M5.3 | Slang 编译工具 | M5.2 | vertex/fragment/compute SPIR-V、反射、诊断和 dk-shaderc 离线发布通过；独立无 Vulkan 配置，见 [0046](development/0046-slang-shader-compiler.md) | 已完成 |
 | M5.4 | 离屏绘制与计算 | M5.3 | 三角形逐像素/compute 数据读回、RAII pending 寿命和失败恢复通过；同步验证零警告/错误，见 [0047](development/0047-offscreen-execution.md) | 已完成 |
 | M5.5 | Vulkan 使用层封装（M5.5.1–5） | M5.4 | 对象/管线/绑定/encoder/传输封装；离屏迁移输出不变、同步与寿命验收；见[设计](design/graphics-vulkan.md)与[0053](development/0053-vulkan-offscreen-migration.md) | 已完成 |
-| M5.6 | 窗口与呈现（M5.6.1–3） | M5.5 | SDL3 swapchain、resize/最小化/重建；复用使用层且离屏路径独立可用 | 进行中 |
+| M5.6 | 窗口与呈现（M5.6.1–3） | M5.5 | SDL3 swapchain、resize/最小化/重建；使用层复用与离屏/CPU 隔离通过，见 [0056](development/0056-presentation-recovery.md) | 已完成 |
 
 M5.6 实施拆分：
 
@@ -297,7 +298,7 @@ M5.6 实施拆分：
 | --- | --- | --- | --- | --- |
 | M5.6.1 | SDL3 窗口与 Surface-aware 设备 | M5.5 | 事件/像素尺寸/窗口保活，present family 与能力选择；18 项检查通过，见 [0054](development/0054-window-device.md) | 已完成 |
 | M5.6.2 | 交换链、外部图像与帧同步 | M5.6.1 | 144 帧及读回、外部图像寿命、放弃帧与同步验证；见 [0055](development/0055-swapchain-frames.md) | 已完成 |
-| M5.6.3 | 恢复与集成验收 | M5.6.2 | resize/minimize/重建/失败、重复关闭、离屏与 CPU 隔离 | 待开始 |
+| M5.6.3 | 恢复与集成验收 | M5.6.2 | resize/minimize/重建/失败、重复关闭、离屏与 CPU 隔离通过；见 [0056](development/0056-presentation-recovery.md) | 已完成 |
 
 M5.5 实施拆分：
 
@@ -505,7 +506,7 @@ GPU 未完成前不释放状态，也不默认经 CPU 读回再上传。
 
 ## 当前执行边界与下一步
 
-M0–M4、M1.7 Memory/Tracy 补充以及 M5.1–4 均已完成。当前可运行的 CPU 链路包括
+M0–M5、M1.7 Memory/Tracy 补充均已完成。当前可运行的 CPU 链路包括
 Foundation、Scene 持久化、命令/事务、batch/stdio、资产导入/缓存与异步 CPU Ready。
 各小阶段的验收条件与证据入口见上表；历史测试计数保留在[开发记录](development/README.md)，不作为日常固定回归套件。
 M4 的进程重启、取消和退出验收见 [0040](development/0040-cpu-assets-delivery.md)，
@@ -516,10 +517,11 @@ M5.2 的 VMA Buffer/Image、单队列提交/读回与延迟释放验收见 [0045
 M5.3 的 Slang 编译、SPIR-V/反射、诊断和离线工具验收见 [0046](development/0046-slang-shader-compiler.md)。
 M5.4 的离屏 draw/dispatch/readback、同步验证与对象寿命验收见 [0047](development/0047-offscreen-execution.md)。
 [M5.5 Vulkan 使用层封装](design/graphics-vulkan.md) 的 M5.5.1–5 已全部完成并独立提交，
-最终验收见 [0053](development/0053-vulkan-offscreen-migration.md)。下一项为 **M5.6 窗口与呈现**。
-各节开工时更新对应模块设计，窗口开始前建立 platform/presentation 设计；
+最终验收见 [0053](development/0053-vulkan-offscreen-migration.md)。
+M5.6 窗口呈现、交换链同步与恢复、独立离屏和 CPU 回归见 [0056](development/0056-presentation-recovery.md)。
+下一项为 **M6.1 图声明与结构校验**。开工前建立 graphics-graph 设计；
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
-M5.1–4 验收不代表窗口呈现、场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
+M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 
 工程基础维护记录包括 [0018](development/0018-vs2026-generation-script.md)、
 [0019](development/0019-development-skills.md) 和 [0041](development/0041-ai-documentation-workflow.md)，不改变里程碑顺序。

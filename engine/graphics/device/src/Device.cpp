@@ -210,6 +210,17 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
         return std::unexpected(Error{ErrorCode::invalid_argument, "surface requires a lifetime owner and instance extensions"});
     for (const auto* extension : options.surface.instance_extensions)
         if (!extension || !*extension) return std::unexpected(Error{ErrorCode::invalid_argument, "instance extension names must not be empty"});
+    Vector<const char*> instance_extensions{memory::Allocator<const char*>{resource}};
+    const auto enable_extension = [&](const char* name) {
+        for (const auto* prior : instance_extensions) if (std::strcmp(prior, name) == 0) return;
+        instance_extensions.push_back(name);
+    };
+    for (const auto* name : options.surface.instance_extensions) enable_extension(name);
+    if (presentation) {
+        enable_extension(VK_KHR_SURFACE_EXTENSION_NAME);
+        enable_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
+        enable_extension(VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME);
+    }
     auto impl = memory::make_unique_in<Device::Impl>(resource, resource);
     if (allocator_api) impl->allocator.api = *allocator_api;
     impl->sink = options.diagnostic_sink;
@@ -243,7 +254,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     auto extensions = enumerate<VkExtensionProperties>(resource, "vkEnumerateInstanceExtensionProperties",
         [&](std::uint32_t* count, VkExtensionProperties* data) { return extensions_fn(nullptr, count, data); });
     if (!extensions) return std::unexpected(extensions.error());
-    for (const auto* required : options.surface.instance_extensions) {
+    for (const auto* required : instance_extensions) {
         bool found = false;
         for (const auto& extension : *extensions) if (std::strcmp(required, extension.extensionName) == 0) found = true;
         if (!found) return std::unexpected(Error{ErrorCode::not_supported, std::string("missing instance extension: ") + required});
@@ -274,7 +285,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     debug_info.pUserData = impl.get();
     impl->context.emplace(resolver);
     detail::InstanceOwner pending_instance;
-    const auto bootstrapped = detail::bootstrap_instance(resolver, impl->validation, debug_info, pending_instance, options.surface.instance_extensions);
+    const auto bootstrapped = detail::bootstrap_instance(resolver, impl->validation, debug_info, pending_instance, instance_extensions);
     if (!bootstrapped) return std::unexpected(bootstrapped.error());
     if (!pending_instance.destroy_instance)
         return std::unexpected(Error{ErrorCode::internal_error, "Vulkan instance is missing vkDestroyInstance"});

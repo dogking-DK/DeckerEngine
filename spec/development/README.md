@@ -57,5 +57,6 @@
 | 0053 | [M5.5.5 离屏迁移与集成验收](0053-vulkan-offscreen-migration.md) | graphics-vulkan, graphics-resources, graphics-offscreen, graphics-device, architecture | completed |
 | 0054 | [M5.6.1 窗口与设备接入](0054-window-device.md) | platform, graphics-presentation, graphics-device | completed |
 | 0055 | [M5.6.2 交换链与帧同步](0055-swapchain-frames.md) | graphics-presentation, graphics-resources, graphics-vulkan | completed |
+| 0056 | [M5.6.3 呈现恢复与集成验收](0056-presentation-recovery.md) | graphics-presentation, platform, graphics-device, graphics-resources, architecture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。
