@@ -157,6 +157,8 @@ Result<void> validate_vertices(BatchState& batch, std::uint32_t count, std::uint
         else if (!indexed) last = std::uint64_t{first} + count - 1;
         // Index contents remain caller-owned; only the minimum vertex extent is provable without reading GPU memory.
         for (const auto& attribute : state.pipeline->vertex_attributes) if (attribute.binding == binding.binding) {
+            if (binding.stride && last > (std::numeric_limits<std::uint64_t>::max()-attribute.offset)/binding.stride)
+                return std::unexpected(invalid("vertex input address overflows"));
             const auto offset = last * binding.stride + attribute.offset;
             if (!valid_range(found->buffer->buffer_desc.size - found->offset, offset, vertex_format_size(attribute.format)))
                 return std::unexpected(invalid("vertex/instance input range exceeds buffer"));
@@ -227,6 +229,19 @@ Result<ComputeEncoder> CommandBatch::compute()
     invalidate_encoder(*state_);
     state_->encoding = std::move(encoding);
     return ComputeEncoder{state_, state_->generation};
+}
+Result<void> CommandBatch::dispatch(const ComputePipeline& pipeline, std::span<const BindingSet* const> sets,
+    std::span<const std::byte> constants, std::array<std::uint32_t,3> groups)
+{
+    auto commands = compute();
+    if (!commands) return std::unexpected(commands.error());
+    struct Guard { BatchState& batch; bool done = false; ~Guard() { if (!done) batch.invalid = true; } } guard{*state_};
+    if (auto valid = commands->bind_pipeline(pipeline); !valid) return valid;
+    if (auto valid = commands->bind_sets(sets); !valid) return valid;
+    if (!constants.empty()) if (auto valid = commands->push_constants(vk::ShaderStageFlagBits::eCompute,0,constants); !valid) return valid;
+    if (auto valid = commands->dispatch(groups); !valid) return valid;
+    guard.done = true;
+    return {};
 }
 Result<RenderEncoder> CommandBatch::begin_rendering(const RenderingDesc& desc)
 {

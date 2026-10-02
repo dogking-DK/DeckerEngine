@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-02T21:07:00+08:00"
+updated_at: "2026-10-02T21:26:00+08:00"
 status: accepted
 ---
 
@@ -37,7 +37,7 @@ map/范围/角色失败不写用户数据；read 的 invalidate 失败不修改�
 host 内存可能已写入，不保证字节回滚，也不会因此自动提交 GPU 工作。
 ImageDesc 提供多 mip/layer、sample=1 的二维 image，view 支持 2D/2D array。color 支持 RGBA8 UNORM/SRGB、BGRA8 UNORM、
 R32_UINT/R32_SFLOAT，均为每像素 4 字节；D32_SFLOAT 只支持 depth attachment/sampling，拒绝 byte copy。
-检查 extent、mip/layer、字节数溢出、usage 和设备 format 能力；Image::state(mip,layer) 替代单值 layout 查询。
+检查 extent、mip/layer、字节数溢出、usage 和设备 format 能力；Image::state(mip,layer) 替代单值 layout 查询，Buffer::state() 返回整对象的已提交状态。
 Buffer/Image 的 vk::* 句柄只借用，不得额外销毁；VMA allocation 不公开。
 
 begin() 获取空闲槽并开始 one-time command buffer。prepare(ResourceUse) 根据局部账本发 barrier；
@@ -60,8 +60,9 @@ rendering 不可嵌套，scope 内禁止 prepare/copy/compute；end 或有效 en
 对象绑定自动保留资源闭包至 GPU 完成；单纯创建 BindingSet 不增加资源忙引用。
 unsafe_record(before,after,callback) 是原生互操作入口；对象用 retain 重载声明，资源范围前后一一对应。
 回调负责声明真实性，不得 end/reset/submit 或 signal 内部 timeline；退出使 encoder 失效，异常使 batch invalid。
-旧无 region 的 copy/transition 和 command_buffer 暂保留给待迁移消费者及专门底层 probe；
-其保守同步不属于 Graph 路径。零长度 copy 拒绝；CPU 零字节 read/write 是合法无变化。
+旧无 region 的 copy/transition 保留为兼容入口，command_buffer 已 deprecated；常规消费者已迁移。
+兼容 copy 的全局 barrier 保守记录读写并使旧 prepare 失效，避免与类型化命令混用时丢失 WAR。
+这种保守同步不属于 Graph 路径。零长度 copy 拒绝；CPU 零字节 read/write 是合法无变化。
 支持布局 Undefined（仅初始）、TransferSrc/Dst、ShaderReadOnly、General、ColorAttachment、DepthStencilAttachment。
 
 submit(CommandBatch&&) 返回 Submission（弱 owner 身份和单调值）；poll() 查询完成并回收，

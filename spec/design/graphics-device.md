@@ -1,7 +1,7 @@
 ---
 module: graphics-device
 created_at: "2026-09-28T16:38:00+08:00"
-updated_at: "2026-09-30T11:46:20+08:00"
+updated_at: "2026-10-02T21:26:00+08:00"
 status: accepted
 ---
 
@@ -23,8 +23,8 @@ DK_BUILD_GRAPHICS_DEVICE 默认 OFF，windows-graphics 预设显式开启；vulk
 ## 能力和接口
 
 本页描述当前设备契约。[M5.5 使用层设计](graphics-vulkan.md) 在同 target 扩展使用接口。
-M5.5.1 已加入 `SubmissionQueue::resources()` 工厂及 ImageView/Sampler/ShaderModule，
-独立 shader_types 不链接 Slang；管线/绑定与 encoder 按后续小节实施。
+`SubmissionQueue::resources()` 工厂提供资源/view/sampler/shader、管线布局与管线、不可变绑定集；
+类型化 encoder、prepare/barrier 与上传/读回接口复用提交域。独立 shader_types 不链接 Slang。
 公开 RAII 借用接口保留为底层互操作入口；Device 继续只管理初始化/能力。
 
 公开 [Device.hpp](../../engine/graphics/device/include/dk/graphics/Device.hpp) 使用 Vulkan-Hpp 类型，

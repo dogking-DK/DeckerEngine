@@ -1,49 +1,27 @@
 #include "OffscreenPolicy.hpp"
+#include <dk/graphics/Transfer.hpp>
 #include <dk/profiling/Profiler.hpp>
 #include <utility>
 
 namespace dk::graphics {
 namespace {
 struct Work {
-    explicit Work(memory::ResourceHandle resource)
-        : uploads(memory::Allocator<Buffer>{resource}), storage(memory::Allocator<Buffer>{resource}),
-          readbacks(memory::Allocator<Buffer>{resource}) {}
-    // Buffers/images retain Device and must outlive all borrowed-dispatcher RAII objects.
-    Vector<Buffer> uploads, storage, readbacks;
-    Image image;
-    vk::raii::ShaderModule first_shader{nullptr}, second_shader{nullptr};
-    vk::raii::DescriptorSetLayout descriptor_layout{nullptr};
-    vk::raii::PipelineLayout layout{nullptr};
-    vk::raii::DescriptorPool pool{nullptr};
-    vk::raii::DescriptorSet descriptor_set{nullptr};
-    vk::raii::ImageView view{nullptr};
-    vk::raii::Pipeline pipeline{nullptr};
+    explicit Work(memory::ResourceHandle resource) : readbacks(memory::Allocator<ReadbackRequest>{resource}) {}
+    Vector<ReadbackRequest> readbacks;
     Submission ticket;
 };
-vk::raii::ShaderModule module(const Device& device, const CompiledShader& shader)
-{
-    vk::ShaderModuleCreateInfo info{};
-    info.setCode(shader.spirv);
-    return {device.logical_device(), info};
-}
-Error vk_error(const vk::SystemError& error)
-{
-    return {ErrorCode::internal_error, std::string{"offscreen Vulkan operation failed: "} + error.what()};
-}
 } // namespace
 
 struct OffscreenExecutor::Impl {
     Impl(memory::ResourceHandle memory, SubmissionQueue&& submission_queue)
         : resource(std::move(memory)), queue(std::move(submission_queue)) {}
     memory::ResourceHandle resource;
-    // Reverse destruction: queue first drains/falls back to idle, then pending RAII.
-    // Work's VMA owners preserve Device after QueueState itself has been destroyed.
+    // Queue completion updates independent readback records before their final release.
     memory::UniquePtr<Work> pending;
     SubmissionQueue queue;
-    bool failed = false;
     Result<void> accepting() const
     {
-        if (failed || queue.stats().device_lost || queue.stats().closed)
+        if (queue.stats().device_lost || queue.stats().closed)
             return std::unexpected(Error{ErrorCode::invalid_state, "offscreen executor is closed or device lost"});
         if (resource.state() != memory::ResourceState::open)
             return std::unexpected(Error{ErrorCode::invalid_state, "offscreen Memory resource is closing or closed"});
@@ -52,7 +30,7 @@ struct OffscreenExecutor::Impl {
     }
     Result<void> execute(memory::UniquePtr<Work> work, CommandBatch&& batch, std::uint64_t timeout)
     {
-        pending = std::move(work); // Reserve all non-VMA GPU owners before submission.
+        pending = std::move(work); // Reserve result requests and the ticket slot before submission.
         // SubmissionQueue cannot throw after a successful native submit. An exception
         // before that commit must not strand an empty ticket in pending.
         auto ticket = [&]() {
@@ -67,11 +45,7 @@ struct OffscreenExecutor::Impl {
         if (!*completed) return std::unexpected(Error{ErrorCode::conflict, "offscreen wait timed out; GPU resources retained until drain"});
         return {};
     }
-    Error failure(const vk::SystemError& error)
-    {
-        if (error.code().value() == static_cast<int>(vk::Result::eErrorDeviceLost)) failed = true;
-        return vk_error(error);
-    }
+
 };
 
 OffscreenExecutor::OffscreenExecutor(memory::UniquePtr<Impl> impl) : impl_(std::move(impl)) {}
@@ -110,164 +84,109 @@ Result<OffscreenImage> OffscreenExecutor::draw(const CompiledShader& vertex, con
     const auto size = detail::validate_draw(vertex, fragment, description, device().adapter().properties.limits);
     if (!size) return std::unexpected(size.error());
     auto& queue = impl_->queue;
-    const auto& logical = device().logical_device();
+    auto factory = queue.resources();
     OffscreenImage output{description.width, description.height, Vector<std::byte>{memory::Allocator<std::byte>{impl_->resource}}};
-    output.rgba8.resize(*size); // All return storage exists before any GPU submission.
-    auto work = memory::make_unique_in<Work>(impl_->resource, impl_->resource);
+    output.rgba8.resize(*size);
+    auto work = memory::make_unique_in<Work>(impl_->resource,impl_->resource);
     work->readbacks.reserve(1);
-    auto readback = queue.create_buffer({*size, vk::BufferUsageFlagBits::eTransferDst, BufferMemory::readback});
-    if (!readback) return std::unexpected(readback.error());
-    work->readbacks.push_back(std::move(*readback));
-    auto image = queue.create_image({description.width, description.height, vk::Format::eR8G8B8A8Unorm,
+    auto vs = factory.create_shader(vertex);
+    if (!vs) return std::unexpected(vs.error());
+    auto fs = factory.create_shader(fragment);
+    if (!fs) return std::unexpected(fs.error());
+    const std::array shaders{&*vs,&*fs};
+    auto layout = factory.create_pipeline_layout(shaders);
+    if (!layout) return std::unexpected(layout.error());
+    auto pipeline = factory.create_graphics_pipeline({&*vs,&*fs,&*layout});
+    if (!pipeline) return std::unexpected(pipeline.error());
+    auto image = factory.create_image({description.width,description.height,vk::Format::eR8G8B8A8Unorm,
         vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc});
     if (!image) return std::unexpected(image.error());
-    work->image = std::move(*image);
-    try {
-        work->first_shader = module(device(), vertex);
-        work->second_shader = module(device(), fragment);
-        work->layout = vk::raii::PipelineLayout{logical, vk::PipelineLayoutCreateInfo{}};
-        work->view = vk::raii::ImageView{logical, vk::ImageViewCreateInfo{{}, work->image.handle(), vk::ImageViewType::e2D,
-            vk::Format::eR8G8B8A8Unorm, {}, vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}}};
-        const std::array stages{
-            vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eVertex, *work->first_shader, vertex.entry.c_str()},
-            vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eFragment, *work->second_shader, fragment.entry.c_str()}};
-        const vk::PipelineVertexInputStateCreateInfo input{};
-        const vk::PipelineInputAssemblyStateCreateInfo assembly{{}, vk::PrimitiveTopology::eTriangleList, VK_FALSE};
-        vk::PipelineViewportStateCreateInfo viewport{};
-        viewport.viewportCount = viewport.scissorCount = 1;
-        vk::PipelineRasterizationStateCreateInfo raster{};
-        raster.polygonMode = vk::PolygonMode::eFill;
-        raster.cullMode = vk::CullModeFlagBits::eNone;
-        raster.frontFace = vk::FrontFace::eCounterClockwise;
-        raster.lineWidth = 1.0F;
-        const vk::PipelineMultisampleStateCreateInfo samples{{}, vk::SampleCountFlagBits::e1};
-        vk::PipelineColorBlendAttachmentState attachment{};
-        attachment.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG
-            | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
-        vk::PipelineColorBlendStateCreateInfo blend{};
-        blend.setAttachments(attachment);
-        const std::array dynamic_states{vk::DynamicState::eViewport, vk::DynamicState::eScissor};
-        vk::PipelineDynamicStateCreateInfo dynamic{};
-        dynamic.setDynamicStates(dynamic_states);
-        const vk::Format format = vk::Format::eR8G8B8A8Unorm;
-        vk::PipelineRenderingCreateInfo rendering{};
-        rendering.setColorAttachmentFormats(format);
-        vk::GraphicsPipelineCreateInfo pipeline{};
-        pipeline.setStages(stages).setPVertexInputState(&input).setPInputAssemblyState(&assembly)
-            .setPViewportState(&viewport).setPRasterizationState(&raster).setPMultisampleState(&samples)
-            .setPColorBlendState(&blend).setPDynamicState(&dynamic).setLayout(*work->layout).setPNext(&rendering);
-        work->pipeline = vk::raii::Pipeline{logical, nullptr, pipeline};
-        auto batch = queue.begin();
-        if (!batch) return std::unexpected(batch.error());
-        if (auto status = batch->transition(work->image, vk::ImageLayout::eColorAttachmentOptimal); !status)
-            return std::unexpected(status.error());
-        vk::RenderingAttachmentInfo color{};
-        color.imageView = *work->view;
-        color.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
-        color.loadOp = vk::AttachmentLoadOp::eClear;
-        color.storeOp = vk::AttachmentStoreOp::eStore;
-        color.clearValue.color = vk::ClearColorValue{description.clear_color};
-        vk::RenderingInfo info{};
-        info.renderArea = vk::Rect2D{{0, 0}, {description.width, description.height}};
-        info.layerCount = 1;
-        info.setColorAttachments(color);
-        const auto& command = batch->command_buffer();
-        command.beginRendering(info);
-        command.bindPipeline(vk::PipelineBindPoint::eGraphics, *work->pipeline);
-        command.setViewport(0, vk::Viewport{0, 0, static_cast<float>(description.width), static_cast<float>(description.height), 0, 1});
-        command.setScissor(0, info.renderArea);
-        command.draw(description.vertex_count, 1, 0, 0);
-        command.endRendering();
-        if (auto status = batch->copy_to_buffer(work->image, work->readbacks.front()); !status) return std::unexpected(status.error());
-        if (auto status = impl_->execute(std::move(work), std::move(*batch), timeout_ns); !status) return std::unexpected(status.error());
-        auto status = impl_->pending->readbacks.front().read(0, output.rgba8);
-        impl_->pending.reset();
-        if (!status) return std::unexpected(status.error());
-        return output;
-    } catch (const vk::SystemError& error) { return std::unexpected(impl_->failure(error)); }
+    auto view = factory.create_view(*image);
+    if (!view) return std::unexpected(view.error());
+    auto batch = queue.begin();
+    if (!batch) return std::unexpected(batch.error());
+    const std::array uses{image_use(*image,vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        vk::AccessFlagBits2::eColorAttachmentRead | vk::AccessFlagBits2::eColorAttachmentWrite,vk::ImageLayout::eColorAttachmentOptimal)};
+    if (auto status = batch->prepare(uses); !status) return std::unexpected(status.error());
+    RenderingDesc rendering{};
+    rendering.color.view = &*view;
+    rendering.color.clear = description.clear_color;
+    auto render = batch->begin_rendering(rendering);
+    if (!render) return std::unexpected(render.error());
+    if (auto status = render->bind_pipeline(*pipeline); !status) return std::unexpected(status.error());
+    if (auto status = render->draw(description.vertex_count); !status) return std::unexpected(status.error());
+    if (auto status = render->end(); !status) return std::unexpected(status.error());
+    auto request = batch->readback(*image,{0,0,0,0,description.width,description.height});
+    if (!request) return std::unexpected(request.error());
+    work->readbacks.push_back(std::move(*request));
+    if (auto status = impl_->execute(std::move(work),std::move(*batch),timeout_ns); !status) return std::unexpected(status.error());
+    auto status = impl_->pending->readbacks.front().try_read(output.rgba8);
+    impl_->pending.reset();
+    if (!status) return std::unexpected(status.error());
+    if (!*status) return std::unexpected(Error{ErrorCode::internal_error,"completed offscreen readback is not ready"});
+    return output;
 }
 
 Result<ComputeOutput> OffscreenExecutor::dispatch(const CompiledShader& shader, std::span<const ComputeBufferInput> buffers,
-    std::span<const std::byte> push_constants, std::array<std::uint32_t, 3> groups, std::uint64_t timeout_ns)
+    std::span<const std::byte> push_constants, std::array<std::uint32_t,3> groups, std::uint64_t timeout_ns)
 {
     DK_PROFILE_ZONE("offscreen.dispatch");
-    if (!impl_) return std::unexpected(Error{ErrorCode::invalid_state, "offscreen executor is moved from"});
+    if (!impl_) return std::unexpected(Error{ErrorCode::invalid_state,"offscreen executor is moved from"});
     if (auto status = impl_->accepting(); !status) return std::unexpected(status.error());
-    if (auto status = detail::validate_dispatch(shader, buffers, push_constants, groups, device().adapter().properties.limits); !status)
+    if (auto status = detail::validate_dispatch(shader,buffers,push_constants,groups,device().adapter().properties.limits); !status)
         return std::unexpected(status.error());
     auto& queue = impl_->queue;
-    const auto& logical = device().logical_device();
+    auto factory = queue.resources();
     ComputeOutput output{memory::Allocator<ComputeBufferOutput>{impl_->resource}};
+    Vector<Buffer> storage{memory::Allocator<Buffer>{impl_->resource}};
+    Vector<BindingWrite> writes{memory::Allocator<BindingWrite>{impl_->resource}};
+    Vector<ResourceUse> uses{memory::Allocator<ResourceUse>{impl_->resource}};
+    auto work = memory::make_unique_in<Work>(impl_->resource,impl_->resource);
     output.reserve(buffers.size());
-    auto work = memory::make_unique_in<Work>(impl_->resource, impl_->resource);
-    work->uploads.reserve(buffers.size());
-    work->storage.reserve(buffers.size());
+    storage.reserve(buffers.size()); // Keep addresses used by descriptors/access declarations stable.
+    writes.reserve(buffers.size());
+    uses.reserve(buffers.size());
     work->readbacks.reserve(buffers.size());
+    auto module = factory.create_shader(shader);
+    if (!module) return std::unexpected(module.error());
+    const std::array shaders{&*module};
+    auto layout = factory.create_pipeline_layout(shaders);
+    if (!layout) return std::unexpected(layout.error());
+    auto pipeline = factory.create_compute_pipeline({&*module,&*layout});
+    if (!pipeline) return std::unexpected(pipeline.error());
+    auto batch = queue.begin();
+    if (!batch) return std::unexpected(batch.error());
     for (const auto& input : buffers) {
-        output.push_back({input.binding, Vector<std::byte>{memory::Allocator<std::byte>{impl_->resource}}});
+        output.push_back({input.binding,Vector<std::byte>{memory::Allocator<std::byte>{impl_->resource}}});
         output.back().bytes.resize(input.bytes.size());
-        auto upload = queue.create_buffer({input.bytes.size(), vk::BufferUsageFlagBits::eTransferSrc, BufferMemory::upload});
-        if (!upload) return std::unexpected(upload.error());
-        if (auto status = upload->write(0, input.bytes); !status) return std::unexpected(status.error());
-        work->uploads.push_back(std::move(*upload));
-        auto storage = queue.create_buffer({input.bytes.size(), vk::BufferUsageFlagBits::eStorageBuffer
-            | vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst, BufferMemory::device});
-        if (!storage) return std::unexpected(storage.error());
-        work->storage.push_back(std::move(*storage));
-        auto readback = queue.create_buffer({input.bytes.size(), vk::BufferUsageFlagBits::eTransferDst, BufferMemory::readback});
-        if (!readback) return std::unexpected(readback.error());
-        work->readbacks.push_back(std::move(*readback));
+        auto buffer = factory.create_buffer({input.bytes.size(),vk::BufferUsageFlagBits::eStorageBuffer |
+            vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst});
+        if (!buffer) return std::unexpected(buffer.error());
+        storage.push_back(std::move(*buffer));
+        if (auto status = batch->upload(storage.back(),input.bytes); !status) return std::unexpected(status.error());
+        writes.push_back({input.binding,0,BufferBinding{&storage.back()}});
+        uses.push_back(buffer_use(storage.back(),vk::PipelineStageFlagBits2::eComputeShader,
+            vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite));
     }
-    try {
-        work->first_shader = module(device(), shader);
-        Vector<vk::DescriptorSetLayoutBinding> bindings{memory::Allocator<vk::DescriptorSetLayoutBinding>{impl_->resource}};
-        for (const auto& binding : shader.bindings)
-            bindings.emplace_back(binding.binding, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute);
-        vk::DescriptorSetLayoutCreateInfo set_info{};
-        set_info.setBindings(bindings);
-        work->descriptor_layout = vk::raii::DescriptorSetLayout{logical, set_info};
-        vk::PipelineLayoutCreateInfo layout_info{};
-        layout_info.setSetLayouts(*work->descriptor_layout);
-        const vk::PushConstantRange push{vk::ShaderStageFlagBits::eCompute, 0, static_cast<std::uint32_t>(push_constants.size())};
-        if (!push_constants.empty()) layout_info.setPushConstantRanges(push);
-        work->layout = vk::raii::PipelineLayout{logical, layout_info};
-        const vk::DescriptorPoolSize pool_size{vk::DescriptorType::eStorageBuffer, static_cast<std::uint32_t>(buffers.size())};
-        vk::DescriptorPoolCreateInfo pool_info{};
-        pool_info.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-        pool_info.maxSets = 1;
-        pool_info.setPoolSizes(pool_size);
-        work->pool = vk::raii::DescriptorPool{logical, pool_info};
-        vk::DescriptorSetAllocateInfo allocation{};
-        allocation.setDescriptorPool(*work->pool).setSetLayouts(*work->descriptor_layout);
-        auto sets = logical.allocateDescriptorSets(allocation);
-        work->descriptor_set = std::move(sets.front());
-        for (std::size_t i = 0; i < buffers.size(); ++i) {
-            const vk::DescriptorBufferInfo buffer{work->storage[i].handle(), 0, buffers[i].bytes.size()};
-            vk::WriteDescriptorSet write{};
-            write.setDstSet(*work->descriptor_set).setDstBinding(buffers[i].binding)
-                .setDescriptorType(vk::DescriptorType::eStorageBuffer).setBufferInfo(buffer);
-            logical.updateDescriptorSets(write, {});
+    auto bindings = factory.create_bindings(*layout,0,writes);
+    if (!bindings) return std::unexpected(bindings.error());
+    if (auto status = batch->prepare(uses); !status) return std::unexpected(status.error());
+    const std::array sets{&*bindings};
+    if (auto status = batch->dispatch(*pipeline,sets,push_constants,groups); !status) return std::unexpected(status.error());
+    for (const auto& buffer : storage) {
+        auto request = batch->readback(buffer);
+        if (!request) return std::unexpected(request.error());
+        work->readbacks.push_back(std::move(*request));
+    }
+    if (auto status = impl_->execute(std::move(work),std::move(*batch),timeout_ns); !status) return std::unexpected(status.error());
+    for (std::size_t i = 0; i < buffers.size(); ++i) {
+        auto status = impl_->pending->readbacks[i].try_read(output[i].bytes);
+        if (!status || !*status) {
+            impl_->pending.reset();
+            return std::unexpected(status ? Error{ErrorCode::internal_error,"completed compute readback is not ready"} : status.error());
         }
-        const vk::PipelineShaderStageCreateInfo stage{{}, vk::ShaderStageFlagBits::eCompute, *work->first_shader, shader.entry.c_str()};
-        work->pipeline = vk::raii::Pipeline{logical, nullptr, vk::ComputePipelineCreateInfo{{}, stage, *work->layout}};
-        auto batch = queue.begin();
-        if (!batch) return std::unexpected(batch.error());
-        for (std::size_t i = 0; i < buffers.size(); ++i)
-            if (auto status = batch->copy(work->uploads[i], work->storage[i], buffers[i].bytes.size()); !status) return std::unexpected(status.error());
-        const auto& command = batch->command_buffer();
-        command.bindPipeline(vk::PipelineBindPoint::eCompute, *work->pipeline);
-        command.bindDescriptorSets(vk::PipelineBindPoint::eCompute, *work->layout, 0, *work->descriptor_set, {});
-        if (!push_constants.empty()) command.pushConstants<std::byte>(*work->layout, vk::ShaderStageFlagBits::eCompute, 0, push_constants);
-        command.dispatch(groups[0], groups[1], groups[2]);
-        for (std::size_t i = 0; i < buffers.size(); ++i)
-            if (auto status = batch->copy(work->storage[i], work->readbacks[i], buffers[i].bytes.size()); !status) return std::unexpected(status.error());
-        if (auto status = impl_->execute(std::move(work), std::move(*batch), timeout_ns); !status) return std::unexpected(status.error());
-        for (std::size_t i = 0; i < buffers.size(); ++i) {
-            auto status = impl_->pending->readbacks[i].read(0, output[i].bytes);
-            if (!status) { impl_->pending.reset(); return std::unexpected(status.error()); }
-        }
-        impl_->pending.reset();
-        return output;
-    } catch (const vk::SystemError& error) { return std::unexpected(impl_->failure(error)); }
+    }
+    impl_->pending.reset();
+    return output;
 }
 } // namespace dk::graphics

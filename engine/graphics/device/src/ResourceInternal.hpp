@@ -184,7 +184,7 @@ struct BatchState {
         return nullptr;
     }
     const vk::raii::CommandBuffer& command() const { return queue->slots[slot].command; }
-    void barrier() const
+    void barrier()
     {
         const auto stages = vk::PipelineStageFlagBits2::eAllCommands | vk::PipelineStageFlagBits2::eHost;
         const auto access = vk::AccessFlagBits2::eMemoryRead | vk::AccessFlagBits2::eMemoryWrite;
@@ -192,6 +192,13 @@ struct BatchState {
         vk::DependencyInfo dependency{};
         dependency.setMemoryBarriers(barrier_info);
         command().pipelineBarrier2(dependency);
+        // Legacy helpers expose a conservative global barrier. Forget previous
+        // typed preparations and keep both read and write scopes for later use.
+        for (auto& use : uses) for (std::size_t i = 0; i < use.states.size(); ++i) {
+            use.states[i].stages = stages;
+            use.states[i].access = access;
+            use.prepared[i] = 0;
+        }
     }
     void transition(const std::shared_ptr<ResourceState>& resource, vk::ImageLayout layout)
     {
@@ -216,6 +223,7 @@ struct BatchState {
         prior.stages = barrier_info.dstStageMask;
         prior.access = barrier_info.dstAccessMask;
         prior.layout = layout;
+        use.prepared[static_cast<std::size_t>(layer) * resource->image_desc.mip_levels + mip] = 0;
         }
     }
 };

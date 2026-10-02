@@ -4,7 +4,7 @@
 命名空间为 `dk`，CMake target 使用 `dk_*` / `dk::*`。
 
 当前提供 Foundation、Memory/Tracy、Scene 持久化、命令/事务、CPU Runtime、
-资产导入与缓存、有界 Jobs、异步 CPU Ready，以及可选的 Vulkan 设备、VMA 资源、Slang 编译和离屏绘制/计算读回。
+资产导入与缓存、有界 Jobs、异步 CPU Ready，以及可选的 Vulkan 使用层（对象/管线/绑定/录制/同步/传输）、Slang 编译和离屏绘制/计算读回。
 场景渲染、窗口呈现、物理、编辑器、网络 IPC 与脚本尚未实现。
 阶段状态、依赖和下一项统一见[开发 Roadmap](spec/roadmap.md)。
 
@@ -31,7 +31,7 @@ cmake --build --preset windows-debug --target dk_run
 | batch、持续 stdio、命令层独立配置 | [Runtime 指南](spec/guides/runtime.md)、[命令参考](spec/commands/README.md) |
 | 登记、改名、导入、缓存、异步加载与作业 | [资产指南](spec/guides/assets.md) |
 | heap、拥有型容器、scratch、pool、线程上下文、Tracy | [Memory 指南](spec/guides/memory.md) |
-| Vulkan 设备、资源上传/读回、提交与 GPU 探针 | [Graphics 指南](spec/guides/graphics.md) |
+| Vulkan 使用层、上传/读回、绘制/计算与 GPU 探针 | [Graphics 指南](spec/guides/graphics.md) |
 | Slang 离线编译、SPIR-V、反射与 dk-shaderc | [Shader 指南](spec/guides/shaders.md) |
 | 离屏三角形、compute 与结果读回 | [离屏指南](spec/guides/offscreen.md) |
 | Core、数学、IO、Scene 与 CPU 示例 | [Foundation/Scene 指南](spec/guides/foundation.md) |
@@ -65,7 +65,7 @@ pwsh -NoProfile -File scripts/check-spec.ps1
 | engine/scene | 场景文档、组件、层级、工程与 JSON 持久化 |
 | engine/framework | commands、services、operations、runtime |
 | engine/automation | JSON-RPC 与 JSON Lines/stdio；网络和客户端 SDK 预留 |
-| engine/graphics/device、shaders、offscreen | Vulkan 1.4 设备/资源/提交、Slang 编译与离屏执行；Graph/呈现预留 |
+| engine/graphics/device、shader-types、shaders、offscreen | Vulkan 1.4 使用层、独立 shader 产物、Slang 编译与离屏执行；Graph/呈现预留 |
 | apps/runner、tools/assetc | CPU 命令进程、离线资产工具 |
 | tools/shaderc、shaders/common | 独立 shader 编译工具、图形/compute 源码示例 |
 | tools/profiling | 独立 Tracy 工具及内存 capture 检查器 |

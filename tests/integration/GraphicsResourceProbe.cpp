@@ -274,6 +274,36 @@ void transfer_requests(memory::ResourceHandle resource, const DeviceOptions& opt
         "queue destruction did not complete independent readback");
     survivor = {};
     {
+        auto owner = queue(resource,options);
+        auto gpu = buffer(owner,64,BufferMemory::device);
+        auto image = take(owner.create_image({4,4}));
+        auto batch = take(owner.begin());
+        const auto fill_use = buffer_use(gpu,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite);
+        const auto clear_use = image_use(image,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal);
+        const std::array uses{fill_use,clear_use};
+        check(batch.prepare(uses));
+        check(batch.fill(gpu,0x12345678u));
+        require(!batch.fill(gpu),"second fill accepted without write barrier");
+        check(batch.clear(image,vk::ClearColorValue{std::array<float,4>{0,1,0,1}},clear_use.range));
+        auto fill_request = take(batch.readback(gpu));
+        auto clear_request = take(batch.readback(image,{0,0,0,0,4,4}));
+        auto ticket = take(owner.submit(std::move(batch)));
+        require(take(owner.wait(ticket)),"fill/clear timed out");
+        require(take(fill_request.try_read(std::as_writable_bytes(std::span{actual}))) && actual[0] == 0x12345678u && actual[15] == 0x12345678u,"buffer fill mismatch");
+        require(take(clear_request.try_read(std::as_writable_bytes(std::span{actual}))) && actual[0] == 0xff00ff00u && actual[15] == 0xff00ff00u,"image clear mismatch");
+        auto upload = buffer(owner,64,BufferMemory::upload);
+        check(upload.write(0,std::as_bytes(std::span{data})));
+        auto mixed = take(owner.begin());
+        check(mixed.copy_to_image(upload,image)); // Compatibility path must publish conservative source reads.
+        const std::array overwrite{buffer_use(upload,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite)};
+        check(mixed.prepare(overwrite));
+        check(mixed.fill(upload));
+        auto original = take(mixed.readback(image,{0,0,0,0,4,4}));
+        auto mixed_ticket = take(owner.submit(std::move(mixed)));
+        require(take(owner.wait(mixed_ticket)) && take(original.try_read(std::as_writable_bytes(std::span{actual}))) && actual == data,
+            "legacy upload and typed overwrite lost WAR dependency");
+    }
+    {
         auto owner = queue(resource,options,true);
         auto gpu = buffer(owner,64,BufferMemory::device);
         auto batch = take(owner.begin());

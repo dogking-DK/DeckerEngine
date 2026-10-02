@@ -1,11 +1,11 @@
 ---
 created_at: "2026-09-28T16:49:00+08:00"
-updated_at: "2026-09-30T09:44:00+08:00"
+updated_at: "2026-10-02T21:26:00+08:00"
 ---
 
-# Vulkan 设备、资源与提交
+# Vulkan 使用层：资源、管线、录制与提交
 
-[返回项目入口](../../README.md)。当前提供设备、VMA Buffer/Image、单队列提交、上传/读回与延迟释放；
+[返回项目入口](../../README.md)。当前提供资源工厂、管线/绑定、类型化录制、显式同步、单队列提交与异步读回；
 离线 shader 编译见 [Shader 指南](shaders.md)，真实 draw/dispatch/readback 见[离屏指南](offscreen.md)。
 窗口呈现尚未实现。接口与生命周期见 [设备设计](../design/graphics-device.md) 和[资源设计](../design/graphics-resources.md)。
 
@@ -84,6 +84,7 @@ ValidationMode::if_available（默认）在环境缺失时报告原因并明确�
 sink 的 user data 必须活到创建失败或 Device 销毁返回。
 
 `instance()`、`physical_device()`、`logical_device()`、`queue()` 返回只读 vk::raii 引用。
+以下是专门的底层互操作示例；常规资源与命令使用后面的 ResourceFactory/encoder。
 包含 Device.hpp 即可使用 Vulkan-Hpp；例如在上面的 device 作用域内创建临时子资源：
 
 ```cpp
@@ -119,55 +120,128 @@ Vulkan 1.4 基线与 VMA 查询验证见 [0048](../development/0048-vulkan-14-ba
 
 ## 上传与读回
 
-文件包含 `<dk/graphics/Resources.hpp>` 和 `<array>`，在上述 Device 创建成功后消费设备：
+文件包含 `<dk/graphics/Transfer.hpp>` 和 `<array>`，在上述 Device 创建成功后消费设备：
 
 ```cpp
 auto queue = dk::graphics::SubmissionQueue::create(*heap, std::move(*device), 3);
 if (!queue) return 1;
+auto factory = queue->resources();
 std::array<std::byte, 64> input{}, output{};
 input.fill(std::byte{0x5a});
-using dk::graphics::BufferMemory;
 const auto usage = vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst;
-auto upload = queue->create_buffer({input.size(), usage, BufferMemory::upload});
-auto gpu = queue->create_buffer({input.size(), usage, BufferMemory::device});
-auto readback = queue->create_buffer({input.size(), usage, BufferMemory::readback});
-if (!upload || !gpu || !readback || !upload->write(0, input)) return 1;
+auto gpu = factory.create_buffer({input.size(), usage});
+if (!gpu) return 1;
 auto batch = queue->begin();
-if (!batch) return 1;
-if (!batch->copy(*upload, *gpu, input.size()) || !batch->copy(*gpu, *readback, input.size())) return 1;
+if (!batch || !batch->upload(*gpu, input)) return 1;
+auto request = batch->readback(*gpu);
+if (!request) return 1;
 auto ticket = queue->submit(std::move(*batch));
 if (!ticket) return 1;
 auto completed = queue->wait(*ticket);
-if (!completed || !*completed || !readback->read(0, output) || output != input) return 1;
-if (!queue->close()) return 1;
+if (!completed || !*completed) return 1;
+auto read = request->try_read(output);
+if (!read || !*read || output != input || !queue->close()) return 1;
 ```
+
+多次 upload/readback 复用同一个 batch，只在显式 submit 时提交。输入 byte span 在 upload 返回后可释放。
+ReadbackRequest 在未提交/未完成时 try_read 返回 false 且不改输出，放弃或失败后返回取消错误；
+poll/wait/close 推进完成状态。请求不强持有 queue，正常队列析构排空后仍可读取；设备丢失不返回成功数据。
 
 创建队列后不再使用移后的 Device；queue.device() 只借用设备。factory 预检失败不消费设备，
 开始创建后发生失败则销毁已消费设备。队列、资源和相关 Vulkan 访问由调用者串行执行，
 不要绕过队列提交/重置内部 command buffer 或 signal 内部 timeline。
 
-Image 使用 `create_image({width, height})`，默认 RGBA8、transfer src/dst + sampled。
-`batch.copy_to_image(upload, image)` 与 `copy_to_buffer(image, readback)` 复制整图，缓冲至少 width×height×4 字节，
-自动处理 transfer layout；`transition(image, vk::ImageLayout::eShaderReadOnlyOptimal)` 可将其准备为只读布局。
-支持单 mip/layer 二维 RGBA8 UNORM/SRGB、BGRA8 UNORM、R32_UINT/FLOAT；其他格式和复杂 subresource 待扩展。
+Image 使用 `factory.create_image({width, height})`，默认 RGBA8、transfer src/dst + sampled。
+ImageDesc 末尾可指定 mip_levels/array_layers，ImageViewDesc 选择 2D/2D array 和子资源范围。
+`batch.upload(image, bytes, {mip, layer, x, y, width, height})` 上传选定区域，
+`batch.readback(image, region)` 返回该区域的紧密排列字节。上传可指定 buffer offset/row length/image height，
+长度须匹配实际 footprint；高层读回这三个字段须为零，description() 返回实际行字节数。
+color 支持 RGBA8 UNORM/SRGB、BGRA8 UNORM、R32_UINT/FLOAT；D32_SFLOAT 支持深度附件和采样，暂不支持 byte 传输。
+新 image 必须先 clear/完整上传或声明完整 shader 覆盖才能读；局部写入不会证明整 mip/layer 内容有效。
 
 begin() 在固定槽（1–64）用尽时返回 conflict；调用 poll() 或 wait() 确认完成后才复用。
 wait 的超时单位为 ns，返回 false 时资源仍在使用；默认等待无超时。票据不能跨队列使用。
 Buffer 的 CPU 访问在录制和 pending 期间被拒绝，wait/poll 回收引用后才允许访问。
 VMA 负责 non-coherent flush/invalidate；flush 失败不保证已写 host 字节回滚。
 
-丢弃 batch 会取消未提交录制；提交失败不更新票据或 image 全局布局。一个 image 同时只能由一个 batch 录制，
+丢弃 batch 会取消未提交录制；提交失败不更新票据或资源全局状态。一个 Buffer/Image 同时只能由一个未提交 batch 预约，
 成功提交后即可在同队列下一批继续使用。包装提前销毁时队列保留 allocation 到 GPU 完成；
 buffer/image 可晚于 queue 销毁，它们会继续持有设备，因此诊断 sink 和 Memory 系统也须保持存活。
 close() 遇录制中的 batch 返回 conflict；成功后拒绝新工作。队列最终析构等待 pending 工作，
 device lost 为终态；其他等待失败保留资源以供重试。API 的 bad_alloc 不转换为 GPU 成功/完成。
 
 内置同步以正确性为先，采用保守 barrier；目前未做异步传输队列或 barrier 合并优化。
-手工录制可借用 batch.command_buffer()，必须先 retain 所有使用资源，并经 transition 更新 image 布局。
-该路径不追踪手工创建的 image view/pipeline 等子对象，调用者须将它们保持到票据完成。
+原生互操作使用 unsafe_record(before, after, callback)，先用 retain 的对象重载声明额外对象，
+资源状态前后一一对应；回调不得 end/reset/submit 或 signal 内部 timeline。回调退出使已有 encoder 失效，
+异常使批次 invalid。command_buffer() 已弃用，仅保留兼容；常规调用使用下面的 encoder。
 
 资源 GPU 探针每次验证 16 轮 buffer/image 往返、5 种格式、提交失败/超时/等待错误、跨队列拒绝、
 延迟释放和关闭。验证用例通过环境设置开启 Khronos 同步验证（兼容旧 SDK 的 VK_LAYER_VALIDATE_SYNC
 和新版本的 VK_VALIDATION_VALIDATE_SYNC），无环境返回 77；不将跳过当通过。
 Tracy 当前标记 CPU 创建/submit/wait/collect；GPU query/context 的寿命契约已确定，
 GPU timestamp zone/capture 尚未启用，见[接入边界](../design/graphics-resources.md#tracy-gpu-接入边界)。
+
+
+## 管线、绑定与计算
+
+包含 `<dk/graphics/Transfer.hpp>`；使用已有 queue、factory 与受信任的 CompiledShader。
+以下片段假定 compute 产物只声明 set=0/binding=0 的 storage buffer，且无 push constants；
+input/output 为相同长度的四字节对齐 byte span，groups 为合法工作组数量，shader 负责访问边界。
+
+```cpp
+using namespace dk::graphics;
+auto module = factory.create_shader(compiled);
+if (!module) return 1;
+const std::array shaders{&*module};
+auto layout = factory.create_pipeline_layout(shaders);
+if (!layout) return 1;
+auto pipeline = factory.create_compute_pipeline({&*module, &*layout});
+auto storage = factory.create_buffer({input.size(), vk::BufferUsageFlagBits::eStorageBuffer |
+    vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst});
+if (!pipeline || !storage) return 1;
+const std::array<BindingWrite, 1> writes{{{0, 0, BufferBinding{&*storage}}}};
+auto bindings = factory.create_bindings(*layout, 0, writes);
+if (!bindings) return 1;
+// layout/pipeline/bindings 可保留，并用于后续多个批次。
+auto batch = queue->begin();
+if (!batch || !batch->upload(*storage, input)) return 1;
+const std::array uses{buffer_use(*storage, vk::PipelineStageFlagBits2::eComputeShader,
+    vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite)};
+if (!batch->prepare(uses)) return 1;
+const std::array sets{&*bindings};
+if (!batch->dispatch(*pipeline, sets, {}, groups)) return 1;
+auto request = batch->readback(*storage);
+if (!request) return 1;
+auto ticket = queue->submit(std::move(*batch));
+if (!ticket) return 1;
+auto done = queue->wait(*ticket);
+if (!done || !*done) return 1;
+auto read = request->try_read(output);
+if (!read || !*read) return 1;
+```
+
+多次 dispatch 可借用 `batch.compute()`，依次 bind_pipeline/bind_sets/push_constants/dispatch。
+写后读/写必须先再次 prepare，即使 layout 不变；descriptor 本身不推断 shader 的读写意图。
+Bindings 创建后不可变，更新绑定生成新对象；旧绑定与其资源自动保活到 GPU 完成。
+多个 set、固定数组、uniform/storage buffer、sampled/storage image 与 sampler 例子见
+[GPU probe 的 pipeline_bindings](../../tests/integration/OffscreenProbe.cpp)。
+
+## 绘制与显式同步
+
+`prepare(输入/附件) → begin_rendering(RenderingDesc) → bind/draw → end → readback` 是基本顺序。
+RenderingDesc 指定 color view 与可选 depth view、load/store/clear 和区域，默认 viewport/scissor 覆盖区域。
+Color 的声明包含 ColorAttachmentRead/Write 与 ColorAttachmentOutput；depth 包含 Early/LateFragmentTests、
+DepthStencilAttachmentRead/Write。已开启的 rendering scope 内不能 prepare、copy、compute 或嵌套 rendering。
+GraphicsPipelineDesc 指定 vertex/fragment、布局、顶点 binding/attribute、格式、深度和混合设置；
+RenderEncoder 提供 vertex_buffer、index_buffer、draw/draw_indexed。索引值决定的实际顶点范围由调用者保证。
+完整的 compute→vertex→indexed draw、D32 深度与对象提前释放示例见上述 probe 的 indexed_depth。
+
+ResourceUse 的 buffer_use/image_use 明确 stage/access、layout 和范围，prepare 自动依据账本发 barrier。
+需要外部规划时传 `ResourceBarrier{use, before}` 给 batch.barrier，不再重复 prepare；
+它和 encoder/copy 共用一份状态。Buffer::state() / Image::state(mip,layer) 是上次成功提交的状态，不能据此判断 GPU 完成。
+buffer 按整对象保守跟踪，image 按 mip/layer；ResourceUse.full_overwrite 表示下一次 shader 写入完整初始化声明的子资源，
+调用者必须保证真实覆盖。低层 copy_buffer/带 region 的 copy/fill/clear 要求已 prepare，不隐式加第二份同步。
+
+end、提交或 batch 移动后，旧 encoder 返回 invalid_state；移动打开 rendering 的 batch 会使批次 invalid。
+单次 dispatch 与传输组合方法在已经发出命令后失败也使批次 invalid，应放弃后新建。普通 bind/retain 负责保活，不能代替同步。
+接口仍是 Vulkan 专用：保留格式、usage 和 stage/access 值类型；不包含窗口呈现、Graph 调度、多队列、MSAA 或 bindless。

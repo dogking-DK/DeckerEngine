@@ -1,7 +1,7 @@
 ---
 module: graphics-vulkan
 created_at: "2026-09-30T10:18:48+08:00"
-updated_at: "2026-10-02T21:07:00+08:00"
+updated_at: "2026-10-02T21:26:00+08:00"
 status: accepted
 ---
 
@@ -10,19 +10,19 @@ status: accepted
 ## 目标与现状
 
 本设计对应新增的 **M5.5 Vulkan 使用层封装**，位于已完成的离屏验收之后、窗口呈现之前。
-本方案进入逐节实现；各节完成与验证状态见 Roadmap，未完成部分仍为实施目标，现行契约以
+本页描述已采用的使用层接口；各节验证状态见 Roadmap。相关设备、资源和业务边界同时见
 [设备](graphics-device.md)、[资源提交](graphics-resources.md)、[Shader](graphics-shaders.md)
-和[离屏](graphics-offscreen.md)设计为准。阶段状态与编号迁移统一见 [Roadmap](../roadmap.md)。
+和[离屏](graphics-offscreen.md)设计。阶段状态与编号迁移统一见 [Roadmap](../roadmap.md)。
 
-目前底座已具备 Vulkan 1.4、Vulkan-Hpp RAII、VMA 和单队列完成跟踪，但还未覆盖日常使用流程：
+M5.5 开始前底座具备 Vulkan 1.4、Vulkan-Hpp RAII、VMA 和单队列完成跟踪；本阶段收口的原始问题如下：
 
-| 实际调用点 | 当前负担 | 本阶段收口位置 |
+| 原始调用点 | 原有负担 | 收口位置 |
 | --- | --- | --- |
 | [Offscreen.cpp](../../engine/graphics/offscreen/src/Offscreen.cpp) 的 draw | 手工拼接 ShaderModule、ImageView、固定管线状态及 dynamic rendering 结构 | 对象工厂、GraphicsPipelineDesc、RenderingDesc |
 | 同文件的 dispatch | 手工合成 layout/pool/set、逐项更新 descriptor，再 bind/push/dispatch | PipelineLayout、BindingSet、ComputeEncoder |
 | 同文件的 Work/execute | 另保留整组 vk::raii 对象；通过 Buffer/Image 间接保证设备寿命 | 统一对象控制块和提交保留列表 |
 | [Resources.hpp](../../engine/graphics/device/include/dk/graphics/Resources.hpp) | 只有 copy/transition，其他录制需要借用 command_buffer 并手工 retain | 类型化录制入口、自动保活和受控原生扩展 |
-| [Resources.cpp](../../engine/graphics/device/src/Resources.cpp) | 全图 layout 账本、保守全局 barrier；上传/读回需要反复组装 staging | 显式访问状态、范围同步、TransferBatch/ReadbackRequest |
+| [Resources.cpp](../../engine/graphics/device/src/Resources.cpp) | 全图 layout 账本、保守全局 barrier；上传/读回需要反复组装 staging | 显式访问状态、范围同步、CommandBatch 传输/ReadbackRequest |
 
 目标是让常见调用表达“创建哪些资源、绑定什么数据、执行什么工作、何时取结果”。
 重复的 Vulkan 创建结构、对象寿命、descriptor 写入和录制规则由底座承担。
@@ -34,7 +34,7 @@ status: accepted
 保持 Vulkan 专用实现，不引入多后端 RHI、虚函数设备树或通用 `create<T>` / `set_state(any)`。
 继续使用 `dk::graphics` 命名空间、既有 dispatcher 和 VMA；不新增或升级三方依赖。
 
-| 位置与 target（规划） | 职责 | 依赖方向 |
+| 位置与 target | 职责 | 依赖方向 |
 | --- | --- | --- |
 | `graphics/device`，既有 `dk::graphics_device` | 设备、资源/管线/绑定对象、命令录制、提交、传输 | PUBLIC Core、Memory、Vulkan 值类型及 shader_types；PRIVATE 保持现有装载/分配/Profiling 依赖 |
 | `graphics/shader-types`，新增 `dk::graphics_shader_types` | 从现有头中提取 CompiledShader、阶段与最小反射数据；拥有型产物构造 | 仅 Core/Memory，不含 Slang、Vulkan、IO 或编译入口 |
@@ -70,7 +70,7 @@ flowchart TD
 ### 统一工厂与所有权
 
 `SubmissionQueue::resources()` 返回借用该队列的 `ResourceFactory` 视图，集中提供具名工厂方法。
-现有 `queue.create_buffer/create_image` 保留为转发入口；工厂不额外拥有队列，不产生资源→队列引用环。
+现有 `queue.create_buffer/create_image` 保留为兼容入口；工厂不额外拥有队列，不产生资源→队列引用环。
 Device 保持初始化和能力查询职责，不把所有创建方法继续加进 Device。
 
 | 拥有型对象 | 描述/创建入口 | 内部依赖和调用者获得的简化 |
@@ -169,15 +169,15 @@ bind/draw/dispatch 校验资源处于已声明的范围和状态，资源访问�
 对多 draw 的 rendering scope，先声明整个 scope 的输入/attachment 集合，全部 barrier 在 beginRendering 之前记录；
 首版不支持 scope 内 storage 写入后再读或 attachment feedback loop，遇到这类需求需结束 scope 再 prepare。
 
-Graph 走 `batch.barrier(BarrierBatch)` 与同一组底层 copy/encoder 接口，显式给出 before/after 状态。
+Graph 走 `batch.barrier(span<ResourceBarrier>)` 与同一组底层 copy/encoder 接口，显式给出 before/after 状态。
 这条路径只校验范围/账本一致性、发出给定 barrier 并更新同一账本，不再额外插入 prepare 的 barrier；
 Graph 无需经带隐式传输准备的便利函数，不建立另一套 Vulkan command recording。
 显式 barrier 的访问完成后也遵循同一状态校验规则；原来的保守 copy/transition 仅作为兼容入口保留，
 迁移后调用者选用明确的便利路径或计划路径，不为同一次访问重复准备。
 
 状态账本首版 Buffer 按整对象保守跟踪，API 仍验证 byte range；Image 按 aspect/mip/layer 跟踪。
-增加按范围查询状态的接口，返回子资源状态快照；在 M5.5.3 迁移现有测试/消费者对单值 Image::layout() 的查询，
-再废弃该单值入口，不能用 Undefined 假装多个不同的 layout。
+Buffer::state() 与 Image::state(mip,layer) 返回成功提交的状态快照；Image::layout() 已移除，
+不能用 Undefined 假装多个不同的 layout。
 每个被跟踪资源同时只允许一个未提交 batch 预约（包括 Buffer），避免并行录制拿到过时的起始状态；
 相互独立的资源仍可录制到不同槽。成功提交后释放预约，后续 batch 可依单队列顺序继续使用，
 无需等上一份 GPU 工作完成。资源的“已提交状态”不等同于“已经完成”。
@@ -207,27 +207,26 @@ request 持有独立完成记录和设备寿命，不强持有整个 queue；que
 若 Core 无对应错误码，not_ready 使用返回值状态表示，不新增含义混杂的异常。
 depth/压缩格式的通用 byte readback 首版拒绝，不能沿用每像素四字节的假设。
 
-以下是拟议的调用形状，不是已存在或可编译的示例；`TRY/TAKE` 仅表示 Result 传播。
-`TAKE` 解包成功值，错误时直接返回；省略初始化及描述构造，与未来宏命名无关。
+以下为组合顺序；`TRY/TAKE` 仅表示 Result 传播，管线和绑定的实际创建例子见[使用指南](../guides/graphics.md)。
+管线、布局与 BindingSet 可在多次批次间复用。
 
 ```cpp
-auto factory = queue.resources();
-auto shader = TAKE(factory.create_shader(compiled_compute));
-auto layout = TAKE(factory.create_pipeline_layout({shader}));
-auto pipeline = TAKE(factory.create_compute_pipeline({shader, layout}));
-auto storage = TAKE(factory.create_buffer(storage_desc));
-auto bindings = TAKE(factory.create_bindings(layout, 0, {storage_binding(0, storage)}));
-// shader/layout/pipeline/bindings 可在多次任务间复用。
-
 auto batch = TAKE(queue.begin());
 TRY(batch.upload(storage, input_bytes));
-TRY(batch.prepare({storage_read_write(storage, vk::ShaderStageFlagBits::eCompute)}));
-TRY(batch.dispatch(pipeline, bindings, constants, groups));
+const std::array uses{buffer_use(storage, vk::PipelineStageFlagBits2::eComputeShader,
+    vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite)};
+TRY(batch.prepare(uses));
+const std::array sets{&bindings};
+TRY(batch.dispatch(pipeline, sets, constants, groups));
 auto result = TAKE(batch.readback(storage));
 auto ticket = TAKE(queue.submit(std::move(batch)));
 if (!TAKE(queue.wait(ticket, timeout_ns))) return pending_result;
 return result.try_read(output_bytes);
 ```
+
+单次 dispatch 便利方法复用 ComputeEncoder；组合途中失败将批次置为 invalid，调用者放弃该批次。
+高层 image readback 输出紧密排列的区域，buffer_offset/row_length/image_height 必须为零；
+原始区域 copy 支持目的步长。上传可指定 pitch 与前缀，输入长度须等于实际 footprint。
 
 绘制对应的核心流程为 `prepare(输入和附件) → begin_rendering(desc) → bind/draw → end → readback`。
 常见路径不出现 Vulkan CreateInfo、descriptor pool 分配、裸 bind 命令或手工 pending work 对象集合。
@@ -260,7 +259,7 @@ close、析构等待失败与 fail-stop 策略沿用资源设计，普通对象�
 先声明保留对象与资源 before/after 状态，再借用 command buffer；退出后使缓存的 pipeline/binding/dynamic state 失效。
 未知扩展状态不能自动推断；未声明/无法表达的状态变化拒绝继续受管录制，回调异常使 batch invalid。
 禁止在扩展内 end/reset/submit command buffer、销毁受管对象或 signal 内部 timeline。
-M5.5.5 将当前公开 command_buffer() 标记弃用并迁移常规消费者；底层实现及专门故障/互操作 probe 仍可直接调用 Vulkan。
+command_buffer() 已标记 deprecated，Offscreen 常规消费者完成迁移；底层实现及专门故障/互操作 probe 仍可直接调用 Vulkan。
 原生扩展的声明真实性由调用者负责，封装不能验证任意原生命令的实际访问。
 
 M5.6 的 WSI 适配使用独立 external image 引用：保留 swapchain generation owner，
@@ -291,7 +290,7 @@ GPU probe 覆盖新增真实资源和读写链路，开启同步验证；测试�
 Offscreen 的公共执行路径和新增使用示例不再创建 vk::raii 对象、拼 vk::*CreateInfo、
 updateDescriptorSets 或调用原生 command buffer。该检查结合输出回归和同步验证，不单以代码行数衡量。
 只运行当节受影响测试；最终定向复验 device/resources/shaders/offscreen、CPU runner 与独立 shader 配置。
-纯设计交付只运行文档/链接检查，不运行引擎构建，也不声称 GPU 行为已验证。
+各节的实际验证和限制保存在独立开发记录，不能将设计本身视为 GPU 验收证据。
 
 ## 取舍与暂缓项
 
@@ -315,4 +314,5 @@ RAII 内部所有权与 descriptor pool 释放策略参考
 [Shader](graphics-shaders.md)、[离屏](graphics-offscreen.md)。现状证据见
 [0045](../development/0045-graphics-resources-submission.md)、[0047](../development/0047-offscreen-execution.md)
 和 [0048](../development/0048-vulkan-14-baseline.md)。实现记录从
-[0049 M5.5.1](../development/0049-vulkan-object-foundation.md) 开始，后续各节独立留档。
+[0049 M5.5.1](../development/0049-vulkan-object-foundation.md) 开始，最终迁移与验收见
+[0053 M5.5.5](../development/0053-vulkan-offscreen-migration.md)。

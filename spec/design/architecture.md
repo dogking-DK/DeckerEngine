@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-30T10:18:48+08:00"
+updated_at: "2026-10-02T21:26:00+08:00"
 status: accepted
 ---
 
@@ -22,8 +22,8 @@ graphics/shaders 提供独立 CPU Slang 编译、SPIR-V 和最小反射，同样
 graphics/offscreen 组合上述模块，提供同步离屏 draw/dispatch/readback 验证入口，同样独立于 CPU Runtime。
 Graph 和呈现尚未实现，具体边界见[设备设计](graphics-device.md)、[资源设计](graphics-resources.md)、
 [Shader 设计](graphics-shaders.md) 和[离屏设计](graphics-offscreen.md)。
-新增 [Vulkan 使用层设计稿](graphics-vulkan.md) 规划在窗口之前统一对象/管线/绑定/录制/传输封装；
-提取无 Slang/Vulkan 依赖的 shader 产物类型，Graph 后续复用使用层执行接口。上述扩展尚未实现。
+[Vulkan 使用层](graphics-vulkan.md) 统一对象/管线/绑定/录制/同步与传输，Offscreen 通过该接口执行；
+无 Slang/Vulkan 依赖的 shader-types 保存编译产物，设备模块无需链接编译器。Graph 后续复用同一执行与状态接口。
 模块接口与实现入口见[设计索引](README.md)，阶段状态和下一项统一见[Roadmap](../roadmap.md)，
 历史验收结果见[开发记录](../development/README.md)。
 Runtime 装配 Assets/Jobs heap 与线程上下文；worker 捕获拥有型路由并在安全点退休。

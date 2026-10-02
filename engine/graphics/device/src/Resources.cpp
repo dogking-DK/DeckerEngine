@@ -50,6 +50,8 @@ Result<void> host_access(const std::shared_ptr<detail::ResourceState>& state, vk
 }
 vk::Buffer Buffer::handle() const noexcept { return state_ ? vk::Buffer{state_->buffer} : vk::Buffer{}; }
 vk::DeviceSize Buffer::size() const noexcept { return state_ ? state_->buffer_desc.size : 0; }
+Result<AccessState> Buffer::state() const
+{ return state_ ? Result<AccessState>{state_->states.front()} : std::unexpected(Error{ErrorCode::invalid_state,"buffer is empty"}); }
 Result<void> Buffer::write(vk::DeviceSize offset, std::span<const std::byte> bytes) { return host_access(state_, offset, {}, bytes, true); }
 Result<void> Buffer::read(vk::DeviceSize offset, std::span<std::byte> bytes) const { return host_access(state_, offset, bytes, {}, false); }
 vk::Image Image::handle() const noexcept { return state_ ? vk::Image{state_->image} : vk::Image{}; }
@@ -129,6 +131,7 @@ Result<void> CommandBatch::copy_to_image(const Buffer& source, const Image& dest
     region.imageExtent = vk::Extent3D{destination.description().width, destination.description().height, 1};
     state_->command().copyBufferToImage(source.handle(), destination.handle(), vk::ImageLayout::eTransferDstOptimal, region);
     state_->find(destination.state_)->states.front().initialized = true;
+    state_->barrier();
     return {};
 }
 Result<void> CommandBatch::copy_to_buffer(const Image& source, const Buffer& destination)

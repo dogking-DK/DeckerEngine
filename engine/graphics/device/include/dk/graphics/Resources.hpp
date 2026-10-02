@@ -54,6 +54,7 @@ public:
     [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
     [[nodiscard]] vk::Buffer handle() const noexcept;
     [[nodiscard]] vk::DeviceSize size() const noexcept;
+    [[nodiscard]] Result<AccessState> state() const;
     [[nodiscard]] Result<void> write(vk::DeviceSize offset, std::span<const std::byte> bytes);
     [[nodiscard]] Result<void> read(vk::DeviceSize offset, std::span<std::byte> bytes) const;
 private:
@@ -119,6 +120,8 @@ public:
     [[nodiscard]] Result<void> barrier(std::span<const ResourceBarrier> barriers);
     [[nodiscard]] Result<RenderEncoder> begin_rendering(const RenderingDesc& description);
     [[nodiscard]] Result<ComputeEncoder> compute();
+    [[nodiscard]] Result<void> dispatch(const ComputePipeline& pipeline, std::span<const BindingSet* const> sets,
+        std::span<const std::byte> push_constants, std::array<std::uint32_t,3> groups);
     [[nodiscard]] Result<void> copy_buffer(const Buffer& source, const Buffer& destination,
         vk::DeviceSize size, vk::DeviceSize source_offset = 0, vk::DeviceSize destination_offset = 0);
     [[nodiscard]] Result<void> copy_to_image(const Buffer& source, const Image& destination, const ImageCopyRegion& region);
@@ -134,6 +137,7 @@ public:
         NativeRecorder recorder, void* user_data = nullptr);
     // Valid only during this batch. Retain every manually referenced resource.
     // Do not end/submit/reset the command buffer or bypass tracked image layouts.
+    [[deprecated("Use typed encoders or unsafe_record with explicit resource declarations")]]
     [[nodiscard]] const vk::raii::CommandBuffer& command_buffer() const;
 private:
     friend class SubmissionQueue;

@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-30T09:26:00+08:00"
-updated_at: "2026-09-30T09:44:00+08:00"
+updated_at: "2026-10-02T21:26:00+08:00"
 ---
 
 # 离屏绘制、计算与读回
@@ -81,4 +81,6 @@ int main()
 默认等待 10 秒，超时返回 conflict；等待错误和超时均保留所有 GPU 所有者，新操作被拒绝。
 调用 `drain(timeout_ns)` 确认完成并丢弃失败调用的结果；false 表示仍 pending，错误也可重试。
 析构会等待自身工作。Memory 关闭后禁止新 draw/dispatch，仍允许 drain；操作期间需串行访问并保持资源 open。
-普通 Vulkan 对象全部采用 `vk::raii`，VMA 独占其 Buffer/Image。尚无管线缓存、场景渲染、窗口或 Tracy GPU capture。
+实现通过 ResourceFactory、encoder、upload/readback 组合，pending 只保存请求与票据；
+提交层自动保留 GPU 对象闭包。需要复用管线、多 set、纹理、深度或索引绘制时，直接使用[使用层接口](graphics.md)。
+尚无自动管线缓存、场景渲染、窗口或 Tracy GPU capture。

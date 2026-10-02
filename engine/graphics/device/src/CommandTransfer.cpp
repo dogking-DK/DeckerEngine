@@ -117,6 +117,10 @@ Result<void> CommandBatch::unsafe_record(std::span<const ResourceUse> before, st
     if (auto valid = prepare(before); !valid) return valid;
     detail::invalidate_encoder(*state_);
     try { recorder(state_->command(), user_data); }
+    catch (const vk::SystemError& error) {
+        state_->invalid = true;
+        return std::unexpected(state_->queue->failure("unsafe native recording",static_cast<VkResult>(error.code().value())));
+    }
     catch (...) { state_->invalid = true; throw; }
     for (const auto& use : final) {
         auto* local = state_->find(use.resource);

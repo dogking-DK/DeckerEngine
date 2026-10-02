@@ -4,7 +4,7 @@
 | --- | --- | --- | --- | --- | --- |
 | architecture | [整体架构](architecture.md) | accepted | 长期模块边界和依赖方向 | [模块目录](../../engine) | [流程/检查](../README.md) |
 | graphics-device | [Vulkan 设备与诊断](graphics-device.md) | accepted | Vulkan 1.4 设备/诊断；Vulkan-Hpp RAII、volk、vk-bootstrap、VMA allocator | [Device](../../engine/graphics/device) | [device](../../tests/unit/CMakeLists.txt) |
-| graphics-resources | [Vulkan 资源与提交生命周期](graphics-resources.md) | accepted | M5.2 VMA 资源、上传/读回、完成与延迟释放 | [device](../../engine/graphics/device) | [graphics](../../tests/integration/CMakeLists.txt) |
+| graphics-resources | [Vulkan 资源与提交生命周期](graphics-resources.md) | accepted | VMA 资源、子资源状态、提交保留与异步上传/读回 | [device](../../engine/graphics/device) | [graphics](../../tests/integration/CMakeLists.txt) |
 | graphics-shaders | [Slang 编译与反射](graphics-shaders.md) | accepted | M5.3 离线 SPIR-V、最小布局反射与诊断 | [shaders](../../engine/graphics/shaders) | [shaders](../../tests/unit/CMakeLists.txt) |
 | graphics-offscreen | [离屏绘制与计算](graphics-offscreen.md) | accepted | M5.4 draw/dispatch/readback 与完成保护 | [offscreen](../../engine/graphics/offscreen) | [offscreen](../../tests/integration/CMakeLists.txt) |
 | graphics-vulkan | [Vulkan 使用层封装](graphics-vulkan.md) | accepted | M5.5 对象/管线/绑定/录制/同步/传输与离屏迁移契约；实现进度见 Roadmap | [device](../../engine/graphics/device)、[offscreen](../../engine/graphics/offscreen) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
