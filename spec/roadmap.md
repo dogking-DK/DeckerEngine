@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-09-30T12:06:23+08:00"
+updated_at: "2026-10-02T20:56:00+08:00"
 status: accepted
 ---
 
@@ -35,7 +35,7 @@ M1.7.1–7 已完成，见 [0023](development/0023-tracy-cpu-profiling.md)、[00
 M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘制与计算已完成，见 [0042](development/0042-vulkan-device.md)、
 [0045](development/0045-graphics-resources-submission.md)、[0046](development/0046-slang-shader-compiler.md)、
 [0047](development/0047-offscreen-execution.md)。已插入 M5.5 Vulkan 使用层封装设计，
-M5.5.1–2 已完成，下一项为 M5.5.3；原未开始的窗口与呈现顺延为 M5.6。
+M5.5.1–3 已完成，下一项为 M5.5.4；原未开始的窗口与呈现顺延为 M5.6。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作；提早建立多线程内存契约与性能测量，复杂并行优化仍由测量驱动。
@@ -55,7 +55,7 @@ M5.5.1–2 已完成，下一项为 M5.5.3；原未开始的窗口与呈现顺�
 | M3 命令与 CPU Runtime | CLI/stdio 创建、修改、查询、保存场景 | M2 | 已完成（M3.1–M3.5，交付 A） |
 | M1.7 Foundation 补充 | Tracy、mimalloc heap、PMR/智能指针、arena/pool、多线程生命周期与性能基线 | 原 M1、M3（现有链路埋点） | 已完成：M1.7.1–7 均验收 |
 | M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3、M1.7 | 已完成：M4.1–4，证据 0031–0040 |
-| M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、Vulkan 使用层、最小呈现 | M1、M1.7 | 进行中：M5.1–4 已完成，M5.5.1–2 已完成、M5.5.3–5 待开始，M5.6 待开始 |
+| M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、Vulkan 使用层、最小呈现 | M1、M1.7 | 进行中：M5.1–4 已完成，M5.5.1–3 已完成、M5.5.4–5 待开始，M5.6 待开始 |
 | M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 待开始 |
 | M7 场景渲染 | 资产上传、场景提取、Pass、pipeline、可等待截图 | M3、M4、M6 | 待开始 |
 | M8 编辑器与进程控制 | 可编辑保存的视口；dk-ctl 操作运行中的程序 | M7 | 待开始 |
@@ -288,7 +288,7 @@ CPU Ready 与未来 GPU Ready 分开。
 | M5.2 | 资源与提交生命周期 | M5.1 | VMA Buffer/Image、5 种格式上传/读回、timeline/槽复用、延迟释放和失败保护通过；Tracy GPU 寿命边界已定义，见 [0045](development/0045-graphics-resources-submission.md) | 已完成 |
 | M5.3 | Slang 编译工具 | M5.2 | vertex/fragment/compute SPIR-V、反射、诊断和 dk-shaderc 离线发布通过；独立无 Vulkan 配置，见 [0046](development/0046-slang-shader-compiler.md) | 已完成 |
 | M5.4 | 离屏绘制与计算 | M5.3 | 三角形逐像素/compute 数据读回、RAII pending 寿命和失败恢复通过；同步验证零警告/错误，见 [0047](development/0047-offscreen-execution.md) | 已完成 |
-| M5.5 | Vulkan 使用层封装（M5.5.1–5） | M5.4 | 对象/管线/绑定/encoder/传输封装；离屏迁移输出不变、同步与寿命验收；见[设计稿](design/graphics-vulkan.md) | 进行中，M5.5.1–2 已完成 |
+| M5.5 | Vulkan 使用层封装（M5.5.1–5） | M5.4 | 对象/管线/绑定/encoder/传输封装；离屏迁移输出不变、同步与寿命验收；见[设计稿](design/graphics-vulkan.md) | 进行中，M5.5.1–3 已完成 |
 | M5.6 | 窗口与呈现 | M5.5 | SDL3 swapchain、resize/最小化/重建；复用使用层且离屏路径独立可用 | 待开始 |
 
 M5.5 实施拆分：
@@ -297,11 +297,11 @@ M5.5 实施拆分：
 | --- | --- | --- | --- | --- |
 | M5.5.1 | 统一对象工厂、设备寿命与 shader 产物类型提取 | M5.4 | view/sampler/ShaderModule 创建、移动与失败清理；普通对象独立保活设备；device 不链接 Slang，见 [0049](development/0049-vulkan-object-foundation.md) | 已完成 |
 | M5.5.2 | 管线布局、graphics/compute 管线与不可变绑定 | M5.5.1 | 多 set/固定数组、跨阶段反射合并、管线复用、纹理/各类 buffer 绑定和冲突拒绝，见 [0050](development/0050-vulkan-pipelines-bindings.md) | 已完成 |
-| M5.5.3 | 类型化录制、资源状态与显式同步 | M5.5.2 | draw/indexed draw/dispatch、depth、多 mip/layer、依赖 barrier 与失败回滚；Graph 计划路径可复用 | 待开始 |
+| M5.5.3 | 类型化录制、资源状态与显式同步 | M5.5.2 | draw/indexed draw/dispatch、depth、多 mip/layer、依赖 barrier 与失败回滚；Graph 计划路径可复用，见 [0051](development/0051-vulkan-command-encoding.md) | 已完成 |
 | M5.5.4 | 批量上传与异步读回 | M5.5.3 | 多操作单次提交、区域 copy、超时/放弃/队列关闭及 host 可见性；完成前保活 staging | 待开始 |
 | M5.5.5 | 离屏迁移、调用示例与集成验收 | M5.5.4 | 原有输出/失败行为回归，常规消费者不直接创建/录制 Vulkan 对象；同步验证零相关错误 | 待开始 |
 
-M5.5.1–2 已完成，实现证据见上表；其他小节尚未验收。M5.1–4 的编号与验收保持；
+M5.5.1–3 已完成，实现证据见上表；其他小节尚未验收。M5.1–4 的编号与验收保持；
 原待开始的 M5.5 窗口与呈现改为 M5.6，历史记录 0047/0048 中的“下一项 M5.5”保留当时含义，
 当前执行顺序以此表为准。每个 M5.5.x 独立实现、定向验证和留档后再推进下一节。
 
@@ -507,8 +507,8 @@ M5.1 的无窗口设备、验证诊断及 CPU-only 隔离验收见 [0042](develo
 M5.2 的 VMA Buffer/Image、单队列提交/读回与延迟释放验收见 [0045](development/0045-graphics-resources-submission.md)。
 M5.3 的 Slang 编译、SPIR-V/反射、诊断和离线工具验收见 [0046](development/0046-slang-shader-compiler.md)。
 M5.4 的离屏 draw/dispatch/readback、同步验证与对象寿命验收见 [0047](development/0047-offscreen-execution.md)。
-已采用 [M5.5 Vulkan 使用层封装设计](design/graphics-vulkan.md)，M5.5.1–2 对象工厂与管线绑定已完成。
-下一项为 **M5.5.3 录制与同步**；按 M5.5.3–5 完成封装及离屏迁移后，再进入 **M5.6 窗口与呈现**。
+已采用 [M5.5 Vulkan 使用层封装设计](design/graphics-vulkan.md)，M5.5.1–3 对象工厂与管线绑定已完成。
+下一项为 **M5.5.4 批量上传与异步读回**；按 M5.5.4–5 完成封装及离屏迁移后，再进入 **M5.6 窗口与呈现**。
 各节开工时更新对应模块设计，窗口开始前建立 platform/presentation 设计；
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5.1–4 验收不代表窗口呈现、场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。

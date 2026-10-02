@@ -1,5 +1,5 @@
 #include "ResourcePolicy.hpp"
-#include "ResourceInternal.hpp"
+#include "CommandInternal.hpp"
 #include <dk/profiling/Profiler.hpp>
 #include <algorithm>
 #include <cstring>
@@ -35,6 +35,10 @@ Result<void> host_access(const std::shared_ptr<detail::ResourceState>& state, vk
     auto* bytes = static_cast<std::byte*>(mapped) + offset;
     if (write) {
         std::memcpy(bytes, source.data(), size);
+        auto& tracked = state->states.front();
+        tracked.stages = vk::PipelineStageFlagBits2::eHost;
+        tracked.access = vk::AccessFlagBits2::eHostWrite;
+        tracked.initialized = tracked.initialized || (offset == 0 && size == state->buffer_desc.size);
         result = vmaFlushAllocation(allocator, state->allocation, offset, size);
     } else {
         result = vmaInvalidateAllocation(allocator, state->allocation, offset, size);
@@ -50,12 +54,22 @@ Result<void> Buffer::write(vk::DeviceSize offset, std::span<const std::byte> byt
 Result<void> Buffer::read(vk::DeviceSize offset, std::span<std::byte> bytes) const { return host_access(state_, offset, bytes, {}, false); }
 vk::Image Image::handle() const noexcept { return state_ ? vk::Image{state_->image} : vk::Image{}; }
 ImageDesc Image::description() const noexcept { return state_ ? state_->image_desc : ImageDesc{}; }
-vk::ImageLayout Image::layout() const noexcept { return state_ ? state_->layout : vk::ImageLayout::eUndefined; }
+Result<AccessState> Image::state(std::uint32_t mip, std::uint32_t layer) const
+{
+    if (!state_ || mip >= state_->image_desc.mip_levels || layer >= state_->image_desc.array_layers)
+        return std::unexpected(Error{ErrorCode::invalid_argument, "image state subresource is out of range"});
+    return state_->states[static_cast<std::size_t>(layer) * state_->image_desc.mip_levels + mip];
+}
 CommandBatch::CommandBatch() = default;
-CommandBatch::CommandBatch(memory::UniquePtr<detail::BatchState> state) : state_(std::move(state)) {}
+CommandBatch::CommandBatch(std::shared_ptr<detail::BatchState> state) : state_(std::move(state)) {}
 CommandBatch::~CommandBatch() = default;
-CommandBatch::CommandBatch(CommandBatch&&) noexcept = default;
-CommandBatch& CommandBatch::operator=(CommandBatch&&) noexcept = default;
+CommandBatch::CommandBatch(CommandBatch&& other) noexcept : state_(std::move(other.state_))
+{ if (state_) { ++state_->generation; if (state_->rendering) state_->invalid = true; } }
+CommandBatch& CommandBatch::operator=(CommandBatch&& other) noexcept
+{
+    if (this != &other) { state_ = std::move(other.state_); if (state_) { ++state_->generation; if (state_->rendering) state_->invalid = true; } }
+    return *this;
+}
 Result<void> CommandBatch::retain(const Buffer& buffer) { return state_ ? state_->retain(buffer.state_) : std::unexpected(empty_batch()); }
 Result<void> CommandBatch::retain(const Image& image) { return state_ ? state_->retain(image.state_) : std::unexpected(empty_batch()); }
 const vk::raii::CommandBuffer& CommandBatch::command_buffer() const
@@ -67,6 +81,7 @@ Result<void> CommandBatch::copy(const Buffer& source, const Buffer& destination,
     vk::DeviceSize source_offset, vk::DeviceSize destination_offset)
 {
     if (!state_) return std::unexpected(empty_batch());
+    if (auto result = detail::outside_rendering(*state_); !result) return result;
     if (auto result = state_->check(source.state_); !result) return result;
     if (auto result = state_->check(destination.state_); !result) return result;
     if (!(source.state_->buffer_desc.usage & vk::BufferUsageFlagBits::eTransferSrc) ||
@@ -77,12 +92,17 @@ Result<void> CommandBatch::copy(const Buffer& source, const Buffer& destination,
     if (auto result = retain(destination); !result) return result;
     state_->barrier();
     state_->command().copyBuffer(source.handle(), destination.handle(), vk::BufferCopy{source_offset, destination_offset, size});
+    auto& dst = state_->find(destination.state_)->states.front();
+    dst.stages = vk::PipelineStageFlagBits2::eAllCommands;
+    dst.access = vk::AccessFlagBits2::eMemoryRead | vk::AccessFlagBits2::eMemoryWrite;
+    dst.initialized = dst.initialized || (destination_offset == 0 && size == destination.size());
     state_->barrier();
     return {};
 }
 Result<void> CommandBatch::transition(const Image& image, vk::ImageLayout layout)
 {
     if (!state_) return std::unexpected(empty_batch());
+    if (auto result = detail::outside_rendering(*state_); !result) return result;
     if (auto result = state_->check(image.state_); !result) return result;
     if (auto result = detail::validate_layout(layout, image.state_->image_desc.usage); !result) return result;
     if (auto result = retain(image); !result) return result;
@@ -92,11 +112,14 @@ Result<void> CommandBatch::transition(const Image& image, vk::ImageLayout layout
 Result<void> CommandBatch::copy_to_image(const Buffer& source, const Image& destination)
 {
     if (!state_) return std::unexpected(empty_batch());
+    if (auto result = detail::outside_rendering(*state_); !result) return result;
     if (auto result = state_->check(source.state_); !result) return result;
     if (auto result = state_->check(destination.state_); !result) return result;
+    const auto bytes = detail::image_bytes(destination.description());
+    if (!bytes) return std::unexpected(bytes.error());
     if (!(source.state_->buffer_desc.usage & vk::BufferUsageFlagBits::eTransferSrc) ||
         !(destination.state_->image_desc.usage & vk::ImageUsageFlagBits::eTransferDst) ||
-        source.size() < *detail::image_bytes(destination.description()))
+        source.size() < *bytes)
         return std::unexpected(Error{ErrorCode::invalid_argument, "buffer/image upload size or usage mismatch"});
     if (auto result = retain(source); !result) return result;
     if (auto result = transition(destination, vk::ImageLayout::eTransferDstOptimal); !result) return result;
@@ -105,16 +128,20 @@ Result<void> CommandBatch::copy_to_image(const Buffer& source, const Image& dest
     region.imageSubresource = vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1};
     region.imageExtent = vk::Extent3D{destination.description().width, destination.description().height, 1};
     state_->command().copyBufferToImage(source.handle(), destination.handle(), vk::ImageLayout::eTransferDstOptimal, region);
+    state_->find(destination.state_)->states.front().initialized = true;
     return {};
 }
 Result<void> CommandBatch::copy_to_buffer(const Image& source, const Buffer& destination)
 {
     if (!state_) return std::unexpected(empty_batch());
+    if (auto result = detail::outside_rendering(*state_); !result) return result;
     if (auto result = state_->check(source.state_); !result) return result;
     if (auto result = state_->check(destination.state_); !result) return result;
+    const auto bytes = detail::image_bytes(source.description());
+    if (!bytes) return std::unexpected(bytes.error());
     if (!(source.state_->image_desc.usage & vk::ImageUsageFlagBits::eTransferSrc) ||
         !(destination.state_->buffer_desc.usage & vk::BufferUsageFlagBits::eTransferDst) ||
-        destination.size() < *detail::image_bytes(source.description()))
+        destination.size() < *bytes)
         return std::unexpected(Error{ErrorCode::invalid_argument, "image/buffer readback size or usage mismatch"});
     if (auto result = retain(destination); !result) return result;
     if (auto result = transition(source, vk::ImageLayout::eTransferSrcOptimal); !result) return result;
@@ -170,7 +197,8 @@ Result<Buffer> SubmissionQueue::create_buffer(const BufferDesc& description)
     DK_PROFILE_ZONE("graphics.buffer.create");
     if (auto result = state_->accepting(); !result) return std::unexpected(result.error());
     if (auto result = detail::validate_buffer(description); !result) return std::unexpected(result.error());
-    auto resource = memory::make_shared_in<detail::ResourceState>(state_->resource, state_->owner);
+    auto resource = memory::make_shared_in<detail::ResourceState>(state_->resource, state_->owner, state_->resource);
+    resource->states.resize(1);
     resource->buffer_desc = description;
     vk::BufferCreateInfo info{{}, description.size, description.usage, vk::SharingMode::eExclusive};
     VmaAllocationCreateInfo allocation{};
@@ -189,19 +217,21 @@ Result<Image> SubmissionQueue::create_image(const ImageDesc& description)
 {
     DK_PROFILE_ZONE("graphics.image.create");
     if (auto result = state_->accepting(); !result) return std::unexpected(result.error());
-    if (auto result = detail::image_bytes(description); !result) return std::unexpected(result.error());
+    if (auto result = detail::validate_image(description); !result) return std::unexpected(result.error());
     try {
         const auto properties = device().physical_device().getImageFormatProperties(description.format,
             vk::ImageType::e2D, vk::ImageTiling::eOptimal, description.usage, {});
-        if (description.width > properties.maxExtent.width || description.height > properties.maxExtent.height)
+        if (description.width > properties.maxExtent.width || description.height > properties.maxExtent.height ||
+            description.mip_levels > properties.maxMipLevels || description.array_layers > properties.maxArrayLayers)
             return std::unexpected(Error{ErrorCode::not_supported, "image extent exceeds device format limits"});
     } catch (const vk::SystemError& error) {
         return std::unexpected(state_->failure("vkGetPhysicalDeviceImageFormatProperties", static_cast<VkResult>(error.code().value())));
     }
-    auto resource = memory::make_shared_in<detail::ResourceState>(state_->resource, state_->owner);
+    auto resource = memory::make_shared_in<detail::ResourceState>(state_->resource, state_->owner, state_->resource);
+    resource->states.resize(static_cast<std::size_t>(description.mip_levels) * description.array_layers);
     resource->image_desc = description;
     vk::ImageCreateInfo info{{}, vk::ImageType::e2D, description.format, vk::Extent3D{description.width, description.height, 1},
-        1, 1, vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal, description.usage, vk::SharingMode::eExclusive};
+        description.mip_levels, description.array_layers, vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal, description.usage, vk::SharingMode::eExclusive};
     VmaAllocationCreateInfo allocation{};
     allocation.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     const auto result = vmaCreateImage(device().allocator(), reinterpret_cast<const VkImageCreateInfo*>(&info), &allocation,
@@ -220,7 +250,7 @@ Result<CommandBatch> SubmissionQueue::begin()
     for (std::size_t index = 0; index < state_->slots.size(); ++index) {
         auto& slot = state_->slots[index];
         if (slot.phase != detail::SlotPhase::free) continue;
-        auto batch = memory::make_unique_in<detail::BatchState>(state_->resource, state_, index);
+        auto batch = memory::make_shared_in<detail::BatchState>(state_->resource, state_, index);
         try {
             slot.pool.reset({});
             slot.command.begin(vk::CommandBufferBeginInfo{vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
@@ -239,6 +269,8 @@ Result<Submission> SubmissionQueue::submit(CommandBatch&& batch)
     if (auto result = state_->accepting(); !result) return std::unexpected(result.error());
     if (!batch.state_ || batch.state_->queue != state_ || !batch.state_->active)
         return std::unexpected(Error{ErrorCode::invalid_argument, "submission requires an active batch from this queue"});
+    if (batch.state_->invalid || batch.state_->rendering)
+        return std::unexpected(Error{ErrorCode::invalid_state, "cannot submit invalid or open-rendering batch"});
     if (state_->submitted == std::numeric_limits<std::uint64_t>::max())
         return std::unexpected(Error{ErrorCode::invalid_state, "timeline value exhausted"});
     auto recording = std::move(batch.state_);
@@ -260,8 +292,9 @@ Result<Submission> SubmissionQueue::submit(CommandBatch&& batch)
     // Commit: all ownership transfers below are noexcept and require no allocation.
     static_assert(noexcept(slot.uses = std::move(recording->uses)));
     slot.uses = std::move(recording->uses);
-    for (auto& use : slot.uses) if (use.resource->image) {
-        use.resource->layout = use.layout;
+    slot.objects = std::move(recording->objects);
+    for (auto& use : slot.uses) {
+        std::copy(use.states.begin(), use.states.end(), use.resource->states.begin());
         use.resource->reserved = false;
     }
     state_->submitted = ticket.value_;

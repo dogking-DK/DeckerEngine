@@ -1,4 +1,5 @@
 #include <dk/graphics/Offscreen.hpp>
+#include <dk/graphics/CommandEncoder.hpp>
 #include <dk/memory/MemorySystem.hpp>
 #include "OffscreenPolicy.hpp"
 #include "SubmissionInternal.hpp"
@@ -238,19 +239,40 @@ void pipeline_bindings(memory::ResourceHandle resource, const DeviceOptions& opt
     take(upload.write(0, std::as_bytes(std::span{red})));
     for (unsigned repeat = 0; repeat < 2; ++repeat) {
         auto batch = take(queue.begin());
-        take(batch.copy_to_image(upload, sampled));
-        take(batch.transition(sampled, vk::ImageLayout::eShaderReadOnlyOptimal));
-        take(batch.transition(output_image, vk::ImageLayout::eGeneral));
-        take(batch.retain(uniform));
-        take(batch.retain(storage));
-        const auto& command = batch.command_buffer();
-        command.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline.handle());
-        const std::array sets{bindings1.handle(), bindings2.handle()};
-        command.bindDescriptorSets(vk::PipelineBindPoint::eCompute, layout.handle(), 1, sets, {});
-        command.dispatch(4, 4, 1);
-        take(batch.copy(storage, readback, 64));
-        take(batch.copy_to_buffer(output_image, image_readback));
+        const std::array upload_uses{buffer_use(upload, vk::PipelineStageFlagBits2::eCopy, vk::AccessFlagBits2::eTransferRead),
+            image_use(sampled, vk::PipelineStageFlagBits2::eCopy, vk::AccessFlagBits2::eTransferWrite, vk::ImageLayout::eTransferDstOptimal)};
+        take(batch.prepare(upload_uses));
+        take(batch.copy_to_image(upload, sampled, {0,0,0,0,4,4}));
+        auto output_use = image_use(output_image, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageWrite, vk::ImageLayout::eGeneral);
+        output_use.full_overwrite = true;
+        const std::array compute_uses{
+            image_use(sampled, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderSampledRead, vk::ImageLayout::eShaderReadOnlyOptimal),
+            output_use, buffer_use(uniform, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eUniformRead),
+            buffer_use(storage, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageWrite)};
+        auto compute = take(batch.compute());
+        take(compute.bind_pipeline(pipeline));
+        const std::array sets{&bindings1,&bindings2};
+        take(compute.bind_sets(sets));
+        require(!compute.dispatch({4,4,1}), "dispatch accepted undeclared binding access");
+        require(!uniform.write(0, std::as_bytes(std::span{scale})), "bound resource closure did not block host writes");
+        take(batch.prepare(compute_uses));
+        take(compute.dispatch({4,4,1}));
+        require(!compute.dispatch({4,4,1}), "same-layout WAW dispatch accepted without barrier");
+        take(batch.prepare(compute_uses));
+        take(compute.bind_pipeline(repeated));
+        take(compute.dispatch({4,4,1}));
+        const std::array read_uses{buffer_use(storage,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead),
+            buffer_use(readback,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite),
+            image_use(output_image,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead,vk::ImageLayout::eTransferSrcOptimal),
+            buffer_use(image_readback,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite)};
+        take(batch.prepare(read_uses));
+        take(batch.copy_buffer(storage,readback,64));
+        take(batch.copy_to_buffer(output_image,image_readback,{0,0,0,0,4,4}));
+        const std::array host{buffer_use(readback,vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead),
+            buffer_use(image_readback,vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead)};
+        take(batch.prepare(host));
         auto ticket = take(queue.submit(std::move(batch)));
+        require(!compute.dispatch({4,4,1}), "submitted encoder remained valid");
         require(take(queue.wait(ticket)), "pipeline binding dispatch did not complete");
         std::array<float,16> floats{};
         std::array<std::uint32_t,16> pixels{};
@@ -262,6 +284,89 @@ void pipeline_bindings(memory::ResourceHandle resource, const DeviceOptions& opt
     shader = {};
     layout = {};
     require(bool(pipeline.handle()) && bool(bindings2.handle()), "pipeline/binding lost owned layout");
+    take(queue.close());
+}
+void indexed_depth(memory::ResourceHandle resource, const DeviceOptions& options)
+{
+    auto queue = take(SubmissionQueue::create(resource, take(Device::create(resource, options))));
+    auto factory = queue.resources();
+    const auto source = std::filesystem::path{DK_COMMON_SHADER_DIR}.parent_path().parent_path() / "tests/fixtures/shaders/usage-geometry.slang";
+    const std::array<ShaderDefine,1> compute_defines{{{"DK_GEOMETRY_COMPUTE","1"}}}, fragment_defines{{{"DK_GEOMETRY_FRAGMENT","1"}}};
+    auto cs = take(factory.create_shader(take(compile_shader({source,"computeMain",ShaderStage::compute,{},compute_defines},resource))));
+    auto vs = take(factory.create_shader(take(compile_shader({source,"vertexMain",ShaderStage::vertex},resource))));
+    auto fs = take(factory.create_shader(take(compile_shader({source,"fragmentMain",ShaderStage::fragment,{},fragment_defines},resource))));
+    const std::array compute_shaders{&cs};
+    const std::array render_shaders{&vs,&fs};
+    auto cl = take(factory.create_pipeline_layout(compute_shaders));
+    auto gl = take(factory.create_pipeline_layout(render_shaders));
+    auto cp = take(factory.create_compute_pipeline({&cs,&cl}));
+    const std::array vertex_bindings{vk::VertexInputBindingDescription{0,16,vk::VertexInputRate::eVertex}};
+    const std::array attributes{vk::VertexInputAttributeDescription{0,0,vk::Format::eR32G32B32A32Sfloat,0}};
+    GraphicsPipelineDesc desc{&vs,&fs,&gl,vertex_bindings,attributes};
+    desc.depth_format = vk::Format::eD32Sfloat;
+    desc.depth_test = desc.depth_write = true;
+    auto gp = take(factory.create_graphics_pipeline(desc));
+    auto vertices = take(factory.create_buffer({48,vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eVertexBuffer}));
+    auto indices = take(factory.create_buffer({12,vk::BufferUsageFlagBits::eIndexBuffer,BufferMemory::upload}));
+    const std::array<std::uint32_t,3> index_data{0,1,2};
+    take(indices.write(0,std::as_bytes(std::span{index_data})));
+    const std::array<BindingWrite,1> writes{{{0,0,BufferBinding{&vertices}}}};
+    auto bindings = take(factory.create_bindings(cl,0,writes));
+    auto color = take(factory.create_image({32,32,vk::Format::eR8G8B8A8Unorm,vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc}));
+    auto depth = take(factory.create_image({32,32,vk::Format::eD32Sfloat,vk::ImageUsageFlagBits::eDepthStencilAttachment}));
+    auto cv = take(factory.create_view(color));
+    ImageViewDesc dv_desc{};
+    dv_desc.range.aspectMask = vk::ImageAspectFlagBits::eDepth;
+    auto dv = take(factory.create_view(depth,dv_desc));
+    auto readback = take(factory.create_buffer({32*32*4,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
+    auto batch = take(queue.begin());
+    auto compute = take(batch.compute());
+    take(compute.bind_pipeline(cp));
+    const std::array sets{&bindings};
+    take(compute.bind_sets(sets));
+    const std::array compute_use{buffer_use(vertices,vk::PipelineStageFlagBits2::eComputeShader,vk::AccessFlagBits2::eShaderStorageWrite)};
+    take(batch.prepare(compute_use));
+    take(compute.dispatch({3,1,1}));
+    const std::array render_uses{
+        buffer_use(vertices,vk::PipelineStageFlagBits2::eVertexAttributeInput,vk::AccessFlagBits2::eVertexAttributeRead),
+        buffer_use(indices,vk::PipelineStageFlagBits2::eIndexInput,vk::AccessFlagBits2::eIndexRead),
+        image_use(color,vk::PipelineStageFlagBits2::eColorAttachmentOutput,vk::AccessFlagBits2::eColorAttachmentRead | vk::AccessFlagBits2::eColorAttachmentWrite,vk::ImageLayout::eColorAttachmentOptimal),
+        image_use(depth,vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+            vk::AccessFlagBits2::eDepthStencilAttachmentRead | vk::AccessFlagBits2::eDepthStencilAttachmentWrite,vk::ImageLayout::eDepthStencilAttachmentOptimal,dv_desc.range)};
+    take(batch.prepare(render_uses));
+    RenderingDesc rendering{};
+    rendering.color.view = &cv;
+    rendering.depth.view = &dv;
+    auto render = take(batch.begin_rendering(rendering));
+    require(!compute.dispatch({3,1,1}) && !batch.compute() && !batch.prepare(render_uses), "rendering allowed invalid scope operations");
+    require(!queue.submit(std::move(batch)), "unclosed rendering submitted");
+    take(render.bind_pipeline(gp));
+    take(render.vertex_buffer(0,vertices));
+    take(render.index_buffer(indices,vk::IndexType::eUint32));
+    require(!render.draw_indexed(3), "unset push bytes accepted");
+    const std::array<float,4> red{1,0,0,1}, green{0,1,0,1};
+    take(render.push_constants(vk::ShaderStageFlagBits::eFragment,0,std::as_bytes(std::span{red})));
+    require(!render.draw_indexed(4), "out-of-range indices accepted");
+    require(!render.draw(4), "out-of-range vertices accepted");
+    take(render.draw_indexed(3));
+    take(render.push_constants(vk::ShaderStageFlagBits::eFragment,0,std::as_bytes(std::span{green})));
+    take(render.draw_indexed(3)); // Equal depth fails Less; output must remain red.
+    take(render.end());
+    require(!render.draw_indexed(3), "ended encoder accepted draw");
+    const std::array copy_use{image_use(color,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead,vk::ImageLayout::eTransferSrcOptimal),
+        buffer_use(readback,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite)};
+    take(batch.prepare(copy_use));
+    take(batch.copy_to_buffer(color,readback,{0,0,0,0,32,32}));
+    const std::array host{buffer_use(readback,vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead)};
+    take(batch.prepare(host));
+    // Only the batch retains pipelines, views, descriptor sets and their transitive owners.
+    cp = {}; gp = {}; cl = {}; gl = {}; cs = {}; vs = {}; fs = {}; bindings = {}; cv = {}; dv = {};
+    vertices = {}; indices = {}; color = {}; depth = {};
+    auto ticket = take(queue.submit(std::move(batch)));
+    require(take(queue.wait(ticket)), "indexed depth draw timed out");
+    std::array<std::uint32_t,32*32> pixels{};
+    take(readback.read(0,std::as_writable_bytes(std::span{pixels})));
+    require(pixels[16*32+16] == 0xff0000ffu && pixels[0] == 0xff000000u, "indexed depth test/clear result mismatch");
     take(queue.close());
 }
 } // namespace
@@ -303,6 +408,7 @@ int main(int argc, char** argv)
             auto compute = take(compile_shader({sources / "transform.slang", "computeMain", ShaderStage::compute}, resource));
             std::printf("Slang=%s target=spirv_1_5 matrix=row_major entries=vertexMain,fragmentMain,computeMain\n", compute.compiler.c_str());
             pipeline_bindings(resource, options, vertex, fragment);
+            indexed_depth(resource, options);
             for (unsigned round = 0; round < 3; ++round) {
                 auto device = round == 0 ? std::move(*first_device) : take(Device::create(resource, options));
                 auto executor = intercepted(resource, std::move(device));

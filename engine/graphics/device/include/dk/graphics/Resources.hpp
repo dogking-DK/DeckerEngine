@@ -14,11 +14,32 @@ struct ImageDesc {
     std::uint32_t width = 0, height = 0;
     vk::Format format = vk::Format::eR8G8B8A8Unorm;
     vk::ImageUsageFlags usage = vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
+    std::uint32_t mip_levels = 1, array_layers = 1;
 };
-namespace detail { struct ResourceState; struct QueueState; struct BatchState; struct SubmissionAccess; }
+struct AccessState {
+    vk::PipelineStageFlags2 stages{};
+    vk::AccessFlags2 access{};
+    vk::ImageLayout layout = vk::ImageLayout::eUndefined;
+    bool initialized = false;
+    bool operator==(const AccessState&) const = default;
+};
+namespace detail { struct ResourceState; struct QueueState; struct BatchState; struct SubmissionAccess; struct ObjectAccess; }
 class CommandBatch;
 class SubmissionQueue;
 class ResourceFactory;
+class RenderEncoder;
+class ComputeEncoder;
+class ImageView;
+class Sampler;
+class ShaderModule;
+class PipelineLayout;
+class ComputePipeline;
+class GraphicsPipeline;
+class BindingSet;
+struct ResourceUse;
+struct ResourceBarrier;
+struct RenderingDesc;
+struct ImageCopyRegion;
 
 // VMA owners. Native handles are borrowed; submitted batches retain allocations.
 // All accesses to a queue and its resources must be externally serialized.
@@ -38,6 +59,7 @@ private:
     friend class SubmissionQueue;
     friend class CommandBatch;
     friend class ResourceFactory;
+    friend struct detail::ObjectAccess;
     explicit Buffer(std::shared_ptr<detail::ResourceState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::ResourceState> state_;
 };
@@ -51,12 +73,13 @@ public:
     [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
     [[nodiscard]] vk::Image handle() const noexcept;
     [[nodiscard]] ImageDesc description() const noexcept;
-    // Last successfully submitted layout; may still be in flight on this queue.
-    [[nodiscard]] vk::ImageLayout layout() const noexcept;
+    // Last successfully submitted states, ordered by layer then mip; not completion.
+    [[nodiscard]] Result<AccessState> state(std::uint32_t mip = 0, std::uint32_t layer = 0) const;
 private:
     friend class SubmissionQueue;
     friend class CommandBatch;
     friend class ResourceFactory;
+    friend struct detail::ObjectAccess;
     explicit Image(std::shared_ptr<detail::ResourceState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::ResourceState> state_;
 };
@@ -79,18 +102,39 @@ public:
     CommandBatch& operator=(const CommandBatch&) = delete;
     [[nodiscard]] Result<void> retain(const Buffer& buffer);
     [[nodiscard]] Result<void> retain(const Image& image);
+    [[nodiscard]] Result<void> retain(const ImageView& view);
+    [[nodiscard]] Result<void> retain(const Sampler& sampler);
+    [[nodiscard]] Result<void> retain(const ShaderModule& shader);
+    [[nodiscard]] Result<void> retain(const PipelineLayout& layout);
+    [[nodiscard]] Result<void> retain(const ComputePipeline& pipeline);
+    [[nodiscard]] Result<void> retain(const GraphicsPipeline& pipeline);
+    [[nodiscard]] Result<void> retain(const BindingSet& bindings);
     [[nodiscard]] Result<void> copy(const Buffer& source, const Buffer& destination,
         vk::DeviceSize size, vk::DeviceSize source_offset = 0, vk::DeviceSize destination_offset = 0);
     [[nodiscard]] Result<void> copy_to_image(const Buffer& source, const Image& destination);
     [[nodiscard]] Result<void> copy_to_buffer(const Image& source, const Buffer& destination);
     [[nodiscard]] Result<void> transition(const Image& image, vk::ImageLayout layout);
+    [[nodiscard]] Result<void> prepare(std::span<const ResourceUse> uses);
+    [[nodiscard]] Result<void> barrier(std::span<const ResourceBarrier> barriers);
+    [[nodiscard]] Result<RenderEncoder> begin_rendering(const RenderingDesc& description);
+    [[nodiscard]] Result<ComputeEncoder> compute();
+    [[nodiscard]] Result<void> copy_buffer(const Buffer& source, const Buffer& destination,
+        vk::DeviceSize size, vk::DeviceSize source_offset = 0, vk::DeviceSize destination_offset = 0);
+    [[nodiscard]] Result<void> copy_to_image(const Buffer& source, const Image& destination, const ImageCopyRegion& region);
+    [[nodiscard]] Result<void> copy_to_buffer(const Image& source, const Buffer& destination, const ImageCopyRegion& region);
+    [[nodiscard]] Result<void> fill(const Buffer& buffer, std::uint32_t value = 0);
+    [[nodiscard]] Result<void> clear(const Image& image, const vk::ClearColorValue& color, const vk::ImageSubresourceRange& range);
+    using NativeRecorder = void (*)(const vk::raii::CommandBuffer&, void*);
+    [[nodiscard]] Result<void> unsafe_record(std::span<const ResourceUse> before, std::span<const ResourceUse> after,
+        NativeRecorder recorder, void* user_data = nullptr);
     // Valid only during this batch. Retain every manually referenced resource.
     // Do not end/submit/reset the command buffer or bypass tracked image layouts.
     [[nodiscard]] const vk::raii::CommandBuffer& command_buffer() const;
 private:
     friend class SubmissionQueue;
-    explicit CommandBatch(memory::UniquePtr<detail::BatchState> state);
-    memory::UniquePtr<detail::BatchState> state_;
+    friend struct detail::ObjectAccess;
+    explicit CommandBatch(std::shared_ptr<detail::BatchState> state);
+    std::shared_ptr<detail::BatchState> state_;
 };
 struct SubmissionStats {
     std::uint64_t submitted = 0, completed = 0;

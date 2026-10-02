@@ -1,7 +1,7 @@
 ---
 module: graphics-vulkan
 created_at: "2026-09-30T10:18:48+08:00"
-updated_at: "2026-09-30T12:06:23+08:00"
+updated_at: "2026-10-02T20:54:00+08:00"
 status: accepted
 ---
 
@@ -150,15 +150,16 @@ begin_rendering 自动展开 attachments 的 view/layout/load/store/clear 和 re
 默认 viewport/scissor 覆盖 render area，调用者可覆盖。
 所有 bind/copy/attachment 操作自动保留相关对象及其资源闭包，不要求普通调用者手动 retain。
 首版只处理一个 primary command buffer；rendering scope 不可嵌套，compute/copy/barrier 只在 scope 外记录。
-encoder 与 batch 的活跃代次绑定；end/移动/提交后继续调用返回 invalid_state，不能持有悬空引用。
+encoder 与 batch 的活跃代次绑定；end/batch 移动/提交后继续调用返回 invalid_state，不能持有悬空引用。
+打开 rendering 时移动 batch 会使整个批次 invalid，只能放弃；移动 RenderEncoder 则转移 scope 的结束责任。
 RenderEncoder 析构只结束仍有效的本地 scope，不提交也不等待；显式 end 可及时报告状态错误。
-提交前必须已结束 rendering；绘制前校验管线、绑定、push bytes、顶点/索引范围及 attachment 格式匹配。
+提交前必须已结束 rendering；绘制前校验管线、绑定、push bytes、顶点/索引字节范围及 attachment 格式匹配；GPU index 数据对应的实际顶点地址仍由调用者保证。
 
 ### 一份状态账本，两种调用粒度
 
 保活、同步、GPU 完成是三件事；bind/retain 本身不建立内存依赖。
 引入 `ResourceUse`：资源、buffer 范围或 image 子资源、stage/access、image layout；
-提供 transfer_src/dst、vertex/index、uniform_read、sampled_read、storage_read/write、color/depth_attachment 等便利构造，
+提供 buffer_use/image_use 构造，明确指定 transfer、vertex/index、uniform、sampled/storage、attachment 意图；
 shader 访问必须指定 stage 和读写意图，不从 descriptor type 猜测 shader 是否写入。
 
 简单调用先 `batch.prepare(uses)`，将局部账本状态转换成所需状态并发出 synchronization2 barrier。

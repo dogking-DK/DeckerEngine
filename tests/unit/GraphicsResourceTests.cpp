@@ -1,5 +1,6 @@
 #include "ResourcePolicy.hpp"
 #include "PipelinePolicy.hpp"
+#include "CommandInternal.hpp"
 #include <dk/memory/MemorySystem.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -110,4 +111,24 @@ TEST_CASE("pipeline interfaces merge stages preserve array counts and reject con
     limits.maxPerStageDescriptorUniformBuffers = 16;
     limits.maxPushConstantsSize = 16;
     REQUIRE_FALSE(policy::merge_interfaces(heap, views, limits));
+}
+
+TEST_CASE("image subresource and pitched copy validation rejects invalid footprints")
+{
+    ImageDesc image{8,8,vk::Format::eR8G8B8A8Unorm,vk::ImageUsageFlagBits::eTransferDst,4,2};
+    REQUIRE(policy::validate_image(image));
+    REQUIRE_FALSE(policy::validate_subresources(image,{vk::ImageAspectFlagBits::eColor,4,1,0,1}));
+    REQUIRE_FALSE(policy::validate_subresources(image,{vk::ImageAspectFlagBits::eDepth,0,1,0,1}));
+    auto copy = policy::copy_footprint(image,{1,1,0,0,4,4,16,8,4});
+    REQUIRE(copy);
+    REQUIRE(copy->bytes == 112);
+    REQUIRE(copy->full);
+    REQUIRE_FALSE(policy::copy_footprint(image,{1,1,1,0,4,4}));
+    REQUIRE_FALSE(policy::copy_footprint(image,{1,2,0,0,4,4}));
+    REQUIRE_FALSE(policy::copy_footprint(image,{1,1,0,0,4,4,0,3}));
+    image.mip_levels = 5;
+    REQUIRE_FALSE(policy::validate_image(image));
+    REQUIRE(policy::stage_covers(vk::PipelineStageFlagBits2::eAllGraphics,vk::PipelineStageFlagBits2::eVertexAttributeInput));
+    REQUIRE_FALSE(policy::stage_covers(vk::PipelineStageFlagBits2::eAllGraphics,vk::PipelineStageFlagBits2::eComputeShader));
+    REQUIRE_FALSE(policy::stage_covers(vk::PipelineStageFlagBits2::eAllGraphics,vk::PipelineStageFlagBits2::eCopy));
 }

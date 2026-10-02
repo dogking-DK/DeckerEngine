@@ -1,4 +1,5 @@
 #include <dk/graphics/Resources.hpp>
+#include <dk/graphics/CommandEncoder.hpp>
 #include <dk/memory/MemorySystem.hpp>
 #include "SubmissionInternal.hpp"
 #include "ObjectInternal.hpp"
@@ -92,7 +93,7 @@ void roundtrip(SubmissionQueue& queue, unsigned round)
         auto competing = take(queue.begin());
         require(!competing.retain(image), "two image recording reservations accepted");
     }
-    require(image.layout() == vk::ImageLayout::eUndefined, "abandon published an image layout");
+    require(take(image.state()).layout == vk::ImageLayout::eUndefined, "abandon published an image layout");
     require(queue.stats().free_slots == 2, "abandoned slots were not released");
     check(upload.write(0, input));
     {
@@ -103,7 +104,7 @@ void roundtrip(SubmissionQueue& queue, unsigned round)
         const auto result = queue.submit(std::move(rejected));
         require(!result && result.error().message.find("VK_ERROR_OUT_OF_HOST_MEMORY") != std::string::npos, "submit failure not reported");
         require(queue.stats().submitted == before && queue.stats().free_slots == 2, "failed submit published work");
-        require(image.layout() == vk::ImageLayout::eUndefined, "failed submit published layout");
+        require(take(image.state()).layout == vk::ImageLayout::eUndefined, "failed submit published layout");
         check(upload.write(0, input));
     }
     auto first = take(queue.begin());
@@ -111,7 +112,7 @@ void roundtrip(SubmissionQueue& queue, unsigned round)
     check(first.copy_to_image(upload, image));
     check(first.transition(image, vk::ImageLayout::eShaderReadOnlyOptimal));
     auto first_ticket = take(queue.submit(std::move(first)));
-    require(image.layout() == vk::ImageLayout::eShaderReadOnlyOptimal, "successful submit did not publish layout");
+    require(take(image.state()).layout == vk::ImageLayout::eShaderReadOnlyOptimal, "successful submit did not publish layout");
     const auto count = allocations(queue);
     upload = Buffer{};
     require(allocations(queue) == count, "pending upload freed early");
@@ -144,6 +145,74 @@ void roundtrip(SubmissionQueue& queue, unsigned round)
     check(image_output.read(0, actual));
     require(actual == input, "image roundtrip mismatch");
     check(queue.poll());
+}
+void subresource_commands(SubmissionQueue& owner)
+{
+    auto image = take(owner.create_image({8,8,vk::Format::eR8G8B8A8Unorm,
+        vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,4,2}));
+    auto upload = buffer(owner,64,BufferMemory::upload);
+    auto readback = buffer(owner,64,BufferMemory::readback);
+    const std::array<std::uint32_t,16> pixels{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
+    check(upload.write(0,std::as_bytes(std::span{pixels})));
+    const vk::ImageSubresourceRange range{vk::ImageAspectFlagBits::eColor,1,1,1,1};
+    const auto write = image_use(image,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal,range);
+    const auto read = image_use(image,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead,vk::ImageLayout::eTransferSrcOptimal,range);
+    {
+        auto abandoned = take(owner.begin());
+        const std::array writes{write};
+        check(abandoned.prepare(writes));
+    }
+    require(take(image.state(1,1)).layout == vk::ImageLayout::eUndefined,"abandon published subresource state");
+    {
+        auto failed = take(owner.begin());
+        const std::array writes{write};
+        check(failed.prepare(writes));
+        submit_error = VK_ERROR_OUT_OF_HOST_MEMORY;
+        require(!owner.submit(std::move(failed)),"failed subresource submit accepted");
+    }
+    require(take(image.state(1,1)).layout == vk::ImageLayout::eUndefined,"failed submit published subresource state");
+    auto batch = take(owner.begin());
+    const std::array initial{buffer_use(upload,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead),write};
+    auto wrong = ResourceBarrier{read,{vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eGeneral}};
+    const std::array wrong_barriers{wrong};
+    require(!batch.barrier(wrong_barriers),"Graph barrier accepted mismatched before state");
+    check(upload.write(0,std::as_bytes(std::span{pixels}))); // Rejected plan leaves no reservation.
+    check(batch.prepare(initial));
+    auto competing = take(owner.begin());
+    require(!competing.retain(upload),"two buffer recording reservations accepted");
+    competing = {};
+    // A partial write cannot establish valid content for a previously undefined mip.
+    check(batch.copy_to_image(upload,image,{1,1,0,0,2,2}));
+    const std::array reading{read,buffer_use(readback,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite)};
+    check(batch.prepare(reading));
+    require(!batch.copy_to_buffer(image,readback,{1,1,0,0,4,4}),"partial initialization accepted as full content");
+    check(batch.prepare(initial));
+    check(batch.copy_to_image(upload,image,{1,1,0,0,4,4}));
+    const std::array graph_barriers{ResourceBarrier{read,{vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal,true}}};
+    check(batch.barrier(graph_barriers));
+    check(batch.copy_to_buffer(image,readback,{1,1,0,0,4,4}));
+    const std::array host{buffer_use(readback,vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead)};
+    check(batch.prepare(host));
+    auto stale = take(batch.compute());
+    auto moved = std::move(batch);
+    require(!stale.dispatch({1,1,1}),"batch move left encoder valid");
+    auto ticket = take(owner.submit(std::move(moved)));
+    require(take(image.state(0,0)).layout == vk::ImageLayout::eUndefined && take(image.state(1,0)).layout == vk::ImageLayout::eUndefined &&
+        take(image.state(1,1)).layout == vk::ImageLayout::eTransferSrcOptimal,"subresource state contaminated other mip/layer");
+    require(take(owner.wait(ticket)),"subresource transfer timed out");
+    std::array<std::uint32_t,16> actual{};
+    check(readback.read(0,std::as_writable_bytes(std::span{actual})));
+    require(actual == pixels,"subresource copy mismatch");
+    {
+        auto unsafe = take(owner.begin());
+        auto old_encoder = take(unsafe.compute());
+        check(unsafe.unsafe_record({}, {}, [](const vk::raii::CommandBuffer&,void*) {}));
+        require(!old_encoder.dispatch({1,1,1}),"native escape did not invalidate encoder");
+        bool threw = false;
+        try { (void)unsafe.unsafe_record({}, {}, [](const vk::raii::CommandBuffer&,void*) { throw std::runtime_error("injected"); }); }
+        catch (const std::runtime_error&) { threw = true; }
+        require(threw && !owner.submit(std::move(unsafe)),"throwing native recording remained submittable");
+    }
 }
 void cross_queue(SubmissionQueue& first, SubmissionQueue& second)
 {
@@ -316,6 +385,7 @@ int main(int argc, char** argv)
             require(!owner.create_buffer({}) && !owner.create_image({}), "invalid descriptions accepted");
             for (unsigned round = 0; round < 16; ++round) roundtrip(owner, round);
             require(allocations(owner) == 0, "roundtrip leaked VMA allocations");
+            subresource_commands(owner);
             auto peer = queue(resource, options);
             cross_queue(owner, peer);
             check(owner.close());

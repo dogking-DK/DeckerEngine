@@ -1,4 +1,5 @@
 #include "ObjectInternal.hpp"
+#include "ResourcePolicy.hpp"
 #include <cmath>
 
 namespace dk::graphics {
@@ -29,11 +30,12 @@ Result<ImageView> ResourceFactory::create_view(const Image& image, const ImageVi
     if (!image.state_ || image.state_->owner != queue.owner)
         return std::unexpected(Error{ErrorCode::invalid_argument, "view image is empty or belongs to another device"});
     const auto& range = description.range;
-    if (description.type != vk::ImageViewType::e2D || range.aspectMask != vk::ImageAspectFlagBits::eColor ||
-        range.baseMipLevel || range.levelCount != 1 || range.baseArrayLayer || range.layerCount != 1)
-        return std::unexpected(Error{ErrorCode::not_supported, "view requires the image's single 2D color subresource"});
+    if (auto valid = detail::validate_subresources(image.description(), range); !valid) return std::unexpected(valid.error());
+    if ((description.type != vk::ImageViewType::e2D && description.type != vk::ImageViewType::e2DArray) ||
+        (description.type == vk::ImageViewType::e2D && range.layerCount != 1))
+        return std::unexpected(Error{ErrorCode::not_supported, "view requires 2D or 2D array matching its range"});
     constexpr auto view_usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage |
-        vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment;
+        vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment | vk::ImageUsageFlagBits::eDepthStencilAttachment;
     if (!(image.description().usage & view_usage))
         return std::unexpected(Error{ErrorCode::invalid_argument, "image lacks a view-compatible usage"});
     auto state = memory::make_shared_in<detail::ViewState>(queue.resource, queue.owner, image.state_, description);

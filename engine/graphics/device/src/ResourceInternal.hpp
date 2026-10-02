@@ -4,20 +4,23 @@
 
 namespace dk::graphics::detail {
 struct PoolPage;
+struct ObjectState;
+struct EncoderState;
 struct DeviceLifetime {
     explicit DeviceLifetime(Device&& value) : device(std::move(value)) {}
     Device device;
     bool lost = false;
 };
 struct ResourceState {
-    explicit ResourceState(std::shared_ptr<DeviceLifetime> value) : owner(std::move(value)) {}
+    ResourceState(std::shared_ptr<DeviceLifetime> value, memory::ResourceHandle resource)
+        : owner(std::move(value)), states(memory::Allocator<AccessState>{resource}) {}
     std::shared_ptr<DeviceLifetime> owner;
     VkBuffer buffer = VK_NULL_HANDLE;
     VkImage image = VK_NULL_HANDLE;
     VmaAllocation allocation = VK_NULL_HANDLE;
     BufferDesc buffer_desc;
     ImageDesc image_desc;
-    vk::ImageLayout layout = vk::ImageLayout::eUndefined;
+    Vector<AccessState> states;
     std::size_t uses = 0;
     bool reserved = false;
     ~ResourceState()
@@ -26,14 +29,22 @@ struct ResourceState {
         if (image) vmaDestroyImage(owner->device.allocator(), image, allocation);
     }
 };
-struct Use { std::shared_ptr<ResourceState> resource; vk::ImageLayout layout; };
+struct Use {
+    Use(std::shared_ptr<ResourceState> value, memory::ResourceHandle memory)
+        : resource(std::move(value)), states(resource->states.begin(), resource->states.end(), memory::Allocator<AccessState>{memory}),
+          prepared(states.size(), 0, memory::Allocator<std::uint8_t>{memory}) {}
+    std::shared_ptr<ResourceState> resource;
+    Vector<AccessState> states;
+    Vector<std::uint8_t> prepared;
+};
 enum class SlotPhase { free, recording, pending };
 struct Slot {
-    explicit Slot(memory::ResourceHandle resource) : uses(memory::Allocator<Use>{resource}) {}
+    explicit Slot(memory::ResourceHandle resource) : uses(memory::Allocator<Use>{resource}), objects(memory::Allocator<std::shared_ptr<ObjectState>>{resource}) {}
     // Command buffer must be destroyed before its pool.
     vk::raii::CommandPool pool{nullptr};
     vk::raii::CommandBuffer command{nullptr};
     Vector<Use> uses;
+    Vector<std::shared_ptr<ObjectState>> objects;
     SlotPhase phase = SlotPhase::free;
     std::uint64_t value = 0;
 };
@@ -41,7 +52,7 @@ inline void release_uses(Vector<Use>& uses, bool recording) noexcept
 {
     for (auto& use : uses) {
         --use.resource->uses;
-        if (recording && use.resource->image) use.resource->reserved = false;
+        if (recording) use.resource->reserved = false;
     }
     uses.clear();
 }
@@ -83,6 +94,7 @@ struct QueueState {
         completed = std::max(completed, value);
         for (auto& slot : slots) if (slot.phase == SlotPhase::pending && slot.value <= completed) {
             release_uses(slot.uses, false);
+            slot.objects.clear();
             slot.phase = SlotPhase::free;
         }
     }
@@ -90,6 +102,7 @@ struct QueueState {
     {
         for (auto& slot : slots) if (slot.phase == SlotPhase::pending) {
             release_uses(slot.uses, false);
+            slot.objects.clear();
             slot.phase = SlotPhase::free;
         }
     }
@@ -108,10 +121,15 @@ struct QueueState {
 };
 struct BatchState {
     BatchState(std::shared_ptr<QueueState> queue_value, std::size_t index)
-        : queue(std::move(queue_value)), slot(index), uses(memory::Allocator<Use>{queue->resource}) {}
+        : queue(std::move(queue_value)), slot(index), uses(memory::Allocator<Use>{queue->resource}),
+          objects(memory::Allocator<std::shared_ptr<ObjectState>>{queue->resource}) {}
     std::shared_ptr<QueueState> queue;
     std::size_t slot;
     Vector<Use> uses;
+    Vector<std::shared_ptr<ObjectState>> objects;
+    std::shared_ptr<EncoderState> encoding;
+    std::uint64_t generation = 1;
+    bool rendering = false, invalid = false;
     bool active = false;
     ~BatchState()
     {
@@ -122,7 +140,7 @@ struct BatchState {
     }
     Result<void> valid() const
     {
-        if (!active) return std::unexpected(Error{ErrorCode::invalid_state, "command batch is not recording"});
+        if (!active || invalid) return std::unexpected(Error{ErrorCode::invalid_state, "command batch is not recording or was invalidated"});
         return queue->accepting();
     }
     Result<void> check(const std::shared_ptr<ResourceState>& resource) const
@@ -131,18 +149,22 @@ struct BatchState {
         if (!resource || resource->owner != queue->owner)
             return std::unexpected(Error{ErrorCode::invalid_argument, "resource is empty or belongs to another submission queue"});
         const bool retained = std::any_of(uses.begin(), uses.end(), [&](const Use& use) { return use.resource == resource; });
-        if (resource->image && resource->reserved && !retained)
-            return std::unexpected(Error{ErrorCode::conflict, "image is reserved by another recording batch"});
+        if (resource->reserved && !retained)
+            return std::unexpected(Error{ErrorCode::conflict, "resource is reserved by another recording batch"});
         return {};
     }
     Result<void> retain(const std::shared_ptr<ResourceState>& resource)
     {
         if (auto result = check(resource); !result) return result;
         for (const auto& use : uses) if (use.resource == resource) return {};
-        uses.push_back({resource, resource->layout}); // Allocate before changing resource state.
+        uses.emplace_back(resource, queue->resource); // Allocate before changing resource state.
         ++resource->uses;
-        if (resource->image) resource->reserved = true;
+        resource->reserved = true;
         return {};
+    }
+    Use* find(const std::shared_ptr<ResourceState>& resource) noexcept {
+        for (auto& use : uses) if (use.resource == resource) return &use;
+        return nullptr;
     }
     const vk::raii::CommandBuffer& command() const { return queue->slots[slot].command; }
     void barrier() const
@@ -156,22 +178,28 @@ struct BatchState {
     }
     void transition(const std::shared_ptr<ResourceState>& resource, vk::ImageLayout layout)
     {
-        auto& use = *std::find_if(uses.begin(), uses.end(), [&](const Use& entry) { return entry.resource == resource; });
+        auto& use = *find(resource);
+        for (std::uint32_t layer = 0; layer < resource->image_desc.array_layers; ++layer)
+        for (std::uint32_t mip = 0; mip < resource->image_desc.mip_levels; ++mip) {
+        auto& prior = use.states[static_cast<std::size_t>(layer) * resource->image_desc.mip_levels + mip];
         vk::ImageMemoryBarrier2 barrier_info{};
-        barrier_info.srcStageMask = use.layout == vk::ImageLayout::eUndefined ? vk::PipelineStageFlags2{} : vk::PipelineStageFlagBits2::eAllCommands;
-        barrier_info.srcAccessMask = use.layout == vk::ImageLayout::eUndefined ? vk::AccessFlags2{} : vk::AccessFlagBits2::eMemoryWrite | vk::AccessFlagBits2::eMemoryRead;
+        barrier_info.srcStageMask = prior.layout == vk::ImageLayout::eUndefined ? vk::PipelineStageFlags2{} : vk::PipelineStageFlagBits2::eAllCommands;
+        barrier_info.srcAccessMask = prior.layout == vk::ImageLayout::eUndefined ? vk::AccessFlags2{} : vk::AccessFlagBits2::eMemoryWrite | vk::AccessFlagBits2::eMemoryRead;
         barrier_info.dstStageMask = vk::PipelineStageFlagBits2::eAllCommands;
         barrier_info.dstAccessMask = vk::AccessFlagBits2::eMemoryRead | vk::AccessFlagBits2::eMemoryWrite;
-        barrier_info.oldLayout = use.layout;
+        barrier_info.oldLayout = prior.layout;
         barrier_info.newLayout = layout;
         barrier_info.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier_info.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier_info.image = resource->image;
-        barrier_info.subresourceRange = vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
+        barrier_info.subresourceRange = vk::ImageSubresourceRange{resource->image_desc.format == vk::Format::eD32Sfloat ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor, mip, 1, layer, 1};
         vk::DependencyInfo dependency{};
         dependency.setImageMemoryBarriers(barrier_info);
         command().pipelineBarrier2(dependency);
-        use.layout = layout;
+        prior.stages = barrier_info.dstStageMask;
+        prior.access = barrier_info.dstAccessMask;
+        prior.layout = layout;
+        }
     }
 };
 } // namespace dk::graphics::detail

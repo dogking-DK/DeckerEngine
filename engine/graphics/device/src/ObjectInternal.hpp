@@ -43,6 +43,9 @@ struct ObjectAccess {
     static const auto& state(const ComputePipeline& value) { return value.state_; }
     static const auto& state(const GraphicsPipeline& value) { return value.state_; }
     static const auto& state(const BindingSet& value) { return value.state_; }
+    static const auto& state(const Buffer& value) { return value.state_; }
+    static const auto& state(const Image& value) { return value.state_; }
+    static const auto& state(const CommandBatch& value) { return value.state_; }
     static void fail_creation(const ResourceFactory& factory, VkResult result) {
         if (auto queue = factory.queue_.lock()) queue->object_creation_failure = result;
     }

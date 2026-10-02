@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-09-30T12:06:23+08:00"
+updated_at: "2026-10-02T20:54:00+08:00"
 status: accepted
 ---
 
@@ -12,8 +12,8 @@ status: accepted
 M5.2 在 [设备底座](graphics-device.md) 上交付 VMA Buffer/Image、上传/读回、单队列提交、
 完成票据、固定提交槽和延迟回收。实现位于 engine/graphics/device，继续使用 dk::graphics_device；
 公开 Resources.hpp，不新增依赖或 feature。普通 Vulkan 所有权使用 vk::raii；VMA 资源配对释放。
-该模块不涉及 shader、绘制、窗口、Graph、多队列或后台提交线程。
-[离屏模块](graphics-offscreen.md) 在此之上管理管线、描述符和 image view 至提交完成。
+设备使用层现在覆盖对象、管线、绑定和录制；不负责 shader 编译、窗口、Graph 调度、多队列或后台提交线程。
+[离屏模块](graphics-offscreen.md) 负责特定绘制/计算输入输出，逐步迁移到同一批次保留机制。
 
 [M5.5 使用层设计](graphics-vulkan.md) 扩展全部 GPU 对象保留和常用操作。
 M5.5.1 的 GpuObjects.hpp 提供 ResourceFactory、ImageView/Sampler/ShaderModule，
@@ -22,10 +22,8 @@ ShaderModule 复制入口/阶段/反射，原始编译产物可在工厂返回�
 M5.5.2 增加 Pipeline.hpp/Bindings.hpp：跨阶段布局合并、可复用 graphics/compute 管线、
 不可变 BindingSet，支持多个 set、固定数组、uniform/storage buffer、sampled/storage image 和 sampler。
 管线持有布局、绑定持有布局/池/资源；这些寿命引用不将 Buffer 标为 recording/pending 忙状态。
-描述符池页的固定上限与类型化接口见使用层设计，首次录制保留在 M5.5.3 接入。
-encoder、资源访问状态与子资源范围、staging 和完成后读回接口按后续小节实施。
-本页单 mip/layer、全图布局、手工 retain 和保守 copy barrier 仍是当前契约；
-各 M5.5.x 实施时逐节更新本页，保持唯一提交点、timeout 保活和无资源→队列引用环的约束。
+M5.5.3 的 CommandEncoder.hpp 接入类型化绘制/计算、显式 prepare/barrier 和对象闭包保留。
+Buffer 按整对象、Image 按 mip/layer 跟踪阶段/访问/布局与内容有效性。传输便利层在后续小节接入。
 
 ## 接口与数据
 
@@ -36,16 +34,34 @@ BufferDesc 指定大小、Vulkan usage、device/upload/readback 内存用途；C
 通过 VMA map、flush/invalidate、unmap 配对处理，设备用途不能直接访问。
 map/范围/角色失败不写用户数据；read 的 invalidate 失败不修改输出；write 的 flush 失败时
 host 内存可能已写入，不保证字节回滚，也不会因此自动提交 GPU 工作。
-ImageDesc 提供单 mip、单 layer、sample=1 的二维 color image；首版支持 RGBA8 UNORM/SRGB、BGRA8 UNORM、
-R32_UINT/R32_SFLOAT，均为每像素 4 字节。检查 extent、字节数溢出、usage 和设备 format/extent 能力。
+ImageDesc 提供多 mip/layer、sample=1 的二维 image，view 支持 2D/2D array。color 支持 RGBA8 UNORM/SRGB、BGRA8 UNORM、
+R32_UINT/R32_SFLOAT，均为每像素 4 字节；D32_SFLOAT 只支持 depth attachment/sampling，拒绝 byte copy。
+检查 extent、mip/layer、字节数溢出、usage 和设备 format 能力；Image::state(mip,layer) 替代单值 layout 查询。
 Buffer/Image 的 vk::* 句柄只借用，不得额外销毁；VMA allocation 不公开。
 
-begin() 获取空闲槽并开始 one-time command buffer。CommandBatch 提供 buffer copy、整图 buffer/image
-双向 copy、image transition，以及 retain(buffer/image) 和借用 RAII command_buffer() 扩展点。
-手工录制须先 retain 全部使用资源，手工 image barrier 不得绕过 transition 的布局账本。
-内置 copy 检查 owner、usage、范围、4 字节对齐、同 buffer 重叠和 image 尺寸；使用 synchronization2
-建立保守 memory barrier 和 transfer/host 可见性。零长度 copy 拒绝；CPU 零字节 read/write 是合法无变化。
-支持布局 Undefined（仅初始）、TransferSrc/Dst、ShaderReadOnly、General、ColorAttachment；非初始目标不能为 Undefined。
+begin() 获取空闲槽并开始 one-time command buffer。prepare(ResourceUse) 根据局部账本发 barrier；
+barrier(ResourceBarrier) 校验显式 before 状态后使用同一实现，供未来 Graph 直接规划同步。
+copy_buffer、带 ImageCopyRegion 的双向 copy、fill/clear 只执行已准备访问，缺少同步在原生命令前拒绝。
+ImageCopyRegion 指定 mip/layer、像素区域、buffer offset/row length/image height；按 footprint 验证范围和溢出。
+写访问消费 prepare 声明，后续依赖需要重新 prepare；连续只读保留声明并累积读取阶段。
+Buffer 范围用于验证，同步保守覆盖整对象；image 按子资源独立处理。
+Undefined 只作为初始布局，read/load 必须有已初始化内容；局部写入不证明整子资源有效。
+shader 整图写入可在 ResourceUse.full_overwrite 声明保证，真实性由调用者负责。
+
+compute()/begin_rendering() 返回借用同一批次的 encoder；代次检查拒绝过期、提交后或 batch 移动后的调用。
+RenderEncoder 默认设置覆盖 render area 的 viewport/scissor，支持单 color、可选 D32 depth、vertex/index、多实例和 push constants。
+rendering 不可嵌套，scope 内禁止 prepare/copy/compute；end 或有效 encoder 析构结束 scope。
+在打开 rendering 时移动 batch 会将其标记 invalid，禁止提交；放弃时释放资源与预约。
+绘制前检查 attachment 格式、全部所需绑定、常量、顶点和索引字节范围。
+索引内容决定的实际 vertex 地址不能在 CPU 侧推断，调用者保证索引值与 vertex_offset 不越界。
+图形 storage 写入/attachment feedback 暂不支持。load/store discard 使内容失效，局部 clear 不证明全图初始化。
+
+对象绑定自动保留资源闭包至 GPU 完成；单纯创建 BindingSet 不增加资源忙引用。
+unsafe_record(before,after,callback) 是原生互操作入口；对象用 retain 重载声明，资源范围前后一一对应。
+回调负责声明真实性，不得 end/reset/submit 或 signal 内部 timeline；退出使 encoder 失效，异常使 batch invalid。
+旧无 region 的 copy/transition 和 command_buffer 暂保留给待迁移消费者及专门底层 probe；
+其保守同步不属于 Graph 路径。零长度 copy 拒绝；CPU 零字节 read/write 是合法无变化。
+支持布局 Undefined（仅初始）、TransferSrc/Dst、ShaderReadOnly、General、ColorAttachment、DepthStencilAttachment。
 
 submit(CommandBatch&&) 返回 Submission（弱 owner 身份和单调值）；poll() 查询完成并回收，
 wait(ticket, timeout_ns) 返回 bool（false 为超时），close() 等待并停止新录制。
@@ -58,14 +74,14 @@ Stats 区分 recording/pending/free 槽、提交值、已完成值和 pending �
 在 batch 放弃前不销毁；票据不延长队列寿命。诊断 sink 的 user data 必须晚于所有资源的最终销毁。
 所有 API、相关资源和借用队列由调用者串行访问；本阶段不提供线程安全提交。
 
-槽状态为 free→recording→pending→free。未提交 batch 析构释放录制保留和 image 预约，不提交 GPU 工作；
+槽状态为 free→recording→pending→free。未提交 batch 析构释放录制保留和资源预约，不提交 GPU 工作；
 下次获取 free 槽才重置 pool。Buffer 被录制或 pending 引用时拒绝 CPU read/write，避免覆盖 GPU 数据。
-Image 每次只允许一个活跃 batch 预约，记录局部 predicted layout；成功提交才发布布局，
-失败或放弃不改变全局布局。已提交 image 可在同队列后续 batch 继续使用，barrier 按队列顺序生效。
+Buffer/Image 每次只允许一个未提交 batch 预约，记录局部 AccessState；成功提交才发布状态，
+失败或放弃不改变全局状态。已提交资源可在同队列后续 batch 继续使用，barrier 按队列顺序生效。
 
 所有 CPU 分配/保留列表准备在 vkQueueSubmit2 之前完成。仅 VK_SUCCESS 是提交点：发布票据、
-递增 timeline、转移预分配资源列表、提交局部 image 布局，这些步骤不得分配或抛出。
-失败不发布票据/值/布局，batch 被消费且释放录制引用，资源仍由调用者持有；std::bad_alloc 保持标准异常约定。
+递增 timeline、转移预分配资源/对象列表、提交局部资源状态，这些步骤不得分配或抛出。
+失败不发布票据/值/状态，batch 被消费且释放录制引用，资源仍由调用者持有；std::bad_alloc 保持标准异常约定。
 GPU 完成由 timeline 值确认；timeout 不释放 pending、不复用槽。token 必须属于同一队列且已提交。
 资源包装提前销毁只释放用户引用，pending 引用到完成时才释放 VMA allocation。
 不以 CPU 下一帧或引用计数为 GPU 完成依据，不允许 host signal 内部 timeline。

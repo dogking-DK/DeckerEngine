@@ -1,5 +1,7 @@
 #pragma once
 #include <dk/graphics/Resources.hpp>
+#include <bit>
+#include <algorithm>
 
 namespace dk::graphics::detail {
 inline Result<void> validate_buffer(const BufferDesc& desc)
@@ -33,6 +35,29 @@ inline Result<vk::DeviceSize> image_bytes(const ImageDesc& desc)
 }
 inline bool valid_range(vk::DeviceSize capacity, vk::DeviceSize offset, vk::DeviceSize size) noexcept
 { return offset <= capacity && size <= capacity - offset; }
+inline Result<void> validate_image(const ImageDesc& desc)
+{
+    if (!desc.width || !desc.height || !desc.mip_levels || !desc.array_layers ||
+        desc.mip_levels > static_cast<std::uint32_t>(std::bit_width(std::max(desc.width, desc.height))))
+        return std::unexpected(Error{ErrorCode::invalid_argument, "invalid image mip/layer/extent"});
+    if (desc.format == vk::Format::eD32Sfloat) {
+        constexpr auto allowed = vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled;
+        if (!desc.usage || (static_cast<VkImageUsageFlags>(desc.usage) & ~static_cast<VkImageUsageFlags>(allowed)))
+            return std::unexpected(Error{ErrorCode::not_supported, "depth images support attachment/sampling only"});
+        return {};
+    }
+    if (auto bytes = image_bytes(desc); !bytes) return std::unexpected(bytes.error());
+    return {};
+}
+inline Result<void> validate_subresources(const ImageDesc& desc, const vk::ImageSubresourceRange& range)
+{
+    const auto aspect = desc.format == vk::Format::eD32Sfloat ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor;
+    if (range.aspectMask != aspect || !range.levelCount || !range.layerCount ||
+        !valid_range(desc.mip_levels, range.baseMipLevel, range.levelCount) ||
+        !valid_range(desc.array_layers, range.baseArrayLayer, range.layerCount))
+        return std::unexpected(Error{ErrorCode::invalid_argument, "invalid image aspect/mip/layer range"});
+    return {};
+}
 inline Result<void> validate_copy(vk::DeviceSize source_size, vk::DeviceSize destination_size,
     vk::DeviceSize size, vk::DeviceSize source_offset, vk::DeviceSize destination_offset, bool same)
 {
@@ -52,6 +77,7 @@ inline Result<void> validate_layout(vk::ImageLayout layout, vk::ImageUsageFlags 
     case vk::ImageLayout::eShaderReadOnlyOptimal: supported = bool(usage & (vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eInputAttachment)); break;
     case vk::ImageLayout::eGeneral: supported = true; break;
     case vk::ImageLayout::eColorAttachmentOptimal: supported = bool(usage & vk::ImageUsageFlagBits::eColorAttachment); break;
+    case vk::ImageLayout::eDepthStencilAttachmentOptimal: supported = bool(usage & vk::ImageUsageFlagBits::eDepthStencilAttachment); break;
     default: break;
     }
     if (!supported) return std::unexpected(Error{ErrorCode::invalid_argument, "unsupported image layout or missing usage"});
