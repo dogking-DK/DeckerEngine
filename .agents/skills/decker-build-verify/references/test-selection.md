@@ -35,6 +35,8 @@
 | Runtime 的 batch/stdio 进程行为 | dk_run | `^dk\.runtime\.` |
 | CLI 版本 | dk_run | `^dk\.bootstrap\.version$` |
 | Vulkan 设备策略、缺失环境和失败清理（无需 GPU） | dk_device_tests | `^dk\.device\.unit\.` |
+| SDL3 窗口事件、尺寸与寿命（需桌面） | dk_platform_probe | `^dk\.platform\.windows$` |
+| Vulkan Surface、呈现选卡与窗口保活 | dk_present_device_probe | `^dk\.presentation\.device_validation$` |
 | Vulkan 真设备、验证消息、VMA 分配与双设备销毁 | dk_device_probe | `^dk\.device\.gpu_`（gpu label；77 为跳过） |
 | Vulkan 资源描述、范围/对齐/布局与空对象（无需 GPU） | dk_graphics_resource_tests | `^dk\.graphics\.unit\.` |
 | VMA 上传/读回、timeline、延迟释放与提交失败 | dk_graphics_resource_probe | `^dk\.graphics\.gpu_`（gpu label；77 为跳过） |

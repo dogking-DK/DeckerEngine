@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-09-30T09:40:00+08:00"
+updated_at: "2026-10-02T21:56:00+08:00"
 status: accepted
 ---
 
@@ -154,11 +154,17 @@ VMA 继续独占 Buffer/Image 内存所有权。离屏绘制/compute 和同步�
 现有固定依赖已支持 1.4，因此不修改 baseline、不浮动跟随 Khronos patch，也不安装/升级本机 SDK 或驱动。
 配置、特性与 GPU 验证见 [0048](development/0048-vulkan-14-baseline.md)。
 
+## M5.6 窗口依赖
+
+SDL3 / `sdl3` 3.4.16#1 已由 dk::platform PRIVATE 链接；独立 platform feature 选择 vulkan，
+不包含 ImGui。2026-10-02 核验[官方 port](https://raw.githubusercontent.com/microsoft/vcpkg/master/ports/sdl3/vcpkg.json)
+与固定基线一致，因此保留 builtin-baseline。Windows x64 窗口和 surface-aware device 验收见
+[0054](development/0054-window-device.md)。公开窗口头不暴露 SDL/Vulkan；CPU runner 与离屏设备不依赖 SDL。
+
 ## 清单预留，模块尚未实现
 
 | 库 / vcpkg port | 当前版本 | feature | 计划用途 |
 | --- | --- | --- | --- |
-| SDL3 / `sdl3` | 3.4.16#1 | editor | 窗口与输入，选择 vulkan feature |
 | Dear ImGui / `imgui` | 1.92.9 | editor | 编辑器 UI，选择 docking-experimental、sdl3-binding、vulkan-binding |
 | Lua / `lua` | 5.5.1 | scripting | 内嵌场景脚本语言 |
 | sol2 / `sol2` | 3.5.0#1 | scripting | C++ 与 Lua 绑定 |

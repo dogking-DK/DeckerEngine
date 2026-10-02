@@ -26,16 +26,27 @@ struct Diagnostic {
 // Message views are borrowed for the call. Must be thread safe, noexcept, and
 // must not reenter device operations. User data outlives creation/destruction.
 using DiagnosticSink = void (*)(void*, const Diagnostic&) noexcept;
+// Optional WSI bridge. Called once after instance creation, before selection.
+// Successful callback transfers surface ownership to Device; owner keeps the
+// native window alive until after surface/instance destruction. No SDL dependency.
+struct SurfaceSource {
+    std::span<const char* const> instance_extensions;
+    Result<VkSurfaceKHR> (*create)(VkInstance, void*) = nullptr;
+    void* user_data = nullptr;
+    std::shared_ptr<void> owner;
+};
 struct DeviceOptions {
     ValidationMode validation = ValidationMode::if_available;
     std::optional<std::uint32_t> adapter_index;
     std::filesystem::path loader_path; // Empty: system loader; otherwise absolute.
     DiagnosticSink diagnostic_sink = nullptr;
     void* diagnostic_user_data = nullptr;
+    SurfaceSource surface;
 };
 
 struct AdapterInfo {
-    explicit AdapterInfo(memory::ResourceHandle resource) : queues(memory::Allocator<vk::QueueFamilyProperties>{resource}) {}
+    explicit AdapterInfo(memory::ResourceHandle resource) : queues(memory::Allocator<vk::QueueFamilyProperties>{resource}),
+        present_queues(memory::Allocator<std::uint8_t>{resource}) {}
     vk::PhysicalDeviceProperties properties{};
     vk::PhysicalDeviceDriverProperties driver{};
     bool timeline_semaphore = false;
@@ -43,11 +54,13 @@ struct AdapterInfo {
     bool dynamic_rendering = false;
     bool maintenance4 = false;
     Vector<vk::QueueFamilyProperties> queues;
+    Vector<std::uint8_t> present_queues;
+    bool swapchain = false, swapchain_maintenance1 = false;
 };
 struct AdapterSelection { std::uint32_t adapter_index; std::uint32_t queue_family; };
 // Pure policy functions; no loader, instance, or GPU is needed.
 [[nodiscard]] Result<AdapterSelection> select_adapter(std::span<const AdapterInfo> adapters,
-    std::optional<std::uint32_t> requested = {});
+    std::optional<std::uint32_t> requested = {}, bool presentation = false);
 [[nodiscard]] Result<bool> select_validation(ValidationMode mode, bool layer_available, bool debug_utils_available);
 [[nodiscard]] std::string_view vulkan_result_name(VkResult result) noexcept;
 
@@ -74,6 +87,7 @@ public:
     // Borrowed allocator. Release every allocation before destroying this Device.
     [[nodiscard]] VmaAllocator allocator() const noexcept;
     [[nodiscard]] std::uint32_t queue_family() const noexcept;
+    [[nodiscard]] vk::SurfaceKHR surface() const noexcept;
     [[nodiscard]] const AdapterInfo& adapter() const noexcept;
     [[nodiscard]] bool validation_enabled() const noexcept;
     [[nodiscard]] std::uint64_t validation_errors() const noexcept;

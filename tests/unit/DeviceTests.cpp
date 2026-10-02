@@ -24,6 +24,23 @@ AdapterInfo suitable(memory::ResourceHandle resource, vk::PhysicalDeviceType typ
     info.queues.push_back({vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute, 1, 64, {1, 1, 1}});
     return info;
 }
+TEST_CASE("presentation selection checks every queue and required extension")
+{
+    Memory memory;
+    std::array<AdapterInfo, 2> adapters{suitable(memory.resource), suitable(memory.resource, vk::PhysicalDeviceType::eIntegratedGpu)};
+    auto& candidate = adapters[1];
+    candidate.queues.push_back(candidate.queues.front());
+    candidate.present_queues = {0, 1};
+    candidate.swapchain = candidate.swapchain_maintenance1 = true;
+    auto selected = select_adapter(adapters, {}, true);
+    REQUIRE(selected);
+    CHECK(selected->adapter_index == 1);
+    CHECK(selected->queue_family == 1);
+    CHECK_FALSE(select_adapter(adapters, 0, true));
+    candidate.swapchain_maintenance1 = false;
+    CHECK_FALSE(select_adapter(adapters, {}, true));
+    CHECK(select_adapter(adapters)->adapter_index == 0); // Headless unchanged.
+}
 template<class T> T handle(std::uintptr_t value) { return reinterpret_cast<T>(value); }
 struct Fake {
     inline static Fake* active = nullptr;

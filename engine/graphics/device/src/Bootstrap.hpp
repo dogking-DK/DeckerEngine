@@ -18,5 +18,5 @@ struct InstanceOwner {
                vk::raii::DebugUtilsMessengerEXT& target_messenger);
 };
 Result<void> bootstrap_instance(PFN_vkGetInstanceProcAddr resolver, bool validation,
-    const VkDebugUtilsMessengerCreateInfoEXT& debug, InstanceOwner& owner);
+    const VkDebugUtilsMessengerCreateInfoEXT& debug, InstanceOwner& owner, std::span<const char* const> extensions = {});
 } // namespace dk::graphics::detail

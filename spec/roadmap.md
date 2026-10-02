@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-02T21:26:00+08:00"
+updated_at: "2026-10-02T21:56:00+08:00"
 status: accepted
 ---
 
@@ -289,7 +289,15 @@ CPU Ready 与未来 GPU Ready 分开。
 | M5.3 | Slang 编译工具 | M5.2 | vertex/fragment/compute SPIR-V、反射、诊断和 dk-shaderc 离线发布通过；独立无 Vulkan 配置，见 [0046](development/0046-slang-shader-compiler.md) | 已完成 |
 | M5.4 | 离屏绘制与计算 | M5.3 | 三角形逐像素/compute 数据读回、RAII pending 寿命和失败恢复通过；同步验证零警告/错误，见 [0047](development/0047-offscreen-execution.md) | 已完成 |
 | M5.5 | Vulkan 使用层封装（M5.5.1–5） | M5.4 | 对象/管线/绑定/encoder/传输封装；离屏迁移输出不变、同步与寿命验收；见[设计](design/graphics-vulkan.md)与[0053](development/0053-vulkan-offscreen-migration.md) | 已完成 |
-| M5.6 | 窗口与呈现 | M5.5 | SDL3 swapchain、resize/最小化/重建；复用使用层且离屏路径独立可用 | 待开始 |
+| M5.6 | 窗口与呈现（M5.6.1–3） | M5.5 | SDL3 swapchain、resize/最小化/重建；复用使用层且离屏路径独立可用 | 进行中 |
+
+M5.6 实施拆分：
+
+| 子阶段 | 范围 | 前置 | 独立验收 | 状态 |
+| --- | --- | --- | --- | --- |
+| M5.6.1 | SDL3 窗口与 Surface-aware 设备 | M5.5 | 事件/像素尺寸/窗口保活，present family 与能力选择；18 项检查通过，见 [0054](development/0054-window-device.md) | 已完成 |
+| M5.6.2 | 交换链、外部图像与帧同步 | M5.6.1 | acquire/typed render/present、外部图像寿命、放弃帧与同步验证 | 待开始 |
+| M5.6.3 | 恢复与集成验收 | M5.6.2 | resize/minimize/重建/失败、重复关闭、离屏与 CPU 隔离 | 待开始 |
 
 M5.5 实施拆分：
 
@@ -312,7 +320,7 @@ volk、vk-bootstrap 和 VMA allocator 接入见 [0043](development/0043-vulkan-l
 Vulkan-Hpp RAII 所有权与消费接口见 [0044](development/0044-vulkan-hpp-raii.md)。
 M5.2 的拥有型资源、提交、完成跟踪和延迟释放已通过专门验收；Tracy GPU query/context 寿命约定已明确，
 实际 GPU timestamp zone/capture 尚未启用。M5.3 离线编译和布局反射、M5.4 真实绘制/计算读回已验收；
-窗口 M5.6 实施前建立 `platform.md`、`graphics-presentation.md`。
+窗口 M5.6 设计见 [platform](design/platform.md) 与 [graphics-presentation](design/graphics-presentation.md)。
 
 **验收：** 编译一个图形 shader 和一个 compute shader；
 离屏生成小图像并读回、计算已知数据并校验；窗口路径能呈现和调整尺寸。

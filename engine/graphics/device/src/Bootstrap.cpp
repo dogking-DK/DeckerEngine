@@ -77,13 +77,14 @@ void InstanceOwner::adopt(const vk::raii::Context& context, vk::raii::Instance& 
     target_messenger = std::move(owned_messenger);
 }
 Result<void> bootstrap_instance(PFN_vkGetInstanceProcAddr resolver, bool validation,
-    const VkDebugUtilsMessengerCreateInfoEXT& debug, InstanceOwner& owner)
+    const VkDebugUtilsMessengerCreateInfoEXT& debug, InstanceOwner& owner, std::span<const char* const> extensions)
 {
     const std::lock_guard lock(bootstrap_mutex);
     Context context{resolver, owner};
     const Scope scope{context};
     vkb::InstanceBuilder builder{resolve};
     builder.set_app_name("DeckerEngine").set_engine_name("DeckerEngine").require_api_version(device_api_version).set_headless();
+    for (auto* extension : extensions) builder.enable_extension(extension);
     if (validation) {
         builder.enable_validation_layers().set_debug_callback(debug.pfnUserCallback)
             .set_debug_callback_user_data_pointer(debug.pUserData)

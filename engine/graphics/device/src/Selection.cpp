@@ -15,7 +15,7 @@ Result<bool> select_validation(ValidationMode mode, bool layer, bool debug)
     return std::unexpected(Error{ErrorCode::invalid_argument, "invalid validation mode"});
 }
 
-Result<AdapterSelection> select_adapter(std::span<const AdapterInfo> adapters, std::optional<std::uint32_t> requested)
+Result<AdapterSelection> select_adapter(std::span<const AdapterInfo> adapters, std::optional<std::uint32_t> requested, bool presentation)
 {
     if (requested && *requested >= adapters.size())
         return std::unexpected(Error{ErrorCode::not_found, "requested Vulkan adapter index is unavailable"});
@@ -33,15 +33,20 @@ Result<AdapterSelection> select_adapter(std::span<const AdapterInfo> adapters, s
         require(adapter.synchronization2, "synchronization2");
         require(adapter.dynamic_rendering, "dynamicRendering");
         require(adapter.maintenance4, "maintenance4");
+        if (presentation) {
+            require(adapter.swapchain, "VK_KHR_swapchain");
+            require(adapter.swapchain_maintenance1, "VK_EXT_swapchain_maintenance1 / swapchainMaintenance1");
+        }
         std::optional<std::uint32_t> family;
         for (std::size_t q = 0; q < adapter.queues.size(); ++q) {
             const auto& queue = adapter.queues[q];
             constexpr auto flags = vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute;
-            if (queue.queueCount > 0 && (queue.queueFlags & flags) == flags) {
+            if (queue.queueCount > 0 && (queue.queueFlags & flags) == flags &&
+                (!presentation || (q < adapter.present_queues.size() && adapter.present_queues[q]))) {
                 family = static_cast<std::uint32_t>(q); break;
             }
         }
-        require(family.has_value(), "graphics+compute queue");
+        require(family.has_value(), presentation ? "graphics+compute+present queue" : "graphics+compute queue");
         if (!missing.empty()) {
             failure.context.push_back("adapter[" + std::to_string(i) + "] " + adapter.properties.deviceName.data() + ": " + missing);
             continue;
@@ -66,6 +71,11 @@ std::string_view vulkan_result_name(VkResult result) noexcept
 #define DK_VK_RESULT(value) case value: return #value
     DK_VK_RESULT(VK_SUCCESS);
     DK_VK_RESULT(VK_INCOMPLETE);
+    DK_VK_RESULT(VK_NOT_READY);
+    DK_VK_RESULT(VK_TIMEOUT);
+    DK_VK_RESULT(VK_SUBOPTIMAL_KHR);
+    DK_VK_RESULT(VK_ERROR_OUT_OF_DATE_KHR);
+    DK_VK_RESULT(VK_ERROR_SURFACE_LOST_KHR);
     DK_VK_RESULT(VK_ERROR_OUT_OF_HOST_MEMORY);
     DK_VK_RESULT(VK_ERROR_OUT_OF_DEVICE_MEMORY);
     DK_VK_RESULT(VK_ERROR_INITIALIZATION_FAILED);

@@ -98,6 +98,15 @@
       }
     },
     {
+      "name": "windows-presentation",
+      "inherits": "windows-graphics",
+      "displayName": "Windows SDL3 and Vulkan presentation",
+      "cacheVariables": {
+        "DK_BUILD_PLATFORM": "ON",
+        "DK_BUILD_GRAPHICS_PRESENTATION": "ON"
+      }
+    },
+    {
       "name": "windows-desktop-deps",
       "inherits": "windows-dev",
       "displayName": "Prepare all planned desktop dependencies",

@@ -162,9 +162,11 @@ struct Device::Impl {
     PFN_vkGetInstanceProcAddr get_instance_proc = nullptr;
     PFN_vkGetDeviceProcAddr get_device_proc = nullptr;
     // Reverse declaration order keeps callbacks, dispatchers and loader alive.
+    std::shared_ptr<void> window_owner;
     std::optional<vk::raii::Context> context;
     vk::raii::Instance instance{nullptr};
     vk::raii::DebugUtilsMessengerEXT messenger{nullptr};
+    vk::raii::SurfaceKHR surface{nullptr};
     vk::raii::PhysicalDevice physical{nullptr};
     vk::raii::Device device{nullptr};
     vk::raii::Queue queue{nullptr};
@@ -203,10 +205,16 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
         return std::unexpected(Error{ErrorCode::invalid_argument, "loader_path must be absolute"});
     if (auto policy = select_validation(options.validation, true, true); !policy)
         return std::unexpected(policy.error());
+    const bool presentation = options.surface.create != nullptr;
+    if (presentation && (!options.surface.owner || options.surface.instance_extensions.empty()))
+        return std::unexpected(Error{ErrorCode::invalid_argument, "surface requires a lifetime owner and instance extensions"});
+    for (const auto* extension : options.surface.instance_extensions)
+        if (!extension || !*extension) return std::unexpected(Error{ErrorCode::invalid_argument, "instance extension names must not be empty"});
     auto impl = memory::make_unique_in<Device::Impl>(resource, resource);
     if (allocator_api) impl->allocator.api = *allocator_api;
     impl->sink = options.diagnostic_sink;
     impl->sink_data = options.diagnostic_user_data;
+    impl->window_owner = options.surface.owner;
     if (!resolver) {
         auto loaded = impl->loader.open(options.loader_path);
         if (!loaded) return std::unexpected(loaded.error());
@@ -235,6 +243,11 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     auto extensions = enumerate<VkExtensionProperties>(resource, "vkEnumerateInstanceExtensionProperties",
         [&](std::uint32_t* count, VkExtensionProperties* data) { return extensions_fn(nullptr, count, data); });
     if (!extensions) return std::unexpected(extensions.error());
+    for (const auto* required : options.surface.instance_extensions) {
+        bool found = false;
+        for (const auto& extension : *extensions) if (std::strcmp(required, extension.extensionName) == 0) found = true;
+        if (!found) return std::unexpected(Error{ErrorCode::not_supported, std::string("missing instance extension: ") + required});
+    }
     const auto has_debug = [](std::span<const VkExtensionProperties> list) {
         for (const auto& extension : list) if (std::strcmp(extension.extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0) return true;
         return false;
@@ -261,13 +274,22 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     debug_info.pUserData = impl.get();
     impl->context.emplace(resolver);
     detail::InstanceOwner pending_instance;
-    const auto bootstrapped = detail::bootstrap_instance(resolver, impl->validation, debug_info, pending_instance);
+    const auto bootstrapped = detail::bootstrap_instance(resolver, impl->validation, debug_info, pending_instance, options.surface.instance_extensions);
     if (!bootstrapped) return std::unexpected(bootstrapped.error());
     if (!pending_instance.destroy_instance)
         return std::unexpected(Error{ErrorCode::internal_error, "Vulkan instance is missing vkDestroyInstance"});
     pending_instance.adopt(*impl->context, impl->instance, impl->messenger);
     const auto native_instance = static_cast<VkInstance>(*impl->instance);
     load_instance_table(resolver, native_instance, impl->instance_table);
+    if (presentation) {
+        if (!impl->instance_table.vkDestroySurfaceKHR || !impl->instance_table.vkGetPhysicalDeviceSurfaceSupportKHR ||
+            !impl->instance_table.vkEnumerateDeviceExtensionProperties)
+            return std::unexpected(Error{ErrorCode::not_supported, "missing WSI instance entry points"});
+        auto surface = options.surface.create(native_instance, options.surface.user_data);
+        if (!surface) return std::unexpected(surface.error());
+        if (!*surface) return std::unexpected(Error{ErrorCode::internal_error, "surface callback returned a null surface"});
+        impl->surface = vk::raii::SurfaceKHR{impl->instance, *surface};
+    }
     const auto destroy_device = reinterpret_cast<PFN_vkDestroyDevice>(resolver(native_instance, "vkDestroyDevice"));
     impl->get_device_proc = impl->instance_table.vkGetDeviceProcAddr;
     const auto physical_fn = impl->instance_table.vkEnumeratePhysicalDevices;
@@ -309,9 +331,34 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
             queues_fn(physical, &count, reinterpret_cast<VkQueueFamilyProperties*>(info.queues.data()));
             info.queues.resize(count);
         }
+        if (presentation) {
+            auto device_extensions = enumerate<VkExtensionProperties>(resource, "vkEnumerateDeviceExtensionProperties",
+                [&](std::uint32_t* size, VkExtensionProperties* data) {
+                    return impl->instance_table.vkEnumerateDeviceExtensionProperties(physical, nullptr, size, data);
+                });
+            if (!device_extensions) return std::unexpected(device_extensions.error());
+            bool maintenance = false;
+            for (const auto& extension : *device_extensions) {
+                if (std::strcmp(extension.extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0) info.swapchain = true;
+                if (std::strcmp(extension.extensionName, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME) == 0) maintenance = true;
+            }
+            if (maintenance) {
+                VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT feature{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT};
+                VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &feature};
+                features_fn(physical, &features);
+                info.swapchain_maintenance1 = feature.swapchainMaintenance1 == VK_TRUE;
+            }
+            info.present_queues.resize(count);
+            for (std::uint32_t q = 0; q < count; ++q) {
+                VkBool32 support = VK_FALSE;
+                const auto result = impl->instance_table.vkGetPhysicalDeviceSurfaceSupportKHR(physical, q, static_cast<VkSurfaceKHR>(*impl->surface), &support);
+                if (result != VK_SUCCESS) return std::unexpected(vk_error("vkGetPhysicalDeviceSurfaceSupportKHR", result));
+                info.present_queues[q] = support ? 1 : 0;
+            }
+        }
         adapters.push_back(std::move(info));
     }
-    auto selection = select_adapter(adapters, options.adapter_index);
+    auto selection = select_adapter(adapters, options.adapter_index, presentation);
     if (!selection) return std::unexpected(selection.error());
     const auto native_physical = (*physicals)[selection->adapter_index];
     impl->physical = vk::raii::PhysicalDevice{impl->instance, native_physical};
@@ -326,6 +373,9 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     features13.synchronization2 = VK_TRUE;
     features13.dynamicRendering = VK_TRUE;
     features13.maintenance4 = VK_TRUE;
+    vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT maintenance{};
+    maintenance.swapchainMaintenance1 = VK_TRUE;
+    if (presentation) features13.pNext = &maintenance;
     vk::PhysicalDeviceVulkan12Features features12{};
     features12.timelineSemaphore = VK_TRUE;
     features12.pNext = &features13;
@@ -333,6 +383,8 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     device_info.pNext = &features12;
     device_info.queueCreateInfoCount = 1;
     device_info.pQueueCreateInfos = &queue_info;
+    const std::array<const char*, 2> device_extensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME};
+    if (presentation) device_info.setPEnabledExtensionNames(device_extensions);
     PendingDevice pending_device{VK_NULL_HANDLE, destroy_device};
     auto result = create_device(native_physical, reinterpret_cast<const VkDeviceCreateInfo*>(&device_info), nullptr, &pending_device.handle);
     if (result != VK_SUCCESS) { pending_device.handle = VK_NULL_HANDLE; return std::unexpected(vk_error("vkCreateDevice", result)); }
@@ -368,6 +420,7 @@ const vk::raii::Queue& Device::queue() const noexcept { return impl_->queue; }
 VkDevice Device::native_device() const noexcept { return static_cast<VkDevice>(*impl_->device); }
 VmaAllocator Device::allocator() const noexcept { return impl_->allocator.handle; }
 std::uint32_t Device::queue_family() const noexcept { return impl_->family; }
+vk::SurfaceKHR Device::surface() const noexcept { return *impl_->surface; }
 const AdapterInfo& Device::adapter() const noexcept { return impl_->info; }
 bool Device::validation_enabled() const noexcept { return impl_->validation; }
 std::uint64_t Device::validation_errors() const noexcept { return impl_->errors.load(std::memory_order_relaxed); }

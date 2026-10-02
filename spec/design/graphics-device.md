@@ -1,7 +1,7 @@
 ---
 module: graphics-device
 created_at: "2026-09-28T16:38:00+08:00"
-updated_at: "2026-10-02T21:26:00+08:00"
+updated_at: "2026-10-02T21:56:00+08:00"
 status: accepted
 ---
 
@@ -38,7 +38,10 @@ AdapterInfo 的属性与队列快照使用 vk::* 值类型；诊断 callback 和
 InstanceBuilder 使用同一版本，不将 headers 的 patch 版本当作最低驱动补丁要求。
 必须具有 timelineSemaphore、synchronization2、dynamicRendering、maintenance4，
 一个 queueCount > 0 且同时支持 graphics/compute 的 family（按规范也支持 transfer）。
-只启用这四项 feature，创建该 family 的第 0 个队列，不要求 present 或任何 device extension。
+默认离屏模式只启用这四项 feature，创建该 family 的第 0 个队列，不要求 present 或任何 device extension。
+M5.6 可选 SurfaceSource 在 instance 后、选卡前创建 surface，Device 保留窗口 token 并拥有 surface。
+此模式额外检查同 family 的 present、VK_KHR_swapchain 与 EXT swapchainMaintenance1，
+显式启用相应 device 扩展/feature；Platform/SDL 适配位于 [Presentation](graphics-presentation.md)，Device 不链接 SDL。
 maintenance4 用于 VMA 的设备内存需求查询；API 1.4 并不自动启用所有可选 feature。
 这些条件为下一阶段资源/同步与离屏动态渲染提供基线，不代表已实现相应业务。
 
