@@ -56,5 +56,6 @@
 | 0052 | [M5.5.4 批量上传与异步读回](0052-vulkan-transfers-readback.md) | graphics-vulkan, graphics-resources | completed |
 | 0053 | [M5.5.5 离屏迁移与集成验收](0053-vulkan-offscreen-migration.md) | graphics-vulkan, graphics-resources, graphics-offscreen, graphics-device, architecture | completed |
 | 0054 | [M5.6.1 窗口与设备接入](0054-window-device.md) | platform, graphics-presentation, graphics-device | completed |
+| 0055 | [M5.6.2 交换链与帧同步](0055-swapchain-frames.md) | graphics-presentation, graphics-resources, graphics-vulkan | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

@@ -268,6 +268,12 @@ Result<CommandBatch> SubmissionQueue::begin()
 }
 Result<Submission> SubmissionQueue::submit(CommandBatch&& batch)
 {
+    if (batch.state_ && batch.state_->external_sync)
+        return std::unexpected(Error{ErrorCode::invalid_state, "presentable frames must be submitted through Presenter"});
+    return submit_impl(std::move(batch), {}, {});
+}
+Result<Submission> SubmissionQueue::submit_impl(CommandBatch&& batch, vk::Semaphore wait, vk::Semaphore binary_signal)
+{
     DK_PROFILE_ZONE("graphics.submit");
     if (auto result = state_->accepting(); !result) return std::unexpected(result.error());
     if (!batch.state_ || batch.state_->queue != state_ || !batch.state_->active)
@@ -286,9 +292,15 @@ Result<Submission> SubmissionQueue::submit(CommandBatch&& batch)
     ticket.owner_ = state_;
     ticket.value_ = state_->submitted + 1;
     const vk::CommandBufferSubmitInfo command{*slot.command};
-    const vk::SemaphoreSubmitInfo signal{*state_->timeline, ticket.value_, vk::PipelineStageFlagBits2::eAllCommands};
+    const std::array<vk::SemaphoreSubmitInfo, 2> signals{{
+        {*state_->timeline, ticket.value_, vk::PipelineStageFlagBits2::eAllCommands},
+        {binary_signal, 0, vk::PipelineStageFlagBits2::eAllCommands}}};
+    const vk::SemaphoreSubmitInfo acquire{wait, 0, vk::PipelineStageFlagBits2::eAllCommands};
     vk::SubmitInfo2 submit{};
-    submit.setCommandBufferInfos(command).setSignalSemaphoreInfos(signal);
+    submit.setCommandBufferInfos(command);
+    submit.signalSemaphoreInfoCount = binary_signal ? 2u : 1u;
+    submit.pSignalSemaphoreInfos = signals.data();
+    if (wait) submit.setWaitSemaphoreInfos(acquire);
     const auto result = state_->api.submit(static_cast<VkQueue>(*device().queue()), 1,
         reinterpret_cast<const VkSubmitInfo2*>(&submit), VK_NULL_HANDLE);
     if (result != VK_SUCCESS) return std::unexpected(state_->failure("vkQueueSubmit2", result));
@@ -296,6 +308,7 @@ Result<Submission> SubmissionQueue::submit(CommandBatch&& batch)
     static_assert(noexcept(slot.uses = std::move(recording->uses)));
     slot.uses = std::move(recording->uses);
     slot.objects = std::move(recording->objects);
+    slot.external_sync_owner = std::move(recording->external_sync_owner);
     static_assert(noexcept(slot.requests = std::move(recording->requests)));
     slot.requests = std::move(recording->requests);
     for (auto& request : slot.requests) request->status = ReadbackStatus::pending;

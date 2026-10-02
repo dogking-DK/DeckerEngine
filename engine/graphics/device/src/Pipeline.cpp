@@ -228,7 +228,8 @@ Result<GraphicsPipeline> ResourceFactory::create_graphics_pipeline(const Graphic
     const auto& device = queue.owner->device;
     const auto& limits = device.adapter().properties.limits;
     if (desc.color_format != vk::Format::eR8G8B8A8Unorm && desc.color_format != vk::Format::eR8G8B8A8Srgb &&
-        desc.color_format != vk::Format::eB8G8R8A8Unorm && desc.color_format != vk::Format::eR32Uint && desc.color_format != vk::Format::eR32Sfloat)
+        desc.color_format != vk::Format::eB8G8R8A8Unorm && desc.color_format != vk::Format::eB8G8R8A8Srgb &&
+        desc.color_format != vk::Format::eR32Uint && desc.color_format != vk::Format::eR32Sfloat)
         return std::unexpected(Error{ErrorCode::not_supported, "color format is outside supported resource formats"});
     if ((desc.topology != vk::PrimitiveTopology::eTriangleList && desc.topology != vk::PrimitiveTopology::eTriangleStrip) ||
         (desc.front_face != vk::FrontFace::eClockwise && desc.front_face != vk::FrontFace::eCounterClockwise) ||

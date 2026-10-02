@@ -19,6 +19,8 @@ struct ResourceState {
     VkBuffer buffer = VK_NULL_HANDLE;
     VkImage image = VK_NULL_HANDLE;
     VmaAllocation allocation = VK_NULL_HANDLE;
+    std::shared_ptr<void> external_owner;
+    std::weak_ptr<BatchState> external_batch;
     BufferDesc buffer_desc;
     ImageDesc image_desc;
     Vector<AccessState> states;
@@ -27,7 +29,7 @@ struct ResourceState {
     ~ResourceState()
     {
         if (buffer) vmaDestroyBuffer(owner->device.allocator(), buffer, allocation);
-        if (image) vmaDestroyImage(owner->device.allocator(), image, allocation);
+        if (image && !external_owner) vmaDestroyImage(owner->device.allocator(), image, allocation);
     }
 };
 struct Use {
@@ -57,6 +59,7 @@ struct Slot {
     Vector<std::shared_ptr<ObjectState>> objects;
     Vector<std::shared_ptr<ReadbackState>> requests;
     SlotPhase phase = SlotPhase::free;
+    std::shared_ptr<void> external_sync_owner;
     std::uint64_t value = 0;
 };
 inline void release_uses(Vector<Use>& uses, bool recording) noexcept
@@ -107,6 +110,7 @@ struct QueueState {
             release_uses(slot.uses, false);
             slot.objects.clear();
             complete_requests(slot.requests, ReadbackStatus::ready);
+            slot.external_sync_owner.reset();
             slot.phase = SlotPhase::free;
         }
     }
@@ -116,6 +120,7 @@ struct QueueState {
             release_uses(slot.uses, false);
             slot.objects.clear();
             complete_requests(slot.requests, ReadbackStatus::device_lost);
+            slot.external_sync_owner.reset();
             slot.phase = SlotPhase::free;
         }
     }
@@ -144,6 +149,8 @@ struct BatchState {
     Vector<std::shared_ptr<ObjectState>> objects;
     Vector<std::shared_ptr<ReadbackState>> requests;
     std::shared_ptr<EncoderState> encoding;
+    std::shared_ptr<void> external_sync_owner;
+    bool external_sync = false;
     std::uint64_t generation = 1;
     bool rendering = false, invalid = false;
     bool active = false;
@@ -165,6 +172,8 @@ struct BatchState {
         if (auto result = valid(); !result) return result;
         if (!resource || resource->owner != queue->owner)
             return std::unexpected(Error{ErrorCode::invalid_argument, "resource is empty or belongs to another submission queue"});
+        if (resource->external_owner && resource->external_batch.lock().get() != this)
+            return std::unexpected(Error{ErrorCode::invalid_state, "external image is not acquired for this batch"});
         const bool retained = std::any_of(uses.begin(), uses.end(), [&](const Use& use) { return use.resource == resource; });
         if (resource->reserved && !retained)
             return std::unexpected(Error{ErrorCode::conflict, "resource is reserved by another recording batch"});

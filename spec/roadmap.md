@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-02T21:56:00+08:00"
+updated_at: "2026-10-02T22:20:00+08:00"
 status: accepted
 ---
 
@@ -296,7 +296,7 @@ M5.6 实施拆分：
 | 子阶段 | 范围 | 前置 | 独立验收 | 状态 |
 | --- | --- | --- | --- | --- |
 | M5.6.1 | SDL3 窗口与 Surface-aware 设备 | M5.5 | 事件/像素尺寸/窗口保活，present family 与能力选择；18 项检查通过，见 [0054](development/0054-window-device.md) | 已完成 |
-| M5.6.2 | 交换链、外部图像与帧同步 | M5.6.1 | acquire/typed render/present、外部图像寿命、放弃帧与同步验证 | 待开始 |
+| M5.6.2 | 交换链、外部图像与帧同步 | M5.6.1 | 144 帧及读回、外部图像寿命、放弃帧与同步验证；见 [0055](development/0055-swapchain-frames.md) | 已完成 |
 | M5.6.3 | 恢复与集成验收 | M5.6.2 | resize/minimize/重建/失败、重复关闭、离屏与 CPU 隔离 | 待开始 |
 
 M5.5 实施拆分：

@@ -24,7 +24,7 @@ inline Result<vk::DeviceSize> image_bytes(const ImageDesc& desc)
     if (!desc.width || !desc.height || !desc.usage || (static_cast<VkImageUsageFlags>(desc.usage) & ~static_cast<VkImageUsageFlags>(allowed)))
         return std::unexpected(Error{ErrorCode::invalid_argument, "image requires nonzero extent and supported color usage"});
     switch (desc.format) {
-    case vk::Format::eR8G8B8A8Unorm: case vk::Format::eR8G8B8A8Srgb: case vk::Format::eB8G8R8A8Unorm:
+    case vk::Format::eR8G8B8A8Unorm: case vk::Format::eR8G8B8A8Srgb: case vk::Format::eB8G8R8A8Unorm: case vk::Format::eB8G8R8A8Srgb:
     case vk::Format::eR32Uint: case vk::Format::eR32Sfloat: break;
     default: return std::unexpected(Error{ErrorCode::not_supported, "image format is outside the M5.2 four-byte color formats"});
     }

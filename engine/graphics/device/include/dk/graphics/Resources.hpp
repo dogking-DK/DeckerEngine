@@ -23,7 +23,7 @@ struct AccessState {
     bool initialized = false;
     bool operator==(const AccessState&) const = default;
 };
-namespace detail { struct ResourceState; struct QueueState; struct BatchState; struct SubmissionAccess; struct ObjectAccess; }
+namespace detail { struct ResourceState; struct QueueState; struct BatchState; struct SubmissionAccess; struct ObjectAccess; struct PresentationAccess; }
 class CommandBatch;
 class SubmissionQueue;
 class ResourceFactory;
@@ -82,6 +82,7 @@ private:
     friend class CommandBatch;
     friend class ResourceFactory;
     friend struct detail::ObjectAccess;
+    friend struct detail::PresentationAccess;
     explicit Image(std::shared_ptr<detail::ResourceState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::ResourceState> state_;
 };
@@ -142,6 +143,7 @@ public:
 private:
     friend class SubmissionQueue;
     friend struct detail::ObjectAccess;
+    friend struct detail::PresentationAccess;
     explicit CommandBatch(std::shared_ptr<detail::BatchState> state);
     std::shared_ptr<detail::BatchState> state_;
 };
@@ -173,6 +175,8 @@ public:
     [[nodiscard]] Result<void> close();
     [[nodiscard]] SubmissionStats stats() const noexcept;
 private:
+    friend struct detail::PresentationAccess;
+    [[nodiscard]] Result<Submission> submit_impl(CommandBatch&& batch, vk::Semaphore wait, vk::Semaphore signal);
     friend struct detail::SubmissionAccess;
     friend class ResourceFactory;
     explicit SubmissionQueue(std::shared_ptr<detail::QueueState> state) : state_(std::move(state)) {}

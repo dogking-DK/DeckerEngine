@@ -1,7 +1,7 @@
 ---
 module: graphics-vulkan
 created_at: "2026-09-30T10:18:48+08:00"
-updated_at: "2026-10-02T21:26:00+08:00"
+updated_at: "2026-10-02T22:20:00+08:00"
 status: accepted
 ---
 
@@ -40,7 +40,7 @@ M5.5 开始前底座具备 Vulkan 1.4、Vulkan-Hpp RAII、VMA 和单队列完成
 | `graphics/shader-types`，新增 `dk::graphics_shader_types` | 从现有头中提取 CompiledShader、阶段与最小反射数据；拥有型产物构造 | 仅 Core/Memory，不含 Slang、Vulkan、IO 或编译入口 |
 | `graphics/shaders`，既有 `dk::graphics_shaders` | 离线编译、诊断与产物发布 | PUBLIC shader_types；编译器依赖留在本模块，旧 ShaderCompiler.hpp 重导出类型以兼容调用 |
 | `graphics/offscreen`，既有 `dk::graphics_offscreen` | 组合资源和操作，验证图像/数据，提供原有同步入口 | 使用 device 与 shaders；不再实现通用 Vulkan 管线/描述符流程 |
-| 后续 `graphics/presentation`、`graphics/graph` | 窗口交换链；Pass 依赖和同步规划 | 消费 device 公共接口，不依赖 offscreen 或其 src |
+| `graphics/presentation`、后续 `graphics/graph` | 窗口交换链；Pass 依赖和同步规划 | 消费 device 公共接口，不依赖 offscreen 或其 src |
 
 shader_types 是产物定义的提取，不改变 SPIR-V、JSON schema 或离线编译行为。
 设备工厂因此能直接接收编译产物并校验布局，而只创建 Vulkan 资源的程序无需链接 Slang。
@@ -100,7 +100,7 @@ M5.5.2 首版上限为 64 页、每页 32 个同类 descriptor 数量的 set、�
 
 ImageDesc 扩展为 2D/2D array、extent、mip_levels、array_layers、format、usage；首版仍 sample=1。
 ImageViewDesc 表达 aspect、mip/layer 范围与 2D/array 视图；不隐式创建全套 view。
-保留现有五种 color 格式，补充 `D32_SFLOAT` 深度 attachment 路径；每种组合先查询 format/usage 能力，
+保留原五种 color 格式，M5.6 补充 BGRA8 sRGB；另有 `D32_SFLOAT` 深度 attachment 路径；每种组合先查询 format/usage 能力，
 不因为枚举合法就假定硬件支持。color 传输按每个 mip 的 extent 和数据步长检查；深度读回另列为暂缓。
 
 SamplerDesc 明确 filter、address mode、LOD 范围，默认关闭 anisotropy/compare；
@@ -263,10 +263,10 @@ command_buffer() 已标记 deprecated，Offscreen 常规消费者完成迁移；
 原生扩展的声明真实性由调用者负责，封装不能验证任意原生命令的实际访问。
 
 M5.6 的 WSI 适配使用独立 external image 引用：保留 swapchain generation owner，
-不交由 VMA 销毁，并显式导入/导出 layout 与外部同步。M5.5 不提供任意裸 VkImage 的无所有者接管。
-submit 的 acquire wait/render-finished signal 接口在 M5.6 结合 acquire/present 状态机实现；
+不交由 VMA 销毁，并显式导入/导出 layout 与外部同步。不提供任意裸 VkImage 的无所有者接管。
+private bridge 将 acquire wait/render-finished signal 与受保护帧 batch 一并提交；普通 submit 拒绝 WSI batch。
 render submission 完成不代表 present wait semaphore 已消费，交换链重建和信号量回收由 presentation 验证。
-窗口所需 instance/device extensions、present family 选择仍归 M5.6，不从本设计推定已支持。
+窗口实例扩展、surface-aware 选卡与帧契约见 [Presentation](graphics-presentation.md)，设备层本身不链接 SDL。
 
 ## 实施拆分与独立验收
 

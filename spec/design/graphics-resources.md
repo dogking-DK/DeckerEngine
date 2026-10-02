@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-02T21:26:00+08:00"
+updated_at: "2026-10-02T22:20:00+08:00"
 status: accepted
 ---
 
@@ -129,3 +129,11 @@ Memory 关闭新分配后：录制 retain 分配失败不发布工作，已准�
 [timeline semaphore](https://docs.vulkan.org/samples/latest/samples/extensions/timeline_semaphore/README.html) 和
 VMA [映射规范](https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/memory_mapping.html)。
 开发记录：[0045](../development/0045-graphics-resources-submission.md)。
+
+## 窗口外部图像
+
+M5.6 的 private PresentationBridge 创建外部 Image，保留交换链代际 owner，析构不调用 VMA。
+访问限定到本次 acquire 的 batch；未获取/过期引用及跨 batch 被拒绝。该 batch 必须经 Presenter 提交，
+等待 acquire binary semaphore 并 signal render-finished 与原 timeline；pending 槽保活独立同步对象。
+render timeline 与 present fence 是两个完成边界，具体恢复/回收由 [Presentation](graphics-presentation.md) 管理。
+BGRA8 sRGB 加入四字节 color 资源格式，surface 支持时可复用 readback。headless submit 默认行为不变。

@@ -1,7 +1,7 @@
 ---
 module: graphics-presentation
 created_at: "2026-10-02T21:40:00+08:00"
-updated_at: "2026-10-02T21:40:00+08:00"
+updated_at: "2026-10-02T22:00:00+08:00"
 status: accepted
 ---
 
@@ -35,13 +35,15 @@ Presenter 拥有 SubmissionQueue、窗口引用与交换链代际；调用者通
 每次 acquire 返回状态（ready/suspended/retry）及独占 Frame；每个 Presenter 同时最多一个未提交帧。
 Frame 提供绑定到该获取操作的 CommandBatch、color Image/View 与 extent/format。
 使用标准 prepare/begin_rendering/RenderEncoder 录制，present 自动导出 PresentSrcKHR 并提交 acquire wait、
-render-finished signal、timeline。Frame 不公开可移动的 batch 所有权，防止绕过 WSI 提交。
+render-finished signal、timeline。Frame 借用 batch 供录制；普通 submit 拒绝带 WSI 标记的 batch，
+即使调用者将它移出 Frame 也不能绕过同步。
 帧提交成功后即消费，即使随后的 present 失败也不回滚已发生的 GPU 工作。
 pipeline 在交换链 format 变化后由调用者重建；extent 变化只更新动态 viewport/scissor。
 
 交换链图像是外部 Image，保留独立代际 owner，不调用 VMA/vkDestroyImage。
 外部资源只有在对应 frame 的 batch 内可访问；旧引用/未获取图像/另一 batch 被拒绝。
 typed view/encoder/提交保活链保留图像及代际，兼容已完成 M5.5 的接口。
+每次获取将内容作为未初始化，从 Undefined 布局开始，本帧必须 clear/full write，不能 load 前一帧像素。
 代际 owner 不持有 Image，避免循环；销毁交换链之前释放 view。
 
 ## 状态机、同步与恢复
@@ -52,7 +54,8 @@ typed view/encoder/提交保活链保留图像及代际，兼容已完成 M5.5 �
 - 每个在途槽保存 acquire semaphore、获取 fence、render-finished semaphore、present fence 和 timeline ticket。
   重用前同时确认渲染与呈现 fence；不把渲染完成当作 present wait 消费。
 - Frame 放弃或录制/submit 失败：先销毁未提交 batch，等待获取 fence，释放 acquired image；
-  已信号 acquire semaphore 经单独受控 wait 消费后才重用。失败返回明确错误或进入终态。
+  此时无 wait 排队，销毁已信号 acquire semaphore，下次 acquire 再创建。失败返回明确错误或进入终态。
+  present OOM 保证未入队，等待已提交渲染再释放图像与信号量；out-of-date/surface-lost 已入队，等待 present fence。
 - 重建先 drain 本 Presenter 的渲染及 present fence，再创建交换链及 view。
   Vulkan oldSwapchain 一经传入创建即退休，不能承诺失败回滚；本实现明确进入 needs-rebuild，
   中途失败清理候选/退休代际，下次从无活动交换链重试。成功才发布完整新代际。
@@ -62,6 +65,8 @@ typed view/encoder/提交保活链保留图像及代际，兼容已完成 M5.5 �
 窗口、Presenter、Frame、queue 及最终对象释放全部在主线程串行；native 互操作需遵守原有外部同步约定。
 第一版使用 FIFO、BGRA/RGBA 8-bit sRGB 或 UNORM、单 color attachment、sample=1；
 无跨队列 ownership transfer、HDR、独占全屏、present 模式切换或多窗口共享设备。
+当 surface 支持 TransferSrc 时额外启用该 usage，允许使用现有 readback 验证实际待呈现图像；
+不支持时仍可正常呈现，调用者通过 ImageDesc.usage 判定能否读回。
 
 ## 验证与实施
 
