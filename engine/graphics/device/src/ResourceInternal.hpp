@@ -1,5 +1,6 @@
 #pragma once
 #include "SubmissionInternal.hpp"
+#include <dk/graphics/Transfer.hpp>
 #include <algorithm>
 
 namespace dk::graphics::detail {
@@ -38,13 +39,23 @@ struct Use {
     Vector<std::uint8_t> prepared;
 };
 enum class SlotPhase { free, recording, pending };
+struct ReadbackState {
+    ReadbackState(Buffer&& buffer, ReadbackDescription value) : staging(std::move(buffer)), description(value) {}
+    Buffer staging;
+    ReadbackDescription description;
+    ReadbackStatus status = ReadbackStatus::unsubmitted;
+};
+inline void complete_requests(Vector<std::shared_ptr<ReadbackState>>& requests, ReadbackStatus status) noexcept
+{ for (auto& request : requests) request->status = status; requests.clear(); }
 struct Slot {
-    explicit Slot(memory::ResourceHandle resource) : uses(memory::Allocator<Use>{resource}), objects(memory::Allocator<std::shared_ptr<ObjectState>>{resource}) {}
+    explicit Slot(memory::ResourceHandle resource) : uses(memory::Allocator<Use>{resource}), objects(memory::Allocator<std::shared_ptr<ObjectState>>{resource}),
+        requests(memory::Allocator<std::shared_ptr<ReadbackState>>{resource}) {}
     // Command buffer must be destroyed before its pool.
     vk::raii::CommandPool pool{nullptr};
     vk::raii::CommandBuffer command{nullptr};
     Vector<Use> uses;
     Vector<std::shared_ptr<ObjectState>> objects;
+    Vector<std::shared_ptr<ReadbackState>> requests;
     SlotPhase phase = SlotPhase::free;
     std::uint64_t value = 0;
 };
@@ -95,6 +106,7 @@ struct QueueState {
         for (auto& slot : slots) if (slot.phase == SlotPhase::pending && slot.value <= completed) {
             release_uses(slot.uses, false);
             slot.objects.clear();
+            complete_requests(slot.requests, ReadbackStatus::ready);
             slot.phase = SlotPhase::free;
         }
     }
@@ -103,6 +115,7 @@ struct QueueState {
         for (auto& slot : slots) if (slot.phase == SlotPhase::pending) {
             release_uses(slot.uses, false);
             slot.objects.clear();
+            complete_requests(slot.requests, ReadbackStatus::device_lost);
             slot.phase = SlotPhase::free;
         }
     }
@@ -116,17 +129,20 @@ struct QueueState {
             if (result != VK_SUCCESS && result != VK_ERROR_DEVICE_LOST) std::terminate();
             if (result == VK_ERROR_DEVICE_LOST) owner->lost = true;
         }
-        discard_lost(); // Safe after completion or terminal device loss; no fabricated completion value.
+        if (owner->lost) discard_lost();
+        else collect(submitted); // A successful wait/queue-idle confirmed completion above.
     }
 };
 struct BatchState {
     BatchState(std::shared_ptr<QueueState> queue_value, std::size_t index)
         : queue(std::move(queue_value)), slot(index), uses(memory::Allocator<Use>{queue->resource}),
-          objects(memory::Allocator<std::shared_ptr<ObjectState>>{queue->resource}) {}
+          objects(memory::Allocator<std::shared_ptr<ObjectState>>{queue->resource}),
+          requests(memory::Allocator<std::shared_ptr<ReadbackState>>{queue->resource}) {}
     std::shared_ptr<QueueState> queue;
     std::size_t slot;
     Vector<Use> uses;
     Vector<std::shared_ptr<ObjectState>> objects;
+    Vector<std::shared_ptr<ReadbackState>> requests;
     std::shared_ptr<EncoderState> encoding;
     std::uint64_t generation = 1;
     bool rendering = false, invalid = false;
@@ -134,6 +150,7 @@ struct BatchState {
     ~BatchState()
     {
         if (active) {
+            complete_requests(requests, queue->owner->lost ? ReadbackStatus::device_lost : ReadbackStatus::cancelled);
             release_uses(uses, true);
             queue->slots[slot].phase = SlotPhase::free;
         }

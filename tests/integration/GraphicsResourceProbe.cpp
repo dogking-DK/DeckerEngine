@@ -1,5 +1,6 @@
 #include <dk/graphics/Resources.hpp>
 #include <dk/graphics/CommandEncoder.hpp>
+#include <dk/graphics/Transfer.hpp>
 #include <dk/memory/MemorySystem.hpp>
 #include "SubmissionInternal.hpp"
 #include "ObjectInternal.hpp"
@@ -214,6 +215,77 @@ void subresource_commands(SubmissionQueue& owner)
         require(threw && !owner.submit(std::move(unsafe)),"throwing native recording remained submittable");
     }
 }
+void transfer_requests(memory::ResourceHandle resource, const DeviceOptions& options)
+{
+    ReadbackRequest survivor;
+    const std::array<std::uint32_t,16> data{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
+    {
+        auto owner = queue(resource,options,true);
+        auto gpu = buffer(owner,64,BufferMemory::device);
+        auto image = take(owner.create_image({8,8,vk::Format::eR8G8B8A8Unorm,
+            vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,2,2}));
+        std::array<std::uint32_t,64> base{};
+        for (std::uint32_t i = 0; i < base.size(); ++i) base[i] = 100+i;
+        std::array<std::uint32_t,22> pitched{};
+        for (std::uint32_t y = 0; y < 4; ++y) for (std::uint32_t x = 0; x < 4; ++x) pitched[y*6+x] = data[y*4+x];
+        auto batch = take(owner.begin());
+        check(batch.upload(gpu,std::as_bytes(std::span{data}).first(32)));
+        check(batch.upload(gpu,std::as_bytes(std::span{data}).subspan(32),32));
+        check(batch.upload(image,std::as_bytes(std::span{base}),{0,0,0,0,8,8}));
+        check(batch.upload(image,std::as_bytes(std::span{pitched}),{1,1,0,0,4,4,0,6}));
+        auto bytes = take(batch.readback(gpu));
+        auto subregion = take(batch.readback(image,{0,0,1,2,2,2}));
+        auto mip = take(batch.readback(image,{1,1,0,0,4,4}));
+        auto dropped = take(batch.readback(gpu));
+        dropped = {}; // Pending ownership must not depend on the user's request.
+        require(owner.stats().submitted == 0,"upload/readback submitted implicitly");
+        std::array<std::uint32_t,16> actual{};
+        actual.fill(0xccccccccu);
+        require(bytes.status() == ReadbackStatus::unsubmitted && !take(bytes.try_read(std::as_writable_bytes(std::span{actual}))) && actual[0] == 0xccccccccu,
+            "unsubmitted request returned bytes");
+        auto ticket = take(owner.submit(std::move(batch)));
+        require(owner.stats().submitted == 1 && bytes.status() == ReadbackStatus::pending,"batch did not bind requests at commit");
+        const auto pending_allocations = allocations(owner);
+        timeout_once = true;
+        require(!take(owner.wait(ticket,0)) && allocations(owner) == pending_allocations && !take(bytes.try_read(std::as_writable_bytes(std::span{actual}))),
+            "timeout completed/released a readback");
+        require(take(owner.wait(ticket)),"transfer batch wait failed");
+        require(bytes.status() == ReadbackStatus::ready && take(bytes.try_read(std::as_writable_bytes(std::span{actual}))) && actual == data,"batched buffer uploads mismatch");
+        require(take(mip.try_read(std::as_writable_bytes(std::span{actual}))) && actual == data,"pitched mip/layer upload mismatch");
+        std::array<std::uint32_t,4> cropped{};
+        require(subregion.description().row_pitch == 8 && take(subregion.try_read(std::as_writable_bytes(std::span{cropped}))),"subregion readback metadata failed");
+        require(cropped == std::array<std::uint32_t,4>{117,118,125,126},"subregion readback pixels mismatch");
+        ReadbackRequest cancelled;
+        {
+            auto abandoned = take(owner.begin());
+            cancelled = take(abandoned.readback(gpu));
+        }
+        require(cancelled.status() == ReadbackStatus::cancelled && !cancelled.try_read(std::as_writable_bytes(std::span{actual})),"abandoned readback remained live");
+        auto failed = take(owner.begin());
+        auto rejected = take(failed.readback(gpu));
+        submit_error = VK_ERROR_OUT_OF_HOST_MEMORY;
+        require(!owner.submit(std::move(failed)) && rejected.status() == ReadbackStatus::cancelled,"failed submit published readback completion");
+        auto last = take(owner.begin());
+        survivor = take(last.readback(gpu));
+        (void)take(owner.submit(std::move(last)));
+    }
+    std::array<std::uint32_t,16> actual{};
+    require(survivor.status() == ReadbackStatus::ready && take(survivor.try_read(std::as_writable_bytes(std::span{actual}))) && actual == data,
+        "queue destruction did not complete independent readback");
+    survivor = {};
+    {
+        auto owner = queue(resource,options,true);
+        auto gpu = buffer(owner,64,BufferMemory::device);
+        auto batch = take(owner.begin());
+        check(batch.upload(gpu,std::as_bytes(std::span{data})));
+        auto lost = take(batch.readback(gpu));
+        auto ticket = take(owner.submit(std::move(batch)));
+        owner.device().queue().waitIdle(); // Safely inject loss after real work has stopped.
+        wait_error = VK_ERROR_DEVICE_LOST;
+        require(!owner.wait(ticket) && lost.status() == ReadbackStatus::device_lost && !lost.try_read(std::as_writable_bytes(std::span{actual})),"lost request returned successful bytes");
+        require(!owner.close(),"lost queue close reported success");
+    }
+}
 void cross_queue(SubmissionQueue& first, SubmissionQueue& second)
 {
     auto source = buffer(first, 16, BufferMemory::upload);
@@ -342,15 +414,16 @@ void submit_without_cpu_allocation(memory::MemorySystem& system, const DeviceOpt
         std::array<std::byte, 16> data{}, actual{};
         data.fill(std::byte{0x37});
         auto upload = buffer(owner, data.size(), BufferMemory::upload);
-        auto readback = buffer(owner, data.size(), BufferMemory::readback);
+        auto gpu = buffer(owner, data.size(), BufferMemory::device);
         check(upload.write(0, data));
         auto batch = take(owner.begin());
-        check(batch.copy(upload, readback, data.size()));
+        check(batch.upload(gpu,data));
+        auto readback = take(batch.readback(gpu));
         // All engine ownership/list allocation must be done before native submit.
         resource.begin_close();
         auto ticket = take(owner.submit(std::move(batch)));
         require(take(owner.wait(ticket)), "closed CPU heap prevented safe submission commit");
-        check(readback.read(0, actual));
+        require(take(readback.try_read(actual)), "allocation-free request did not become ready");
         require(actual == data, "allocation-free commit roundtrip failed");
         check(owner.close());
     }
@@ -396,6 +469,7 @@ int main(int argc, char** argv)
         }
         late_lifetime(resource, options);
         object_factory(resource, options);
+        transfer_requests(resource, options);
         allocation_failure(system, options);
         submit_without_cpu_allocation(system, options);
         lost_device(resource, options);

@@ -1,7 +1,7 @@
 ---
 module: graphics-vulkan
 created_at: "2026-09-30T10:18:48+08:00"
-updated_at: "2026-10-02T20:54:00+08:00"
+updated_at: "2026-10-02T21:07:00+08:00"
 status: accepted
 ---
 
@@ -192,7 +192,8 @@ load/store 的 discard 会使相应内容标记失效，只有提交成功才发
 
 ## 上传、读回与调用示意
 
-`TransferBatch` 借用 CommandBatch，封装 staging Buffer 的分配、CPU 数据复制、区域 copy 和必要 prepare。
+`CommandBatch::upload/readback` 封装 staging Buffer 的分配、CPU 数据复制、区域 copy 和必要 prepare。
+直接放在批次上避免另一层借用对象及代次；多个传输仍使用同一个 CommandBatch。
 上传接受 byte span 与目标 buffer slice/image region；返回后输入 span 可释放，staging 进入批次保留列表。
 首版用独立 staging allocation，避免提前引入 ring buffer 的空间退休机制；后续可保持接口改为有界池。
 多次传输可合到一次 submit，不为每个 upload 隐式提交/等待。

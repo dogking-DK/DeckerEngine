@@ -36,6 +36,7 @@ class PipelineLayout;
 class ComputePipeline;
 class GraphicsPipeline;
 class BindingSet;
+class ReadbackRequest;
 struct ResourceUse;
 struct ResourceBarrier;
 struct RenderingDesc;
@@ -124,6 +125,10 @@ public:
     [[nodiscard]] Result<void> copy_to_buffer(const Image& source, const Buffer& destination, const ImageCopyRegion& region);
     [[nodiscard]] Result<void> fill(const Buffer& buffer, std::uint32_t value = 0);
     [[nodiscard]] Result<void> clear(const Image& image, const vk::ClearColorValue& color, const vk::ImageSubresourceRange& range);
+    [[nodiscard]] Result<void> upload(const Buffer& destination, std::span<const std::byte> bytes, vk::DeviceSize offset = 0);
+    [[nodiscard]] Result<void> upload(const Image& destination, std::span<const std::byte> bytes, const ImageCopyRegion& region);
+    [[nodiscard]] Result<ReadbackRequest> readback(const Buffer& source, vk::DeviceSize offset = 0, vk::DeviceSize size = VK_WHOLE_SIZE);
+    [[nodiscard]] Result<ReadbackRequest> readback(const Image& source, const ImageCopyRegion& region);
     using NativeRecorder = void (*)(const vk::raii::CommandBuffer&, void*);
     [[nodiscard]] Result<void> unsafe_record(std::span<const ResourceUse> before, std::span<const ResourceUse> after,
         NativeRecorder recorder, void* user_data = nullptr);

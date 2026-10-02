@@ -36,6 +36,7 @@ struct ShaderState : ObjectState {
     vk::raii::ShaderModule shader{nullptr};
 };
 struct ObjectAccess {
+    static ResourceFactory factory(const BatchState& batch) { return ResourceFactory{batch.queue}; }
     static const auto& state(const ImageView& value) { return value.state_; }
     static const auto& state(const Sampler& value) { return value.state_; }
     static const auto& state(const ShaderModule& value) { return value.state_; }

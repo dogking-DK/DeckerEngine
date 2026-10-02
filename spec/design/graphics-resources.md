@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-02T20:54:00+08:00"
+updated_at: "2026-10-02T21:07:00+08:00"
 status: accepted
 ---
 
@@ -23,7 +23,8 @@ M5.5.2 增加 Pipeline.hpp/Bindings.hpp：跨阶段布局合并、可复用 grap
 不可变 BindingSet，支持多个 set、固定数组、uniform/storage buffer、sampled/storage image 和 sampler。
 管线持有布局、绑定持有布局/池/资源；这些寿命引用不将 Buffer 标为 recording/pending 忙状态。
 M5.5.3 的 CommandEncoder.hpp 接入类型化绘制/计算、显式 prepare/barrier 和对象闭包保留。
-Buffer 按整对象、Image 按 mip/layer 跟踪阶段/访问/布局与内容有效性。传输便利层在后续小节接入。
+Buffer 按整对象、Image 按 mip/layer 跟踪阶段/访问/布局与内容有效性。
+Transfer.hpp 提供 ReadbackRequest，upload/readback 便利方法直接位于 CommandBatch。
 
 ## 接口与数据
 
@@ -66,6 +67,19 @@ unsafe_record(before,after,callback) 是原生互操作入口；对象用 retain
 submit(CommandBatch&&) 返回 Submission（弱 owner 身份和单调值）；poll() 查询完成并回收，
 wait(ticket, timeout_ns) 返回 bool（false 为超时），close() 等待并停止新录制。
 Stats 区分 recording/pending/free 槽、提交值、已完成值和 pending 保留资源引用数。
+
+upload 接受 buffer slice 或 color image region 与输入 byte span，返回前复制输入至独立 staging；
+输入内存可立即释放。多次 upload/readback 只录制到当前 batch，不隐式提交或等待。
+image upload 支持行步长及前缀 offset，要求输入字节数等于 footprint；image readback 返回紧密排列的区域，
+region 的 buffer_offset/row_length/image_height 必须为零，低层 copy 仍可指定目的步长。
+组合操作首条命令前的错误保留有效 batch；已发命令后的异常将 batch 标记 invalid，禁止提交。
+
+ReadbackRequest 为 move-only，description 返回大小/格式/区域尺寸/行字节数；status 为
+unsubmitted/pending/ready/cancelled/device_lost。try_read 在 unsubmitted/pending 返回 false 且不修改输出，
+cancelled/lost 返回错误；ready 时经 VMA invalidate 读取，输出 span 必须精确匹配大小。
+请求不持有 queue，只持有独立完成记录及 staging；queue 的 poll/wait/close 或正常析构更新完成状态。
+submit 失败或 batch 放弃时取消请求，成功时以预分配列表绑定 pending；用户丢弃请求不会取消 GPU 工作。
+queue 正常析构排空后，外部 request 仍可读；lost 是共享设备域终态，不返回成功数据。
 
 ## 所有权、提交点与失败
 

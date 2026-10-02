@@ -16,11 +16,11 @@ else()
     target_compile_options(dk_graphics_vma PRIVATE -w)
 endif()
 add_library(dk_graphics_device STATIC src/Device.cpp src/Selection.cpp src/Bootstrap.cpp src/Resources.cpp
-    src/GpuObjects.cpp src/Pipeline.cpp src/Bindings.cpp src/ResourceSync.cpp src/CommandTransfer.cpp src/CommandEncoder.cpp)
+    src/GpuObjects.cpp src/Pipeline.cpp src/Bindings.cpp src/ResourceSync.cpp src/CommandTransfer.cpp src/CommandEncoder.cpp src/Transfer.cpp)
 add_library(dk::graphics_device ALIAS dk_graphics_device)
 target_sources(dk_graphics_device PUBLIC FILE_SET HEADERS BASE_DIRS include FILES
     include/dk/graphics/Device.hpp include/dk/graphics/Resources.hpp include/dk/graphics/GpuObjects.hpp
-    include/dk/graphics/Pipeline.hpp include/dk/graphics/Bindings.hpp include/dk/graphics/CommandEncoder.hpp)
+    include/dk/graphics/Pipeline.hpp include/dk/graphics/Bindings.hpp include/dk/graphics/CommandEncoder.hpp include/dk/graphics/Transfer.hpp)
 target_compile_definitions(dk_graphics_device PUBLIC VK_NO_PROTOTYPES
     VULKAN_HPP_ENABLE_DYNAMIC_LOADER_TOOL=0 VULKAN_HPP_NO_DEFAULT_DISPATCHER)
 target_link_libraries(dk_graphics_device PUBLIC dk::core dk::memory dk::graphics_shader_types Vulkan::Headers GPUOpen::VulkanMemoryAllocator

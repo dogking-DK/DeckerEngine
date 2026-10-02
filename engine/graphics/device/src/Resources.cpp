@@ -293,6 +293,9 @@ Result<Submission> SubmissionQueue::submit(CommandBatch&& batch)
     static_assert(noexcept(slot.uses = std::move(recording->uses)));
     slot.uses = std::move(recording->uses);
     slot.objects = std::move(recording->objects);
+    static_assert(noexcept(slot.requests = std::move(recording->requests)));
+    slot.requests = std::move(recording->requests);
+    for (auto& request : slot.requests) request->status = ReadbackStatus::pending;
     for (auto& use : slot.uses) {
         std::copy(use.states.begin(), use.states.end(), use.resource->states.begin());
         use.resource->reserved = false;
