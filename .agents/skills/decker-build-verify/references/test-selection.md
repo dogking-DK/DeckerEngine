@@ -34,7 +34,7 @@
 | JSON-RPC、JSON Lines、任务 | dk_protocol_tests | `^dk\.protocol\.` |
 | Runtime 的 batch/stdio 进程行为 | dk_run | `^dk\.runtime\.` |
 | CLI 版本 | dk_run | `^dk\.bootstrap\.version$` |
-| GPU Graph 声明、句柄、内容覆盖与依赖循环（无需 GPU） | dk_graph_tests | `^dk\.graph\.` |
+| GPU Graph 声明、句柄、内容/循环、编译裁剪与生命周期（无需 GPU） | dk_graph_tests | `^dk\.graph\.` |
 | Vulkan 设备策略、缺失环境和失败清理（无需 GPU） | dk_device_tests | `^dk\.device\.unit\.` |
 | SDL3 窗口事件、尺寸与寿命（需桌面） | dk_platform_probe | `^dk\.platform\.windows$` |
 | Vulkan Surface、呈现选卡与窗口保活 | dk_present_device_probe | `^dk\.presentation\.device_validation$` |

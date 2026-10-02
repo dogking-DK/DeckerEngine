@@ -1,7 +1,7 @@
 ---
 module: graphics-graph
 created_at: "2026-10-02T23:00:00+08:00"
-updated_at: "2026-10-02T23:30:11+08:00"
+updated_at: "2026-10-03T07:24:14+08:00"
 status: accepted
 ---
 
@@ -9,9 +9,9 @@ status: accepted
 
 ## 目标与本次范围
 
-M6 用同一图组织上传、计算、绘制和读回。本次 M6.1 实现 CPU 声明与结构校验：
+M6 用同一图组织上传、计算、绘制和读回。M6.1 提供 CPU 声明与结构校验：
 transient/external buffer/image、Pass 访问与副作用、输出和显式依赖。
-不创建 GPU 对象，不录制、不提交，也不提供可执行计划；M6.2 才发布排序、裁剪和生命周期计划，
+本次 M6.2 发布 CPU 编译计划（依赖、排序、裁剪与逻辑生命周期），不创建 GPU 对象，不录制、不提交；
 M6.3 接入状态导入/导出及单队列执行，M6.4 迁移样例。阶段状态见 [Roadmap](../roadmap.md)。
 
 ## 模块边界和依赖方向
@@ -46,14 +46,62 @@ Graph 的 CPU 测试不初始化设备或 loader。
   `mark_output(resource)` 表示需要保留的完整资源，重复标记幂等。空图有效，纯副作用 Pass 有效。
 - 资源读写依赖按 Pass 声明顺序定义：RAW/WAR/WAW 保持该顺序，discard 写仍有 WAW/WAR；
   buffer 同步保守覆盖整个对象，与 M5 一致；image 按子资源相交，读读布局不同也产生依赖。
-  显式反向边不能颠倒已有资源依赖，否则形成循环。未来编译可重排没有依赖的 Pass。
+  显式反向边不能颠倒已有资源依赖，否则形成循环。编译可重排没有依赖的 Pass。
 - 全部读取或保留内容的部分写，必须有 external 初始内容或前序 full_overwrite 覆盖访问范围。
   full_overwrite 是调用者完整写入声明范围的保证，不能同时声明读访问。
   buffer 按字节区间、image 按 mip/layer 检查覆盖；多个写入可以合并覆盖，输出要求整个资源有效。
   不检查 shader 的实际写入，调用者必须兑现声明。
 - `validate()` 返回首个可定位 Error，包含资源/Pass 名字和索引；循环包含闭合 Pass 路径。
-  先检查内容，再检查资源边与显式边的合图。不缓存“有效”标记，未来 compile 必须重新验证。
+  先检查内容，再检查资源边与显式边的合图。不缓存“有效”标记，compile 始终重新验证完整声明，包括将被裁剪的 Pass。
   查询返回只读借用 view；任何图修改、移动赋值、reset 或销毁后不得再使用 view。
+
+## M6.2 编译计划
+
+`Graph::compile()` 返回 move-only `CompiledGraph`，整个流程仅使用 CPU 与创建图的 Memory 域。
+先验证完整图，再在临时候选中完成下列步骤；全部成功后才返回计划，失败不修改原图或先前计划。
+
+### 依赖与裁剪
+
+- 顺序约束复用 M6.1：显式边、RAW/WAR/WAW 及 image layout 转换；buffer 按整个对象，image 按相交子资源。
+  诊断 `Dependency` 包含 before/after 的 Pass 声明索引、kind，以及资源的计划索引（显式边无资源）。
+  多个原因独立保留，相同原因/资源/端点去重。
+- 内容依赖单独计算：对读取或保留内容的访问，按声明顺序逆向找到覆盖对应字节/mip/layer 的最近写入者。
+  完整覆盖写不依赖旧内容；保留写依赖旧内容并成为后续消费者的生产者。
+  导入且 initialized 的剩余范围由外部提供，没有对应 Pass 边；部分写或多子资源生产者可能有多条内容边。
+- 根为 side_effect Pass 和标记输出各部分的最终写入者。沿内容依赖与显式前驱保留闭包；
+  RAW/WAR/WAW/layout 的纯顺序边不单独强制前驱存活。
+  因此完整覆盖前的无用写可以裁剪，显式前置操作不能被意外删除。
+  external 的未标记写入也可裁剪；调用者需用 mark_output 或 side_effect 声明外部可观察效果。
+- 在保留 Pass 的诱导子图上排序，包含所有幸存的顺序、内容和显式边。
+  每次选声明索引最小的就绪 Pass，输出确定性拓扑顺序；无根图可裁为零 Pass。
+  即使死分支存在未初始化读取或循环，编译也拒绝，不能利用裁剪隐藏非法声明。
+
+### 数据、生命周期与分配
+
+- `CompiledGraph::passes()` 保留全部 Pass 的名字、副作用、归一化访问、retained 和可选 order_index；
+  `order()` 只含保留 Pass 的声明索引；`dependencies()` 只含两端均保留的边。
+- `resources()` 顺序固定为 buffer 声明序列后接 image 声明序列；`PlannedUse::resource` 和依赖/分配条目
+  使用此快照内的连续索引，不能作为另一计划或 Graph 的 ID。
+  资源条目复制名称、类型化描述、原同类型声明索引、lifetime/initialized/output、retained、
+  可选 first_use/last_use（均为 order 的位置）及 allocation_index。
+- retained 资源为保留 Pass 使用的资源或标记输出。external 只登记，不列入 transient 分配；
+  未使用的 initialized external 输出 retained=true、无 first/last_use，也不制造空 Pass。
+- 每个活跃 transient 资源有独立 `TransientAllocation`，不做 aliasing 或物理块复用。
+  create_before 为首次使用位置；普通资源 release_after 为末次使用位置。
+  标记输出的 release_after 为空，表示需要向结果所有者保留，不能在末次 Pass 后当作临时量丢弃。
+  分配条目按 create_before、资源索引排序。这里只规划逻辑生命周期；物理大小/对齐和显存类型仍由
+  M6.3 的 ResourceFactory/VMA 决定，GPU pending 保活仍由 M5 完成跟踪保障，不能按 CPU 位置提前销毁。
+- 名字、描述、访问和索引全部复制到计划；不保存原图 ID 或原图对象。
+  原图修改/reset/销毁不改变计划，原 Graph ID 仍按原规则失效；重复 compile 返回各自独立快照。
+  计划的只读 span/string_view 借用到计划被覆盖或销毁，Memory 关闭后仍允许读取已发布快照。
+  默认/移后 CompiledGraph 的 bool 为 false，所有只读列表为空；合法空图计划 bool 为 true。
+
+### 验证与限制
+
+覆盖真实 upload→compute→draw→readback 计划、确定性排序、死分支、旧写覆盖、显式前驱、WAR/WAW、
+子范围/部分保留/多 mip/layer 生产者、external 输出、生命周期、快照独立性、预算失败与关闭回收。
+复用 dk_graph_tests；本阶段不改 device 录制，默认不重复 GPU/窗口/全量回归。
+编译沿用成对依赖检查与区间分割，优先明确语义；不承诺大图性能。GPU barrier/执行仍属 M6.3。
 
 ## 生命周期、并发和错误处理
 
@@ -66,9 +114,9 @@ MSVC Debug 的 allocator-only 空容器构造及 string/vector move 可能在 no
 图使用可抛异常的零 count 构造，不移动包含这些容器的记录，使预算失败能到达 Result 边界。
 声明先校验并构建候选，再一次 append 发布。无效参数或可捕获分配失败不改变计数、内容、
 依赖、输出或已有句柄。reset 先创建空候选，再替换身份；失败保留原图。
-validate 只读，失败不修改图，不存在 GPU 状态提交点。本阶段没有执行回调或 GPU owner。
+validate/compile 只读，失败不修改图，不存在 GPU 状态提交点。本阶段没有执行回调或 GPU owner。
 
-## 实施步骤和验证计划
+## 声明层实施与验证依据（M6.1）
 
 1. 提取 M5 纯验证接口，建立可选 Graph target 与 CPU 测试入口。
 2. 实现声明、归一化、只读查询、输出、依赖、reset 和失败保护。
@@ -86,4 +134,4 @@ validate 只读，失败不修改图，不存在 GPU 状态提交点。本阶段
 ## 相关记录
 
 [架构](architecture.md)、[资源](graphics-resources.md)、[Vulkan 使用层](graphics-vulkan.md)、
-[0057 开发记录](../development/0057-graph-declarations.md)。
+[0057 声明记录](../development/0057-graph-declarations.md)、[0058 编译记录](../development/0058-graph-compilation.md)。

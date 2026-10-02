@@ -1,57 +1,12 @@
-#include <dk/graphics/Graph.hpp>
-#include <dk/memory/Containers.hpp>
-#include <dk/memory/SmartPtr.hpp>
+#include "GraphInternal.hpp"
 #include <algorithm>
 #include <new>
 
 namespace dk::graphics::graph {
-namespace detail {
-struct HandleAccess {
-    template<class Tag> static Id<Tag> make(const std::shared_ptr<GraphState>& state, std::size_t index) {
-        Id<Tag> id; id.owner_ = state; id.index_ = index; return id;
-    }
-    template<class Tag> static bool belongs(const Id<Tag>& id, const std::shared_ptr<GraphState>& state) {
-        return id.owner_.lock() == state;
-    }
-    template<class Tag> static std::size_t index(const Id<Tag>& id) { return id.index_; }
-};
-template<class Desc> struct Resource {
-    Resource(memory::ResourceHandle heap, std::string_view label, const Desc& desc, Lifetime life, bool contents)
-        : name(label, memory::Allocator<char>{heap}), description(desc), lifetime(life), initialized(contents) {}
-    String name;
-    Desc description;
-    Lifetime lifetime;
-    bool initialized;
-};
-struct Pass {
-    Pass(memory::ResourceHandle heap, const PassDesc& desc)
-        : name(desc.name, memory::Allocator<char>{heap}), uses(0, memory::Allocator<Use>{heap}), side_effect(desc.side_effect) {}
-    String name;
-    Vector<Use> uses;
-    bool side_effect;
-};
-struct Edge {
-    std::size_t before, after;
-    bool operator==(const Edge&) const = default;
-};
-struct GraphState {
-    explicit GraphState(memory::ResourceHandle heap)
-        : resource(heap), buffers(0, memory::Allocator<memory::UniquePtr<Resource<BufferDesc>>>{heap}),
-          images(0, memory::Allocator<memory::UniquePtr<Resource<ImageDesc>>>{heap}),
-          passes(0, memory::Allocator<memory::UniquePtr<Pass>>{heap}),
-          dependencies(0, memory::Allocator<Edge>{heap}), outputs(0, memory::Allocator<ResourceId>{heap}) {}
-    memory::ResourceHandle resource;
-    Vector<memory::UniquePtr<Resource<BufferDesc>>> buffers;
-    Vector<memory::UniquePtr<Resource<ImageDesc>>> images;
-    Vector<memory::UniquePtr<Pass>> passes;
-    Vector<Edge> dependencies;
-    Vector<ResourceId> outputs;
-};
-} // namespace detail
+
 namespace {
 using detail::GraphState;
 using detail::HandleAccess;
-using detail::Edge;
 Error invalid(std::string message) { return {ErrorCode::invalid_argument, std::move(message)}; }
 Error allocation_failure() { return {ErrorCode::internal_error, "graph allocation failed; declaration unchanged"}; }
 Result<void> ready(const std::shared_ptr<GraphState>& state) {
@@ -153,7 +108,7 @@ Use whole_resource(const ResourceId& resource, const GraphState& state) {
     }
     return use;
 }
-Result<void> acyclic(const GraphState& state, std::span<const Edge> edges) {
+Result<void> acyclic(const GraphState& state, std::span<const Dependency> edges) {
     struct Visit { std::size_t node, next_edge; };
     Vector<unsigned char> color(state.passes.size(), 0, memory::Allocator<unsigned char>{state.resource});
     Vector<Visit> stack(0, memory::Allocator<Visit>{state.resource});
@@ -227,7 +182,7 @@ Result<void> Graph::add_dependency(PassId before, PassId after) try {
     if (!a) return std::unexpected(a.error());
     if (!b) return std::unexpected(b.error());
     if (*a == *b) return std::unexpected(invalid("self dependency: " + pass_context(*state_, *a)));
-    const Edge edge{*a, *b};
+    const detail::Edge edge{*a, *b};
     if (std::ranges::find(state_->dependencies, edge) == state_->dependencies.end()) state_->dependencies.push_back(edge);
     return {};
 } catch (const std::bad_alloc&) { return std::unexpected(allocation_failure()); }
@@ -237,7 +192,7 @@ Result<void> Graph::remove_dependency(PassId before, PassId after) {
     const auto a = index_of(before, state_, state_->passes.size()), b = index_of(after, state_, state_->passes.size());
     if (!a) return std::unexpected(a.error());
     if (!b) return std::unexpected(b.error());
-    std::erase(state_->dependencies, Edge{*a, *b});
+    std::erase(state_->dependencies, detail::Edge{*a, *b});
     return {};
 }
 Result<void> Graph::mark_output(ResourceId resource) try {
@@ -279,36 +234,52 @@ Result<void> Graph::reset() {
     state_.swap(candidate->state_);
     return {};
 }
-Result<void> Graph::validate() const try {
-    if (auto valid = ready(state_); !valid) return valid;
-    Vector<const Use*> writes(0, memory::Allocator<const Use*>{state_->resource});
-    for (std::size_t i = 0; i < state_->passes.size(); ++i) {
-        const auto& pass = *state_->passes[i];
+Result<void> detail::analyze(const std::shared_ptr<GraphState>& state, Vector<Dependency>& edges) {
+    if (auto valid = ready(state); !valid) return valid;
+    Vector<const Use*> writes(0, memory::Allocator<const Use*>{state->resource});
+    for (std::size_t i = 0; i < state->passes.size(); ++i) {
+        const auto& pass = *state->passes[i];
         for (const auto& use : pass.uses) {
-            if (!use.access.full_overwrite && !initialized(use, writes, *state_))
+            if (!use.access.full_overwrite && !initialized(use, writes, *state))
                 return std::unexpected(invalid("read or preserved write requires initialized contents")
-                    .with_context(resource_context(use.resource, *state_)).with_context(pass_context(*state_, i)));
+                    .with_context(resource_context(use.resource, *state)).with_context(pass_context(*state, i)));
         }
         for (const auto& use : pass.uses) if (use.access.full_overwrite) writes.push_back(&use);
     }
-    for (const auto& output : state_->outputs) {
-        if (!initialized(whole_resource(output, *state_), writes, *state_))
-            return std::unexpected(invalid("graph output is not fully initialized").with_context(resource_context(output, *state_)));
+    for (const auto& output : state->outputs) {
+        if (!initialized(whole_resource(output, *state), writes, *state))
+            return std::unexpected(invalid("graph output is not fully initialized").with_context(resource_context(output, *state)));
     }
-    auto edges = state_->dependencies;
-    for (std::size_t before = 0; before < state_->passes.size(); ++before) {
-        for (std::size_t after = before + 1; after < state_->passes.size(); ++after) {
-            bool hazard = false;
-            for (const auto& a : state_->passes[before]->uses) {
-                for (const auto& b : state_->passes[after]->uses) {
-                    if (overlaps(a, b) && (access_writes(a.access.state.access) || access_writes(b.access.state.access) ||
-                        a.access.state.layout != b.access.state.layout)) { hazard = true; break; }
+    for (const auto& edge : state->dependencies)
+        append_dependency(edges, {edge.before, edge.after, DependencyKind::explicit_order, {}});
+    for (std::size_t before = 0; before < state->passes.size(); ++before) {
+        for (std::size_t after = before + 1; after < state->passes.size(); ++after) {
+            for (const auto& a : state->passes[before]->uses) {
+                for (const auto& b : state->passes[after]->uses) {
+                    if (!overlaps(a, b)) continue;
+                    const auto resource = resource_number(a.resource, *state);
+                    const auto add = [&](DependencyKind kind) { append_dependency(edges, {before, after, kind, resource}); };
+                    if (access_writes(a.access.state.access) && access_reads(b.access.state.access)) add(DependencyKind::read_after_write);
+                    if (access_reads(a.access.state.access) && access_writes(b.access.state.access)) add(DependencyKind::write_after_read);
+                    if (access_writes(a.access.state.access) && access_writes(b.access.state.access)) add(DependencyKind::write_after_write);
+                    if (a.access.state.layout != b.access.state.layout) add(DependencyKind::layout_transition);
                 }
-                if (hazard) break;
             }
-            if (hazard && std::ranges::find(edges, Edge{before, after}) == edges.end()) edges.push_back({before, after});
         }
     }
-    return acyclic(*state_, edges);
+    return acyclic(*state, edges);
+}
+void detail::append_dependency(Vector<Dependency>& dependencies, const Dependency& dependency) {
+    if (std::ranges::find(dependencies, dependency) == dependencies.end()) dependencies.push_back(dependency);
+}
+std::size_t detail::resource_number(const ResourceId& id, const GraphState& state) {
+    if (const auto* buffer = std::get_if<BufferId>(&id)) return HandleAccess::index(*buffer);
+    return state.buffers.size() + HandleAccess::index(std::get<ImageId>(id));
+}
+Use detail::complete_use(const ResourceId& id, const GraphState& state) { return whole_resource(id, state); }
+Result<void> Graph::validate() const try {
+    if (auto valid = ready(state_); !valid) return valid;
+    Vector<Dependency> dependencies(0, memory::Allocator<Dependency>{state_->resource});
+    return detail::analyze(state_, dependencies);
 } catch (const std::bad_alloc&) { return std::unexpected(allocation_failure()); }
 } // namespace dk::graphics::graph

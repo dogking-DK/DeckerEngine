@@ -12,7 +12,7 @@ dk_target_defaults(dk_core_tests)
 
 include(Catch)
 if(DK_BUILD_GRAPHICS_GRAPH)
-    add_executable(dk_graph_tests GraphTests.cpp)
+    add_executable(dk_graph_tests GraphTests.cpp GraphCompileTests.cpp)
     target_link_libraries(dk_graph_tests PRIVATE dk::graphics_graph Catch2::Catch2WithMain)
     dk_target_defaults(dk_graph_tests)
     catch_discover_tests(dk_graph_tests TEST_PREFIX "dk.graph."
