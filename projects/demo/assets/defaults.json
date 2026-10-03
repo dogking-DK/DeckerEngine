@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "name": "Sponza",
+  "gltf_scene": "gltf/Sponza/glTF/Sponza.gltf",
+  "environment_hdr": "hdr/citrus_orchard_road_puresky_4k.hdr",
+  "skybox": {
+    "directory": "skybox/sky_clouds_12_cubemap_(roblox)_2k",
+    "source_layout": "roblox",
+    "faces": {
+      "px": "skybox/sky_clouds_12_cubemap_(roblox)_2k/px.png",
+      "nx": "skybox/sky_clouds_12_cubemap_(roblox)_2k/nx.png",
+      "py": "skybox/sky_clouds_12_cubemap_(roblox)_2k/py.png",
+      "ny": "skybox/sky_clouds_12_cubemap_(roblox)_2k/ny.png",
+      "pz": "skybox/sky_clouds_12_cubemap_(roblox)_2k/pz.png",
+      "nz": "skybox/sky_clouds_12_cubemap_(roblox)_2k/nz.png"
+    },
+    "layout_preview": "skybox/sky_clouds_12_cubemap_(roblox)_2k/cubemap_layout.png"
+  }
+}

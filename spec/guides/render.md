@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-03T15:28:09+08:00"
-updated_at: "2026-10-03T16:54:00+08:00"
+updated_at: "2026-10-03T17:07:43+08:00"
 ---
 
 # 场景数据、GPU 资源与离屏渲染
@@ -95,3 +95,12 @@ settings.capture_plan=true 时 plan_text() 返回五个 Pass 的图计划。
 探针在 build/tests/integration 中输出 render-pipeline-validation.ppm 和同名 .txt 图计划，
 覆盖重叠几何、相机/实例、曝光、不同尺寸与空场景，以及对象/提交/预算失败和在途释放。
 设计见 [render-pipeline](../design/render-pipeline.md)，阶段记录见 [0062](../development/0062-render-pipeline.md)。
+
+## 默认磁盘测试素材
+
+默认输入集中在 [projects/demo/assets](../../projects/demo/assets/README.md)，
+[defaults.json](../../projects/demo/assets/defaults.json) 指定 Sponza glTF、
+Citrus Orchard Road HDR 和 sky_clouds_12 六面天空盒，路径均相对于 assets 目录。
+原始素材为本地副本，Git 保存清单与来源说明；新 checkout 需按说明准备。
+这份清单用于后续磁盘场景集成，不是引擎 Scene/Project 文件；当前管线尚未自动读取它，
+也未接入 HDR 环境采样和天空盒绘制。

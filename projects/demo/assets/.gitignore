@@ -1,0 +1,4 @@
+# Local test payloads; keep paths and provenance in version control.
+/gltf/
+/hdr/
+/skybox/
