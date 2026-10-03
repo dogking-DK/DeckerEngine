@@ -5,6 +5,11 @@
 #include <dk/operations/AssetOperations.hpp>
 #endif
 
+#ifdef DK_RUNTIME_CAPTURE
+#include <dk/operations/RenderOperations.hpp>
+#include <dk/operations/JobOperations.hpp>
+#endif
+
 namespace dk
 {
 namespace
@@ -38,8 +43,24 @@ Result<std::unique_ptr<Runtime>> Runtime::create(const std::filesystem::path &ro
     auto assets = AsyncAssetService::create(root, [events = runtime->events_] { events->notify(); });
     if (!assets) return std::unexpected(assets.error());
     runtime->assets_ = std::move(*assets);
-    auto asset_commands = register_asset_commands(runtime->commands_, *runtime->assets_);
+    auto asset_commands = register_asset_commands(runtime->commands_, *runtime->assets_
+#ifdef DK_RUNTIME_CAPTURE
+        ,false
+#endif
+        );
     if (!asset_commands) return std::unexpected(asset_commands.error());
+#endif
+#ifdef DK_RUNTIME_CAPTURE
+    auto capture = CaptureService::create(DK_CAPTURE_SHADER_DIR,[events=runtime->events_] { events->notify(); });
+    if (!capture) return std::unexpected(capture.error());
+    runtime->captures_=std::move(*capture);
+    auto rendering=register_render_commands(runtime->commands_,*runtime->captures_,*runtime->service_);
+    if (!rendering) return std::unexpected(rendering.error());
+    rendering=register_job_commands(runtime->commands_,{
+        [r=runtime.get()](JobId id) { return r->job(id); },
+        [r=runtime.get()](JobId id,std::chrono::milliseconds timeout) { return r->wait_job(id,timeout); },
+        [r=runtime.get()](JobId id) { return r->cancel_job(id); }},render_job_result_schema());
+    if (!rendering) return std::unexpected(rendering.error());
 #endif
     auto registered = register_scene_commands(runtime->commands_, *runtime->service_);
     if (!registered)
@@ -52,11 +73,15 @@ Result<std::unique_ptr<Runtime>> Runtime::create(const std::filesystem::path &ro
 }
 Result<void> Runtime::register_runtime_commands()
 {
-    auto r = commands_.add({"runtime.capabilities", "Describe synchronous CPU runtime capabilities",
+    auto r = commands_.add({"runtime.capabilities", "Describe enabled runtime capabilities",
                             schema::object(),
                             schema::object({{"protocol", schema::string()},
                                             {"async_tasks", schema::boolean()},
                                             {"async_jobs", schema::boolean()},
+                                            {"render_capture",schema::boolean()},
+                                            {"capture_limits",schema::nullable(schema::object({{"queued",schema::integer()},
+                                                {"active",schema::integer()},{"terminal",schema::integer()},{"input_bytes",schema::integer()},
+                                                {"max_dimension",schema::integer()}},{"queued","active","terminal","input_bytes","max_dimension"}))},
                                             {"job_limits", schema::nullable(schema::object({{"queued",schema::integer()},
                                                 {"active",schema::integer()},{"terminal",schema::integer()},
                                                 {"input_bytes",schema::integer()}},{"queued","active","terminal","input_bytes"}))},
@@ -65,7 +90,7 @@ Result<void> Runtime::register_runtime_commands()
                                             {"max_batch_requests", schema::integer()},
                                             {"transactions", schema::boolean()},
                                             {"guard", schema::string()}},
-                                           {"protocol", "async_tasks", "async_jobs", "job_limits", "task_retention", "max_line_bytes",
+                                           {"protocol", "async_tasks", "async_jobs", "render_capture", "capture_limits", "job_limits", "task_retention", "max_line_bytes",
                                             "max_batch_requests", "transactions", "guard"})},
                            [this](const Json &) -> Result<Json>
                            {
@@ -78,6 +103,13 @@ Result<void> Runtime::register_runtime_commands()
                                const auto limits = assets_->limits(); value["async_jobs"] = true;
                                value["job_limits"] = {{"queued",limits.queued},{"active",limits.active},
                                    {"terminal",limits.terminal},{"input_bytes",limits.input_bytes}};
+#endif
+                               value["render_capture"]=false; value["capture_limits"]=nullptr;
+#ifdef DK_RUNTIME_CAPTURE
+                               const auto capture_limits=captures_->limits();
+                               value["async_jobs"]=true; value["render_capture"]=true;
+                               value["capture_limits"]={{"queued",capture_limits.queued},{"active",capture_limits.active},
+                                   {"terminal",capture_limits.terminal},{"input_bytes",capture_limits.input_bytes},{"max_dimension",2048}};
 #endif
                                return value;
                            });
@@ -126,6 +158,9 @@ bool Runtime::has_command(std::string_view method) const
     return commands_.describe(method).has_value();
 }
 void Runtime::pump() {
+#ifdef DK_RUNTIME_CAPTURE
+    if (!stopping_) captures_->pump();
+#endif
 #ifdef DK_RUNTIME_ASSETS
     if (!stopping_) assets_->pump();
 #endif
@@ -197,6 +232,9 @@ Result<CommandExecution> Runtime::dispatch(std::string_view method, const Json &
         if (!sync) result = std::unexpected(sync.error());
     }
 #endif
+#ifdef DK_RUNTIME_CAPTURE
+    captures_->rethrow_failure();
+#endif
     task.succeeded = result.has_value();
     if (!result)
         task.error_code = result.error().code;
@@ -208,3 +246,33 @@ Result<CommandExecution> Runtime::dispatch(std::string_view method, const Json &
     return CommandExecution{*id, std::move(result)};
 }
 } // namespace dk
+
+#ifdef DK_RUNTIME_CAPTURE
+namespace dk {
+Result<JobSnapshot> Runtime::job(JobId id) const {
+    auto value=captures_->job(id);
+#ifdef DK_RUNTIME_ASSETS
+    if (!value && value.error().code==ErrorCode::not_found) return assets_->job(id);
+#endif
+    return value;
+}
+Result<JobCancel> Runtime::cancel_job(JobId id) {
+    auto value=captures_->cancel(id);
+#ifdef DK_RUNTIME_ASSETS
+    if (!value && value.error().code==ErrorCode::not_found) return assets_->cancel(id);
+#endif
+    return value;
+}
+Result<JobWait> Runtime::wait_job(JobId id,std::chrono::milliseconds timeout) {
+    if (timeout.count()<0 || timeout.count()>1000) return std::unexpected(Error{ErrorCode::invalid_argument,"timeout_ms must be 0..1000"});
+    const auto deadline=JobQueue::Clock::now()+timeout;
+    for (;;) {
+        const auto sequence=events_->sequence(); pump();
+        auto value=job(id); if (!value) return std::unexpected(value.error());
+        if (terminal(value->state)) return JobWait{std::move(*value),false};
+        if (JobQueue::Clock::now()>=deadline) return JobWait{std::move(*value),true};
+        events_->wait(sequence,deadline);
+    }
+}
+}
+#endif

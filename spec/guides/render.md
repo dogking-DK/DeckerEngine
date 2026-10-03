@@ -1,11 +1,11 @@
 ---
 created_at: "2026-10-03T15:28:09+08:00"
-updated_at: "2026-10-03T17:31:34+08:00"
+updated_at: "2026-10-03T21:44:26+08:00"
 ---
 
 # 场景数据、GPU 资源与离屏渲染
 
-[返回项目入口](../../README.md)。本页对应 M7.1–3；capture 任务和 Runtime 自动化将在 M7.4 接入。
+[返回项目入口](../../README.md)。本页对应 M7 场景渲染和 Runtime 截图自动化。
 
 ## 配置与验证
 
@@ -13,7 +13,8 @@ updated_at: "2026-10-03T17:31:34+08:00"
 `DK_BUILD_RENDER_RESOURCES` 构建 `dk::render_resources`（asset_data/Device/Graph）。
 `DK_BUILD_RENDER_PIPELINE` 构建 `dk::render_pipeline`，要求前两者、Graph 和 Shaders。
 `DK_BUILD_RENDER_DISK` 构建 `dk::render_disk`，要求 Render Data/Resources、Asset Importers/Runtime。
-四个选项默认 OFF，windows-graphics 启用；CPU Runtime 不链接渲染模块。
+`DK_BUILD_RENDER_CAPTURE` 构建可选的截图服务/操作并接入 Runtime，要求 Framework、Scene、Jobs、Render Disk/Pipeline。
+五个选项默认 OFF，windows-graphics 启用；windows-dev 的 CPU-only Runtime 不链接渲染模块。
 
 ```powershell
 cmake --preset windows-graphics
@@ -137,5 +138,33 @@ Sponza 测试带 local-assets 标签，缺少本机素材时明确跳过（77）
 也接受三个位置参数 `PROJECT_ROOT MANIFEST OUTPUT.ppm`（路径支持 Unicode）；示例使用固定 Sponza 相机，
 通用库调用者通过 ViewDescription 自行配置相机。输出父目录须存在，PPM 文件在完成读回后原子写入。
 
-这一步提供库和独立示例；尚无 Runtime capture 命令、后台加载或 HDR/天空盒着色。
+上述库之外，Runtime 截图入口见下节；HDR/天空盒着色仍未接入。
 设计与验收见 [render-disk](../design/render-disk.md)、[0063](../development/0063-render-disk.md)。
+
+## Runtime 截图自动化
+
+构建 windows-graphics 的 dk_run 后运行（PowerShell 7）：
+
+```powershell
+cmake --build out/build/windows-graphics --config Debug --target dk_run
+./examples/render/capture.ps1 -RequireValidation
+```
+
+脚本通过 stdio 执行 scene.load → render.capture → jobs.wait → runtime.shutdown，
+自动使用实际 guard/JobId，输出默认工程下 captures/sponza.ppm（生成目录被 Git 忽略）。
+可指定 -Runner、-ProjectRoot、-Manifest、-Output、-Width、-Height；其他相机用直接命令配置。
+源素材准备见 [默认素材](../../projects/demo/assets/README.md)，本机 AMD 层处理见 [Graphics 指南](graphics.md)。
+
+render.capture 固定活动内存 Scene 版本，支持未保存编辑，成功结果携带 scene_id/revision/frame。
+示例只是单次捕获；重复编辑/截图及取消可通过相同 stdio 连接完成。
+EOF 会取消未发布任务，因此自动化客户端应先等待 succeeded 再关闭输入。
+输出目前为 PPM；PNG 转换不属于 Runtime 命令能力。
+
+```powershell
+& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Target dk_run `
+    -TestRegex '^dk\.runtime\.capture_gpu_validation$' -Reason 'Capture automation delivery B'
+```
+
+进程测试使用仓库内小夹具，校验原图/冻结快照完全相同、新变换图像不同、空闲发布、
+导入与原子替换失败保护、取消、EOF/shutdown；不需要本地 Sponza 文件。
+完整字段见 [截图命令](../commands/render.md)，状态和限制见 [设计](../design/render-capture.md)。

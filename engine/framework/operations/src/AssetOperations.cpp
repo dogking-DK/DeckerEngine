@@ -1,5 +1,6 @@
 #include <dk/operations/AssetOperations.hpp>
 #include <algorithm>
+#include <dk/operations/JobOperations.hpp>
 
 namespace dk {
 namespace {
@@ -12,14 +13,6 @@ Json error_schema() { return schema::nullable(schema::object({{"code",integer()}
 Json error_json(const std::optional<Error>& error) { return error ? Json{{"code",static_cast<unsigned>(error->code)},
     {"message",error->message},{"context",error->context}} : Json(nullptr); }
 Json result_schema() { return schema::object({{"root_id",uuid()},{"key",schema::string(32,32)},{"cache_hit",schema::boolean()}},{"root_id","key","cache_hit"}); }
-Json job_schema() { return schema::object({{"id",uuid()},{"state",{{"type","string"},{"enum",{"queued","running","succeeded","failed","cancelled"}}}},
-    {"cancel_requested",schema::boolean()},{"result",schema::nullable(result_schema())},{"error",error_schema()}},
-    {"id","state","cancel_requested","result","error"}); }
-Json job_json(const JobSnapshot& job) {
-    constexpr const char* states[] = {"queued","running","succeeded","failed","cancelled"};
-    return {{"id",job.id.to_string()},{"state",states[static_cast<unsigned>(job.state)]},{"cancel_requested",job.cancel_requested},
-        {"result",job.summary.empty() ? Json(nullptr) : Json::parse(job.summary)},{"error",error_json(job.error)}};
-}
 Json kind_schema() { return {{"type","string"},{"enum",{"mesh","material","texture"}}}; }
 Json asset_schema() { return schema::object({{"id",uuid()},{"kind",kind_schema()},
     {"state",{{"type","string"},{"enum",{"unloaded","loading","ready","failed"}}}}, {"generation",integer()},
@@ -50,7 +43,7 @@ Result<Json> catalog_state(const AsyncAssetService& service) {
 }
 }
 Json catalog_guard_json(CatalogGuard guard) { return {{"session_id",guard.session_id.to_string()},{"revision",guard.revision}}; }
-Result<void> register_asset_commands(CommandRegistry& registry, AsyncAssetService& service) {
+Result<void> register_asset_commands(CommandRegistry& registry, AsyncAssetService& service, bool with_jobs) {
     auto add = [&](std::string name, std::string description, Json params, Json result, CommandEffect effect, CommandHandler handler) {
         return registry.add({std::move(name),std::move(description),std::move(params),std::move(result),effect,false},std::move(handler));
     };
@@ -115,24 +108,10 @@ Result<void> register_asset_commands(CommandRegistry& registry, AsyncAssetServic
                 if (!result) return std::unexpected(result.error()); return asset_json(*result,service);
             }); if (!r) return r;
     }
-    r = add("jobs.get","Query a retained background JobId",schema::object({{"id",uuid()}},{"id"}),job_schema(),CommandEffect::query,
-        [&service](const Json& p) -> Result<Json> {
-            auto job = id<JobId>(p["id"]); if (!job) return std::unexpected(job.error()); auto result = service.job(*job);
-            if (!result) return std::unexpected(result.error()); return job_json(*result);
-        }); if (!r) return r;
-    r = add("jobs.wait","Pump completions and wait at most 1000 ms without command reentry",
-        schema::object({{"id",uuid()},{"timeout_ms",integer(1000)}},{"id"}),
-        schema::object({{"job",job_schema()},{"timed_out",schema::boolean()}},{"job","timed_out"}),CommandEffect::query,
-        [&service](const Json& p) -> Result<Json> {
-            auto job = id<JobId>(p["id"]); if (!job) return std::unexpected(job.error());
-            auto result = service.wait(*job,std::chrono::milliseconds{p.value("timeout_ms",0)});
-            if (!result) return std::unexpected(result.error()); return Json{{"job",job_json(result->job)},{"timed_out",result->timed_out}};
-        }); if (!r) return r;
-    return add("jobs.cancel","Request cooperative cancellation before publication",schema::object({{"id",uuid()}},{"id"}),
-        schema::object({{"job",job_schema()},{"accepted",schema::boolean()}},{"job","accepted"}),CommandEffect::control,
-        [&service](const Json& p) -> Result<Json> {
-            auto job = id<JobId>(p["id"]); if (!job) return std::unexpected(job.error()); auto result = service.cancel(*job);
-            if (!result) return std::unexpected(result.error()); return Json{{"job",job_json(result->job)},{"accepted",result->accepted}};
-        });
+    if (!with_jobs) return {};
+    return register_job_commands(registry,{
+        [&service](JobId id) { return service.job(id); },
+        [&service](JobId id,std::chrono::milliseconds timeout) { return service.wait(id,timeout); },
+        [&service](JobId id) { return service.cancel(id); }},result_schema());
 }
 }

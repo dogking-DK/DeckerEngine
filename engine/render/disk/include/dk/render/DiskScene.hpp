@@ -10,6 +10,7 @@ struct DiskSceneOptions {
     GltfImportProfile profile = GltfImportProfile::strict;
     std::size_t max_assets = 64;
     std::size_t cpu_bytes = 512U * 1024U * 1024U;
+    std::stop_token stop;
 };
 // Read-only CPU candidate. Requires a bound ThreadContext with scratch.
 // No meta/cache/project writes; loading again never mutates an existing candidate.
@@ -18,6 +19,7 @@ public:
     DiskScene() = default;
     [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
     [[nodiscard]] static Result<DiskScene> load(memory::ResourceHandle, const Project&, const DiskSceneOptions& = {});
+    [[nodiscard]] static Result<DiskScene> load_snapshot(memory::ResourceHandle, const Project&, const SceneSnapshot&, const DiskSceneOptions& = {});
     [[nodiscard]] RenderScene scene() const noexcept;
     [[nodiscard]] std::span<const std::shared_ptr<const CpuAsset>> assets() const noexcept;
     // Fresh cache; uploads and waits each package. Earlier GPU submissions cannot be undone

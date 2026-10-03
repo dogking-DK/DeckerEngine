@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-03T17:31:34+08:00"
+updated_at: "2026-10-03T21:44:26+08:00"
 status: accepted
 ---
 
@@ -17,8 +17,8 @@ status: accepted
 技术方向：C++23、Eigen、Vulkan、Slang、SDL3、ImGui、CMake、vcpkg；
 ECS 使用 flecs，内嵌脚本计划用 Lua/sol2，外部自动化计划用 Python。
 当前 CPU 链路由 Foundation/Memory/Jobs、Scene、Commands/Services/Runtime 和 Assets 组成。
-graphics/device 提供独立可选的无窗口 Vulkan 设备、VMA 资源、提交/读回与延迟释放，不进入 CPU Runtime 的链接依赖；
-graphics/shaders 提供独立 CPU Slang 编译、SPIR-V 和最小反射，同样不进入 CPU Runtime 的链接依赖。
+graphics/device 提供独立可选的无窗口 Vulkan 设备、VMA 资源、提交/读回与延迟释放，不进入 CPU-only Runtime 的链接依赖；
+graphics/shaders 提供独立 CPU Slang 编译、SPIR-V 和最小反射，同样不进入 CPU-only Runtime 的链接依赖。
 graphics/offscreen 组合 Device、Shaders 与 Graph，提供同步离屏 draw/dispatch/readback 验证入口，同样独立于 CPU Runtime。
 platform 提供 SDL3 窗口/事件，graphics/presentation 提供独立可选的窗口设备、交换链及帧恢复，
 复用 graphics/device 使用层；两者不进入 CPU Runtime 或 Offscreen 依赖。Graph 提供独立可选的 CPU 资源/Pass 声明、校验、依赖编译、裁剪、资源生命周期计划、单队列同步执行及计划/同步诊断。具体边界见[设备设计](graphics-device.md)、[资源设计](graphics-resources.md)、
@@ -30,7 +30,7 @@ platform 提供 SDL3 窗口/事件，graphics/presentation 提供独立可选的
 Runtime 装配 Assets/Jobs heap 与线程上下文；worker 捕获拥有型路由并在安全点退休。
 render/data 已提供不可变 SceneSnapshot 提取和显式相机 View，render/resources 通过 Graph 上传 CpuAsset，
 管理 GpuMesh/纹理/材质快照、提交后缓存发布和在途卸载，见 [Render 数据](render-data.md) 与
-[GPU 资源](render-resources.md)。两者均为独立可选模块，不进入 CPU Runtime。
+[GPU 资源](render-resources.md)。两者均为独立可选模块，不进入 CPU-only Runtime。
 render/pipeline 通过 Graph 执行 depth/opaque/tone/readback，提供绑定场景版本的异步离屏帧，
 见 [最小渲染管线](render-pipeline.md)。render/disk 只读连接 M2 工程/场景、M4 导入或 CPU 产物，
 准备独立 GPU 缓存，见 [磁盘渲染](render-disk.md)。编辑器、截图任务和脚本按后续阶段接入。
@@ -120,3 +120,8 @@ Memory/Tracy 补充 → 资产加载/导入 → Vulkan Device/Shader → GPU Gra
 - [0004 Eigen 与小阶段划分](../development/0004-eigen-math-foundation.md)
 - [0005 Transform](../development/0005-transform.md)
 - [0001 工程初始化](../development/0001-project-bootstrap.md)
+
+## M7.4 截图接入
+
+可选 DK_BUILD_RENDER_CAPTURE 通过独立 RenderServices/RenderOperations 接入 Runtime；CPU-only Runtime 保持无 GPU 依赖。
+详见 [截图设计](render-capture.md)。

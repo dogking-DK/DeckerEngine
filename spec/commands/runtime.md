@@ -1,7 +1,7 @@
 ---
 module: command-reference-runtime
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-09-28T15:06:06+08:00"
+updated_at: "2026-10-03T21:44:26+08:00"
 status: accepted
 ---
 
@@ -15,7 +15,10 @@ status: accepted
 参数 `{}`；effect=query，undoable=false。
 返回当前能力对象：protocol="jsonrpc-2.0-jsonl"、async_tasks=false、task_retention=256、
 max_line_bytes=1048576、max_batch_requests=128、transactions=true、guard="document_id+revision"。
-另返回 async_jobs 和 job_limits；windows-dev 为 true 及 queued=16、active=17、terminal=256、input_bytes=536870912。未装配资产 Jobs 时为 false/null。TaskId 仍同步完成；后台 JobId 使用 [jobs.wait/cancel](jobs.md)。
+另返回 async_jobs 和 job_limits；windows-dev 为 true 及 queued=16、active=17、terminal=256、input_bytes=536870912。job_limits 未装配资产 Jobs 时为 null；async_jobs 表示任一后台服务可用。TaskId 仍同步完成；后台 JobId 使用 [jobs.wait/cancel](jobs.md)。
+
+另返回 render_capture 与 capture_limits：关闭截图为 false/null，启用为 true 及 queued=2、active=3、terminal=64、input_bytes=201326592、max_dimension=2048。
+这表示已编译能力，不保证当前机器设备/验证层可用；设备在 capture Job 内延迟初始化。
 
 ```json
 {"jsonrpc":"2.0","id":19,"method":"runtime.capabilities"}

@@ -279,3 +279,12 @@ if(TARGET dk_scene_demo AND WIN32)
             "-DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-artifacts/$<CONFIG>/scene"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/SceneDemoTest.cmake")
 endif()
+
+if(TARGET dk_render_services AND TARGET dk_run AND WIN32)
+    add_test(NAME dk.runtime.capture_gpu_validation
+        COMMAND "${DK_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass
+            -File "${CMAKE_CURRENT_SOURCE_DIR}/RuntimeCaptureTest.ps1"
+            -Runner "$<TARGET_FILE:dk_run>" -Fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+            -WorkDir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+    set_tests_properties(dk.runtime.capture_gpu_validation PROPERTIES TIMEOUT 180 SKIP_RETURN_CODE 77 LABELS "gpu")
+endif()

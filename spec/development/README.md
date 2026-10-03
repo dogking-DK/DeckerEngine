@@ -65,5 +65,6 @@
 | 0061 | [M7.1 场景提取与 GPU 资源](0061-render-data-resources.md) | render-data, render-resources, assets-importers, architecture | completed |
 | 0062 | [M7.2 最小场景渲染管线](0062-render-pipeline.md) | render-pipeline, graphics-vulkan, graphics-resources, graphics-graph, architecture | completed |
 | 0063 | [M7.3 磁盘场景与资产集成](0063-render-disk.md) | render-disk, render-pipeline, assets-importers, render-resources, architecture | completed |
+| 0064 | [M7.4 截图任务与自动化验收](0064-render-capture.md) | render-capture, runtime, application-services, render-disk, architecture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

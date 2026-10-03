@@ -1,7 +1,7 @@
 ---
 module: render-disk
 created_at: "2026-10-03T17:17:15+08:00"
-updated_at: "2026-10-03T17:17:15+08:00"
+updated_at: "2026-10-03T21:50:44+08:00"
 status: accepted
 ---
 
@@ -12,7 +12,7 @@ status: accepted
 M7.3 新增独立可选 engine/render/disk、dk_render_disk / dk::render_disk。
 PUBLIC 依赖 render_data、render_resources、asset_importers（公开 profile）、Scene；
 PRIVATE 依赖 asset_runtime、IO、Memory、profiling。DK_BUILD_RENDER_DISK 默认 OFF，
-windows-graphics 启用；不接入 CPU Runtime、Jobs/capture 命令或窗口，不升级依赖。
+windows-graphics 启用；底层模块不依赖 Runtime、Jobs 或窗口。可选 CaptureService 在上层装配，CPU-only Runtime 仍独立；不升级依赖。
 
 DiskScene::load(heap, project, options) 只读加载 M2 场景并提取 RenderScene，按实体/引用顺序
 导入每个唯一 mesh。Project 的 mesh path 支持 .gltf/.glb 或 M4 CPU artifact 的 manifest.json。
@@ -62,3 +62,8 @@ CPU 夹具使用临时 M2 Project/Scene 与小型 M4 glTF/CPU artifact，核对�
 
 关联 [导入](assets-importers.md)、[场景](scene.md)、[管线](render-pipeline.md)、
 [0063](../development/0063-render-disk.md)。
+
+## M7.4 截图接入
+
+新增 load_snapshot(heap, Project, SceneSnapshot, options) 以捕获未保存编辑；load 读取磁盘文档后复用它。options 增加 stop_token，导入和包间协作取消。
+详见 [截图设计](render-capture.md)。

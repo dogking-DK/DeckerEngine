@@ -19,6 +19,12 @@ struct DocumentState
     bool dirty;
     std::size_t entity_count;
 };
+struct SceneReadSnapshot
+{
+    DocumentState state;
+    Project project;
+    SceneSnapshot scene;
+};
 struct CreateEntity
 {
     std::optional<EntityId> id;
@@ -66,6 +72,7 @@ class SceneService final
                                                                       HistoryLimits limits = {});
     [[nodiscard]] Result<DocumentState> state() const;
     [[nodiscard]] Result<const SceneDocument *> document() const;
+    [[nodiscard]] Result<SceneReadSnapshot> read_snapshot(EditGuard) const;
     [[nodiscard]] Result<void> check_guard(EditGuard guard) const;
     [[nodiscard]] Result<void> new_scene(ProjectDescription description, std::optional<EditGuard> guard = {});
     [[nodiscard]] Result<void> load(const std::filesystem::path &manifest,

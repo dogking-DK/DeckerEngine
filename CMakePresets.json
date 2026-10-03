@@ -86,7 +86,8 @@
         "DK_BUILD_RENDER_DATA": "ON",
         "DK_BUILD_RENDER_RESOURCES": "ON",
         "DK_BUILD_RENDER_PIPELINE": "ON",
-        "DK_BUILD_RENDER_DISK": "ON"
+        "DK_BUILD_RENDER_DISK": "ON",
+        "DK_BUILD_RENDER_CAPTURE": "ON"
       }
     },
     {

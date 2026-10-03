@@ -30,8 +30,9 @@
 | project-format | [工程格式](project-format.md) | accepted | M2.3 版本清单、路径与文件诊断 | [Project](../../engine/scene) | [scene / assets](../../tests/unit/ProjectTests.cpp) |
 | commands | [命令注册](commands.md) | accepted | M3.1 schema、注册与能力发现 | [Commands](../../engine/framework/commands) | [commands](../../tests/unit/CommandTests.cpp) |
 | application-services | [场景应用服务](application-services.md) | accepted | 场景/资产服务、guard、事务/历史与 Project 映射同步 | [Services](../../engine/framework/services) | [services / asset_commands](../../tests/unit/CMakeLists.txt) |
-| runtime | [CPU Runtime](runtime.md) | accepted | 生命周期、同步 TaskId、异步 JobId 装配及 batch/事件驱动 stdio | [Runtime](../../engine/framework/runtime) | [runtime](../../tests/integration/CMakeLists.txt) |
+| runtime | [Runtime](runtime.md) | accepted | 生命周期、同步 TaskId、异步 JobId 装配及 batch/事件驱动 stdio | [Runtime](../../engine/framework/runtime) | [runtime](../../tests/integration/CMakeLists.txt) |
 | automation-protocol | [自动化协议](automation-protocol.md) | accepted | JSON-RPC、任务终态、可取消 stdio reader 与关闭边界 | [协议/传输](../../engine/automation) | [protocol / runtime](../../tests/unit/ProtocolTests.cpp) |
+| render-capture | [截图作业](render-capture.md) | accepted | 有界截图作业、固定版本与原子输出 | [Services](../../engine/framework/services) | [Runtime](../../tests/integration/CMakeLists.txt) |
 
 后续模块开始开发时先新建设计并加入此表；架构总览中的规划不等于模块已实现。
 阶段目标和先后顺序见 [开发 Roadmap](../roadmap.md)，它不替代模块专项设计。

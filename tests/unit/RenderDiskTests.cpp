@@ -83,3 +83,17 @@ TEST_CASE("disk scene failure leaves old candidate and source bytes intact") {
 TEST_CASE("empty disk scene exposes no scene or GPU cache") {
     DiskScene scene; CHECK_FALSE(scene); CHECK_FALSE(scene.scene()); CHECK(scene.assets().empty());
 }
+
+TEST_CASE("snapshot disk loading retains unsaved edits and cooperatively cancels") {
+    Fixture f; auto project=f.project(); auto document=load_scene(project).value();
+    const auto baseline=read_file_bytes(f.files.root/"scene.json").value();
+    auto id=document->snapshot()->entities()[0].id; auto local=document->entity(id)->local;
+    local.translation.x()=0.75; REQUIRE(document->set_local_transform(id,local));
+    auto snapshot=document->snapshot().value(); auto captured=DiskScene::load_snapshot(f.heap,project,snapshot);
+    REQUIRE(captured); CHECK(captured->scene().revision()==document->revision());
+    CHECK(captured->scene().entities()[0].world.matrix()(0,3)==0.75);
+    CHECK(read_file_bytes(f.files.root/"scene.json").value()==baseline);
+    std::stop_source cancel; cancel.request_stop(); DiskSceneOptions options; options.stop=cancel.get_token();
+    CHECK_FALSE(DiskScene::load_snapshot(f.heap,project,snapshot,options));
+    CHECK(captured->assets().size()==2);
+}

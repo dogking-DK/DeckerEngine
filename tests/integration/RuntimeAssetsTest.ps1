@@ -67,7 +67,7 @@ try {
     $caps = Value (Call-Rpc $server 'runtime.capabilities')
     Check ($caps.async_jobs -and -not $caps.async_tasks) 'Async capability/TaskId compatibility mismatch'
     $commands = @(Value (Call-Rpc $server 'commands.list'))
-    Check ($commands.Count -eq 33) 'Unexpected command discovery count'
+    Check ($commands.Count -eq $(if ($caps.render_capture) { 34 } else { 33 })) 'Unexpected command discovery count'
     foreach ($name in @('assets.open','assets.catalog','assets.import','assets.register','assets.rename','assets.load','assets.status','assets.unload','jobs.get','jobs.wait','jobs.cancel')) {
         $description = Value (Call-Rpc $server 'commands.describe' @{name=$name})
         Check (-not $description.undoable -and -not $description.parameters.additionalProperties) ('Bad command contract: '+$name)

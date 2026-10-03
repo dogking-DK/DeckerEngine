@@ -300,3 +300,11 @@ Result<void> SceneService::redo(EditGuard guard)
     return history_step(guard, true);
 }
 } // namespace dk
+
+namespace dk {
+Result<SceneReadSnapshot> SceneService::read_snapshot(EditGuard guard) const {
+    auto checked = check_guard(guard); if (!checked) return std::unexpected(checked.error());
+    auto snapshot = document_->snapshot(); if (!snapshot) return std::unexpected(snapshot.error());
+    return SceneReadSnapshot{*state(), *project_, std::move(*snapshot)};
+}
+}

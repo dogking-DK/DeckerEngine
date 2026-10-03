@@ -6,3 +6,7 @@ if(TARGET dk_runtime)
     target_compile_definitions(dk_run PRIVATE DK_RUN_WITH_RUNTIME=1)
 endif()
 dk_target_defaults(dk_run)
+
+if(TARGET dk_render_services)
+    dk_deploy_slang(dk_run)
+endif()

@@ -23,3 +23,7 @@ endif()
 if(TARGET dk_runtime)
     add_subdirectory(automation)
 endif()
+
+if(DK_BUILD_RENDER_CAPTURE AND NOT TARGET dk_render_services)
+    message(FATAL_ERROR "DK_BUILD_RENDER_CAPTURE requires Framework/Scene, Jobs, Render Disk and Pipeline")
+endif()

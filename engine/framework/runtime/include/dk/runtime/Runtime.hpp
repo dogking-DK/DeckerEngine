@@ -6,6 +6,10 @@
 #include <dk/services/AsyncAssetService.hpp>
 #endif
 
+#ifdef DK_RUNTIME_CAPTURE
+#include <dk/services/CaptureService.hpp>
+#endif
+
 namespace dk
 {
 struct TaskIdTag;
@@ -43,6 +47,12 @@ class Runtime final
     std::shared_ptr<RuntimeEvents> events_ = std::make_shared<RuntimeEvents>();
 #ifdef DK_RUNTIME_ASSETS
     std::unique_ptr<AsyncAssetService> assets_;
+#endif
+#ifdef DK_RUNTIME_CAPTURE
+    std::unique_ptr<CaptureService> captures_;
+    [[nodiscard]] Result<JobSnapshot> job(JobId) const;
+    [[nodiscard]] Result<JobWait> wait_job(JobId,std::chrono::milliseconds);
+    [[nodiscard]] Result<JobCancel> cancel_job(JobId);
 #endif
     CommandRegistry commands_;
     bool dispatching_ = false;

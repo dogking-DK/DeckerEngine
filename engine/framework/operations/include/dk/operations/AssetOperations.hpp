@@ -3,5 +3,5 @@
 #include <dk/services/AsyncAssetService.hpp>
 namespace dk {
 [[nodiscard]] Json catalog_guard_json(CatalogGuard);
-[[nodiscard]] Result<void> register_asset_commands(CommandRegistry&, AsyncAssetService&);
+[[nodiscard]] Result<void> register_asset_commands(CommandRegistry&, AsyncAssetService&, bool with_jobs = true);
 }

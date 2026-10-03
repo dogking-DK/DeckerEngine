@@ -1,7 +1,7 @@
 ---
 module: foundation-jobs
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T15:29:44+08:00"
+updated_at: "2026-10-03T21:44:26+08:00"
 status: accepted
 ---
 
@@ -9,7 +9,7 @@ status: accepted
 
 ## 目标和边界
 
-用于 M4.4 的本地 CPU 导入/加载。M4.4.1 已实现 `engine/foundation/jobs` target
+用于本地后台候选准备；最初接入 M4.4 CPU 导入/加载，M7.4 的独立截图服务同样复用该队列，Jobs 本身不依赖 GPU。M4.4.1 已实现 `engine/foundation/jobs` target
 `dk_jobs / dk::jobs`，依赖 Core、Memory 和标准库线程设施，私有使用 Profiling；不依赖 Scene、资产、JSON、Runtime 或 GPU。
 首版一个可关闭的 worker + 有界队列，std::jthread/stop_token/条件变量；不建设协程、任务图或 work stealing。
 它支持协作取消，不保证能抢占三方解码器或阻塞的系统 IO。

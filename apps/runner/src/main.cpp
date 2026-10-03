@@ -19,7 +19,7 @@ int run(const std::vector<std::filesystem::path> &args)
 {
     if (args.empty() || (args.size() == 1 && args[0] == "--help"))
     {
-        std::cout << "DeckerEngine CPU runner\nUsage: dk-run [--help | --version]\n";
+        std::cout << "DeckerEngine runner\nUsage: dk-run [--help | --version]\n";
 #ifdef DK_RUN_WITH_RUNTIME
         std::cout << "       dk-run --project-root ROOT --batch FILE [--auto-guard]\n";
         std::cout << "       dk-run --project-root ROOT --stdio\n";

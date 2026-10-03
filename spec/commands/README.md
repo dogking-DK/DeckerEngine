@@ -1,15 +1,15 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-09-28T19:03:00+08:00"
+updated_at: "2026-10-03T21:44:26+08:00"
 status: accepted
 ---
 
 # DeckerEngine 命令参考
 
-本目录供人和 AI 查阅当前可调用命令。适用于 M3 完成后的 CPU Runtime；
+本目录供人和 AI 查阅当前可调用命令。适用于当前 Runtime；
 `windows-dev` 构建启用此功能，最小 bootstrap 仅提供 `--help/--version`。
-windows-dev 当前 33 条命令以实际 `commands.list` 为准；关闭 Jobs/Importers 时保留原 22 条。
+windows-dev 当前 33 条命令，windows-graphics 增加 render.capture 共34条；以实际 `commands.list` 为准。关闭 Jobs/Importers 且不装配截图时保留原22条。
 完整字段 schema 可通过 `commands.describe` 查询。
 
 独立离线 CLI 另见 [dk-shaderc 编译参数与输出](shaderc.md)；它不属于下列 Runtime 命令集。
@@ -24,6 +24,7 @@ windows-dev 当前 33 条命令以实际 `commands.list` 为准；关闭 Jobs/Im
 | [历史](history.md) | `history.status`、`history.undo`、`history.redo` | 内存撤销与重做 |
 | [运行时与任务](runtime.md) | `runtime.capabilities`、`runtime.shutdown`、`tasks.list`、`tasks.get` | 能力、同步任务和关闭 |
 | [CPU 资产](assets.md) | `assets.open`、`assets.catalog`、`assets.import`、`assets.register`、`assets.rename`、`assets.load`、`assets.status`、`assets.unload` | 目录会话、持久身份和 CPU Ready |
+| [截图](render.md) | `render.capture` | 固定内存场景版本，后台离屏渲染和原子图像输出 |
 | [后台作业](jobs.md) | `jobs.get`、`jobs.wait`、`jobs.cancel` | JobId 状态、等待和协作取消 |
 
 各参考页的“参数”指请求的 `params`，“返回”指响应的 `result.value`。

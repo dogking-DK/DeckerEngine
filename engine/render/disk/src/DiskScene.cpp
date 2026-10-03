@@ -63,12 +63,17 @@ CpuAsset load_asset(const Project& project,AssetReference reference,const DiskSc
         require(mesh!=identities.end() && mesh->id==reference.id && mesh->kind==AssetKind::mesh,
             "source metadata mesh/0 ID differs from Project",ErrorCode::conflict);
     } else identities.push_back({String{"mesh/0"},reference.id,AssetKind::mesh});
-    GltfImportRequest request{relative,identities,scale}; request.profile=options.profile;
+    GltfImportRequest request{relative,identities,scale}; request.profile=options.profile; request.stop=options.stop;
     auto imported=take(import_gltf(project.paths(),request));
     return std::move(static_cast<CpuAsset&>(imported));
 }
 }
 Result<DiskScene> DiskScene::load(memory::ResourceHandle heap,const Project& project,const DiskSceneOptions& options) {
+    auto document=load_scene(project); if (!document) return std::unexpected(document.error());
+    auto snapshot=(*document)->snapshot(); if (!snapshot) return std::unexpected(snapshot.error());
+    return load_snapshot(heap,project,*snapshot,options);
+}
+Result<DiskScene> DiskScene::load_snapshot(memory::ResourceHandle heap,const Project& project,const SceneSnapshot& snapshot,const DiskSceneOptions& options) {
     DK_PROFILE_ZONE("render.load_disk_scene");
     if (!heap || heap.state()!=memory::ResourceState::open)
         return std::unexpected(Error{ErrorCode::invalid_state,"disk scene requires open memory"});
@@ -79,15 +84,16 @@ Result<DiskScene> DiskScene::load(memory::ResourceHandle heap,const Project& pro
     try {
         memory::DomainScope domain{heap};
         check(check_asset_operations(project.paths().root()));
-        auto document=take(load_scene(project));
+        require(!options.stop.stop_requested(),"disk scene load cancelled",ErrorCode::invalid_state);
         auto candidate=memory::make_shared_in<detail::DiskSceneState>(heap,heap);
-        candidate->scene=take(RenderScene::extract(heap,take(document->snapshot())));
+        candidate->scene=take(RenderScene::extract(heap,snapshot));
         std::size_t used=0;
         for (std::size_t i=0;i<candidate->scene.entities().size();++i) {
             for (auto reference : take(candidate->scene.assets(i))) {
                 if (reference.kind!=AssetKind::mesh) continue;
                 if (std::ranges::any_of(candidate->assets,[&](const auto& asset){return asset->mesh.id==reference.id;})) continue;
                 require(candidate->assets.size()<options.max_assets,"disk scene asset count exceeds limit");
+                require(!options.stop.stop_requested(),"disk scene load cancelled",ErrorCode::invalid_state);
                 auto loaded=load_asset(project,reference,options);
                 check(validate_gpu_asset(loaded));
                 for (const auto& material : loaded.materials)

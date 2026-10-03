@@ -7,3 +7,9 @@ if(TARGET dk_asset_operations)
     target_link_libraries(dk_runtime PUBLIC dk::asset_services PRIVATE dk::asset_operations)
     target_compile_definitions(dk_runtime PUBLIC DK_RUNTIME_ASSETS=1)
 endif()
+
+if(TARGET dk_render_operations)
+    target_link_libraries(dk_runtime PUBLIC dk::render_services PRIVATE dk::render_operations dk::job_operations)
+    target_compile_definitions(dk_runtime PUBLIC DK_RUNTIME_CAPTURE=1
+        PRIVATE DK_CAPTURE_SHADER_DIR="${PROJECT_SOURCE_DIR}/shaders/render")
+endif()

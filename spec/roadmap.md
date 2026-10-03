@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-03T17:37:32+08:00"
+updated_at: "2026-10-03T21:47:34+08:00"
 status: accepted
 ---
 
@@ -43,7 +43,8 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 [0060](development/0060-graph-integration.md)；M6 已全部验收。M7.1 场景提取与 GPU 资源已完成，见
 [0061](development/0061-render-data-resources.md)；M7.2 最小渲染管线完成，见
 [0062](development/0062-render-pipeline.md)。M7.3 磁盘场景与资产集成完成，见
-[0063](development/0063-render-disk.md)，下一项为 M7.4 截图任务与自动化验收。
+[0063](development/0063-render-disk.md)。M7.4 截图任务与自动化验收完成，见
+[0064](development/0064-render-capture.md)；M7 与交付 B 已验收，下一项为 M8.1 编辑器工作台。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作；提早建立多线程内存契约与性能测量，复杂并行优化仍由测量驱动。
@@ -65,7 +66,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3、M1.7 | 已完成：M4.1–4，证据 0031–0040 |
 | M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、Vulkan 使用层、最小呈现 | M1、M1.7 | 已完成：M5.1–6 均验收，见 0042–0056 |
 | M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 已完成（M6.1–4） |
-| M7 场景渲染 | 资产上传、场景提取、Pass、pipeline、可等待截图 | M3、M4、M6 | 进行中（M7.1 完成） |
+| M7 场景渲染 | 资产上传、场景提取、Pass、pipeline、可等待截图 | M3、M4、M6 | 已完成（M7.1–4，交付 B） |
 | M8 编辑器与进程控制 | 可编辑保存的视口；dk-ctl 操作运行中的程序 | M7 | 待开始 |
 | M9 脚本与自动化 SDK | Lua 场景脚本、Python 客户端、批处理与重放 | M3；集成验收需要 M8 | 待开始 |
 | M10 物理实验闭环 | 固定步长、CPU 参照、首个 GPU 求解器及可视化 | M7、M9 | 待开始 |
@@ -390,7 +391,7 @@ M5 的图像/计算样例迁移后输出保持符合原验证条件。
   pipeline 负责连接，Graph 不包含业务 Pass。
 - 从工程加载场景和资产，先提供程序化简单物体回归样例，
   再接入 M4 导入网格。
-- 实现 render.capture、job.status/wait 等操作。
+- 实现 render.capture、jobs.get/wait/cancel 等操作。
   截图绑定 scene revision/view，完成返回 frame、输出文件和诊断。
 
 小阶段与独立验收：
@@ -400,11 +401,11 @@ M5 的图像/计算样例迁移后输出保持符合原验证条件。
 | M7.1 | 场景提取与 GPU 资源 | M3、M4、M6 | 只读视图、GpuMesh/纹理 Graph 上传及卸载寿命，见 [0061](development/0061-render-data-resources.md) | 已完成 |
 | M7.2 | 最小渲染管线 | M7.1 | opaque/depth/tone mapping 由 Graph 执行，程序化场景可回归 | 已完成（[0062](development/0062-render-pipeline.md)） |
 | M7.3 | 磁盘场景与资产集成 | M7.2 | M4 导入/CPU 产物和 M2 场景可加载并离屏渲染；Sponza 无光照预览与 alpha mask | 已完成（[0063](development/0063-render-disk.md)） |
-| M7.4 | 截图任务与自动化验收 | M7.3 | capture/status/wait 绑定 revision/frame，失败有终态，截图可核验；交付 B | 待开始 |
+| M7.4 | 截图任务与自动化验收 | M7.3 | capture/jobs 绑定 revision/frame，失败终态、像素变化和原子截图可核验；交付 B | 已完成（[0064](development/0064-render-capture.md)） |
 
 **设计：** [render-data](design/render-data.md)、[render-resources](design/render-resources.md) 已采用；
 [render-pipeline](design/render-pipeline.md)、[render-disk](design/render-disk.md) 已实现；
-下一阶段先写 `render-capture.md`，再更新 runtime/automation 设计。
+[render-capture](design/render-capture.md) 已接入 Runtime；完整字段见 [截图命令](commands/render.md)。
 
 **验收：** 在无窗口 runner 中加载固定场景，等待资产/GPU 上传完成后渲染并保存图像；
 改变变换再截图，能确认返回结果对应目标 revision。
@@ -534,7 +535,8 @@ M6.4 样例迁移与诊断完成，见 [0060](development/0060-graph-integration
 M7.1 场景提取与 GPU 资源完成，见 [0061](development/0061-render-data-resources.md)。
 M7.2 最小渲染管线与程序化图像回归完成，见 [0062](development/0062-render-pipeline.md)。
 M7.3 磁盘到图像及默认 Sponza 验收完成，见 [0063](development/0063-render-disk.md)。
-下一项为 **M7.4 截图任务与自动化验收**：capture/status/wait 绑定 revision/frame、文件产物及失败终态；
+M7.4 截图自动化验收完成，见 [0064](development/0064-render-capture.md)；M7 与交付 B 全部完成。
+下一项为 **M8.1 编辑器工作台**：窗口、Hierarchy/Inspector/Viewport 和保存加载；
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 

@@ -1,17 +1,18 @@
 ---
 module: runtime
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-09-28T16:00:00+08:00"
+updated_at: "2026-10-03T21:44:26+08:00"
 status: accepted
 ---
 
-# CPU Runtime
+# Runtime
 
 ## 所有权与分派
 
 dk::runtime 位于 framework/runtime，拥有 SceneService 和 CommandRegistry；构造先创建服务，
 再注册操作，析构先销毁 registry，保证捕获引用有效。PUBLIC 依赖 services/commands，PRIVATE 依赖 operations/profiling。
-framework 和 Scene 同时启用才构建；不链接日志、窗口、GPU 或脚本。
+framework 和 Scene 同时启用才构建；基础 CPU 配置不链接日志、窗口、GPU 或脚本。
+DK_BUILD_RENDER_CAPTURE 条件接入独立 RenderServices/Operations，启用时才链接渲染链路。
 M1.7.1 为 create/dispatch 和 runner 入口增加可关闭的 [CPU zone](foundation-profiling.md)，
 dispatch 使用动态文本记录 method；不改变命令/schema/guard/stdout 契约。
 
@@ -29,7 +30,7 @@ batch 读取直到 EOF，逐条输出/刷新响应，命令失败继续后续行
 协议和服务默认仍要求显式 guard；此选项不是过期请求自动重试。stdio 不允许 auto-guard。
 
 transport/protocol 位于 automation，依赖 runtime，Runtime 不依赖传输。stdout 只写 JSON 响应，
-stderr 写诊断；未连接日志模块时同样可运行。batch 按行串行处理；持续 stdio 使用下述显式事件循环，不初始化 GPU。
+stderr 写诊断；未连接日志模块时同样可运行。batch 按行串行处理；持续 stdio 使用下述显式事件循环；GPU 只在提交截图作业后由 worker 延迟初始化。
 资源不足、输出失败等入口致命异常报告 stderr 并返回 3；不能宣称响应失败意味着命令未执行。
 
 验收：独立进程从空工程创建父子/变换、保存两文件，第二进程加载查询并比较持久状态；
@@ -90,3 +91,8 @@ RuntimeEvents 维护序列号和条件变量，输入队列与 worker 通知它�
 TaskId 表示一次同步命令执行，JobId 表示后台作业，两者使用各自查询接口。
 公开调用见[Runtime 命令](../commands/runtime.md)、[资产命令](../commands/assets.md)和[作业命令](../commands/jobs.md)。
 后台接入与进程验收证据见 [0039](../development/0039-assets-jobs-commands.md)、[0040](../development/0040-cpu-assets-delivery.md)。
+
+## M7.4 截图接入
+
+Runtime 条件装配 CaptureService 与 RenderOperations；jobs 命令按 JobId 路由到资产/截图队列，idle pump 和 wait 消费两者。CPU-only 配置保留原依赖。
+详见 [截图设计](render-capture.md)。
