@@ -34,8 +34,8 @@
 | JSON-RPC、JSON Lines、任务 | dk_protocol_tests | `^dk\.protocol\.` |
 | Runtime 的 batch/stdio 进程行为 | dk_run | `^dk\.runtime\.` |
 | CLI 版本 | dk_run | `^dk\.bootstrap\.version$` |
-| GPU Graph 声明、句柄、内容/循环、编译裁剪与生命周期（无需 GPU） | dk_graph_tests | `^dk\.graph\.graph ` |
-| GPU Graph 同步、执行、导入导出与失败保护 | dk_graph_probe | `^dk\.graph\.gpu_`（gpu label；77 为跳过） |
+| GPU Graph 声明、编译裁剪、生命周期与诊断（无需 GPU） | dk_graph_tests | `^dk\.graph\.graph ` |
+| GPU Graph 同步、执行、导入导出、诊断与失败保护 | dk_graph_probe | `^dk\.graph\.gpu_`（gpu label；77 为跳过） |
 | Vulkan 设备策略、缺失环境和失败清理（无需 GPU） | dk_device_tests | `^dk\.device\.unit\.` |
 | SDL3 窗口事件、尺寸与寿命（需桌面） | dk_platform_probe | `^dk\.platform\.windows$` |
 | Vulkan Surface、呈现选卡与窗口保活 | dk_present_device_probe | `^dk\.presentation\.device_validation$` |
@@ -48,7 +48,7 @@
 | Slang 三阶段编译、反射、诊断与 Memory 寿命（无需 GPU） | dk_shader_tests | `^dk\.shaders\.` |
 | shaderc Unicode/include/import/宏、原子输出与隔离部署 | dk_shaderc | `^dk\.shaderc\.` |
 | 离屏 draw/dispatch 参数、SPIR-V/布局和设备限制（无需 GPU） | dk_offscreen_tests | `^dk\.offscreen\.unit\.` |
-| 离屏绘制/计算读回、管线寿命与同步验证 | dk_offscreen_probe | `^dk\.offscreen\.gpu_`（gpu label；77 为跳过） |
+| Graph 完整管线、离屏绘制/计算读回、M5 基线与同步寿命 | dk_offscreen_probe | `^dk\.offscreen\.gpu_`（gpu label；77 为跳过） |
 | Foundation 进程示例 | dk_foundation_demo | `^dk\.foundation\.` |
 | Scene 跨进程往返 | dk_scene_demo | `^dk\.scene_demo\.` |
 

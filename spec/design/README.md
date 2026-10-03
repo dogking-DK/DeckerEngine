@@ -3,13 +3,13 @@
 | 模块 | 文档 | 状态 | 范围 | 源码入口 | 测试入口 |
 | --- | --- | --- | --- | --- | --- |
 | architecture | [整体架构](architecture.md) | accepted | 长期模块边界和依赖方向 | [模块目录](../../engine) | [流程/检查](../README.md) |
-| graphics-graph | [GPU Graph](graphics-graph.md) | accepted | 图声明/编译、裁剪、单队列执行与状态导入导出 | [graph](../../engine/graphics/graph) | [单元](../../tests/unit/CMakeLists.txt) |
+| graphics-graph | [GPU Graph](graphics-graph.md) | accepted | 图声明/编译、裁剪、同步执行、导入导出与诊断 | [graph](../../engine/graphics/graph) | [单元](../../tests/unit/CMakeLists.txt) |
 | platform | [SDL3 窗口](platform.md) | accepted | 窗口寿命、事件与像素尺寸 | [platform](../../engine/platform) | [集成](../../tests/integration/CMakeLists.txt) |
 | graphics-presentation | [窗口与呈现](graphics-presentation.md) | accepted | Surface、交换链、帧获取/呈现与重建契约 | [presentation](../../engine/graphics/presentation) | [集成](../../tests/integration/CMakeLists.txt) |
 | graphics-device | [Vulkan 设备与诊断](graphics-device.md) | accepted | Vulkan 1.4 设备/诊断；Vulkan-Hpp RAII、volk、vk-bootstrap、VMA allocator | [Device](../../engine/graphics/device) | [device](../../tests/unit/CMakeLists.txt) |
 | graphics-resources | [Vulkan 资源与提交生命周期](graphics-resources.md) | accepted | VMA 资源、子资源状态、提交保留与异步上传/读回 | [device](../../engine/graphics/device) | [graphics](../../tests/integration/CMakeLists.txt) |
 | graphics-shaders | [Slang 编译与反射](graphics-shaders.md) | accepted | M5.3 离线 SPIR-V、最小布局反射与诊断 | [shaders](../../engine/graphics/shaders) | [shaders](../../tests/unit/CMakeLists.txt) |
-| graphics-offscreen | [离屏绘制与计算](graphics-offscreen.md) | accepted | M5.4 draw/dispatch/readback 与完成保护 | [offscreen](../../engine/graphics/offscreen) | [offscreen](../../tests/integration/CMakeLists.txt) |
+| graphics-offscreen | [离屏绘制与计算](graphics-offscreen.md) | accepted | 基于 Graph 的 draw/dispatch/readback 与完成保护 | [offscreen](../../engine/graphics/offscreen) | [offscreen](../../tests/integration/CMakeLists.txt) |
 | graphics-vulkan | [Vulkan 使用层封装](graphics-vulkan.md) | accepted | M5.5 对象/管线/绑定/录制/同步/传输与离屏迁移契约；实现进度见 Roadmap | [device](../../engine/graphics/device)、[offscreen](../../engine/graphics/offscreen) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | project-foundation | [工程基础](project-foundation.md) | accepted | Git、目录、CMake、vcpkg、构建探针与留档 | [CMake/构建](../../cmake) | [文档脚本回归](../../scripts/test-check-spec.ps1) |
 | foundation-core | [Core 基础](foundation-core.md) | accepted | 错误、日志、stduuid 稳定 ID 与验证 | [Core](../../engine/foundation/core) | [core / log_probe](../../tests/unit/CMakeLists.txt) |

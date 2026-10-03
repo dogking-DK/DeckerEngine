@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-02T23:20:00+08:00"
-updated_at: "2026-10-03T08:09:09+08:00"
+updated_at: "2026-10-03T14:45:24+08:00"
 ---
 
 # GPU Graph 声明、编译与执行
@@ -138,4 +138,43 @@ if (queue.wait(execution.submission()).value()) {
 buffer 的 initialized 只保守描述整 buffer：部分写不使其变为 true，即使多个写累计覆盖了全部字节。
 图内部按字节范围证明的内容仍能使用；下一次声明 initialized=true 导入时要求账本确实为 true。
 本阶段为同队列自有资源执行，不支持 WSI acquire/present、多队列或 aliasing；
-现有 upload/compute/draw/readback 样例迁移和诊断整合属于 M6.4。
+Offscreen 已使用 Graph 运行 draw/dispatch，完整组合用例见下文。
+
+
+## 计划和同步诊断
+
+包含 `dk/graphics/GraphDiagnostics.hpp`，调用 `format_plan(plan)` 得到拥有型 PlanReport，
+通过 text() 取得只读文本。报告显示 retained/culled Pass、访问范围、资源首末次使用与独立分配、
+拓扑顺序及 explicit/RAW/WAR/WAW/layout/contents 依赖；阶段/访问掩码为 Vulkan 十六进制值，layout 为枚举数值。
+名字会转义换行和引号；结果不借用原计划，可在计划销毁或 Memory 关闭后读取。
+格式是人类诊断信息，不作为持久化协议。
+
+执行时将 ExecutionDesc::capture_synchronization 设为 true，Execution::synchronization() 就会记录
+Pass 前及最终访问的逐资源 barrier 输入。每项有 Pass 索引（final 为空）、资源索引、mip/layer、
+before 与 target；buffer 同步仍为整对象。barrier 不改变 initialized，target 不是 shader 执行后的内容状态。
+连续只读时 before 可能包含累计访问，target 是本次请求；最终账本快照用 states() 查询。
+默认不捕获，同步诊断没有 GPU 计时或性能含义。诊断分配失败仍放弃候选执行，不发布 GPU 状态。
+
+执行错误保留原 Error code/message/context，再加 Pass 名字/索引、资源名字/索引或提交阶段。
+打印错误时应同时输出 context，按最内层到最外层阅读。
+
+## 完整 upload→compute→draw→readback 样例
+
+[GraphPipeline.cpp](../../tests/integration/GraphPipeline.cpp) 是仅使用公共 Graph/Device/Shader API 的完整示例，
+随 dk_offscreen_probe 构建运行；[graph-transform.slang](../../shaders/common/graph-transform.slang) 读取上传顶点并缩放。
+
+1. CPU 写入 upload buffer，图中的 upload Pass 复制到 transient 顶点和索引 buffer。
+2. compute 通过 storage binding 更新顶点，图生成 compute-write→vertex-read barrier。
+3. clear 初始化 color image；draw 以 Load 使用已有内容并执行索引绘制。
+4. readback 复制 color 到标记输出的 transient buffer，最后转到 HostRead。
+5. 同一计划执行四次，每次与 M5 原有 indexed triangle 的全部像素比较，末尾没有 transient/pending 残留。
+
+```powershell
+& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Target dk_offscreen_probe `
+  -TestRegex '^dk\.offscreen\.gpu_validation$' -Reason 'Graph 完整管线与 M5 样例迁移回归'
+```
+
+CTest 在 `out/build/windows-graphics/tests/integration/graph-pipeline-validation.txt` 输出计划与首轮实际同步记录；
+无验证层版本测试输出 graph-pipeline.txt。同一 probe 继续验证 12 次 Offscreen draw、12 次 dispatch、
+原有低层绑定/深度校验及超时、失败、drain、析构行为；具体环境与证据见
+[0060](../development/0060-graph-integration.md)。进程级 AMD 层兼容设置按前述 Graphics 指南处理。

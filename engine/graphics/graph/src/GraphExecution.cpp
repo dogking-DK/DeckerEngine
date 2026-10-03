@@ -8,9 +8,10 @@ namespace detail {
 struct BoundResource { Buffer buffer; Image image; };
 struct ExecutionState {
     ExecutionState(memory::ResourceHandle heap, std::size_t count)
-        : resources(count, memory::Allocator<BoundResource>{heap}), states(0, memory::Allocator<ExportedState>{heap}) {}
+        : resources(count, memory::Allocator<BoundResource>{heap}), states(0, memory::Allocator<ExportedState>{heap}), synchronization(0, memory::Allocator<Synchronization>{heap}) {}
     Vector<BoundResource> resources;
     Vector<ExportedState> states;
+    Vector<Synchronization> synchronization;
     Submission submission;
 };
 struct ExecutionAccess {
@@ -61,8 +62,26 @@ Result<void> import_resource(detail::BoundResource& bound, const PlannedResource
     }
     return {};
 }
-Error pass_error(const PlannedPass& pass, const Error& error) {
-    return {error.code, "graph pass '" + std::string(pass.name) + "': " + error.message};
+Result<void> capture(detail::ExecutionState& result, CommandBatch& batch, std::span<const ResourceUse> uses,
+    std::span<const std::size_t> indices, std::optional<std::size_t> pass) {
+    for (std::size_t i = 0; i < uses.size(); ++i) {
+        const auto& use = uses[i];
+        const auto append = [&](std::uint32_t mip, std::uint32_t layer) -> Result<void> {
+            auto before = use.buffer ? batch.state(*use.buffer) : batch.state(*use.image,mip,layer);
+            if (!before) return std::unexpected(before.error());
+            auto target = use.state; target.initialized = before->initialized;
+            result.synchronization.push_back({pass,indices[i],mip,layer,*before,target});
+            return {};
+        };
+        if (use.buffer) { if (auto status = append(0,0); !status) return status; }
+        else for (std::uint32_t layer = use.range.baseArrayLayer; layer < use.range.baseArrayLayer + use.range.layerCount; ++layer)
+            for (std::uint32_t mip = use.range.baseMipLevel; mip < use.range.baseMipLevel + use.range.levelCount; ++mip)
+                if (auto status = append(mip,layer); !status) return status;
+    }
+    return {};
+}
+Error pass_error(const PlannedPass& pass, std::size_t index, const Error& error) {
+    return error.with_context("graph pass #" + std::to_string(index) + " '" + std::string(pass.name) + "'");
 }
 }
 
@@ -141,6 +160,7 @@ Result<void> PassContext::clear(std::size_t resource, const vk::ClearColorValue&
 Result<ComputeEncoder> PassContext::compute() { return batch_.compute(); }
 Result<RenderEncoder> PassContext::begin_rendering(const RenderingDesc& description) { return batch_.begin_rendering(description); }
 
+std::span<const Synchronization> Execution::synchronization() const noexcept { return state_ ? std::span<const Synchronization>{state_->synchronization} : std::span<const Synchronization>{}; }
 Submission Execution::submission() const noexcept { return state_ ? state_->submission : Submission{}; }
 std::span<const ExportedState> Execution::states() const noexcept { return state_ ? std::span<const ExportedState>{state_->states} : std::span<const ExportedState>{}; }
 Result<const Buffer*> Execution::buffer(std::size_t resource) const {
@@ -162,6 +182,10 @@ Result<Execution> execute(const CompiledGraph& plan, SubmissionQueue& queue, con
         Vector<const PassCallback*> callbacks(plan.passes().size(), nullptr, memory::Allocator<const PassCallback*>{heap});
         Vector<FinalAccess> final(0, memory::Allocator<FinalAccess>{heap});
         Vector<ResourceUse> uses(0, memory::Allocator<ResourceUse>{heap});
+        Vector<std::size_t> indices(0, memory::Allocator<std::size_t>{heap});
+        const auto resource_error = [&](std::size_t i, const Error& error) {
+            return error.with_context("graph resource #" + std::to_string(i) + " '" + std::string(resources[i].name) + "'");
+        };
         for (const auto& callback : description.callbacks) {
             if (callback.pass >= callbacks.size() || !callback.record || callbacks[callback.pass])
                 return std::unexpected(invalid("invalid or duplicate pass callback"));
@@ -173,7 +197,7 @@ Result<Execution> execute(const CompiledGraph& plan, SubmissionQueue& queue, con
                 return std::unexpected(invalid("binding requires a retained external resource"));
             auto& bound = result->resources[binding.resource];
             if (bound.buffer || bound.image) return std::unexpected(invalid("duplicate external binding"));
-            if (auto imported = import_resource(bound, resources[binding.resource], binding); !imported) return std::unexpected(imported.error());
+            if (auto imported = import_resource(bound, resources[binding.resource], binding); !imported) return std::unexpected(resource_error(binding.resource, imported.error()));
             for (std::size_t i = 0; i < resources.size(); ++i) if (i != binding.resource) {
                 const auto& other = result->resources[i];
                 if ((bound.buffer && other.buffer && bound.buffer.handle() == other.buffer.handle()) ||
@@ -206,10 +230,11 @@ Result<Execution> execute(const CompiledGraph& plan, SubmissionQueue& queue, con
         auto batch_result = queue.begin(); if (!batch_result) return std::unexpected(batch_result.error());
         auto batch = std::move(*batch_result);
         // Retain all imports before callbacks: enforces device, WSI and recording reservations.
-        for (auto& bound : result->resources) {
+        for (std::size_t i = 0; i < resources.size(); ++i) {
+            auto& bound = result->resources[i];
             if (!bound.buffer && !bound.image) continue;
             auto retained = bound.buffer ? batch.retain(bound.buffer) : batch.retain(bound.image);
-            if (!retained) return std::unexpected(retained.error());
+            if (!retained) return std::unexpected(resource_error(i, retained.error()));
         }
         std::size_t next_allocation = 0;
         for (std::size_t position = 0; position < plan.order().size(); ++position) {
@@ -217,27 +242,41 @@ Result<Execution> execute(const CompiledGraph& plan, SubmissionQueue& queue, con
                 const auto index = plan.allocations()[next_allocation++].resource;
                 auto& bound = result->resources[index];
                 if (const auto* desc = std::get_if<BufferDesc>(&resources[index].description)) {
-                    auto created = queue.create_buffer(*desc); if (!created) return std::unexpected(created.error());
+                    auto created = queue.create_buffer(*desc); if (!created) return std::unexpected(resource_error(index, created.error()));
                     bound.buffer = std::move(*created);
                 } else {
-                    auto created = queue.create_image(std::get<ImageDesc>(resources[index].description)); if (!created) return std::unexpected(created.error());
+                    auto created = queue.create_image(std::get<ImageDesc>(resources[index].description)); if (!created) return std::unexpected(resource_error(index, created.error()));
                     bound.image = std::move(*created);
                 }
             }
             const auto index = plan.order()[position];
             const auto& pass = plan.passes()[index];
-            uses.clear();
-            for (const auto& use : pass.uses) uses.push_back(use_for(result->resources[use.resource], use.access));
-            if (auto prepared = batch.prepare(uses); !prepared) return std::unexpected(pass_error(pass, prepared.error()));
+            uses.clear(); indices.clear();
+            for (const auto& use : pass.uses) {
+                uses.push_back(use_for(result->resources[use.resource], use.access));
+                if (description.capture_synchronization) indices.push_back(use.resource);
+            }
+            if (description.capture_synchronization)
+                if (auto status = capture(*result,batch,uses,indices,index); !status) return std::unexpected(pass_error(pass,index,status.error()));
+            if (auto prepared = batch.prepare(uses); !prepared) return std::unexpected(pass_error(pass,index,prepared.error()));
             auto context = detail::ExecutionAccess::context(plan, *result, batch, index);
-            auto recorded = callbacks[index]->record(context, callbacks[index]->user_data);
-            if (!recorded) return std::unexpected(pass_error(pass, recorded.error()));
-            if (auto finished = batch.finish_pass(); !finished) return std::unexpected(pass_error(pass, finished.error()));
+            auto recorded = [&]() -> Result<void> {
+                try { return callbacks[index]->record(context, callbacks[index]->user_data); }
+                catch (const std::exception& error) { return std::unexpected(Error{ErrorCode::internal_error,error.what()}); }
+                catch (...) { return std::unexpected(Error{ErrorCode::internal_error,"unknown callback exception"}); }
+            }();
+            if (!recorded) return std::unexpected(pass_error(pass,index,recorded.error()));
+            if (auto finished = batch.finish_pass(); !finished) return std::unexpected(pass_error(pass,index,finished.error()));
             for (const auto& allocation : plan.allocations()) if (allocation.release_after == position)
                 result->resources[allocation.resource] = {};
         }
-        uses.clear();
-        for (const auto& request : final) uses.push_back(use_for(result->resources[request.resource], request.access));
+        uses.clear(); indices.clear();
+        for (const auto& request : final) {
+            uses.push_back(use_for(result->resources[request.resource], request.access));
+            if (description.capture_synchronization) indices.push_back(request.resource);
+        }
+        if (description.capture_synchronization)
+            if (auto status = capture(*result,batch,uses,indices,{}); !status) return std::unexpected(status.error().with_context("graph final access"));
         if (auto prepared = batch.prepare(uses); !prepared) return std::unexpected(prepared.error());
         // Snapshot before submit. No allocation or fallible work follows successful submission.
         for (std::size_t i = 0; i < resources.size(); ++i) {
@@ -255,7 +294,7 @@ Result<Execution> execute(const CompiledGraph& plan, SubmissionQueue& queue, con
                 }
             }
         }
-        auto submission = queue.submit(std::move(batch)); if (!submission) return std::unexpected(submission.error());
+        auto submission = queue.submit(std::move(batch)); if (!submission) return std::unexpected(submission.error().with_context("graph submit"));
         result->submission = *submission;
         for (std::size_t i = 0; i < resources.size(); ++i) if (!resources[i].output) result->resources[i] = {};
         return detail::ExecutionAccess::publish(std::move(result));

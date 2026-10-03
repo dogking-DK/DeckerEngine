@@ -16,6 +16,7 @@
 
 using namespace dk;
 using namespace dk::graphics;
+void graph_pipeline(memory::ResourceHandle,const DeviceOptions&,const std::array<std::uint32_t,1024>&);
 namespace {
 void require(bool condition, const char* message) { if (!condition) throw std::runtime_error(message); }
 void take(Result<void>&& result) { if (!result) throw std::runtime_error(result.error().message); }
@@ -126,9 +127,9 @@ void failure_lifetimes(OffscreenExecutor& executor, const CompiledShader& vertex
     const auto submitted = executor.stats().submitted;
     // Throw before native submit to exercise ownership rollback on a CPU exception.
     submit_exception = true;
-    bool threw = false;
-    try { (void)executor.draw(vertex, fragment); } catch (const std::bad_alloc&) { threw = true; }
-    require(threw && executor.stats().submitted == submitted && allocations(executor) == 0,
+    const auto allocation_failure = executor.draw(vertex, fragment);
+    require(!allocation_failure && allocation_failure.error().code == ErrorCode::internal_error &&
+        executor.stats().submitted == submitted && allocations(executor) == 0,
         "pre-submit exception published or retained work");
     require(take(executor.drain()), "pre-submit exception stranded a pending ticket");
     submit_error = VK_ERROR_OUT_OF_HOST_MEMORY;
@@ -286,7 +287,7 @@ void pipeline_bindings(memory::ResourceHandle resource, const DeviceOptions& opt
     require(bool(pipeline.handle()) && bool(bindings2.handle()), "pipeline/binding lost owned layout");
     take(queue.close());
 }
-void indexed_depth(memory::ResourceHandle resource, const DeviceOptions& options)
+std::array<std::uint32_t,1024> indexed_depth(memory::ResourceHandle resource, const DeviceOptions& options)
 {
     auto queue = take(SubmissionQueue::create(resource, take(Device::create(resource, options))));
     auto factory = queue.resources();
@@ -368,6 +369,7 @@ void indexed_depth(memory::ResourceHandle resource, const DeviceOptions& options
     take(readback.read(0,std::as_writable_bytes(std::span{pixels})));
     require(pixels[16*32+16] == 0xff0000ffu && pixels[0] == 0xff000000u, "indexed depth test/clear result mismatch");
     take(queue.close());
+    return pixels;
 }
 } // namespace
 
@@ -408,7 +410,7 @@ int main(int argc, char** argv)
             auto compute = take(compile_shader({sources / "transform.slang", "computeMain", ShaderStage::compute}, resource));
             std::printf("Slang=%s target=spirv_1_5 matrix=row_major entries=vertexMain,fragmentMain,computeMain\n", compute.compiler.c_str());
             pipeline_bindings(resource, options, vertex, fragment);
-            indexed_depth(resource, options);
+            graph_pipeline(resource,options,indexed_depth(resource, options));
             for (unsigned round = 0; round < 3; ++round) {
                 auto device = round == 0 ? std::move(*first_device) : take(Device::create(resource, options));
                 auto executor = intercepted(resource, std::move(device));

@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-03T07:28:09+08:00"
+updated_at: "2026-10-03T14:45:24+08:00"
 ---
 
 # 构建与依赖配置
@@ -58,7 +58,7 @@ ctest --preset windows-debug
 
 `windows-dev` 默认构建 Core、日志、Eigen 数学、IO、Scene、Memory、Jobs、CPU 资产导入/缓存、Framework 与 Catch2 单元测试。
 `windows-graphics` 继承该预设，显式启用 DK_BUILD_GRAPHICS_DEVICE、DK_BUILD_GRAPHICS_SHADERS、DK_BUILD_GRAPHICS_OFFSCREEN、DK_BUILD_GRAPHICS_GRAPH；
-Offscreen 要求前两个模块，复用其 feature。设备/资源和离屏探针见 [Graphics 指南](graphics.md)、[离屏指南](offscreen.md)。
+Offscreen 要求 Device、Shaders、Graph，复用已有 feature。设备/资源和离屏探针见 [Graphics 指南](graphics.md)、[离屏指南](offscreen.md)。
 Graph 要求 device；声明/校验/编译不初始化 GPU，无额外依赖 feature，见 [Graph 指南](graph.md)。
 `windows-shaders` 单独构建无需 Vulkan 的
 离线编译库/工具，见 [Shader 指南](shaders.md)。默认开发预设不加载 Vulkan 或 Slang。

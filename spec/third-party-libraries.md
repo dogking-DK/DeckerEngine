@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-10-02T21:56:00+08:00"
+updated_at: "2026-10-03T14:48:07+08:00"
 status: accepted
 ---
 
@@ -147,6 +147,8 @@ Slang COM 对象使用 ComPtr RAII，三方内部及短期适配分配使用默�
 M5.4 复用以上固定版本，无新增/升级包或 baseline 变化。dk::graphics_offscreen PUBLIC 组合 Device/Shaders，
 以 vk::raii 管理 ShaderModule、Pipeline/Layout、DescriptorSetLayout/Pool/Set 和 ImageView；
 VMA 继续独占 Buffer/Image 内存所有权。离屏绘制/compute 和同步验证证据见 [0047](development/0047-offscreen-execution.md)。
+M6.4 的 Offscreen 另以 PRIVATE 链接 dk::graphics_graph，由图编排上传/计算/绘制/读回；
+底层 vk::raii 对象仍归 device 工厂，无新增外部依赖或 baseline 变化，见 [0060](development/0060-graph-integration.md)。
 
 2026-09-30 按用户要求将运行 API 基线统一为 Vulkan 1.4，CMake 要求 VulkanHeaders >= 1.4；
 官方 [headers port](https://github.com/microsoft/vcpkg/blob/master/ports/vulkan-headers/vcpkg.json) 仍为 1.4.357.0，

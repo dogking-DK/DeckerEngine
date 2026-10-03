@@ -4,7 +4,7 @@
 #include <optional>
 
 namespace dk::graphics::graph {
-namespace detail { struct GraphState; struct HandleAccess; struct PlanState; struct ExecutionAccess; }
+namespace detail { struct GraphState; struct HandleAccess; struct PlanState; struct ExecutionAccess; struct PlanAccess; }
 template<class Tag> class Id final {
 public:
     Id() = default;
@@ -98,6 +98,7 @@ public:
 private:
     friend class Graph;
     friend struct detail::ExecutionAccess;
+    friend struct detail::PlanAccess;
     explicit CompiledGraph(std::shared_ptr<detail::PlanState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::PlanState> state_;
 };

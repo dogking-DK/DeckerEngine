@@ -1,7 +1,7 @@
 ---
 module: graphics-offscreen
 created_at: "2026-09-30T09:00:00+08:00"
-updated_at: "2026-10-02T21:26:00+08:00"
+updated_at: "2026-10-03T14:45:24+08:00"
 status: accepted
 ---
 
@@ -11,13 +11,13 @@ status: accepted
 
 M5.4 将 [Device/资源提交](graphics-resources.md) 与 [Slang 产物](graphics-shaders.md) 连成
 真实 draw/dispatch/readback 闭环。独立 `dk::graphics_offscreen`、`DK_BUILD_GRAPHICS_OFFSCREEN`，
-要求 Device/Shaders 已启用；windows-graphics 开启，默认 CPU 与离线 Shader 配置不引入此模块。
-复用现有固定依赖；不新增包、Runtime 命令、窗口、swapchain、Graph 或第二套通用渲染架构。
-这是同步、单队列的底座验证入口；正式业务调度留给 M6/M7。
+要求 Device/Shaders/Graph 已启用；windows-graphics 开启，默认 CPU 与离线 Shader 配置不引入此模块。
+复用现有固定依赖；不新增包、Runtime 命令、窗口、swapchain 或第二套通用渲染架构。
+这是同步、单队列的底座验证入口；正式场景渲染留给 M7。
 
 [M5.5 使用层](graphics-vulkan.md) 接管 view/pipeline/descriptor、命令录制和 GPU 对象保活；
-本模块只组合输入、资源、显式访问意图和结果请求，保留现有同步 API。
-Work 仅包含 ReadbackRequest 与票据；每次建管线和 draw/dispatch 的特定输入限制保持不变。
+本模块通过 Graph 组合输入、资源、访问声明和输出，保留现有同步 API。
+Work 仅包含 Graph Execution；每次建管线和 draw/dispatch 的特定输入限制保持不变。
 
 ## 接口与数据
 
@@ -44,14 +44,14 @@ shader 来自受信任且未经修改的 compile_shader 产物；基本 SPIR-V �
 调用者串行访问 executor，不公开其可变队列，单次最多一个 pending 操作；每次创建管线，不实现缓存。
 
 输出 CPU 容器、所有资源与录制在 submit 前准备；提交层 pending slot 持有管线/描述符/view/资源闭包。
-Offscreen pending work 只保存结果请求与票据，不重复维护 GPU 对象所有权。
+Offscreen pending work 只保存 Graph Execution；结果拥有 readback buffer，pending slot 保活中间资源和对象。
 成功等待完成后才读回、发布返回值并释放 work。输入错误、分配/创建/录制/submit 失败不发布输出，
 不会修改调用者输入。Memory resource 关闭后拒绝新操作，但仍允许 drain/析构回收；调用期间不能并发关闭资源。
 可传播的 CPU 分配异常不伪装成 Result；提交前异常清除预留 work，提交后保持 pending。
 不承诺 MSVC Debug STL 的 noexcept 容器构造发生 OOM 时可恢复。Vulkan/参数错误通过 Result 返回。
 默认等待 10 秒，超时返回 conflict，其他 wait 错误保留原 Result；两者均保留 pending，禁止新操作。
 `drain(timeout)` 等待并丢弃该失败调用的待处理结果，只有确认完成才释放；允许重试。
-析构先让 SubmissionQueue 等待/处理 lost，再释放结果请求；资源持有设备寿命直至最后释放。
+析构先让 SubmissionQueue 等待/处理 lost，再释放 Graph 结果；资源持有设备寿命直至最后释放。
 不伪造 GPU 完成，不因超时或 CPU 函数返回就释放对象。Device lost 沿用 M5.2 终态与析构保护。
 
 ## 实施与验证
@@ -66,4 +66,18 @@ CPU 参数策略与 GPU probe 分开。通过 upload→prepare→encoder→readb
 
 参考 [Khronos dynamic rendering](https://docs.vulkan.org/samples/latest/samples/extensions/dynamic_rendering/README.html)、
 [同步示例](https://docs.vulkan.org/guide/latest/synchronization_examples.html)。
-开发记录：[0047](../development/0047-offscreen-execution.md)。
+开发记录：[0047](../development/0047-offscreen-execution.md)、[0060](../development/0060-graph-integration.md)。
+
+## M6.4 Graph 迁移
+
+公开同步 draw/dispatch、输入约束、返回值顺序、超时/drain/关闭行为保持。
+draw 声明 clear→draw→readback；dispatch 声明 upload→compute→readback，初始 bytes 先写 upload buffer，
+GPU 复制是 upload Pass。storage、color、readback 均由图创建，每个 readback 标记输出并声明最终 HostRead。
+compute 的 input buffer 保守按 storage read/write 声明，支持 shader 只写部分元素并保留尾部。
+各回调内创建瞬态 view/binding；不保存借用到后续 Pass，GPU 对象由 encoder/batch 保活。
+
+Work 和 CPU 返回容器在 Graph 提交前预留，成功后只移动 Execution；等待失败保留 pending，drain 完成后丢弃。
+Graph 录制/提交边界捕获的 CPU 异常变为 internal_error Result，外部预处理的分配异常仍可传播。
+原有“提交失败无 pending，超时不释放，关闭可 drain”的状态约定保持。
+CMake 显式增加 PRIVATE dk::graphics_graph；独立 OFFSCREEN=ON 时必须同时 GRAPH=ON，不自动开启选项。
+M5 使用层的底层非法操作测试保留，Offscreen 图像/计算测试迁移并比较原结果。

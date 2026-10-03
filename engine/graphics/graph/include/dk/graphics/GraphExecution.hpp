@@ -20,6 +20,12 @@ struct ExportedState {
     std::uint32_t mip = 0, layer = 0;
     AccessState state;
 };
+struct Synchronization {
+    std::optional<std::size_t> pass; // Empty for final access; otherwise declaration index.
+    std::size_t resource;
+    std::uint32_t mip = 0, layer = 0;
+    AccessState before, target; // Actual barrier scopes; initialized is preserved.
+};
 // Borrowed for one callback only. Declare every accessed binding/range in the Pass.
 // Encoders must end within the callback; no submission or manual barriers are exposed.
 class PassContext final {
@@ -59,6 +65,7 @@ struct ExecutionDesc {
     std::span<const ExternalBinding> bindings;
     std::span<const PassCallback> callbacks;
     std::span<const FinalAccess> final_accesses;
+    bool capture_synchronization = false;
 };
 class Execution final {
 public:
@@ -71,6 +78,7 @@ public:
     // Use queue.wait/poll; publication of states does not imply GPU completion.
     [[nodiscard]] Submission submission() const noexcept;
     [[nodiscard]] std::span<const ExportedState> states() const noexcept;
+    [[nodiscard]] std::span<const Synchronization> synchronization() const noexcept;
     // Output owners only. Borrowed until this result is replaced/destroyed; share() keeps an owner.
     [[nodiscard]] Result<const Buffer*> buffer(std::size_t resource) const;
     [[nodiscard]] Result<const Image*> image(std::size_t resource) const;

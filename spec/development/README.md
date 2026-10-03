@@ -61,5 +61,6 @@
 | 0057 | [M6.1 图声明与结构校验](0057-graph-declarations.md) | graphics-graph, graphics-resources, architecture | completed |
 | 0058 | [M6.2 依赖编译与资源生命周期](0058-graph-compilation.md) | graphics-graph, architecture | completed |
 | 0059 | [M6.3 单队列同步与执行](0059-graph-execution.md) | graphics-graph, graphics-resources, architecture | completed |
+| 0060 | [M6.4 样例迁移与诊断](0060-graph-integration.md) | graphics-graph, graphics-offscreen, architecture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

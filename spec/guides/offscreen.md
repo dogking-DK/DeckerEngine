@@ -1,12 +1,12 @@
 ---
 created_at: "2026-09-30T09:26:00+08:00"
-updated_at: "2026-10-02T21:26:00+08:00"
+updated_at: "2026-10-03T14:45:24+08:00"
 ---
 
 # 离屏绘制、计算与读回
 
 [返回项目入口](../../README.md)。`dk::graphics_offscreen` 将 [Slang 编译](shaders.md) 和
-[Vulkan 资源提交](graphics.md) 接成同步 GPU 执行入口，无窗口、无 swapchain。
+[Vulkan 资源提交](graphics.md)、[Graph](graph.md) 接成同步 GPU 执行入口，无窗口、无 swapchain。
 这是底座验证用途：图形支持无顶点缓冲/descriptor 的 triangle list，计算支持 set 0 的 storage buffer 与 push constant。
 完整限制和寿命约定见 [graphics-offscreen](../design/graphics-offscreen.md)。
 
@@ -21,11 +21,11 @@ cmake --preset windows-graphics -DDK_WARNINGS_AS_ERRORS=ON
 & ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Target @('dk_offscreen_tests', 'dk_offscreen_probe') -TestRegex '^dk\.offscreen\.' -Reason '验证离屏绘制计算与同步寿命'
 ```
 
-预设开启 `DK_BUILD_GRAPHICS_OFFSCREEN`，要求 Device/Shaders 同时开启。自定义程序链接
+预设开启 `DK_BUILD_GRAPHICS_OFFSCREEN`，要求 Device/Shaders/Graph 同时开启。自定义程序链接
 `dk::graphics_offscreen`，并调用 `dk_deploy_slang(target)` 部署编译器依赖。
 CPU 参数检查可仅选择 `dk_offscreen_tests` / `^dk\.offscreen\.unit\.`，不需要 GPU。
 
-GPU 探针每次编译三个入口，在三轮设备生命周期内验证 12 组 draw/compute，另验证失败、超时、恢复与带 pending 析构。
+GPU 探针编译三角形、计算与完整 Graph 样例的 shader 入口，在三轮设备生命周期内验证 12 组 draw/compute，另验证失败、超时、恢复与带 pending 析构。
 图像使用逐像素背景/三角形内部插值校验；compute 对 1/64/257/1031 个元素执行已知整数变换并检查尾部哨兵。
 同时要求 VMA/Memory 无残留、零验证 warning/error。无必需环境返回 77（Skipped），不代表验收通过。
 验证用例自动开启同步验证，兼容 `VK_LAYER_VALIDATE_SYNC` / `VK_VALIDATION_VALIDATE_SYNC`。
@@ -33,7 +33,9 @@ GPU 探针每次编译三个入口，在三轮设备生命周期内验证 12 组
 CTest 在 `out/build/windows-graphics/tests/integration/` 输出 `offscreen-triangle.ppm` 和
 `offscreen-triangle-validation.ppm`，均为 64×64 RGB PPM。也可直接运行
 `out/build/windows-graphics/bin/Debug/dk-offscreen-probe.exe --validation`，此时图像输出到当前目录。
-日志打印实际 GPU/驱动/API、Slang 版本/目标和诊断计数；验证记录见 [0047](../development/0047-offscreen-execution.md)。
+日志打印实际 GPU/驱动/API、Slang 版本/目标和诊断计数；Graph 迁移验收见 [0060](../development/0060-graph-integration.md)。
+组合 upload→compute→draw→readback 图另执行四次，输出与 M5 indexed triangle 逐像素一致；
+计划与同步诊断保存为同目录的 graph-pipeline-validation.txt，详见 [Graph 指南](graph.md)。
 
 ## C++ 调用
 
@@ -81,6 +83,8 @@ int main()
 默认等待 10 秒，超时返回 conflict；等待错误和超时均保留所有 GPU 所有者，新操作被拒绝。
 调用 `drain(timeout_ns)` 确认完成并丢弃失败调用的结果；false 表示仍 pending，错误也可重试。
 析构会等待自身工作。Memory 关闭后禁止新 draw/dispatch，仍允许 drain；操作期间需串行访问并保持资源 open。
-实现通过 ResourceFactory、encoder、upload/readback 组合，pending 只保存请求与票据；
-提交层自动保留 GPU 对象闭包。需要复用管线、多 set、纹理、深度或索引绘制时，直接使用[使用层接口](graphics.md)。
+实现通过 Graph 声明 clear/draw/readback 或 upload/compute/readback；pipeline/view/binding 使用 ResourceFactory。
+pending 保存 Graph Execution，提交层保活中间资源，Execution 保留 readback 输出。
+Graph 录制/提交边界捕获的 CPU 异常转换为 internal_error Result；外围准备的分配异常仍可能传播。
+需要复用管线、多 set、纹理、深度或索引绘制时，可组合 [Graph](graph.md) 和[使用层接口](graphics.md)。
 尚无自动管线缓存、场景渲染、窗口或 Tracy GPU capture。

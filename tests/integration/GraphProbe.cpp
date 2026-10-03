@@ -65,7 +65,7 @@ void add(Graph& graph, std::string_view name, std::initializer_list<Use> uses, b
     static_cast<void>(take(graph.add_pass({name, {uses.begin(), uses.size()}, effect})));
 }
 Result<void> noop(PassContext&, void*) { return {}; }
-Result<void> fail(PassContext&, void*) { return std::unexpected(Error{ErrorCode::conflict, "injected recorder failure"}); }
+Result<void> fail(PassContext&, void*) { return std::unexpected(Error{ErrorCode::conflict, "injected recorder failure", {"inner recorder"}}); }
 Result<void> throws(PassContext&, void*) { throw std::runtime_error("injected recorder exception"); }
 Result<void> fill_first(PassContext& pass, void*) { return pass.fill(0, 0x12345678u); }
 
@@ -105,7 +105,13 @@ void roundtrip(memory::ResourceHandle heap, SubmissionQueue& queue) {
         std::array<std::uint32_t, 16> input{}, actual{};
         for (std::size_t i = 0; i < input.size(); ++i) input[i] = static_cast<std::uint32_t>(i * 7919 + round * 97);
         check(upload.write(0, std::as_bytes(std::span{input})));
-        auto execution = take(execute(plan, queue, {bindings, callbacks, final}));
+        auto execution = take(execute(plan, queue, {bindings, callbacks, final, true}));
+        require(execution.synchronization().size() == 8,"missing graph barrier diagnostics");
+        const auto& image_barrier = execution.synchronization()[3];
+        require(image_barrier.pass == 1 && image_barrier.resource == 4 &&
+            image_barrier.before.layout == vk::ImageLayout::eUndefined && image_barrier.target.layout == vk::ImageLayout::eTransferDstOptimal &&
+            !image_barrier.target.initialized,"image barrier diagnostics invented initial content");
+        require(!execution.synchronization().back().pass,"final barrier was labelled as a pass");
         require(counter.recorded == round + 1, "callback execution count mismatch");
         require(execution.states().size() == 3, "missing exported state");
         require(!execution.buffer(1) && !execution.buffer(3), "non-output was retained by execution");
@@ -148,6 +154,7 @@ void import_and_failures(memory::ResourceHandle heap, SubmissionQueue& queue, co
         require(!execution, "invalid execution accepted");
         require(queue.stats().submitted == submitted && queue.stats().recording_slots == 0, "failure published or retained work");
         require(take(output.state()) == before && allocations(queue) == live, "failure changed state or leaked GPU allocations");
+        return execution.error();
     };
     rejects({{}, callbacks, {}}); rejects({bindings, {}, {}});
     const std::array duplicate_callbacks{callbacks[0], callbacks[0]}; rejects({bindings, duplicate_callbacks, {}});
@@ -159,7 +166,10 @@ void import_and_failures(memory::ResourceHandle heap, SubmissionQueue& queue, co
     require(!execute(plan, queue, {wrong_binding, callbacks, {}}), "wrong description accepted"); wrong = Buffer{};
     const FinalAccess final{0, {{vk::PipelineStageFlagBits2::eHost, vk::AccessFlagBits2::eHostRead}}};
     const std::array overlapping{final, final}; rejects({bindings, callbacks, overlapping});
-    callbacks[0].record = fail; rejects({bindings, callbacks, {}});
+    callbacks[0].record = fail;
+    const auto error = rejects({bindings, callbacks, {}});
+    require(error.code == ErrorCode::conflict && error.message == "injected recorder failure" && error.context.size() == 2 &&
+        error.context.front() == "inner recorder" && error.context.back().find("graph pass #0 'fill'") != std::string::npos,"graph lost nested error context");
     callbacks[0].record = throws; rejects({bindings, callbacks, {}});
     callbacks[0].record = noop; rejects({bindings, callbacks, {}}); // An unrecorded write cannot masquerade as initialization.
     callbacks[0].record = fill_first;
@@ -323,7 +333,7 @@ void budget_and_commit(memory::MemorySystem& system, SubmissionQueue& queue) {
         do {
             const auto before = heap.snapshot(); const auto submitted = queue.stats().submitted;
             {
-                auto execution = execute(plan, queue, {{},callbacks,{}});
+                auto execution = execute(plan, queue, {{},callbacks,{},true});
                 if (!execution) {
                     failed = true; partial |= heap.snapshot().allocation_count > before.allocation_count + 3;
                     require(queue.stats().submitted == submitted, "allocation failure published work");

@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-03T08:09:09+08:00"
+updated_at: "2026-10-03T14:45:24+08:00"
 status: accepted
 ---
 
@@ -19,11 +19,11 @@ ECS 使用 flecs，内嵌脚本计划用 Lua/sol2，外部自动化计划用 Pyt
 当前 CPU 链路由 Foundation/Memory/Jobs、Scene、Commands/Services/Runtime 和 Assets 组成。
 graphics/device 提供独立可选的无窗口 Vulkan 设备、VMA 资源、提交/读回与延迟释放，不进入 CPU Runtime 的链接依赖；
 graphics/shaders 提供独立 CPU Slang 编译、SPIR-V 和最小反射，同样不进入 CPU Runtime 的链接依赖。
-graphics/offscreen 组合上述模块，提供同步离屏 draw/dispatch/readback 验证入口，同样独立于 CPU Runtime。
+graphics/offscreen 组合 Device、Shaders 与 Graph，提供同步离屏 draw/dispatch/readback 验证入口，同样独立于 CPU Runtime。
 platform 提供 SDL3 窗口/事件，graphics/presentation 提供独立可选的窗口设备、交换链及帧恢复，
-复用 graphics/device 使用层；两者不进入 CPU Runtime 或 Offscreen 依赖。Graph 提供独立可选的 CPU 资源/Pass 声明、校验、依赖编译、裁剪、资源生命周期计划及单队列同步执行。具体边界见[设备设计](graphics-device.md)、[资源设计](graphics-resources.md)、
+复用 graphics/device 使用层；两者不进入 CPU Runtime 或 Offscreen 依赖。Graph 提供独立可选的 CPU 资源/Pass 声明、校验、依赖编译、裁剪、资源生命周期计划、单队列同步执行及计划/同步诊断。具体边界见[设备设计](graphics-device.md)、[资源设计](graphics-resources.md)、
 [Graph 设计](graphics-graph.md)、[Shader 设计](graphics-shaders.md)、[离屏设计](graphics-offscreen.md)、[窗口设计](platform.md) 和[呈现设计](graphics-presentation.md)。
-[Vulkan 使用层](graphics-vulkan.md) 统一对象/管线/绑定/录制/同步与传输，Offscreen 通过该接口执行；
+[Vulkan 使用层](graphics-vulkan.md) 统一对象/管线/绑定/录制/同步与传输，Offscreen 通过 Graph 编排，再由使用层录制执行；
 无 Slang/Vulkan 依赖的 shader-types 保存编译产物，设备模块无需链接编译器。Graph 共用 device 的纯访问校验；执行复用同一录制、导入导出状态与完成接口。
 模块接口与实现入口见[设计索引](README.md)，阶段状态和下一项统一见[Roadmap](../roadmap.md)，
 历史验收结果见[开发记录](../development/README.md)。

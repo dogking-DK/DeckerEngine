@@ -1,7 +1,7 @@
 ---
 module: graphics-graph
 created_at: "2026-10-02T23:00:00+08:00"
-updated_at: "2026-10-03T08:14:35+08:00"
+updated_at: "2026-10-03T14:45:24+08:00"
 status: accepted
 ---
 
@@ -12,11 +12,11 @@ status: accepted
 M6 用同一图组织上传、计算、绘制和读回。M6.1 提供 CPU 声明与结构校验：
 transient/external buffer/image、Pass 访问与副作用、输出和显式依赖。
 M6.2 发布独立 CPU 编译计划（依赖、排序、裁剪与逻辑生命周期）。
-本次 M6.3 接入状态导入/导出及单队列执行，M6.4 迁移样例。阶段状态见 [Roadmap](../roadmap.md)。
+M6.3 接入状态导入/导出及单队列执行；M6.4 迁移样例并提供计划/同步诊断。阶段状态见 [Roadmap](../roadmap.md)。
 
 ## 模块边界和依赖方向
 
-`engine/graphics/graph` 提供 `dk::graphics_graph`，公开入口 `dk/graphics/Graph.hpp`、`dk/graphics/GraphExecution.hpp`，
+`engine/graphics/graph` 提供 `dk::graphics_graph`，公开入口 `dk/graphics/Graph.hpp`、`dk/graphics/GraphExecution.hpp`、`dk/graphics/GraphDiagnostics.hpp`，
 命名空间 `dk::graphics::graph`。可选 `DK_BUILD_GRAPHICS_GRAPH` 默认 OFF，要求 device；
 windows-graphics 预设显式开启，CPU runner 不链接 Graph。PUBLIC 依赖 device，以复用
 BufferDesc/ImageDesc/AccessState、Memory 和 Vulkan 值类型；不依赖 Slang、SDL、Scene 或 Offscreen。
@@ -168,4 +168,22 @@ validate/compile 只读，失败不修改图，不存在 GPU 状态提交点。�
 ## 相关记录
 
 [架构](architecture.md)、[资源](graphics-resources.md)、[Vulkan 使用层](graphics-vulkan.md)、
-[0057 声明记录](../development/0057-graph-declarations.md)、[0058 编译记录](../development/0058-graph-compilation.md)、[0059 执行记录](../development/0059-graph-execution.md)。
+[0057 声明记录](../development/0057-graph-declarations.md)、[0058 编译记录](../development/0058-graph-compilation.md)、[0059 执行记录](../development/0059-graph-execution.md)、[0060 集成记录](../development/0060-graph-integration.md)。
+
+## 样例与诊断（M6.4）
+
+Offscreen 的 draw/dispatch 改为 Graph 客户端，GPU 上传、计算、绘制、读回均为显式 Pass。
+清屏采用独立 transfer clear Pass（完整覆盖），draw 使用 Load 和保留读写；避免把 attachment 读访问
+伪装成不读取旧内容的 full_overwrite。组合 GPU 样例用上传的初始顶点经过 compute 后作为 vertex buffer 绘制，
+最后读回；与 M5 图像/计算基线及重复运行结果比较。管线/绑定仍来自 Device 工厂，Graph 不依赖 Shader 编译器。
+
+`format_plan(plan)` 返回拥有型 PlanReport，其 text() 借用内部 Memory String：按声明索引列出 retained/culled Pass、访问范围、
+资源类型/寿命/首末使用/分配，以及拓扑顺序和依赖原因；名字转义换行与引号，文本稳定、无地址或设备句柄。
+格式为人类诊断，不承诺持久化协议；默认/关闭的计划域拒绝生成，已返回文本仍独立有效。
+
+`ExecutionDesc::capture_synchronization` 默认 false；启用后 Execution::synchronization() 返回实际录制的
+每个资源 barrier 输入（Pass 索引或 final、资源索引、mip/layer、before 和目标 state）。
+buffer 为整对象，image 逐子资源；目标 state 的 initialized 沿用 before（barrier 不创造内容），
+read/read 时目标访问是本次请求，可能与账本累计的访问不同。顺序与 prepare 的发出顺序一致。
+记录只在执行候选中分配，失败仍不发布/提交半个结果；不做 GPU timestamp 或性能推断。
+错误补充执行阶段、Pass 名字/索引或资源名字/索引上下文，保留原 Error code/message/context。

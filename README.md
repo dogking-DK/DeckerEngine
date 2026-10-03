@@ -5,7 +5,7 @@
 
 当前提供 Foundation、Memory/Tracy、Scene 持久化、命令/事务、CPU Runtime、
 资产导入与缓存、有界 Jobs、异步 CPU Ready，以及可选的 Vulkan 使用层（对象/管线/绑定/录制/同步/传输）、Slang 编译、离屏绘制/计算读回，以及 SDL3 窗口与 Vulkan 呈现。
-GPU Graph 提供资源/Pass 声明、CPU 编译、裁剪、transient 资源管理及单队列同步执行和状态导入导出。
+GPU Graph 提供资源/Pass 声明、CPU 编译、裁剪、transient 资源管理及单队列同步执行、状态导入导出和诊断；离屏样例已由 Graph 编排。
 场景渲染、物理、编辑器、网络 IPC 与脚本尚未实现。
 阶段状态、依赖和下一项统一见[开发 Roadmap](spec/roadmap.md)。
 
@@ -68,7 +68,7 @@ pwsh -NoProfile -File scripts/check-spec.ps1
 | engine/scene | 场景文档、组件、层级、工程与 JSON 持久化 |
 | engine/framework | commands、services、operations、runtime |
 | engine/automation | JSON-RPC 与 JSON Lines/stdio；网络和客户端 SDK 预留 |
-| engine/graphics/device、shader-types、shaders、offscreen、presentation、graph | Vulkan 1.4 使用层、独立 shader 产物、Slang 编译、离屏执行与窗口呈现与 Graph 单队列执行 |
+| engine/graphics/device、shader-types、shaders、offscreen、presentation、graph | Vulkan 1.4 使用层、独立 shader 产物、Slang 编译、离屏执行、窗口呈现与 Graph 单队列执行 |
 | engine/platform | SDL3 窗口、事件与像素尺寸；不进入 CPU runner/离屏依赖 |
 | apps/runner、tools/assetc | CPU 命令进程、离线资产工具 |
 | tools/shaderc、shaders/common | 独立 shader 编译工具、图形/compute 源码示例 |

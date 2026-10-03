@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-03T08:14:35+08:00"
+updated_at: "2026-10-03T14:45:24+08:00"
 status: accepted
 ---
 
@@ -39,7 +39,8 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 [0056](development/0056-presentation-recovery.md)；M5 已全部验收。M6.1 图声明与结构校验完成，见
 [0057](development/0057-graph-declarations.md)。M6.2 依赖编译与资源生命周期完成，见
 [0058](development/0058-graph-compilation.md)。M6.3 单队列同步与执行完成，见
-[0059](development/0059-graph-execution.md)；下一项为 M6.4 样例迁移与诊断。
+[0059](development/0059-graph-execution.md)。M6.4 样例迁移与诊断完成，见
+[0060](development/0060-graph-integration.md)；M6 已全部验收，下一项为 M7.1 场景提取与 GPU 资源。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作；提早建立多线程内存契约与性能测量，复杂并行优化仍由测量驱动。
@@ -60,7 +61,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M1.7 Foundation 补充 | Tracy、mimalloc heap、PMR/智能指针、arena/pool、多线程生命周期与性能基线 | 原 M1、M3（现有链路埋点） | 已完成：M1.7.1–7 均验收 |
 | M4 资产加载链路 | 导入、缓存、加载状态、异步任务 | M2、M3、M1.7 | 已完成：M4.1–4，证据 0031–0040 |
 | M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、Vulkan 使用层、最小呈现 | M1、M1.7 | 已完成：M5.1–6 均验收，见 0042–0056 |
-| M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 进行中：M6.1–3 已完成，M6.4 待开始 |
+| M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 已完成（M6.1–4） |
 | M7 场景渲染 | 资产上传、场景提取、Pass、pipeline、可等待截图 | M3、M4、M6 | 待开始 |
 | M8 编辑器与进程控制 | 可编辑保存的视口；dk-ctl 操作运行中的程序 | M7 | 待开始 |
 | M9 脚本与自动化 SDK | Lua 场景脚本、Python 客户端、批处理与重放 | M3；集成验收需要 M8 | 待开始 |
@@ -362,9 +363,9 @@ shader 热重载、跨平台交叉编译、多 GPU 暂缓。
 | M6.1 | 图声明与结构校验 | M5 | 资源/Pass 声明、句柄/内容/循环校验与失败保护通过，见 [0057](development/0057-graph-declarations.md) | 已完成 |
 | M6.2 | 依赖编译与资源生命周期 | M6.1 | 确定性排序、内容裁剪、独立快照与 transient 生命周期计划通过，见 [0058](development/0058-graph-compilation.md) | 已完成 |
 | M6.3 | 单队列同步与执行 | M6.2 | barrier、layout、外部状态与完成跟踪通过 GPU 验证，见 [0059](development/0059-graph-execution.md) | 已完成 |
-| M6.4 | 样例迁移与诊断 | M6.3 | upload/compute/draw/readback 全部进入图，重复运行和 M5 结果回归通过 | 待开始 |
+| M6.4 | 样例迁移与诊断 | M6.3 | 完整管线重复执行、M5 结果回归与诊断通过，见 [0060](development/0060-graph-integration.md) | 已完成 |
 
-**当前设计：** [GPU Graph](design/graphics-graph.md)。M6.1–3 提供 CPU 声明/编译、单队列同步执行、状态导入导出与完成跟踪；样例迁移与诊断整合待 M6.4。
+**当前设计：** [GPU Graph](design/graphics-graph.md)。M6.1–4 提供声明/编译、同步执行、状态导入导出、完成跟踪和诊断；Offscreen 与完整组合样例通过图执行。
 
 **验收：** upload → compute → draw → readback 的小图正确执行；
 写后读、布局转换、外部状态、重复执行和生命周期有测试。
@@ -509,7 +510,7 @@ GPU 未完成前不释放状态，也不默认经 CPU 读回再上传。
 
 ## 当前执行边界与下一步
 
-M0–M5、M1.7 Memory/Tracy 补充均已完成。当前可运行的 CPU 链路包括
+M0–M6、M1.7 Memory/Tracy 补充均已完成。当前可运行的 CPU 链路包括
 Foundation、Scene 持久化、命令/事务、batch/stdio、资产导入/缓存与异步 CPU Ready。
 各小阶段的验收条件与证据入口见上表；历史测试计数保留在[开发记录](development/README.md)，不作为日常固定回归套件。
 M4 的进程重启、取消和退出验收见 [0040](development/0040-cpu-assets-delivery.md)，
@@ -525,7 +526,8 @@ M5.6 窗口呈现、交换链同步与恢复、独立离屏和 CPU 回归见 [00
 M6.1 图声明与结构校验完成，见 [0057](development/0057-graph-declarations.md)。
 M6.2 编译计划与生命周期完成，见 [0058](development/0058-graph-compilation.md)。
 M6.3 同步、执行与状态导入导出完成，见 [0059](development/0059-graph-execution.md)。
-下一项为 **M6.4 样例迁移与诊断**：将 upload/compute/draw/readback 样例纳入图，完善执行诊断；
+M6.4 样例迁移与诊断完成，见 [0060](development/0060-graph-integration.md)；M6 全部验收。
+下一项为 **M7.1 场景提取与 GPU 资源**：只读场景/视图、GpuMesh/纹理上传及卸载寿命；
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 

@@ -3,6 +3,7 @@
 
 namespace dk::graphics::graph {
 namespace detail {
+struct PlanAccess { static const auto& state(const CompiledGraph& plan) { return plan.state_; } };
 struct PlanResourceOwner {
     PlanResourceOwner(memory::ResourceHandle heap, std::string_view label) : name(label, memory::Allocator<char>{heap}) {}
     String name;
