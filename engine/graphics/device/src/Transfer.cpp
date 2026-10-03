@@ -125,7 +125,7 @@ Result<ReadbackRequest> CommandBatch::readback(const Image& source, const ImageC
     auto staging = detail::ObjectAccess::factory(*state_).create_buffer({copy->bytes,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback});
     if (!staging) return std::unexpected(staging.error());
     auto request = memory::make_shared_in<detail::ReadbackState>(state_->queue->resource,std::move(*staging),
-        ReadbackDescription{copy->bytes,source.description().format,region.width,region.height,vk::DeviceSize{region.width}*4});
+        ReadbackDescription{copy->bytes,source.description().format,region.width,region.height,vk::DeviceSize{region.width}*detail::color_texel_bytes(source.description().format)});
     TransferGuard guard{*state_};
     state_->requests.push_back(request);
     const std::array uses{image_use(source,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead,vk::ImageLayout::eTransferSrcOptimal,copy->range),

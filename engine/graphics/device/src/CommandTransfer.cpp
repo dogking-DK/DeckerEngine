@@ -1,25 +1,27 @@
 #include "CommandInternal.hpp"
+#include <cmath>
 
 namespace dk::graphics::detail {
 Result<CopyFootprint> copy_footprint(const ImageDesc& image, const ImageCopyRegion& region)
 {
     if (auto bytes = image_bytes(image); !bytes) return std::unexpected(bytes.error());
-    if (region.mip >= image.mip_levels || region.layer >= image.array_layers || !region.width || !region.height || region.buffer_offset % 4)
+    const auto stride = detail::color_texel_bytes(image.format);
+    if (region.mip >= image.mip_levels || region.layer >= image.array_layers || !region.width || !region.height || region.buffer_offset % stride)
         return std::unexpected(Error{ErrorCode::invalid_argument, "invalid copy mip/layer/extent/alignment"});
     const auto width = std::max(1u, image.width >> region.mip), height = std::max(1u, image.height >> region.mip);
     const auto row = region.row_length ? region.row_length : region.width;
     if (!valid_range(width, region.x, region.width) || !valid_range(height, region.y, region.height) || row < region.width ||
-        (region.image_height && region.image_height < region.height) || row > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max() / 4))
+        (region.image_height && region.image_height < region.height) || row > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max() / stride))
         return std::unexpected(Error{ErrorCode::invalid_argument, "copy extent or row pitch is out of range"});
     const auto texels = vk::DeviceSize{row} * (region.height - 1) + region.width;
-    if (texels > std::numeric_limits<vk::DeviceSize>::max() / 4 || region.buffer_offset > std::numeric_limits<vk::DeviceSize>::max() - texels * 4)
+    if (texels > std::numeric_limits<vk::DeviceSize>::max() / stride || region.buffer_offset > std::numeric_limits<vk::DeviceSize>::max() - texels * stride)
         return std::unexpected(Error{ErrorCode::invalid_argument, "copy footprint overflow"});
     CopyFootprint result{};
     result.native = vk::BufferImageCopy{region.buffer_offset, region.row_length, region.image_height,
         vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, region.mip, region.layer, 1},
         vk::Offset3D{static_cast<std::int32_t>(region.x), static_cast<std::int32_t>(region.y), 0}, vk::Extent3D{region.width, region.height, 1}};
     result.range = vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, region.mip, 1, region.layer, 1};
-    result.bytes = texels * 4;
+    result.bytes = texels * stride;
     result.full = region.x == 0 && region.y == 0 && region.width == width && region.height == height;
     return result;
 }
@@ -98,6 +100,22 @@ Result<void> CommandBatch::clear(const Image& image, const vk::ClearColorValue& 
         return std::unexpected(Error{ErrorCode::invalid_state, "clear image layout is not prepared"});
     if (auto valid = detail::require_use(*state_, image.state_, vk::PipelineStageFlagBits2::eClear, vk::AccessFlagBits2::eTransferWrite, &range, layout, false); !valid) return valid;
     state_->command().clearColorImage(image.handle(), layout, color, range);
+    detail::consume_use(*state_, image.state_, &range, true);
+    return {};
+}
+Result<void> CommandBatch::clear_depth(const Image& image, float depth, const vk::ImageSubresourceRange& range)
+{
+    if (auto valid = ready(state_); !valid) return valid;
+    if (auto valid = state_->check(image.state_); !valid) return valid;
+    if (auto valid = detail::validate_subresources(image.description(), range); !valid) return valid;
+    if (range.aspectMask != vk::ImageAspectFlagBits::eDepth || !std::isfinite(depth) || depth < 0 || depth > 1)
+        return std::unexpected(Error{ErrorCode::invalid_argument, "depth clear requires depth aspect and finite value in [0,1]"});
+    const auto layout = local_layout(*state_, image.state_, range);
+    if (layout != vk::ImageLayout::eTransferDstOptimal && layout != vk::ImageLayout::eGeneral)
+        return std::unexpected(Error{ErrorCode::invalid_state, "depth clear layout is not prepared"});
+    if (auto valid = detail::require_use(*state_, image.state_, vk::PipelineStageFlagBits2::eClear,
+        vk::AccessFlagBits2::eTransferWrite, &range, layout, false); !valid) return valid;
+    state_->command().clearDepthStencilImage(image.handle(), layout, vk::ClearDepthStencilValue{depth,0}, range);
     detail::consume_use(*state_, image.state_, &range, true);
     return {};
 }

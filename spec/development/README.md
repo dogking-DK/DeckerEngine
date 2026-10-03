@@ -63,5 +63,6 @@
 | 0059 | [M6.3 单队列同步与执行](0059-graph-execution.md) | graphics-graph, graphics-resources, architecture | completed |
 | 0060 | [M6.4 样例迁移与诊断](0060-graph-integration.md) | graphics-graph, graphics-offscreen, architecture | completed |
 | 0061 | [M7.1 场景提取与 GPU 资源](0061-render-data-resources.md) | render-data, render-resources, assets-importers, architecture | completed |
+| 0062 | [M7.2 最小场景渲染管线](0062-render-pipeline.md) | render-pipeline, graphics-vulkan, graphics-resources, graphics-graph, architecture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

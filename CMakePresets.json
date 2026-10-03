@@ -84,7 +84,8 @@
         "DK_BUILD_GRAPHICS_OFFSCREEN": "ON",
         "DK_BUILD_GRAPHICS_GRAPH": "ON",
         "DK_BUILD_RENDER_DATA": "ON",
-        "DK_BUILD_RENDER_RESOURCES": "ON"
+        "DK_BUILD_RENDER_RESOURCES": "ON",
+        "DK_BUILD_RENDER_PIPELINE": "ON"
       }
     },
     {

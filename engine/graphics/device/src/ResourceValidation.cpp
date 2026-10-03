@@ -44,6 +44,7 @@ Result<void> validate_access(const AccessDescription& input)
     return {};
 }
 } // namespace
+std::uint32_t color_texel_bytes(vk::Format format) noexcept { return detail::color_texel_bytes(format); }
 Result<void> validate_buffer_description(const BufferDesc& desc) { return detail::validate_buffer(desc); }
 Result<void> validate_image_description(const ImageDesc& desc) { return detail::validate_image(desc); }
 bool access_reads(vk::AccessFlags2 access) noexcept { return bool(access & read_access); }

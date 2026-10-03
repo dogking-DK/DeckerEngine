@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-03T08:14:35+08:00"
+updated_at: "2026-10-03T16:55:00+08:00"
 status: accepted
 ---
 
@@ -44,7 +44,8 @@ BufferDesc 指定大小、Vulkan usage、device/upload/readback 内存用途；C
 map/范围/角色失败不写用户数据；read 的 invalidate 失败不修改输出；write 的 flush 失败时
 host 内存可能已写入，不保证字节回滚，也不会因此自动提交 GPU 工作。
 ImageDesc 提供多 mip/layer、sample=1 的二维 image，view 支持 2D/2D array。color 支持 RGBA8 UNORM/SRGB、BGRA8 UNORM/SRGB、
-R32_UINT/R32_SFLOAT，均为每像素 4 字节；D32_SFLOAT 只支持 depth attachment/sampling，拒绝 byte copy。
+R32_UINT/R32_SFLOAT（每像素 4 字节），以及 RGBA32F（每像素 16 字节）；
+D32_SFLOAT 支持 depth attachment/sampling 和 TransferDst clear，拒绝 byte copy。
 检查 extent、mip/layer、字节数溢出、usage 和设备 format 能力；Image::state(mip,layer) 替代单值 layout 查询，Buffer::state() 返回整对象的已提交状态。
 Buffer/Image 的 vk::* 句柄只借用，不得额外销毁；VMA allocation 不公开。
 
@@ -58,7 +59,8 @@ Undefined 只作为初始布局，read/load 必须有已初始化内容；局部
 shader 整图写入可在 ResourceUse.full_overwrite 声明保证，真实性由调用者负责。
 
 compute()/begin_rendering() 返回借用同一批次的 encoder；代次检查拒绝过期、提交后或 batch 移动后的调用。
-RenderEncoder 默认设置覆盖 render area 的 viewport/scissor，支持单 color、可选 D32 depth、vertex/index、多实例和 push constants。
+RenderEncoder 默认设置覆盖 render area 的 viewport/scissor，支持单 color 加可选 D32 depth，或仅 D32 depth；至少一个附件有效。
+支持 vertex/index、多实例和 push constants。
 rendering 不可嵌套，scope 内禁止 prepare/copy/compute；end 或有效 encoder 析构结束 scope。
 在打开 rendering 时移动 batch 会将其标记 invalid，禁止提交；放弃时释放资源与预约。
 绘制前检查 attachment 格式、全部所需绑定、常量、顶点和索引字节范围。
@@ -153,3 +155,12 @@ CommandBatch::state 查询当前 batch 的局部状态（未 retain 时读取全
 finish_pass 检查活动 rendering 和未消费的写准备，成功时清除所有 prepared 并使旧 encoder 失效。
 buffer 的部分范围 full_overwrite 不代表整 buffer 初始化；仍允许图用精确字节覆盖证明内容依赖。
 这些接口供上层 Graph 使用，Graph 不包含 device 私有实现，也不直接调用 Vulkan。
+
+## M7.2 格式与深度清除
+
+支持 16 字节 RGBA32F 颜色 texel，公开 color_texel_bytes(format) 对支持的颜色格式返回字节数，
+对深度/未知格式返回 0；typed copy、Graph 范围检查、完整颜色 copy 和 ReadbackDescription.row_pitch
+按实际字节数校验。buffer offset 要求 texel block 对齐，保留 row pitch 上限及字节乘法溢出保护。
+D32 新增 TransferDst usage，只用于完整子资源 clear_depth；不开放深度 copy/readback。
+清除仍先检查状态/范围，完成后只更新 batch 局部 initialized，submit 成功才发布。
+关联 [0062](../development/0062-render-pipeline.md)。

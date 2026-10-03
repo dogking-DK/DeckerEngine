@@ -42,6 +42,7 @@ public:
     [[nodiscard]] Result<void> copy_to_buffer(std::size_t source, std::size_t destination, const ImageCopyRegion& region);
     [[nodiscard]] Result<void> fill(std::size_t resource, std::uint32_t value = 0);
     [[nodiscard]] Result<void> clear(std::size_t resource, const vk::ClearColorValue& color, const vk::ImageSubresourceRange& range);
+    [[nodiscard]] Result<void> clear_depth(std::size_t resource, float depth, const vk::ImageSubresourceRange& range);
     [[nodiscard]] Result<ComputeEncoder> compute();
     [[nodiscard]] Result<RenderEncoder> begin_rendering(const RenderingDesc& description);
 private:

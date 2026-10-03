@@ -16,6 +16,15 @@ inline Result<void> validate_buffer(const BufferDesc& desc)
         return std::unexpected(Error{ErrorCode::invalid_argument, "invalid buffer memory role"});
     return {};
 }
+inline std::uint32_t color_texel_bytes(vk::Format format) noexcept
+{
+    switch (format) {
+    case vk::Format::eR8G8B8A8Unorm: case vk::Format::eR8G8B8A8Srgb: case vk::Format::eB8G8R8A8Unorm: case vk::Format::eB8G8R8A8Srgb:
+    case vk::Format::eR32Uint: case vk::Format::eR32Sfloat: return 4;
+    case vk::Format::eR32G32B32A32Sfloat: return 16;
+    default: return 0;
+    }
+}
 inline Result<vk::DeviceSize> image_bytes(const ImageDesc& desc)
 {
     constexpr auto allowed = vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst |
@@ -23,15 +32,12 @@ inline Result<vk::DeviceSize> image_bytes(const ImageDesc& desc)
         vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment;
     if (!desc.width || !desc.height || !desc.usage || (static_cast<VkImageUsageFlags>(desc.usage) & ~static_cast<VkImageUsageFlags>(allowed)))
         return std::unexpected(Error{ErrorCode::invalid_argument, "image requires nonzero extent and supported color usage"});
-    switch (desc.format) {
-    case vk::Format::eR8G8B8A8Unorm: case vk::Format::eR8G8B8A8Srgb: case vk::Format::eB8G8R8A8Unorm: case vk::Format::eB8G8R8A8Srgb:
-    case vk::Format::eR32Uint: case vk::Format::eR32Sfloat: break;
-    default: return std::unexpected(Error{ErrorCode::not_supported, "image format is outside the M5.2 four-byte color formats"});
-    }
+    const auto texel_bytes = detail::color_texel_bytes(desc.format);
+    if (!texel_bytes) return std::unexpected(Error{ErrorCode::not_supported, "unsupported color image format"});
     const auto pixels = vk::DeviceSize{desc.width} * desc.height;
-    if (pixels > std::numeric_limits<vk::DeviceSize>::max() / 4)
+    if (pixels > std::numeric_limits<vk::DeviceSize>::max() / texel_bytes)
         return std::unexpected(Error{ErrorCode::invalid_argument, "image byte count overflow"});
-    return pixels * 4;
+    return pixels * texel_bytes;
 }
 inline bool valid_range(vk::DeviceSize capacity, vk::DeviceSize offset, vk::DeviceSize size) noexcept
 { return offset <= capacity && size <= capacity - offset; }
@@ -41,9 +47,9 @@ inline Result<void> validate_image(const ImageDesc& desc)
         desc.mip_levels > static_cast<std::uint32_t>(std::bit_width(std::max(desc.width, desc.height))))
         return std::unexpected(Error{ErrorCode::invalid_argument, "invalid image mip/layer/extent"});
     if (desc.format == vk::Format::eD32Sfloat) {
-        constexpr auto allowed = vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled;
+        constexpr auto allowed = vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
         if (!desc.usage || (static_cast<VkImageUsageFlags>(desc.usage) & ~static_cast<VkImageUsageFlags>(allowed)))
-            return std::unexpected(Error{ErrorCode::not_supported, "depth images support attachment/sampling only"});
+            return std::unexpected(Error{ErrorCode::not_supported, "depth images support attachment, sampling and transfer clear"});
         return {};
     }
     if (auto bytes = image_bytes(desc); !bytes) return std::unexpected(bytes.error());

@@ -139,6 +139,7 @@ public:
     [[nodiscard]] Result<void> copy_to_buffer(const Image& source, const Buffer& destination, const ImageCopyRegion& region);
     [[nodiscard]] Result<void> fill(const Buffer& buffer, std::uint32_t value = 0);
     [[nodiscard]] Result<void> clear(const Image& image, const vk::ClearColorValue& color, const vk::ImageSubresourceRange& range);
+    [[nodiscard]] Result<void> clear_depth(const Image& image, float depth, const vk::ImageSubresourceRange& range);
     [[nodiscard]] Result<void> upload(const Buffer& destination, std::span<const std::byte> bytes, vk::DeviceSize offset = 0);
     [[nodiscard]] Result<void> upload(const Image& destination, std::span<const std::byte> bytes, const ImageCopyRegion& region);
     [[nodiscard]] Result<ReadbackRequest> readback(const Buffer& source, vk::DeviceSize offset = 0, vk::DeviceSize size = VK_WHOLE_SIZE);

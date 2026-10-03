@@ -1,3 +1,4 @@
+#include "ResourcePolicy.hpp"
 #include "PipelinePolicy.hpp"
 #include <tuple>
 
@@ -224,13 +225,14 @@ Result<GraphicsPipeline> ResourceFactory::create_graphics_pipeline(const Graphic
     if (!checked) return std::unexpected(checked.error());
     auto& queue = **checked;
     if (auto valid = check_stage(queue, desc.vertex, desc.layout, ShaderStage::vertex); !valid) return std::unexpected(valid.error());
-    if (auto valid = check_stage(queue, desc.fragment, desc.layout, ShaderStage::fragment); !valid) return std::unexpected(valid.error());
+    if (desc.fragment || desc.color_format != vk::Format::eUndefined)
+        if (auto valid = check_stage(queue, desc.fragment, desc.layout, ShaderStage::fragment); !valid) return std::unexpected(valid.error());
     const auto& device = queue.owner->device;
     const auto& limits = device.adapter().properties.limits;
-    if (desc.color_format != vk::Format::eR8G8B8A8Unorm && desc.color_format != vk::Format::eR8G8B8A8Srgb &&
-        desc.color_format != vk::Format::eB8G8R8A8Unorm && desc.color_format != vk::Format::eB8G8R8A8Srgb &&
-        desc.color_format != vk::Format::eR32Uint && desc.color_format != vk::Format::eR32Sfloat)
-        return std::unexpected(Error{ErrorCode::not_supported, "color format is outside supported resource formats"});
+    const bool has_color = desc.color_format != vk::Format::eUndefined;
+    if ((has_color && !detail::color_texel_bytes(desc.color_format)) || (!has_color && desc.depth_format == vk::Format::eUndefined) ||
+        (!has_color && desc.blend))
+        return std::unexpected(Error{ErrorCode::not_supported, "unsupported or empty graphics attachment configuration"});
     if ((desc.topology != vk::PrimitiveTopology::eTriangleList && desc.topology != vk::PrimitiveTopology::eTriangleStrip) ||
         (desc.front_face != vk::FrontFace::eClockwise && desc.front_face != vk::FrontFace::eCounterClockwise) ||
         (static_cast<VkCullModeFlags>(desc.cull_mode) & ~static_cast<VkCullModeFlags>(vk::CullModeFlagBits::eFrontAndBack)) ||
@@ -238,8 +240,8 @@ Result<GraphicsPipeline> ResourceFactory::create_graphics_pipeline(const Graphic
         ((desc.depth_test || desc.depth_write) && desc.depth_format == vk::Format::eUndefined) ||
         static_cast<std::uint32_t>(desc.depth_compare) > static_cast<std::uint32_t>(vk::CompareOp::eAlways))
         return std::unexpected(Error{ErrorCode::not_supported, "unsupported graphics topology/raster/depth state"});
-    const auto color = device.physical_device().getFormatProperties(desc.color_format).optimalTilingFeatures;
-    if (!(color & vk::FormatFeatureFlagBits::eColorAttachment) || (desc.blend && !(color & vk::FormatFeatureFlagBits::eColorAttachmentBlend)))
+    const auto color = has_color ? device.physical_device().getFormatProperties(desc.color_format).optimalTilingFeatures : vk::FormatFeatureFlags{};
+    if (has_color && (!(color & vk::FormatFeatureFlagBits::eColorAttachment) || (desc.blend && !(color & vk::FormatFeatureFlagBits::eColorAttachmentBlend))))
         return std::unexpected(Error{ErrorCode::not_supported, "color format lacks attachment/blend support"});
     if (desc.depth_format != vk::Format::eUndefined && !(device.physical_device().getFormatProperties(desc.depth_format).optimalTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment))
         return std::unexpected(Error{ErrorCode::not_supported, "depth format lacks attachment support"});
@@ -271,7 +273,7 @@ Result<GraphicsPipeline> ResourceFactory::create_graphics_pipeline(const Graphic
     state->vertex_attributes.assign(desc.vertex_attributes.begin(), desc.vertex_attributes.end());
     const std::array stages{
         vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eVertex, desc.vertex->handle(), desc.vertex->state_->entry.c_str()},
-        vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eFragment, desc.fragment->handle(), desc.fragment->state_->entry.c_str()}};
+        desc.fragment ? vk::PipelineShaderStageCreateInfo{{}, vk::ShaderStageFlagBits::eFragment, desc.fragment->handle(), desc.fragment->state_->entry.c_str()} : vk::PipelineShaderStageCreateInfo{}};
     vk::PipelineVertexInputStateCreateInfo input{};
     input.setVertexBindingDescriptions(desc.vertex_bindings).setVertexAttributeDescriptions(desc.vertex_attributes);
     const vk::PipelineInputAssemblyStateCreateInfo assembly{{}, desc.topology, VK_FALSE};
@@ -287,14 +289,15 @@ Result<GraphicsPipeline> ResourceFactory::create_graphics_pipeline(const Graphic
         .setColorBlendOp(vk::BlendOp::eAdd).setSrcAlphaBlendFactor(vk::BlendFactor::eOne).setDstAlphaBlendFactor(vk::BlendFactor::eOneMinusSrcAlpha)
         .setAlphaBlendOp(vk::BlendOp::eAdd).setColorWriteMask(vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
     vk::PipelineColorBlendStateCreateInfo blend{};
-    blend.setAttachments(attachment);
+    if (has_color) blend.setAttachments(attachment);
     const std::array dynamic_states{vk::DynamicState::eViewport, vk::DynamicState::eScissor};
     vk::PipelineDynamicStateCreateInfo dynamic{};
     dynamic.setDynamicStates(dynamic_states);
     vk::PipelineRenderingCreateInfo rendering{};
-    rendering.setColorAttachmentFormats(desc.color_format).setDepthAttachmentFormat(desc.depth_format);
+    if (has_color) rendering.setColorAttachmentFormats(desc.color_format);
+    rendering.setDepthAttachmentFormat(desc.depth_format);
     vk::GraphicsPipelineCreateInfo info{};
-    info.setStages(stages).setPVertexInputState(&input).setPInputAssemblyState(&assembly).setPViewportState(&viewport)
+    info.setStageCount(desc.fragment ? 2u : 1u).setPStages(stages.data()).setPVertexInputState(&input).setPInputAssemblyState(&assembly).setPViewportState(&viewport)
         .setPRasterizationState(&raster).setPMultisampleState(&samples).setPDepthStencilState(&depth)
         .setPColorBlendState(&blend).setPDynamicState(&dynamic).setLayout(desc.layout->handle()).setPNext(&rendering);
     try { state->pipeline = vk::raii::Pipeline{device.logical_device(), nullptr, info}; }

@@ -32,6 +32,7 @@ struct DepthAttachment {
     vk::AttachmentStoreOp store = vk::AttachmentStoreOp::eStore;
     float clear = 1;
 };
+// At least one attachment is required; color may be absent for depth-only rendering.
 struct RenderingDesc {
     ColorAttachment color;
     DepthAttachment depth;

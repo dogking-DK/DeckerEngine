@@ -13,7 +13,7 @@ endif()
 if(DK_BUILD_SCENE)
     add_subdirectory(scene)
 endif()
-if(DK_BUILD_RENDER_DATA OR DK_BUILD_RENDER_RESOURCES)
+if(DK_BUILD_RENDER_DATA OR DK_BUILD_RENDER_RESOURCES OR DK_BUILD_RENDER_PIPELINE)
     add_subdirectory(render)
 endif()
 # Other module directories are reserved. Add their CMakeLists after module design.

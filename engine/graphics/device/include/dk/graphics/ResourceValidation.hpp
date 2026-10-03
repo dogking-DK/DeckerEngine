@@ -2,6 +2,8 @@
 #include <dk/graphics/Resources.hpp>
 
 namespace dk::graphics {
+// Supported color texel byte count; zero for depth/unsupported formats.
+[[nodiscard]] std::uint32_t color_texel_bytes(vk::Format format) noexcept;
 // Pure value validation shared by recording and graph declaration. No device access.
 struct AccessDescription {
     AccessState state{};

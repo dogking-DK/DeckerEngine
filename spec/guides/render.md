@@ -1,17 +1,18 @@
 ---
 created_at: "2026-10-03T15:28:09+08:00"
-updated_at: "2026-10-03T15:28:09+08:00"
+updated_at: "2026-10-03T16:54:00+08:00"
 ---
 
-# 场景提取与 GPU 资源
+# 场景数据、GPU 资源与离屏渲染
 
-[返回项目入口](../../README.md)。本页对应 M7.1；业务绘制管线与磁盘场景集成尚未实现。
+[返回项目入口](../../README.md)。本页对应 M7.1–2；磁盘场景集成将在 M7.3 接入。
 
 ## 配置与验证
 
 `DK_BUILD_RENDER_DATA` 构建 `dk::render_data`（Scene/Memory，无 Vulkan 依赖）；
 `DK_BUILD_RENDER_RESOURCES` 构建 `dk::render_resources`（asset_data/Device/Graph）。
-两者默认 OFF，windows-graphics 启用；可独立开启，CPU Runtime 不链接它们。
+`DK_BUILD_RENDER_PIPELINE` 构建 `dk::render_pipeline`，要求前两者、Graph 和 Shaders。
+三个选项默认 OFF，windows-graphics 启用；CPU Runtime 不链接它们。
 
 ```powershell
 cmake --preset windows-graphics
@@ -62,3 +63,35 @@ RenderView::create(render_scene, ViewDescription) 固定 scene/revision、frame 
 
 设计与完整边界见 [Render 数据](../design/render-data.md)、[GPU 资源](../design/render-resources.md)，
 验收记录见 [0061](../development/0061-render-data-resources.md)。
+
+## 最小场景管线
+
+公开入口：[ScenePipeline.hpp](../../engine/render/pipeline/include/dk/render/ScenePipeline.hpp)。
+在上述上传完成提交后，用同一队列调用 ScenePipeline::create(heap, queue, shader_directory)，
+shader_directory 指向仓库 shaders/render 或部署时复制的同名目录。创建时编译固定 Slang 源；
+每帧调用 render(queue, view, cache, settings)，不必先在 CPU 等待资产上传完成。
+每一步 Result 均须检查，渲染成功表示提交成功。
+
+管线按 mesh 引用绘制全部 primitives：深度预处理 → 无光照 opaque HDR → Reinhard/sRGB → RGBA8 读回。
+支持父级世界矩阵、显式相机/投影、实例、基础色纹理和 emissive；当前无透明、灯光/PBR、阴影或可见性裁剪。
+缺少 mesh、alpha mask/blend 或世界到裁剪矩阵溢出会拒绝整帧。实体上的 material/texture 引用不自动覆盖 mesh 材质。
+
+RenderFrame::wait(queue, timeout) 确认完成后，read_rgba8(span) 写入 width*height*4 字节。
+像素为 sRGB 编码 RGB、alpha=255，保持正高度 Vulkan viewport 的行方向。
+color() 返回同一帧的借用 Image（RGBA8 UNORM，内容已编码为 sRGB，最终 shader-read layout）；
+后续消费者应按这一色彩约定使用。info() 给出 scene/revision/frame、尺寸与 draw_count。
+settings.capture_plan=true 时 plan_text() 返回五个 Pass 的图计划。
+每帧独立拥有输出，失败保留旧帧；释放 Frame/缓存/管线不会提前销毁在途资源，需通过队列回收完成工作。
+
+```powershell
+& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics `
+    -Target dk_render_pipeline_tests -TestRegex '^dk\.render\.pipeline\.' `
+    -Reason 'Render settings and matrix conversion'
+& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics `
+    -Target dk_render_pipeline_probe -TestRegex '^dk\.render\.pipeline_gpu_validation$' `
+    -Reason 'Depth, HDR tone mapping, image regression and frame lifetime'
+```
+
+探针在 build/tests/integration 中输出 render-pipeline-validation.ppm 和同名 .txt 图计划，
+覆盖重叠几何、相机/实例、曝光、不同尺寸与空场景，以及对象/提交/预算失败和在途释放。
+设计见 [render-pipeline](../design/render-pipeline.md)，阶段记录见 [0062](../development/0062-render-pipeline.md)。

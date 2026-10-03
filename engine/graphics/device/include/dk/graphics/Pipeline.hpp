@@ -31,6 +31,7 @@ struct ComputePipelineDesc {
     const ShaderModule* shader = nullptr;
     const PipelineLayout* layout = nullptr;
 };
+// color_format=Undefined enables depth-only rendering; fragment may then be null.
 struct GraphicsPipelineDesc {
     const ShaderModule* vertex = nullptr;
     const ShaderModule* fragment = nullptr;

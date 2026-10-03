@@ -3,6 +3,7 @@
 | 模块 | 文档 | 状态 | 范围 | 源码入口 | 测试入口 |
 | --- | --- | --- | --- | --- | --- |
 | architecture | [整体架构](architecture.md) | accepted | 长期模块边界和依赖方向 | [模块目录](../../engine) | [流程/检查](../README.md) |
+| render-pipeline | [最小场景渲染管线](render-pipeline.md) | accepted | depth/opaque/tone Graph 管线与帧结果 | [pipeline](../../engine/render/pipeline) | [集成](../../tests/integration/CMakeLists.txt) |
 | render-data | [场景与视图提取](render-data.md) | accepted | 不可变场景、世界变换和视图 | [data](../../engine/render/data) | [单元](../../tests/unit/CMakeLists.txt) |
 | render-resources | [GPU 资产资源](render-resources.md) | accepted | Graph 上传、缓存发布与卸载寿命 | [resources](../../engine/render/resources) | [集成](../../tests/integration/CMakeLists.txt) |
 | graphics-graph | [GPU Graph](graphics-graph.md) | accepted | 图声明/编译、裁剪、同步执行、导入导出与诊断 | [graph](../../engine/graphics/graph) | [单元](../../tests/unit/CMakeLists.txt) |

@@ -29,7 +29,7 @@ Result<void> bind_pipeline(BatchState& batch, const std::shared_ptr<PipelineStat
     if (!pipeline || pipeline->owner != batch.queue->owner || pipeline->point != (render ? vk::PipelineBindPoint::eGraphics : vk::PipelineBindPoint::eCompute))
         return std::unexpected(invalid("pipeline is empty, foreign, or has the wrong bind point"));
     auto& state = *batch.encoding;
-    if (render && (pipeline->color_format != state.color->image->image_desc.format ||
+    if (render && (pipeline->color_format != (state.color ? state.color->image->image_desc.format : vk::Format::eUndefined) ||
         pipeline->depth_format != (state.depth ? state.depth->image->image_desc.format : vk::Format::eUndefined)))
         return std::unexpected(invalid("pipeline attachment formats do not match rendering"));
     if (auto valid = retain_object(batch, pipeline); !valid) return valid;
@@ -130,7 +130,7 @@ Result<void> validate_bindings(BatchState& batch)
                 if (!access || (batch.rendering && (access & write_access)))
                     return std::unexpected(bad_state("storage requires explicit shader access; graphics storage writes are unsupported"));
             }
-            if (batch.rendering && bound.view && (resource == state.color->image || (state.depth && resource == state.depth->image)))
+            if (batch.rendering && bound.view && ((state.color && resource == state.color->image) || (state.depth && resource == state.depth->image)))
                 return std::unexpected(bad_state("attachment feedback is unsupported"));
             if (auto valid = require_use(batch, resource, shader_stages(binding.stages & active), access, range, bound.image_layout); !valid) return valid;
         }
@@ -247,17 +247,18 @@ Result<RenderEncoder> CommandBatch::begin_rendering(const RenderingDesc& desc)
 {
     if (!state_) return std::unexpected(bad_state("empty batch"));
     if (auto valid = outside_rendering(*state_); !valid) return std::unexpected(valid.error());
-    if (!desc.color.view || !valid_ops(desc.color.load, desc.color.store) || !valid_ops(desc.depth.load, desc.depth.store) ||
+    if ((!desc.color.view && !desc.depth.view) || !valid_ops(desc.color.load, desc.color.store) || !valid_ops(desc.depth.load, desc.depth.store) ||
         !std::isfinite(desc.depth.clear) || desc.depth.clear < 0 || desc.depth.clear > 1)
         return std::unexpected(invalid("rendering attachment/load/store invalid"));
     auto encoding = new_encoding(*state_);
-    encoding->color = ObjectAccess::state(*desc.color.view);
+    if (desc.color.view) encoding->color = ObjectAccess::state(*desc.color.view);
     if (desc.depth.view) encoding->depth = ObjectAccess::state(*desc.depth.view);
     RetainRollback rollback{*state_};
-    if (auto valid = attachment(*state_, encoding->color, false, desc.color.load); !valid) return std::unexpected(valid.error());
+    if (desc.color.view) if (auto valid = attachment(*state_, encoding->color, false, desc.color.load); !valid) return std::unexpected(valid.error());
     if (desc.depth.view) if (auto valid = attachment(*state_, encoding->depth, true, desc.depth.load); !valid) return std::unexpected(valid.error());
-    const auto& image = encoding->color->image->image_desc;
-    const auto mip = encoding->color->description.range.baseMipLevel;
+    const auto& extent_view = encoding->color ? encoding->color : encoding->depth;
+    const auto& image = extent_view->image->image_desc;
+    const auto mip = extent_view->description.range.baseMipLevel;
     const auto width = std::max(1u, image.width >> mip), height = std::max(1u, image.height >> mip);
     auto area = desc.area;
     if (!area.extent.width && !area.extent.height) area = vk::Rect2D{{0,0},{width,height}};
@@ -277,18 +278,19 @@ Result<RenderEncoder> CommandBatch::begin_rendering(const RenderingDesc& desc)
     encoding->color_store = desc.color.store;
     encoding->depth_store = desc.depth.store;
     vk::RenderingAttachmentInfo color{};
-    color.setImageView(*encoding->color->view).setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
+    if (encoding->color) color.setImageView(*encoding->color->view).setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
         .setLoadOp(desc.color.load).setStoreOp(desc.color.store).setClearValue(vk::ClearValue{vk::ClearColorValue{desc.color.clear}});
     vk::RenderingAttachmentInfo depth{};
     if (encoding->depth) depth.setImageView(*encoding->depth->view).setImageLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
         .setLoadOp(desc.depth.load).setStoreOp(desc.depth.store).setClearValue(vk::ClearValue{vk::ClearDepthStencilValue{desc.depth.clear,0}});
     vk::RenderingInfo info{};
-    info.setRenderArea(area).setLayerCount(1).setColorAttachments(color).setPDepthAttachment(encoding->depth ? &depth : nullptr);
+    if (encoding->color) info.setColorAttachments(color);
+    info.setRenderArea(area).setLayerCount(1).setPDepthAttachment(encoding->depth ? &depth : nullptr);
     state_->command().beginRendering(info);
     state_->command().setViewport(0, vk::Viewport{static_cast<float>(area.offset.x),static_cast<float>(area.offset.y),static_cast<float>(area.extent.width),static_cast<float>(area.extent.height),0,1});
     state_->command().setScissor(0, area);
     const bool full = area.offset.x == 0 && area.offset.y == 0 && area.extent.width == width && area.extent.height == height;
-    attachment_content(*state_, encoding->color, desc.color.load, full);
+    if (encoding->color) attachment_content(*state_, encoding->color, desc.color.load, full);
     if (encoding->depth) attachment_content(*state_, encoding->depth, desc.depth.load, full);
     invalidate_encoder(*state_);
     state_->encoding = std::move(encoding);
@@ -427,7 +429,7 @@ Result<void> RenderEncoder::end()
         }
     };
     batch.command().endRendering();
-    finish(batch.encoding->color,batch.encoding->color_store);
+    if (batch.encoding->color) finish(batch.encoding->color,batch.encoding->color_store);
     if (batch.encoding->depth) finish(batch.encoding->depth,batch.encoding->depth_store);
     batch.rendering = false;
     invalidate_encoder(batch);

@@ -1,7 +1,7 @@
 ---
 module: graphics-graph
 created_at: "2026-10-02T23:00:00+08:00"
-updated_at: "2026-10-03T14:45:24+08:00"
+updated_at: "2026-10-03T16:28:50+08:00"
 status: accepted
 ---
 
@@ -187,3 +187,9 @@ buffer 为整对象，image 逐子资源；目标 state 的 initialized 沿用 b
 read/read 时目标访问是本次请求，可能与账本累计的访问不同。顺序与 prepare 的发出顺序一致。
 记录只在执行候选中分配，失败仍不发布/提交半个结果；不做 GPU timestamp 或性能推断。
 错误补充执行阶段、Pass 名字/索引或资源名字/索引上下文，保留原 Error code/message/context。
+
+## M7.2 颜色 footprint 与深度清除
+
+PassContext 的 image copy 按 Device 的 color_texel_bytes 计算实际 buffer 范围（含 RGBA32F），
+不得用四字节假设放过欠声明范围。clear_depth 只访问已声明 depth 子资源并委托 typed Device 操作，
+完整写入的 content/lifetime/submit 规则保持不变。关联 [0062](../development/0062-render-pipeline.md)。

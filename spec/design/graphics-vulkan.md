@@ -1,7 +1,7 @@
 ---
 module: graphics-vulkan
 created_at: "2026-09-30T10:18:48+08:00"
-updated_at: "2026-10-02T22:20:00+08:00"
+updated_at: "2026-10-03T16:55:00+08:00"
 status: accepted
 ---
 
@@ -100,7 +100,7 @@ M5.5.2 首版上限为 64 页、每页 32 个同类 descriptor 数量的 set、�
 
 ImageDesc 扩展为 2D/2D array、extent、mip_levels、array_layers、format、usage；首版仍 sample=1。
 ImageViewDesc 表达 aspect、mip/layer 范围与 2D/array 视图；不隐式创建全套 view。
-保留原五种 color 格式，M5.6 补充 BGRA8 sRGB；另有 `D32_SFLOAT` 深度 attachment 路径；每种组合先查询 format/usage 能力，
+保留原五种 color 格式，M5.6 补充 BGRA8 sRGB，M7.2 补充 RGBA32F；另有 `D32_SFLOAT` 深度 attachment 路径；每种组合先查询 format/usage 能力，
 不因为枚举合法就假定硬件支持。color 传输按每个 mip 的 extent 和数据步长检查；深度读回另列为暂缓。
 
 SamplerDesc 明确 filter、address mode、LOD 范围，默认关闭 anisotropy/compare；
@@ -316,3 +316,12 @@ RAII 内部所有权与 descriptor pool 释放策略参考
 和 [0048](../development/0048-vulkan-14-baseline.md)。实现记录从
 [0049 M5.5.1](../development/0049-vulkan-object-foundation.md) 开始，最终迁移与验收见
 [0053 M5.5.5](../development/0053-vulkan-offscreen-migration.md)。
+
+## M7.2 管线所需补充
+
+增加 RGBA32F（R32G32B32A32Sfloat）颜色格式，传输/读回 footprint 使用格式实际 texel 字节数。
+GraphicsPipelineDesc 允许 color_format=Undefined 的仅深度管线，此时 fragment 可为空；
+有颜色时仍要求 fragment，没有任何附件的管线拒绝。RenderingDesc 允许 color.view 为空且 depth.view
+有效；格式匹配、attachment feedback、end/store 路径对可选颜色附件显式处理。
+D32 支持 TransferDst 和 typed clear_depth（有限 [0,1]，depth aspect 范围），Graph 暴露同名受限操作。
+深度 copy/readback 仍不支持。现有颜色/颜色+深度路径保持原契约。关联 [0062](../development/0062-render-pipeline.md)。

@@ -161,3 +161,17 @@ TEST_CASE("pure access validation normalizes ranges and rejects unknown raw flag
     use.state.access = vk::AccessFlags2{1ull << 63};
     CHECK_FALSE(validate_image_access({4, 4}, use));
 }
+
+TEST_CASE("HDR color footprint uses sixteen byte texels and depth clear usage is explicit") {
+    ImageDesc hdr{3,2,vk::Format::eR32G32B32A32Sfloat};
+    CHECK(color_texel_bytes(hdr.format)==16); CHECK(color_texel_bytes(vk::Format::eD32Sfloat)==0);
+    REQUIRE(policy::validate_image(hdr)); CHECK(*policy::image_bytes(hdr)==96);
+    auto footprint=policy::copy_footprint(hdr,{0,0,0,0,3,2,16,4}); REQUIRE(footprint); CHECK(footprint->bytes==112);
+    CHECK_FALSE(policy::copy_footprint(hdr,{0,0,0,0,3,2,4}));
+    CHECK_FALSE(policy::copy_footprint(hdr,{0,0,0,0,3,2,0,UINT32_MAX}));
+    hdr.width=hdr.height=UINT32_MAX; CHECK_FALSE(policy::image_bytes(hdr));
+    ImageDesc depth{4,4,vk::Format::eD32Sfloat,vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eTransferDst};
+    CHECK(policy::validate_image(depth)); CHECK_FALSE(policy::copy_footprint(depth,{0,0,0,0,4,4}));
+    depth.usage|=vk::ImageUsageFlagBits::eTransferSrc; CHECK_FALSE(policy::validate_image(depth));
+    CommandBatch batch; CHECK_FALSE(batch.clear_depth({},1,{vk::ImageAspectFlagBits::eDepth,0,1,0,1}));
+}
