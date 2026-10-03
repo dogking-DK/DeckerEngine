@@ -1,3 +1,14 @@
+if(DK_BUILD_GRAPHICS_GRAPH)
+    add_executable(dk_graph_probe GraphProbe.cpp)
+    set_target_properties(dk_graph_probe PROPERTIES OUTPUT_NAME "dk-graph-probe")
+    target_include_directories(dk_graph_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
+    target_link_libraries(dk_graph_probe PRIVATE dk::graphics_graph)
+    dk_target_defaults(dk_graph_probe)
+    add_test(NAME dk.graph.gpu_execution COMMAND dk_graph_probe)
+    add_test(NAME dk.graph.gpu_validation COMMAND dk_graph_probe --validation)
+    set_tests_properties(dk.graph.gpu_execution dk.graph.gpu_validation PROPERTIES TIMEOUT 120 SKIP_RETURN_CODE 77 LABELS "gpu")
+    set_tests_properties(dk.graph.gpu_validation PROPERTIES ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+endif()
 if(TARGET dk_shaderc)
     add_test(NAME dk.shaderc.process COMMAND "${CMAKE_COMMAND}"
         "-DSHADERC=$<TARGET_FILE:dk_shaderc>"

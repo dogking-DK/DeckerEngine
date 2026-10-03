@@ -50,6 +50,7 @@ Result<void> host_access(const std::shared_ptr<detail::ResourceState>& state, vk
 }
 vk::Buffer Buffer::handle() const noexcept { return state_ ? vk::Buffer{state_->buffer} : vk::Buffer{}; }
 vk::DeviceSize Buffer::size() const noexcept { return state_ ? state_->buffer_desc.size : 0; }
+BufferDesc Buffer::description() const noexcept { return state_ ? state_->buffer_desc : BufferDesc{}; }
 Result<AccessState> Buffer::state() const
 { return state_ ? Result<AccessState>{state_->states.front()} : std::unexpected(Error{ErrorCode::invalid_state,"buffer is empty"}); }
 Result<void> Buffer::write(vk::DeviceSize offset, std::span<const std::byte> bytes) { return host_access(state_, offset, {}, bytes, true); }

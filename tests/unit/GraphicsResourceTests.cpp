@@ -74,6 +74,11 @@ TEST_CASE("empty resource and batch operations reject without native calls")
     REQUIRE_FALSE(batch.retain(image));
     REQUIRE_FALSE(batch.copy(buffer, buffer, 4));
     REQUIRE_FALSE(batch.compute());
+    REQUIRE_FALSE(buffer.share());
+    REQUIRE_FALSE(image.share());
+    REQUIRE_FALSE(batch.state(buffer));
+    REQUIRE_FALSE(batch.state(image));
+    REQUIRE_FALSE(batch.finish_pass());
     REQUIRE_FALSE(batch.unsafe_record({}, {}, [](const vk::raii::CommandBuffer&,void*) {}));
 }
 TEST_CASE("pipeline interfaces merge stages preserve array counts and reject conflicts")

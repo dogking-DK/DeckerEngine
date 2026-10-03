@@ -1,30 +1,33 @@
 ---
 created_at: "2026-10-02T23:20:00+08:00"
-updated_at: "2026-10-03T07:24:14+08:00"
+updated_at: "2026-10-03T08:09:09+08:00"
 ---
 
-# GPU Graph 声明与编译
+# GPU Graph 声明、编译与执行
 
 [返回项目入口](../../README.md)。接口契约见 [Graph 设计](../design/graphics-graph.md)。
-当前可声明资源、Pass、依赖和输出，在 CPU 上校验并编译；尚无 GPU 绑定或 execute 入口。
+资源、Pass、依赖与输出在 CPU 上声明和编译；执行时绑定实际资源并使用单队列提交。
 
 ## 构建与验证
 
 `windows-graphics` 开启 `DK_BUILD_GRAPHICS_GRAPH`，其他配置可显式开启，同时要求
 `DK_BUILD_GRAPHICS_DEVICE` 和 Memory。消费者链接 `dk::graphics_graph`，
-包含 `dk/graphics/Graph.hpp`；不要求 Slang、SDL3 或创建 Vulkan 设备。
+包含 `dk/graphics/Graph.hpp`；CPU 声明/编译无需设备。执行还需包含 `dk/graphics/GraphExecution.hpp`
+并传入 SubmissionQueue；模块不依赖 Slang 或 SDL3。
 
 ```powershell
 cmake --preset windows-graphics
 & ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Target dk_graph_tests `
-  -TestRegex '^dk\.graph\.' -Reason 'GPU Graph 声明、编译与生命周期'
+  -TestRegex '^dk\.graph\.graph ' -Reason 'GPU Graph CPU 声明、编译与生命周期'
+& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Target dk_graph_probe `
+  -TestRegex '^dk\.graph\.gpu_validation$' -Reason 'GPU Graph 单队列执行与同步验证'
 ```
 
 ## 声明顺序
 
 1. 以开放的 Memory ResourceHandle 创建 `graph::Graph::create(resource)`。
 2. `declare_buffer/declare_image` 返回类型化 ID；默认 transient 内容未初始化。
-   external 目前只是逻辑导入声明，`initialized=true` 表示调用者保证整个资源内容有效。
+   external 在 execute 时绑定 Buffer/Image；`initialized=true` 要求导入账本中整个资源内容有效。
 3. `add_pass(PassDesc)` 复制名字和访问列表；每项 `Use` 包含资源 ID 及 AccessDescription。
    使用 M5 的 stage/access/layout 枚举。buffer 指定 offset/size，image 指定 aspect/mip/layer。
 4. 完整写入访问范围时设置 `full_overwrite=true`；其他访问保留内容，需要已初始化数据。
@@ -58,7 +61,7 @@ cmake --preset windows-graphics
 
 `first_use/last_use/create_before/release_after` 都是 `order()` 中的位置，不是 Pass 声明索引。
 output 的 release_after 为空，表示向结果所有者保留；external 不进入分配表。
-分配表描述逻辑生命周期，不能据此在 GPU 完成前销毁资源；本阶段也不提供物理显存大小或 aliasing。
+分配表描述逻辑生命周期；执行器与 pending slot 保证 GPU 完成前资源仍存活，不提供显存 aliasing。
 
 例如，同一 transient buffer 连续被两个完整写覆盖，只有最终内容被标记输出时，第一个写可裁剪。
 如果两次写之间有一个带 side_effect 的读取，则旧写、读取和新写全部保留，执行顺序不变。
@@ -79,5 +82,60 @@ move 保留转入图的身份。reset 成功后所有旧 ID 失效；失败则�
 编译失败同样不修改图，也不影响先前已发布的计划；默认/移后计划 bool 为 false，查询返回空列表。
 计划的只读视图借用到计划被覆盖或销毁；关闭 Memory 域后仍可读取已有计划，释放计划后可完成域回收。
 
-尚未支持实际 GPU 分配、barrier 规划、GPU 回调、实际 external owner 绑定、
-状态导入导出或完成跟踪；依赖与后续步骤见 [Roadmap](../roadmap.md)。
+执行的失败与所有权规则见下节；阶段依赖与后续步骤见 [Roadmap](../roadmap.md)。
+
+## 单队列执行
+
+1. `ExternalBinding` 用计划 resources() 索引绑定同队列的现有 Buffer/Image，描述必须完全相同。
+   每个 retained external 必须绑定，不能把同一物理资源绑定为多个逻辑资源；transient 由图创建。
+   expected_states 留空时读取当前账本，提供时做精确校验；image 按 layer-major/mip-minor 排列。
+2. `PassCallback` 用 passes() 声明索引绑定函数指针和 user_data。每个 retained Pass 都需回调；
+   裁剪 Pass 可提供回调但不会执行。回调只借用到 execute 返回，不是保存在计划里的闭包。
+3. `PassContext` 按计划索引查询当前 Pass 的 buffer/image；copy/fill/clear 直接接受索引，
+   compute/rendering 返回现有 typed encoder。管线/绑定仍由 M5 工厂创建，shader 的绑定和访问范围必须与声明一致。
+   回调必须返回失败 Result，不能保存上下文/资源引用或 encoder，也不能重入修改当前计划或队列。
+   每个 Pass 后会清除准备状态并使 encoder 失效，重复写或内部状态切换需拆分 Pass。
+4. 可用 `FinalAccess` 设置输出或 external 资源的退出 stage/access/layout，例如 buffer 的 HostRead。
+   同一 image 可给不重叠的 mip/layer 范围；退出访问只建立同步，不初始化内容。
+5. `execute(plan, queue, desc)` 完成 CPU 录制并提交，返回 Execution。
+   `queue.wait(execution.submission())` 或 poll 确认完成；状态发布不表示 GPU 已完成，未完成时不能 CPU 读取。
+6. Execution::buffer/image 只返回标记输出的 owner；需要跨结果保存时调用 share()。
+   导入的输出同样持有显式共享 owner。states() 保存 external/输出的最终状态快照，后续执行不会改写。
+   非输出 transient 在逻辑末次使用后释放执行器引用，实际 GPU 生命周期由 pending slot 保证。
+
+以下例子创建 transient readback 输出并填充；为突出调用顺序用 value()，实际调用应处理各步 Result。
+`heap` 和 `queue` 分别是开放的 Memory resource 和现有 SubmissionQueue。
+
+```cpp
+using namespace dk::graphics;
+using namespace dk::graphics::graph;
+auto graph = Graph::create(heap).value();
+const auto output = graph.declare_buffer("readback",
+    {64, vk::BufferUsageFlagBits::eTransferDst, BufferMemory::readback}).value();
+const Use write{output, {{vk::PipelineStageFlagBits2::eClear,
+    vk::AccessFlagBits2::eTransferWrite}, 0, VK_WHOLE_SIZE, {}, true}};
+graph.add_pass({"fill", std::span{&write, 1}}).value();
+graph.mark_output(output).value();
+const auto plan = graph.compile().value();
+const std::array callbacks{PassCallback{0, [](PassContext& pass, void*) {
+    return pass.fill(0, 0x12345678u);
+}}};
+const auto execution = execute(plan, queue, {{}, callbacks, {}}).value();
+std::array<std::uint32_t, 16> pixels{};
+if (queue.wait(execution.submission()).value()) {
+    execution.buffer(0).value()->read(0, std::as_writable_bytes(std::span{pixels})).value();
+}
+```
+
+完整可运行的复制、图片转换、外部绑定、多 mip/layer 与失败用例见
+[GraphProbe.cpp](../../tests/integration/GraphProbe.cpp)。GPU 缺失返回 77（跳过），不计作通过。
+已有 AMD 隐式层兼容问题及进程级环境处理见 [0048](../development/0048-vulkan-14-baseline.md)。
+
+参数、分配、录制或提交失败时不发布候选 Execution、全局资源状态或完成票据；回调自身 CPU 副作用不回滚。
+成功提交后提前销毁结果不会取消 GPU 工作。等待超时保持 pending 和 owner；设备丢失沿用队列终态。
+关闭计划 Memory 后已有计划/结果仍可读，但拒绝新 execute。
+
+buffer 的 initialized 只保守描述整 buffer：部分写不使其变为 true，即使多个写累计覆盖了全部字节。
+图内部按字节范围证明的内容仍能使用；下一次声明 initialized=true 导入时要求账本确实为 true。
+本阶段为同队列自有资源执行，不支持 WSI acquire/present、多队列或 aliasing；
+现有 upload/compute/draw/readback 样例迁移和诊断整合属于 M6.4。

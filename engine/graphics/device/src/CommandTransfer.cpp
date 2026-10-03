@@ -125,7 +125,9 @@ Result<void> CommandBatch::unsafe_record(std::span<const ResourceUse> before, st
     for (const auto& use : final) {
         auto* local = state_->find(use.resource);
         const auto publish = [&](std::size_t index) {
-            const bool initialized = local->states[index].initialized || use.full_overwrite;
+            const bool full = use.full_overwrite && (!use.resource->buffer ||
+                (use.offset == 0 && use.size == use.resource->buffer_desc.size));
+            const bool initialized = local->states[index].initialized || full;
             local->states[index] = use.state;
             local->states[index].initialized = initialized;
             local->prepared[index] = 0;

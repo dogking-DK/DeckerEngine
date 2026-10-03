@@ -55,6 +55,8 @@ public:
     [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
     [[nodiscard]] vk::Buffer handle() const noexcept;
     [[nodiscard]] vk::DeviceSize size() const noexcept;
+    [[nodiscard]] BufferDesc description() const noexcept;
+    [[nodiscard]] Buffer share() const noexcept { return Buffer{state_}; }
     [[nodiscard]] Result<AccessState> state() const;
     [[nodiscard]] Result<void> write(vk::DeviceSize offset, std::span<const std::byte> bytes);
     [[nodiscard]] Result<void> read(vk::DeviceSize offset, std::span<std::byte> bytes) const;
@@ -76,6 +78,7 @@ public:
     [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
     [[nodiscard]] vk::Image handle() const noexcept;
     [[nodiscard]] ImageDesc description() const noexcept;
+    [[nodiscard]] Image share() const noexcept { return Image{state_}; }
     // Last successfully submitted states, ordered by layer then mip; not completion.
     [[nodiscard]] Result<AccessState> state(std::uint32_t mip = 0, std::uint32_t layer = 0) const;
 private:
@@ -119,6 +122,12 @@ public:
     [[nodiscard]] Result<void> copy_to_buffer(const Image& source, const Buffer& destination);
     [[nodiscard]] Result<void> transition(const Image& image, vk::ImageLayout layout);
     [[nodiscard]] Result<void> prepare(std::span<const ResourceUse> uses);
+    // Local recording state; never publishes or changes the resource ledger.
+    [[nodiscard]] Result<AccessState> state(const Buffer& buffer) const;
+    [[nodiscard]] Result<AccessState> state(const Image& image, std::uint32_t mip = 0, std::uint32_t layer = 0) const;
+    // End a typed pass: all declared writes must have executed, rendering must have ended.
+    // Clears preparations and invalidates borrowed encoders on success.
+    [[nodiscard]] Result<void> finish_pass();
     [[nodiscard]] Result<void> barrier(std::span<const ResourceBarrier> barriers);
     [[nodiscard]] Result<RenderEncoder> begin_rendering(const RenderingDesc& description);
     [[nodiscard]] Result<ComputeEncoder> compute();

@@ -102,7 +102,9 @@ Result<void> prepare_resolved(BatchState& batch, std::span<const ResolvedUse> us
             const auto stages = keep_reads ? state.stages | use.state.stages : use.state.stages;
             const auto access = keep_reads ? state.access | use.state.access : use.state.access;
             state = {stages, access, use.state.layout, state.initialized};
-            local->prepared[index] = static_cast<std::uint8_t>(1u | (use.full_overwrite ? 2u : 0u));
+            const bool full = use.full_overwrite && (!use.resource->buffer ||
+                (use.offset == 0 && use.size == use.resource->buffer_desc.size));
+            local->prepared[index] = static_cast<std::uint8_t>(1u | (full ? 2u : 0u));
         });
     }
     rollback.committed = true;
@@ -149,6 +151,35 @@ ResourceUse buffer_use(const Buffer& buffer, vk::PipelineStageFlags2 stages, vk:
 { ResourceUse use{}; use.buffer = &buffer; use.state = {stages, access}; use.offset = offset; use.size = size; return use; }
 ResourceUse image_use(const Image& image, vk::PipelineStageFlags2 stages, vk::AccessFlags2 access, vk::ImageLayout layout, vk::ImageSubresourceRange range)
 { ResourceUse use{}; use.image = &image; use.state = {stages, access, layout}; use.range = range; return use; }
+Result<AccessState> CommandBatch::state(const Buffer& buffer) const
+{
+    if (!state_) return std::unexpected(Error{ErrorCode::invalid_state, "empty batch"});
+    if (auto valid = state_->check(buffer.state_); !valid) return std::unexpected(valid.error());
+    const auto* local = state_->find(buffer.state_);
+    return local ? local->states.front() : buffer.state_->states.front();
+}
+Result<AccessState> CommandBatch::state(const Image& image, std::uint32_t mip, std::uint32_t layer) const
+{
+    if (!state_) return std::unexpected(Error{ErrorCode::invalid_state, "empty batch"});
+    if (auto valid = state_->check(image.state_); !valid) return std::unexpected(valid.error());
+    const auto desc = image.description();
+    if (mip >= desc.mip_levels || layer >= desc.array_layers)
+        return std::unexpected(Error{ErrorCode::invalid_argument, "image state subresource is out of range"});
+    const auto* local = state_->find(image.state_);
+    const auto index = static_cast<std::size_t>(layer) * desc.mip_levels + mip;
+    return local ? local->states[index] : image.state_->states[index];
+}
+Result<void> CommandBatch::finish_pass()
+{
+    if (!state_) return std::unexpected(Error{ErrorCode::invalid_state, "empty batch"});
+    if (auto valid = detail::outside_rendering(*state_); !valid) return valid;
+    for (const auto& use : state_->uses) for (std::size_t i = 0; i < use.states.size(); ++i)
+        if ((use.prepared[i] & 1u) && (use.states[i].access & detail::write_access))
+            return std::unexpected(Error{ErrorCode::invalid_state, "pass has an unconsumed declared write"});
+    for (auto& use : state_->uses) std::fill(use.prepared.begin(), use.prepared.end(), std::uint8_t{0});
+    detail::invalidate_encoder(*state_);
+    return {};
+}
 Result<void> CommandBatch::prepare(std::span<const ResourceUse> uses)
 {
     if (!state_) return std::unexpected(Error{ErrorCode::invalid_state, "empty batch"});

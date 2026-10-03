@@ -205,6 +205,23 @@ void subresource_commands(SubmissionQueue& owner)
     check(readback.read(0,std::as_writable_bytes(std::span{actual})));
     require(actual == pixels,"subresource copy mismatch");
     {
+        auto partial = buffer(owner,16,BufferMemory::readback);
+        auto commands = take(owner.begin());
+        auto use = buffer_use(partial,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,0,8);
+        use.full_overwrite = true;
+        auto handle = partial.handle();
+        check(commands.unsafe_record({&use,1},{&use,1},[](const vk::raii::CommandBuffer& native,void* data) {
+            native.fillBuffer(*static_cast<vk::Buffer*>(data),0,8,0x11223344u);
+        },&handle));
+        require(!take(commands.state(partial)).initialized,"partial native write initialized whole buffer locally");
+        const auto completion = take(owner.submit(std::move(commands)));
+        require(!take(partial.state()).initialized,"partial native write initialized whole buffer globally");
+        require(take(owner.wait(completion)),"partial native write did not complete");
+        std::array<std::uint32_t,2> values{};
+        check(partial.read(0,std::as_writable_bytes(std::span{values})));
+        require(values == std::array<std::uint32_t,2>{0x11223344u,0x11223344u},"partial native write differs");
+    }
+    {
         auto unsafe = take(owner.begin());
         auto old_encoder = take(unsafe.compute());
         check(unsafe.unsafe_record({}, {}, [](const vk::raii::CommandBuffer&,void*) {}));

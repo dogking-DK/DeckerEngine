@@ -1,7 +1,7 @@
 ---
 module: graphics-graph
 created_at: "2026-10-02T23:00:00+08:00"
-updated_at: "2026-10-03T07:24:14+08:00"
+updated_at: "2026-10-03T08:14:35+08:00"
 status: accepted
 ---
 
@@ -11,12 +11,12 @@ status: accepted
 
 M6 用同一图组织上传、计算、绘制和读回。M6.1 提供 CPU 声明与结构校验：
 transient/external buffer/image、Pass 访问与副作用、输出和显式依赖。
-本次 M6.2 发布 CPU 编译计划（依赖、排序、裁剪与逻辑生命周期），不创建 GPU 对象，不录制、不提交；
-M6.3 接入状态导入/导出及单队列执行，M6.4 迁移样例。阶段状态见 [Roadmap](../roadmap.md)。
+M6.2 发布独立 CPU 编译计划（依赖、排序、裁剪与逻辑生命周期）。
+本次 M6.3 接入状态导入/导出及单队列执行，M6.4 迁移样例。阶段状态见 [Roadmap](../roadmap.md)。
 
 ## 模块边界和依赖方向
 
-`engine/graphics/graph` 提供 `dk::graphics_graph`，公开入口 `dk/graphics/Graph.hpp`，
+`engine/graphics/graph` 提供 `dk::graphics_graph`，公开入口 `dk/graphics/Graph.hpp`、`dk/graphics/GraphExecution.hpp`，
 命名空间 `dk::graphics::graph`。可选 `DK_BUILD_GRAPHICS_GRAPH` 默认 OFF，要求 device；
 windows-graphics 预设显式开启，CPU runner 不链接 Graph。PUBLIC 依赖 device，以复用
 BufferDesc/ImageDesc/AccessState、Memory 和 Vulkan 值类型；不依赖 Slang、SDL、Scene 或 Offscreen。
@@ -24,14 +24,14 @@ Graph 的 CPU 测试不初始化设备或 loader。
 
 从 device 的已有录制验证提取纯函数 `ResourceValidation.hpp`：描述、stage/access/usage/layout、
 范围检查由 Graph 与 CommandBatch 共用，避免两套相互偏离的规则；设备能力仍在实际创建时验证。
-后续 Graph 只能消费 ResourceFactory、encoder、barrier、SubmissionQueue，不重建 Vulkan 所有权层。
+Graph 只消费 ResourceFactory、encoder、barrier、SubmissionQueue，不重建 Vulkan 所有权层。
 
 ## 接口与数据设计
 
 - `Graph::create(resource)` 创建拥有型图；`declare_buffer/declare_image` 复制名字与描述。
-  `Lifetime::transient/external` 是逻辑声明；external 目前不绑定原生对象。
+  `Lifetime::transient/external` 是逻辑声明；external 在执行时绑定已有 Buffer/Image owner。
   external 的 `initialized` 表示导入时整个资源内容有效，transient 必须为 false。
-  精细初始/最终状态及实际外部 owner 的绑定在 M6.3 实现。
+  精细初始/最终状态及实际外部 owner 的绑定见执行契约。
 - `BufferId/ImageId/PassId` 是不同类型，携带弱图身份与索引，不能手工伪造；默认、跨图、
   reset 前和已销毁图的引用都拒绝。move 转移身份，目标原有句柄失效。
 - `Use` 携带类型化资源 ID 与 `AccessDescription`（stage/access/layout、buffer 字节范围、
@@ -101,7 +101,41 @@ Graph 的 CPU 测试不初始化设备或 loader。
 覆盖真实 upload→compute→draw→readback 计划、确定性排序、死分支、旧写覆盖、显式前驱、WAR/WAW、
 子范围/部分保留/多 mip/layer 生产者、external 输出、生命周期、快照独立性、预算失败与关闭回收。
 复用 dk_graph_tests；本阶段不改 device 录制，默认不重复 GPU/窗口/全量回归。
-编译沿用成对依赖检查与区间分割，优先明确语义；不承诺大图性能。GPU barrier/执行仍属 M6.3。
+编译沿用成对依赖检查与区间分割，优先明确语义；不承诺大图性能。GPU barrier/执行见下文。
+
+## 单队列执行契约（M6.3）
+
+- `GraphExecution.hpp` 的 `execute(plan, queue, desc)` 每次创建独立资源实例、录制一个 batch 并提交一次。
+  绑定和回调使用当前计划索引。每个 retained external 必须有唯一绑定，每个 retained Pass 必须有唯一回调；
+  裁剪 Pass 不调用，裁剪资源不分配。绑定拒绝错类型/描述、空 owner、重复物理资源、跨设备、正在其他 batch
+  录制或未在当前 batch 获取的 WSI image；本阶段只支持同队列自有 buffer/image。
+- external 通过显式 `share()` 共享已有 owner，无原生重复所有权。描述精确匹配。
+  默认从 owner 的上次成功提交状态导入，可提供 expected initial states（buffer 一项；image layer-major/mip-minor）
+  作全量陈旧状态断言；不允许伪造状态覆盖账本。声明 initialized=true 要求所有导入子资源已初始化。
+  绑定引用及回调 user_data 只借用到 execute 返回；回调外部 CPU 副作用不保证回滚。
+- `PassContext` 提供当前 Pass 声明资源的借用查询，以及 typed copy/fill/clear、compute/render encoder。
+  不暴露可移动/提交/重新 prepare 的 CommandBatch。调用者必须遵守声明的范围、绑定和 full_overwrite 承诺；
+  不保存上下文、资源引用或 encoder 到回调之外。回调返回 Result；异常转为执行错误。
+  每 Pass 前用 `CommandBatch::prepare` 生成 synchronization2 barrier；buffer 整体追踪，image 按 mip/layer。
+  每 Pass 后 `finish_pass` 要求没有活动 rendering 或尚未执行的声明写入，并清除准备状态、使 encoder 失效。
+  不推断 shader 内的实际访问与完整覆盖，额外未声明的资源访问仍属于调用者违约。
+- transient 在 create_before 通过队列工厂创建；非输出在 release_after 释放执行层引用，
+  batch/pending slot 仍保活实际 GPU owner。输出由 `Execution` 持有，可在完成后读取，或作为下次图的外部绑定。
+  `Execution` 只读导出 external/输出的最终状态快照；后续提交不修改旧快照。
+- 可对 retained external/输出声明 final access（不得 full_overwrite 或伪造 initialized），
+  在所有 Pass 后统一 prepare。允许不重叠 image 子资源项，同 buffer 最多一项。
+  final access 只建立下一使用者所需同步/layout，不初始化内容。
+  buffer initialized 沿用整资源保守账本；部分范围写入不应将整个 buffer 标为已初始化，
+  即使多个范围累计覆盖全体也可保持 false。图内部的内容依赖仍按精确字节范围证明。
+- 所有输出 owner、状态快照、回调目录和临时元数据在提交前构建；唯一提交点为成功的队列 submit。
+  参数/分配/回调/提交失败时销毁未提交 batch 和候选结果，不发布全局资源状态或完成票据；先前执行不变。
+  成功后仅做无分配的 owner 移动/释放，返回已有 Submission；通过 queue.wait/poll 跟踪，超时保留 pending。
+  结果提前销毁不取消已提交 GPU 工作。queue 及其资源仍须外部串行访问。
+- 计划/执行持久元数据使用计划的 Memory resource；资源和 batch 使用队列的 Memory resource。
+  关闭计划 Memory 后可读已有快照，但拒绝新 execute。无队列并发、aliasing、WSI 提交或 hidden wait。
+
+验证：复用 CPU 图用例，新增 GPU probe 验证实际 barrier/layout、重复执行、导入断言/导出快照、
+子资源、裁剪、输出保活、录制/提交/分配失败、超时/完成/设备丢失。同步回归直接变更的资源层。
 
 ## 生命周期、并发和错误处理
 
@@ -114,7 +148,7 @@ MSVC Debug 的 allocator-only 空容器构造及 string/vector move 可能在 no
 图使用可抛异常的零 count 构造，不移动包含这些容器的记录，使预算失败能到达 Result 边界。
 声明先校验并构建候选，再一次 append 发布。无效参数或可捕获分配失败不改变计数、内容、
 依赖、输出或已有句柄。reset 先创建空候选，再替换身份；失败保留原图。
-validate/compile 只读，失败不修改图，不存在 GPU 状态提交点。本阶段没有执行回调或 GPU owner。
+validate/compile 只读，失败不修改图，不存在 GPU 状态提交点。执行的提交点见单队列执行契约。
 
 ## 声明层实施与验证依据（M6.1）
 
@@ -129,9 +163,9 @@ validate/compile 只读，失败不修改图，不存在 GPU 状态提交点。�
 
 先用清晰的成对依赖检查和迭代 DFS 验证循环，不声称大图编译性能；没有递归深度限制。
 硬件格式/extent 限制不在纯 CPU 校验中证明。暂不提供版本化 SSA 资源、多队列、aliasing、
-历史图句柄、并发构建、执行闭包或复杂导入状态；这些能力不能从已有声明接口推断。
+历史图句柄、并发构建或跨队列导入状态；这些能力不能从已有声明接口推断。
 
 ## 相关记录
 
 [架构](architecture.md)、[资源](graphics-resources.md)、[Vulkan 使用层](graphics-vulkan.md)、
-[0057 声明记录](../development/0057-graph-declarations.md)、[0058 编译记录](../development/0058-graph-compilation.md)。
+[0057 声明记录](../development/0057-graph-declarations.md)、[0058 编译记录](../development/0058-graph-compilation.md)、[0059 执行记录](../development/0059-graph-execution.md)。

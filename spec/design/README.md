@@ -3,7 +3,7 @@
 | 模块 | 文档 | 状态 | 范围 | 源码入口 | 测试入口 |
 | --- | --- | --- | --- | --- | --- |
 | architecture | [整体架构](architecture.md) | accepted | 长期模块边界和依赖方向 | [模块目录](../../engine) | [流程/检查](../README.md) |
-| graphics-graph | [GPU Graph](graphics-graph.md) | accepted | 图资源/Pass 声明、依赖编译、裁剪与生命周期计划 | [graph](../../engine/graphics/graph) | [单元](../../tests/unit/CMakeLists.txt) |
+| graphics-graph | [GPU Graph](graphics-graph.md) | accepted | 图声明/编译、裁剪、单队列执行与状态导入导出 | [graph](../../engine/graphics/graph) | [单元](../../tests/unit/CMakeLists.txt) |
 | platform | [SDL3 窗口](platform.md) | accepted | 窗口寿命、事件与像素尺寸 | [platform](../../engine/platform) | [集成](../../tests/integration/CMakeLists.txt) |
 | graphics-presentation | [窗口与呈现](graphics-presentation.md) | accepted | Surface、交换链、帧获取/呈现与重建契约 | [presentation](../../engine/graphics/presentation) | [集成](../../tests/integration/CMakeLists.txt) |
 | graphics-device | [Vulkan 设备与诊断](graphics-device.md) | accepted | Vulkan 1.4 设备/诊断；Vulkan-Hpp RAII、volk、vk-bootstrap、VMA allocator | [Device](../../engine/graphics/device) | [device](../../tests/unit/CMakeLists.txt) |

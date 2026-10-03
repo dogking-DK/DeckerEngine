@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-02T23:30:11+08:00"
+updated_at: "2026-10-03T08:14:35+08:00"
 status: accepted
 ---
 
@@ -145,3 +145,11 @@ M5.6 的 private PresentationBridge 创建外部 Image，保留交换链代际 o
 等待 acquire binary semaphore 并 signal render-finished 与原 timeline；pending 槽保活独立同步对象。
 render timeline 与 present fence 是两个完成边界，具体恢复/回收由 [Presentation](graphics-presentation.md) 管理。
 BGRA8 sRGB 加入四字节 color 资源格式，surface 支持时可复用 readback。headless submit 默认行为不变。
+
+## Graph 执行接入（M6.3）
+
+Buffer 补充 description；Buffer/Image 的显式 share 返回共享同一 owner 的 move-only 包装，不创建原生对象。
+CommandBatch::state 查询当前 batch 的局部状态（未 retain 时读取全局账本），校验归属/范围，绝不发布。
+finish_pass 检查活动 rendering 和未消费的写准备，成功时清除所有 prepared 并使旧 encoder 失效。
+buffer 的部分范围 full_overwrite 不代表整 buffer 初始化；仍允许图用精确字节覆盖证明内容依赖。
+这些接口供上层 Graph 使用，Graph 不包含 device 私有实现，也不直接调用 Vulkan。
