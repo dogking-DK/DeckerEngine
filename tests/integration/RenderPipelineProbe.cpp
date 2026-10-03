@@ -173,10 +173,10 @@ void render_scenes(memory::ResourceHandle heap,SubmissionQueue& queue,const Devi
     require(!pipeline.render(queue,view,cache,settings),"submit failure ignored"); unchanged();
     Trsd huge; huge.translation.x()=1e100; check(program.scene->set_local_transform(program.near,huge));
     require(!pipeline.render(queue,program.view(heap),cache,settings),"float overflow accepted"); unchanged();
-    program.front.materials[0].alpha_mode=AlphaMode::mask;
+    program.front.materials[0].alpha_mode=AlphaMode::blend;
     auto unsupported=take(cache.upload(queue,program.front)); require(take(unsupported.wait(queue)),"unsupported upload wait failed"); unsupported={};
     const auto before_alpha=queue.stats().submitted;
-    require(!pipeline.render(queue,view,cache,settings) && queue.stats().submitted==before_alpha,"alpha mask silently rendered as opaque");
+    require(!pipeline.render(queue,view,cache,settings) && queue.stats().submitted==before_alpha,"alpha blend silently rendered as opaque");
     program.front.materials[0].alpha_mode=AlphaMode::opaque; auto restored=take(cache.upload(queue,program.front)); require(take(restored.wait(queue)),"restore wait failed"); restored={};
     auto other_device=take(Device::create(heap,options)); auto other_queue=take(SubmissionQueue::create(heap,std::move(other_device)));
     require(!first.wait(other_queue) && !pipeline.render(other_queue,view,cache,settings),"foreign queue accepted frame or pipeline");

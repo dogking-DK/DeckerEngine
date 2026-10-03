@@ -61,3 +61,23 @@ TEST_CASE("textures share one output per texture and budget distinct samplers se
     dk::GltfImportRequest limited{"assets/模型.gltf"}; limited.limits.texture_bytes=31;
     REQUIRE_FALSE(dk::import_gltf(f.paths,limited));
 }
+
+TEST_CASE("unlit preview explicitly omits lighting inputs while strict import still rejects") {
+    GltfFixture f; textured(f);
+    f.json["materials"][0]["normalTexture"]={{"index",0}};
+    f.json["materials"][0]["pbrMetallicRoughness"]["metallicRoughnessTexture"]={{"index",0}};
+    const auto offset=f.binary.size();
+    for (int i=0;i<3;++i) for (float value : {1.f,0.f,0.f,1.f}) GltfFixture::word(f.binary,std::bit_cast<std::uint32_t>(value));
+    f.json["buffers"][0]["byteLength"]=f.binary.size();
+    f.json["bufferViews"].push_back({{"buffer",0},{"byteOffset",offset},{"byteLength",48}});
+    f.json["accessors"].push_back({{"bufferView",2},{"componentType",5126},{"count",3},{"type","VEC4"}});
+    f.json["meshes"][0]["primitives"][0]["attributes"]["TANGENT"]=4;
+    f.save(); REQUIRE_FALSE(dk::import_gltf(f.paths,{"assets/模型.gltf"}));
+    dk::GltfImportRequest request{"assets/模型.gltf"}; request.profile=dk::GltfImportProfile::unlit_preview;
+    auto preview=dk::import_gltf(f.paths,request); REQUIRE(preview);
+    CHECK(preview->textures.size()==1); CHECK(preview->materials[0].alpha_mode==dk::AlphaMode::mask);
+    CHECK(preview->diagnostics.size()==3); // Tangent, lighting textures, node placement.
+    f.json["accessors"][4]["count"]=2; f.save(); CHECK_FALSE(dk::import_gltf(f.paths,request));
+    f.json["accessors"][4]["count"]=3; f.json["materials"][0]["emissiveTexture"]={{"index",0}}; f.save();
+    CHECK_FALSE(dk::import_gltf(f.paths,request));
+}

@@ -12,12 +12,15 @@ struct ImportLimits {
     std::size_t vertices = 1000000, indices = 3000000, primitives = 4096;
     std::size_t image_dimension = 8192, image_bytes = 64 * 1024 * 1024, texture_bytes = 128 * 1024 * 1024;
 };
+// Preview explicitly omits lighting-only inputs with diagnostics; compiler/cache stay strict.
+enum class GltfImportProfile { strict, unlit_preview };
 struct GltfImportRequest {
     std::string_view source;
     std::span<const OutputIdentity> identities;
     double unit_scale = 1;
     ImportLimits limits;
     std::stop_token stop;
+    GltfImportProfile profile = GltfImportProfile::strict;
 };
 // Pure candidate: no writes or changes to existing metadata, Project, Scene or published data.
 // Requires a bound persistent memory context with scratch; ContextError/bad_alloc propagate.

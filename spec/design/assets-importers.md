@@ -1,7 +1,7 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-10-03T15:28:09+08:00"
+updated_at: "2026-10-03T17:17:15+08:00"
 status: accepted
 ---
 
@@ -209,3 +209,9 @@ M4.4 的 AssetService 提供有版本检查的清单适配。M4.2.2 先固定并
 子资产删除留下明确缺失诊断，已有引用不自动指向新资产。多 mesh/更多材质通道按后续需求单独扩展。
 
 M4.4.2 在 GltfImportRequest 中加入可选 stop_token，读取、解析、primitive 和纹理解码之间协作检查；取消不抢占三方调用。
+
+## M7.3 显式无光照预览
+
+GltfImportRequest 新增 profile，默认 strict 完整保持上述拒绝策略。unlit_preview 仅允许省略
+已校验的 TANGENT 与 normal/occlusion/metallicRoughness 纹理，返回明确诊断；不省略 emissiveTexture
+或未知属性，不修改 CPU artifact 格式，也不进入既有 compiler/cache 路径。见 [磁盘渲染](render-disk.md)。

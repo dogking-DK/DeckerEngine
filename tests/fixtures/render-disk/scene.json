@@ -1,0 +1,179 @@
+{
+  "format": "DeckerScene",
+  "version": 1,
+  "scene_id": "30000000-0000-4000-8000-000000000001",
+  "revision": 1,
+  "entities": [
+    {
+      "components": {
+        "dk.Identity": {
+          "version": 1,
+          "id": "20000000-0000-4000-8000-000000000001"
+        },
+        "dk.Name": {
+          "version": 1,
+          "value": "mask"
+        },
+        "dk.Transform": {
+          "version": 1,
+          "translation": [
+            0,
+            -0.125,
+            0.25
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            0.5,
+            0.5,
+            1
+          ]
+        },
+        "dk.Hierarchy": {
+          "version": 1,
+          "parent": "20000000-0000-4000-8000-000000000010"
+        },
+        "dk.AssetReferences": {
+          "version": 1,
+          "items": [
+            {
+              "id": "10000000-0000-4000-8000-000000000001",
+              "kind": "mesh"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "components": {
+        "dk.Identity": {
+          "version": 1,
+          "id": "20000000-0000-4000-8000-000000000002"
+        },
+        "dk.Name": {
+          "version": 1,
+          "value": "back"
+        },
+        "dk.Transform": {
+          "version": 1,
+          "translation": [
+            0,
+            -0.125,
+            0.75
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            0.8,
+            0.8,
+            1
+          ]
+        },
+        "dk.Hierarchy": {
+          "version": 1,
+          "parent": "20000000-0000-4000-8000-000000000010"
+        },
+        "dk.AssetReferences": {
+          "version": 1,
+          "items": [
+            {
+              "id": "10000000-0000-4000-8000-000000000002",
+              "kind": "mesh"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "components": {
+        "dk.Identity": {
+          "version": 1,
+          "id": "20000000-0000-4000-8000-000000000003"
+        },
+        "dk.Name": {
+          "version": 1,
+          "value": "instance"
+        },
+        "dk.Transform": {
+          "version": 1,
+          "translation": [
+            0.85,
+            -0.125,
+            0.1
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            0.1,
+            0.2,
+            1
+          ]
+        },
+        "dk.Hierarchy": {
+          "version": 1,
+          "parent": "20000000-0000-4000-8000-000000000010"
+        },
+        "dk.AssetReferences": {
+          "version": 1,
+          "items": [
+            {
+              "id": "10000000-0000-4000-8000-000000000001",
+              "kind": "mesh"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "components": {
+        "dk.Identity": {
+          "version": 1,
+          "id": "20000000-0000-4000-8000-000000000010"
+        },
+        "dk.Name": {
+          "version": 1,
+          "value": "parent"
+        },
+        "dk.Transform": {
+          "version": 1,
+          "translation": [
+            0,
+            0.125,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "dk.Hierarchy": {
+          "version": 1,
+          "parent": null
+        },
+        "dk.AssetReferences": {
+          "version": 1,
+          "items": []
+        }
+      }
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-03T17:07:43+08:00"
-updated_at: "2026-10-03T17:07:43+08:00"
+updated_at: "2026-10-03T17:31:34+08:00"
 ---
 
 # 默认测试场景素材
@@ -18,7 +18,8 @@ updated_at: "2026-10-03T17:07:43+08:00"
 Sponza 整个源目录保留，包含 .gltf、.bin、纹理、README 来源说明和截图。
 天空盒保留 px/nx/py/ny/pz/nz.png 与 cubemap_layout.png，不修改像素、面命名或方向；
 引擎采样时的面朝向转换由后续接入验证。
-HDR、天空盒渲染以及磁盘场景集成尚未实现；现有 M7.2 程序化回归保持原入口，
+磁盘场景示例现使用 [project.json](../project.json) 和 [Sponza 场景](../scenes/sponza.scene.json)，
+显式无光照预览并支持 alpha mask；HDR 与天空盒渲染尚未实现。现有程序化回归保持原入口，
 详见 [Render 指南](../../../spec/guides/render.md)。
 
 ## 本机原始来源
@@ -37,4 +38,4 @@ Sponza 的原始来源与许可说明保留在 `gltf/Sponza/README.md`；其他�
 Sponza 的 70 个外部 buffer/image URI 均在复制目录内解析成功，buffer 长度符合声明。
 HDR 头部尺寸为 4096x2048；六张天空盒面各为 512x512，PNG 完整性检查通过。
 复制校验明细保存于本机 `out/default-test-assets-copy.json`（从仓库根解析）。
-本次只准备和核对素材，不代表已经通过引擎导入或渲染验收。
+本节只记录素材复制核对；磁盘导入和渲染验收另见 [M7.3 记录](../../../spec/development/0063-render-disk.md)。

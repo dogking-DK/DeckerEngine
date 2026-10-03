@@ -15,10 +15,21 @@ VertexOutput vertexMain(float3 position : POSITION, float2 uv : TEXCOORD0)
 #else
 [[vk::binding(0,0)]] Texture2D<float4> baseTexture;
 [[vk::binding(1,0)]] SamplerState baseSampler;
+float4 surface(float2 uv)
+{
+    float4 value = baseTexture.Sample(baseSampler,uv) * drawData.baseColor;
+    // emissive.w is the alpha cutoff, or -1 for opaque materials.
+    if (value.a < drawData.emissive.w) discard;
+    return value;
+}
+#if defined(DK_DEPTH)
+[shader("fragment")]
+void depthMain(VertexOutput input) { surface(input.uv); }
+#else
 [shader("fragment")]
 float4 fragmentMain(VertexOutput input) : SV_Target0
 {
-    float3 color = baseTexture.Sample(baseSampler,input.uv).rgb * drawData.baseColor.rgb + drawData.emissive.rgb;
-    return float4(color,1);
+    return float4(surface(input.uv).rgb + drawData.emissive.rgb,1);
 }
+#endif
 #endif

@@ -1,3 +1,21 @@
+if(DK_BUILD_RENDER_DISK AND DK_BUILD_RENDER_PIPELINE)
+    add_executable(dk_render_disk_probe RenderDiskProbe.cpp)
+    set_target_properties(dk_render_disk_probe PROPERTIES OUTPUT_NAME dk-render-disk-probe)
+    target_compile_definitions(dk_render_disk_probe PRIVATE DK_DISK_FIXTURE_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+        DK_RENDER_SHADER_DIR="${PROJECT_SOURCE_DIR}/shaders/render")
+    target_include_directories(dk_render_disk_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
+    target_link_libraries(dk_render_disk_probe PRIVATE dk::render_disk dk::render_pipeline dk::asset_runtime)
+    dk_target_defaults(dk_render_disk_probe)
+    dk_deploy_slang(dk_render_disk_probe)
+    add_test(NAME dk.render.disk_gpu_validation COMMAND dk_render_disk_probe)
+    set_tests_properties(dk.render.disk_gpu_validation PROPERTIES TIMEOUT 120 SKIP_RETURN_CODE 77 LABELS "gpu"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+    if(TARGET dk_render_demo)
+        add_test(NAME dk.render.sponza_validation COMMAND dk_render_demo)
+        set_tests_properties(dk.render.sponza_validation PROPERTIES TIMEOUT 180 SKIP_RETURN_CODE 77 LABELS "gpu;local-assets"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+    endif()
+endif()
 if(DK_BUILD_RENDER_PIPELINE)
     add_executable(dk_render_pipeline_probe RenderPipelineProbe.cpp)
     set_target_properties(dk_render_pipeline_probe PROPERTIES OUTPUT_NAME "dk-render-pipeline-probe")

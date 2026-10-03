@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-03T16:54:00+08:00"
+updated_at: "2026-10-03T17:31:34+08:00"
 status: accepted
 ---
 
@@ -32,7 +32,8 @@ render/data 已提供不可变 SceneSnapshot 提取和显式相机 View，render
 管理 GpuMesh/纹理/材质快照、提交后缓存发布和在途卸载，见 [Render 数据](render-data.md) 与
 [GPU 资源](render-resources.md)。两者均为独立可选模块，不进入 CPU Runtime。
 render/pipeline 通过 Graph 执行 depth/opaque/tone/readback，提供绑定场景版本的异步离屏帧，
-见 [最小渲染管线](render-pipeline.md)。磁盘渲染集成、编辑器和脚本按后续阶段接入。
+见 [最小渲染管线](render-pipeline.md)。render/disk 只读连接 M2 工程/场景、M4 导入或 CPU 产物，
+准备独立 GPU 缓存，见 [磁盘渲染](render-disk.md)。编辑器、截图任务和脚本按后续阶段接入。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，
@@ -48,7 +49,7 @@ render/pipeline 通过 Graph 执行 depth/opaque/tone/readback，提供绑定场
 | engine/assets | 资产类型、运行时、导入器 | 与设备资源和图资源分离 |
 | engine/scene | 组件、层级、序列化、迁移 | 基础层与资产引用，不持有 Vulkan 资源 |
 | engine/graphics | device、shaders、offscreen、presentation、graph 声明/编译/执行 | 离屏底座不依赖场景，正式业务后续统一进入 Graph |
-| engine/render | 已实现只读数据/视图、GPU 资产缓存、最小离屏管线 | data 依赖 Scene/Memory；resources 依赖 asset_data/Device/Graph；pipeline 依赖前两者、Graph/Shaders，不依赖 Editor |
+| engine/render | 已实现只读数据/视图、GPU 资产缓存、最小离屏管线、磁盘输入 | data 依赖 Scene/Memory；resources 依赖 asset_data/Device/Graph；pipeline 依赖前两者、Graph/Shaders；disk 组合 Scene/资产导入和 runtime，不依赖 Framework/Editor |
 | engine/physics | 接口、CPU/GPU 求解器 | CPU 不依赖 Vulkan；GPU 可用 Device/Graph |
 | engine/framework | commands、services、operations、runtime | 应用服务与模块装配；通用命令层保持独立 |
 | engine/automation | 协议、传输、客户端、服务端 | 客户端不链接完整 Runtime/Renderer |

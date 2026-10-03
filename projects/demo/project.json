@@ -1,0 +1,13 @@
+{
+  "format": "DeckerProject",
+  "version": 1,
+  "name": "Sponza unlit preview",
+  "scene": "scenes/sponza.scene.json",
+  "assets": [
+    {
+      "id": "cd173456-5bdb-446a-8aa4-4283e4a457b8",
+      "kind": "mesh",
+      "path": "assets/gltf/Sponza/glTF/Sponza.gltf"
+    }
+  ]
+}

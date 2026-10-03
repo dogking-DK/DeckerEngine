@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-03T16:57:00+08:00"
+updated_at: "2026-10-03T17:37:32+08:00"
 status: accepted
 ---
 
@@ -42,7 +42,8 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 [0059](development/0059-graph-execution.md)。M6.4 样例迁移与诊断完成，见
 [0060](development/0060-graph-integration.md)；M6 已全部验收。M7.1 场景提取与 GPU 资源已完成，见
 [0061](development/0061-render-data-resources.md)；M7.2 最小渲染管线完成，见
-[0062](development/0062-render-pipeline.md)，下一项为 M7.3 磁盘场景与资产集成。
+[0062](development/0062-render-pipeline.md)。M7.3 磁盘场景与资产集成完成，见
+[0063](development/0063-render-disk.md)，下一项为 M7.4 截图任务与自动化验收。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作；提早建立多线程内存契约与性能测量，复杂并行优化仍由测量驱动。
@@ -398,11 +399,12 @@ M5 的图像/计算样例迁移后输出保持符合原验证条件。
 | --- | --- | --- | --- | --- |
 | M7.1 | 场景提取与 GPU 资源 | M3、M4、M6 | 只读视图、GpuMesh/纹理 Graph 上传及卸载寿命，见 [0061](development/0061-render-data-resources.md) | 已完成 |
 | M7.2 | 最小渲染管线 | M7.1 | opaque/depth/tone mapping 由 Graph 执行，程序化场景可回归 | 已完成（[0062](development/0062-render-pipeline.md)） |
-| M7.3 | 磁盘场景与资产集成 | M7.2 | M4 导入资产和 M2 场景可加载并离屏渲染 | 待开始 |
+| M7.3 | 磁盘场景与资产集成 | M7.2 | M4 导入/CPU 产物和 M2 场景可加载并离屏渲染；Sponza 无光照预览与 alpha mask | 已完成（[0063](development/0063-render-disk.md)） |
 | M7.4 | 截图任务与自动化验收 | M7.3 | capture/status/wait 绑定 revision/frame，失败有终态，截图可核验；交付 B | 待开始 |
 
 **设计：** [render-data](design/render-data.md)、[render-resources](design/render-resources.md) 已采用；
-后续所属阶段先写 `render-pipeline.md`、`render-capture.md`，再更新 runtime/automation 设计。
+[render-pipeline](design/render-pipeline.md)、[render-disk](design/render-disk.md) 已实现；
+下一阶段先写 `render-capture.md`，再更新 runtime/automation 设计。
 
 **验收：** 在无窗口 runner 中加载固定场景，等待资产/GPU 上传完成后渲染并保存图像；
 改变变换再截图，能确认返回结果对应目标 revision。
@@ -531,7 +533,8 @@ M6.3 同步、执行与状态导入导出完成，见 [0059](development/0059-gr
 M6.4 样例迁移与诊断完成，见 [0060](development/0060-graph-integration.md)；M6 全部验收。
 M7.1 场景提取与 GPU 资源完成，见 [0061](development/0061-render-data-resources.md)。
 M7.2 最小渲染管线与程序化图像回归完成，见 [0062](development/0062-render-pipeline.md)。
-下一项为 **M7.3 磁盘场景与资产集成**：连接 M4 导入资产和 M2 场景，完成磁盘加载到离屏图像链路；
+M7.3 磁盘到图像及默认 Sponza 验收完成，见 [0063](development/0063-render-disk.md)。
+下一项为 **M7.4 截图任务与自动化验收**：capture/status/wait 绑定 revision/frame、文件产物及失败终态；
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 

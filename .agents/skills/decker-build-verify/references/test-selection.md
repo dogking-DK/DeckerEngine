@@ -39,6 +39,9 @@
 | GpuMesh/纹理 Graph 上传、字节读回、缓存与在途卸载 | dk_render_resources_probe | `^dk\.render\.gpu_`（gpu label；77 为跳过） |
 | Render 管线参数、矩阵 float 转换与空帧（无需 GPU） | dk_render_pipeline_tests | `^dk\.render\.pipeline\.` |
 | 场景 depth/opaque/tone 图像、HDR 传输与帧失败/寿命 | dk_render_pipeline_probe | `^dk\.render\.pipeline_gpu_validation$`（gpu label；77 为跳过） |
+| 磁盘 Scene/glTF/CPU 产物、身份/预算与只读失败保护 | dk_render_disk_tests | `^dk\.render\.disk\.` |
+| 磁盘到 GPU 图像、alpha mask、重载与上传部分失败 | dk_render_disk_probe | `^dk\.render\.disk_gpu_validation$`（gpu label；77 为跳过） |
+| 默认 Sponza 磁盘渲染示例 | dk_render_demo | `^dk\.render\.sponza_validation$`（gpu/local-assets；77 为跳过） |
 | GPU Graph 声明、编译裁剪、生命周期与诊断（无需 GPU） | dk_graph_tests | `^dk\.graph\.graph ` |
 | GPU Graph 同步、执行、导入导出、诊断与失败保护 | dk_graph_probe | `^dk\.graph\.gpu_`（gpu label；77 为跳过） |
 | Vulkan 设备策略、缺失环境和失败清理（无需 GPU） | dk_device_tests | `^dk\.device\.unit\.` |

@@ -1,7 +1,7 @@
 ---
 module: render-resources
 created_at: "2026-10-03T15:06:44+08:00"
-updated_at: "2026-10-03T15:24:26+08:00"
+updated_at: "2026-10-03T17:31:34+08:00"
 status: accepted
 ---
 
@@ -57,7 +57,8 @@ CPU 输入只在 upload 调用中借用，可在返回后立即释放。Memory c
 验证 pending 卸载、重载旧快照、缓存销毁、队列关闭/异队列等待、失败提交、候选分配失败和
 Memory 预算；同步验证层无告警，最终 pending/VMA/Memory 回零。
 CPU 验证输入拒绝无需初始化 GPU。无后台任务、自动缓存淘汰、渲染帧/descriptor 管理，
-这些不能作为已实现能力。后续 [M7.2](../roadmap.md) 实现管线，M7.3 才连接磁盘/AsyncAssets。
+这些不能作为本模块已实现能力。业务管线见 [render-pipeline](render-pipeline.md)，
+磁盘装配见 [render-disk](render-disk.md)；后者同步读取候选并准备 GPU 缓存，未接入 AsyncAssets/Jobs。
 
 关联 [CPU 资产](assets-importers.md)、[Graph](graphics-graph.md)、[资源寿命](graphics-resources.md)、
 [0061](../development/0061-render-data-resources.md)。

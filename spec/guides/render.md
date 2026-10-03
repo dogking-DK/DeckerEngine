@@ -1,18 +1,19 @@
 ---
 created_at: "2026-10-03T15:28:09+08:00"
-updated_at: "2026-10-03T17:07:43+08:00"
+updated_at: "2026-10-03T17:31:34+08:00"
 ---
 
 # 场景数据、GPU 资源与离屏渲染
 
-[返回项目入口](../../README.md)。本页对应 M7.1–2；磁盘场景集成将在 M7.3 接入。
+[返回项目入口](../../README.md)。本页对应 M7.1–3；capture 任务和 Runtime 自动化将在 M7.4 接入。
 
 ## 配置与验证
 
 `DK_BUILD_RENDER_DATA` 构建 `dk::render_data`（Scene/Memory，无 Vulkan 依赖）；
 `DK_BUILD_RENDER_RESOURCES` 构建 `dk::render_resources`（asset_data/Device/Graph）。
 `DK_BUILD_RENDER_PIPELINE` 构建 `dk::render_pipeline`，要求前两者、Graph 和 Shaders。
-三个选项默认 OFF，windows-graphics 启用；CPU Runtime 不链接它们。
+`DK_BUILD_RENDER_DISK` 构建 `dk::render_disk`，要求 Render Data/Resources、Asset Importers/Runtime。
+四个选项默认 OFF，windows-graphics 启用；CPU Runtime 不链接渲染模块。
 
 ```powershell
 cmake --preset windows-graphics
@@ -73,8 +74,8 @@ shader_directory 指向仓库 shaders/render 或部署时复制的同名目录�
 每一步 Result 均须检查，渲染成功表示提交成功。
 
 管线按 mesh 引用绘制全部 primitives：深度预处理 → 无光照 opaque HDR → Reinhard/sRGB → RGBA8 读回。
-支持父级世界矩阵、显式相机/投影、实例、基础色纹理和 emissive；当前无透明、灯光/PBR、阴影或可见性裁剪。
-缺少 mesh、alpha mask/blend 或世界到裁剪矩阵溢出会拒绝整帧。实体上的 material/texture 引用不自动覆盖 mesh 材质。
+支持父级世界矩阵、显式相机/投影、实例、基础色纹理和 emissive；支持 alpha mask；当前无 alpha blend、灯光/PBR、阴影或可见性裁剪。
+缺少 mesh、alpha blend 或世界到裁剪矩阵溢出会拒绝整帧。实体上的 material/texture 引用不自动覆盖 mesh 材质。
 
 RenderFrame::wait(queue, timeout) 确认完成后，read_rgba8(span) 写入 width*height*4 字节。
 像素为 sRGB 编码 RGB、alpha=255，保持正高度 Vulkan viewport 的行方向。
@@ -102,5 +103,39 @@ settings.capture_plan=true 时 plan_text() 返回五个 Pass 的图计划。
 [defaults.json](../../projects/demo/assets/defaults.json) 指定 Sponza glTF、
 Citrus Orchard Road HDR 和 sky_clouds_12 六面天空盒，路径均相对于 assets 目录。
 原始素材为本地副本，Git 保存清单与来源说明；新 checkout 需按说明准备。
-这份清单用于后续磁盘场景集成，不是引擎 Scene/Project 文件；当前管线尚未自动读取它，
-也未接入 HDR 环境采样和天空盒绘制。
+该清单是素材索引；真正的 M2 工程入口为 projects/demo/project.json，场景为
+scenes/sponza.scene.json。默认示例读取这个工程。HDR 环境采样和天空盒绘制仍未接入。
+
+## 磁盘场景与默认 Sponza
+
+公开入口：[DiskScene.hpp](../../engine/render/disk/include/dk/render/DiskScene.hpp)。
+调用方装配带 scratch 的 Memory ThreadContext，打开 Project 后依次检查：
+DiskScene::load(heap, project, options) → disk.upload(queue) → RenderView::create(disk.scene(), view) →
+ScenePipeline::render(queue, view, gpu_assets)。load 只读，不写 source.meta 或任何缓存索引；
+upload 逐包等待完毕才返回新的完整缓存。重新加载失败时，旧 DiskScene、缓存、Frame 仍可使用。
+
+Project 的 mesh 路径可以指向 .gltf/.glb 或 M4 产物的 manifest.json；已有 source.meta 的 mesh/0 ID
+必须与 Project 对应，没有 meta 时用 Project ID。M4 产物读取并校验其自带身份和摘要。
+多个实体引用相同 mesh 只加载一次；节点摆放来自 M2 Scene，不自动使用 glTF node transforms。
+最多 64 个包、累计 512 MiB CPU 数值/纹理载荷，DiskSceneOptions 可降低限额。
+
+默认 strict 保持 M4 导入范围；Sponza 示例显式使用 GltfImportProfile::unlit_preview，
+校验但省略切线，忽略 normal/occlusion/metallicRoughness 纹理并输出诊断。base color 和 alpha mask 保留。
+不省略 emissiveTexture、未知属性或扩展。已有资产编译器/缓存仍然 strict，预览不生成其持久产物。
+
+```powershell
+cmake --preset windows-graphics
+& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics `
+    -Target @('dk_render_disk_tests','dk_render_disk_probe','dk_render_demo') `
+    -TestRegex '^dk\.render\.(disk\.|disk_gpu_validation$|sponza_validation$)' `
+    -Reason 'Disk scene loading, alpha mask and default Sponza'
+```
+
+需要 Vulkan/Khronos validation；本机旧 AMD 隐式层兼容设置见 [Graphics 指南](graphics.md)。
+Sponza 测试带 local-assets 标签，缺少本机素材时明确跳过（77）；小型磁盘夹具不依赖 Sponza。
+程序 dk-render-demo 无参数时读取仓库默认工程，输出当前目录 render-sponza.ppm 和 .txt 图计划。
+也接受三个位置参数 `PROJECT_ROOT MANIFEST OUTPUT.ppm`（路径支持 Unicode）；示例使用固定 Sponza 相机，
+通用库调用者通过 ViewDescription 自行配置相机。输出父目录须存在，PPM 文件在完成读回后原子写入。
+
+这一步提供库和独立示例；尚无 Runtime capture 命令、后台加载或 HDR/天空盒着色。
+设计与验收见 [render-disk](../design/render-disk.md)、[0063](../development/0063-render-disk.md)。

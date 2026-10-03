@@ -1,0 +1,52 @@
+{
+  "format": "DeckerScene",
+  "version": 1,
+  "scene_id": "9c44d3b5-254e-49b1-b29c-d29ca7ba038b",
+  "revision": 1,
+  "entities": [
+    {
+      "components": {
+        "dk.Identity": {
+          "version": 1,
+          "id": "c0e66d9c-c5f7-4d53-8e98-4ea7ef6eb221"
+        },
+        "dk.Name": {
+          "version": 1,
+          "value": "Sponza"
+        },
+        "dk.Transform": {
+          "version": 1,
+          "translation": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            0.00800000037997961,
+            0.00800000037997961,
+            0.00800000037997961
+          ]
+        },
+        "dk.Hierarchy": {
+          "version": 1,
+          "parent": null
+        },
+        "dk.AssetReferences": {
+          "version": 1,
+          "items": [
+            {
+              "id": "cd173456-5bdb-446a-8aa4-4283e4a457b8",
+              "kind": "mesh"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

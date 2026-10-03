@@ -13,8 +13,8 @@ namespace detail {
 struct PipelineState {
     memory::ResourceHandle heap;
     ResourceFactory factory;
-    PipelineLayout depth_layout, opaque_layout, tone_layout;
-    GraphicsPipeline depth, opaque, tone;
+    PipelineLayout depth_layout, mask_layout, opaque_layout, tone_layout;
+    GraphicsPipeline depth, mask, opaque, tone;
     Sampler white_sampler;
 };
 struct FrameState {
@@ -37,6 +37,7 @@ struct Draw {
     GpuAsset owner;
     const GpuPrimitive* primitive = nullptr;
     const GpuTexture* texture = nullptr;
+    bool masked = false;
     std::array<float,24> push{};
     std::size_t vertices = 0, indices = 0;
 };
@@ -64,8 +65,8 @@ void resolve(Inputs& result,const RenderView& view,const GpuAssets& assets) {
                     auto m = std::ranges::find(found->materials(),*primitive.material,&MaterialData::id);
                     if (m == found->materials().end()) throw Error{ErrorCode::invalid_state,"GPU material reference missing"};
                     material = &*m;
-                    if (material->alpha_mode != AlphaMode::opaque)
-                        throw Error{ErrorCode::not_supported,"minimal scene pipeline supports opaque materials only"};
+                    if (material->alpha_mode == AlphaMode::blend)
+                        throw Error{ErrorCode::not_supported,"scene pipeline supports opaque and alpha mask materials only"};
                     if (material->base_color_texture) {
                         auto t = std::ranges::find(found->textures(),*material->base_color_texture,&GpuTexture::id);
                         if (t == found->textures().end()) throw Error{ErrorCode::invalid_state,"GPU texture reference missing"};
@@ -73,6 +74,8 @@ void resolve(Inputs& result,const RenderView& view,const GpuAssets& assets) {
                         if (std::ranges::find(result.textures,&t->image) == result.textures.end()) result.textures.push_back(&t->image);
                     }
                 }
+                draw.masked = material && material->alpha_mode == AlphaMode::mask;
+                draw.push[23] = draw.masked ? material->alpha_cutoff : -1;
                 for (std::size_t c=0;c<4;++c) draw.push[16+c] = material ? material->base_color[static_cast<int>(c)] : 1;
                 for (std::size_t c=0;c<3;++c) draw.push[20+c] = material ? material->emissive[static_cast<int>(c)] : 0;
                 const auto buffer_index = [&](const Buffer& buffer) {
@@ -114,20 +117,20 @@ Result<void> geometry_pass(graph::PassContext& pass,void* pointer) {
     RenderingDesc desc{}; desc.depth.view = &dv; desc.depth.load = vk::AttachmentLoadOp::eLoad;
     if (!depth_only) {
         cv = take(c.pipeline.factory.create_view(*take(pass.image(c.hdr))));
-        white = take(c.pipeline.factory.create_view(*take(pass.image(c.white))));
         desc.color.view = &cv; desc.color.load = vk::AttachmentLoadOp::eLoad;
     }
+    white = take(c.pipeline.factory.create_view(*take(pass.image(c.white))));
     auto encoder = take(pass.begin_rendering(desc));
-    check(encoder.bind_pipeline(depth_only ? c.pipeline.depth : c.pipeline.opaque));
     for (const auto& draw : c.inputs.draws) {
+        check(encoder.bind_pipeline(depth_only ? (draw.masked ? c.pipeline.mask : c.pipeline.depth) : c.pipeline.opaque));
         check(encoder.vertex_buffer(0,*take(pass.buffer(draw.vertices))));
         check(encoder.index_buffer(*take(pass.buffer(draw.indices)),vk::IndexType::eUint32));
-        if (depth_only) check(encoder.push_constants(vk::ShaderStageFlagBits::eVertex,0,std::as_bytes(std::span{draw.push})));
+        if (depth_only && !draw.masked) check(encoder.push_constants(vk::ShaderStageFlagBits::eVertex,0,std::as_bytes(std::span{draw.push})));
         else {
             const auto& view = draw.texture ? draw.texture->view : white;
             const auto& sampler = draw.texture ? draw.texture->sampler : c.pipeline.white_sampler;
             const std::array writes{BindingWrite{0,0,ImageBinding{&view}},BindingWrite{1,0,SamplerBinding{&sampler}}};
-            auto bindings = take(c.pipeline.factory.create_bindings(c.pipeline.opaque_layout,0,writes));
+            auto bindings = take(c.pipeline.factory.create_bindings(depth_only ? c.pipeline.mask_layout : c.pipeline.opaque_layout,0,writes));
             const std::array sets{&bindings}; check(encoder.bind_sets(sets));
             check(encoder.push_constants(vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,0,std::as_bytes(std::span{draw.push})));
         }
@@ -177,12 +180,15 @@ Result<ScenePipeline> ScenePipeline::create(memory::ResourceHandle heap,Submissi
         };
         auto opaque_vs = compile("scene.slang","vertexMain",ShaderStage::vertex,"DK_VERTEX");
         auto opaque_fs = compile("scene.slang","fragmentMain",ShaderStage::fragment);
+        auto mask_fs = compile("scene.slang","depthMain",ShaderStage::fragment,"DK_DEPTH");
         auto tone_vs = compile("tone.slang","vertexMain",ShaderStage::vertex,"DK_VERTEX");
         auto tone_fs = compile("tone.slang","fragmentMain",ShaderStage::fragment);
         const std::array ds{&opaque_vs};
         const std::array os{&opaque_vs,&opaque_fs};
+        const std::array ms{&opaque_vs,&mask_fs};
         const std::array ts{&tone_vs,&tone_fs};
         state->depth_layout = take(state->factory.create_pipeline_layout(ds));
+        state->mask_layout = take(state->factory.create_pipeline_layout(ms));
         state->opaque_layout = take(state->factory.create_pipeline_layout(os));
         state->tone_layout = take(state->factory.create_pipeline_layout(ts));
         const std::array vb{vk::VertexInputBindingDescription{0,sizeof(GpuVertex),vk::VertexInputRate::eVertex}};
@@ -192,6 +198,8 @@ Result<ScenePipeline> ScenePipeline::create(memory::ResourceHandle heap,Submissi
         depth.vertex_bindings = vb; depth.vertex_attributes = va;
         depth.color_format = vk::Format::eUndefined; depth.depth_format = vk::Format::eD32Sfloat; depth.depth_test = depth.depth_write = true;
         state->depth = take(state->factory.create_graphics_pipeline(depth));
+        depth.fragment = &mask_fs; depth.layout = &state->mask_layout;
+        state->mask = take(state->factory.create_graphics_pipeline(depth));
         GraphicsPipelineDesc opaque{&opaque_vs,&opaque_fs,&state->opaque_layout,vb,va};
         opaque.color_format = vk::Format::eR32G32B32A32Sfloat; opaque.depth_format = vk::Format::eD32Sfloat;
         opaque.depth_test = true; opaque.depth_compare = vk::CompareOp::eEqual;
@@ -244,8 +252,6 @@ Result<RenderFrame> ScenePipeline::render(SubmissionQueue& queue,const RenderVie
             use(white,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal,true)};
         static_cast<void>(take(graph.add_pass({"clear targets",clear_uses})));
         geometry.push_back(use(depth,depth_stages,depth_access,vk::ImageLayout::eDepthStencilAttachmentOptimal,false,true));
-        static_cast<void>(take(graph.add_pass({"depth prepass",geometry})));
-        geometry.push_back(use(hdr,vk::PipelineStageFlagBits2::eColorAttachmentOutput,color_access,vk::ImageLayout::eColorAttachmentOptimal));
         geometry.push_back(use(white,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal));
         for (std::size_t i=0;i<inputs.textures.size();++i) {
             const auto* texture=inputs.textures[i];
@@ -253,6 +259,8 @@ Result<RenderFrame> ScenePipeline::render(SubmissionQueue& queue,const RenderVie
             external.push_back({image_base+4+i,nullptr,texture,{}});
             geometry.push_back(use(id,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal));
         }
+        static_cast<void>(take(graph.add_pass({"depth prepass",geometry})));
+        geometry.push_back(use(hdr,vk::PipelineStageFlagBits2::eColorAttachmentOutput,color_access,vk::ImageLayout::eColorAttachmentOptimal));
         static_cast<void>(take(graph.add_pass({"opaque",geometry})));
         const std::array tone_uses{use(hdr,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal),
             use(ldr,vk::PipelineStageFlagBits2::eColorAttachmentOutput,color_access,vk::ImageLayout::eColorAttachmentOptimal)};

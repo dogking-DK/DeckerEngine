@@ -101,6 +101,7 @@ public:
     ImportResult result;
     std::size_t input_used = 0, output_used = 0, vertices_used = 0, indices_used = 0;
     std::size_t texture_used = 0;
+    bool tangent_diagnostic = false, lighting_diagnostic = false;
     std::map<std::size_t, AssetId> textures;
     std::map<std::string, std::size_t, std::less<>> inputs;
     std::pmr::set<std::string, std::less<>> used_keys{memory::current_scratch_resource()};
@@ -189,6 +190,8 @@ public:
     }
     ImportResult run()
     {
+        require(request.profile == GltfImportProfile::strict || request.profile == GltfImportProfile::unlit_preview, "Invalid import profile");
+        const bool preview = request.profile == GltfImportProfile::unlit_preview;
         limits(request.limits); require(std::isfinite(request.unit_scale) && request.unit_scale > 0, "Invalid unit_scale");
         require(request.identities.size() <= 10000, "Too many identities"); std::set<std::string> keys; std::set<AssetId> ids;
         for (const auto& item : request.identities) { require(!item.id.is_nil() && keys.insert(std::string{item.key}).second && ids.insert(item.id).second, "Invalid or duplicate output identity"); }
@@ -236,7 +239,7 @@ public:
             checkpoint();
             DK_PROFILE_ZONE("Assets.DecodePrimitive"); location = "mesh/0/primitive/" + std::to_string(p);
             const auto& primitive = asset.meshes[0].primitives[p]; require(primitive.type == fastgltf::PrimitiveType::Triangles, "Only TRIANGLES supported", ErrorCode::not_supported);
-            for (const auto& attr : primitive.attributes) { require(attr.name == "POSITION" || attr.name == "NORMAL" || attr.name == "TEXCOORD_0", "Unsupported attribute: " + std::string{attr.name}, ErrorCode::not_supported); }
+            for (const auto& attr : primitive.attributes) { require(attr.name == "POSITION" || attr.name == "NORMAL" || attr.name == "TEXCOORD_0" || (preview && attr.name == "TANGENT"), "Unsupported attribute: " + std::string{attr.name}, ErrorCode::not_supported); }
             const auto position = primitive.findAttribute("POSITION"); require(position != primitive.attributes.end(), "POSITION required");
             const auto& a = accessor(asset, position->accessorIndex, fastgltf::AccessorType::Vec3);
             consume(vertices_used, a.count, request.limits.vertices, "vertices");
@@ -251,6 +254,16 @@ public:
                 if (i == 0) { out.bounds_min = out.bounds_max = out.positions[i]; }
                 else { out.bounds_min = out.bounds_min.cwiseMin(out.positions[i]); out.bounds_max = out.bounds_max.cwiseMax(out.positions[i]); }
             });
+            if (const auto tangent = primitive.findAttribute("TANGENT"); tangent != primitive.attributes.end()) {
+                const auto& t = accessor(asset,tangent->accessorIndex,fastgltf::AccessorType::Vec4);
+                require(t.count == a.count,"TANGENT count differs");
+                fastgltf::iterateAccessor<fastgltf::math::fvec4>(asset,t,[](auto v) {
+                    for (std::size_t c=0;c<4;++c) require(std::isfinite(v[c]),"Nonfinite tangent");
+                });
+                if (!tangent_diagnostic) {
+                    result.diagnostics.push_back(owned("Unlit preview: TANGENT validated but omitted")); tangent_diagnostic = true;
+                }
+            }
             const auto normal = primitive.findAttribute("NORMAL");
             if (normal != primitive.attributes.end()) {
                 const auto& n = accessor(asset, normal->accessorIndex, fastgltf::AccessorType::Vec3); require(n.count == a.count, "NORMAL count differs");
@@ -277,7 +290,12 @@ public:
                 const auto index = *primitive.materialIndex; require(index < asset.materials.size(), "Material index out of range");
                 if (!materials.contains(index)) {
                     location = "material/" + std::to_string(index); const auto& m = asset.materials[index];
-                    require(!m.normalTexture && !m.occlusionTexture && !m.emissiveTexture && !m.pbrData.metallicRoughnessTexture, "Unsupported material texture channel", ErrorCode::not_supported);
+                    require(!m.emissiveTexture && (preview || (!m.normalTexture && !m.occlusionTexture && !m.pbrData.metallicRoughnessTexture)),
+                        "Unsupported material texture channel", ErrorCode::not_supported);
+                    if (preview && !lighting_diagnostic && (m.normalTexture || m.occlusionTexture || m.pbrData.metallicRoughnessTexture)) {
+                        result.diagnostics.push_back(owned("Unlit preview: normal, occlusion and metallic-roughness textures are not imported"));
+                        lighting_diagnostic = true;
+                    }
                     MaterialData material; material.id = identity(location, AssetKind::material);
                     if (m.pbrData.baseColorTexture) {
                         require(m.pbrData.baseColorTexture->texCoordIndex == 0, "Only UV0 supported", ErrorCode::not_supported);

@@ -1,0 +1,18 @@
+{
+  "format": "DeckerProject",
+  "version": 1,
+  "name": "Disk render fixture",
+  "scene": "scene.json",
+  "assets": [
+    {
+      "id": "10000000-0000-4000-8000-000000000001",
+      "kind": "mesh",
+      "path": "assets/mask.gltf"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000002",
+      "kind": "mesh",
+      "path": "assets/back.gltf"
+    }
+  ]
+}
