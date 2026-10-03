@@ -1,8 +1,10 @@
 set(CMAKE_FOLDER "${CMAKE_FOLDER}/Assets")
 
 add_subdirectory(types)
-if(DK_BUILD_ASSET_IMPORTERS)
+if(DK_BUILD_ASSET_IMPORTERS OR DK_BUILD_RENDER_RESOURCES)
     add_subdirectory(data)
+endif()
+if(DK_BUILD_ASSET_IMPORTERS)
     add_subdirectory(importers)
 endif()
 if(DK_BUILD_ASSET_RUNTIME)

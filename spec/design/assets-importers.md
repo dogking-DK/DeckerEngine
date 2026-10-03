@@ -1,7 +1,7 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T16:00:00+08:00"
+updated_at: "2026-10-03T15:28:09+08:00"
 status: accepted
 ---
 
@@ -15,6 +15,8 @@ M4.2 已实现 CPU 网格/材质/纹理导入与 dk-assetc，见 [0033](../devel
 [0020](../development/0020-m4-development-plan.md)。
 
 `dk::asset_importers` 依赖 asset_data、IO；解析器、图像解码和 JSON 为 PRIVATE 依赖。
+`dk::asset_data` 仅依赖 asset_types、Math 和 Memory，可由 Render Resources 单独启用而不引入导入器或 IO；
+IO 前置检查位于 importers target。该边界调整见 [0061](../development/0061-render-data-resources.md)。
 按用户选型，glTF/GLB 使用 fastgltf，PNG/JPEG 使用 stb_image，内容摘要使用 xxHash 的 XXH3-128。
 这些库已接入并完成定向功能验证；M4.3 同步缓存/失效清理已实现，异步加载留在 M4.4。
 导入器使用引擎提供的字节/依赖读取入口，不能绕过路径、大小限制自行访问网络或任意文件。

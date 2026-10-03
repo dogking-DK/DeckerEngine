@@ -34,6 +34,9 @@
 | JSON-RPC、JSON Lines、任务 | dk_protocol_tests | `^dk\.protocol\.` |
 | Runtime 的 batch/stdio 进程行为 | dk_run | `^dk\.runtime\.` |
 | CLI 版本 | dk_run | `^dk\.bootstrap\.version$` |
+| RenderScene/RenderView 提取、版本与 CPU 寿命 | dk_render_data_tests | `^dk\.render\.data\.` |
+| GPU 资产输入校验、缓存空/关闭状态（无需 GPU） | dk_gpu_asset_tests | `^dk\.render\.assets\.` |
+| GpuMesh/纹理 Graph 上传、字节读回、缓存与在途卸载 | dk_render_resources_probe | `^dk\.render\.gpu_`（gpu label；77 为跳过） |
 | GPU Graph 声明、编译裁剪、生命周期与诊断（无需 GPU） | dk_graph_tests | `^dk\.graph\.graph ` |
 | GPU Graph 同步、执行、导入导出、诊断与失败保护 | dk_graph_probe | `^dk\.graph\.gpu_`（gpu label；77 为跳过） |
 | Vulkan 设备策略、缺失环境和失败清理（无需 GPU） | dk_device_tests | `^dk\.device\.unit\.` |

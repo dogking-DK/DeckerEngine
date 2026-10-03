@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-03T14:45:24+08:00"
+updated_at: "2026-10-03T15:28:09+08:00"
 ---
 
 # 构建与依赖配置
@@ -24,7 +24,7 @@ updated_at: "2026-10-03T14:45:24+08:00"
 脚本只配置工程和准备依赖；不会自动编译或打开 IDE，配置失败会返回非零退出码。
 
 解决方案按 `Engine`、`Apps`、`Tests`、`Examples` 和 `CMake` 分组。
-`Engine` 下再分 `Foundation`、`Assets`、`Automation`、`Framework`，启用设备模块时增加 `Graphics`；场景库直接位于 `Engine`。
+`Engine` 下再分 `Foundation`、`Assets`、`Automation`、`Framework`，启用设备模块时增加 `Graphics`，启用渲染模块时增加 `Render`；场景库直接位于 `Engine`。
 测试程序及日志探针集中在 `Tests`，`dk_run` 位于 `Apps`，CMake 辅助项目位于 `CMake`。
 分组由 CMake 目录继承维护；assetc 等工具 target 归入 `Tools`，空分组不会显示。
 已打开解决方案时，重新运行脚本后在 VS 接受重新加载提示；也可关闭并重新打开 `.slnx`。
@@ -57,8 +57,10 @@ ctest --preset windows-debug
 ```
 
 `windows-dev` 默认构建 Core、日志、Eigen 数学、IO、Scene、Memory、Jobs、CPU 资产导入/缓存、Framework 与 Catch2 单元测试。
-`windows-graphics` 继承该预设，显式启用 DK_BUILD_GRAPHICS_DEVICE、DK_BUILD_GRAPHICS_SHADERS、DK_BUILD_GRAPHICS_OFFSCREEN、DK_BUILD_GRAPHICS_GRAPH；
+`windows-graphics` 继承该预设，显式启用 DK_BUILD_GRAPHICS_DEVICE、DK_BUILD_GRAPHICS_SHADERS、DK_BUILD_GRAPHICS_OFFSCREEN、DK_BUILD_GRAPHICS_GRAPH、DK_BUILD_RENDER_DATA、DK_BUILD_RENDER_RESOURCES；
 Offscreen 要求 Device、Shaders、Graph，复用已有 feature。设备/资源和离屏探针见 [Graphics 指南](graphics.md)、[离屏指南](offscreen.md)。
+Render Data 要求 Scene/Memory，Render Resources 要求 Math/Memory/Device/Graph，仅使用 asset_data 不要求 importer；
+两个选项默认 OFF，不增加三方库 feature。用法见 [Render 指南](render.md)。
 Graph 要求 device；声明/校验/编译不初始化 GPU，无额外依赖 feature，见 [Graph 指南](graph.md)。
 `windows-shaders` 单独构建无需 Vulkan 的
 离线编译库/工具，见 [Shader 指南](shaders.md)。默认开发预设不加载 Vulkan 或 Slang。

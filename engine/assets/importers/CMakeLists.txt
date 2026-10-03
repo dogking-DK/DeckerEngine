@@ -1,3 +1,6 @@
+if(NOT TARGET dk::io)
+    message(FATAL_ERROR "DK_BUILD_ASSET_IMPORTERS requires IO")
+endif()
 find_package(fastgltf CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(Stb REQUIRED)

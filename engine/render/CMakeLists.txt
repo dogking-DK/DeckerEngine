@@ -1,0 +1,7 @@
+set(CMAKE_FOLDER "${CMAKE_FOLDER}/Render")
+if(DK_BUILD_RENDER_DATA)
+    add_subdirectory(data)
+endif()
+if(DK_BUILD_RENDER_RESOURCES)
+    add_subdirectory(resources)
+endif()
