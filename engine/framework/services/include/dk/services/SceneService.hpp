@@ -24,6 +24,7 @@ struct SceneReadSnapshot
     DocumentState state;
     Project project;
     SceneSnapshot scene;
+    std::filesystem::path manifest;
 };
 struct CreateEntity
 {

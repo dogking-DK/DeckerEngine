@@ -17,5 +17,5 @@ namespace schema {
 [[nodiscard]] Result<void> validate(const Json& definition, const Json& value);
 } // namespace schema
 [[nodiscard]] Result<void> validate_command_value(const Json& value, std::size_t byte_limit);
-[[nodiscard]] Result<Json> parse_command_json(std::string_view text);
+[[nodiscard]] Result<Json> parse_command_json(std::string_view text, std::size_t byte_limit = 1024 * 1024);
 } // namespace dk

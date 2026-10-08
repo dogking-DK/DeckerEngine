@@ -1,4 +1,7 @@
-# 编辑器工作台（M8.1–M8.2）
+# 编辑器工作台（M8.1–M8.3）
+
+Windows 可加 `--pipe NAME` 开放本机命令端点，用 `dk-ctl --pipe NAME --method scene.query` 查询。
+构建、guard 编辑和重试见 [IPC 指南](ipc.md)。默认不开放 IPC；外部 `runtime.shutdown` 不自动保存。
 
 在仓库根配置和启动：
 

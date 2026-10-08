@@ -134,8 +134,8 @@ Result<void> validate_command_value(const Json& value, std::size_t byte_limit) {
     catch (const Json::exception&) { return invalid("Invalid UTF-8 JSON value"); }
     return {};
 }
-Result<Json> parse_command_json(std::string_view text) {
-    if (text.size() > 1024 * 1024) return std::unexpected(Error{ErrorCode::invalid_argument, "JSON input exceeds 1 MiB"});
+Result<Json> parse_command_json(std::string_view text, std::size_t byte_limit) {
+    if (text.size() > byte_limit) return std::unexpected(Error{ErrorCode::invalid_argument, "JSON input exceeds byte limit"});
     try {
         std::vector<std::set<std::string>> keys;
         auto value = Json::parse(text, [&keys](int depth, Json::parse_event_t event, Json& parsed) {
@@ -145,7 +145,7 @@ Result<Json> parse_command_json(std::string_view text) {
             if (event == Json::parse_event_t::object_end) keys.pop_back();
             return true;
         });
-        auto r = validate_command_value(value, 1024 * 1024); if (!r) return std::unexpected(r.error());
+        auto r = validate_command_value(value, byte_limit); if (!r) return std::unexpected(r.error());
         return value;
     } catch (const Json::exception& e) { return std::unexpected(Error{ErrorCode::invalid_argument, e.what()}); }
       catch (const std::invalid_argument& e) { return std::unexpected(Error{ErrorCode::invalid_argument, e.what()}); }

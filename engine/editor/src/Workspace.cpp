@@ -1,5 +1,6 @@
 #include <dk/editor/Workspace.hpp>
 #include <algorithm>
+#include <stdexcept>
 
 namespace dk::editor {
 namespace {
@@ -11,6 +12,29 @@ Result<std::unique_ptr<Workspace>> Workspace::create(const std::filesystem::path
     if (!runtime) return std::unexpected(runtime.error());
     return std::unique_ptr<Workspace>(new Workspace(std::move(*runtime)));
 }
+void Workspace::pump() {
+    runtime_->pump();
+#ifdef _WIN32
+    if (ipc_) {
+        const auto before=ipc_->dispatch_count();
+        (void)ipc_->pump();
+        if (before!=ipc_->dispatch_count() && !runtime_->stopping()) {
+            if (auto refreshed=refresh(); !refreshed) throw std::runtime_error{refreshed.error().message};
+        }
+    }
+#endif
+}
+#ifdef _WIN32
+Result<void> Workspace::start_ipc(std::string_view name) {
+    if (ipc_) return std::unexpected(Error{ErrorCode::invalid_state,"IPC is already running"});
+    if (!snapshot_) return std::unexpected(Error{ErrorCode::invalid_state,"Open a scene before starting editor IPC"});
+    auto server=IpcServer::listen(*runtime_,name);
+    if (!server) return std::unexpected(server.error());
+    ipc_=std::move(*server);
+    return {};
+}
+void Workspace::close_ipc() { if (ipc_) ipc_->close(std::chrono::milliseconds{1500}); }
+#endif
 Result<Json> Workspace::call(std::string_view method, Json p) {
     auto result=runtime_->dispatch(method,p);
     if (!result) return std::unexpected(result.error());
@@ -45,6 +69,7 @@ Result<void> Workspace::refresh() {
         selection_.reset(); draft_.reset();
     }
     snapshot_=std::move(*candidate);
+    manifest_=snapshot_->manifest;
     history_={history->at("undo_count").get<std::size_t>(),history->at("redo_count").get<std::size_t>(),
         history->at("logical_bytes").get<std::size_t>()};
     if (selection_) {

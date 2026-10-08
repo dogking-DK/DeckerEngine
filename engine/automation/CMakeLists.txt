@@ -1,4 +1,10 @@
 set(CMAKE_FOLDER "${CMAKE_FOLDER}/Automation")
 
 add_subdirectory(protocol)
-add_subdirectory(transport)
+if(WIN32)
+    add_subdirectory(transport)
+    add_subdirectory(client)
+endif()
+if(TARGET dk_runtime)
+    add_subdirectory(server)
+endif()

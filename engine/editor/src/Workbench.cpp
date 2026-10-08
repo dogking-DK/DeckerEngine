@@ -51,6 +51,9 @@ int session(const WorkbenchOptions& options,memory::ResourceHandle heap,Diagnost
         throw std::runtime_error("--smoke requires a disposable project with .dk-editor-smoke marker");
     auto model=take(Workspace::create(options.root));
     check(model->open(options.manifest));
+#ifdef _WIN32
+    if (!options.pipe.empty()) check(model->start_ipc(options.pipe));
+#endif
     auto window=take(platform::Window::create(heap,{"DeckerEngine | Scene Workbench",1440,900}));
     graphics::DeviceOptions device;
     device.validation=options.validation ? graphics::ValidationMode::required : graphics::ValidationMode::if_available;
@@ -74,7 +77,7 @@ int session(const WorkbenchOptions& options,memory::ResourceHandle heap,Diagnost
             const auto status=take(window.poll_events(event_sink,&ui));
             if (status.close_requested) { check(window.clear_close_request()); ui.request_close(); }
             model->pump();
-            if (ui.closing()) break;
+            if (ui.closing() || model->stopping()) break;
             if ((options.smoke || options.frames) && std::chrono::steady_clock::now()-start>std::chrono::seconds(90))
                 throw std::runtime_error("Workbench acceptance run timed out");
             if (status.minimized || !status.pixel_width || !status.pixel_height) { SDL_Delay(16); continue; }
@@ -110,6 +113,9 @@ int session(const WorkbenchOptions& options,memory::ResourceHandle heap,Diagnost
                 break;
             }
         }
+#ifdef _WIN32
+        model->close_ipc();
+#endif
         check(presenter.close());
     } catch (...) {
         // Drain before descriptor/backend destruction, including a failed frame.

@@ -1,15 +1,16 @@
 ---
 module: automation-protocol
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-09-28T16:00:00+08:00"
+updated_at: "2026-10-08T13:04:33+08:00"
 status: accepted
 ---
 
 # JSON-RPC 与行传输
 
 dk::automation_protocol 实现 [JSON-RPC 2.0](https://www.jsonrpc.org/specification) 请求分派，
-PUBLIC 依赖 dk::runtime。dk::automation_transport 提供流循环，PRIVATE/ PUBLIC 依赖协议按公开接口声明。
-文件批处理与持续 stdio 复用同一协议和同步命令任务状态；不建立 TCP/命名管道。
+PUBLIC 依赖 dk::commands，通过 RpcEndpoint 注入命令发现/执行，不链接 Runtime。
+automation/server 提供 Runtime 适配与 JSON Lines/stdio；旧请求/响应格式保持兼容。
+M8.3 在独立 automation/transport 上提供有界 Named Pipe，见 [传输设计](automation-transport.md)。不建立 TCP。
 
 请求为 {jsonrpc:"2.0",method:string,params?:object,id?:string|integer|null}；
 id 整数限 int64 范围，拒绝浮点、bool、数组/对象；字符串最多 256 个 UTF-8 字节。

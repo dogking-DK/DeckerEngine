@@ -4,6 +4,7 @@
 #include <dk/automation/JsonLines.hpp>
 #include <fstream>
 #ifdef _WIN32
+#include <dk/automation/IpcServer.hpp>
 #include <fcntl.h>
 #include <io.h>
 #endif
@@ -23,6 +24,9 @@ int run(const std::vector<std::filesystem::path> &args)
 #ifdef DK_RUN_WITH_RUNTIME
         std::cout << "       dk-run --project-root ROOT --batch FILE [--auto-guard]\n";
         std::cout << "       dk-run --project-root ROOT --stdio\n";
+#ifdef _WIN32
+        std::cout << "       dk-run --project-root ROOT --pipe NAME\n";
+#endif
 #endif
         return 0;
     }
@@ -33,6 +37,7 @@ int run(const std::vector<std::filesystem::path> &args)
     }
 #ifdef DK_RUN_WITH_RUNTIME
     std::filesystem::path root, batch;
+    std::string pipe_name;
     bool auto_guard = false, stdio = false;
     for (std::size_t i = 0; i < args.size(); ++i)
     {
@@ -44,15 +49,24 @@ int run(const std::vector<std::filesystem::path> &args)
             auto_guard = true;
         else if (args[i] == "--stdio" && !stdio)
             stdio = true;
+#ifdef _WIN32
+        else if (args[i] == "--pipe" && pipe_name.empty() && i + 1 < args.size())
+        {
+            const auto name = args[++i].u8string();
+            pipe_name.assign(reinterpret_cast<const char*>(name.data()), name.size());
+            if (!dk::ipc::valid_endpoint(pipe_name)) { std::cerr << "Invalid pipe name.\n"; return 2; }
+        }
+#endif
         else
         {
             std::cerr << "Invalid arguments. Use dk-run --help.\n";
             return 2;
         }
     }
-    if (root.empty() || (stdio == !batch.empty()) || (stdio && auto_guard))
+    if (root.empty() || (static_cast<int>(stdio) + static_cast<int>(!batch.empty()) + static_cast<int>(!pipe_name.empty()) != 1)
+        || (auto_guard && batch.empty()))
     {
-        std::cerr << "Use --project-root with exactly one of --batch/--stdio; --auto-guard is batch-only.\n";
+        std::cerr << "Use --project-root with exactly one of --batch/--stdio/--pipe; --auto-guard is batch-only.\n";
         return 2;
     }
     auto runtime = dk::Runtime::create(root);
@@ -66,6 +80,22 @@ int run(const std::vector<std::filesystem::path> &args)
     {
         std::cerr << "Cannot configure binary protocol streams.\n";
         return 3;
+    }
+#endif
+#ifdef _WIN32
+    if (!pipe_name.empty())
+    {
+        auto server = dk::IpcServer::listen(**runtime, pipe_name);
+        if (!server) { std::cerr << server.error().message << '\n'; return 3; }
+        while (!(*runtime)->stopping())
+        {
+            const auto sequence = (*runtime)->events()->sequence();
+            (*runtime)->pump();
+            (void)(*server)->pump();
+            if (!(*runtime)->stopping()) (*runtime)->events()->wait(sequence, std::chrono::steady_clock::now() + std::chrono::seconds{1});
+        }
+        (*server)->close(std::chrono::milliseconds{1500});
+        return 0;
     }
 #endif
     if (stdio)

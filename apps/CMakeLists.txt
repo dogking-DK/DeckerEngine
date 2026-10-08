@@ -6,4 +6,6 @@ endif()
 if(DK_BUILD_EDITOR)
     add_subdirectory(editor)
 endif()
-# ctl is reserved for M8.3.
+if(DK_BUILD_CTL AND TARGET dk_automation_client)
+    add_subdirectory(ctl)
+endif()

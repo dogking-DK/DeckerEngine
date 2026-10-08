@@ -1,7 +1,7 @@
 ---
 module: runtime
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-10-08T10:13:00+08:00"
+updated_at: "2026-10-08T13:04:33+08:00"
 status: accepted
 ---
 
@@ -29,13 +29,20 @@ batch 读取直到 EOF，逐条输出/刷新响应，命令失败继续后续行
 在串行执行点注入当前 document_id/revision；显式 guard 保持原样。方便从空场景开始的可重放离线脚本。
 协议和服务默认仍要求显式 guard；此选项不是过期请求自动重试。stdio 不允许 auto-guard。
 
-transport/protocol 位于 automation，依赖 runtime，Runtime 不依赖传输。stdout 只写 JSON 响应，
+automation/protocol 仅依赖 Commands；automation/server 提供 Runtime 适配及 stdio/Named Pipe 宿主，Runtime 不依赖传输。stdout 只写 JSON 响应，
 stderr 写诊断；未连接日志模块时同样可运行。batch 按行串行处理；持续 stdio 使用下述显式事件循环；GPU 只在提交截图作业后由 worker 延迟初始化。
 资源不足、输出失败等入口致命异常报告 stderr 并返回 3；不能宣称响应失败意味着命令未执行。
 
 验收：独立进程从空工程创建父子/变换、保存两文件，第二进程加载查询并比较持久状态；
 错误命令继续、显式过期 guard 拒绝、bootstrap 兼容。按本次影响选择进程用例；依赖边界变化时检查无日志/示例/Catch2 CPU 配置。
 记录：[0016](../development/0016-cpu-runtime-cli.md)。
+
+## IPC 宿主
+
+Windows runner 新增 `--project-root ROOT --pipe NAME`，与 batch/stdio 互斥，禁止 auto-guard。
+IO worker 只收发有界帧并唤醒 RuntimeEvents；主线程 pump 在安全点执行命令。
+正常 shutdown 先回复，再最多等待 1500 ms 排空当前连接后取消 IO；异常退出立即取消并 join。
+详细 session/ticket、断连和结果未知语义见 [传输设计](automation-transport.md)。
 
 ## 同步命令任务
 

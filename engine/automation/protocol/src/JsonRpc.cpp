@@ -23,7 +23,7 @@ bool valid_id(const Json &id)
                static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
     return id.is_number_integer();
 }
-RpcOutcome single(Runtime &runtime, const Json &request, bool auto_guard)
+RpcOutcome single(const RpcEndpoint &runtime, const Json &request)
 {
     if (!request.is_object() || !request.contains("jsonrpc") || request["jsonrpc"] != "2.0" ||
         !request.contains("method") || !request["method"].is_string() ||
@@ -49,10 +49,10 @@ RpcOutcome single(Runtime &runtime, const Json &request, bool auto_guard)
     const auto params = request.value("params", Json::object());
     if (!params.is_object())
         return error(-32602, "Named object parameters required");
-    auto execution = runtime.dispatch(method, params, auto_guard);
-    if (!execution || !execution->result)
+    auto execution = runtime.dispatch(method, params);
+    if (!execution.result)
     {
-        const auto &e = execution ? execution->result.error() : execution.error();
+        const auto &e = execution.result.error();
         const int code =
             e.code == ErrorCode::invalid_argument
                 ? -32602
@@ -60,9 +60,9 @@ RpcOutcome single(Runtime &runtime, const Json &request, bool auto_guard)
         Json data{{"engine_code", static_cast<unsigned>(e.code)},
                   {"engine_name", error_code_name(e.code)},
                   {"context", e.context}};
-        if (execution)
+        if (execution.task_id)
         {
-            data["task_id"] = execution->task_id.to_string();
+            data["task_id"] = *execution.task_id;
             data["status"] = "failed";
         }
         return error(code, e.message, std::move(data));
@@ -72,37 +72,37 @@ RpcOutcome single(Runtime &runtime, const Json &request, bool auto_guard)
     return {Json{{"jsonrpc", "2.0"},
                  {"id", id},
                  {"result",
-                  {{"value", std::move(*execution->result)},
-                   {"task_id", execution->task_id.to_string()},
+                  {{"value", std::move(*execution.result)},
+                   {"task_id", execution.task_id.value_or("")},
                    {"status", "succeeded"}}}},
             false};
 }
 } // namespace
-RpcOutcome dispatch_json_rpc(Runtime &runtime, const Json &request, bool auto_guard)
+RpcOutcome dispatch_json_rpc(const RpcEndpoint &runtime, const Json &request)
 {
     const auto valid = validate_command_value(request, 1024 * 1024);
     if (!valid)
         return {rpc_error(nullptr, -32600, valid.error().message), true};
     if (!request.is_array())
-        return single(runtime, request, auto_guard);
+        return single(runtime, request);
     if (request.empty() || request.size() > 128)
         return {rpc_error(nullptr, -32600, "Batch requires 1-128 requests"), true};
     Json responses = Json::array();
     bool failed = false;
     for (const auto &item : request)
     {
-        auto result = single(runtime, item, auto_guard);
+        auto result = single(runtime, item);
         failed = failed || result.failed;
         if (result.response)
             responses.push_back(std::move(*result.response));
     }
     return {responses.empty() ? std::optional<Json>{} : std::optional<Json>{std::move(responses)}, failed};
 }
-RpcOutcome dispatch_json_line(Runtime &runtime, std::string_view line, bool auto_guard)
+RpcOutcome dispatch_json_line(const RpcEndpoint &runtime, std::string_view line)
 {
     auto parsed = parse_command_json(line);
     if (!parsed)
         return {rpc_error(nullptr, -32700, parsed.error().message), true};
-    return dispatch_json_rpc(runtime, *parsed, auto_guard);
+    return dispatch_json_rpc(runtime, *parsed);
 }
 } // namespace dk

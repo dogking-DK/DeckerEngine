@@ -18,6 +18,13 @@ int main(int argc,char** argv) {
             };
             if (arg=="--root") options.root=next();
             else if (arg=="--manifest") options.manifest=next();
+#ifdef _WIN32
+            else if (arg=="--pipe" && options.pipe.empty()) {
+                const auto name=next().u8string();
+                options.pipe.assign(reinterpret_cast<const char*>(name.data()),name.size());
+                if (options.pipe.empty()) throw std::runtime_error("Missing pipe name");
+            }
+#endif
             else if (arg=="--validation") options.validation=true;
             else if (arg=="--smoke") options.smoke=true;
             else if (arg=="--interaction-smoke") { options.smoke=true; options.interaction_smoke=true; }
@@ -30,7 +37,7 @@ int main(int argc,char** argv) {
             }
             else if (arg=="--screenshot") options.screenshot=next();
             else if (arg=="--help") {
-                std::puts("dk-editor [--root PROJECT_ROOT] [--manifest RELATIVE_MANIFEST] [--validation]\n"
+                std::puts("dk-editor [--root PROJECT_ROOT] [--manifest RELATIVE_MANIFEST] [--validation] [--pipe NAME]\n"
                     "Acceptance: --frames N --screenshot OUTPUT.ppm [--fixture-camera]\n"
                     "            --smoke/--interaction-smoke --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm");
                 return 0;

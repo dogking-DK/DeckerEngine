@@ -1,7 +1,7 @@
 ---
 id: "0016"
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-09-22T14:05:00+08:00"
+updated_at: "2026-10-08T13:05:00+08:00"
 status: completed
 design_refs:
   - ../design/runtime.md
@@ -17,7 +17,8 @@ design_refs:
 
 新增 [Runtime](../../engine/framework/runtime/include/dk/runtime/Runtime.hpp) 生命周期装配与重入保护，
 [JSON-RPC](../../engine/automation/protocol/include/dk/automation/JsonRpc.hpp) 和
-[JSON Lines](../../engine/automation/transport/include/dk/automation/JsonLines.hpp) 传输分别独立 target。
+[JSON Lines](../../engine/automation/server/include/dk/automation/JsonLines.hpp) 传输分别独立 target。
+（M8.3 仅更新此源码链接至迁移后的 server 目录，以上保留当时的实现范围。）
 dk-run 使用原生 Windows 宽字符路径，保留版本入口，新增批处理/显式 auto-guard；诊断直接写 stderr，
 不依赖 logging。支持通知/混合协议 batch、业务错误映射、每行排空与即时 flush。
 新增可运行的 [创建示例](../../examples/automation/create-scene.jsonl) / [加载示例](../../examples/automation/load-scene.jsonl)。

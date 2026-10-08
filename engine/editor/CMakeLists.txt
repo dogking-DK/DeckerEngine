@@ -3,6 +3,9 @@ add_library(dk_editor_model STATIC src/Workspace.cpp src/Camera.cpp src/Transfor
 add_library(dk::editor_model ALIAS dk_editor_model)
 target_sources(dk_editor_model PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/editor/Workspace.hpp include/dk/editor/Camera.hpp include/dk/editor/TransformEdit.hpp)
 target_link_libraries(dk_editor_model PUBLIC dk::runtime dk::geometry)
+if(WIN32)
+    target_link_libraries(dk_editor_model PUBLIC dk::automation_server)
+endif()
 dk_target_defaults(dk_editor_model)
 
 if(DK_BUILD_EDITOR)

@@ -1,7 +1,7 @@
 ---
 module: application-services
 created_at: "2026-09-22T13:28:00+08:00"
-updated_at: "2026-10-03T21:21:47+08:00"
+updated_at: "2026-10-08T13:04:33+08:00"
 status: accepted
 ---
 
@@ -75,4 +75,5 @@ AsyncAssetService 独立拥有 MemorySystem、Jobs 和 CPU 状态，通过 Asset
 ## M7.4 截图接入
 
 SceneService 增加只读 read_snapshot(guard)，复制 Project 和内存 SceneSnapshot。独立可选 CaptureService 拥有后台渲染和原子输出状态，既有 SceneServices target 不链接 GPU。
+M8.3 的只读快照同时携带活动 manifest 的工程相对路径（新建未保存时为空），使外部 load/project.save 后编辑器 Reload 指向当前清单；不改变业务命令 schema。
 详见 [截图设计](render-capture.md)。

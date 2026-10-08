@@ -49,6 +49,17 @@
       }
     },
     {
+      "name": "windows-client",
+      "inherits": "windows-bootstrap",
+      "displayName": "Windows lightweight IPC client (no Runtime or Renderer)",
+      "binaryDir": "${sourceDir}/out/build/windows-client",
+      "cacheVariables": {
+        "DK_BUILD_RUNNER": "OFF",
+        "DK_BUILD_FRAMEWORK": "ON",
+        "DK_BUILD_CTL": "ON"
+      }
+    },
+    {
       "name": "windows-dev",
       "inherits": "windows-base",
       "displayName": "Windows development (foundation dependencies)",

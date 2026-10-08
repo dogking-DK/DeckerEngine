@@ -1,0 +1,11 @@
+add_library(dk_automation_server STATIC src/RpcRuntime.cpp src/JsonLines.cpp src/Stdio.cpp)
+add_library(dk::automation_server ALIAS dk_automation_server)
+target_sources(dk_automation_server PUBLIC FILE_SET HEADERS BASE_DIRS include FILES
+    include/dk/automation/RpcRuntime.hpp include/dk/automation/JsonLines.hpp)
+find_package(Threads REQUIRED)
+target_link_libraries(dk_automation_server PUBLIC dk::runtime dk::automation_protocol PRIVATE Threads::Threads)
+if(WIN32)
+    target_sources(dk_automation_server PRIVATE src/IpcServer.cpp PUBLIC FILE_SET HEADERS FILES include/dk/automation/IpcServer.hpp)
+    target_link_libraries(dk_automation_server PUBLIC dk::automation_transport)
+endif()
+dk_target_defaults(dk_automation_server)

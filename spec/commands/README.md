@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-10-03T21:44:26+08:00"
+updated_at: "2026-10-08T13:04:33+08:00"
 status: accepted
 ---
 
@@ -13,6 +13,7 @@ windows-dev 当前 33 条命令，windows-graphics 增加 render.capture 共34�
 完整字段 schema 可通过 `commands.describe` 查询。
 
 独立离线 CLI 另见 [dk-shaderc 编译参数与输出](shaderc.md)；它不属于下列 Runtime 命令集。
+Windows 本机调用使用 [dk-ctl / IPC 协议](ipc.md)，启动、guard 和重试示例见 [IPC 指南](../guides/ipc.md)。
 
 ## 按功能查找
 

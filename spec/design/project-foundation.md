@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-09-28T19:03:00+08:00"
+updated_at: "2026-10-08T13:04:33+08:00"
 status: accepted
 ---
 
@@ -24,7 +24,8 @@ engine/foundation/core 是首个真实静态库 `dk_core`，别名 `dk::core`。
 
 `dk-run --version` 输出 DeckerEngine 和版本；
 无参数或 `--help` 输出当前骨架用法；不支持的参数在 stderr 报错并返回 2。
-该程序始终链接 dk::core；FRAMEWORK 与 Scene 开启时链接 automation_transport → protocol → runtime。
+该程序始终链接 dk::core；FRAMEWORK 与 Scene 开启时链接 automation_server → runtime/protocol/transport。
+协议/传输与 Runtime 适配拆分，独立 windows-client 预设只构建 dk-ctl 与 Core/Commands 及轻量自动化层。
 M3.4 runner 诊断直接写 stderr，不依赖可选 logging；最小 bootstrap 仍保留原功能范围。
 dk-assetc 已提供 CPU 离线资产导入；其他应用和规划模块的当前接入范围见[模块索引](README.md)。
 

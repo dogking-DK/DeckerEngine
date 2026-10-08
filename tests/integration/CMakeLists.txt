@@ -236,6 +236,23 @@ if(TARGET dk_asset_services AND WIN32)
 endif()
 if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
     find_program(DK_POWERSHELL NAMES pwsh powershell REQUIRED)
+    if(TARGET dk_ctl)
+        add_test(NAME dk.ipc.runner_client
+            COMMAND "${DK_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass
+                -File "${CMAKE_CURRENT_SOURCE_DIR}/IpcClientTest.ps1"
+                -Runner "$<TARGET_FILE:dk_run>" -Client "$<TARGET_FILE:dk_ctl>"
+                -WorkDir "${CMAKE_CURRENT_BINARY_DIR}/test-artifacts/$<CONFIG>/ipc")
+        set_tests_properties(dk.ipc.runner_client PROPERTIES TIMEOUT 90)
+        if(TARGET dk_editor_app)
+            add_test(NAME dk.ipc.editor_gpu_validation
+                COMMAND "${DK_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass
+                    -File "${CMAKE_CURRENT_SOURCE_DIR}/IpcClientTest.ps1"
+                    -Runner "$<TARGET_FILE:dk_run>" -Client "$<TARGET_FILE:dk_ctl>" -Editor "$<TARGET_FILE:dk_editor_app>"
+                    -Fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+                    -WorkDir "${CMAKE_CURRENT_BINARY_DIR}/test-artifacts/$<CONFIG>/ipc-editor")
+            set_tests_properties(dk.ipc.editor_gpu_validation PROPERTIES TIMEOUT 150 LABELS "gpu" RUN_SERIAL TRUE)
+        endif()
+    endif()
     if(TARGET dk_asset_operations)
         add_test(NAME dk.runtime.assets_stdio
             COMMAND "${DK_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass
@@ -258,6 +275,11 @@ if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
                 "-DCASE=${case}"
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/RuntimeBatchTest.cmake")
     endforeach()
+endif()
+
+if(TARGET dk_ctl)
+    add_test(NAME dk.ipc.client_help COMMAND dk_ctl --help)
+    set_tests_properties(dk.ipc.client_help PROPERTIES PASS_REGULAR_EXPRESSION "No automatic retry" TIMEOUT 10)
 endif()
 
 if(TARGET dk_foundation_demo AND WIN32)

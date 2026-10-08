@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-08T12:06:32+08:00"
+updated_at: "2026-10-08T13:04:33+08:00"
 status: accepted
 ---
 
@@ -36,6 +36,15 @@ Model 持有当前拥有型 SceneReadSnapshot；Runtime 增加 guard 校验的�
 关闭/打开/重载遇到场景 dirty 或草稿时显示 Save / Discard / Cancel，Save 先 Apply 再保存，任何失败不继续。
 当前草稿过期时拒绝 Apply，显示冲突，允许 Revert 从当前快照重新读取。
 
+## IPC 接入
+
+Windows `dk-editor --pipe NAME` 显式开启与 runner 相同的服务端。Workspace 持有服务端，
+窗口主线程在每次循环（包括最小化时）pump Runtime 和 IPC，外部请求经同一命令注册表执行。
+处理后刷新只读快照和历史；同一文档的未应用草稿保留旧 guard，Apply 明确冲突，不能悄悄覆盖。
+换文档清空选择/草稿，旧 Gizmo 由现有 document/revision 校验取消。
+外部 runtime.shutdown 是显式退出指令，不保存草稿/场景；回复后排空管道再销毁 GPU/窗口。
+基本接入在 M8.3 验证，完整 GUI/外部/截图一致性留在 M8.4。
+
 ## 窗口与 GPU 接入
 
 Platform 提供显式 SDL 借用句柄、同步事件 sink 和清除关闭请求；事件借用仅在回调期间有效，
@@ -59,4 +68,4 @@ CPU 定向测试覆盖选择/草稿、事务与撤销、过期 guard、保存重
 真实窗口 smoke 用 ImGui 输入事件走选择/Inspector/保存/重载/撤销按钮，检查版本与持久化，
 验证 TRS 改动使预览像素变化、Undo 逐字节哈希恢复，再读回工作台画面并启用 Vulkan validation；
 默认 Sponza 另做实际预览。
-M8.2 的 CPU rayquery、Gizmo 和相机交互见 [交互设计](editor-interaction.md)；M8.3 IPC 与 M8.4 跨入口一致性不提前标为完成。
+M8.2 的 CPU rayquery、Gizmo 和相机交互见 [交互设计](editor-interaction.md)；M8.3 IPC 见 [传输设计](automation-transport.md)，M8.4 再验收完整跨入口一致性。

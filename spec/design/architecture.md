@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-08T12:06:32+08:00"
+updated_at: "2026-10-08T13:04:33+08:00"
 status: accepted
 ---
 
@@ -56,7 +56,9 @@ render/pipeline 通过 Graph 执行 depth/opaque/tone/readback，提供绑定场
 | engine/scripting | 脚本 API 和 Lua 绑定 | 经命令/服务操作引擎 |
 | engine/editor | CPU 工作台/相机/手势模型与 ImGui 面板、拾取/Gizmo、窗口渲染桥 | model 依赖 Runtime/Geometry；UI 私有依赖 SDL3/ImGui/Presentation/Render；经命令修改状态 |
 
-`apps/runner` 提供 `dk-run`；`apps/editor` 提供可选 `dk-editor`；`apps/ctl` 预留 `dk-ctl`。
+`apps/runner` 提供 `dk-run`；`apps/editor` 提供可选 `dk-editor`；`apps/ctl` 提供 Windows `dk-ctl`。
+automation/protocol 依赖 Commands，transport 依赖 Core/Win32，client 组合两者，不链接 Runtime/Scene/Renderer；
+automation/server 装配 Runtime 适配、stdio 和 IPC owner 队列，runner/editor 作为宿主。
 `tools/assetc` 和 `tools/shaderc` 为离线工具；
 `sdk/python` 为外部客户端，`shaders/common` 为公共 Slang 模块。
 `projects/demo` 预留示例资产、场景和脚本。

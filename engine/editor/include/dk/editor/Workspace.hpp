@@ -1,6 +1,9 @@
 #pragma once
 #include <dk/runtime/Runtime.hpp>
 #include <dk/editor/TransformEdit.hpp>
+#ifdef _WIN32
+#include <dk/automation/IpcServer.hpp>
+#endif
 
 namespace dk::editor {
 // UI state only; all durable mutations go through Runtime commands on its owner thread.
@@ -22,7 +25,12 @@ public:
     [[nodiscard]] Result<void> redo();
     [[nodiscard]] Result<TransformEdit> begin_transform() const;
     [[nodiscard]] Result<void> commit_transform(const TransformEdit&);
-    void pump() { runtime_->pump(); }
+    void pump();
+    [[nodiscard]] bool stopping() const { return runtime_->stopping(); }
+#ifdef _WIN32
+    [[nodiscard]] Result<void> start_ipc(std::string_view name);
+    void close_ipc();
+#endif
     [[nodiscard]] const SceneReadSnapshot* snapshot() const { return snapshot_ ? &*snapshot_ : nullptr; }
     [[nodiscard]] const std::filesystem::path& manifest() const { return manifest_; }
     [[nodiscard]] InspectorDraft* draft() { return draft_ ? &*draft_ : nullptr; }
@@ -42,5 +50,8 @@ private:
     std::optional<InspectorDraft> draft_;
     std::filesystem::path manifest_;
     HistoryStatus history_{};
+#ifdef _WIN32
+    std::unique_ptr<IpcServer> ipc_;
+#endif
 };
 } // namespace dk::editor

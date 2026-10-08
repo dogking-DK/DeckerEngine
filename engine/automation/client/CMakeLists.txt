@@ -1,0 +1,5 @@
+add_library(dk_automation_client STATIC src/Client.cpp)
+add_library(dk::automation_client ALIAS dk_automation_client)
+target_sources(dk_automation_client PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/automation/Client.hpp)
+target_link_libraries(dk_automation_client PUBLIC dk::automation_protocol dk::automation_transport)
+dk_target_defaults(dk_automation_client)

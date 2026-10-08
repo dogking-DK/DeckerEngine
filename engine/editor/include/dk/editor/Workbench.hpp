@@ -1,9 +1,11 @@
 #pragma once
 #include <filesystem>
+#include <string>
 
 namespace dk::editor {
 struct WorkbenchOptions {
     std::filesystem::path root;
+    std::string pipe;
     std::filesystem::path manifest = "project.json";
     bool validation = false;
     // Bounded native UI acceptance run. Caller must supply a disposable project.

@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-08T10:00:00+08:00"
+updated_at: "2026-10-08T13:04:33+08:00"
 ---
 
 # 构建与依赖配置
@@ -11,6 +11,10 @@ updated_at: "2026-10-08T10:00:00+08:00"
 独立配置和历史验收计数不构成每次修改的固定回归要求。
 
 ## Windows 快速验证
+
+仅需外部控制客户端时使用 `cmake --preset windows-client`，随后
+`cmake --build out/build/windows-client --config Debug --target dk_ctl`；该配置不启用 Runtime/Scene/Renderer。
+用法见 [IPC 指南](ipc.md)。完整 windows-dev/windows-editor 配置同样生成 dk_ctl。
 
 需要 Visual Studio 2026 C++ 桌面开发工具和 CMake 4.2+。
 设置 `VCPKG_ROOT` 后，在根目录运行 [generate-vs2026.bat](../../generate-vs2026.bat)：

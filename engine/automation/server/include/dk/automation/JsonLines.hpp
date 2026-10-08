@@ -1,5 +1,5 @@
 #pragma once
-#include <dk/automation/JsonRpc.hpp>
+#include <dk/automation/RpcRuntime.hpp>
 #include <iosfwd>
 
 namespace dk
