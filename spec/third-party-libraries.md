@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-10-08T14:42:00+08:00"
+updated_at: "2026-10-08T15:08:00+08:00"
 status: accepted
 ---
 
@@ -178,16 +178,20 @@ vulkan-binding。2026-10-08 核验 [官方 port](https://raw.githubusercontent.c
 三方 UI 内部容器使用默认分配器，引擎 GPU 资源和渲染数据继续遵循 Memory/VMA 所有权。
 实际编译/窗口/退出证据见 [0065](development/0065-editor-workbench.md)。
 
-## 清单预留，模块尚未实现
+## Luau 场景脚本
 
-| 库 / vcpkg port | 当前版本 | feature | 计划用途 |
+| 库 / vcpkg port | 当前版本 | feature | 当前用途 |
 | --- | --- | --- | --- |
-| Luau / `luau` | 0.741 | scripting | 内嵌场景脚本；使用官方 Compiler/VM 接口，尚无引擎消费者 |
+| Luau / `luau` | 0.741 | scripting | dk::scripting_luau 私有链接官方 Compiler/VM，编译源码并调用受控场景命令 |
 
 Luau 为 MIT；2026-10-08 核验 [官方固定 port](https://github.com/microsoft/vcpkg/blob/2750401336fb7c95f6619657a46a7e798661341c/ports/luau/vcpkg.json)。
 [vcpkg-configuration.json](../vcpkg-configuration.json) 只为 luau 选择该官方提交，
 原 builtin-baseline 的 Luau 0.739 不再用于此 feature。仅保留 luau 依赖，移除 Lua/sol2；默认不选 tool feature。
-此处只是依赖预留和解析验证，尚无引擎链接/运行时兼容性结论；M9.1 接入时重新核验版本与 CMake 导出。
+M9.1 使用 `find_package(unofficial-luau CONFIG REQUIRED)` 与导出 target
+`unofficial::luau::Luau.Compiler` / `unofficial::luau::Luau.VM`。Windows x64 静态库、动态 CRT；
+项目和依赖均使用 MSVC 14.51 工具链，Debug 链接/执行证据见 [0070](development/0070-luau-command-bindings.md)。
+未启用 CodeGen、Analysis 或 CLI；Compiler 不执行静态类型检查。Luau VM/Compiler 内存仍由三方默认分配器管理，
+按次关闭 VM，尚无引擎 Memory 域统计或内存硬预算。
 使用 `.luau` 源码、官方编译器和 VM；语言及嵌入边界参见 [Luau 官方说明](https://luau.org/getting-started/)
 与 [嵌入文档](https://luau.org/sandbox/)。M9 实施安排见 [Roadmap](roadmap.md)。
 

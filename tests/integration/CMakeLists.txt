@@ -235,6 +235,15 @@ if(TARGET dk_asset_services AND WIN32)
     endforeach()
 endif()
 if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
+    if(TARGET dk_scripting_luau)
+        add_test(NAME dk.luau.runner_roundtrip
+            COMMAND "${CMAKE_COMMAND}"
+                "-DRUNNER=$<TARGET_FILE:dk_run>"
+                "-DEXAMPLE=${PROJECT_SOURCE_DIR}/examples/scripting/create-scene.luau"
+                "-DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-artifacts/$<CONFIG>/luau"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/LuauRunnerTest.cmake")
+        set_tests_properties(dk.luau.runner_roundtrip PROPERTIES TIMEOUT 60)
+    endif()
     find_program(DK_POWERSHELL NAMES pwsh powershell REQUIRED)
     if(TARGET dk_ctl)
         add_test(NAME dk.ipc.runner_client

@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-08T14:42:00+08:00"
+updated_at: "2026-10-08T15:06:00+08:00"
 status: accepted
 ---
 
@@ -15,11 +15,11 @@ status: accepted
 构建选项和宏以 `DK_` 开头，程序以 `dk-` 开头。
 
 技术方向：C++23、Eigen、Vulkan、Slang、SDL3、ImGui、CMake、vcpkg；
-ECS 使用 flecs，内嵌脚本计划用 Luau，外部自动化计划用 Python。
+ECS 使用 flecs，内嵌场景脚本使用 Luau，外部自动化计划用 Python。
 Luau 通过官方 Compiler/VM 接口接入，不使用 Lua/sol2；脚本源码采用 `.luau`。
-引擎只加载由自身编译的源码产物，不接受外部字节码；后续绑定继续通过 Commands/Services，
-不暴露裸 ECS/Vulkan 指针。类型检查、VM 隔离和运行预算须在脚本阶段明确实现与验收，
-不能由依赖选型推定已具备。此次只替换预留方案，M9 尚未实现。
+引擎只加载由自身编译的源码产物，不接受外部字节码；绑定通过 Runtime/Commands/Services，
+不暴露裸 ECS/Vulkan 指针。同步脚本按次拥有 VM，提供受控场景命令和错误恢复，
+见 [Luau 设计](scripting-luau.md)。静态类型检查、执行预算和取消尚未接入。
 当前 CPU 链路由 Foundation/Memory/Jobs、Scene、Commands/Services/Runtime 和 Assets 组成。
 graphics/device 提供独立可选的无窗口 Vulkan 设备、VMA 资源、提交/读回与延迟释放，不进入 CPU-only Runtime 的链接依赖；
 graphics/shaders 提供独立 CPU Slang 编译、SPIR-V 和最小反射，同样不进入 CPU-only Runtime 的链接依赖。
@@ -37,7 +37,7 @@ render/data 已提供不可变 SceneSnapshot 提取和显式相机 View，render
 [GPU 资源](render-resources.md)。两者均为独立可选模块，不进入 CPU-only Runtime。
 render/pipeline 通过 Graph 执行 depth/opaque/tone/readback，提供绑定场景版本的异步离屏帧，
 见 [最小渲染管线](render-pipeline.md)。render/disk 只读连接 M2 工程/场景、M4 导入或 CPU 产物，
-准备独立 GPU 缓存，见 [磁盘渲染](render-disk.md)。截图任务已条件接入 Runtime；M8.1 编辑器通过只读快照与同一命令链路接入，脚本仍待后续阶段。
+准备独立 GPU 缓存，见 [磁盘渲染](render-disk.md)。截图任务已条件接入 Runtime；编辑器通过只读快照与同一命令链路接入。Luau 目前用于可信离线场景脚本，不进入编辑器事件循环。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，
@@ -57,7 +57,7 @@ render/pipeline 通过 Graph 执行 depth/opaque/tone/readback，提供绑定场
 | engine/physics | 接口、CPU/GPU 求解器 | CPU 不依赖 Vulkan；GPU 可用 Device/Graph |
 | engine/framework | commands、services、operations、runtime | 应用服务与模块装配；通用命令层保持独立 |
 | engine/automation | 协议、传输、客户端、服务端 | 客户端不链接完整 Runtime/Renderer |
-| engine/scripting | 脚本 API 和 Luau 绑定（预留） | 经命令/服务操作引擎；Luau 三方接口留在实现内部 |
+| engine/scripting | 同步 Luau 场景命令绑定 | PUBLIC Runtime、PRIVATE Compiler/VM；Runtime 不反向依赖脚本，三方接口留在实现内部 |
 | engine/editor | CPU 工作台/相机/手势模型与 ImGui 面板、拾取/Gizmo、窗口渲染桥 | model 依赖 Runtime/Geometry；UI 私有依赖 SDL3/ImGui/Presentation/Render；经命令修改状态 |
 
 `apps/runner` 提供 `dk-run`；`apps/editor` 提供可选 `dk-editor`；`apps/ctl` 提供 Windows `dk-ctl`。

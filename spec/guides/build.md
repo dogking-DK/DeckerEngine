@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-08T14:42:00+08:00"
+updated_at: "2026-10-08T15:08:00+08:00"
 ---
 
 # 构建与依赖配置
@@ -61,6 +61,7 @@ ctest --preset windows-debug
 ```
 
 `windows-dev` 默认构建 Core、日志、Eigen 数学、IO、Scene、Memory、Jobs、CPU 资产导入/缓存、Framework 与 Catch2 单元测试。
+`windows-scripting` 继承 windows-dev 并启用 `DK_BUILD_SCRIPTING_LUAU`，要求 Scene/Framework Runtime，自动选择 scripting feature，提供 `dk::scripting_luau` 和 runner 的 `--script FILE.luau`；见 [脚本指南](scripting.md)。
 `windows-graphics` 继承该预设，显式启用 DK_BUILD_GRAPHICS_DEVICE、DK_BUILD_GRAPHICS_SHADERS、DK_BUILD_GRAPHICS_OFFSCREEN、DK_BUILD_GRAPHICS_GRAPH、DK_BUILD_RENDER_DATA、DK_BUILD_RENDER_RESOURCES、DK_BUILD_RENDER_PIPELINE、DK_BUILD_RENDER_DISK、DK_BUILD_RENDER_CAPTURE；
 Offscreen 要求 Device、Shaders、Graph，复用已有 feature。设备/资源和离屏探针见 [Graphics 指南](graphics.md)、[离屏指南](offscreen.md)。
 Render Data 要求 Scene/Memory，Render Resources 要求 Math/Memory/Device/Graph，仅使用 asset_data 不要求 importer；
@@ -97,7 +98,7 @@ JSON 由 Scene 私有使用，原规划的 GLM 已从清单移除。
 | graphics | vulkan、volk、vk-bootstrap、vulkan-memory-allocator、shader-slang |
 | platform | sdl3[vulkan]（DK_BUILD_PLATFORM 自动选择；不含 ImGui） |
 | editor | sdl3[vulkan]、imgui[docking-experimental,sdl3-binding,vulkan-binding]（DK_BUILD_EDITOR 自动选择） |
-| scripting | luau 0.741（依赖预留，尚未接入引擎） |
+| scripting | luau 0.741（DK_BUILD_SCRIPTING_LUAU 自动选择；私有链接 Compiler/VM） |
 | tests | catch2（已接入 Core、数学和 IO 单元测试） |
 | profiling | tracy[on-demand]（关闭默认 features；启用 DK_ENABLE_PROFILING 时自动选择） |
 

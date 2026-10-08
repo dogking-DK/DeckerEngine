@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-08T14:42:00+08:00"
+updated_at: "2026-10-08T15:11:00+08:00"
 status: accepted
 ---
 
@@ -105,13 +105,13 @@ CTest 保留 runner 冒烟验证，开发预设额外运行 Catch2 行为测试�
 本机 vcpkg 干净 checkout 只做 fast-forward，同步其 bootstrap 要求的工具版本。
 依赖 feature 按模块选择，包含 foundation、math、memory、scene、commands、graphics、vulkan-device、shaders、editor、scripting、tests、profiling 等，
 清单默认安装 Core 必需的 stduuid，可选库仍按 feature 选择。
-`scripting` 预留 feature 改为仅选择 Luau，不再选择 Lua/sol2，尚无引擎 CMake 消费者。
+`scripting` feature 仅选择 Luau，不再选择 Lua/sol2。`DK_BUILD_SCRIPTING_LUAU` 默认 OFF，自动选取该 feature；windows-scripting 预设开启它并保留 CPU-only 构建。
 为只更新此次选型，Luau 在 [vcpkg-configuration.json](../../vcpkg-configuration.json) 中
 使用官方 Git registry，reference/baseline 均固定为 `2750401336fb7c95f6619657a46a7e798661341c`，
 仅匹配 `luau`，版本 0.741（port #0）。其余包继续由上述 builtin-baseline 解析，避免连带升级已验收模块。
 这是此次单包替换的固定 registry 例外，不引入旧版本 override、浮动 reference 或自制 port。
 后续统一升级 builtin-baseline 时，若已包含所需 Luau 版本，应一并移除这项单包 registry。
-M9.1 接入时重新核验版本，计划 PRIVATE 链接官方 Compiler/VM 导出；源码目录为 engine/scripting/luau。
+M9.1 沿用固定的 Luau 0.741 / port #0，`dk::scripting_luau` PRIVATE 链接 unofficial::luau::Luau.Compiler / unofficial::luau::Luau.VM；源码目录为 engine/scripting/luau。接口和验证见 [Luau 设计](scripting-luau.md) 与 [0070](../development/0070-luau-command-bindings.md)。
 stduuid 在 Core 实现中使用，不暴露到公开头。
 数学模块使用独立 math feature 安装 eigen3，启用 DK_BUILD_MATH 时自动补充该组；
 foundation 中移除未使用的 glm，保留日志及 JSON 依赖。M2 的 scene feature

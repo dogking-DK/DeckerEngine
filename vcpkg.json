@@ -95,7 +95,7 @@
       ]
     },
     "scripting": {
-      "description": "Embedded Luau scripting (planned)",
+      "description": "Embedded Luau scene command bindings",
       "dependencies": [
         "luau"
       ]

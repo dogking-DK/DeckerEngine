@@ -6,7 +6,7 @@
 当前提供 Foundation、Memory/Tracy、Scene 持久化、命令/事务、CPU Runtime、
 资产导入与缓存、有界 Jobs、异步 CPU Ready，以及可选的 Vulkan 使用层（对象/管线/绑定/录制/同步/传输）、Slang 编译、离屏绘制/计算读回，以及 SDL3 窗口与 Vulkan 呈现。
 GPU Graph 提供资源/Pass 声明、CPU 编译、裁剪、transient 资源管理及单队列同步执行、状态导入导出和诊断；离屏样例已由 Graph 编排。
-Render 已提供只读场景/视图提取、GpuMesh/纹理上传与缓存卸载；已接通磁盘资产、场景 Graph 管线与 Runtime 截图。编辑器提供工作台、拾取/Gizmo、命令编辑和保存加载；Windows 本机 Named Pipe 与轻量 dk-ctl 已接入。GUI、外部命令、截图及保存后 runner 的指定视图一致性已验收，见 [M8.4 / 交付 C](spec/development/0068-editor-consistency.md)。物理、网络远程控制与脚本尚未实现。
+Render 已提供只读场景/视图提取、GpuMesh/纹理上传与缓存卸载；已接通磁盘资产、场景 Graph 管线与 Runtime 截图。编辑器提供工作台、拾取/Gizmo、命令编辑和保存加载；Windows 本机 Named Pipe 与轻量 dk-ctl 已接入。GUI、外部命令、截图及保存后 runner 的指定视图一致性已验收，见 [M8.4 / 交付 C](spec/development/0068-editor-consistency.md)。Luau 支持通过同一服务创建、编辑、保存场景及脚本错误恢复，见[脚本指南](spec/guides/scripting.md)。物理、网络远程控制和 Python SDK 尚未实现。
 阶段状态、依赖和下一项统一见[开发 Roadmap](spec/roadmap.md)。
 
 ## 快速开始
@@ -30,6 +30,7 @@ cmake --build --preset windows-debug --target dk_run
 | --- | --- |
 | 配置、依赖、生成解决方案 | [构建指南](spec/guides/build.md)、[三方库说明](spec/third-party-libraries.md) |
 | batch、持续 stdio、命令层独立配置 | [Runtime 指南](spec/guides/runtime.md)、[命令参考](spec/commands/README.md) |
+| Luau 场景构造/编辑、保存与脚本错误 | [脚本指南](spec/guides/scripting.md)、[可执行示例](examples/scripting/create-scene.luau) |
 | Named Pipe、dk-ctl、超时/重试与独立客户端 | [IPC 指南](spec/guides/ipc.md)、[IPC 协议参考](spec/commands/ipc.md) |
 | 登记、改名、导入、缓存、异步加载与作业 | [资产指南](spec/guides/assets.md) |
 | heap、拥有型容器、scratch、pool、线程上下文、Tracy | [Memory 指南](spec/guides/memory.md) |
@@ -70,6 +71,7 @@ pwsh -NoProfile -File scripts/check-spec.ps1
 | engine/assets | 持久类型、元数据/身份目录、CPU 导入、缓存与异步加载 |
 | engine/scene | 场景文档、组件、层级、工程与 JSON 持久化 |
 | engine/framework | commands、services、operations、runtime |
+| engine/scripting/luau | 独立同步 Luau VM、受控场景命令、值转换与错误恢复 |
 | engine/automation | JSON-RPC 与 JSON Lines/stdio；网络和客户端 SDK 预留 |
 | engine/graphics/device、shader-types、shaders、offscreen、presentation、graph | Vulkan 1.4 使用层、独立 shader 产物、Slang 编译、离屏执行、窗口呈现与 Graph 单队列执行 |
 | engine/render/data、resources、pipeline、disk | 不可变场景/视图、GPU 资产缓存、磁盘输入、Graph 场景渲染与帧读回 |
@@ -81,7 +83,7 @@ pwsh -NoProfile -File scripts/check-spec.ps1
 | examples、tests | CPU/窗口示例、单元与集成测试、独立 GPU 设备探针；replay 预留 |
 | spec、.agents/skills | 设计/指南/记录/命令文档、按任务加载的开发方法 |
 
-physics、scripting 与 Python SDK
+physics、脚本预算/取消与 Python SDK
 仍按 Roadmap 逐步接入；预留目录和安装依赖不代表已经实现。
 公开头位于各模块 `include/dk/`，内部实现位于 `src/`，依赖通过 target 声明。
 构建产物和个人环境留在 Git 忽略目录。

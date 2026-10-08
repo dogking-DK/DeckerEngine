@@ -7,6 +7,11 @@ if(TARGET dk_runtime)
 endif()
 dk_target_defaults(dk_run)
 
+if(TARGET dk_scripting_luau)
+    target_link_libraries(dk_run PRIVATE dk::scripting_luau)
+    target_compile_definitions(dk_run PRIVATE DK_RUN_WITH_LUAU=1)
+endif()
+
 if(TARGET dk_render_services)
     dk_deploy_slang(dk_run)
 endif()

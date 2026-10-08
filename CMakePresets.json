@@ -75,6 +75,14 @@
       }
     },
     {
+      "name": "windows-scripting",
+      "inherits": "windows-dev",
+      "displayName": "Windows CPU Luau scene scripting",
+      "cacheVariables": {
+        "DK_BUILD_SCRIPTING_LUAU": "ON"
+      }
+    },
+    {
       "name": "windows-shaders",
       "inherits": "windows-base",
       "displayName": "Windows offline Slang compiler (no Vulkan)",
