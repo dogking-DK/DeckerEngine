@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-08T10:13:00+08:00"
+updated_at: "2026-10-08T12:06:32+08:00"
 status: accepted
 ---
 
@@ -10,7 +10,7 @@ status: accepted
 ## 边界
 
 `dk-editor` 装配 SDL3、ImGui docking、Vulkan Presenter、ScenePipeline 和 Runtime。
-`dk_editor_model` 只依赖 Runtime，保存选择、Inspector 草稿和只读快照；不访问 ECS。
+`dk_editor_model` 依赖 Runtime/Geometry，保存选择、Inspector 草稿、只读快照并提供相机/手势计算；不访问 ECS。
 `dk_editor` 实现窗口 UI 与渲染桥，私有依赖 ImGui/SDL3。新增 `DK_BUILD_EDITOR` 默认 OFF，
 `windows-editor` 启用已有呈现/渲染模块。CPU-only Runtime 不新增窗口或 GPU 依赖。
 ImGui 使用固定 baseline 中的 1.92.9 docking/SDL3/Vulkan backend；本次核验官方 port 仍为该版本。
@@ -47,7 +47,7 @@ sRGB 交换链上的 UI 样式先转为线性颜色，Viewport 纹理单独按 s
 每帧等待提交完成后再更新/释放 backend 纹理；关闭先排空 GPU，再关闭 ImGui，最后释放 Presenter/Window/Memory。
 交换链格式变化时重建 ImGui pipeline，图像数变化同步 backend 配置；最小化暂停并保留模型。
 
-Viewport 基于当前内存快照，固定 Sponza 相机；按文档版本/面板尺寸失效后绘制，非持续重导入。
+Viewport 基于当前内存快照，默认 Sponza 相机；M8.2 增加会话相机、CPU 拾取和独立 TRS 手势预览，详见 [交互设计](editor-interaction.md)。按文档版本/面板尺寸/相机与手势序号失效后绘制，非持续重导入。
 每个文档会话只加载一次 CPU/GPU 资产，编辑变换时重新提取 RenderScene；显式 Reload 可重读资产。
 渲染结果的 RGBA8 已编码 sRGB，初版通过现有读回和上传桥发布 sRGB 采样纹理，避免再次编码。
 候选图像及描述符成功后替换旧预览；失败保留旧图并明确显示实际 revision/过期状态，可重试。
@@ -59,4 +59,4 @@ CPU 定向测试覆盖选择/草稿、事务与撤销、过期 guard、保存重
 真实窗口 smoke 用 ImGui 输入事件走选择/Inspector/保存/重载/撤销按钮，检查版本与持久化，
 验证 TRS 改动使预览像素变化、Undo 逐字节哈希恢复，再读回工作台画面并启用 Vulkan validation；
 默认 Sponza 另做实际预览。
-M8.2 才加入 CPU rayquery、Gizmo 和相机交互；M8.3 IPC 与 M8.4 跨入口一致性不提前标为完成。
+M8.2 的 CPU rayquery、Gizmo 和相机交互见 [交互设计](editor-interaction.md)；M8.3 IPC 与 M8.4 跨入口一致性不提前标为完成。

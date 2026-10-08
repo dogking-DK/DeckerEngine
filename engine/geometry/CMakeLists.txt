@@ -1,0 +1,6 @@
+set(CMAKE_FOLDER "Engine/Geometry")
+add_library(dk_geometry STATIC src/Query.cpp)
+add_library(dk::geometry ALIAS dk_geometry)
+target_sources(dk_geometry PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/geometry/Query.hpp)
+target_link_libraries(dk_geometry PUBLIC dk::math)
+dk_target_defaults(dk_geometry)

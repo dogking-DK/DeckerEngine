@@ -20,6 +20,7 @@ int main(int argc,char** argv) {
             else if (arg=="--manifest") options.manifest=next();
             else if (arg=="--validation") options.validation=true;
             else if (arg=="--smoke") options.smoke=true;
+            else if (arg=="--interaction-smoke") { options.smoke=true; options.interaction_smoke=true; }
             else if (arg=="--fixture-camera") options.fixture_camera=true;
             else if (arg=="--frames") {
                 const auto text=next().string(); std::size_t used=0;
@@ -31,7 +32,7 @@ int main(int argc,char** argv) {
             else if (arg=="--help") {
                 std::puts("dk-editor [--root PROJECT_ROOT] [--manifest RELATIVE_MANIFEST] [--validation]\n"
                     "Acceptance: --frames N --screenshot OUTPUT.ppm [--fixture-camera]\n"
-                    "            --smoke --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm");
+                    "            --smoke/--interaction-smoke --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm");
                 return 0;
             } else throw std::runtime_error("Unknown dk-editor option");
         }

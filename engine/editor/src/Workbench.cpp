@@ -24,7 +24,12 @@ void diagnostic(void* user,const graphics::Diagnostic& message) noexcept {
     if (message.severity>=VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
         std::fprintf(stderr,"%.*s: %.*s\n",static_cast<int>(message.name.size()),message.name.data(),static_cast<int>(message.message.size()),message.message.data());
 }
-void event_sink(const SDL_Event& event,void*) { ImGui_ImplSDL3_ProcessEvent(&event); }
+void event_sink(const SDL_Event& event,void* user) {
+    ImGui_ImplSDL3_ProcessEvent(&event);
+    // Cancel before a minimized loop skips NewFrame; focus may return before rendering resumes.
+    if (event.type==SDL_EVENT_WINDOW_FOCUS_LOST || event.type==SDL_EVENT_WINDOW_MINIMIZED)
+        static_cast<WorkbenchUi*>(user)->cancel_interaction();
+}
 void write_capture(const std::filesystem::path& output,const graphics::ReadbackRequest& readback) {
     const auto desc=readback.description();
     const bool bgra=desc.format==vk::Format::eB8G8R8A8Srgb || desc.format==vk::Format::eB8G8R8A8Unorm;
@@ -60,13 +65,13 @@ int session(const WorkbenchOptions& options,memory::ResourceHandle heap,Diagnost
         queue.device().adapter().driver.driverInfo.data());
     GuiRenderer gui{queue,window};
     Viewport viewport{heap,queue};
-    WorkbenchUi ui{*model};
-    SmokeDriver smoke;
+    WorkbenchUi ui{*model,options.fixture_camera};
+    SmokeDriver smoke{options.interaction_smoke};
     unsigned frames=0;
     const auto start=std::chrono::steady_clock::now();
     try {
         for (;;) {
-            const auto status=take(window.poll_events(event_sink));
+            const auto status=take(window.poll_events(event_sink,&ui));
             if (status.close_requested) { check(window.clear_close_request()); ui.request_close(); }
             model->pump();
             if (ui.closing()) break;
@@ -82,7 +87,7 @@ int session(const WorkbenchOptions& options,memory::ResourceHandle heap,Diagnost
             gui.new_frame([&] { if (options.smoke) smoke.input(*model,ui,window,viewport); });
             const auto format=frame.format();
             const bool srgb=format==vk::Format::eB8G8R8A8Srgb || format==vk::Format::eR8G8B8A8Srgb;
-            ui.draw(viewport,srgb,options.fixture_camera);
+            ui.draw(viewport,srgb);
             ImGui::Render();
             gui.record(frame,viewport.texture() ? &viewport.image() : nullptr,viewport.texture() ? &viewport.image_view() : nullptr);
             ++frames;

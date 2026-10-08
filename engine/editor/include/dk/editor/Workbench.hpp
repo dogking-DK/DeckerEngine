@@ -8,6 +8,7 @@ struct WorkbenchOptions {
     bool validation = false;
     // Bounded native UI acceptance run. Caller must supply a disposable project.
     bool smoke = false;
+    bool interaction_smoke = false;
     unsigned frames = 0;
     std::filesystem::path screenshot;
     bool fixture_camera = false;

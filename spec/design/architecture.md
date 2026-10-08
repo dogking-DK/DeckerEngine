@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-08T10:13:00+08:00"
+updated_at: "2026-10-08T12:06:32+08:00"
 status: accepted
 ---
 
@@ -45,7 +45,7 @@ render/pipeline 通过 Graph 执行 depth/opaque/tone/readback，提供绑定场
 | --- | --- | --- |
 | engine/foundation | core、数学、IO、profiling、memory、CPU jobs；metadata 预留 | 不依赖 Scene、Vulkan、Editor；profiling 不反向依赖 memory |
 | engine/platform | 窗口、事件、SDL3 后端；完整输入映射后续接入 | 可选，CPU 无窗口运行不依赖它 |
-| engine/geometry | AABB、射线、CPU BVH | 仅基础数学/数据 |
+| engine/geometry | AABB、射线、三角形 BVH 与仿射实例查询 | 仅 Math/Core；不依赖 Scene/Assets/GPU |
 | engine/assets | 资产类型、运行时、导入器 | 与设备资源和图资源分离 |
 | engine/scene | 组件、层级、序列化、迁移 | 基础层与资产引用，不持有 Vulkan 资源 |
 | engine/graphics | device、shaders、offscreen、presentation、graph 声明/编译/执行 | 离屏底座不依赖场景，正式业务后续统一进入 Graph |
@@ -54,7 +54,7 @@ render/pipeline 通过 Graph 执行 depth/opaque/tone/readback，提供绑定场
 | engine/framework | commands、services、operations、runtime | 应用服务与模块装配；通用命令层保持独立 |
 | engine/automation | 协议、传输、客户端、服务端 | 客户端不链接完整 Runtime/Renderer |
 | engine/scripting | 脚本 API 和 Lua 绑定 | 经命令/服务操作引擎 |
-| engine/editor | CPU 工作台模型与 ImGui 面板、窗口渲染桥 | model 只依赖 Runtime；UI 私有依赖 SDL3/ImGui/Presentation/Render；经命令修改状态 |
+| engine/editor | CPU 工作台/相机/手势模型与 ImGui 面板、拾取/Gizmo、窗口渲染桥 | model 依赖 Runtime/Geometry；UI 私有依赖 SDL3/ImGui/Presentation/Render；经命令修改状态 |
 
 `apps/runner` 提供 `dk-run`；`apps/editor` 提供可选 `dk-editor`；`apps/ctl` 预留 `dk-ctl`。
 `tools/assetc` 和 `tools/shaderc` 为离线工具；

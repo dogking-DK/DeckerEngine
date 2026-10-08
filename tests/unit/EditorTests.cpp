@@ -1,5 +1,8 @@
 #include "SceneTestFiles.hpp"
 #include <dk/editor/Workspace.hpp>
+#include <dk/editor/Camera.hpp>
+#include <dk/scene/SceneDocument.hpp>
+#include <catch2/catch_approx.hpp>
 #include <algorithm>
 using namespace dk;
 using namespace dk::editor;
@@ -93,4 +96,65 @@ TEST_CASE("runtime read scene returns independent guarded snapshot") {
     REQUIRE(result); REQUIRE(result->result);
     CHECK(runtime->read_scene(guard).error().code==ErrorCode::conflict);
     CHECK(old->scene.entities().size()==count); CHECK(old->state.revision==guard.revision);
+}
+TEST_CASE("camera projected positions match rays across resize orbit pan and focus") {
+    Camera camera{true};
+    for (double aspect:{0.5,1.0,2.3}) {
+        for (const Vec2d uv:{Vec2d{0.2,0.3},Vec2d{0.5,0.5},Vec2d{0.8,0.6}}) {
+            auto ray=camera.ray(uv,aspect).value();
+            auto projected=camera.project(ray.origin+ray.direction*4,aspect); REQUIRE(projected);
+            CHECK(projected->isApprox(uv,1e-10)); CHECK(ray.direction.norm()==Catch::Approx(1));
+        }
+        camera.orbit(80,40); camera.pan(15,-10,600); camera.dolly(2);
+    }
+    camera.orbit(0,100000); camera.dolly(100000); CHECK(camera.world().matrix().allFinite());
+    camera.dolly(-100000); camera.frame({{-1,-2,-3},{1,2,3}},0.5);
+    CHECK(camera.project({0,0,0},0.5)->isApprox(Vec2d{0.5,0.5},1e-10));
+    CHECK_FALSE(camera.ray({-0.1,0.5},1)); CHECK_FALSE(camera.ray({0.5,0.5},0));
+    const auto before=camera.revision(); camera.orbit(0,0); camera.dolly(0); CHECK(camera.revision()==before);
+}
+TEST_CASE("interaction preview cancel no-op commit and many updates create one undo unit") {
+    EditorFixture f; auto& model=*f.model; const auto id=f.select();
+    const auto before=model.snapshot()->scene; const auto revision=model.snapshot()->state.revision;
+    { auto edit=model.begin_transform().value(); REQUIRE(edit.translate({1,2,3})); }
+    CHECK(model.snapshot()->scene.same_content(before)); CHECK(model.history().undo_count==0); CHECK_FALSE(model.dirty());
+    auto edit=model.begin_transform().value(); REQUIRE(model.commit_transform(edit));
+    CHECK(model.snapshot()->state.revision==revision); CHECK(model.history().undo_count==0);
+    for (int i=1;i<=25;++i) REQUIRE(edit.translate({i*0.02,0,0}));
+    CHECK(model.snapshot()->scene.same_content(before));
+    REQUIRE(model.commit_transform(edit)); CHECK(model.history().undo_count==1); CHECK(model.snapshot()->state.revision==revision+1);
+    const auto moved=model.draft()->entity.local.translation;
+    REQUIRE(model.undo()); CHECK(model.snapshot()->scene.same_content(before));
+    REQUIRE(model.redo()); CHECK(model.draft()->entity.local.translation.isApprox(moved));
+    REQUIRE(model.save()); REQUIRE(model.open("project.json")); REQUIRE(model.select(id));
+    CHECK(model.draft()->entity.local.translation.isApprox(moved));
+}
+TEST_CASE("interaction stale selection pending draft and invalid candidate preserve state") {
+    EditorFixture f; auto& model=*f.model; f.select();
+    auto stale=model.begin_transform().value(); REQUIRE(stale.translate({0.3,0,0}));
+    auto edit=stale; REQUIRE(model.commit_transform(edit));
+    const auto content=model.snapshot()->scene; const auto history=model.history().undo_count;
+    CHECK(model.commit_transform(stale).error().code==ErrorCode::conflict);
+    edit=model.begin_transform().value(); edit.value.rotation.coeffs().setZero();
+    CHECK_FALSE(model.commit_transform(edit)); CHECK(model.snapshot()->scene.same_content(content));
+    CHECK(model.history().undo_count==history);
+    edit=model.begin_transform().value(); REQUIRE(edit.translate({0.1,0,0})); REQUIRE(model.select(std::nullopt));
+    CHECK(model.commit_transform(edit).error().code==ErrorCode::conflict);
+    REQUIRE(model.select(edit.entity)); model.draft()->modified=true;
+    CHECK_FALSE(model.begin_transform()); CHECK_FALSE(model.commit_transform(edit));
+}
+TEST_CASE("interaction local TRS respects rotated scaled parent without decomposing world shear") {
+    auto scene=SceneDocument::create().value(); const auto parent=scene->create_entity().value(),child=scene->create_entity().value();
+    Trsd p; p.scale={2,3,-1}; p.rotation=Quatd{Eigen::AngleAxisd{0.7,Vec3d::UnitY()}};
+    Trsd c; c.translation={1,2,3}; c.rotation=Quatd{Eigen::AngleAxisd{0.4,Vec3d::UnitZ()}};
+    REQUIRE(scene->set_local_transform(parent,p)); REQUIRE(scene->set_local_transform(child,c)); REQUIRE(scene->set_parent(child,parent));
+    auto snapshot=scene->snapshot().value(); auto parent_world=entity_world(snapshot,parent).value();
+    CHECK(entity_world(snapshot,child)->matrix().isApprox(scene->world_transform(child)->matrix()));
+    TransformEdit edit{{DocumentId{},0},child,c,c,parent_world}; const auto world=edit.world().value();
+    const Vec3d delta{0.2,-0.7,1.1}; REQUIRE(edit.translate(delta));
+    CHECK(Vec3d{edit.world()->matrix().block<3,1>(0,3)-world.matrix().block<3,1>(0,3)}.isApprox(delta));
+    REQUIRE(edit.rotate(2,0.5)); CHECK(edit.value.rotation.angularDistance(c.rotation*Quatd{Eigen::AngleAxisd{0.5,Vec3d::UnitZ()}})<1e-10);
+    REQUIRE(edit.scale(1,1.5)); CHECK(edit.value.scale.y()==1.5); CHECK(edit.value.translation==c.translation);
+    CHECK_FALSE(edit.rotate(3,1)); CHECK_FALSE(edit.scale(0,0));
+    p.scale.y()=0; edit.parent=Transformd::from_trs(p).value(); CHECK_FALSE(edit.translate(delta));
 }

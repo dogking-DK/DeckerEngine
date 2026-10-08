@@ -1,6 +1,9 @@
 set(CMAKE_FOLDER "Engine")
 
 add_subdirectory(foundation)
+if(TARGET dk_math)
+    add_subdirectory(geometry)
+endif()
 if(DK_BUILD_PLATFORM)
     add_subdirectory(platform)
 endif()

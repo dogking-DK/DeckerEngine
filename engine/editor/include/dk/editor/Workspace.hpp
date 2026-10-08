@@ -1,5 +1,6 @@
 #pragma once
 #include <dk/runtime/Runtime.hpp>
+#include <dk/editor/TransformEdit.hpp>
 
 namespace dk::editor {
 // UI state only; all durable mutations go through Runtime commands on its owner thread.
@@ -19,6 +20,8 @@ public:
     [[nodiscard]] Result<void> save();
     [[nodiscard]] Result<void> undo();
     [[nodiscard]] Result<void> redo();
+    [[nodiscard]] Result<TransformEdit> begin_transform() const;
+    [[nodiscard]] Result<void> commit_transform(const TransformEdit&);
     void pump() { runtime_->pump(); }
     [[nodiscard]] const SceneReadSnapshot* snapshot() const { return snapshot_ ? &*snapshot_ : nullptr; }
     [[nodiscard]] const std::filesystem::path& manifest() const { return manifest_; }

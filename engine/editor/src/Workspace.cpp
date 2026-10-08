@@ -103,4 +103,30 @@ Result<void> Workspace::history_step(std::string_view method) {
 }
 Result<void> Workspace::undo() { return history_step("history.undo"); }
 Result<void> Workspace::redo() { return history_step("history.redo"); }
+Result<TransformEdit> Workspace::begin_transform() const {
+    if (pending()) return std::unexpected(pending_error());
+    if (!draft_ || !snapshot_) return std::unexpected(Error{ErrorCode::invalid_state,"Select an entity before using Gizmo"});
+    Transformd parent;
+    if (draft_->entity.parent) {
+        auto world=entity_world(snapshot_->scene,*draft_->entity.parent);
+        if (!world) return std::unexpected(world.error());
+        parent=*world;
+    }
+    if (auto inverse=parent.inverse(); !inverse) return std::unexpected(inverse.error());
+    return TransformEdit{{snapshot_->state.document_id,snapshot_->state.revision},draft_->entity.id,draft_->entity.local,draft_->entity.local,parent};
+}
+Result<void> Workspace::commit_transform(const TransformEdit& edit) {
+    if (pending()) return std::unexpected(pending_error());
+    if (!snapshot_ || edit.guard.document_id!=snapshot_->state.document_id || edit.guard.revision!=snapshot_->state.revision)
+        return std::unexpected(Error{ErrorCode::conflict,"Transform preview is stale"});
+    if (selection_!=edit.entity) return std::unexpected(Error{ErrorCode::conflict,"Transform selection changed"});
+    auto valid=Transformd::from_trs(edit.value); if (!valid) return std::unexpected(valid.error());
+    if (!edit.changed()) return {};
+    const auto& t=edit.value;
+    auto result=call("entity.set_transform",{{"guard",guard_json(edit.guard)},{"id",edit.entity.to_string()},
+        {"transform",{{"translation",{t.translation.x(),t.translation.y(),t.translation.z()}},
+            {"rotation",{t.rotation.x(),t.rotation.y(),t.rotation.z(),t.rotation.w()}},{"scale",{t.scale.x(),t.scale.y(),t.scale.z()}}}}});
+    if (!result) return std::unexpected(result.error());
+    return refresh();
+}
 } // namespace dk::editor

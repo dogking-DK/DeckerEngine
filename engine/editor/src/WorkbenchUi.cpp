@@ -6,9 +6,9 @@
 #include <unordered_map>
 
 namespace dk::editor::detail {
-WorkbenchUi::WorkbenchUi(Workspace& model) : model_(model),manifest_(take(path_to_utf8(model.manifest()))) {
+WorkbenchUi::WorkbenchUi(Workspace& model,bool fixture) : model_(model),input_(fixture),manifest_(take(path_to_utf8(model.manifest()))) {
     log_.push_back("Opened "+manifest_);
-    log_.push_back("Viewport: unlit preview / fixed camera. Inspector edits use scene.transaction.");
+    log_.push_back("Viewport: CPU picking / local Gizmo / orbit camera. Edits use guarded commands.");
 }
 void WorkbenchUi::mark(const char* id) {
     const auto a=ImGui::GetItemRectMin(),b=ImGui::GetItemRectMax();
@@ -41,10 +41,11 @@ void WorkbenchUi::request(PendingAction action) {
     if (model_.dirty()) popup_=true;
     else perform();
 }
-void WorkbenchUi::request_close() { request(PendingAction::close); }
+void WorkbenchUi::request_close() { input_.cancel(); request(PendingAction::close); }
 void WorkbenchUi::toolbar() {
     if (!ImGui::BeginMainMenuBar()) return;
     ImGui::TextUnformatted("DECKER  /  WORKBENCH"); ImGui::Separator();
+    ImGui::BeginDisabled(input_.active());
     if (ImGui::Button("Save")) report("Save",model_.save()); mark("save");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(220);
@@ -63,7 +64,7 @@ void WorkbenchUi::toolbar() {
     ImGui::EndDisabled(); ImGui::Separator();
     if (const auto* s=model_.snapshot()) ImGui::Text("rev %llu  |  %s",
         static_cast<unsigned long long>(s->state.revision),model_.dirty() ? "Unsaved changes" : "Saved");
-    ImGui::EndMainMenuBar();
+    ImGui::EndDisabled(); ImGui::EndMainMenuBar();
 }
 void WorkbenchUi::hierarchy() {
     ImGui::Begin("Hierarchy");
@@ -83,7 +84,7 @@ void WorkbenchUi::hierarchy() {
         while (!stack.empty()) {
             auto row=stack.back(); stack.pop_back(); rows.push_back(row); append(row.first->id,row.second+1);
         }
-        ImGui::BeginDisabled(model_.pending());
+        ImGui::BeginDisabled(model_.pending() || input_.active());
         ImGuiListClipper clipper;
         clipper.Begin(static_cast<int>(rows.size()));
         while (clipper.Step()) for (int i=clipper.DisplayStart;i<clipper.DisplayEnd;++i) {
@@ -108,6 +109,7 @@ void WorkbenchUi::inspector() {
     if (!draft) { ImGui::TextWrapped("Select an entity in Hierarchy to inspect or edit it."); ImGui::End(); return; }
     ImGui::TextUnformatted("ENTITY"); ImGui::TextWrapped("%s",draft->entity.id.to_string().c_str());
     ImGui::Separator();
+    ImGui::BeginDisabled(input_.active());
     bool modified=false;
     ImGui::SetNextItemWidth(-1);
     modified|=ImGui::InputText("##Name",&draft->entity.name); mark("name");
@@ -130,6 +132,7 @@ void WorkbenchUi::inspector() {
     if (ImGui::Button("Apply")) report("Apply",model_.apply()); mark("apply");
     ImGui::SameLine();
     if (ImGui::Button("Revert")) report("Revert",model_.revert()); mark("revert");
+    ImGui::EndDisabled();
     ImGui::EndDisabled();
     // Commands may replace the draft; reacquire before displaying it.
     draft=model_.draft();
@@ -181,8 +184,11 @@ void WorkbenchUi::confirmation() {
         ImGui::EndPopup();
     }
 }
-void WorkbenchUi::draw(Viewport& preview,bool srgb,bool fixture) {
+void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     controls_.clear();
+    if (ImGui::GetIO().AppFocusLost || ImGui::IsKeyPressed(ImGuiKey_Escape,false)) input_.cancel();
+    if (input_.edit() && (!model_.snapshot() || input_.edit()->guard.document_id!=model_.snapshot()->state.document_id ||
+        input_.edit()->guard.revision!=model_.snapshot()->state.revision)) input_.cancel();
     toolbar();
     const auto dock=ImGui::DockSpaceOverViewport(0,ImGui::GetMainViewport());
     if (!layout_) {
@@ -200,10 +206,14 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb,bool fixture) {
         layout_=true;
     }
     hierarchy(); inspector();
-    ImGui::Begin("Viewport");
+    const bool visible=ImGui::Begin("Viewport",nullptr,ImGuiWindowFlags_NoScrollWithMouse|ImGuiWindowFlags_NoScrollbar);
+    if (!visible) input_.cancel();
     ImGui::TextUnformatted("UNLIT PREVIEW"); ImGui::SameLine();
+    ImGui::BeginDisabled(input_.active());
     if (ImGui::SmallButton("Refresh")) preview.retry();
-    if (const auto* s=model_.snapshot()) {
+    ImGui::EndDisabled();
+    input_.toolbar(model_,preview,controls_);
+    if (const auto* s=model_.snapshot(); s && visible) {
         if (preview.texture()) ImGui::Text("rev %llu  /  %zu draws  /  %s",
             static_cast<unsigned long long>(preview.info().revision),preview.info().draw_count,
             preview.current(s->state) ? "Current scene" : "STALE PREVIEW");
@@ -212,13 +222,14 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb,bool fixture) {
         if (available.x>=32 && available.y>=32) {
             const auto width=static_cast<std::uint32_t>(std::clamp(available.x,32.0f,1600.0f));
             const auto height=static_cast<std::uint32_t>(std::clamp(available.y,32.0f,1200.0f));
-            preview.update(*s,width,height,srgb,fixture);
+            preview.update(*s,width,height,srgb,input_.camera(),input_.edit(),input_.revision());
             if (preview.texture()) {
                 const auto& info=preview.info();
                 const float scale=std::min(available.x/static_cast<float>(info.width),available.y/static_cast<float>(info.height));
                 ImGui::Image(preview.texture(),{static_cast<float>(info.width)*scale,static_cast<float>(info.height)*scale});
+                input_.image(model_,preview,controls_,[&](const char* action,Result<void> result) { return report(action,std::move(result)); });
             } else ImGui::TextWrapped("Preview unavailable. See Console and press Refresh to retry.");
-        }
+        } else input_.cancel();
         if (preview.error()!=viewport_error_) {
             viewport_error_=preview.error();
             if (!viewport_error_.empty()) report("Viewport",std::unexpected(Error{ErrorCode::internal_error,viewport_error_}));

@@ -1,11 +1,18 @@
 ---
 module: render-data
 created_at: "2026-10-03T15:06:44+08:00"
-updated_at: "2026-10-03T15:06:44+08:00"
+updated_at: "2026-10-08T12:06:32+08:00"
 status: accepted
 ---
 
 # RenderScene 与 RenderView
+
+## M8.2 临时变换预览
+
+RenderScene::extract 可接受单个 LocalTransformOverride（EntityId、本地 TRS），仅覆盖候选提取的数据，
+后代世界变换使用候选父级。输入 Snapshot、revision、SceneDocument 和历史均不变。
+未找到实体或无效 TRS 返回错误，不发布部分候选。调用者用单独 preview 序号标记临时画面，
+不能将保留的 revision 当作已提交该变换的证据。
 
 ## 目标与边界
 

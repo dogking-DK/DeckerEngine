@@ -16,10 +16,13 @@ struct SceneState {
     Vector<AssetReference> references;
 };
 }
-Result<RenderScene> RenderScene::extract(memory::ResourceHandle heap, const SceneSnapshot& source) {
+Result<RenderScene> RenderScene::extract(memory::ResourceHandle heap, const SceneSnapshot& source,
+    const std::optional<LocalTransformOverride>& preview) {
     if (!heap || heap.state() != memory::ResourceState::open)
         return std::unexpected(Error{ErrorCode::invalid_state, "render extraction requires open memory"});
     try {
+        if (preview && std::ranges::none_of(source.entities(),[&](const auto& e) { return e.id==preview->entity; }))
+            return std::unexpected(Error{ErrorCode::not_found,"Preview entity missing"});
         auto output = memory::make_shared_in<detail::SceneState>(heap, heap);
         output->id = source.id(); output->revision = source.revision();
         struct Node { const EntityData* source; Transformd world; unsigned state = 0; };
@@ -48,7 +51,7 @@ Result<RenderScene> RenderScene::extract(memory::ResourceHandle heap, const Scen
             }
             while (!chain.empty()) {
                 auto& node = nodes[chain.back()]; chain.pop_back();
-                auto world = Transformd::from_trs(node.source->local);
+                auto world = Transformd::from_trs(preview && node.source->id==preview->entity ? preview->local : node.source->local);
                 if (!world) return std::unexpected(world.error());
                 if (node.source->parent) {
                     auto parent = parent_index(*node.source->parent);

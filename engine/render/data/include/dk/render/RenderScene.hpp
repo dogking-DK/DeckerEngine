@@ -9,11 +9,13 @@ struct RenderEntity {
     Transformd world;
     std::size_t first_asset = 0, asset_count = 0;
 };
+struct LocalTransformOverride { EntityId entity; Trsd local; };
 // Shared immutable extraction; all returned spans borrow this owner.
 class RenderScene final {
 public:
     RenderScene() = default;
-    [[nodiscard]] static Result<RenderScene> extract(memory::ResourceHandle, const SceneSnapshot&);
+    [[nodiscard]] static Result<RenderScene> extract(memory::ResourceHandle, const SceneSnapshot&,
+        const std::optional<LocalTransformOverride>& preview = {});
     [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
     [[nodiscard]] SceneId id() const noexcept;
     [[nodiscard]] std::uint64_t revision() const noexcept;

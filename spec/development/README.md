@@ -67,5 +67,6 @@
 | 0063 | [M7.3 磁盘场景与资产集成](0063-render-disk.md) | render-disk, render-pipeline, assets-importers, render-resources, architecture | completed |
 | 0064 | [M7.4 截图任务与自动化验收](0064-render-capture.md) | render-capture, runtime, application-services, render-disk, architecture | completed |
 | 0065 | [M8.1 编辑器工作台](0065-editor-workbench.md) | editor, platform, graphics-presentation, runtime, architecture | completed |
+| 0066 | [M8.2 编辑器拾取与交互](0066-editor-interaction.md) | editor-interaction, geometry-query, editor, render-data, architecture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

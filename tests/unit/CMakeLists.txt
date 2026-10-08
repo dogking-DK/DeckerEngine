@@ -11,6 +11,13 @@ endif()
 dk_target_defaults(dk_core_tests)
 
 include(Catch)
+if(TARGET dk_geometry)
+    add_executable(dk_geometry_tests GeometryTests.cpp)
+    target_link_libraries(dk_geometry_tests PRIVATE dk::geometry Catch2::Catch2WithMain)
+    dk_target_defaults(dk_geometry_tests)
+    catch_discover_tests(dk_geometry_tests TEST_PREFIX "dk.geometry."
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 30 LABELS "cpu")
+endif()
 if(DK_BUILD_RENDER_DISK)
     add_executable(dk_render_disk_tests RenderDiskTests.cpp)
     target_compile_definitions(dk_render_disk_tests PRIVATE DK_DISK_FIXTURE_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk")

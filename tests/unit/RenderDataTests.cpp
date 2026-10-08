@@ -60,6 +60,18 @@ TEST_CASE("render view owns its scene and validates camera projection and extent
     CHECK_FALSE(RenderView::create(scene,desc));
     scene = {}; source.reset(); f.heap.begin_close(); CHECK(view.scene().id() != SceneId{});
 }
+TEST_CASE("render local preview affects descendants but preserves source revision and prior scene") {
+    Fixture f; auto source=SceneDocument::create().value();
+    const auto parent=source->create_entity().value(),child=source->create_entity().value(); REQUIRE(source->set_parent(child,parent));
+    const auto snapshot=source->snapshot().value(); auto original=RenderScene::extract(f.heap,snapshot).value();
+    Trsd moved; moved.translation={2,3,4};
+    auto preview=RenderScene::extract(f.heap,snapshot,LocalTransformOverride{parent,moved}).value();
+    for (const auto& e:preview.entities()) CHECK(Vec3d{e.world.matrix().block<3,1>(0,3)}==moved.translation);
+    for (const auto& e:original.entities()) CHECK(Vec3d{e.world.matrix().block<3,1>(0,3)}==Vec3d::Zero());
+    CHECK(preview.revision()==snapshot.revision()); CHECK(source->snapshot()->same_content(snapshot));
+    CHECK_FALSE(RenderScene::extract(f.heap,snapshot,LocalTransformOverride{EntityId::generate().value(),moved}));
+    moved.rotation.coeffs().setZero(); CHECK_FALSE(RenderScene::extract(f.heap,snapshot,LocalTransformOverride{child,moved}));
+}
 TEST_CASE("render extraction budget failure unwinds candidate and preserves prior extraction") {
     Fixture f; const auto heap = f.system.create_heap({"budget",memory::DomainCategory::render,16384}).value();
     auto source = std::move(SceneDocument::create().value());
