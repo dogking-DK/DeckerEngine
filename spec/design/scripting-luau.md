@@ -1,7 +1,7 @@
 ---
 module: scripting-luau
 created_at: "2026-10-08T14:52:00+08:00"
-updated_at: "2026-10-08T15:40:14+08:00"
+updated_at: "2026-10-08T17:32:08+08:00"
 status: accepted
 ---
 
@@ -46,8 +46,8 @@ vcpkg 实际导出名为 unofficial::luau::Luau.Compiler / unofficial::luau::Lua
   不提供 userdata 算术；不得先用 number 表达超出精确范围的整数。
   转换深度/节点沿用命令值边界，字符串保留长度（含 NUL），UTF-8/schema 校验仍由 Commands 执行。
 
-M9.1 固定允许 scene.new/load/query/save/transaction、project.save、entity 的七条命令、
-history.status/undo/redo、commands.list/describe、runtime.capabilities、tasks.list/get。
+固定允许 scene.new/load/query/save/transaction、project.save、entity 的七条命令、
+history.status/undo/redo、commands.list/describe、runtime.capabilities、tasks.list/get；M10.1 增加文末所列模拟命令。
 精确名称白名单拒绝 shutdown、资产/作业/渲染和未来新增命令；发现返回宿主注册表，不能视为脚本授权清单。
 无裸 ECS、Vulkan、文件系统、进程或模块加载能力；标准库用 Luau sandbox 冻结，移除 print/require/loadstring。
 脚本仍可通过已有 save/load 命令访问工程路径，其范围和原子性沿用 Services，不新增文件系统沙箱承诺。
@@ -131,3 +131,8 @@ Windows Ctrl+C/Ctrl+Break handler 只请求 stop_source；同步执行返回后�
 命令上限保留已提交状态、能力拒绝、预先/运行中取消、owner 关闭 join、后续脚本恢复，
 以及 runner 参数范围/模式、预算退出、真实 Ctrl+Break 和重新加载。
 实施证据见 [0071](../development/0071-luau-execution-limits.md)。
+## M10.1 模拟命令
+
+白名单增加 simulation.query（所有能力模式）与 simulation.start/pause/resume/step/stop（edit/project）。
+运行态控制不加入场景事务；严格步数实验从 paused=true 启动并显式 step。
+长循环仍不会后台推进模拟，只有宿主 pump/命令安全点调度，详见 [Physics API](physics-api.md)。

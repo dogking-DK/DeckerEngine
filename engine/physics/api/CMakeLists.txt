@@ -1,0 +1,5 @@
+add_library(dk_physics_api STATIC src/FixedStepClock.cpp)
+add_library(dk::physics_api ALIAS dk_physics_api)
+target_sources(dk_physics_api PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/physics/FixedStepClock.hpp)
+target_link_libraries(dk_physics_api PUBLIC dk::core)
+dk_target_defaults(dk_physics_api)

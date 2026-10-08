@@ -248,6 +248,15 @@ if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
     if(TARGET dk_ctl)
         find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
         if(Python3_Interpreter_FOUND)
+            foreach(mode IN ITEMS stdio pipe)
+                add_test(NAME dk.simulation.${mode}
+                    COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python"
+                        "PYTHONDONTWRITEBYTECODE=1" "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/SimulationTest.py"
+                        --runner "$<TARGET_FILE:dk_run>" --client "$<TARGET_FILE:dk_ctl>"
+                        --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/simulation" --mode ${mode})
+                set_tests_properties(dk.simulation.${mode} PROPERTIES TIMEOUT 45 LABELS "cpu")
+            endforeach()
             add_test(NAME dk.python.unit
                 COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python"
                     "PYTHONDONTWRITEBYTECODE=1" "${Python3_EXECUTABLE}" -m unittest discover

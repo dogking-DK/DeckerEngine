@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-08T16:57:18+08:00"
+updated_at: "2026-10-08T17:32:08+08:00"
 status: accepted
 ---
 
@@ -134,3 +134,9 @@ Memory/Tracy 补充 → 资产加载/导入 → Vulkan Device/Shader → GPU Gra
 
 可选 DK_BUILD_RENDER_CAPTURE 通过独立 RenderServices/RenderOperations 接入 Runtime；CPU-only Runtime 保持无 GPU 依赖。
 详见 [截图设计](render-capture.md)。
+
+## M10.1 模拟世界
+
+[Physics API](physics-api.md) 提供仅依赖 Core 的固定纳秒时钟；Framework 的 SimulationService
+拥有独立 PlayWorld。Runtime 将模拟调度接入 owner pump，控制通过同一命令/脚本入口。
+本节尚无动力学求解器、粒子数据或模拟渲染 Pass；编辑与截图继续使用 EditWorld。

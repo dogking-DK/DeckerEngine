@@ -32,7 +32,7 @@ TEST_CASE("asset command discovery schemas and effects describe the implemented 
 {
     Commands c; auto caps = c.value("runtime.capabilities"); CHECK(caps["async_jobs"] == true); CHECK(caps["async_tasks"] == false);
     CHECK(caps["job_limits"]["terminal"] == 256);
-    auto commands = c.value("commands.list"); CHECK(commands.size() == (caps["render_capture"].get<bool>() ? 34 : 33));
+    auto commands = c.value("commands.list"); CHECK(commands.size() == (caps["render_capture"].get<bool>() ? 40 : 39));
     for (const auto name : {"assets.open","assets.catalog","assets.import","assets.register","assets.rename","assets.load","assets.status","assets.unload","jobs.get","jobs.wait","jobs.cancel"}) {
         auto desc = c.value("commands.describe",{{"name",name}}); CHECK(desc["undoable"] == false);
         CHECK(desc["parameters"]["additionalProperties"] == false);

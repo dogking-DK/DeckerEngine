@@ -1,6 +1,7 @@
 #pragma once
 #include <dk/commands/CommandRegistry.hpp>
 #include <dk/services/SceneService.hpp>
+#include <dk/services/SimulationService.hpp>
 #include <dk/runtime/RuntimeEvents.hpp>
 #ifdef DK_RUNTIME_ASSETS
 #include <dk/services/AsyncAssetService.hpp>
@@ -37,7 +38,9 @@ class Runtime final
     [[nodiscard]] std::shared_ptr<RuntimeEvents> events() const { return events_; }
     // Immutable owner-thread copy, checked against the active session and revision.
     [[nodiscard]] Result<SceneReadSnapshot> read_scene(EditGuard guard) const;
+    [[nodiscard]] Result<PlaySceneSnapshot> read_play_scene(SimulationId run_id) const;
     void pump();
+    [[nodiscard]] std::chrono::steady_clock::time_point next_pump_deadline(std::chrono::steady_clock::time_point fallback) const;
     [[nodiscard]] bool stopping() const noexcept
     {
         return stopping_;
@@ -46,12 +49,15 @@ class Runtime final
   private:
     explicit Runtime(std::unique_ptr<SceneService> service) : service_{std::move(service)} {}
     std::unique_ptr<SceneService> service_;
+    SimulationService simulation_;
     std::shared_ptr<RuntimeEvents> events_ = std::make_shared<RuntimeEvents>();
 #ifdef DK_RUNTIME_ASSETS
     std::unique_ptr<AsyncAssetService> assets_;
 #endif
 #ifdef DK_RUNTIME_CAPTURE
     std::unique_ptr<CaptureService> captures_;
+#endif
+#if defined(DK_RUNTIME_CAPTURE) || defined(DK_RUNTIME_ASSETS)
     [[nodiscard]] Result<JobSnapshot> job(JobId) const;
     [[nodiscard]] Result<JobWait> wait_job(JobId,std::chrono::milliseconds);
     [[nodiscard]] Result<JobCancel> cancel_job(JobId);

@@ -1,7 +1,7 @@
 ---
 module: command-reference-runtime
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-10-03T21:44:26+08:00"
+updated_at: "2026-10-08T17:26:08+08:00"
 status: accepted
 ---
 
@@ -23,6 +23,8 @@ max_line_bytes=1048576、max_batch_requests=128、transactions=true、guard="doc
 ```json
 {"jsonrpc":"2.0","id":19,"method":"runtime.capabilities"}
 ```
+
+另返回 `simulation={fixed_step:true,solver:"none"}`：可用独立模拟世界和固定时钟，目前无动力学求解器；见 [模拟命令](simulation.md)。
 
 ## tasks.list
 
@@ -58,7 +60,7 @@ effect=query，undoable=false；返回一条 TaskRecord。未知或已淘汰 ID 
 ## runtime.shutdown
 
 参数 `{}`；effect=control，undoable=false。返回 `{stopping:true}`，刷新当前响应后结束读取并退出。
-不会自动保存场景；需要保留的数据须提前调用 scene.save/project.save。
+同时释放活动 PlayWorld，不会自动保存场景；需要保留的数据须提前调用 scene.save/project.save。
 同一 JSON-RPC batch 中排在 shutdown 后的有效命令会返回 invalid_state；后续输入行不再读取。
 
 ```json

@@ -95,7 +95,7 @@ int run_stdio(Runtime& runtime, std::ostream& output, std::ostream& diagnostics)
         const auto sequence = events->sequence();
         runtime.pump();
         auto next = reader.pop(); if (next.eof) break;
-        if (!next.line) { events->wait(sequence, std::chrono::steady_clock::now() + std::chrono::seconds(60)); continue; }
+        if (!next.line) { events->wait(sequence, runtime.next_pump_deadline(std::chrono::steady_clock::now() + std::chrono::seconds(60))); continue; }
         const auto& line = *next.line;
         if (!line.oversized && line.text.find_first_not_of(" \t\r") == std::string::npos) continue;
         const auto response = line.oversized ? RpcOutcome{rpc_error(nullptr, -32700, "JSON line exceeds 1 MiB"), true}

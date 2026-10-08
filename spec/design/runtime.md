@@ -1,7 +1,7 @@
 ---
 module: runtime
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-10-08T15:34:00+08:00"
+updated_at: "2026-10-08T17:32:08+08:00"
 status: accepted
 ---
 
@@ -115,3 +115,10 @@ Runtime::read_scene(guard) 在 owner 线程转发 SceneService::read_snapshot，
 runner 的 `--script FILE.luau` 与 batch/stdio/pipe 互斥，禁止 auto-guard；一次执行拥有独立 VM。
 每条命令沿用 TaskId、schema、guard、事务和历史；脚本异常不回滚已提交命令。
 LuauOptions 提供有限预算、能力模式和 stop_token；取消线程只请求停止，owner 在安全点返回后才销毁 Runtime。runner 支持 Windows Ctrl+C/Ctrl+Break 取消；原生同步命令不硬抢占，详见 [Luau 设计](scripting-luau.md) 与 [使用指南](../guides/scripting.md)。
+## M10.1 模拟调度
+
+Runtime 拥有独立 SimulationService，公开 read_play_scene(run_id) 返回拥有型只读 Play 快照；
+read_scene 与所有既有编辑/保存/截图仍使用 SceneService。pump 以 steady_clock 推进固定步长，
+next_pump_deadline(fallback) 用于 stdio/pipe/jobs.wait 的有限等待，避免无输入时停止模拟。
+shutdown 释放 Play；运行与编辑的身份、时钟边界和失败保护见 [Physics API](physics-api.md)。
+CPU Runtime 新增的 Physics API/SimulationServices 均不依赖 GPU。

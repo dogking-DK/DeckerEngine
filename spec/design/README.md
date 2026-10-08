@@ -2,6 +2,7 @@
 
 | 模块 | 文档 | 状态 | 范围 | 源码入口 | 测试入口 |
 | --- | --- | --- | --- | --- | --- |
+| physics-api | [模拟世界与固定步长](physics-api.md) | accepted | Edit/Play、整数时钟、运行控制与 owner 调度 | [Physics](../../engine/physics)、[Services](../../engine/framework/services) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | automation-replay | [自动化记录与重放](automation-replay.md) | accepted | 输入/版本/seed、身份映射、逐步逻辑核验与失败保护 | [SDK](../../sdk/python) | [集成](../../tests/integration/CMakeLists.txt) |
 | automation-python | [Python 自动化客户端](automation-python.md) | accepted | dk-ctl 封装、截止时间、批量、作业等待与截图产物 | [SDK](../../sdk/python) | [集成](../../tests/integration/CMakeLists.txt) |
 | scripting-luau | [Luau 场景命令绑定](scripting-luau.md) | accepted | 源码编译、命令绑定、执行预算、取消/关闭与错误恢复 | [luau](../../engine/scripting/luau) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |

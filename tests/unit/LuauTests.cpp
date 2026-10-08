@@ -38,6 +38,23 @@ struct Script {
 };
 }
 
+TEST_CASE("Luau simulation example executes exact ticks and capability modes protect controls") {
+    Script s;
+    std::ifstream input(DK_SIMULATION_EXAMPLE, std::ios::binary); REQUIRE(input);
+    const std::string source{std::istreambuf_iterator<char>{input}, {}};
+    LuauOptions edit; edit.access = LuauAccess::edit;
+    REQUIRE(run_luau(*s.runtime, source, "fixed-step.luau", edit));
+    REQUIRE(s.call("simulation.query")["mode"] == "edit");
+    LuauOptions query; query.access = LuauAccess::query;
+    REQUIRE(run_luau(*s.runtime, R"(
+assert(dk.command("simulation.query").ok)
+for _, method in {"simulation.start", "simulation.pause", "simulation.resume", "simulation.step", "simulation.stop"} do
+    local r = dk.command(method)
+    assert(not r.ok and r.error.name == "not_supported" and r.task_id == dk.null)
+end
+)", "query-simulation.luau", query));
+    REQUIRE(s.call("simulation.query")["mode"] == "edit");
+}
 TEST_CASE("Luau example creates edits saves and reloads the same service state") {
     Script s;
     std::ifstream input(DK_LUAU_EXAMPLE, std::ios::binary);

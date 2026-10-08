@@ -43,6 +43,7 @@ Result<Json> catalog_state(const AsyncAssetService& service) {
 }
 }
 Json catalog_guard_json(CatalogGuard guard) { return {{"session_id",guard.session_id.to_string()},{"revision",guard.revision}}; }
+Json asset_job_result_schema() { return result_schema(); }
 Result<void> register_asset_commands(CommandRegistry& registry, AsyncAssetService& service, bool with_jobs) {
     auto add = [&](std::string name, std::string description, Json params, Json result, CommandEffect effect, CommandHandler handler) {
         return registry.add({std::move(name),std::move(description),std::move(params),std::move(result),effect,false},std::move(handler));

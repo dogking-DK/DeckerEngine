@@ -33,6 +33,8 @@
 | Luau 绑定、值转换、预算、取消/关闭和能力模式 | dk_luau_tests | `^dk\.luau\.`（含 Windows 控制台取消；target 自动构建 runner 夹具，CLI 进程测试另见下行） |
 | Luau runner 创建/保存重载、预算参数和诊断 | dk_run | `^dk\.luau\.runner_roundtrip$` |
 | 服务、事务、历史、Operations | dk_service_tests | `^dk\.services\.` |
+| Edit/Play、固定纳秒时钟、模拟命令与失败保护 | dk_simulation_tests | `^dk\.simulation\.(fixed clock \|simulation )` |
+| 真实 stdio/pipe 空闲模拟、暂停与关闭 | dk_run、dk_ctl | `^dk\.simulation\.(stdio\|pipe)$`（Windows，Python 3.11+） |
 | JSON-RPC、JSON Lines、任务 | dk_protocol_tests | `^dk\.protocol\.` |
 | IPC ticket、断连/超时、分帧、有界队列、owner 分派 | dk_ipc_tests | `^dk\.ipc\.(IPC \|Named pipe \|Disconnected \|Pipe )` |
 | runner 与轻量客户端真实进程、重启与 Unicode 参数 | dk_run、dk_ctl | `^dk\.ipc\.runner_client$` |

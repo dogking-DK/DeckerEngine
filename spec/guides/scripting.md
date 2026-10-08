@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-08T15:06:00+08:00"
-updated_at: "2026-10-08T16:18:00+08:00"
+updated_at: "2026-10-08T17:26:08+08:00"
 ---
 
 # Luau 场景脚本
@@ -59,6 +59,7 @@ error 包含原引擎 `code`、`name`、`message`、`context`；task_id 可用�
 | --- | --- |
 | 场景/工程 | scene.new、scene.load、scene.query、scene.save、scene.transaction、project.save |
 | 实体 | entity.create、entity.get、entity.delete、entity.set_name、entity.set_transform、entity.set_parent、entity.set_assets |
+| 模拟 | simulation.start、simulation.pause、simulation.resume、simulation.step、simulation.stop、simulation.query |
 | 历史 | history.status、history.undo、history.redo |
 | 发现/状态 | commands.list、commands.describe、runtime.capabilities、tasks.list、tasks.get |
 
@@ -109,9 +110,9 @@ runner 可显式调整脚本预算，例如：
 这些选项仅能与 --script 一起使用，不允许重复、0预算或无界值。源码固定最多1 MiB，加载字节码最多16 MiB。
 C++ LuauOptions 可进一步缩小源码额度及将 VM 额度降到256 KiB；其余范围同表。
 
-query 仅允许 commands.list/describe、runtime.capabilities、tasks.list/get、scene.query、entity.get、history.status。
-edit 允许原场景/实体/历史操作，但拒绝 scene.load、scene.save 和 project.save；
-服务可能为资产校验读取文件元数据，因此 edit 并不承诺完全无文件读取。project 沿用完整 M9.1 白名单。
+query 仅允许 commands.list/describe、runtime.capabilities、tasks.list/get、scene.query、entity.get、history.status、simulation.query。
+edit 允许原场景/实体/历史操作及模拟控制，但拒绝 scene.load、scene.save 和 project.save；
+服务可能为资产校验读取文件元数据，因此 edit 并不承诺完全无文件读取。project 使用上述完整白名单。
 任何模式都不能调用 runtime.shutdown 或 assets/jobs/render。脚本无法提升宿主所选权限。
 
 VM 超限、取消、时间或命令预算耗尽会终止这次脚本，pcall/xpcall/协程不能清除终止状态。

@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-10-08T15:08:00+08:00"
+updated_at: "2026-10-08T17:26:08+08:00"
 status: accepted
 ---
 
@@ -9,7 +9,7 @@ status: accepted
 
 本目录供人和 AI 查阅当前可调用命令。适用于当前 Runtime；
 `windows-dev` 构建启用此功能，最小 bootstrap 仅提供 `--help/--version`。
-windows-dev 当前 33 条命令，windows-graphics 增加 render.capture 共34条；以实际 `commands.list` 为准。关闭 Jobs/Importers 且不装配截图时保留原22条。
+windows-dev 当前 39 条命令，windows-graphics 增加 render.capture 共40条；以实际 `commands.list` 为准。关闭 Jobs/Importers 且不装配截图时提供28条。
 完整字段 schema 可通过 `commands.describe` 查询。
 
 独立离线 CLI 另见 [dk-shaderc 编译参数与输出](shaderc.md)；它不属于下列 Runtime 命令集。
@@ -28,6 +28,7 @@ Luau 调用同一套场景/实体/历史服务，入口、值转换与允许命�
 | [运行时与任务](runtime.md) | `runtime.capabilities`、`runtime.shutdown`、`tasks.list`、`tasks.get` | 能力、同步任务和关闭 |
 | [CPU 资产](assets.md) | `assets.open`、`assets.catalog`、`assets.import`、`assets.register`、`assets.rename`、`assets.load`、`assets.status`、`assets.unload` | 目录会话、持久身份和 CPU Ready |
 | [截图](render.md) | `render.capture` | 固定内存场景版本，后台离屏渲染和原子图像输出 |
+| [模拟](simulation.md) | `simulation.start`、`simulation.pause`、`simulation.resume`、`simulation.step`、`simulation.stop`、`simulation.query` | 独立 PlayWorld、固定步长与运行控制 |
 | [后台作业](jobs.md) | `jobs.get`、`jobs.wait`、`jobs.cancel` | JobId 状态、等待和协作取消 |
 
 各参考页的“参数”指请求的 `params`，“返回”指响应的 `result.value`。

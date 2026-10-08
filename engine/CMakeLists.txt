@@ -21,6 +21,9 @@ if(DK_BUILD_RENDER_DATA OR DK_BUILD_RENDER_RESOURCES OR DK_BUILD_RENDER_PIPELINE
 endif()
 # Other module directories are reserved. Add their CMakeLists after module design.
 if(DK_BUILD_FRAMEWORK)
+    if(DK_BUILD_SCENE)
+        add_subdirectory(physics)
+    endif()
     add_subdirectory(framework)
 endif()
 if(DK_BUILD_SCRIPTING_LUAU)

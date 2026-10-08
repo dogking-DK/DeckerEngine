@@ -121,7 +121,8 @@ int run(const std::vector<std::filesystem::path> &args)
             const auto sequence = (*runtime)->events()->sequence();
             (*runtime)->pump();
             (void)(*server)->pump();
-            if (!(*runtime)->stopping()) (*runtime)->events()->wait(sequence, std::chrono::steady_clock::now() + std::chrono::seconds{1});
+            if (!(*runtime)->stopping()) (*runtime)->events()->wait(sequence,
+                (*runtime)->next_pump_deadline(std::chrono::steady_clock::now() + std::chrono::seconds{1}));
         }
         (*server)->close(std::chrono::milliseconds{1500});
         return 0;
