@@ -1,7 +1,7 @@
 ---
 module: runtime
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-10-03T21:44:26+08:00"
+updated_at: "2026-10-08T10:13:00+08:00"
 status: accepted
 ---
 
@@ -96,3 +96,8 @@ TaskId 表示一次同步命令执行，JobId 表示后台作业，两者使用�
 
 Runtime 条件装配 CaptureService 与 RenderOperations；jobs 命令按 JobId 路由到资产/截图队列，idle pump 和 wait 消费两者。CPU-only 配置保留原依赖。
 详见 [截图设计](render-capture.md)。
+
+## M8.1 只读前端快照
+
+Runtime::read_scene(guard) 在 owner 线程转发 SceneService::read_snapshot，返回拥有型 Project/Scene/状态副本。
+该接口校验 session/revision，不暴露可写文档；GUI 编辑仍通过 dispatch，见 [编辑器设计](editor.md)。

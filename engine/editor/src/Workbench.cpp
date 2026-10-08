@@ -1,0 +1,133 @@
+#include <dk/editor/Workbench.hpp>
+#include "WorkbenchUi.hpp"
+#include "GuiRenderer.hpp"
+#include "SmokeDriver.hpp"
+#include "EditorSupport.hpp"
+#include <dk/memory/MemorySystem.hpp>
+#include <dk/memory/Context.hpp>
+#include <dk/graphics/Transfer.hpp>
+#include <dk/io/File.hpp>
+#include <imgui_impl_sdl3.h>
+#include <SDL3/SDL.h>
+#include <atomic>
+#include <chrono>
+#include <cstdio>
+
+namespace dk::editor {
+namespace {
+using namespace detail;
+struct Diagnostics { std::atomic<unsigned> errors=0,warnings=0; };
+void diagnostic(void* user,const graphics::Diagnostic& message) noexcept {
+    auto& d=*static_cast<Diagnostics*>(user);
+    if (message.severity==VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) ++d.errors;
+    if (message.severity==VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) ++d.warnings;
+    if (message.severity>=VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+        std::fprintf(stderr,"%.*s: %.*s\n",static_cast<int>(message.name.size()),message.name.data(),static_cast<int>(message.message.size()),message.message.data());
+}
+void event_sink(const SDL_Event& event,void*) { ImGui_ImplSDL3_ProcessEvent(&event); }
+void write_capture(const std::filesystem::path& output,const graphics::ReadbackRequest& readback) {
+    const auto desc=readback.description();
+    const bool bgra=desc.format==vk::Format::eB8G8R8A8Srgb || desc.format==vk::Format::eB8G8R8A8Unorm;
+    if (!bgra && desc.format!=vk::Format::eR8G8B8A8Srgb && desc.format!=vk::Format::eR8G8B8A8Unorm)
+        throw std::runtime_error("Unsupported workbench capture format");
+    std::vector<std::byte> pixels(static_cast<std::size_t>(desc.bytes));
+    if (!take(readback.try_read(pixels))) throw std::runtime_error("Workbench readback is not complete");
+    const std::string header="P6\n"+std::to_string(desc.width)+" "+std::to_string(desc.height)+"\n255\n";
+    const auto bytes=std::as_bytes(std::span{header.data(),header.size()});
+    ByteBuffer ppm{bytes.begin(),bytes.end()};
+    for (std::uint32_t y=0;y<desc.height;++y) for (std::uint32_t x=0;x<desc.width;++x) {
+        const auto offset=static_cast<std::size_t>(y*desc.row_pitch)+x*4;
+        ppm.push_back(pixels[offset+(bgra ? 2 : 0)]); ppm.push_back(pixels[offset+1]); ppm.push_back(pixels[offset+(bgra ? 0 : 2)]);
+    }
+    check(write_file_bytes_atomic(output,ppm));
+}
+int session(const WorkbenchOptions& options,memory::ResourceHandle heap,Diagnostics& diagnostics) {
+    if (options.smoke && !std::filesystem::is_regular_file(options.root/".dk-editor-smoke"))
+        throw std::runtime_error("--smoke requires a disposable project with .dk-editor-smoke marker");
+    auto model=take(Workspace::create(options.root));
+    check(model->open(options.manifest));
+    auto window=take(platform::Window::create(heap,{"DeckerEngine | Scene Workbench",1440,900}));
+    graphics::DeviceOptions device;
+    device.validation=options.validation ? graphics::ValidationMode::required : graphics::ValidationMode::if_available;
+    device.diagnostic_sink=diagnostic; device.diagnostic_user_data=&diagnostics;
+    auto created=graphics::Presenter::create(heap,window,device);
+    if (!created) {
+        std::fprintf(stderr,"%s\n",created.error().message.c_str());
+        return created.error().code==ErrorCode::not_found || created.error().code==ErrorCode::not_supported ? 77 : 1;
+    }
+    auto presenter=std::move(*created); auto& queue=presenter.queue();
+    if (options.frames || options.smoke) std::printf("GPU=%s driver=%s\n",queue.device().adapter().properties.deviceName.data(),
+        queue.device().adapter().driver.driverInfo.data());
+    GuiRenderer gui{queue,window};
+    Viewport viewport{heap,queue};
+    WorkbenchUi ui{*model};
+    SmokeDriver smoke;
+    unsigned frames=0;
+    const auto start=std::chrono::steady_clock::now();
+    try {
+        for (;;) {
+            const auto status=take(window.poll_events(event_sink));
+            if (status.close_requested) { check(window.clear_close_request()); ui.request_close(); }
+            model->pump();
+            if (ui.closing()) break;
+            if ((options.smoke || options.frames) && std::chrono::steady_clock::now()-start>std::chrono::seconds(90))
+                throw std::runtime_error("Workbench acceptance run timed out");
+            if (status.minimized || !status.pixel_width || !status.pixel_height) { SDL_Delay(16); continue; }
+            auto acquired=take(presenter.acquire());
+            if (acquired.status!=graphics::AcquireStatus::ready) { SDL_Delay(8); continue; }
+            auto& frame=acquired.frame;
+            if (!gui.compatible(frame)) {
+                viewport.release_texture(); gui.shutdown_gpu(); gui.initialize(frame);
+            }
+            gui.new_frame([&] { if (options.smoke) smoke.input(*model,ui,window,viewport); });
+            const auto format=frame.format();
+            const bool srgb=format==vk::Format::eB8G8R8A8Srgb || format==vk::Format::eR8G8B8A8Srgb;
+            ui.draw(viewport,srgb,options.fixture_camera);
+            ImGui::Render();
+            gui.record(frame,viewport.texture() ? &viewport.image() : nullptr,viewport.texture() ? &viewport.image_view() : nullptr);
+            ++frames;
+            const bool finish=(options.smoke && smoke.done()) || (options.frames && frames>=options.frames);
+            std::optional<graphics::ReadbackRequest> capture;
+            if (finish && !options.screenshot.empty()) {
+                const auto extent=frame.extent();
+                capture=take(frame.commands().readback(frame.color(),{0,0,0,0,extent.width,extent.height}));
+            }
+            const auto presented=take(presenter.present(std::move(frame)));
+            if (!take(queue.wait(presented.completion))) throw std::runtime_error("GUI submission timed out");
+            if (capture) write_capture(options.screenshot,*capture);
+            if (finish) {
+                if (options.smoke && !smoke.done()) throw std::runtime_error("Frame limit interrupted smoke");
+                if (!viewport.texture() || !viewport.error().empty() || !viewport.current(model->snapshot()->state))
+                    throw std::runtime_error("Viewport did not publish the current scene");
+                std::printf("workbench frames=%u revision=%llu draws=%zu viewport=%ux%u smoke=%s\n",frames,
+                    static_cast<unsigned long long>(viewport.info().revision),viewport.info().draw_count,
+                    viewport.info().width,viewport.info().height,options.smoke ? "passed" : "off");
+                break;
+            }
+        }
+        check(presenter.close());
+    } catch (...) {
+        // Drain before descriptor/backend destruction, including a failed frame.
+        const auto closed=presenter.close();
+        if (!closed) std::fprintf(stderr,"presenter close: %s\n",closed.error().message.c_str());
+        throw;
+    }
+    return 0;
+}
+}
+int run_workbench(const WorkbenchOptions& options) {
+    auto system=detail::take(memory::MemorySystem::create());
+    auto heap=detail::take(system.create_heap({"editor",memory::DomainCategory::render}));
+    Diagnostics diagnostics;
+    int result=1;
+    {
+        memory::ThreadContext context{system,heap}; memory::ExecutionScope scope{context,heap};
+        result=session(options,heap,diagnostics);
+    }
+    const auto live=heap.snapshot().live_allocations;
+    const bool closed=system.try_close().closed();
+    std::printf("validation errors=%u warnings=%u liveAllocations=%zu\n",diagnostics.errors.load(),diagnostics.warnings.load(),live);
+    if (result==0 && (diagnostics.errors || diagnostics.warnings || live || !closed)) return 1;
+    return result;
+}
+} // namespace dk::editor

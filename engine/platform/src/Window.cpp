@@ -87,11 +87,19 @@ Result<WindowStatus> Window::status() const
     return WindowStatus{minimized ? 0u : static_cast<std::uint32_t>(std::max(0, width)),
         minimized ? 0u : static_cast<std::uint32_t>(std::max(0, height)), minimized, state_->close_requested};
 }
-Result<WindowStatus> Window::poll_events() const
+Result<SDL_Window*> Window::native_sdl_window() const { return detail::WindowAccess::native(*this); }
+Result<void> Window::clear_close_request() const
+{
+    if (auto native = detail::WindowAccess::native(*this); !native) return std::unexpected(native.error());
+    state_->close_requested = false;
+    return {};
+}
+Result<WindowStatus> Window::poll_events(EventSink sink, void* user) const
 {
     if (auto native = detail::WindowAccess::native(*this); !native) return std::unexpected(native.error());
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+        if (sink) sink(event, user);
         if (event.type == SDL_EVENT_QUIT) {
             for (auto* window : state_->video->windows)
                 static_cast<detail::WindowState*>(SDL_GetPointerProperty(SDL_GetWindowProperties(window), window_key, nullptr))->close_requested = true;

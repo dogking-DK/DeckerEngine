@@ -35,6 +35,8 @@ class Runtime final
                                                     bool auto_guard = false);
     [[nodiscard]] bool has_command(std::string_view method) const;
     [[nodiscard]] std::shared_ptr<RuntimeEvents> events() const { return events_; }
+    // Immutable owner-thread copy, checked against the active session and revision.
+    [[nodiscard]] Result<SceneReadSnapshot> read_scene(EditGuard guard) const;
     void pump();
     [[nodiscard]] bool stopping() const noexcept
     {

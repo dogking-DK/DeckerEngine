@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-10-03T14:48:07+08:00"
+updated_at: "2026-10-08T10:13:00+08:00"
 status: accepted
 ---
 
@@ -161,13 +161,23 @@ M6.4 的 Offscreen 另以 PRIVATE 链接 dk::graphics_graph，由图编排上传
 SDL3 / `sdl3` 3.4.16#1 已由 dk::platform PRIVATE 链接；独立 platform feature 选择 vulkan，
 不包含 ImGui。2026-10-02 核验[官方 port](https://raw.githubusercontent.com/microsoft/vcpkg/master/ports/sdl3/vcpkg.json)
 与固定基线一致，因此保留 builtin-baseline。Windows x64 窗口和 surface-aware device 验收见
-[0054](development/0054-window-device.md)。公开窗口头不暴露 SDL/Vulkan；CPU runner 与离屏设备不依赖 SDL。
+[0054](development/0054-window-device.md)。窗口头仅前向声明 SDL 借用类型；CPU runner 与离屏设备不依赖 SDL。
+
+## M8.1 编辑器依赖
+
+Dear ImGui / `imgui` 1.92.9 已接入 dk_editor，feature 为 docking-experimental、sdl3-binding、
+vulkan-binding。2026-10-08 核验 [官方 port](https://raw.githubusercontent.com/microsoft/vcpkg/master/ports/imgui/vcpkg.json)
+仍为 1.92.9、无 port 修订；实际源码 tag 是 v1.92.9b-docking，与固定 baseline 一致。
+复用 SDL3 3.4.16#1，不在本次升级已集成窗口依赖；官方 SDL3 已为 3.4.18。
+[同版本 overlay](../cmake/vcpkg-ports/README.md) 仅为 ImGui Vulkan backend 启用 VK_NO_PROTOTYPES，
+由 Device resolver 填充 backend 私有函数表；避免直接链接的函数符号与 volk 全局变量冲突。
+三方 UI 内部容器使用默认分配器，引擎 GPU 资源和渲染数据继续遵循 Memory/VMA 所有权。
+实际编译/窗口/退出证据见 [0065](development/0065-editor-workbench.md)。
 
 ## 清单预留，模块尚未实现
 
 | 库 / vcpkg port | 当前版本 | feature | 计划用途 |
 | --- | --- | --- | --- |
-| Dear ImGui / `imgui` | 1.92.9 | editor | 编辑器 UI，选择 docking-experimental、sdl3-binding、vulkan-binding |
 | Lua / `lua` | 5.5.1 | scripting | 内嵌场景脚本语言 |
 | sol2 / `sol2` | 3.5.0#1 | scripting | C++ 与 Lua 绑定 |
 

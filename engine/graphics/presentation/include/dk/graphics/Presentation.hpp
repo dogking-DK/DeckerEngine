@@ -24,6 +24,7 @@ public:
     [[nodiscard]] const ImageView& color_view() const;
     [[nodiscard]] vk::Extent2D extent() const;
     [[nodiscard]] vk::Format format() const;
+    [[nodiscard]] std::uint32_t image_count() const;
 private:
     friend class Presenter;
     explicit Frame(memory::UniquePtr<detail::FrameState> state);

@@ -239,3 +239,15 @@ if(DK_BUILD_LOGGING)
             -P "${CMAKE_CURRENT_SOURCE_DIR}/LogOutputTest.cmake"
     )
 endif()
+
+if(TARGET dk_editor_model)
+    add_executable(dk_editor_tests EditorTests.cpp)
+    target_link_libraries(dk_editor_tests PRIVATE dk::editor_model Catch2::Catch2WithMain)
+    target_compile_definitions(dk_editor_tests PRIVATE DK_EDITOR_FIXTURE_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk")
+    dk_target_defaults(dk_editor_tests)
+    if(TARGET dk_render_services)
+        dk_deploy_slang(dk_editor_tests)
+    endif()
+    catch_discover_tests(dk_editor_tests TEST_PREFIX "dk.editor."
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 60)
+endif()

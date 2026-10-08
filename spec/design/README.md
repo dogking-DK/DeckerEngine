@@ -3,6 +3,7 @@
 | 模块 | 文档 | 状态 | 范围 | 源码入口 | 测试入口 |
 | --- | --- | --- | --- | --- | --- |
 | architecture | [整体架构](architecture.md) | accepted | 长期模块边界和依赖方向 | [模块目录](../../engine) | [流程/检查](../README.md) |
+| editor | [编辑器工作台](editor.md) | accepted | M8.1 面板、命令编辑和窗口预览 | [editor](../../engine/editor) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | render-disk | [磁盘场景与资产集成](render-disk.md) | accepted | M2 场景、M4 导入/产物与 GPU 资源加载 | [disk](../../engine/render/disk) | [集成](../../tests/integration/CMakeLists.txt) |
 | render-pipeline | [最小场景渲染管线](render-pipeline.md) | accepted | depth/opaque/tone Graph 管线与帧结果 | [pipeline](../../engine/render/pipeline) | [集成](../../tests/integration/CMakeLists.txt) |
 | render-data | [场景与视图提取](render-data.md) | accepted | 不可变场景、世界变换和视图 | [data](../../engine/render/data) | [单元](../../tests/unit/CMakeLists.txt) |

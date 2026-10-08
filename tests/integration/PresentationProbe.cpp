@@ -31,7 +31,10 @@ Frame next_frame(Presenter& presenter, const platform::Window& window) {
     for (int i = 0; i < 100; ++i) {
         take(window.poll_events());
         auto acquired = take(presenter.acquire());
-        if (acquired.status == AcquireStatus::ready) return std::move(acquired.frame);
+        if (acquired.status == AcquireStatus::ready) {
+            require(acquired.frame.image_count()>0, "frame lost swapchain image count");
+            return std::move(acquired.frame);
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     throw std::runtime_error("acquire did not produce a frame");

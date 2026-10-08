@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-03T21:44:26+08:00"
+updated_at: "2026-10-08T10:13:00+08:00"
 status: accepted
 ---
 
@@ -33,7 +33,7 @@ render/data 已提供不可变 SceneSnapshot 提取和显式相机 View，render
 [GPU 资源](render-resources.md)。两者均为独立可选模块，不进入 CPU-only Runtime。
 render/pipeline 通过 Graph 执行 depth/opaque/tone/readback，提供绑定场景版本的异步离屏帧，
 见 [最小渲染管线](render-pipeline.md)。render/disk 只读连接 M2 工程/场景、M4 导入或 CPU 产物，
-准备独立 GPU 缓存，见 [磁盘渲染](render-disk.md)。编辑器、截图任务和脚本按后续阶段接入。
+准备独立 GPU 缓存，见 [磁盘渲染](render-disk.md)。截图任务已条件接入 Runtime；M8.1 编辑器通过只读快照与同一命令链路接入，脚本仍待后续阶段。
 
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，
@@ -54,9 +54,9 @@ render/pipeline 通过 Graph 执行 depth/opaque/tone/readback，提供绑定场
 | engine/framework | commands、services、operations、runtime | 应用服务与模块装配；通用命令层保持独立 |
 | engine/automation | 协议、传输、客户端、服务端 | 客户端不链接完整 Runtime/Renderer |
 | engine/scripting | 脚本 API 和 Lua 绑定 | 经命令/服务操作引擎 |
-| engine/editor | 模型、交互、控件、面板 | 经命令/服务修改状态 |
+| engine/editor | CPU 工作台模型与 ImGui 面板、窗口渲染桥 | model 只依赖 Runtime；UI 私有依赖 SDL3/ImGui/Presentation/Render；经命令修改状态 |
 
-`apps/runner` 已提供 `dk-run`；`apps/editor`、`apps/ctl` 分别预留 `dk-editor`、`dk-ctl`。
+`apps/runner` 提供 `dk-run`；`apps/editor` 提供可选 `dk-editor`；`apps/ctl` 预留 `dk-ctl`。
 `tools/assetc` 和 `tools/shaderc` 为离线工具；
 `sdk/python` 为外部客户端，`shaders/common` 为公共 Slang 模块。
 `projects/demo` 预留示例资产、场景和脚本。

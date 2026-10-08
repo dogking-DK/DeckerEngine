@@ -1,6 +1,7 @@
 include_guard(GLOBAL)
 
 option(DK_BUILD_RUNNER "Build the dk-run bootstrap executable" ON)
+option(DK_BUILD_EDITOR "Build the SDL3/ImGui editor workbench" OFF)
 option(DK_BUILD_TESTS "Enable available DeckerEngine tests" ON)
 option(DK_BUILD_UNIT_TESTS "Build Catch2 unit tests when DK_BUILD_TESTS is enabled" ON)
 option(DK_BUILD_LOGGING "Build the fmt/spdlog logging adapter" ON)

@@ -1,6 +1,5 @@
 #include <dk/platform/Window.hpp>
 #include <dk/memory/MemorySystem.hpp>
-#include "WindowInternal.hpp"
 #include <SDL3/SDL.h>
 #include <cstdio>
 #include <stdexcept>
@@ -33,6 +32,7 @@ int main()
     auto resource = *heap;
     try {
         require(!Window{}.status(), "empty window accepted");
+        require(!Window{}.native_sdl_window() && !Window{}.clear_close_request(), "empty window interop accepted");
         require(!Window::create(resource, {"invalid", 0, 100}), "zero width accepted");
         for (int round = 0; round < 3; ++round) {
             auto created = Window::create(resource, {"DeckerEngine platform probe", 320, 240, true, false, false});
@@ -41,7 +41,7 @@ int main()
             auto second = take(Window::create(resource, {"Second", 200, 160, true, false, true}));
             until(window, [](auto state) { return state.pixel_width && state.pixel_height; });
             bool rejected = false;
-            std::thread worker([&] { rejected = !window.status(); }); worker.join();
+            std::thread worker([&] { rejected = !window.status() && !window.native_sdl_window() && !window.clear_close_request(); }); worker.join();
             require(rejected, "worker window access accepted");
             require(!window.resize(0, 100), "invalid resize accepted");
             check(window.resize(420, 280));
@@ -51,9 +51,18 @@ int main()
             check(window.restore());
             until(window, [](auto state) { return !state.minimized && state.pixel_width && state.pixel_height; });
             SDL_Event close{}; close.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;
-            close.window.windowID = SDL_GetWindowID(take(detail::WindowAccess::native(second)));
+            close.window.windowID = SDL_GetWindowID(take(second.native_sdl_window()));
             require(SDL_PushEvent(&close), "push close event failed");
             require(!take(window.poll_events()).close_requested && take(second.status()).close_requested, "close event routing failed");
+            unsigned forwarded=0;
+            SDL_Event input{}; input.type=SDL_EVENT_USER;
+            require(SDL_PushEvent(&input), "push user event failed");
+            take(window.poll_events([](const SDL_Event& event,void* user) {
+                if (event.type==SDL_EVENT_USER) ++*static_cast<unsigned*>(user);
+            },&forwarded));
+            require(forwarded==1, "native event sink lost or duplicated input");
+            check(second.clear_close_request());
+            require(!take(second.status()).close_requested, "close veto was not applied");
             SDL_Event quit{}; quit.type = SDL_EVENT_QUIT;
             require(SDL_PushEvent(&quit), "push quit event failed");
             require(take(window.poll_events()).close_requested, "quit event not routed");

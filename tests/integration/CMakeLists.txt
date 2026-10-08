@@ -288,3 +288,13 @@ if(TARGET dk_render_services AND TARGET dk_run AND WIN32)
             -WorkDir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
     set_tests_properties(dk.runtime.capture_gpu_validation PROPERTIES TIMEOUT 180 SKIP_RETURN_CODE 77 LABELS "gpu")
 endif()
+
+if(TARGET dk_editor_app AND WIN32)
+    find_program(DK_POWERSHELL NAMES pwsh powershell REQUIRED)
+    add_test(NAME dk.editor.workbench_gpu_validation
+        COMMAND "${DK_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass
+            -File "${CMAKE_CURRENT_SOURCE_DIR}/EditorSmokeTest.ps1"
+            -Editor "$<TARGET_FILE:dk_editor_app>" -Fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+            -WorkDir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+    set_tests_properties(dk.editor.workbench_gpu_validation PROPERTIES TIMEOUT 150 SKIP_RETURN_CODE 77 LABELS "gpu")
+endif()

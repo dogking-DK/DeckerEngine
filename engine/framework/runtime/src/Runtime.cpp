@@ -12,6 +12,10 @@
 
 namespace dk
 {
+Result<SceneReadSnapshot> Runtime::read_scene(EditGuard guard) const
+{
+    return service_->read_snapshot(guard);
+}
 namespace
 {
 Json task_schema()

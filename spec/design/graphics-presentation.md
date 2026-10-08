@@ -1,7 +1,7 @@
 ---
 module: graphics-presentation
 created_at: "2026-10-02T21:40:00+08:00"
-updated_at: "2026-10-02T22:38:00+08:00"
+updated_at: "2026-10-08T10:13:00+08:00"
 status: accepted
 ---
 
@@ -80,3 +80,8 @@ CPU 策略覆盖格式/extent/image count、present family/特性拒绝与状态
 
 相关：[Platform](platform.md)、[Device](graphics-device.md)、[资源](graphics-resources.md)、
 [使用层](graphics-vulkan.md)、[Roadmap](../roadmap.md)。
+
+## M8.1 UI backend 元数据
+
+有效 Frame::image_count() 返回该交换链代的实际图像数，供 ImGui backend 配置。
+与 extent/format 一样仅在未消费的 Frame 有效，空/消费后抛 logic_error，不暴露原生交换链。

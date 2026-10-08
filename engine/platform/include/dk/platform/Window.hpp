@@ -4,6 +4,8 @@
 #include <memory>
 #include <string>
 
+struct SDL_Window;
+union SDL_Event;
 namespace dk::platform {
 namespace detail { struct WindowState; struct WindowAccess; }
 struct WindowDesc {
@@ -22,7 +24,12 @@ public:
     [[nodiscard]] static Result<Window> create(memory::ResourceHandle resource, const WindowDesc& description = {});
     [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
     // Pumps events for all dk windows; returns this window's actual pixel size.
-    [[nodiscard]] Result<WindowStatus> poll_events() const;
+    using EventSink = void (*)(const SDL_Event&, void*);
+    // Synchronous borrowed events; sink must not throw or recursively pump events.
+    [[nodiscard]] Result<WindowStatus> poll_events(EventSink sink = nullptr, void* user = nullptr) const;
+    // Explicit SDL interop. Borrowed, main-thread only; never destroy this handle.
+    [[nodiscard]] Result<SDL_Window*> native_sdl_window() const;
+    [[nodiscard]] Result<void> clear_close_request() const;
     [[nodiscard]] Result<WindowStatus> status() const;
     [[nodiscard]] Result<void> resize(std::uint32_t width, std::uint32_t height) const;
     [[nodiscard]] Result<void> minimize() const;

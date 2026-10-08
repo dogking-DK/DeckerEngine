@@ -1,7 +1,7 @@
 ---
 module: platform
 created_at: "2026-10-02T21:40:00+08:00"
-updated_at: "2026-10-02T22:46:00+08:00"
+updated_at: "2026-10-08T10:13:00+08:00"
 status: accepted
 ---
 
@@ -24,7 +24,10 @@ WindowDesc 用 UTF-8 标题、逻辑尺寸、可调整尺寸/Vulkan/隐藏开关
 
 SDL video 子系统按共享 lease 成对 InitSubSystem/QuitSubSystem；最后一个窗口及设备引用释放后退出。
 所有窗口调用、最终销毁及呈现对象销毁都在创建它们的主线程执行，外部串行。
-内部 WindowAccess 提供 SDL 句柄和寿命 token 给 Presentation，不在公开头暴露 SDL/Vulkan 类型。
+内部 WindowAccess 提供寿命 token 给 Presentation。M8.1 增加 native_sdl_window 显式借用句柄；
+公开头只前向声明 SDL_Window/SDL_Event，不需要包含 SDL 或 Vulkan。
+poll_events 可接受同步 EventSink，在处理事件时转发借用事件，不允许回调抛异常或重入事件泵。
+clear_close_request 用于编辑器取消关闭；三者沿用空对象/主线程校验，不转移 SDL 所有权。
 控制块使用调用者 Memory；SDL 内部临时/系统分配沿用 SDL 默认分配器。
 
 ## 状态与失败

@@ -113,6 +113,14 @@
       }
     },
     {
+      "name": "windows-editor",
+      "inherits": "windows-presentation",
+      "displayName": "Windows editor workbench",
+      "cacheVariables": {
+        "DK_BUILD_EDITOR": "ON"
+      }
+    },
+    {
       "name": "windows-desktop-deps",
       "inherits": "windows-dev",
       "displayName": "Prepare all planned desktop dependencies",

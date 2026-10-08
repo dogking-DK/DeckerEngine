@@ -16,3 +16,12 @@ normal source/document whitespace checks are unchanged.
 ## mimalloc 3.5.3
 
 The official vcpkg 3.5.3 port, source SHA512 and existing patch are preserved. Only MI_WIN_REDIRECT=OFF is added: upstream enables the redirect DLL even when the override feature is off. DeckerEngine uses explicit per-domain heaps and must not inject CRT allocation hooks or emit redirect startup diagnostics. Memory builds enable this overlay; dependency version and builtin-baseline are unchanged. Check and remove this workaround when the official port makes the same guarantee. The copied port files share the adjacent vcpkg license.
+
+## ImGui 1.92.9 (v1.92.9b-docking)
+
+The official fixed-baseline port, source tag and SHA512 are preserved. The only change adds
+PRIVATE VK_NO_PROTOTYPES when IMGUI_BUILD_VULKAN_BINDING is enabled. DeckerEngine fills the
+backend's private dispatch table through ImGui_ImplVulkan_LoadFunctions and its Device resolver.
+This avoids collisions between Vulkan function symbols and Volk's same-named global variables.
+No source vendoring or floating download was introduced. Compare this one-line build adjustment
+when upgrading the official port. Copied port files share the adjacent vcpkg license.

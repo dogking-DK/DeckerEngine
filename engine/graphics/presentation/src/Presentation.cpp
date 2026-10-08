@@ -195,6 +195,7 @@ const Image& Frame::color() const { if (!*this) throw std::logic_error("frame is
 const ImageView& Frame::color_view() const { if (!*this) throw std::logic_error("frame is empty or consumed"); return state_->view; }
 vk::Extent2D Frame::extent() const { if (!*this) throw std::logic_error("frame is empty or consumed"); return state_->generation->choice.extent; }
 vk::Format Frame::format() const { if (!*this) throw std::logic_error("frame is empty or consumed"); return state_->generation->choice.format.format; }
+std::uint32_t Frame::image_count() const { if (!*this) throw std::logic_error("frame is empty or consumed"); return static_cast<std::uint32_t>(state_->generation->images.size()); }
 
 Result<Presenter> Presenter::create(memory::ResourceHandle resource, platform::Window window,
     const DeviceOptions& options, const PresentationOptions& presentation)

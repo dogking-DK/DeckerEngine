@@ -1,0 +1,6 @@
+add_executable(dk_editor_app src/main.cpp)
+set_target_properties(dk_editor_app PROPERTIES OUTPUT_NAME dk-editor)
+target_link_libraries(dk_editor_app PRIVATE dk::editor)
+target_compile_definitions(dk_editor_app PRIVATE DK_EDITOR_DEFAULT_ROOT="${PROJECT_SOURCE_DIR}/projects/demo")
+dk_target_defaults(dk_editor_app)
+dk_deploy_slang(dk_editor_app)
