@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-08T13:04:33+08:00"
+updated_at: "2026-10-08T14:42:00+08:00"
 ---
 
 # 构建与依赖配置
@@ -97,7 +97,7 @@ JSON 由 Scene 私有使用，原规划的 GLM 已从清单移除。
 | graphics | vulkan、volk、vk-bootstrap、vulkan-memory-allocator、shader-slang |
 | platform | sdl3[vulkan]（DK_BUILD_PLATFORM 自动选择；不含 ImGui） |
 | editor | sdl3[vulkan]、imgui[docking-experimental,sdl3-binding,vulkan-binding]（DK_BUILD_EDITOR 自动选择） |
-| scripting | lua、sol2 |
+| scripting | luau 0.741（依赖预留，尚未接入引擎） |
 | tests | catch2（已接入 Core、数学和 IO 单元测试） |
 | profiling | tracy[on-demand]（关闭默认 features；启用 DK_ENABLE_PROFILING 时自动选择） |
 
@@ -107,6 +107,9 @@ JSON 由 Scene 私有使用，原规划的 GLM 已从清单移除。
 [0023](../development/0023-tracy-cpu-profiling.md)，此前升级见
 [0021](../development/0021-vcpkg-baseline-update.md)。已是该索引最新版本的包保持不变；
 历史阶段记录中的旧版本是当时的验证结果。
+
+Luau 单独从 [vcpkg-configuration.json](../../vcpkg-configuration.json) 的固定官方 registry 解析，
+其余依赖保留上述 builtin-baseline；不默认安装 Luau CLI，也不会因选择 scripting feature 而提供脚本运行功能。
 2026-09-24 接入 magic-enum 时重新核验官方最新版本为 0.9.8，与固定基线一致；
 转换范围与兼容验证见 [0028](../development/0028-magic-enum.md)。
 在 vcpkg 仓库目录确认没有本地修改后执行 `git pull --ff-only`，并运行

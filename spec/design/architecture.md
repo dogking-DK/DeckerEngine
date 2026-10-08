@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-08T13:04:33+08:00"
+updated_at: "2026-10-08T14:42:00+08:00"
 status: accepted
 ---
 
@@ -15,7 +15,11 @@ status: accepted
 构建选项和宏以 `DK_` 开头，程序以 `dk-` 开头。
 
 技术方向：C++23、Eigen、Vulkan、Slang、SDL3、ImGui、CMake、vcpkg；
-ECS 使用 flecs，内嵌脚本计划用 Lua/sol2，外部自动化计划用 Python。
+ECS 使用 flecs，内嵌脚本计划用 Luau，外部自动化计划用 Python。
+Luau 通过官方 Compiler/VM 接口接入，不使用 Lua/sol2；脚本源码采用 `.luau`。
+引擎只加载由自身编译的源码产物，不接受外部字节码；后续绑定继续通过 Commands/Services，
+不暴露裸 ECS/Vulkan 指针。类型检查、VM 隔离和运行预算须在脚本阶段明确实现与验收，
+不能由依赖选型推定已具备。此次只替换预留方案，M9 尚未实现。
 当前 CPU 链路由 Foundation/Memory/Jobs、Scene、Commands/Services/Runtime 和 Assets 组成。
 graphics/device 提供独立可选的无窗口 Vulkan 设备、VMA 资源、提交/读回与延迟释放，不进入 CPU-only Runtime 的链接依赖；
 graphics/shaders 提供独立 CPU Slang 编译、SPIR-V 和最小反射，同样不进入 CPU-only Runtime 的链接依赖。
@@ -53,7 +57,7 @@ render/pipeline 通过 Graph 执行 depth/opaque/tone/readback，提供绑定场
 | engine/physics | 接口、CPU/GPU 求解器 | CPU 不依赖 Vulkan；GPU 可用 Device/Graph |
 | engine/framework | commands、services、operations、runtime | 应用服务与模块装配；通用命令层保持独立 |
 | engine/automation | 协议、传输、客户端、服务端 | 客户端不链接完整 Runtime/Renderer |
-| engine/scripting | 脚本 API 和 Lua 绑定 | 经命令/服务操作引擎 |
+| engine/scripting | 脚本 API 和 Luau 绑定（预留） | 经命令/服务操作引擎；Luau 三方接口留在实现内部 |
 | engine/editor | CPU 工作台/相机/手势模型与 ImGui 面板、拾取/Gizmo、窗口渲染桥 | model 依赖 Runtime/Geometry；UI 私有依赖 SDL3/ImGui/Presentation/Render；经命令修改状态 |
 
 `apps/runner` 提供 `dk-run`；`apps/editor` 提供可选 `dk-editor`；`apps/ctl` 提供 Windows `dk-ctl`。
@@ -81,10 +85,10 @@ automation/server 装配 Runtime 适配、stdio 和 IPC owner 队列，runner/ed
 6. Scene 区分持久 EntityId 和运行时句柄；编辑态与运行态分开。
    场景文档由引擎定义 JSON 版本协议，保存采用临时文件验证后原子替换；
    模拟检查点与场景保存分离。
-7. GUI、CLI、Lua 使用同一操作语义。自动化计划采用 JSON-RPC 2.0，
+7. GUI、CLI、Luau 使用同一操作语义。自动化计划采用 JSON-RPC 2.0，
    Windows Named Pipe / Unix socket / stdio；stdout 留给结构化结果，
    日志到 stderr。长任务需可查询、等待和取消，结果关联 revision/step/frame。
-8. Lua 做场景脚本，Slang 做 GPU 程序；两者用途独立。
+8. Luau 做场景脚本，Slang 做 GPU 程序；两者用途独立。
    撤销/重做由命令层支持，并明确可回滚操作的范围。
 9. CPU MemorySystem 按 Runtime/tool 实例拥有，mimalloc v3 heap 按域管理；持久资源可跨线程，
    scratch/local pool 归属线程。资源存活晚于所有容器和控制块；GPU 内存继续由 VMA 管理。

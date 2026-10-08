@@ -95,10 +95,9 @@
       ]
     },
     "scripting": {
-      "description": "Embedded Lua scripting",
+      "description": "Embedded Luau scripting (planned)",
       "dependencies": [
-        "lua",
-        "sol2"
+        "luau"
       ]
     },
     "tests": {

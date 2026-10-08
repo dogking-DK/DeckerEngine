@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-10-08T10:13:00+08:00"
+updated_at: "2026-10-08T14:42:00+08:00"
 status: accepted
 ---
 
@@ -25,11 +25,15 @@ status: accepted
 默认不添加旧版本 override。若最新版本存在兼容问题，优先修复或明确记录未完成的验证；
 确需暂用旧版本时，必须记录具体版本、原因、影响范围和恢复最新版本的条件，不能静默回退。
 当前没有旧版本 override。
+Luau 此次单包替换使用固定的官方 Git registry（见下文），保留其他包的 builtin-baseline。
+后续统一升级基线包含所需 Luau 后合并回 builtin registry；不使用浮动 reference。
 
 ## 当前版本基线与验证范围
 
 - 原有依赖版本核验日期：2026-09-23；新增 magic-enum 核验日期：2026-09-24。
 - builtin-baseline：`33d78c1ed898a06938f31312167c7abefd229455`。
+- Luau 单包 registry：`2750401336fb7c95f6619657a46a7e798661341c`（reference 与 baseline 相同），
+  2026-10-08 实时核验 0.741、port #0；只匹配 luau，其他包不受影响，见 [0069](development/0069-luau-selection.md)。
 - 来源：[官方固定索引](https://github.com/microsoft/vcpkg/blob/33d78c1ed898a06938f31312167c7abefd229455/versions/baseline.json)。
 - Windows host/target triplet：`x64-windows`。
 - M4.1.1 的 assets feature 复用 nlohmann-json 3.12.0#2；资产底层同时复用既有 types/IO/Memory，
@@ -46,7 +50,7 @@ status: accepted
   [0021](development/0021-vcpkg-baseline-update.md) 中的 Debug 测试和 22 包依赖解析是旧基线的历史证据，
   本次不据此声明所有预留 feature 已在新基线构建或运行。
 
-下表记录该基线对应的版本。标为“已集成”的库有实际 CMake 消费者；
+下表记录 builtin-baseline 对应的版本，Luau 单包 registry 例外单列。标为“已集成”的库有实际 CMake 消费者；
 “清单预留”表示仅有依赖 feature；“M4 已选型”尚未加入项目清单。
 M1.7 的 Tracy 与 mimalloc 未包含在 0021 当时的 22 包解析验证中。
 构建缓存中残留的未使用包不属于当前依赖清单，例如此前已移除的 GLM。
@@ -178,11 +182,14 @@ vulkan-binding。2026-10-08 核验 [官方 port](https://raw.githubusercontent.c
 
 | 库 / vcpkg port | 当前版本 | feature | 计划用途 |
 | --- | --- | --- | --- |
-| Lua / `lua` | 5.5.1 | scripting | 内嵌场景脚本语言 |
-| sol2 / `sol2` | 3.5.0#1 | scripting | C++ 与 Lua 绑定 |
+| Luau / `luau` | 0.741 | scripting | 内嵌场景脚本；使用官方 Compiler/VM 接口，尚无引擎消费者 |
 
-这些库当前只做依赖解析，尚无引擎链接/运行时兼容性结论。
-M5/M7/M8/M9 的实施安排见 [Roadmap](roadmap.md)。
+Luau 为 MIT；2026-10-08 核验 [官方固定 port](https://github.com/microsoft/vcpkg/blob/2750401336fb7c95f6619657a46a7e798661341c/ports/luau/vcpkg.json)。
+[vcpkg-configuration.json](../vcpkg-configuration.json) 只为 luau 选择该官方提交，
+原 builtin-baseline 的 Luau 0.739 不再用于此 feature。仅保留 luau 依赖，移除 Lua/sol2；默认不选 tool feature。
+此处只是依赖预留和解析验证，尚无引擎链接/运行时兼容性结论；M9.1 接入时重新核验版本与 CMake 导出。
+使用 `.luau` 源码、官方编译器和 VM；语言及嵌入边界参见 [Luau 官方说明](https://luau.org/getting-started/)
+与 [嵌入文档](https://luau.org/sandbox/)。M9 实施安排见 [Roadmap](roadmap.md)。
 
 ## 其他传递依赖与构建辅助包
 
