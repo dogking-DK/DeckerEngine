@@ -1,4 +1,4 @@
-# 编辑器工作台（M8.1–M8.3）
+# 编辑器工作台（M8.1–M8.4）
 
 Windows 可加 `--pipe NAME` 开放本机命令端点，用 `dk-ctl --pipe NAME --method scene.query` 查询。
 构建、guard 编辑和重试见 [IPC 指南](ipc.md)。默认不开放 IPC；外部 `runtime.shutdown` 不自动保存。
@@ -38,12 +38,22 @@ cmake --build out/build/windows-editor --config Debug --target dk_editor_app
 
 预览在版本或面板尺寸变化后同步渲染；每个文档会话复用 GPU 资产。
 初版通过 RGBA8 读回/上传桥接 ImGui 纹理，大场景导入会短暂阻塞窗口。
-当前只支持单选与本地轴 Gizmo；世界轴、吸附、多选、飞行相机尚未实现。IPC 属于 M8.3。
+当前只支持单选与本地轴 Gizmo；世界轴、吸附、多选、飞行相机尚未实现。
+
+外部命令与 GUI 共用当前 Runtime 的场景与撤销历史。外部编辑成功后，Hierarchy、无草稿的
+Inspector 和 Viewport 刷新到新 revision；已输入的 Inspector 草稿保留，Apply 时用旧 guard
+报冲突，可点击 Revert 读取当前值。未提交草稿和拖动预览不属于 `render.capture` 的已提交版本。
+
+比较视口与 [render.capture](../commands/render.md) 时，要使用相同 scene/revision、资产文件、
+相机和像素尺寸。两者共用背景色与 exposure，但相机是编辑器会话状态，不写入场景：
+截图需显式提供 eye/target/up、fov_y=65、near=0.05、far=10000 和 `profile=unlit_preview`。
+截图默认 far=100；只提供 guard 不会自动取得 GUI 当前视图。
+Save 后另启 runner 加载同一 manifest，scene_id/revision/实体保持一致，document_id 会更换。
 
 定向验收：
 
 ```powershell
-./scripts/verify.ps1 -BuildDir out/build/windows-editor -Target @('dk_editor_tests','dk_editor_app','dk_run') -TestRegex '^dk\.editor\.' -Reason '编辑器工作台与交互验收'
+./scripts/verify.ps1 -BuildDir out/build/windows-editor -Target @('dk_editor_tests','dk_editor_app','dk_run','dk_ctl') -TestRegex '^dk\.editor\.' -Reason '编辑器工作台、交互与一致性验收'
 ```
 
 GPU smoke 在独立复制的夹具中输入、点击真实 ImGui 控件，覆盖选择、编辑、事务、
@@ -52,7 +62,22 @@ Undo/Redo、Save、Reload、丢弃前取消、关闭取消、窗口 resize 和�
 `--smoke` 要求项目内有 `.dk-editor-smoke` 标记，避免误写真实项目。
 `--interaction-smoke` 使用相同保护，覆盖真实视口拾取、移动/旋转/缩放、Esc/失焦取消、
 相机导航与像素变化；对应 CTest 还会启动 runner 读取保存的全部实体 TRS。
-validation 必须启用；环境不支持时 exit 77，不能计为通过。
+上述两项 smoke 必须启用 validation；环境不支持时 exit 77，不能计为通过。
+
+只验收 M8.4 的 GUI/IPC/截图/runner 一致性：
+
+```powershell
+./scripts/verify.ps1 -BuildDir out/build/windows-editor -Target @('dk_editor_app','dk_run','dk_ctl') -TestRegex '^dk\.editor\.consistency_gpu_validation$' -Reason 'M8.4 跨入口一致性'
+```
+
+此测试自动复制小型固定资产夹具，通过真实 ImGui 输入和独立 dk-ctl 进程交替编辑，
+核对草稿冲突、旧 guard、重复请求、撤销/重做、旧版本截图及 Save/Reload；
+最后关闭编辑器，由独立 runner 重现全部实体和图像。9 个窗口检查点和 runner 的离屏图像
+逐字节比较，`acceptance.json`、相机/尺寸/版本摘要、RPC 回复、PPM 和工作台截图
+保存在 `test-artifacts/Debug/editor-consistency-*/`。要求 Vulkan validation，无法运行视为验收失败。
+脚本管理 `--consistency-smoke`、一次性标记和同步文件，不要对真实工程手动启用此模式。
+精确像素验收仅覆盖相同设备/驱动、固定资产和匹配视图，不承诺跨 GPU 完全一致。
+
 本机存在此前已定位的 AMD Switchable Graphics 隐式层冲突，验收仅在进程环境设置
 DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1=1，保留 Khronos 与同步验证。若使用相同本机环境，启动可采用：
 
@@ -75,4 +100,5 @@ VS2026 用户打开 `out/build/windows-editor/DeckerEngine.slnx`，选择 Debug/
 将 Apps/dk_editor_app 设为启动项目。项目属性“配置属性/调试”的环境填入上述 AMD 变量（仅相同本机问题时需要），
 合并环境保持“是”，命令参数可填 `--validation`，按 F5 运行。
 详细边界见 [工作台设计](../design/editor.md)、[交互设计](../design/editor-interaction.md)，
-验收证据见 [0065](../development/0065-editor-workbench.md)、[0066](../development/0066-editor-interaction.md)。
+验收证据见 [0065](../development/0065-editor-workbench.md)、[0066](../development/0066-editor-interaction.md)、
+[0067](../development/0067-ipc-client.md)、[0068](../development/0068-editor-consistency.md)。

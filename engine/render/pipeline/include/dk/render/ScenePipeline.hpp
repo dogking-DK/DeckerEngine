@@ -10,6 +10,8 @@ struct RenderSettings {
     float exposure = 1;
     bool capture_plan = false;
 };
+// Shared by the editor viewport and Runtime capture for reproducible unlit previews.
+[[nodiscard]] inline RenderSettings unlit_preview_settings() { return {{0.04f,0.08f,0.16f},1,false}; }
 [[nodiscard]] Result<void> validate_render_settings(const RenderView&, const RenderSettings&);
 struct FrameInfo {
     SceneId scene;

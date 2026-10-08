@@ -6,7 +6,7 @@
 当前提供 Foundation、Memory/Tracy、Scene 持久化、命令/事务、CPU Runtime、
 资产导入与缓存、有界 Jobs、异步 CPU Ready，以及可选的 Vulkan 使用层（对象/管线/绑定/录制/同步/传输）、Slang 编译、离屏绘制/计算读回，以及 SDL3 窗口与 Vulkan 呈现。
 GPU Graph 提供资源/Pass 声明、CPU 编译、裁剪、transient 资源管理及单队列同步执行、状态导入导出和诊断；离屏样例已由 Graph 编排。
-Render 已提供只读场景/视图提取、GpuMesh/纹理上传与缓存卸载；已接通磁盘资产、场景 Graph 管线与 Runtime 截图。编辑器提供工作台、拾取/Gizmo、命令编辑和保存加载；Windows 本机 Named Pipe 与轻量 dk-ctl 已接入。物理、网络远程控制与脚本尚未实现。
+Render 已提供只读场景/视图提取、GpuMesh/纹理上传与缓存卸载；已接通磁盘资产、场景 Graph 管线与 Runtime 截图。编辑器提供工作台、拾取/Gizmo、命令编辑和保存加载；Windows 本机 Named Pipe 与轻量 dk-ctl 已接入。GUI、外部命令、截图及保存后 runner 的指定视图一致性已验收，见 [M8.4 / 交付 C](spec/development/0068-editor-consistency.md)。物理、网络远程控制与脚本尚未实现。
 阶段状态、依赖和下一项统一见[开发 Roadmap](spec/roadmap.md)。
 
 ## 快速开始
@@ -81,7 +81,7 @@ pwsh -NoProfile -File scripts/check-spec.ps1
 | examples、tests | CPU/窗口示例、单元与集成测试、独立 GPU 设备探针；replay 预留 |
 | spec、.agents/skills | 设计/指南/记录/命令文档、按任务加载的开发方法 |
 
-geometry、physics、scripting、编辑器拾取/交互与 Python SDK
+physics、scripting 与 Python SDK
 仍按 Roadmap 逐步接入；预留目录和安装依赖不代表已经实现。
 公开头位于各模块 `include/dk/`，内部实现位于 `src/`，依赖通过 target 声明。
 构建产物和个人环境留在 Git 忽略目录。

@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-08T13:04:33+08:00"
+updated_at: "2026-10-08T13:57:00+08:00"
 status: accepted
 ---
 
@@ -44,7 +44,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 [0061](development/0061-render-data-resources.md)；M7.2 最小渲染管线完成，见
 [0062](development/0062-render-pipeline.md)。M7.3 磁盘场景与资产集成完成，见
 [0063](development/0063-render-disk.md)。M7.4 截图任务与自动化验收完成，见
-[0064](development/0064-render-capture.md)；M7 与交付 B 已验收。M8.1 编辑器工作台已完成，见 [0065](development/0065-editor-workbench.md)；M8.2 拾取、Gizmo 与相机已完成，见 [0066](development/0066-editor-interaction.md)；M8.3 IPC 与 dk-ctl 已完成，见 [0067](development/0067-ipc-client.md)；下一项为 M8.4。
+[0064](development/0064-render-capture.md)；M7 与交付 B 已验收。M8.1 编辑器工作台已完成，见 [0065](development/0065-editor-workbench.md)；M8.2 拾取、Gizmo 与相机已完成，见 [0066](development/0066-editor-interaction.md)；M8.3 IPC 与 dk-ctl 已完成，见 [0067](development/0067-ipc-client.md)；M8.4 跨入口一致性完成，见 [0068](development/0068-editor-consistency.md)。M8 与交付 C 已验收；下一项为 M9.1。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作；提早建立多线程内存契约与性能测量，复杂并行优化仍由测量驱动。
@@ -67,7 +67,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M5 Vulkan / Slang 底座 | 设备资源、shader 编译、离屏输出、Vulkan 使用层、最小呈现 | M1、M1.7 | 已完成：M5.1–6 均验收，见 0042–0056 |
 | M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 已完成（M6.1–4） |
 | M7 场景渲染 | 资产上传、场景提取、Pass、pipeline、可等待截图 | M3、M4、M6 | 已完成（M7.1–4，交付 B） |
-| M8 编辑器与进程控制 | 可编辑保存的视口；dk-ctl 操作运行中的程序 | M7 | 进行中：M8.1–3 完成，M8.4 待开始 |
+| M8 编辑器与进程控制 | 可编辑保存的视口；dk-ctl 操作运行中的程序 | M7 | 已完成（M8.1–4，交付 C），见 0065–0068 |
 | M9 脚本与自动化 SDK | Lua 场景脚本、Python 客户端、批处理与重放 | M3；集成验收需要 M8 | 待开始 |
 | M10 物理实验闭环 | 固定步长、CPU 参照、首个 GPU 求解器及可视化 | M7、M9 | 待开始 |
 
@@ -79,7 +79,7 @@ M9 的 Lua 命令绑定在 M3 后可提前做；若调整次序，仍需满足�
 
 - **A：M3 完成，已验收。** 无窗口、无 GPU，通过结构化命令生成场景并保存、重载。
 - **B：M7 完成。** 从磁盘资产和场景得到可核验的离屏图像，AI 可以等待任务并检查结果。
-- **C：M8 完成。** 编辑器和外部 CLI 操作同一套场景服务，保存后可在 runner 重现画面。
+- **C：M8 完成，已验收。** 编辑器和外部 CLI 操作同一套场景服务，保存后可在 runner 重现指定视图画面，见 [0068](development/0068-editor-consistency.md)。
 
 M9、M10 将这套基础扩展为可脚本化的渲染与物理实验平台。
 
@@ -438,7 +438,7 @@ M5 的图像/计算样例迁移后输出保持符合原验证条件。
 | M8.1 | 编辑器工作台 | M7 | 窗口、Hierarchy/Inspector/Viewport、保存加载可用 | 已完成，见 [0065](development/0065-editor-workbench.md) |
 | M8.2 | 拾取、选择与交互 | M8.1 | CPU 射线查询/Gizmo/相机；编辑进入命令与撤销链路 | 已完成，见 [0066](development/0066-editor-interaction.md) |
 | M8.3 | IPC 协议和 dk-ctl | M8.2 | Named Pipe、轻量客户端、断连/超时/重复请求有明确语义 | 已完成，见 [0067](development/0067-ipc-client.md) |
-| M8.4 | 编辑器与外部操作一致性 | M8.3 | 外部编辑、GUI 和截图对应同一 revision，保存后 runner 可重现；交付 C | 待开始 |
+| M8.4 | 编辑器与外部操作一致性 | M8.3 | 外部编辑、GUI 和截图对应同一 revision，保存后 runner 可重现；交付 C | 已完成，见 [0068](development/0068-editor-consistency.md) |
 
 **先写设计：** `editor.md`、`editor-interaction.md`、
 `geometry-query.md`、`automation-transport.md`、`automation-client.md`。
@@ -539,7 +539,8 @@ M7.4 截图自动化验收完成，见 [0064](development/0064-render-capture.md
 M8.1 编辑器工作台完成，见 [0065](development/0065-editor-workbench.md)；窗口、面板、命令编辑与保存加载已验收。
 M8.2 拾取、选择与交互完成，见 [0066](development/0066-editor-interaction.md)；CPU 三角形 BVH、统一选择、本地 TRS Gizmo、独立相机及保存后 runner 重载已验收。
 M8.3 IPC 协议和 dk-ctl 完成，见 [0067](development/0067-ipc-client.md)；Named Pipe、轻量客户端、owner 分派及断连/超时/重复请求语义已验收。
-下一项为 **M8.4 编辑器与外部操作一致性**：外部编辑、GUI 和截图对应同一 revision，保存后 runner 可重现；完成后验收交付 C。
+M8.4 编辑器与外部操作一致性完成，见 [0068](development/0068-editor-consistency.md)；真实窗口、dk-ctl、指定版本截图和保存后 runner 的状态/像素一致性已验收，M8 与交付 C 全部完成。
+下一项为 **M9.1 Lua 命令绑定**：脚本经同一服务创建和编辑场景，脚本错误可恢复。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 

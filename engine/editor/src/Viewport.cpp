@@ -6,8 +6,8 @@
 #include <vector>
 
 namespace dk::editor::detail {
-Viewport::Viewport(memory::ResourceHandle heap,graphics::SubmissionQueue& queue)
-    : heap_(heap),queue_(queue),pipeline_(take(render::ScenePipeline::create(heap,queue,DK_EDITOR_SHADER_DIR))) {}
+Viewport::Viewport(memory::ResourceHandle heap,graphics::SubmissionQueue& queue,bool retain_pixels)
+    : heap_(heap),queue_(queue),pipeline_(take(render::ScenePipeline::create(heap,queue,DK_EDITOR_SHADER_DIR))),retain_pixels_(retain_pixels) {}
 Viewport::~Viewport() { release_texture(); }
 void Viewport::release_texture() {
     if (descriptor_) ImGui_ImplVulkan_RemoveTexture(descriptor_);
@@ -38,7 +38,7 @@ void Viewport::update(const SceneReadSnapshot& snapshot,std::uint32_t width,std:
         if (edit) transform=render::LocalTransformOverride{edit->entity,edit->value};
         auto scene=take(render::RenderScene::extract(heap_,snapshot.scene,transform));
         auto render_view=take(render::RenderView::create(scene,{width,height,info_.frame+1,camera.world(),camera.projection(double(width)/height)}));
-        auto frame=take(pipeline_.render(queue_,render_view,assets_,{{0.025f,0.035f,0.05f},1,false}));
+        auto frame=take(pipeline_.render(queue_,render_view,assets_,render::unlit_preview_settings()));
         if (!take(frame.wait(queue_))) throw std::runtime_error("Viewport render timed out");
         std::vector<std::byte> pixels(static_cast<std::size_t>(width)*height*4);
         check(frame.read_rgba8(pixels));
@@ -59,6 +59,7 @@ void Viewport::update(const SceneReadSnapshot& snapshot,std::uint32_t width,std:
         for (const auto byte : pixels) { pixel_signature_^=std::to_integer<unsigned char>(byte); pixel_signature_*=1099511628211ULL; }
         info_=frame.info(); published_session_=key.session; attempted_=key; error_.clear();
         scene_=std::move(scene); camera_=camera; published_camera_=camera.revision();
+        if (retain_pixels_) pixels_=std::move(pixels);
     } catch (const std::exception& error) { error_=error.what(); }
 }
 Result<std::optional<EntityId>> Viewport::pick(const Vec2d& uv) const {

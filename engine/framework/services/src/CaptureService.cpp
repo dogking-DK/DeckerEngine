@@ -60,7 +60,7 @@ Result<JobQueue::Payload> render_capture(memory::ResourceHandle resource,const S
         {
             auto assets=take(source.upload(queue)); checkpoint(stop);
             auto pipeline=take(render::ScenePipeline::create(resource,queue,shader_directory)); checkpoint(stop);
-            auto frame=take(pipeline.render(queue,take(render::RenderView::create(source.scene(),view)),assets,{{0.04f,0.08f,0.16f},1,false}));
+            auto frame=take(pipeline.render(queue,take(render::RenderView::create(source.scene(),view)),assets,render::unlit_preview_settings()));
             require(take(frame.wait(queue)),"Capture GPU wait did not complete",ErrorCode::invalid_state);
             checkpoint(stop);
             frame_info=frame.info();

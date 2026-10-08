@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-10-03T17:31:34+08:00"
+updated_at: "2026-10-08T13:57:00+08:00"
 status: accepted
 ---
 
@@ -21,6 +21,8 @@ ScenePipeline::create(heap, queue, shader_directory) 编译随工程提供的固
 深度/alpha-mask-depth/不透明/tone 管线；shader_directory 显式传入，不硬编码部署路径。
 render(queue, view, gpu_assets, settings) 同步构建/录制一帧并异步提交，返回 RenderFrame。
 Settings 为有限非负线性 HDR clear_rgb、有限非负 exposure 和可选 Graph 诊断。
+M8.4 提供 `unlit_preview_settings()` 作为编辑器视口和 Runtime capture 的共用预览设置
+（线性 clear_rgb=(0.04,0.08,0.16)、exposure=1），通用 RenderSettings 的默认黑色不变。
 队列/管线/缓存均由调用者串行使用；管线无裸队列指针，只用于创建它的队列。
 
 按稳定实体 ID 和原资产引用顺序遍历 mesh 引用，每个 primitive 形成一次 draw。

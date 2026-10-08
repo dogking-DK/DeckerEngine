@@ -327,5 +327,14 @@ if(TARGET dk_editor_app AND WIN32)
                 -Fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
                 -WorkDir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
         set_tests_properties(dk.editor.interaction_gpu_validation PROPERTIES TIMEOUT 180 SKIP_RETURN_CODE 77 LABELS "gpu" RUN_SERIAL TRUE)
+        if(TARGET dk_ctl AND TARGET dk_render_services)
+            add_test(NAME dk.editor.consistency_gpu_validation
+                COMMAND "${DK_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass
+                    -File "${CMAKE_CURRENT_SOURCE_DIR}/EditorConsistencyTest.ps1"
+                    -Editor "$<TARGET_FILE:dk_editor_app>" -Runner "$<TARGET_FILE:dk_run>" -Client "$<TARGET_FILE:dk_ctl>"
+                    -Fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+                    -WorkDir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+            set_tests_properties(dk.editor.consistency_gpu_validation PROPERTIES TIMEOUT 240 LABELS "gpu" RUN_SERIAL TRUE)
+        endif()
     endif()
 endif()

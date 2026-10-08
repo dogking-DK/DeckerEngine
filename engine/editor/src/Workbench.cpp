@@ -2,6 +2,7 @@
 #include "WorkbenchUi.hpp"
 #include "GuiRenderer.hpp"
 #include "SmokeDriver.hpp"
+#include "ConsistencyDriver.hpp"
 #include "EditorSupport.hpp"
 #include <dk/memory/MemorySystem.hpp>
 #include <dk/memory/Context.hpp>
@@ -47,7 +48,7 @@ void write_capture(const std::filesystem::path& output,const graphics::ReadbackR
     check(write_file_bytes_atomic(output,ppm));
 }
 int session(const WorkbenchOptions& options,memory::ResourceHandle heap,Diagnostics& diagnostics) {
-    if (options.smoke && !std::filesystem::is_regular_file(options.root/".dk-editor-smoke"))
+    if ((options.smoke || options.consistency_smoke) && !std::filesystem::is_regular_file(options.root/".dk-editor-smoke"))
         throw std::runtime_error("--smoke requires a disposable project with .dk-editor-smoke marker");
     auto model=take(Workspace::create(options.root));
     check(model->open(options.manifest));
@@ -64,12 +65,14 @@ int session(const WorkbenchOptions& options,memory::ResourceHandle heap,Diagnost
         return created.error().code==ErrorCode::not_found || created.error().code==ErrorCode::not_supported ? 77 : 1;
     }
     auto presenter=std::move(*created); auto& queue=presenter.queue();
-    if (options.frames || options.smoke) std::printf("GPU=%s driver=%s\n",queue.device().adapter().properties.deviceName.data(),
+    if (options.frames || options.smoke || options.consistency_smoke) std::printf("GPU=%s driver=%s\n",queue.device().adapter().properties.deviceName.data(),
         queue.device().adapter().driver.driverInfo.data());
     GuiRenderer gui{queue,window};
-    Viewport viewport{heap,queue};
+    Viewport viewport{heap,queue,options.consistency_smoke};
     WorkbenchUi ui{*model,options.fixture_camera};
     SmokeDriver smoke{options.interaction_smoke};
+    std::optional<ConsistencyDriver> consistency;
+    if (options.consistency_smoke) consistency.emplace(options.root);
     unsigned frames=0;
     const auto start=std::chrono::steady_clock::now();
     try {
@@ -80,6 +83,8 @@ int session(const WorkbenchOptions& options,memory::ResourceHandle heap,Diagnost
             if (ui.closing() || model->stopping()) break;
             if ((options.smoke || options.frames) && std::chrono::steady_clock::now()-start>std::chrono::seconds(90))
                 throw std::runtime_error("Workbench acceptance run timed out");
+            if (consistency && std::chrono::steady_clock::now()-start>std::chrono::seconds(180))
+                throw std::runtime_error("Consistency acceptance run timed out");
             if (status.minimized || !status.pixel_width || !status.pixel_height) { SDL_Delay(16); continue; }
             auto acquired=take(presenter.acquire());
             if (acquired.status!=graphics::AcquireStatus::ready) { SDL_Delay(8); continue; }
@@ -87,14 +92,17 @@ int session(const WorkbenchOptions& options,memory::ResourceHandle heap,Diagnost
             if (!gui.compatible(frame)) {
                 viewport.release_texture(); gui.shutdown_gpu(); gui.initialize(frame);
             }
-            gui.new_frame([&] { if (options.smoke) smoke.input(*model,ui,window,viewport); });
+            gui.new_frame([&] {
+                if (options.smoke) smoke.input(*model,ui,window,viewport);
+                if (consistency) consistency->input(ui);
+            });
             const auto format=frame.format();
             const bool srgb=format==vk::Format::eB8G8R8A8Srgb || format==vk::Format::eR8G8B8A8Srgb;
             ui.draw(viewport,srgb);
             ImGui::Render();
             gui.record(frame,viewport.texture() ? &viewport.image() : nullptr,viewport.texture() ? &viewport.image_view() : nullptr);
             ++frames;
-            const bool finish=(options.smoke && smoke.done()) || (options.frames && frames>=options.frames);
+            const bool finish=(options.smoke && smoke.done()) || (consistency && consistency->done()) || (options.frames && frames>=options.frames);
             std::optional<graphics::ReadbackRequest> capture;
             if (finish && !options.screenshot.empty()) {
                 const auto extent=frame.extent();
@@ -102,6 +110,7 @@ int session(const WorkbenchOptions& options,memory::ResourceHandle heap,Diagnost
             }
             const auto presented=take(presenter.present(std::move(frame)));
             if (!take(queue.wait(presented.completion))) throw std::runtime_error("GUI submission timed out");
+            if (consistency) consistency->presented(*model,ui,viewport);
             if (capture) write_capture(options.screenshot,*capture);
             if (finish) {
                 if (options.smoke && !smoke.done()) throw std::runtime_error("Frame limit interrupted smoke");

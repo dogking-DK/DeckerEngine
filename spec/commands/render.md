@@ -1,7 +1,7 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-10-03T21:44:26+08:00"
+updated_at: "2026-10-08T13:57:00+08:00"
 status: accepted
 ---
 
@@ -27,6 +27,11 @@ status: accepted
 camera 可选 up=[0,1,0]、fov_y=65（度，1&lt;值&lt;179）、near=0.05、far=100。
 必须有限、near&gt;0、far&gt;near，eye 与 target 不同，up 不能平行于观察方向。
 默认 eye=[8,1.8,0]、target=[-4,2,0]。坐标为世界空间，使用右手透视、顶部第一行。
+
+与编辑器视口共用线性背景色 (0.04,0.08,0.16) 和 exposure=1。
+要重现 GUI 当前已提交画面，须显式匹配视口的尺寸、相机和 `profile=unlit_preview`；
+编辑器使用 far=10000，截图默认 far=100。guard 只关联场景版本，不传递相机或未提交草稿。
+完整比较流程与边界见 [编辑器指南](../guides/editor.md)。
 
 返回 `{job_id,document_id,scene_id,revision,frame,width,height,output}`；
 frame 在当前 Runtime 内从 1 递增，拒绝请求不消耗帧号。输出路径规范化为工程相对路径。

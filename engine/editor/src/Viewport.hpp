@@ -9,7 +9,7 @@
 namespace dk::editor::detail {
 class Viewport final {
 public:
-    Viewport(memory::ResourceHandle heap,graphics::SubmissionQueue& queue);
+    Viewport(memory::ResourceHandle heap,graphics::SubmissionQueue& queue,bool retain_pixels=false);
     ~Viewport();
     // Previous GUI submission must be complete. Backend must be initialized.
     void update(const SceneReadSnapshot&,std::uint32_t width,std::uint32_t height,bool srgb,const Camera&,
@@ -24,6 +24,8 @@ public:
     [[nodiscard]] const graphics::ImageView& image_view() const { return view_; }
     [[nodiscard]] std::uint64_t pixel_signature() const { return pixel_signature_; }
     [[nodiscard]] const render::FrameInfo& info() const { return info_; }
+    [[nodiscard]] const Camera& published_camera() const { return camera_; }
+    [[nodiscard]] std::span<const std::byte> retained_pixels() const { return pixels_; }
     [[nodiscard]] bool current(const DocumentState& s) const { return published_session_==s.document_id && info_.revision==s.revision; }
     [[nodiscard]] const std::string& error() const { return error_; }
 private:
@@ -45,6 +47,8 @@ private:
     std::string error_;
     std::uint64_t pixel_signature_ = 0;
     std::uint64_t published_camera_ = 0;
+    bool retain_pixels_ = false;
+    std::vector<std::byte> pixels_;
     Camera camera_;
     render::RenderScene scene_;
     struct PickMesh { AssetId id; geometry::MeshQuery query; };

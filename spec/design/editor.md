@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-08T13:04:33+08:00"
+updated_at: "2026-10-08T13:57:00+08:00"
 status: accepted
 ---
 
@@ -43,7 +43,35 @@ Windows `dk-editor --pipe NAME` 显式开启与 runner 相同的服务端。Work
 处理后刷新只读快照和历史；同一文档的未应用草稿保留旧 guard，Apply 明确冲突，不能悄悄覆盖。
 换文档清空选择/草稿，旧 Gizmo 由现有 document/revision 校验取消。
 外部 runtime.shutdown 是显式退出指令，不保存草稿/场景；回复后排空管道再销毁 GPU/窗口。
-基本接入在 M8.3 验证，完整 GUI/外部/截图一致性留在 M8.4。
+基本接入在 M8.3 验证，M8.4 按下述跨入口契约验收。
+
+## M8.4 跨入口一致性
+
+Runtime 是唯一已提交状态所有者。GUI Apply、外部 dk-ctl 以及 Undo/Redo 都走同一命令/历史；
+scene_id/revision 标识内容版本，document_id 标识当前打开会话。Reload 或新 runner 会改变 document_id，
+但保存后的 SceneId/revision/实体内容和指定视图图像应保持一致。未应用 Inspector 草稿与 Gizmo preview
+不属于已提交场景，不能把它们的像素当成同 revision 的正式截图。
+
+Viewport 与 CaptureService 共用 `render::unlit_preview_settings()`：线性背景 (0.04,0.08,0.16)、
+exposure=1、unlit_preview 导入。比较时显式传递已发布视口的尺寸、相机 eye/target/up、65 度 FOV、
+near=0.05/far=10000；不把“同 revision”误当成“不同相机也应同图”。资产文件在验收期间不变。
+同设备、相同资产/视图/设置逐字节比较 RGB8 PPM；跨设备/驱动的像素完全一致不作承诺。
+
+增加仅用于一次性夹具的 `--consistency-smoke`（要求 `.dk-editor-smoke`、`--pipe`、
+`--fixture-camera` 和 `--screenshot`，与其他 smoke/frames 互斥）。私有 ConsistencyDriver 注入真实
+ImGui 鼠标/键盘输入；外部脚本通过真实 dk-ctl 子进程调用公开命令。固定 checkpoint/continue 文件
+仅同步测试步骤，不增加业务命令或绕过 guard，180 秒内未完成则失败。
+
+checkpoint 在窗口 GPU 提交完成后发布：先写实际视口已上传的 RGB8 像素，再原子写 JSON 摘要。
+摘要保存当前 document/scene/revision/dirty、选择/Inspector/历史以及已发布视口的身份、相机和尺寸；
+必须没有活动 preview、无过期视口、相机匹配。测试模式才保留该帧 CPU 像素，常规编辑器不增加常驻副本。
+窗口最终截图额外证明真实工作台呈现；PPM 比较使用不含 UI overlay 的原始视口，避免窗口布局影响结果。
+
+验收顺序：初始图 → GUI 名称/TRS Apply → 外部事务（含重复 ticket 与旧 guard 拒绝）→
+未提交草稿期间外部编辑 → GUI 旧草稿 Apply 冲突/Revert → GUI Undo/Redo → Save/Reload →
+关闭编辑器 → runner 重载、核对全部实体及原视图截图。旧版本 capture 先提交再编辑，完成结果和图像
+仍必须对应原版本；任何 capture 不隐式保存。拒绝过期请求、草稿冲突不改 revision/history/文件。
+M8.3 的超时/断连去重用例按传输回归复用，不额外改变 IPC 协议。
 
 ## 窗口与 GPU 接入
 
@@ -68,4 +96,4 @@ CPU 定向测试覆盖选择/草稿、事务与撤销、过期 guard、保存重
 真实窗口 smoke 用 ImGui 输入事件走选择/Inspector/保存/重载/撤销按钮，检查版本与持久化，
 验证 TRS 改动使预览像素变化、Undo 逐字节哈希恢复，再读回工作台画面并启用 Vulkan validation；
 默认 Sponza 另做实际预览。
-M8.2 的 CPU rayquery、Gizmo 和相机交互见 [交互设计](editor-interaction.md)；M8.3 IPC 见 [传输设计](automation-transport.md)，M8.4 再验收完整跨入口一致性。
+M8.2 的 CPU rayquery、Gizmo 和相机交互见 [交互设计](editor-interaction.md)；M8.3 IPC 见 [传输设计](automation-transport.md)。M8.4 证据见 [0068](../development/0068-editor-consistency.md)。

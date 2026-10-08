@@ -1,7 +1,7 @@
 ---
 module: render-capture
 created_at: "2026-10-03T21:21:47+08:00"
-updated_at: "2026-10-03T21:44:26+08:00"
+updated_at: "2026-10-08T13:57:00+08:00"
 status: accepted
 ---
 
@@ -56,6 +56,9 @@ Runtime idle pump 同时消费资产与截图；`jobs.*` 通过 JobId 路由到�
 只输出 PPM（顶部第一行、sRGB RGB8），父目录必须存在；路径在工程根内，输出扩展名 .ppm。
 相机使用 eye/target/up、透视 fov_y/near/far，默认采用 Sponza 示例相机；
 默认 unlit_preview，支持 opaque/mask，不新增 PBR/透明/天空盒/HDR 照明。
+M8.4 与编辑器共用 Render 的 unlit_preview_settings。比较视口和截图必须显式匹配尺寸与相机，
+包括 FOV/near/far（编辑器 far=10000，截图默认 far=100），并固定资产文件与设备；
+比较对象是已提交场景，草稿/手势候选不在 capture 快照内。完整验收见 [编辑器设计](editor.md)。
 重复输出按实际 owner 发布顺序替换，无多文件事务；成功只说明该次写入，后续 capture 可覆盖。
 
 CPU 命令验收覆盖 discovery/schema、guard、无场景、路径/相机/尺寸、事务拒绝；
