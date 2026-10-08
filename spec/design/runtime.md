@@ -1,7 +1,7 @@
 ---
 module: runtime
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-10-08T15:08:00+08:00"
+updated_at: "2026-10-08T15:34:00+08:00"
 status: accepted
 ---
 
@@ -114,4 +114,4 @@ Runtime::read_scene(guard) 在 owner 线程转发 SceneService::read_snapshot，
 可选 `dk::scripting_luau` 在 owner 线程调用既有 dispatch；不修改注册表或增加 Runtime 命令。
 runner 的 `--script FILE.luau` 与 batch/stdio/pipe 互斥，禁止 auto-guard；一次执行拥有独立 VM。
 每条命令沿用 TaskId、schema、guard、事务和历史；脚本异常不回滚已提交命令。
-运行预算/取消未接入，当前用于可信离线脚本，详见 [Luau 设计](scripting-luau.md) 与 [使用指南](../guides/scripting.md)。
+LuauOptions 提供有限预算、能力模式和 stop_token；取消线程只请求停止，owner 在安全点返回后才销毁 Runtime。runner 支持 Windows Ctrl+C/Ctrl+Break 取消；原生同步命令不硬抢占，详见 [Luau 设计](scripting-luau.md) 与 [使用指南](../guides/scripting.md)。

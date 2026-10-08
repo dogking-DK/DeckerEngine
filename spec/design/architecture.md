@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-08T15:06:00+08:00"
+updated_at: "2026-10-08T15:34:00+08:00"
 status: accepted
 ---
 
@@ -19,7 +19,7 @@ ECS 使用 flecs，内嵌场景脚本使用 Luau，外部自动化计划用 Pyth
 Luau 通过官方 Compiler/VM 接口接入，不使用 Lua/sol2；脚本源码采用 `.luau`。
 引擎只加载由自身编译的源码产物，不接受外部字节码；绑定通过 Runtime/Commands/Services，
 不暴露裸 ECS/Vulkan 指针。同步脚本按次拥有 VM，提供受控场景命令和错误恢复，
-见 [Luau 设计](scripting-luau.md)。静态类型检查、执行预算和取消尚未接入。
+见 [Luau 设计](scripting-luau.md)。已提供执行时限、安全点/命令预算、VM 内存额度及协作取消；静态类型检查尚未接入，原生同步调用不硬抢占。
 当前 CPU 链路由 Foundation/Memory/Jobs、Scene、Commands/Services/Runtime 和 Assets 组成。
 graphics/device 提供独立可选的无窗口 Vulkan 设备、VMA 资源、提交/读回与延迟释放，不进入 CPU-only Runtime 的链接依赖；
 graphics/shaders 提供独立 CPU Slang 编译、SPIR-V 和最小反射，同样不进入 CPU-only Runtime 的链接依赖。

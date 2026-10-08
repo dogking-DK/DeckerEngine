@@ -30,8 +30,8 @@
 | 资产/作业命令 schema、guard 与服务接入 | dk_asset_command_tests | `^dk\.asset_commands\.` |
 | CPU 资产真实 stdio、重启与关闭 | dk_run | `^dk\.runtime\.assets_stdio$` |
 | 命令注册、schema | dk_commands_tests | `^dk\.commands\.` |
-| Luau 命令绑定、值转换、错误恢复 | dk_luau_tests | `^dk\.luau\.`（runner 进程测试另见下行） |
-| Luau runner 创建/保存重载、参数和诊断 | dk_run | `^dk\.luau\.runner_roundtrip$` |
+| Luau 绑定、值转换、预算、取消/关闭和能力模式 | dk_luau_tests | `^dk\.luau\.`（含 Windows 控制台取消；target 自动构建 runner 夹具，CLI 进程测试另见下行） |
+| Luau runner 创建/保存重载、预算参数和诊断 | dk_run | `^dk\.luau\.runner_roundtrip$` |
 | 服务、事务、历史、Operations | dk_service_tests | `^dk\.services\.` |
 | JSON-RPC、JSON Lines、任务 | dk_protocol_tests | `^dk\.protocol\.` |
 | IPC ticket、断连/超时、分帧、有界队列、owner 分派 | dk_ipc_tests | `^dk\.ipc\.(IPC \|Named pipe \|Disconnected \|Pipe )` |

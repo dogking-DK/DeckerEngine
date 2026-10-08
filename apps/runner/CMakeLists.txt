@@ -8,6 +8,7 @@ endif()
 dk_target_defaults(dk_run)
 
 if(TARGET dk_scripting_luau)
+    target_sources(dk_run PRIVATE src/ScriptRunner.cpp src/ScriptRunner.hpp)
     target_link_libraries(dk_run PRIVATE dk::scripting_luau)
     target_compile_definitions(dk_run PRIVATE DK_RUN_WITH_LUAU=1)
 endif()

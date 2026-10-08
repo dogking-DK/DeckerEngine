@@ -1,7 +1,7 @@
 ---
 module: scripting-luau
 created_at: "2026-10-08T14:52:00+08:00"
-updated_at: "2026-10-08T15:11:00+08:00"
+updated_at: "2026-10-08T15:40:14+08:00"
 status: accepted
 ---
 
@@ -11,13 +11,13 @@ status: accepted
 
 M9.1 提供同步场景构造/编辑脚本，经现有 Runtime → Commands → Operations → Services 执行。
 只接受 `.luau` 源码，由官方 Compiler 编译后交给 VM；不提供外部字节码入口。
-脚本错误可恢复，后续脚本和宿主命令仍可使用同一个 Runtime。M9.2 才实现执行预算、取消和退出控制；
-本阶段仅供可信离线脚本，不接入编辑器事件循环，不承诺完整引擎安全沙箱或无限循环恢复。
+脚本错误、预算终止和取消后，后续脚本与宿主命令仍可使用同一个 Runtime。M9.2 提供有限默认预算和协作取消；
+仍不接入编辑器事件循环，不承诺完整引擎安全沙箱或同步原生调用的硬抢占。
 
 ## 模块与依赖
 
 `engine/scripting/luau` 提供 `dk_scripting_luau` / `dk::scripting_luau`。
-公开头文件 `include/dk/scripting/Luau.hpp` 仅暴露 Runtime/Result/string_view，PUBLIC 依赖 Runtime，
+公开头文件 `include/dk/scripting/Luau.hpp` 暴露 Runtime/Result/string_view 及预算、能力和 std::stop_token 配置，PUBLIC 依赖 Runtime，
 PRIVATE 链接 Luau.Compiler/Luau.VM；Luau 指针、栈和字节码不跨公开接口。
 vcpkg 实际导出名为 unofficial::luau::Luau.Compiler / unofficial::luau::Luau.VM，包名 unofficial-luau。
 `DK_BUILD_SCRIPTING_LUAU` 默认 OFF，要求 Framework/Scene Runtime，自动选择 scripting feature。
@@ -26,10 +26,10 @@ vcpkg 实际导出名为 unofficial::luau::Luau.Compiler / unofficial::luau::Lua
 
 ## 接口与数据
 
-`run_luau(Runtime&, source, chunk_name)` 在调用线程同步执行一次源码，返回 `Result<void>`。
+`run_luau(Runtime&, source, chunk_name, LuauOptions)` 在调用线程同步执行一次源码，返回 `Result<void>`。
 宿主必须在 Runtime owner 线程串行调用。每次执行创建独立 VM，结束即关闭，不持有 Runtime 所有权。
 `dk-run --project-root ROOT --script FILE.luau` 与 batch/stdio/pipe 互斥；auto-guard 仍仅用于 batch。
-成功退出 0，参数/读取/脚本错误退出 2，宿主致命异常沿用 3。脚本模式 stdout 不输出协议响应。
+成功退出 0，参数/读取/预算/脚本错误退出 2，取消退出 130，宿主致命异常沿用 3。脚本模式 stdout 不输出协议响应。
 
 脚本全局 `dk` 为只读表：
 
@@ -59,11 +59,11 @@ invalid_state，包含 chunk/行号或非字符串错误的固定诊断。VM 用
 宿主资源不足/后台致命异常继续抛给宿主，不能混同可恢复脚本错误。
 Luau 会把 escaping std::exception 转成脚本错误，因此绑定单独保存宿主 exception_ptr，
 致命故障后拒绝继续进入命令；即使脚本 pcall/coroutine 消费了错误，外层执行结束仍重新抛出。
-这不提供无限循环抢占，执行预算与退出保证仍属 M9.2。
+终止时停止该 VM 的后续执行并关闭；已经进入的同步原生调用在返回后观察终止，不进行线程强杀。
 
 单条命令的提交点、guard、dirty、revision 和撤销历史完全沿用服务；脚本不是自动事务。
 前面成功的命令及文件效果在后续错误时保留。需要一组原子编辑时显式调用 scene.transaction；
-其中失败保持文档/历史。命令已提交但结果转换失败时返回错误并保留 task_id，调用者应查询状态，不能盲目重试。
+其中失败保持文档/历史。普通值转换错误的 dk.command 返回保留 task_id；预算/取消可能截断脚本返回值，Runtime 仍保留该命令的 TaskId，可通过 tasks.list 和状态查询复核，不能盲目重试。
 无新异步线程/任务状态；每条进入 Runtime 的命令使用原 TaskId 记录。
 
 ## 验证计划
@@ -80,3 +80,54 @@ Luau 会把 escaping std::exception 转成脚本错误，因此绑定单独保�
 [架构](architecture.md)、[Runtime](runtime.md)、[Commands](commands.md)、
 [Services](application-services.md)、[0069 依赖选型](../development/0069-luau-selection.md)、
 [0070 M9.1](../development/0070-luau-command-bindings.md)。
+
+## M9.2 执行限制、取消与能力
+
+`LuauOptions` 包含 `LuauLimits`、`std::stop_token` 和 `LuauAccess`；原三参数调用使用有限默认预算。
+options 在入口复制，调用方不得并发修改输入；取消由 stop_source 请求，其他线程不读写 VM 或 Runtime。
+每次调用独立记录终止原因、已使用预算和 VM 内存。没有后台脚本线程、JobId 或跨调用共享 VM。
+
+| 预算 | 默认值 | 允许范围与含义 |
+| --- | --- | --- |
+| timeout | 5000 ms | 1–600000 ms；steady_clock 从 run_luau 入口起计，含编译和命令耗时 |
+| max_interrupts | 1000000 | 1–1000000000；非 GC VM 安全点次数，不是指令条数或跨版本确定性计数 |
+| max_commands | 10000 | 1–100000；dk.command 尝试次数，含拒绝/失败；超限前不进入下一次 dispatch |
+| max_vm_bytes | 64 MiB | 256 KiB–256 MiB；自定义 VM allocator 的在用请求字节，含 VM/slab/栈/加载字节码 |
+| max_source_bytes | 1 MiB | 1 byte–1 MiB；编译前检查，runner 读取时也封顶；字节码固定上限16 MiB |
+
+Compiler、C++ JSON、Runtime/服务状态、allocator 元数据不计入 VM 内存额度；不是进程 RSS 硬限制。
+输入转换另在分配 C++ 字符串前累计1 MiB的逻辑载荷，避免共享 Luau 大字符串被重复展开造成无界复制。
+既有深度/节点/schema/编码限制继续生效。取消和时限在编译/初始化/加载前后、VM safepoint、命令前后检查。
+Luau 编译、标准库长 C 调用、文件 IO 和单条同步服务操作不可强抢占，因此不承诺严格墙钟退出上限。
+允许参数不能禁用所有运行限制；非法预算/能力参数在编译或修改场景之前返回 invalid_argument。
+
+执行通过 lua_resume 进入，VM interrupt 观察预算或取消后，以 lua_break 返回宿主；GC 回调只记录状态。
+可 yield 的 pcall/xpcall 和协程都传播 break，脚本不能通过捕获普通异常清除终止状态。
+不能 yield 的 C/metamethod 边界使用脚本错误展开到可中断层，终止仍保持。
+终止原因第一次观察后锁定；同一检查点优先既有终止，再取消、超时、安全点/命令额度。
+内存申请超过额度时拒绝并锁定 memory_limit，即使脚本 pcall 消费 OOM，仍禁止后续命令并返回终止。
+初始化/加载也在保护调用中处理预算 OOM；真正宿主分配失败仍按致命 bad_alloc 上抛。
+正常顶层 yield 没有调度器接续，返回 invalid_state；关闭整个 VM 回收所有悬挂协程。
+
+终止返回 ErrorCode::invalid_state，context 的首项为稳定原因：`luau.cancelled`、`luau.timeout`、
+`luau.interrupt_limit`、`luau.command_limit` 或 `luau.memory_limit`，其后为 chunk 名。
+源码/编译产物超限和非法配置返回 invalid_argument。普通语法/脚本/业务错误保持 M9.1 语义。
+终止不撤销已成功的命令、文件或事务；若在已提交命令返回后观察取消，其状态仍保留，调用方应重新查询。
+完成边界是执行返回后的最后一次检查；该检查之后才到达的取消不追溯改变成功结果。
+宿主关闭时 request_stop，等待 owner 上 run_luau 返回，再销毁 Runtime；禁止 detach 或从取消线程释放 VM。
+
+`LuauAccess::project` 默认允许 M9.1 的完整白名单；`edit` 拒绝 scene.load/save/project.save；
+`query` 仅允许 discovery、runtime.capabilities、tasks.list/get、scene.query、entity.get、history.status。
+这控制显式命令能力；服务可能为资产合法性读取文件元数据，edit 不承诺完全无文件读取。
+脚本不能提升权限，拒绝返回普通 not_supported；不计为终止，但消耗命令次数。
+
+runner 增加仅 script 模式可用的 `--script-timeout-ms`、`--script-max-interrupts`、
+`--script-max-commands`、`--script-memory-mib`、`--script-access query|edit|project`。
+Windows Ctrl+C/Ctrl+Break handler 只请求 stop_source；同步执行返回后注销 handler 并销毁 Runtime。
+取消退出130，预算/普通脚本错误沿用2，宿主致命错误3。控制台关闭、系统关机强制终止不作优雅退出保证。
+用独立隐藏控制台的真实子进程验证信号、退出和持久化，不给用户控制台广播事件。
+
+验证覆盖默认例子回归、无限循环/pcall/xpcall/协程/非 yield 边界、VM 额度与被捕获 OOM、
+命令上限保留已提交状态、能力拒绝、预先/运行中取消、owner 关闭 join、后续脚本恢复，
+以及 runner 参数范围/模式、预算退出、真实 Ctrl+Break 和重新加载。
+实施证据见 [0071](../development/0071-luau-execution-limits.md)。

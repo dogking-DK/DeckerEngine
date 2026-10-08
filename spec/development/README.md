@@ -72,5 +72,6 @@
 | 0068 | [M8.4 编辑器与外部操作一致性](0068-editor-consistency.md) | editor, editor-interaction, render-capture, render-pipeline, automation-transport, architecture | completed |
 | 0069 | [内嵌脚本改用 Luau](0069-luau-selection.md) | architecture, project-foundation | completed |
 | 0070 | [M9.1 Luau 命令绑定](0070-luau-command-bindings.md) | scripting-luau, runtime, architecture, project-foundation | completed |
+| 0071 | [M9.2 Luau 执行限制与取消](0071-luau-execution-limits.md) | scripting-luau, runtime, architecture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

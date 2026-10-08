@@ -2,7 +2,7 @@
 
 | 模块 | 文档 | 状态 | 范围 | 源码入口 | 测试入口 |
 | --- | --- | --- | --- | --- | --- |
-| scripting-luau | [Luau 场景命令绑定](scripting-luau.md) | accepted | 源码编译、同步 VM、命令绑定与错误恢复 | [luau](../../engine/scripting/luau) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
+| scripting-luau | [Luau 场景命令绑定](scripting-luau.md) | accepted | 源码编译、命令绑定、执行预算、取消/关闭与错误恢复 | [luau](../../engine/scripting/luau) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | automation-transport | [Named Pipe 与 owner 分派](automation-transport.md) | accepted | 帧、队列、去重、断连与关闭 | [automation](../../engine/automation) | [集成](../../tests/integration/CMakeLists.txt) |
 | automation-client | [dk-ctl 客户端](automation-client.md) | accepted | 轻量调用、超时和显式重试 | [apps](../../apps)、[automation](../../engine/automation) | [集成](../../tests/integration/CMakeLists.txt) |
 | geometry-query | [CPU 几何查询](geometry-query.md) | accepted | AABB、三角形 BVH 与仿射实例射线 | [geometry](../../engine/geometry) | [单元](../../tests/unit/CMakeLists.txt) |

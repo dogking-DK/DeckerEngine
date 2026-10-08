@@ -1,7 +1,7 @@
 #include <dk/core/Version.hpp>
 #include <dk/profiling/Profiler.hpp>
 #ifdef DK_RUN_WITH_LUAU
-#include <dk/scripting/Luau.hpp>
+#include "ScriptRunner.hpp"
 #endif
 #ifdef DK_RUN_WITH_RUNTIME
 #include <dk/automation/JsonLines.hpp>
@@ -29,6 +29,9 @@ int run(const std::vector<std::filesystem::path> &args)
         std::cout << "       dk-run --project-root ROOT --stdio\n";
 #ifdef DK_RUN_WITH_LUAU
         std::cout << "       dk-run --project-root ROOT --script FILE.luau\n";
+        std::cout << "         [--script-timeout-ms 1..600000] [--script-max-interrupts 1..1000000000]\n"
+                     "         [--script-max-commands 1..100000] [--script-memory-mib 1..256]\n"
+                     "         [--script-access query|edit|project] (Ctrl+C/Ctrl+Break cancels on Windows)\n";
 #endif
 #ifdef _WIN32
         std::cout << "       dk-run --project-root ROOT --pipe NAME\n";
@@ -43,6 +46,9 @@ int run(const std::vector<std::filesystem::path> &args)
     }
 #ifdef DK_RUN_WITH_RUNTIME
     std::filesystem::path root, batch, script;
+#ifdef DK_RUN_WITH_LUAU
+    dk::runner::ScriptOptions script_options;
+#endif
     std::string pipe_name;
     bool auto_guard = false, stdio = false;
     for (std::size_t i = 0; i < args.size(); ++i)
@@ -69,12 +75,22 @@ int run(const std::vector<std::filesystem::path> &args)
 #endif
         else
         {
+#ifdef DK_RUN_WITH_LUAU
+            if (i + 1 < args.size() && dk::runner::parse_script_option(args[i], args[i + 1], script_options)) {
+                ++i;
+                continue;
+            }
+#endif
             std::cerr << "Invalid arguments. Use dk-run --help.\n";
             return 2;
         }
     }
     if (root.empty() || (static_cast<int>(stdio) + static_cast<int>(!batch.empty()) + static_cast<int>(!pipe_name.empty()) + static_cast<int>(!script.empty()) != 1)
-        || (auto_guard && batch.empty()))
+        || (auto_guard && batch.empty())
+#ifdef DK_RUN_WITH_LUAU
+        || (script.empty() && !script_options.specified.empty())
+#endif
+        )
     {
         std::cerr << "Use --project-root with exactly one input mode; --auto-guard is batch-only.\n";
         return 2;
@@ -86,23 +102,7 @@ int run(const std::vector<std::filesystem::path> &args)
         return 2;
     }
 #ifdef DK_RUN_WITH_LUAU
-    if (!script.empty())
-    {
-        if (script.extension() != ".luau")
-        {
-            std::cerr << "Script input must be a .luau source file.\n";
-            return 2;
-        }
-        std::ifstream input(script, std::ios::binary);
-        if (!input) { std::cerr << "Cannot open script file.\n"; return 2; }
-        const std::string source{std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
-        if (input.bad()) { std::cerr << "Cannot read script file.\n"; return 2; }
-        const auto path = script.u8string();
-        auto result = dk::run_luau(**runtime, source,
-            std::string_view(reinterpret_cast<const char*>(path.data()), path.size()));
-        if (!result) { std::cerr << result.error().message << '\n'; return 2; }
-        return 0;
-    }
+    if (!script.empty()) return dk::runner::run_script(**runtime, script, script_options);
 #endif
 #ifdef _WIN32
     if (_setmode(_fileno(stdout), _O_BINARY) == -1 || (stdio && _setmode(_fileno(stdin), _O_BINARY) == -1))
