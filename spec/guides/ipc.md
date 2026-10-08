@@ -1,12 +1,13 @@
 ---
 created_at: "2026-10-08T12:55:00+08:00"
-updated_at: "2026-10-08T13:04:33+08:00"
+updated_at: "2026-10-08T16:18:00+08:00"
 ---
 
 # 本机 IPC 与 dk-ctl
 
 [返回项目入口](../../README.md)。Windows Named Pipe 服务由一个 runner 或编辑器进程持有，
 业务命令、schema、guard 和撤销语义与 [命令参考](../commands/README.md) 相同。
+Python 调用、批量与作业等待见 [Python 自动化指南](python.md)，底层复用本文的 dk-ctl。
 
 ## 构建和启动
 

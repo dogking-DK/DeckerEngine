@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-08T15:06:00+08:00"
-updated_at: "2026-10-08T15:40:14+08:00"
+updated_at: "2026-10-08T16:18:00+08:00"
 ---
 
 # Luau 场景脚本
@@ -151,4 +151,4 @@ auto result = dk::run_luau(runtime, source, "example.luau", options);
 & ./scripts/verify.ps1 -BuildDir out/build/windows-scripting -Target @('dk_luau_tests','dk_run') -TestRegex '^dk\.luau\.' -Reason 'Luau 场景绑定和 runner 保存重载'
 ```
 
-绑定验收见 [0070](../development/0070-luau-command-bindings.md)，预算、取消与退出验收见 [0071](../development/0071-luau-execution-limits.md)。下一项为 M9.3 Python 自动化客户端。
+绑定验收见 [0070](../development/0070-luau-command-bindings.md)，预算、取消与退出验收见 [0071](../development/0071-luau-execution-limits.md)。外部批量操作与截图见 [Python 自动化指南](python.md)；阶段状态见 [Roadmap](../roadmap.md)。

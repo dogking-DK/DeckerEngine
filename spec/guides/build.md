@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-08T15:08:00+08:00"
+updated_at: "2026-10-08T16:18:00+08:00"
 ---
 
 # 构建与依赖配置
@@ -15,6 +15,11 @@ updated_at: "2026-10-08T15:08:00+08:00"
 仅需外部控制客户端时使用 `cmake --preset windows-client`，随后
 `cmake --build out/build/windows-client --config Debug --target dk_ctl`；该配置不启用 Runtime/Scene/Renderer。
 用法见 [IPC 指南](ipc.md)。完整 windows-dev/windows-editor 配置同样生成 dk_ctl。
+
+[Python SDK](python.md) 使用外部 Python 3.11+ 解释器和标准库，无额外 pip/vcpkg 库。
+同时有 dk_run/dk_ctl 时，CTest 自动发现解释器并注册 dk.python.unit/cpu；开启截图后
+另注册 dk.python.capture_gpu。缺失解释器会提示未注册，不影响原 C++ 构建。
+可在配置时使用 `-DPython3_EXECUTABLE=C:/path/to/python.exe` 指定解释器。
 
 需要 Visual Studio 2026 C++ 桌面开发工具和 CMake 4.2+。
 设置 `VCPKG_ROOT` 后，在根目录运行 [generate-vs2026.bat](../../generate-vs2026.bat)：

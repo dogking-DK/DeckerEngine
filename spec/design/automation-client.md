@@ -1,7 +1,7 @@
 ---
 module: automation-client
 created_at: "2026-10-08T12:30:00+08:00"
-updated_at: "2026-10-08T13:04:33+08:00"
+updated_at: "2026-10-08T16:18:00+08:00"
 status: accepted
 ---
 
@@ -26,5 +26,9 @@ Windows 使用 wmain/UTF-8 转换，文件路径支持 Unicode。默认 stdout �
 验证真实子进程发现、查询/guard 编辑/Undo/保存、失败退出码、Unicode 参数文件、未知端点、重试元数据、
 超时与断连语义；检查独立构建 target 依赖中没有 Runtime/Renderer。
 本阶段不提供自动重试、后台守护进程、端点扫描或远程网络控制。
+
+[Python SDK](automation-python.md) 在进程外封装此接口，保留原 execution、ticket、
+Task envelope 与显式重试语义；不改变 C++ 客户端或 IPC 协议。Python 自身期限到达时
+只回收 dk-ctl 子进程，不能把结果未知当作命令未执行。
 
 关联：[传输](automation-transport.md)、[命令参考](../commands/README.md)、[0067](../development/0067-ipc-client.md)。

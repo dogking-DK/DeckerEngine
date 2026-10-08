@@ -246,6 +246,37 @@ if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
     endif()
     find_program(DK_POWERSHELL NAMES pwsh powershell REQUIRED)
     if(TARGET dk_ctl)
+        find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
+        if(Python3_Interpreter_FOUND)
+            add_test(NAME dk.python.unit
+                COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python"
+                    "PYTHONDONTWRITEBYTECODE=1" "${Python3_EXECUTABLE}" -m unittest discover
+                    -s "${PROJECT_SOURCE_DIR}/sdk/python/tests" -v)
+            set_tests_properties(dk.python.unit PROPERTIES TIMEOUT 30)
+            foreach(kind IN ITEMS cpu capture_gpu)
+                if(kind STREQUAL "capture_gpu" AND NOT TARGET dk_render_services)
+                    continue()
+                endif()
+                set(_dk_python_extra)
+                if(kind STREQUAL "capture_gpu")
+                    set(_dk_python_extra --gpu)
+                endif()
+                add_test(NAME dk.python.${kind}
+                    COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python"
+                        "PYTHONDONTWRITEBYTECODE=1" "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/PythonClientTest.py"
+                        --runner "$<TARGET_FILE:dk_run>" --client "$<TARGET_FILE:dk_ctl>"
+                        --fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+                        --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/python"
+                        ${_dk_python_extra})
+                set_tests_properties(dk.python.${kind} PROPERTIES TIMEOUT 150)
+            endforeach()
+            if(TARGET dk_render_services)
+                set_tests_properties(dk.python.capture_gpu PROPERTIES LABELS "gpu" RUN_SERIAL TRUE)
+            endif()
+        else()
+            message(STATUS "Python 3.11+ not found: dk.python tests are not registered")
+        endif()
         add_test(NAME dk.ipc.runner_client
             COMMAND "${DK_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass
                 -File "${CMAKE_CURRENT_SOURCE_DIR}/IpcClientTest.ps1"

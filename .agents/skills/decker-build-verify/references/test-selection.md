@@ -36,6 +36,8 @@
 | JSON-RPC、JSON Lines、任务 | dk_protocol_tests | `^dk\.protocol\.` |
 | IPC ticket、断连/超时、分帧、有界队列、owner 分派 | dk_ipc_tests | `^dk\.ipc\.(IPC \|Named pipe \|Disconnected \|Pipe )` |
 | runner 与轻量客户端真实进程、重启与 Unicode 参数 | dk_run、dk_ctl | `^dk\.ipc\.runner_client$` |
+| Python 客户端参数/错误/截止时间与 CPU IPC 批量/重载 | dk_run、dk_ctl | `^dk\.python\.(unit\|cpu)$`（需要 Python 3.11+） |
+| Python 批量编辑、截图等待与产物收集 | dk_run、dk_ctl | `^dk\.python\.capture_gpu$`（需要 Python 3.11+ 和 render capture；gpu label） |
 | 独立客户端帮助入口（windows-client，无 Runtime/Renderer） | dk_ctl | `^dk\.ipc\.client_help$` |
 | 编辑器 IPC 草稿/manifest 刷新（无需 GPU） | dk_editor_tests | `^dk\.editor\.workspace IPC ` |
 | 编辑器外部 IPC 与窗口退出 | dk_editor_app、dk_run、dk_ctl | `^dk\.ipc\.editor_gpu_validation$`（gpu label） |
