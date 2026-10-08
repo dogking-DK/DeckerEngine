@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-08T16:22:26+08:00"
+updated_at: "2026-10-08T16:57:18+08:00"
 status: accepted
 ---
 
@@ -44,7 +44,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 [0061](development/0061-render-data-resources.md)；M7.2 最小渲染管线完成，见
 [0062](development/0062-render-pipeline.md)。M7.3 磁盘场景与资产集成完成，见
 [0063](development/0063-render-disk.md)。M7.4 截图任务与自动化验收完成，见
-[0064](development/0064-render-capture.md)；M7 与交付 B 已验收。M8.1 编辑器工作台已完成，见 [0065](development/0065-editor-workbench.md)；M8.2 拾取、Gizmo 与相机已完成，见 [0066](development/0066-editor-interaction.md)；M8.3 IPC 与 dk-ctl 已完成，见 [0067](development/0067-ipc-client.md)；M8.4 跨入口一致性完成，见 [0068](development/0068-editor-consistency.md)。M8 与交付 C 已验收；M9.1 Luau 命令绑定已完成，见 [0070](development/0070-luau-command-bindings.md)，M9.2 执行限制与取消已完成，见 [0071](development/0071-luau-execution-limits.md)，M9.3 Python 客户端已完成，见 [0072](development/0072-python-automation.md)，下一项为 M9.4。
+[0064](development/0064-render-capture.md)；M7 与交付 B 已验收。M8.1 编辑器工作台已完成，见 [0065](development/0065-editor-workbench.md)；M8.2 拾取、Gizmo 与相机已完成，见 [0066](development/0066-editor-interaction.md)；M8.3 IPC 与 dk-ctl 已完成，见 [0067](development/0067-ipc-client.md)；M8.4 跨入口一致性完成，见 [0068](development/0068-editor-consistency.md)。M8 与交付 C 已验收；M9.1 Luau 命令绑定已完成，见 [0070](development/0070-luau-command-bindings.md)，M9.2 执行限制与取消已完成，见 [0071](development/0071-luau-execution-limits.md)，M9.3 Python 客户端已完成，见 [0072](development/0072-python-automation.md)，M9.4 记录/重放已完成，见 [0073](development/0073-automation-replay.md)；M9 已验收，下一项为 M10.1。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作；提早建立多线程内存契约与性能测量，复杂并行优化仍由测量驱动。
@@ -68,7 +68,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M6 GPU Graph | 资源声明、依赖编译、同步、执行与诊断 | M5 | 已完成（M6.1–4） |
 | M7 场景渲染 | 资产上传、场景提取、Pass、pipeline、可等待截图 | M3、M4、M6 | 已完成（M7.1–4，交付 B） |
 | M8 编辑器与进程控制 | 可编辑保存的视口；dk-ctl 操作运行中的程序 | M7 | 已完成（M8.1–4，交付 C），见 0065–0068 |
-| M9 脚本与自动化 SDK | Luau 场景脚本、Python 客户端、批处理与重放 | M3；集成验收需要 M8 | 进行中：M9.1–3 已完成 |
+| M9 脚本与自动化 SDK | Luau 场景脚本、Python 客户端、批处理与重放 | M3；集成验收需要 M8 | 已完成（M9.1–4） |
 | M10 物理实验闭环 | 固定步长、CPU 参照、首个 GPU 求解器及可视化 | M7、M9 | 待开始 |
 
 默认执行表中顺序。M5 在 Foundation 补充完成后具备独立探索条件，
@@ -471,10 +471,10 @@ M5 的图像/计算样例迁移后输出保持符合原验证条件。
 | M9.1 | Luau 命令绑定 | M3 | 源码编译、受控命令、错误恢复、保存重载与 CPU runner 验证通过，见 [0070](development/0070-luau-command-bindings.md) | 已完成 |
 | M9.2 | 脚本运行限制与取消 | M9.1 | 时限/安全点/命令/VM额度、能力模式、取消恢复与控制台退出通过，见 [0071](development/0071-luau-execution-limits.md)；不承诺安全沙箱 | 已完成 |
 | M9.3 | Python 自动化客户端 | M8、M9.2 | 超时/错误/批量/事务、Job 等待、CPU 重载与 GPU 截图产物通过，见 [0072](development/0072-python-automation.md) | 已完成 |
-| M9.4 | 记录与重放 | M9.3 | 记录版本、资产、随机 seed、上下文并核验重放逻辑状态 | 待开始 |
+| M9.4 | 记录与重放 | M9.3 | 版本/输入/seed/上下文、逐步状态核验、Luau/CPU 与 GPU 重放通过，见 [0073](development/0073-automation-replay.md) | 已完成 |
 
 **当前设计：** [Luau 命令绑定](design/scripting-luau.md) 覆盖绑定、预算、能力和取消/退出；
-[Python 客户端](design/automation-python.md) 覆盖超时、错误、批量/事务、Job 等待和截图产物。后续先写 `automation-replay.md`。
+[Python 客户端](design/automation-python.md) 覆盖超时、错误、批量/事务、Job 等待和截图产物；[记录与重放](design/automation-replay.md) 覆盖输入/版本预检、身份映射、逻辑核验与失败边界。
 
 **验收：** Luau 创建一组实体并保存；Python 批量修改参数、等待截图并收集产物。
 同一操作从 GUI/CLI/Luau 进入相同服务校验。
@@ -546,7 +546,8 @@ M8.4 编辑器与外部操作一致性完成，见 [0068](development/0068-edito
 M9.1 Luau 命令绑定完成，见 [0070](development/0070-luau-command-bindings.md)：脚本经同一服务创建/编辑/保存场景，错误可恢复，runner 跨进程重载已验收。
 M9.2 执行限制与取消完成，见 [0071](development/0071-luau-execution-limits.md)：有限默认预算、VM额度、宿主取消和 Windows 控制台退出已验收，保留已提交状态。
 M9.3 Python 自动化客户端完成，见 [0072](development/0072-python-automation.md)：超时/错误、批量/事务、Job 等待和 CPU/GPU 真实链路已验收。
-下一项为 **M9.4 记录与重放**：记录版本、资产、随机 seed、上下文并核验逻辑场景状态。
+M9.4 记录与重放完成，见 [0073](development/0073-automation-replay.md)：版本/输入/seed/上下文、逐步状态核验及跨进程 CPU/GPU 链路已验收，M9 全部完成。
+下一项为 **M10.1 模拟世界与固定步长**：Edit/Play 分离、启动/暂停/单步/Stop 不破坏编辑态。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 

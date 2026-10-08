@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-08T16:18:00+08:00"
+updated_at: "2026-10-08T16:57:18+08:00"
 status: accepted
 ---
 
@@ -17,6 +17,7 @@ status: accepted
 技术方向：C++23、Eigen、Vulkan、Slang、SDL3、ImGui、CMake、vcpkg；
 ECS 使用 flecs，内嵌场景脚本使用 Luau，外部自动化使用 Python 标准库 SDK 封装 dk-ctl。
 Python 提供显式 guard/重试、顺序批量/事务、截止时间、作业等待和截图产物，见 [Python 设计](automation-python.md)。
+[记录/重放](automation-replay.md) 保存版本、输入摘要、seed 和上下文，重放经同一服务逐步核验逻辑状态；不承诺跨 GPU 完全确定性。
 Luau 通过官方 Compiler/VM 接口接入，不使用 Lua/sol2；脚本源码采用 `.luau`。
 引擎只加载由自身编译的源码产物，不接受外部字节码；绑定通过 Runtime/Commands/Services，
 不暴露裸 ECS/Vulkan 指针。同步脚本按次拥有 VM，提供受控场景命令和错误恢复，
@@ -58,7 +59,7 @@ render/pipeline 通过 Graph 执行 depth/opaque/tone/readback，提供绑定场
 | engine/physics | 接口、CPU/GPU 求解器 | CPU 不依赖 Vulkan；GPU 可用 Device/Graph |
 | engine/framework | commands、services、operations、runtime | 应用服务与模块装配；通用命令层保持独立 |
 | engine/automation | 协议、传输、客户端、服务端 | 客户端不链接完整 Runtime/Renderer |
-| sdk/python | Python 标准库调用、批量、等待与产物 | 通过 dk-ctl 使用已有协议；不嵌入引擎，不持有 Runtime 或 GPU 对象 |
+| sdk/python | Python 标准库调用、批量、等待、产物与记录/重放 | 通过 dk-ctl 使用已有协议；不嵌入引擎，不持有 Runtime 或 GPU 对象 |
 | engine/scripting | 同步 Luau 场景命令绑定 | PUBLIC Runtime、PRIVATE Compiler/VM；Runtime 不反向依赖脚本，三方接口留在实现内部 |
 | engine/editor | CPU 工作台/相机/手势模型与 ImGui 面板、拾取/Gizmo、窗口渲染桥 | model 依赖 Runtime/Geometry；UI 私有依赖 SDL3/ImGui/Presentation/Render；经命令修改状态 |
 

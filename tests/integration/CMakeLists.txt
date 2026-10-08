@@ -274,6 +274,29 @@ if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
             if(TARGET dk_render_services)
                 set_tests_properties(dk.python.capture_gpu PROPERTIES LABELS "gpu" RUN_SERIAL TRUE)
             endif()
+            foreach(kind IN ITEMS cpu gpu)
+                if(kind STREQUAL "gpu" AND NOT TARGET dk_render_services)
+                    continue()
+                endif()
+                set(_dk_replay_extra)
+                if(kind STREQUAL "gpu")
+                    set(_dk_replay_extra --gpu)
+                elseif(TARGET dk_scripting_luau)
+                    set(_dk_replay_extra --script-runner "$<TARGET_FILE:dk_run>"
+                        --script "${PROJECT_SOURCE_DIR}/examples/scripting/create-scene.luau")
+                endif()
+                add_test(NAME dk.replay.${kind}
+                    COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python"
+                        "PYTHONDONTWRITEBYTECODE=1" "${Python3_EXECUTABLE}"
+                        "${PROJECT_SOURCE_DIR}/tests/replay/ReplayTest.py"
+                        --runner "$<TARGET_FILE:dk_run>" --client "$<TARGET_FILE:dk_ctl>"
+                        --fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+                        --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/replay" ${_dk_replay_extra})
+                set_tests_properties(dk.replay.${kind} PROPERTIES TIMEOUT 180)
+            endforeach()
+            if(TARGET dk_render_services)
+                set_tests_properties(dk.replay.gpu PROPERTIES LABELS "gpu" RUN_SERIAL TRUE)
+            endif()
         else()
             message(STATUS "Python 3.11+ not found: dk.python tests are not registered")
         endif()

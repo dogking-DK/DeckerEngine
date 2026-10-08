@@ -6,3 +6,4 @@ Python 3.11+ 标准库客户端，通过 Windows `dk-ctl` 连接已有 runner/ed
 
 完整配置、API、错误和可执行示例见 [Python 自动化指南](../../spec/guides/python.md)，
 状态与失败契约见 [设计](../../spec/design/automation-python.md)。
+记录/重放使用 `decker.replay`，见 [重放指南](../../spec/guides/replay.md)。

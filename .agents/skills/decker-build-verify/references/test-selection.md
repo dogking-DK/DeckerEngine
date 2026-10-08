@@ -38,6 +38,9 @@
 | runner 与轻量客户端真实进程、重启与 Unicode 参数 | dk_run、dk_ctl | `^dk\.ipc\.runner_client$` |
 | Python 客户端参数/错误/截止时间与 CPU IPC 批量/重载 | dk_run、dk_ctl | `^dk\.python\.(unit\|cpu)$`（需要 Python 3.11+） |
 | Python 批量编辑、截图等待与产物收集 | dk_run、dk_ctl | `^dk\.python\.capture_gpu$`（需要 Python 3.11+ 和 render capture；gpu label） |
+| 记录格式/输入/失败与 Python SDK 单元回归 | dk_run、dk_ctl | `^dk\.python\.unit$`（需要 Python 3.11+） |
+| 跨进程记录/重放、身份/事务/文件/漂移拒绝 | dk_run、dk_ctl | `^dk\.replay\.cpu$`（启用 Luau 时从脚本保存的工程开始） |
+| 记录/重放截图及 Job/逻辑状态核验 | dk_run、dk_ctl | `^dk\.replay\.gpu$`（需要 Python 3.11+ 和 render capture；gpu label） |
 | 独立客户端帮助入口（windows-client，无 Runtime/Renderer） | dk_ctl | `^dk\.ipc\.client_help$` |
 | 编辑器 IPC 草稿/manifest 刷新（无需 GPU） | dk_editor_tests | `^dk\.editor\.workspace IPC ` |
 | 编辑器外部 IPC 与窗口退出 | dk_editor_app、dk_run、dk_ctl | `^dk\.ipc\.editor_gpu_validation$`（gpu label） |

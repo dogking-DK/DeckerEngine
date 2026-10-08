@@ -1,7 +1,7 @@
 ---
 module: automation-python
 created_at: "2026-10-08T16:00:00+08:00"
-updated_at: "2026-10-08T16:21:00+08:00"
+updated_at: "2026-10-08T16:57:18+08:00"
 status: accepted
 ---
 
@@ -13,7 +13,8 @@ M9.3 在 `sdk/python/decker` 提供 Python 3.11+ 标准库客户端，通过已�
 `dk-ctl` 连接 runner 或编辑器的 Named Pipe。源码目录加入 PYTHONPATH 即可使用，
 不增加 Python/C++ 三方依赖、CMake 引擎 target 或协议分支；不嵌入 Python、不直连 ECS。
 接口复用 [客户端](automation-client.md)、[协议](automation-protocol.md) 与
-[截图](render-capture.md)。本阶段不包含 M9.4 记录/重放、远程网络、异步 Python API 或进程托管。
+[截图](render-capture.md)。记录/重放扩展见 [对应设计](automation-replay.md)，复用此客户端而不修改其超时/重试语义。
+不提供远程网络、异步 Python API 或进程托管。
 
 ## 接口与数据
 

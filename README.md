@@ -6,7 +6,7 @@
 当前提供 Foundation、Memory/Tracy、Scene 持久化、命令/事务、CPU Runtime、
 资产导入与缓存、有界 Jobs、异步 CPU Ready，以及可选的 Vulkan 使用层（对象/管线/绑定/录制/同步/传输）、Slang 编译、离屏绘制/计算读回，以及 SDL3 窗口与 Vulkan 呈现。
 GPU Graph 提供资源/Pass 声明、CPU 编译、裁剪、transient 资源管理及单队列同步执行、状态导入导出和诊断；离屏样例已由 Graph 编排。
-Render 已提供只读场景/视图提取、GpuMesh/纹理上传与缓存卸载；已接通磁盘资产、场景 Graph 管线与 Runtime 截图。编辑器提供工作台、拾取/Gizmo、命令编辑和保存加载；Windows 本机 Named Pipe 与轻量 dk-ctl 已接入。GUI、外部命令、截图及保存后 runner 的指定视图一致性已验收，见 [M8.4 / 交付 C](spec/development/0068-editor-consistency.md)。Luau 支持通过同一服务创建、编辑、保存场景，并提供错误恢复、执行预算、能力模式及取消，见[脚本指南](spec/guides/scripting.md)。Python SDK 提供超时/结构化错误、批量/事务、作业等待和截图产物收集，见[Python 指南](spec/guides/python.md)。物理和网络远程控制尚未实现。
+Render 已提供只读场景/视图提取、GpuMesh/纹理上传与缓存卸载；已接通磁盘资产、场景 Graph 管线与 Runtime 截图。编辑器提供工作台、拾取/Gizmo、命令编辑和保存加载；Windows 本机 Named Pipe 与轻量 dk-ctl 已接入。GUI、外部命令、截图及保存后 runner 的指定视图一致性已验收，见 [M8.4 / 交付 C](spec/development/0068-editor-consistency.md)。Luau 支持通过同一服务创建、编辑、保存场景，并提供错误恢复、执行预算、能力模式及取消，见[脚本指南](spec/guides/scripting.md)。Python SDK 提供超时/结构化错误、批量/事务、作业等待和截图产物收集，见[Python 指南](spec/guides/python.md)。已提供版本化命令记录和逐步逻辑状态重放，见[重放指南](spec/guides/replay.md)。物理和网络远程控制尚未实现。
 阶段状态、依赖和下一项统一见[开发 Roadmap](spec/roadmap.md)。
 
 ## 快速开始
@@ -32,6 +32,7 @@ cmake --build --preset windows-debug --target dk_run
 | batch、持续 stdio、命令层独立配置 | [Runtime 指南](spec/guides/runtime.md)、[命令参考](spec/commands/README.md) |
 | Luau 场景构造/编辑、保存与脚本错误 | [脚本指南](spec/guides/scripting.md)、[可执行示例](examples/scripting/create-scene.luau) |
 | Named Pipe、dk-ctl、超时/重试与独立客户端 | [IPC 指南](spec/guides/ipc.md)、[IPC 协议参考](spec/commands/ipc.md) |
+| 记录/重放、输入指纹、seed 与逻辑状态核验 | [重放指南](spec/guides/replay.md)、[录制示例](examples/automation/record_experiment.py) |
 | Python 批量编辑、作业等待与截图产物 | [Python 指南](spec/guides/python.md)、[可执行示例](examples/automation/batch_capture.py) |
 | 登记、改名、导入、缓存、异步加载与作业 | [资产指南](spec/guides/assets.md) |
 | heap、拥有型容器、scratch、pool、线程上下文、Tracy | [Memory 指南](spec/guides/memory.md) |
@@ -74,7 +75,7 @@ pwsh -NoProfile -File scripts/check-spec.ps1
 | engine/framework | commands、services、operations、runtime |
 | engine/scripting/luau | 独立同步 Luau VM、受控场景命令、值转换与错误恢复 |
 | engine/automation | JSON-RPC、JSON Lines/stdio、Windows Named Pipe 与轻量客户端 |
-| sdk/python | 基于 dk-ctl 的标准库 Python 自动化客户端 |
+| sdk/python | 基于 dk-ctl 的标准库 Python 自动化客户端与记录/重放 |
 | engine/graphics/device、shader-types、shaders、offscreen、presentation、graph | Vulkan 1.4 使用层、独立 shader 产物、Slang 编译、离屏执行、窗口呈现与 Graph 单队列执行 |
 | engine/render/data、resources、pipeline、disk | 不可变场景/视图、GPU 资产缓存、磁盘输入、Graph 场景渲染与帧读回 |
 | engine/editor、apps/editor | CPU 工作台模型、ImGui 面板与 dk-editor |
@@ -82,9 +83,9 @@ pwsh -NoProfile -File scripts/check-spec.ps1
 | apps/runner、tools/assetc | CPU 命令进程、离线资产工具 |
 | tools/shaderc、shaders/common | 独立 shader 编译工具、图形/compute 源码示例 |
 | tools/profiling | 独立 Tracy 工具及内存 capture 检查器 |
-| examples、tests | CPU/窗口示例、单元与集成测试、独立 GPU 设备探针；replay 预留 |
+| examples、tests | CPU/窗口示例、单元与集成测试、独立 GPU 设备探针和跨进程 replay 验收 |
 | spec、.agents/skills | 设计/指南/记录/命令文档、按任务加载的开发方法 |
 
-physics 与记录/重放仍按 Roadmap 逐步接入；预留目录和安装依赖不代表已经实现。
+physics 仍按 Roadmap 逐步接入；预留目录和安装依赖不代表已经实现。
 公开头位于各模块 `include/dk/`，内部实现位于 `src/`，依赖通过 target 声明。
 构建产物和个人环境留在 Git 忽略目录。

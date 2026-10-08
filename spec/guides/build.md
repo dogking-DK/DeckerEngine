@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-08T16:18:00+08:00"
+updated_at: "2026-10-08T16:57:18+08:00"
 ---
 
 # 构建与依赖配置
@@ -18,7 +18,9 @@ updated_at: "2026-10-08T16:18:00+08:00"
 
 [Python SDK](python.md) 使用外部 Python 3.11+ 解释器和标准库，无额外 pip/vcpkg 库。
 同时有 dk_run/dk_ctl 时，CTest 自动发现解释器并注册 dk.python.unit/cpu；开启截图后
-另注册 dk.python.capture_gpu。缺失解释器会提示未注册，不影响原 C++ 构建。
+另注册 dk.python.capture_gpu。记录/重放另有 dk.replay.cpu，截图配置提供 dk.replay.gpu；
+启用 Luau 时 CPU 重放使用脚本保存的初始工程，见 [重放指南](replay.md)。
+缺失解释器会提示未注册，不影响原 C++ 构建。
 可在配置时使用 `-DPython3_EXECUTABLE=C:/path/to/python.exe` 指定解释器。
 
 需要 Visual Studio 2026 C++ 桌面开发工具和 CMake 4.2+。
