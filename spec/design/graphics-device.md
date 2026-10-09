@@ -1,7 +1,7 @@
 ---
 module: graphics-device
 created_at: "2026-09-28T16:38:00+08:00"
-updated_at: "2026-10-02T22:38:00+08:00"
+updated_at: "2026-10-09T19:38:24+08:00"
 status: accepted
 ---
 
@@ -62,7 +62,12 @@ callback 覆盖 instance 创建/销毁及 device 生命周期，转发 severity�
 
 ## 所有权、发布与失败
 
-每个 Device 独立持有 loader、volk instance/device table、vk::raii::Context/Instance/
+M11.4 的 `DeviceOptions::cancel` 是可选 stop_token，默认不取消。创建在 loader/instance、
+选卡与 logical device 的调用之间检查；取消返回 invalid_state 与唯一 context
+`graphics.device.create.cancelled`，已经获得的句柄仍由原 RAII 路径回收。不会抢占单个驱动调用，
+不会发布半成品 Device，也不会把并发发生的真实 Vulkan 错误改写成取消。
+
+默认每次create独立持有 loader、volk instance/device table、vk::raii::Context/Instance/
 DebugUtilsMessengerEXT/PhysicalDevice/Device/Queue 和 VMA allocator。
 Context 显式使用该 loader 的 resolver；Hpp 每对象 dispatcher 与 volk table 独立，
 不启用 Hpp 隐式动态 loader 或全局默认 dispatcher。成员声明顺序保证诊断状态和 loader
@@ -129,3 +134,16 @@ volk 1.4.357.0、vk-bootstrap 1.4.357、VMA 3.4.0 官方 port 与 baseline 一�
 Vulkan 1.4 基线切换见 [0048](../development/0048-vulkan-14-baseline.md)。
 Vulkan-Hpp 随固定 vulkan-headers 1.4.357.0 提供；参考官方
 [RAII 指南](https://github.com/KhronosGroup/Vulkan-Hpp/blob/main/docs/VkRaiiProgrammingGuide.md)。
+
+## M11.4 同族独立队列与设备寿命复用
+
+DeviceOptions.secondary_queue显式请求同族第二条队列；支持时创建两条，否则保持一条。
+默认仍只创建第0条。queue_count/queue_index公开实际配置；share_queue(index)返回显式共享
+设备/instance/VMA/诊断寿命的移动型Device视图，越界拒绝且无变化。create失败仍不发布任何视图。
+每个队列的提交域、command pool、timeline和资源ledger独立；不同域之间不共享可变资源，
+不实现跨队列资源传递或自动依赖。调用者必须保证同一原生队列只有一个串行提交所有者。
+VMA保持默认内部同步；设备元数据只读、诊断计数原子。最后一个视图才销毁设备和instance，
+最后释放线程必须满足surface/window token的原有主线程约束，应用先join worker再释放主视图。
+依据：[Vulkan queues](https://docs.vulkan.org/guide/latest/queues.html)、
+[VMA thread safety](https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/general_considerations.html)。
+验证共享视图越界/最后释放/单队列退化，以及真实GUI双队列validation、任务边界和数值。

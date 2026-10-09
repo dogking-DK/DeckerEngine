@@ -1,7 +1,7 @@
 ---
 module: command-reference-runtime
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-10-09T15:30:00+08:00"
+updated_at: "2026-10-09T19:38:24+08:00"
 status: accepted
 ---
 
@@ -58,6 +58,9 @@ effect=query，undoable=false；返回一条 TaskRecord。未知或已淘汰 ID 
 ```
 
 ## runtime.shutdown
+
+有限仿真任务先收到停止请求；`stopping=true` 表示受理，不代表 GPU 已回收。
+宿主可以并行清理窗口，进程退出前仍等待 worker 安全结束；不会 detach。
 
 参数 `{}`；effect=control，undoable=false。返回 `{stopping:true}`，刷新当前响应后结束读取并退出。
 同时释放活动 PlayWorld，不会自动保存场景；需要保留的数据须提前调用 scene.save/project.save。

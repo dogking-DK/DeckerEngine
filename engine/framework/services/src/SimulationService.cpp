@@ -6,6 +6,17 @@
 #endif
 
 namespace dk {
+Result<void> SimulationService::set_gpu_device(std::shared_ptr<const graphics::Device> device) {
+    if (play_) return std::unexpected(Error{ErrorCode::invalid_state,"Stop simulation before replacing its GPU device"});
+#ifdef DK_SIMULATION_GPU
+    if (device && device->queue_count()<2)
+        return std::unexpected(Error{ErrorCode::not_supported,"Simulation requires a dedicated secondary queue"});
+#else
+    if (device) return std::unexpected(Error{ErrorCode::not_supported,"GPU simulation is not compiled"});
+#endif
+    gpu_device_=std::move(device);
+    return {};
+}
 Result<void> SimulationService::run(const SceneService& edit, EditGuard guard, std::uint32_t count,
     ClothConfig cloth, bool gpu, std::int64_t dt, std::uint32_t batch) {
     if (!count || count > 1000000 || !batch || batch > 8 || dt < 1000000 || dt > 33333333)
@@ -20,7 +31,7 @@ Result<void> SimulationService::run(const SceneService& edit, EditGuard guard, s
     auto candidate = std::move(play_);
     candidate->task_gpu = gpu;
     candidate->paused = false;
-    candidate->task = detail::AsyncSimulation::create(*candidate->solver,gpu,dt,count,batch);
+    candidate->task = detail::AsyncSimulation::create(*candidate->solver,gpu,dt,count,batch,gpu_device_);
     candidate->progress = SimulationTaskState{SimulationTaskStatus::initializing,count,0,0,batch};
     play_ = std::move(candidate);
     return {};
@@ -58,7 +69,7 @@ Result<void> SimulationService::start(const SceneService& edit, EditGuard guard,
         std::move(input->manifest), std::move(*scene), *clock, cloth, std::move(solver), paused, {}, {}, {}});
 #ifdef DK_SIMULATION_GPU
     if (gpu) {
-        auto created = detail::GpuSimulation::create(*candidate->solver);
+        auto created = detail::GpuSimulation::create(*candidate->solver,{},gpu_device_);
         if (!created) return std::unexpected(created.error());
         candidate->gpu = std::move(*created);
     }
@@ -111,6 +122,10 @@ Result<void> SimulationService::advance_solver(const FixedStepClock& clock, std:
     }
 #endif
     return play_->solver->advance(clock.config().fixed_dt_ns, count);
+}
+void SimulationService::request_shutdown() noexcept {
+    if (play_ && play_->task) play_->task->stop();
+    else play_.reset();
 }
 Result<void> SimulationService::stop(SimulationId id) {
     auto valid = check_run(id); if (!valid) return valid;

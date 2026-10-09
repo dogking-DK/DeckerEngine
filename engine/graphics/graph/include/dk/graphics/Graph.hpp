@@ -1,4 +1,5 @@
 #pragma once
+#include <stop_token>
 #include <dk/graphics/ResourceValidation.hpp>
 #include <variant>
 #include <optional>
@@ -125,7 +126,7 @@ public:
     [[nodiscard]] Result<PassDesc> pass(PassId) const;
     [[nodiscard]] Counts counts() const noexcept;
     [[nodiscard]] Result<void> validate() const;
-    [[nodiscard]] Result<CompiledGraph> compile() const;
+    [[nodiscard]] Result<CompiledGraph> compile(std::stop_token = {}) const;
     // Replaces graph identity only after allocating an empty candidate successfully.
     [[nodiscard]] Result<void> reset();
 private:

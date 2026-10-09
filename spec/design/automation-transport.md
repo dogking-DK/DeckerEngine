@@ -1,7 +1,7 @@
 ---
 module: automation-transport
 created_at: "2026-10-08T12:30:00+08:00"
-updated_at: "2026-10-09T12:02:00+08:00"
+updated_at: "2026-10-09T19:38:24+08:00"
 status: accepted
 ---
 
@@ -31,6 +31,9 @@ owner 在 pump 安全点解析/分派，runner 空闲时等待 RuntimeEvents，e
 accepted 队列项断连后仍可能执行；超时不是回滚。队列满断开且不入队，但远端仍按结果未知处理。
 退出停止接收，已提交回复允许短暂排空；随后 CancelIoEx、等待 overlapped 完成、join、释放句柄。
 响应写完后等待客户端关闭或下一帧，避免 DisconnectNamedPipe 丢弃未读响应。
+关闭立即通知独立的accept停止事件，取消空闲ConnectNamedPipe；活动连接仍使用原IO停止事件，
+在grace内保留回复排空机会。避免客户端刚断开且worker重新进入监听时，无待发回复也等待整个grace。
+grace到期才取消活动IO并join，不将停止监听误当作可以丢弃已提交回复。覆盖空闲grace关闭和回复排空回归。
 
 ## IPC v1 与重试身份
 

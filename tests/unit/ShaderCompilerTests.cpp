@@ -190,3 +190,27 @@ TEST_CASE("same process observes include edits and retains successful warnings",
     CHECK(second->diagnostics.empty());
     CHECK(first->spirv == original); // Later compiles cannot invalidate an earlier owned artifact.
 }
+
+TEST_CASE("scoped shader batch preserves independent artifacts and cancellation", "[shaders]")
+{
+    Fixture fixture;
+    const std::array requests{
+        ShaderCompileRequest{std::filesystem::path{DK_COMMON_SHADER_DIR}/"triangle.slang","vertexMain",ShaderStage::vertex},
+        ShaderCompileRequest{std::filesystem::path{DK_COMMON_SHADER_DIR}/"triangle.slang","fragmentMain",ShaderStage::fragment}};
+    {
+        auto batch=compile_shaders(requests,fixture.heap); REQUIRE(batch); REQUIRE(batch->size()==requests.size());
+        for (std::size_t i=0;i<requests.size();++i) {
+            auto single=compile_shader(requests[i],fixture.heap); require_success(single);
+            CHECK((*batch)[i].spirv==single->spirv);
+            CHECK(shader_reflection_json((*batch)[i])==shader_reflection_json(*single));
+        }
+    }
+    std::stop_source stop; stop.request_stop();
+    auto cancelled=compile_shaders(requests,fixture.heap,stop.get_token()); REQUIRE_FALSE(cancelled);
+    CHECK(cancelled.error().context==std::vector<std::string>{"graphics.shader.compile.cancelled"});
+    CHECK(fixture.heap.snapshot().live_allocations==0);
+    auto failed_requests=requests; failed_requests[1].entry="missingEntry";
+    auto failed=compile_shaders(failed_requests,fixture.heap); REQUIRE_FALSE(failed);
+    CHECK(failed.error().code==dk::ErrorCode::not_found);
+    CHECK(fixture.heap.snapshot().live_allocations==0);
+}

@@ -1,7 +1,7 @@
 ---
 module: graphics-shaders
 created_at: "2026-09-28T19:00:00+08:00"
-updated_at: "2026-09-30T11:46:20+08:00"
+updated_at: "2026-10-09T19:38:24+08:00"
 status: accepted
 ---
 
@@ -35,7 +35,7 @@ compute 入口。入口必须由 Slang 识别阶段，且与请求阶段一致�
 编译返回拥有型结果，SPIR-V words、反射列表和字符串采用调用者提供的 Memory resource；
 Slang COM 对象由上游 ComPtr RAII 管理，内部编译分配属于第三方内存边界；
 IO 字节、请求适配字符串与 JSON 序列化临时对象使用现有标准/三方分配器，不计入返回产物预算。
-每次调用创建独立 session，不跨调用缓存已加载模块；相同输入和固定编译器配置可重复，源码/include 修改在下一次生效。
+每次编译创建独立ISession，不跨编译缓存已加载模块；相同输入和固定编译器配置可重复，源码/include 修改在下一次生效。
 调用者保证输入文件在一次编译期间不变，不承诺跨编译器版本或机器的字节稳定。
 错误使用 dk::Result，保留 source/entry/阶段和 Slang 原始诊断；成功警告单独返回。
 基础设施分配异常继续抛出，CLI 捕获后以独立退出码报告。
@@ -65,3 +65,14 @@ shader-slang 2026.18（官方当前 port，无修订），不改变 CPU runner �
 参考：[Slang 编译 API](https://docs.shader-slang.org/en/latest/external/slang/docs/user-guide/08-compiling.html)、
 [反射 API](https://docs.shader-slang.org/en/latest/external/slang/docs/user-guide/09-reflection.html)、
 [IO 契约](foundation-io.md)、[Memory 契约](foundation-memory.md)。
+
+
+## M11.4 有界批量编译与取消
+
+compile_shaders接受一组请求，在本次调用内复用一个IGlobalSession，逐入口创建独立ISession；
+作用域结束释放全部Slang对象，不引入进程级缓存或跨线程编译器共享。单个compile_shader仍保持独立全局会话。
+相同输入的单次/批量SPIR-V和反射必须一致；宏和导入仅在本入口的ISession中生效。
+单次与批量接受可选stop_token，在全局会话/后端/局部会话、加载模块、组合、链接、反射和生成代码之间检查。
+取消返回invalid_state及唯一context graphics.shader.compile.cancelled，不发布半批产物；真实阶段失败优先保留。
+不承诺中断单个Slang调用。XPBD四个变体共用一次全局会话，减少重复标准库初始化的不可取消窗口。
+定向验证批量与单次产物逐字节一致、预取消无产物/无分配残留、真实任务中途取消及数值。

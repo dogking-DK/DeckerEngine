@@ -1,7 +1,7 @@
 ---
 module: physics-xpbd-gpu
 created_at: "2026-10-09T10:59:13+08:00"
-updated_at: "2026-10-09T15:30:00+08:00"
+updated_at: "2026-10-09T19:38:24+08:00"
 status: accepted
 ---
 
@@ -70,3 +70,19 @@ GPU提交计数由solver持有，完成数由任务单独记录；等待失败�
 owner只读进度并发控制请求，不跨线程借用GPU状态。Stop排空后由owner移除Play；不detach在途worker。
 原 step/read/capture 仍提供同步契约，有限任务显式诊断在稳定边界交给worker执行。
 详见[任务状态契约](physics-api.md#m113-有界有限步任务)及[0080](../development/0080-bounded-simulation-tasks.md)。
+
+## M11.4 初始化的协作取消
+
+GpuXpbdSolver::create接受可选stop_token，默认不取消以保持既有同步调用。
+每个shader/pipeline创建边界与上传前检查请求；取消返回invalid_state并附唯一context
+physics.gpu.initialize.cancelled，调用层据该标记区分取消和故障，不以任意错误加stop_requested伪装取消。
+取消不发布solver；局部资源正常销毁。单个编译/驱动调用不能硬抢占，上传提交后仍需等完成。
+私有GpuSimulation在设备/队列创建边界执行同样检查，向任务返回明确的未初始化取消结果。
+
+GpuXpbdOptions增加默认无取消的stop_token，将任务取消传到Graph.compile；
+建图安全点和execute提交前再次检查。取消返回独立context，未提交时不增加steps或发布新buffer/cache；
+一旦execute成功提交则沿用完成轮询，不能把已提交状态当作取消回滚。
+
+M11.4初始化将四个计算变体交给compile_shaders，在一次拥有型批次中复用Slang全局会话，
+每入口仍为独立局部会话和相同宏/优化选项；产物齐备后创建GPU模块/布局/管线。
+编译阶段取消映射为physics.gpu.initialize.cancelled，候选CPU/GPU产物全部回收，已提交阶段不变。

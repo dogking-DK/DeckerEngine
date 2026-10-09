@@ -26,9 +26,11 @@ int main(int argc,char** argv) {
             }
 #endif
             else if (arg=="--validation") options.validation=true;
+            else if (arg=="--no-validation") options.disable_validation=true;
             else if (arg=="--smoke") options.smoke=true;
             else if (arg=="--interaction-smoke") { options.smoke=true; options.interaction_smoke=true; }
             else if (arg=="--consistency-smoke") options.consistency_smoke=true;
+            else if (arg=="--simulation-response-probe") options.simulation_response_probe=true;
             else if (arg=="--fixture-camera") options.fixture_camera=true;
             else if (arg=="--frames") {
                 const auto text=next().string(); std::size_t used=0;
@@ -38,17 +40,21 @@ int main(int argc,char** argv) {
             }
             else if (arg=="--screenshot") options.screenshot=next();
             else if (arg=="--help") {
-                std::puts("dk-editor [--root PROJECT_ROOT] [--manifest RELATIVE_MANIFEST] [--validation] [--pipe NAME]\n"
+                std::puts("dk-editor [--root PROJECT_ROOT] [--manifest RELATIVE_MANIFEST] [--validation|--no-validation] [--pipe NAME]\n"
                     "Acceptance: --frames N --screenshot OUTPUT.ppm [--fixture-camera]\n"
                     "            --smoke/--interaction-smoke --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
-                    "            --consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm");
+                    "            --consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
+                    "            --simulation-response-probe --pipe NAME --root DISPOSABLE_PROJECT");
                 return 0;
             } else throw std::runtime_error("Unknown dk-editor option");
         }
+        if (options.validation && options.disable_validation) throw std::runtime_error("--validation and --no-validation are mutually exclusive");
         if (!options.screenshot.empty() && options.screenshot.extension()!=".ppm")
             throw std::runtime_error("screenshot must have .ppm extension");
         if (options.consistency_smoke && (options.smoke || options.frames || options.pipe.empty() || !options.fixture_camera || options.screenshot.empty()))
             throw std::runtime_error("--consistency-smoke requires --pipe, --fixture-camera and --screenshot; incompatible with --frames and other smoke modes");
+        if (options.simulation_response_probe && (options.smoke || options.consistency_smoke || options.frames || options.pipe.empty()))
+            throw std::runtime_error("--simulation-response-probe requires --pipe and is incompatible with smoke/frames");
         return dk::editor::run_workbench(options);
     } catch (const std::exception& error) { std::fprintf(stderr,"editor: %s\n",error.what()); return 1; }
 }

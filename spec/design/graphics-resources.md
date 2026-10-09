@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-09T14:26:13+08:00"
+updated_at: "2026-10-09T19:38:24+08:00"
 status: accepted
 ---
 
@@ -20,7 +20,7 @@ Graph 自己约束图身份、依赖和内容声明，见 [Graph 设计](graphic
 M5.2 在 [设备底座](graphics-device.md) 上交付 VMA Buffer/Image、上传/读回、单队列提交、
 完成票据、固定提交槽和延迟回收。实现位于 engine/graphics/device，继续使用 dk::graphics_device；
 公开 Resources.hpp，不新增依赖或 feature。普通 Vulkan 所有权使用 vk::raii；VMA 资源配对释放。
-设备使用层现在覆盖对象、管线、绑定和录制；不负责 shader 编译、窗口、Graph 调度、多队列或后台提交线程。
+设备使用层现在覆盖对象、管线、绑定和录制；不负责 shader 编译、窗口、Graph 调度、跨队列调度或后台提交线程。
 [离屏模块](graphics-offscreen.md) 负责特定绘制/计算输入输出，逐步迁移到同一批次保留机制。
 
 [M5.5 使用层设计](graphics-vulkan.md) 扩展全部 GPU 对象保留和常用操作。
@@ -168,3 +168,14 @@ buffer 的部分范围 full_overwrite 不代表整 buffer 初始化；仍允许�
 D32 新增 TransferDst usage，只用于完整子资源 clear_depth；不开放深度 copy/readback。
 清除仍先检查状态/范围，完成后只更新 batch 局部 initialized，submit 成功才发布。
 关联 [0062](../development/0062-render-pipeline.md)。
+
+## M11.4 取消边界补充
+
+设备创建可在驱动调用之间协作取消，见[设备设计](graphics-device.md)；已经提交的Queue工作仍必须
+到达completion后回收。有限模拟worker与GUI窗口分别拥有设备/提交域，可以并行关闭，但各自不能越过
+本域completion提前释放资源；shutdown受理回复不代表资源已经销毁。
+
+
+M11.4允许独立SubmissionQueue消费同设备不同队列索引的Device视图；各自保有独立
+DeviceLifetime、资源ledger和timeline，既有owner检查继续拒绝跨提交域资源。
+共享VMA由其默认内部同步保护；close仅等待本提交域的timeline，不用全设备idle阻塞另一队列。

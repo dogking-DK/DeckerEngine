@@ -1,7 +1,7 @@
 ---
 module: runtime
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-10-09T15:30:00+08:00"
+updated_at: "2026-10-09T19:38:24+08:00"
 status: accepted
 ---
 
@@ -134,6 +134,12 @@ capabilities.simulation 增加 finite_tasks/max_task_steps/max_batch_steps/max_i
 此能力属于SimulationService，以run_id查询进度；async_tasks=false和原同步Commands TaskId、Jobs JobId不变。
 SimulationServices PRIVATE依赖Threads与Profiling，使用一个专属后端worker；无通用任务池或队列扩张。
 Runtime::pump在owner发布进度/故障/完成时钟；活动任务next_pump_deadline最多5ms后再次检查，暂停/终态无空转。
-Stop只受理stopping，worker安全销毁后pump清除Play；shutdown停止接收新命令并请求关闭/join。
+Stop只受理stopping，worker安全销毁后pump清除Play；shutdown停止接收新命令并请求关闭。
+M11.4 将有限任务的 join 延后到 Runtime 所有者销毁；shutdown 回复只表示已受理，
+宿主窗口回收可与仿真 worker 回收重叠，进程退出前仍必须 join。旧同步 Play 仍立即清理。
 专属worker不访问Scene/Runtime，不发协议响应；线程基础设施异常传回owner，不作为普通任务失败吞掉。
 旧start/step仍同步，显式particles/export仍可阻塞；GUI与全样本响应性验收属于M11.4。
+
+
+宿主可在Edit态通过set_simulation_gpu_device配置模拟专用的第二队列，转发服务校验；
+这是宿主资源装配API，不新增命令或绕过guard。CPU-only头接口仅前向声明Device，不引入Vulkan依赖。

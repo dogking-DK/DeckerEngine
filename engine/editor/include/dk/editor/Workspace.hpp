@@ -26,6 +26,11 @@ public:
     [[nodiscard]] Result<TransformEdit> begin_transform() const;
     [[nodiscard]] Result<void> commit_transform(const TransformEdit&);
     void pump();
+    [[nodiscard]] Result<void> set_simulation_gpu_device(std::shared_ptr<const graphics::Device> device) {
+        return runtime_->set_simulation_gpu_device(std::move(device));
+    }
+    [[nodiscard]] Result<void> request_shutdown();
+    [[nodiscard]] SimulationState simulation_state() const { return runtime_->simulation_state(); }
     [[nodiscard]] bool stopping() const { return runtime_->stopping(); }
 #ifdef _WIN32
     [[nodiscard]] Result<void> start_ipc(std::string_view name);

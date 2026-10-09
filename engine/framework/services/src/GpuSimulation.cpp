@@ -29,14 +29,23 @@ struct GpuSimulation::Impl {
 };
 GpuSimulation::GpuSimulation(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
 GpuSimulation::~GpuSimulation() = default;
-Result<std::shared_ptr<GpuSimulation>> GpuSimulation::create(const XpbdSolver& cpu) {
+Result<std::shared_ptr<GpuSimulation>> GpuSimulation::create(const XpbdSolver& cpu, std::stop_token stop,
+    std::shared_ptr<const graphics::Device> host_device) {
     try {
+        if (stop.stop_requested()) return std::shared_ptr<GpuSimulation>{};
         auto impl = std::make_unique<Impl>();
         memory::ExecutionScope scope{impl->context, impl->heap};
-        auto device = graphics::Device::create(impl->heap);
+        auto device = host_device ? host_device->share_queue(1) : graphics::Device::create(impl->heap, {.cancel=stop});
+        if (!device && device.error().context == std::vector<std::string>{"graphics.device.create.cancelled"})
+            return std::shared_ptr<GpuSimulation>{};
         if (!device) return std::unexpected(device.error().with_context("simulation.gpu.device"));
+        if (stop.stop_requested()) return std::shared_ptr<GpuSimulation>{};
         impl->queue.emplace(take(graphics::SubmissionQueue::create(impl->heap, std::move(*device))));
-        impl->solver = take(GpuXpbdSolver::create(impl->heap, *impl->queue, cpu, DK_XPBD_SHADER));
+        auto solver = GpuXpbdSolver::create(impl->heap, *impl->queue, cpu, DK_XPBD_SHADER, stop);
+        if (!solver && solver.error().context == std::vector<std::string>{"physics.gpu.initialize.cancelled"})
+            return std::shared_ptr<GpuSimulation>{};
+        impl->solver = take(std::move(solver));
+        if (stop.stop_requested()) return std::shared_ptr<GpuSimulation>{};
         return std::shared_ptr<GpuSimulation>(new GpuSimulation(std::move(impl)));
     } catch (Error& e) { return std::unexpected(std::move(e)); }
 }
@@ -46,13 +55,15 @@ Result<void> GpuSimulation::step(std::int64_t dt, std::uint32_t count) {
     try { auto frame = take(s.solver.advance(*s.queue, dt, count)); wait(frame, *s.queue); return {}; }
     catch (Error& e) { return std::unexpected(std::move(e)); }
 }
-Result<void> GpuSimulation::submit(std::int64_t dt, std::uint32_t count) {
+Result<bool> GpuSimulation::submit(std::int64_t dt, std::uint32_t count, std::stop_token stop) {
     auto& s = *impl_; memory::ExecutionScope scope{s.context, s.heap};
     if (s.pending) return std::unexpected(Error{ErrorCode::invalid_state,"Simulation already has an in-flight batch"});
-    auto frame = s.solver.advance(*s.queue,dt,count);
+    auto frame = s.solver.advance(*s.queue,dt,count,{.cancel=stop});
+    if (!frame && (frame.error().context==std::vector<std::string>{"graph.compile.cancelled"} ||
+                   frame.error().context==std::vector<std::string>{"physics.gpu.advance.cancelled"})) return false;
     if (!frame) return std::unexpected(frame.error());
     s.pending = std::move(*frame);
-    return {};
+    return true;
 }
 Result<bool> GpuSimulation::poll() {
     auto& s = *impl_; memory::ExecutionScope scope{s.context, s.heap};

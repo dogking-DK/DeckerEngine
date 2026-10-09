@@ -48,8 +48,9 @@ struct GraphState {
 };
 
 // Shared declaration analysis. Populates ordering constraints only; no culling.
-Result<void> analyze(const std::shared_ptr<GraphState>& state, Vector<Dependency>& dependencies);
-void normalize_dependencies(Vector<Dependency>& dependencies);
+Result<void> analyze(const std::shared_ptr<GraphState>& state, Vector<Dependency>& dependencies, std::stop_token = {});
+inline Error compilation_cancelled() { return {ErrorCode::invalid_state,"Graph compilation cancelled",{"graph.compile.cancelled"}}; }
+void normalize_dependencies(Vector<Dependency>& dependencies, std::stop_token = {});
 std::size_t resource_number(const ResourceId& id, const GraphState& state);
 Use complete_use(const ResourceId& id, const GraphState& state);
 } // namespace detail

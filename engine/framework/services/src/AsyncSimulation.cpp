@@ -25,25 +25,30 @@ namespace detail {
 namespace {
 class Backend final : public SimulationTaskBackend {
 public:
-    Backend(XpbdSolver input, bool gpu) : cpu_(std::move(input)), use_gpu_(gpu) {}
-    Result<void> initialize() override {
+    Backend(XpbdSolver input, bool gpu,std::shared_ptr<const graphics::Device> device)
+        : cpu_(std::move(input)), use_gpu_(gpu),device_(std::move(device)) {}
+    Result<bool> initialize(std::stop_token stop) override {
+        if (stop.stop_requested()) return false;
 #ifdef DK_SIMULATION_GPU
         if (use_gpu_) {
-            auto result = GpuSimulation::create(cpu_);
+            auto result = GpuSimulation::create(cpu_,stop,device_);
             if (!result) return std::unexpected(result.error());
             gpu_ = std::move(*result);
+            if (!gpu_) return false;
         }
 #endif
-        return {};
+        return true;
     }
-    Result<void> submit(std::int64_t dt, std::uint32_t count) override {
+    Result<bool> submit(std::int64_t dt, std::uint32_t count, std::stop_token stop) override {
+        if (stop.stop_requested()) return false;
         dt_ = dt;
 #ifdef DK_SIMULATION_GPU
-        if (gpu_) return gpu_->submit(dt,count);
+        if (gpu_) return gpu_->submit(dt,count,stop);
 #endif
         auto result = cpu_.advance(dt,count);
         if (result) steps_ += count;
-        return result;
+        if (!result) return std::unexpected(result.error());
+        return true;
     }
     Result<bool> poll() override {
 #ifdef DK_SIMULATION_GPU
@@ -75,7 +80,7 @@ public:
     Result<SimulationImage> capture(std::int64_t dt, const ClothConfig& cloth, std::uint32_t width, std::uint32_t height) override {
         auto renderer = gpu_;
         if (!renderer) {
-            auto created = GpuSimulation::create(cpu_);
+            auto created = GpuSimulation::create(cpu_,{},device_);
             if (!created) return std::unexpected(created.error());
             renderer = std::move(*created);
         }
@@ -85,6 +90,7 @@ public:
 private:
     XpbdSolver cpu_;
     bool use_gpu_;
+    std::shared_ptr<const graphics::Device> device_;
     std::int64_t dt_ = 10000000;
     std::uint64_t steps_ = 0;
 #ifdef DK_SIMULATION_GPU
@@ -103,6 +109,7 @@ struct AsyncSimulation::Impl {
     bool finished = false;
     std::function<void(SimulationTaskBackend&)> diagnostic;
     std::jthread worker;
+    std::stop_source initialization_stop;
 
     SimulationTaskState state_locked() const {
         if (fatal) std::rethrow_exception(fatal);
@@ -138,10 +145,11 @@ struct AsyncSimulation::Impl {
                 DK_PROFILE_ZONE("simulation.task.initialize");
                 backend = factory();
                 if (!backend) throw std::logic_error{"Missing simulation backend"};
-                const auto result = backend->initialize();
+                const auto result = backend->initialize(initialization_stop.get_token());
                 std::lock_guard lock{mutex};
                 if (!result) fail_locked(result.error());
-                else { progress.initialized = true; boundary_locked(); }
+                else if (*result) { progress.initialized = true; boundary_locked(); }
+                else { progress.batch_active = false; terminal = SimulationTaskStatus::cancelled; }
             }
             for (;;) {
                 std::unique_lock lock{mutex};
@@ -156,9 +164,10 @@ struct AsyncSimulation::Impl {
                 progress.batch_active = true; // Claim one batch under the same lock as cancel/pause.
                 lock.unlock();
                 DK_PROFILE_ZONE("simulation.task.batch");
-                const auto submitted = backend->submit(dt,count);
+                const auto submitted = backend->submit(dt,count,initialization_stop.get_token());
                 lock.lock(); progress.submitted_steps = backend->submitted();
                 if (!submitted) { fail_locked(submitted.error()); continue; }
+                if (!*submitted) { progress.batch_active=false; terminal=SimulationTaskStatus::cancelled; continue; }
                 lock.unlock();
                 for (;;) {
                     const auto complete = backend->poll();
@@ -207,8 +216,9 @@ AsyncSimulation::AsyncSimulation(Factory factory, std::int64_t dt, std::uint32_t
     impl_->progress.target_steps = count; impl_->progress.batch_steps = batch;
     impl_->worker = std::jthread{[p=impl_.get(),factory=std::move(factory),dt]() mutable { p->work(std::move(factory),dt); }};
 }
-std::shared_ptr<AsyncSimulation> AsyncSimulation::create(XpbdSolver cpu, bool gpu, std::int64_t dt, std::uint32_t count, std::uint32_t batch) {
-    return std::make_shared<AsyncSimulation>([cpu=std::move(cpu),gpu] { return std::make_unique<Backend>(cpu,gpu); },dt,count,batch);
+std::shared_ptr<AsyncSimulation> AsyncSimulation::create(XpbdSolver cpu, bool gpu, std::int64_t dt, std::uint32_t count, std::uint32_t batch,
+    std::shared_ptr<const graphics::Device> device) {
+    return std::make_shared<AsyncSimulation>([cpu=std::move(cpu),gpu,device=std::move(device)] { return std::make_unique<Backend>(cpu,gpu,device); },dt,count,batch);
 }
 AsyncSimulation::~AsyncSimulation() { stop(); impl_->worker.join(); }
 SimulationTaskState AsyncSimulation::state() const { std::lock_guard lock{impl_->mutex}; return impl_->state_locked(); }
@@ -233,12 +243,14 @@ Result<void> AsyncSimulation::cancel() {
         return std::unexpected(Error{ErrorCode::invalid_state,"Task is stopping"});
     if (!impl_->terminal) {
         impl_->requested = Impl::Request::cancel;
+        impl_->initialization_stop.request_stop();
         if (!impl_->progress.batch_active && impl_->progress.initialized) impl_->terminal = SimulationTaskStatus::cancelled;
     }
     impl_->changed.notify_all(); return {};
 }
 void AsyncSimulation::stop() noexcept {
-    std::lock_guard lock{impl_->mutex}; impl_->requested = Impl::Request::stop; impl_->changed.notify_all();
+    std::lock_guard lock{impl_->mutex}; impl_->requested = Impl::Request::stop;
+    impl_->initialization_stop.request_stop(); impl_->changed.notify_all();
 }
 bool AsyncSimulation::closed() const { std::lock_guard lock{impl_->mutex}; return impl_->finished; }
 Result<XpbdSnapshot> AsyncSimulation::read() { return impl_->inspect<XpbdSnapshot>([](auto& backend) { return backend.read(); }); }

@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <optional>
 #include <span>
+#include <stop_token>
 
 namespace dk::graphics {
 
@@ -42,6 +43,8 @@ struct DeviceOptions {
     DiagnosticSink diagnostic_sink = nullptr;
     void* diagnostic_user_data = nullptr;
     SurfaceSource surface;
+    std::stop_token cancel; // Cooperative checkpoints; never interrupts a driver call.
+    bool secondary_queue = false; // Request a second same-family queue when available.
 };
 
 struct AdapterInfo {
@@ -87,6 +90,11 @@ public:
     // Borrowed allocator. Release every allocation before destroying this Device.
     [[nodiscard]] VmaAllocator allocator() const noexcept;
     [[nodiscard]] std::uint32_t queue_family() const noexcept;
+    [[nodiscard]] std::uint32_t queue_count() const noexcept;
+    [[nodiscard]] std::uint32_t queue_index() const noexcept { return queue_index_; }
+    // Explicit shared lifetime. Each native queue still requires a single serial owner.
+    // The final view must be released on the surface/window owner's thread, if any.
+    [[nodiscard]] Result<Device> share_queue(std::uint32_t index) const;
     [[nodiscard]] vk::SurfaceKHR surface() const noexcept;
     [[nodiscard]] const AdapterInfo& adapter() const noexcept;
     [[nodiscard]] bool validation_enabled() const noexcept;
@@ -97,7 +105,8 @@ public:
 private:
     friend struct detail::DeviceAccess;
     struct Impl;
-    explicit Device(memory::UniquePtr<Impl> impl) noexcept;
-    memory::UniquePtr<Impl> impl_;
+    explicit Device(std::shared_ptr<Impl> impl,std::uint32_t index=0) noexcept;
+    std::shared_ptr<Impl> impl_;
+    std::uint32_t queue_index_=0;
 };
 } // namespace dk::graphics

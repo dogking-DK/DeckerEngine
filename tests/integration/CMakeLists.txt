@@ -302,6 +302,27 @@ if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
     if(TARGET dk_ctl)
         find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
         if(Python3_Interpreter_FOUND)
+            add_test(NAME dk.simulation.response_aggregation
+                COMMAND "${CMAKE_COMMAND}" -E env "PYTHONDONTWRITEBYTECODE=1" "${Python3_EXECUTABLE}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/SimulationResponseTest.py")
+            set_tests_properties(dk.simulation.response_aggregation PROPERTIES TIMEOUT 30 LABELS "cpu")
+            if(TARGET dk_render_simulation)
+                foreach(host IN ITEMS runner editor)
+                    if(host STREQUAL "editor" AND NOT TARGET dk_editor_app)
+                        continue()
+                    endif()
+                    set(_dk_response_editor)
+                    if(host STREQUAL "editor")
+                        set(_dk_response_editor --editor "$<TARGET_FILE:dk_editor_app>" --gui-validation required)
+                    endif()
+                    add_test(NAME dk.simulation.response_${host}_smoke
+                        COMMAND "${CMAKE_COMMAND}" -E env "PYTHONDONTWRITEBYTECODE=1" "${Python3_EXECUTABLE}"
+                            "${PROJECT_SOURCE_DIR}/scripts/benchmark-simulation-response.py"
+                            --runner "$<TARGET_FILE:dk_run>" --ctl "$<TARGET_FILE:dk_ctl>" ${_dk_response_editor}
+                            --smoke --hosts ${host} --sizes 8 --backends gpu)
+                    set_tests_properties(dk.simulation.response_${host}_smoke PROPERTIES TIMEOUT 180 LABELS "gpu" RUN_SERIAL TRUE)
+                endforeach()
+            endif()
             foreach(kind IN ITEMS cpu gpu)
                 if(kind STREQUAL "gpu" AND NOT TARGET dk_render_simulation)
                     continue()
@@ -321,6 +342,16 @@ if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
                     set_tests_properties(dk.simulation.task_gpu PROPERTIES RUN_SERIAL TRUE ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
                 endif()
             endforeach()
+            if(TARGET dk_editor_app AND TARGET dk_render_simulation)
+                add_test(NAME dk.simulation.task_editor_gpu
+                    COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python"
+                        "PYTHONDONTWRITEBYTECODE=1" "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/SimulationEditorTaskTest.py"
+                        --editor "$<TARGET_FILE:dk_editor_app>" --client "$<TARGET_FILE:dk_ctl>"
+                        --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/simulation-tasks")
+                set_tests_properties(dk.simulation.task_editor_gpu PROPERTIES TIMEOUT 180 SKIP_RETURN_CODE 77
+                    LABELS "gpu" RUN_SERIAL TRUE ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+            endif()
             if(TARGET dk_render_simulation AND TARGET dk_scripting_luau)
                 add_test(NAME dk.simulation.experiment_gpu
                     COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python"

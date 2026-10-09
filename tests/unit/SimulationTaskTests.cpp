@@ -23,19 +23,21 @@ struct Fake final : SimulationTaskBackend {
     std::uint64_t steps=0;
     explicit Fake(std::shared_ptr<Gate> g) : gate(std::move(g)) {}
     ~Fake() override { gate->destroyed_on=std::this_thread::get_id(); gate->destroyed=true; }
-    Result<void> initialize() override {
+    Result<bool> initialize(std::stop_token stop) override {
         gate->initialized_on=std::this_thread::get_id(); gate->entered=true;
         while (!gate->initialize) std::this_thread::sleep_for(1ms);
+        if (gate->fail==6 && stop.stop_requested()) return false;
         if (gate->fail==4) throw std::bad_alloc{};
         if (gate->fail==1) return std::unexpected(Error{ErrorCode::not_supported,"init failed"});
-        return {};
+        return true;
     }
-    Result<void> submit(std::int64_t, std::uint32_t count) override {
+    Result<bool> submit(std::int64_t, std::uint32_t count, std::stop_token stop) override {
         gate->submitting=true; ++gate->submits;
         gate->max_batch=std::max(gate->max_batch.load(),count);
         while (!gate->submit) std::this_thread::sleep_for(1ms);
+        if (gate->fail==7 && stop.stop_requested()) return false;
         if (gate->fail==2) return std::unexpected(Error{ErrorCode::invalid_argument,"pre-submit failure"});
-        steps+=count; return {};
+        steps+=count; return true;
     }
     Result<bool> poll() override {
         ++gate->polls;
@@ -150,4 +152,20 @@ TEST_CASE("finite task diagnostic failure freezes a completed experiment without
     REQUIRE_FALSE(f.task->read()); REQUIRE(f.task->state().status==SimulationTaskStatus::failed);
     REQUIRE(f.task->state().submitted_steps==8); REQUIRE(f.task->state().completed_steps==8);
     REQUIRE_FALSE(f.task->resume()); REQUIRE_FALSE(f.task->read());
+}
+TEST_CASE("finite task cooperative initialization cancellation is distinct from a failed backend") {
+    Fixture f; f.gate->fail=6; f.start(); until([&] { return f.gate->entered.load(); });
+    REQUIRE(f.task->cancel()); f.gate->initialize=true;
+    until([&] { return f.task->state().status==SimulationTaskStatus::cancelled; });
+    REQUIRE_FALSE(f.task->state().initialized); REQUIRE_FALSE(f.task->state().error);
+    REQUIRE(f.task->state().completed_steps==0); REQUIRE(f.gate->submits==0);
+    REQUIRE_FALSE(f.task->read());
+}
+TEST_CASE("finite task cancellation during preparation does not fabricate submitted steps") {
+    Fixture f; f.gate->fail=7; f.gate->initialize=true; f.start();
+    until([&] { return f.gate->submitting.load(); });
+    REQUIRE(f.task->cancel()); f.gate->submit=true;
+    until([&] { return f.task->state().status==SimulationTaskStatus::cancelled; });
+    REQUIRE(f.task->state().submitted_steps==0); REQUIRE(f.task->state().completed_steps==0);
+    REQUIRE(f.gate->polls==0); REQUIRE_FALSE(f.task->state().error);
 }

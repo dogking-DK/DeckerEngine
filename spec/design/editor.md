@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-08T13:57:00+08:00"
+updated_at: "2026-10-09T19:38:24+08:00"
 status: accepted
 ---
 
@@ -97,3 +97,43 @@ CPU 定向测试覆盖选择/草稿、事务与撤销、过期 guard、保存重
 验证 TRS 改动使预览像素变化、Undo 逐字节哈希恢复，再读回工作台画面并启用 Vulkan validation；
 默认 Sponza 另做实际预览。
 M8.2 的 CPU rayquery、Gizmo 和相机交互见 [交互设计](editor-interaction.md)；M8.3 IPC 见 [传输设计](automation-transport.md)。M8.4 证据见 [0068](../development/0068-editor-consistency.md)。
+
+## M11.4 模拟期间的事件循环响应
+
+现有editor IPC与Runtime owner pump承载simulation.run/query/pause/cancel/stop；正常编辑视口仍使用EditWorld。
+增加仅验收使用的--simulation-response-probe，要求--pipe及一次性工程.dk-editor-smoke标记，与其他smoke/frames互斥。
+真实窗口完成初始视口呈现后发布ready；外部夹具才开始进程首次模拟初始化。
+在事件循环每次poll前保存单调时钟、owner发布的模拟状态和提交/完成数，最多120000项，超限失败。
+退出后统一保存JSON，不逐帧写盘；首次窗口/视口初始化不混入模拟期间的心跳，暂停/空闲与活动区间分开。
+依然实际运行SDL事件、ImGui布局、Vulkan呈现和IPC，不用后台定时器代替GUI心跳。
+M12的Play视口/参数工作台不属于本阶段；这里只验收现有宿主对有限任务的响应和关闭。
+
+验收单列已知AMD隐式层API版本警告，保留原始stderr与knownLoaderWarnings计数；
+仅该精确消息不阻止响应性探针通过，其他warning/error仍失败，不关闭validation。常规编辑器策略不变。
+
+性能采样与正确性验收分开：`--validation` 要求验证层，`--no-validation` 显式关闭GUI设备验证层，
+两者互斥；未指定时仍if_available。响应夹具默认required，disabled只用于独立性能诊断；
+两种配置的数据单列，不能互相替代。response_editor_smoke固定required，并验证真实呈现/资源寿命。独立仿真设备保持if_available，共享设备时继承GUI验证模式，
+所以不能把GUI与runner延迟之差解释为纯呈现开销。退出探针另记录各所有者销毁阶段，包含到进程退出的完整成本。
+
+IPC/Runtime owner pump在每帧开头、成功获取交换链图像后和渲染提交等待完成后执行。
+GPU等待期间收到的控制请求在下一次UI绘制前处理，避免无谓追加一帧呈现后才开始关闭。
+获取后收到shutdown时直接退出循环，由Frame原有放弃路径等待获取完成并归还图像；
+仍先排空IPC回复。正常退出先close渲染队列证明所有绘制完成，再释放Viewport/ImGui资源，
+随后Presenter.close等待present fence并释放交换链；worker同时回收自己的资源。
+呈现清理后销毁Runtime以join模拟worker，最后销毁GUI设备和窗口。
+不把渲染完成当作呈现完成；异常路径仍先完整排空Presenter，再展开UI资源栈。
+两个设备的最终销毁不竞争驱动生命周期锁，且所有对象仍在原拥有线程回收。
+验证只覆盖真实窗口控制/关闭和受影响的退出延迟，复用未改动的求解与数值结果。
+
+M11.4复用已存在的GUI Vulkan设备：请求同族第二队列，支持时将设备寿命提供给Runtime，
+模拟worker独占index 1，Presenter独占index 0；不支持时保留原独立模拟设备路径。
+GUI设备required validation同时覆盖模拟队列；实例/设备创建属于编辑器启动，首次模拟仍包含
+首次求解器/shader/Graph初始化，报告明确该成本变化，不伪称重新创建第二设备。
+作用域守卫在所有正常/异常退出路径上先销毁所有UI使用者、关闭IPC并销毁Runtime（join worker），
+最后释放Presenter/Window，保证共享设备和窗口的最终释放仍在主线程。
+保持原FIFO绘制节奏，不限制工作台到60Hz。
+
+若一次IPC pump只处理握手而未分派命令，Workspace使用先读取的RuntimeEvents sequence
+最多等待1ms以接收同连接的执行帧，再pump一次。普通命令和空闲循环不增加等待；
+客户端未继续发送时仍有界返回，不让每次两段握手都依赖下一帧的绘制/呈现。

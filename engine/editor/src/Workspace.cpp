@@ -17,7 +17,15 @@ void Workspace::pump() {
 #ifdef _WIN32
     if (ipc_) {
         const auto before=ipc_->dispatch_count();
-        (void)ipc_->pump();
+        const auto sequence=runtime_->events()->sequence();
+        const auto received=ipc_->pump();
+        if (received && before==ipc_->dispatch_count()) {
+            // A hello reply is followed by the command on the same connection.
+            // Give that short exchange a bounded owner turn instead of drawing
+            // another frame between its two messages. The sequence prevents a lost wake.
+            runtime_->events()->wait(sequence,std::chrono::steady_clock::now()+std::chrono::milliseconds{1});
+            (void)ipc_->pump();
+        }
         if (before!=ipc_->dispatch_count() && !runtime_->stopping()) {
             if (auto refreshed=refresh(); !refreshed) throw std::runtime_error{refreshed.error().message};
         }
@@ -35,6 +43,12 @@ Result<void> Workspace::start_ipc(std::string_view name) {
 }
 void Workspace::close_ipc() { if (ipc_) ipc_->close(std::chrono::milliseconds{1500}); }
 #endif
+Result<void> Workspace::request_shutdown() {
+    if (stopping()) return {};
+    auto result=call("runtime.shutdown");
+    if (!result) return std::unexpected(result.error());
+    return {};
+}
 Result<Json> Workspace::call(std::string_view method, Json p) {
     auto result=runtime_->dispatch(method,p);
     if (!result) return std::unexpected(result.error());

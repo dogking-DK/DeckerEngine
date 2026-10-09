@@ -399,7 +399,9 @@ TEST_CASE("graph partial allocation failures unwind construction and publication
         return dk::Error{dk::ErrorCode::internal_error, "memory system creation failed"};
     }));
     bool create_failed = false, pass_failed = false, validation_failed = false, completed = false;
-    for (std::size_t budget = 1; budget < 4096; budget += 31) {
+    // The optimized build's validation scratch window can be smaller than 31 bytes.
+    // Visit every budget so that configuration-dependent object sizes cannot skip it.
+    for (std::size_t budget = 1; budget < 4096; ++budget) {
         const auto heap = system.create_heap({"graph-budget-sweep", dk::memory::DomainCategory::render, budget}).value();
         {
             auto graph = Graph::create(heap);

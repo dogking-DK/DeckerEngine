@@ -201,6 +201,7 @@ void Incoming::reply(std::string bytes)
 struct PipeServer::Impl
 {
     Handle pipe;
+    Handle accept_stop{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
     Handle stop{CreateEventW(nullptr, TRUE, FALSE, nullptr)};
     PipeOptions options;
     std::function<void()> wake;
@@ -214,7 +215,7 @@ struct PipeServer::Impl
     Impl(Handle handle, PipeOptions opts, std::function<void()> notify)
         : pipe{std::move(handle)}, options{opts}, wake{std::move(notify)}
     {
-        if (!stop.value) throw std::runtime_error{"cannot create pipe stop event"};
+        if (!accept_stop.value || !stop.value) throw std::runtime_error{"cannot create pipe stop event"};
     }
     void run() noexcept
     {
@@ -222,7 +223,7 @@ struct PipeServer::Impl
         {
             while (!closing)
             {
-                auto connected = io(pipe.value, stop.value, Operation::connect, nullptr, 0, Deadline::max());
+                auto connected = io(pipe.value, accept_stop.value, Operation::connect, nullptr, 0, Deadline::max());
                 if (!connected)
                 {
                     if (connected.error().kind == Failure::stopped) break;
@@ -287,6 +288,7 @@ void PipeServer::close(std::chrono::milliseconds grace) noexcept
 {
     if (!impl_ || !impl_->worker.joinable()) return;
     impl_->closing = true;
+    SetEvent(impl_->accept_stop.value);
     if (grace.count() > 0)
     {
         std::unique_lock lock{impl_->mutex};

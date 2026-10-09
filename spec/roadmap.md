@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-09T15:37:04+08:00"
+updated_at: "2026-10-09T17:35:02+08:00"
 status: accepted
 ---
 
@@ -70,7 +70,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M8 编辑器与进程控制 | 可编辑保存的视口；dk-ctl 操作运行中的程序 | M7 | 已完成（M8.1–4，交付 C），见 0065–0068 |
 | M9 脚本与自动化 SDK | Luau 场景脚本、Python 客户端、批处理与重放 | M3；集成验收需要 M8 | 已完成（M9.1–4） |
 | M10 物理实验闭环 | 固定步长、CPU 参照、首个 GPU 求解器及可视化 | M7、M9 | 已完成 |
-| M11 模拟运行响应性与性能基线 | GPU 性能观测、可复现基准、有界模拟任务与暂停/取消 | M1.7、M8、M10 | 进行中，M11.1已完成 |
+| M11 模拟运行响应性与性能基线 | GPU 性能观测、可复现基准、有界模拟任务与暂停/取消 | M1.7、M8、M10 | 已完成，见0078–0081 |
 | M12 编辑器模拟工作台 | 参数配置、运行控制、实时模拟视口、指标与导出 | M8、M11 | 未开始 |
 | M13 实验管理与参数扫描 | 批量实验、产物索引、失败恢复与对比报告 | M9、M12 | 未开始 |
 
@@ -542,7 +542,7 @@ GPU 未完成前不释放状态，也不默认经 CPU 读回再上传。
 | M11.1 | GPU 性能观测 | M1.7、M10 | timestamp/Tracy提交与求解/绘制、CPU阶段关联、开关一致性、查询复用/失败/关闭及CPU-only通过，见 [0078](development/0078-gpu-profiling.md) | 已完成 |
 | M11.2 | 可复现性能与响应性基线 | M11.1 | 三规模/三轮、冷/热CPU与GPU、Tracy采集开销、真实IPC控制及300拍数值通过；后续响应阈值与条件确定，见[报告](benchmarks/2026-10-09-simulation.md)及[0079](development/0079-simulation-performance-baseline.md) | 已完成 |
 | M11.3 | 有界模拟任务与暂停/取消 | M11.2 | 有限run/query/cancel、单在途批次、暂停/取消/Stop边界、故障冻结及真实CPU/GPU三规模300拍/退出通过，见[0080](development/0080-bounded-simulation-tasks.md) | 已完成 |
-| M11.4 | 响应性集成与性能复测 | M11.3 | GUI/IPC 在冷启动和持续实验中满足约定响应阈值；严格 N 步及 CPU/GPU 容差通过；用同一基准对照优化前后结果并说明限制 | 未开始 |
+| M11.4 | 响应性集成与性能复测 | M11.3 | 完整响应矩阵与定向回归通过；按用户确认的退出p95≤400ms验收，三规模300拍数值和同基准性能复测通过，见[报告](benchmarks/2026-10-09-simulation-response.md)及[0081](development/0081-simulation-responsiveness.md) | 已完成 |
 
 **设计入口：** 实施前更新 [性能分析](design/foundation-profiling.md)、
 [GPU 资源与提交](design/graphics-resources.md)、[GPU Graph](design/graphics-graph.md)、
@@ -666,7 +666,8 @@ M10.4 已完成，见 [0077](development/0077-simulation-experiments.md)：精�
 M13 实验管理与参数扫描。M11.1 GPU性能观测已完成，见 [0078](development/0078-gpu-profiling.md)：原生时间戳、Tracy区间与CPU关联、开关/查询寿命及CPU-only隔离通过。
 M11.2已完成，见[0079](development/0079-simulation-performance-baseline.md)：三规模固定300拍与三轮基线、采集开销及控制延迟已记录，冷初始化阻塞仍需改善。
 M11.3已完成，见[0080](development/0080-bounded-simulation-tasks.md)：有限任务进度/取消、单在途上限、安全边界和CPU/GPU数值通过。
-M11进行中，M12/M13未开始；下一项为 **M11.4 响应性集成与性能复测**。
+M11.4已完成，见[0081](development/0081-simulation-responsiveness.md)：GUI/IPC响应、冷阶段取消、共享设备安全回收及最终性能/数值通过；退出p95目标按用户要求调整为400ms。
+M11已完成，M12/M13未开始；下一项为 **M12.1 模拟面板与运行控制**。
 编辑器 Play 视口在 M12 验收，批量实验在 M13 验收；检查点、其他平台与发布打包仍未纳入本轮扩展。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。

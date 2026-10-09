@@ -237,10 +237,11 @@ Result<void> Graph::reset() {
     state_.swap(candidate->state_);
     return {};
 }
-Result<void> detail::analyze(const std::shared_ptr<GraphState>& state, Vector<Dependency>& edges) {
+Result<void> detail::analyze(const std::shared_ptr<GraphState>& state, Vector<Dependency>& edges, std::stop_token stop) {
     if (auto valid = ready(state); !valid) return valid;
     Vector<const Use*> writes(0, memory::Allocator<const Use*>{state->resource});
     for (std::size_t i = 0; i < state->passes.size(); ++i) {
+        if (stop.stop_requested()) return std::unexpected(compilation_cancelled());
         const auto& pass = *state->passes[i];
         for (const auto& use : pass.uses) {
             if (!use.access.full_overwrite && !initialized(use, writes, *state))
@@ -256,6 +257,7 @@ Result<void> detail::analyze(const std::shared_ptr<GraphState>& state, Vector<De
     for (const auto& edge : state->dependencies)
         edges.push_back({edge.before, edge.after, DependencyKind::explicit_order, {}});
     for (std::size_t before = 0; before < state->passes.size(); ++before) {
+        if (stop.stop_requested()) return std::unexpected(compilation_cancelled());
         for (std::size_t after = before + 1; after < state->passes.size(); ++after) {
             for (const auto& a : state->passes[before]->uses) {
                 for (const auto& b : state->passes[after]->uses) {
@@ -270,13 +272,22 @@ Result<void> detail::analyze(const std::shared_ptr<GraphState>& state, Vector<De
             }
         }
     }
-    normalize_dependencies(edges);
+    if (stop.stop_requested()) return std::unexpected(compilation_cancelled());
+    normalize_dependencies(edges,stop);
+    if (stop.stop_requested()) return std::unexpected(compilation_cancelled());
     return acyclic(*state, edges);
 }
-void detail::normalize_dependencies(Vector<Dependency>& dependencies) {
-    std::ranges::sort(dependencies, [](const Dependency& a, const Dependency& b) {
+void detail::normalize_dependencies(Vector<Dependency>& dependencies, std::stop_token stop) {
+    const auto less = [](const Dependency& a, const Dependency& b) {
         return std::tie(a.before,a.after,a.kind,a.resource) < std::tie(b.before,b.after,b.kind,b.resource);
-    });
+    };
+    if (stop.stop_possible()) {
+        std::size_t comparisons=0;
+        std::ranges::sort(dependencies, [&](const Dependency& a, const Dependency& b) {
+            if ((comparisons++ & 4095u)==0 && stop.stop_requested()) throw compilation_cancelled();
+            return less(a,b);
+        });
+    } else std::ranges::sort(dependencies,less);
     dependencies.erase(std::unique(dependencies.begin(),dependencies.end()),dependencies.end());
 }
 std::size_t detail::resource_number(const ResourceId& id, const GraphState& state) {

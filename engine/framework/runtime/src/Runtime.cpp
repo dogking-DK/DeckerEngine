@@ -183,7 +183,7 @@ Result<void> Runtime::register_runtime_commands()
                          [this](const Json &) -> Result<Json>
                          {
                              Json value{{"stopping", true}};
-                             simulation_.shutdown();
+                             simulation_.request_shutdown();
                              stopping_ = true;
                              return value;
                          });

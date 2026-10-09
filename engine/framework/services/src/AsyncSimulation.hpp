@@ -1,6 +1,7 @@
 #pragma once
 #include <dk/services/SimulationService.hpp>
 #include <functional>
+#include <stop_token>
 #ifdef DK_SIMULATION_GPU
 #include "GpuSimulation.hpp"
 #endif
@@ -11,8 +12,8 @@ namespace dk::detail {
 class SimulationTaskBackend {
 public:
     virtual ~SimulationTaskBackend() = default;
-    virtual Result<void> initialize() = 0;
-    virtual Result<void> submit(std::int64_t, std::uint32_t) = 0;
+    virtual Result<bool> initialize(std::stop_token) = 0; // false: cancelled, no initialized backend
+    virtual Result<bool> submit(std::int64_t, std::uint32_t, std::stop_token) = 0;
     virtual Result<bool> poll() = 0;
     virtual std::uint64_t submitted() const = 0;
     virtual Result<XpbdSnapshot> read() = 0;
@@ -25,7 +26,8 @@ public:
 class AsyncSimulation final {
 public:
     using Factory = std::function<std::unique_ptr<SimulationTaskBackend>()>;
-    static std::shared_ptr<AsyncSimulation> create(XpbdSolver, bool gpu, std::int64_t dt, std::uint32_t count, std::uint32_t batch);
+    static std::shared_ptr<AsyncSimulation> create(XpbdSolver, bool gpu, std::int64_t dt, std::uint32_t count, std::uint32_t batch,
+        std::shared_ptr<const graphics::Device> device={});
     AsyncSimulation(Factory, std::int64_t dt, std::uint32_t count, std::uint32_t batch);
     ~AsyncSimulation();
     AsyncSimulation(const AsyncSimulation&) = delete;

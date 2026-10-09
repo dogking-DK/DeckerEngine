@@ -10,10 +10,12 @@ struct SimulationImage {
 // synchronous legacy steps and explicit readbacks retain their wait boundary.
 class GpuSimulation final {
 public:
-    static Result<std::shared_ptr<GpuSimulation>> create(const XpbdSolver&);
+    // Successful null means cooperative cancellation before initialization publication.
+    static Result<std::shared_ptr<GpuSimulation>> create(const XpbdSolver&, std::stop_token = {},
+        std::shared_ptr<const graphics::Device> device={});
     ~GpuSimulation();
     Result<void> step(std::int64_t dt, std::uint32_t count);
-    Result<void> submit(std::int64_t dt, std::uint32_t count);
+    Result<bool> submit(std::int64_t dt, std::uint32_t count, std::stop_token);
     Result<bool> poll();
     Result<GpuParticles> read(std::int64_t dt);
     Result<SimulationImage> capture(std::int64_t dt, const ClothConfig&, std::uint32_t width, std::uint32_t height);

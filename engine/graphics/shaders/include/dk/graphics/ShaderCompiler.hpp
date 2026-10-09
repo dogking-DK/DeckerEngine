@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <span>
 #include <string_view>
+#include <stop_token>
 
 namespace dk::graphics {
 
@@ -21,7 +22,10 @@ struct ShaderCompileRequest {
 // Fresh Slang session per call. Input files must remain stable during the call.
 // Requires a live owning heap resource. Allocation failures throw std::bad_alloc.
 [[nodiscard]] Result<CompiledShader> compile_shader(const ShaderCompileRequest& request,
-                                                  memory::ResourceHandle resource);
+                                                  memory::ResourceHandle resource,std::stop_token cancel={});
+// One scoped global session, fresh per-entry sessions; no partial batch is published.
+[[nodiscard]] Result<Vector<CompiledShader>> compile_shaders(std::span<const ShaderCompileRequest> requests,
+    memory::ResourceHandle resource,std::stop_token cancel={});
 // Stable schema v1; excludes source/output absolute paths and diagnostic prose.
 [[nodiscard]] String shader_reflection_json(const CompiledShader& shader);
 

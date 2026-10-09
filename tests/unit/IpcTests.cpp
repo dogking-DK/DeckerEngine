@@ -226,3 +226,23 @@ TEST_CASE("Pipe queues are bounded and idle shutdown cancels IO")
     CHECK(unavailable.status == "timeout"); CHECK(unavailable.execution == "not_sent"); CHECK_FALSE(unavailable.ticket);
     CHECK_FALSE(ipc::valid_endpoint("../remote")); CHECK_FALSE(ipc::valid_endpoint(""));
 }
+TEST_CASE("Pipe grace close does not wait for a new connection")
+{
+    const auto name=endpoint();
+    auto server=ipc::PipeServer::listen(name,[] {}).value();
+    SECTION("unused listener") {}
+    SECTION("peer has received its reply and disconnected") {
+        auto peer=std::async(std::launch::async,[&] {
+            auto connection=ipc::Connection::connect(name,deadline()).value();
+            if (!connection.send("request",deadline())) throw std::runtime_error{"send failed"};
+            return connection.receive(deadline());
+        });
+        auto frame=incoming(*server); frame.reply("reply");
+        const auto reply=peer.get(); REQUIRE(reply); CHECK(*reply=="reply");
+    }
+    // Let the IO thread enter/re-enter ConnectNamedPipe before requesting grace.
+    std::this_thread::sleep_for(30ms);
+    const auto start=std::chrono::steady_clock::now();
+    server->close(1500ms);
+    CHECK(std::chrono::steady_clock::now()-start < 1s);
+}

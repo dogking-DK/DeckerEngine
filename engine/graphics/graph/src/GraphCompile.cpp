@@ -74,7 +74,7 @@ template<class F> void latest_writers(const GraphState& graph, const Use& use, s
     }
 }
 
-void cull(const GraphState& graph, PlanState& plan) {
+void cull(const GraphState& graph, PlanState& plan, std::stop_token stop) {
     Vector<std::size_t> pending(0, memory::Allocator<std::size_t>{plan.resource});
     Vector<Dependency> required(0, memory::Allocator<Dependency>{plan.resource});
     for (const auto& edge : plan.dependencies) if (edge.kind == DependencyKind::explicit_order) required.push_back(edge);
@@ -84,6 +84,7 @@ void cull(const GraphState& graph, PlanState& plan) {
         pending.push_back(index);
     };
     for (std::size_t p = 0; p < graph.passes.size(); ++p) {
+        if (stop.stop_requested()) throw detail::compilation_cancelled();
         if (graph.passes[p]->side_effect) keep(p);
         for (const auto& use : graph.passes[p]->uses) {
             if (use.access.full_overwrite) continue;
@@ -107,7 +108,7 @@ void cull(const GraphState& graph, PlanState& plan) {
     std::erase_if(plan.dependencies, [&](const Dependency& edge) {
         return !plan.passes[edge.before].retained || !plan.passes[edge.after].retained;
     });
-    detail::normalize_dependencies(plan.dependencies);
+    detail::normalize_dependencies(plan.dependencies,stop);
 }
 
 Result<void> schedule(PlanState& plan) {
@@ -163,17 +164,24 @@ Result<void> lifetimes(PlanState& plan) {
 }
 } // namespace
 
-Result<CompiledGraph> Graph::compile() const try {
+Result<CompiledGraph> Graph::compile(std::stop_token stop) const try {
     DK_PROFILE_ZONE("graph.compile");
     if (!state_ || state_->resource.state() != memory::ResourceState::open)
         return std::unexpected(Error{ErrorCode::invalid_state, "graph is empty, moved from, or its memory domain is closing"});
+    const auto cancelled = [&] { if (stop.stop_requested()) throw detail::compilation_cancelled(); };
+    cancelled();
     auto candidate = memory::make_shared_in<PlanState>(state_->resource, state_->resource);
-    if (auto valid = detail::analyze(state_, candidate->dependencies); !valid) return std::unexpected(valid.error());
+    if (auto valid = detail::analyze(state_, candidate->dependencies,stop); !valid) return std::unexpected(valid.error());
+    cancelled();
     snapshot(*state_, *candidate);
-    cull(*state_, *candidate);
+    cull(*state_, *candidate,stop);
+    cancelled();
     if (auto sorted = schedule(*candidate); !sorted) return std::unexpected(sorted.error());
+    cancelled();
     if (auto planned = lifetimes(*candidate); !planned) return std::unexpected(planned.error());
     return CompiledGraph{std::move(candidate)};
+} catch (Error& error) {
+    return std::unexpected(std::move(error));
 } catch (const std::bad_alloc&) {
     return std::unexpected(Error{ErrorCode::internal_error, "graph compilation allocation failed; graph and prior plans unchanged"});
 }

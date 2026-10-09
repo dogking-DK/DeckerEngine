@@ -8,10 +8,12 @@ struct WorkbenchOptions {
     std::string pipe;
     std::filesystem::path manifest = "project.json";
     bool validation = false;
+    bool disable_validation = false;
     // Bounded native UI acceptance run. Caller must supply a disposable project.
     bool smoke = false;
     bool interaction_smoke = false;
     bool consistency_smoke = false;
+    bool simulation_response_probe = false;
     unsigned frames = 0;
     std::filesystem::path screenshot;
     bool fixture_camera = false;

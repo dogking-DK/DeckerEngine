@@ -37,6 +37,8 @@
 | 服务、事务、历史、Operations | dk_service_tests | `^dk\.services\.` |
 | Edit/Play、固定纳秒时钟、有限任务暂停/取消、故障与关闭 | dk_simulation_tests | `^dk\.simulation\.(fixed clock \|simulation \|finite )` |
 | 真实有限任务IPC、冷初始化控制、三规模300拍、数值与资源退出 | dk_run、dk_ctl | `^dk\.simulation\.task_(cpu\|gpu)$`（Windows/Python；GPU要求RenderSimulation） |
+| 有限任务响应汇总、真实runner/GUI心跳smoke | dk_run、dk_ctl、dk_editor_app | `^dk\.simulation\.response_(aggregation\|runner_smoke\|editor_smoke)$`；正式每控制项至少20样本，使用scripts/benchmark-simulation-response.py |
+| GUI共享设备双队列、三规模300拍、导出与暖进程关闭 | dk_editor_app、dk_ctl | `^dk\.simulation\.task_editor_gpu$`（required及同步validation） |
 | CPU XPBD解析解、布片、分组、接触、数值与失败回滚 | dk_xpbd_tests | `^dk\.xpbd\.` |
 | GPU 命令、Python/Luau 严格步数实验与配置/指标/图像重放 | dk_run、dk_ctl | `^dk\.simulation\.experiment_gpu$`（RenderSimulation + Luau + Python，gpu label） |
 | 真实 stdio/pipe 空闲模拟、暂停与关闭 | dk_run、dk_ctl | `^dk\.simulation\.(stdio\|pipe)$`（Windows，Python 3.11+） |

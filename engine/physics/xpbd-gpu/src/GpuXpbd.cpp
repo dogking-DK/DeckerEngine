@@ -73,11 +73,15 @@ Result<void> record_dispatch(graph::PassContext& pass, void* pointer) {
 Error allocation_error() { return {ErrorCode::internal_error,"GPU XPBD allocation failed; no state published"}; }
 }
 Result<GpuXpbdSolver> GpuXpbdSolver::create(memory::ResourceHandle heap, SubmissionQueue& queue,
-    const XpbdSolver& cpu, const std::filesystem::path& shader) {
+    const XpbdSolver& cpu, const std::filesystem::path& shader, std::stop_token stop) {
     DK_PROFILE_ZONE("physics.gpu.initialize");
     if (!heap || heap.state()!=memory::ResourceState::open || queue.stats().closed || queue.stats().device_lost)
         return std::unexpected(Error{ErrorCode::invalid_state,"GPU XPBD requires an open heap and queue"});
     try {
+        const auto cancellation_point = [&] {
+            if (stop.stop_requested()) throw Error{ErrorCode::invalid_state,"GPU XPBD initialization cancelled",{"physics.gpu.initialize.cancelled"}};
+        };
+        cancellation_point();
         auto data = cpu.snapshot();
         if (data.positions.empty()) return std::unexpected(Error{ErrorCode::invalid_argument,"empty CPU solver"});
         auto state = memory::make_shared_in<dk::detail::GpuXpbdState>(heap);
@@ -85,14 +89,24 @@ Result<GpuXpbdSolver> GpuXpbdSolver::create(memory::ResourceHandle heap, Submiss
         state->particles=static_cast<std::uint32_t>(data.positions.size());
         state->constraints=static_cast<std::uint32_t>(data.constraints.size()); state->colors=std::move(data.color_offsets);
         constexpr std::array defines{"DK_PREDICT","DK_PROJECT","DK_FLOOR","DK_VELOCITY"};
+        std::array<std::array<ShaderDefine,1>,4> definitions;
+        std::array<ShaderCompileRequest,4> requests;
         for (std::size_t k=0;k<defines.size();++k) {
-            const std::array definitions{ShaderDefine{defines[k],"1"}};
-            auto compiled=take(compile_shader({shader,"computeMain",ShaderStage::compute,{},definitions},heap));
-            auto module=take(state->factory.create_shader(compiled));
+            definitions[k]={ShaderDefine{defines[k],"1"}};
+            requests[k]={shader,"computeMain",ShaderStage::compute,{},definitions[k]};
+        }
+        auto compiled_batch=compile_shaders(requests,heap,stop);
+        if (!compiled_batch && compiled_batch.error().context==std::vector<std::string>{"graphics.shader.compile.cancelled"})
+            throw Error{ErrorCode::invalid_state,"GPU XPBD initialization cancelled",{"physics.gpu.initialize.cancelled"}};
+        auto compiled=take(std::move(compiled_batch));
+        for (std::size_t k=0;k<defines.size();++k) {
+            cancellation_point();
+            auto module=take(state->factory.create_shader(compiled[k]));
             const std::array shaders{&module};
             state->layouts[k]=take(state->factory.create_pipeline_layout(shaders));
             state->pipelines[k]=take(state->factory.create_compute_pipeline({&module,&state->layouts[k]}));
         }
+        cancellation_point();
         std::vector<std::array<float,4>> directions;
         for (auto d:data.initial_directions) directions.push_back({d[0],d[1],d[2],0});
         // Nonempty descriptor storage even for the zero-constraint free-fall case.
@@ -186,6 +200,8 @@ Result<GpuXpbdFrame> GpuXpbdSolver::advance(SubmissionQueue& queue,std::int64_t 
             dispatches.push_back({state_.get(),kernel,parameters}); add(name,uses,record_dispatch,&dispatches.back());
         };
         for (std::uint32_t step=0;step<count;++step) {
+            if (options.cancel.stop_requested())
+                return std::unexpected(Error{ErrorCode::invalid_state,"XPBD preparation cancelled",{"physics.gpu.advance.cancelled"}});
             add("XPBD reset lambda",{use(ids[7],vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,true)},
                 [](graph::PassContext& pass,void*) { return pass.fill(7); });
             dispatch("XPBD predict",0,{use(ids[4],compute,read|write),use(ids[5],compute,read|write),use(ids[6],compute,write,true)});
@@ -218,11 +234,13 @@ Result<GpuXpbdFrame> GpuXpbdSolver::advance(SubmissionQueue& queue,std::int64_t 
         }
         graph::CompiledGraph candidate_plan;
         const bool cached=!consumer.append && state_->cached_plan && state_->cached_count==count && state_->cached_readback==options.readback;
-        if (!cached) candidate_plan=take(graph.compile());
+        if (!cached) candidate_plan=take(graph.compile(options.cancel));
         const auto& plan=cached ? state_->cached_plan : candidate_plan;
         if (options.capture_plan) frame->report=take(graph::format_plan(plan));
         std::vector<graph::ExternalBinding> retained;
         for (const auto& binding:external) if (plan.resources()[binding.resource].retained) retained.push_back(binding);
+        if (options.cancel.stop_requested())
+            return std::unexpected(Error{ErrorCode::invalid_state,"XPBD preparation cancelled",{"physics.gpu.advance.cancelled"}});
         frame->execution=take(graph::execute(plan,queue,{retained,callbacks,finals,options.capture_plan}));
         // All allocations and failure-prone operations precede submission. Output indices are guaranteed by this graph.
         state_->buffers[0]=frame->execution.buffer(4).value()->share();

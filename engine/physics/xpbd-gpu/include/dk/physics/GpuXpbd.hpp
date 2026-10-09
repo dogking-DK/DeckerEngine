@@ -2,10 +2,11 @@
 #include <dk/physics/Xpbd.hpp>
 #include <dk/graphics/GraphExecution.hpp>
 #include <filesystem>
+#include <stop_token>
 
 namespace dk {
 namespace detail { struct GpuXpbdState; struct GpuXpbdFrameState; }
-struct GpuXpbdOptions { bool readback = false, capture_plan = false; };
+struct GpuXpbdOptions { bool readback = false, capture_plan = false; std::stop_token cancel; };
 struct GpuParticles {
     std::vector<ParticlePosition> positions;
     std::vector<ParticleVelocity> velocities;
@@ -48,7 +49,7 @@ public:
     GpuXpbdSolver(const GpuXpbdSolver&) = delete;
     GpuXpbdSolver& operator=(const GpuXpbdSolver&) = delete;
     [[nodiscard]] static Result<GpuXpbdSolver> create(memory::ResourceHandle, graphics::SubmissionQueue&,
-        const XpbdSolver&, const std::filesystem::path& shader_file);
+        const XpbdSolver&, const std::filesystem::path& shader_file, std::stop_token = {});
     // count 0..8; 0 produces a display-only frame. Success means submitted, not completed/finite.
     [[nodiscard]] Result<GpuXpbdFrame> advance(graphics::SubmissionQueue&, std::int64_t fixed_dt_ns,
         std::uint32_t count = 1, GpuXpbdOptions = {}, GpuParticleConsumer = {});

@@ -80,7 +80,7 @@ Result<std::string> SimulationService::export_experiment(SimulationId id, std::u
         auto temporary = output.parent_path() / (".dk-experiment-" + take(SimulationId::generate()).to_string());
         auto image = [&]() -> Result<detail::SimulationImage> {
             if (play_->task) return play_->task->capture(play_->clock.config().fixed_dt_ns,*play_->cloth,width,height);
-            auto gpu = play_->gpu ? play_->gpu : take(detail::GpuSimulation::create(*play_->solver));
+            auto gpu = play_->gpu ? play_->gpu : take(detail::GpuSimulation::create(*play_->solver,{},gpu_device_));
             return gpu->capture(play_->clock.config().fixed_dt_ns, *play_->cloth, width, height);
         }();
         if (!image) {

@@ -134,15 +134,20 @@ Result<void> reflect(slang::ProgramLayout* layout, CompiledShader& output)
 }
 } // namespace
 
-Result<CompiledShader> compile_shader(const ShaderCompileRequest& request, memory::ResourceHandle resource)
+namespace {
+Result<CompiledShader> compile_shader_impl(const ShaderCompileRequest& request, memory::ResourceHandle resource,
+    ComPtr<slang::IGlobalSession>& global,std::stop_token cancel)
 {
     DK_PROFILE_ZONE("Shader.compile");
+    const auto cancelled=[] { return std::unexpected(Error{ErrorCode::invalid_state,
+        "Shader compilation cancelled",{"graphics.shader.compile.cancelled"}}); };
     if (!resource || resource.state() != memory::ResourceState::open) {
         return std::unexpected(Error{ErrorCode::invalid_state, "Shader compilation requires an open Memory resource"});
     }
     if (request.source.empty() || !identifier(request.entry) || slang_stage(request.stage) == SLANG_STAGE_NONE) {
         return std::unexpected(Error{ErrorCode::invalid_argument, "Shader source, identifier entry and supported stage are required"});
     }
+    if (cancel.stop_requested()) return cancelled();
     std::error_code ec;
     const auto absolute = std::filesystem::absolute(request.source, ec);
     if (ec) { return std::unexpected(Error{ErrorCode::io_error, "Cannot resolve shader source: " + ec.message()}); }
@@ -181,14 +186,16 @@ Result<CompiledShader> compile_shader(const ShaderCompileRequest& request, memor
     }
     std::vector<slang::PreprocessorMacroDesc> defines;
     for (const auto& [name, value] : define_storage) { defines.push_back({name.c_str(), value.c_str()}); }
-    ComPtr<slang::IGlobalSession> global;
-    if (SLANG_FAILED(slang::createGlobalSession(global.writeRef()))) { return fail("Cannot create Slang global session", ErrorCode::internal_error); }
+    if (cancel.stop_requested()) return cancelled();
+    if (!global && SLANG_FAILED(slang::createGlobalSession(global.writeRef()))) { return fail("Cannot create Slang global session", ErrorCode::internal_error); }
+    if (cancel.stop_requested()) return cancelled();
     output.compiler = global->getBuildTagString();
     // Slang may still return code after a missing optimizer diagnostic. Require the
     // selected backend up front so a broken deployment cannot silently change policy.
     if (SLANG_FAILED(global->checkPassThroughSupport(SLANG_PASS_THROUGH_SPIRV_OPT))) {
         return fail("Slang spirv-opt backend unavailable; deploy the matching slang-glslang runtime library", ErrorCode::not_supported);
     }
+    if (cancel.stop_requested()) return cancelled();
     slang::TargetDesc target{};
     target.format = SLANG_SPIRV;
     target.profile = global->findProfile("spirv_1_5");
@@ -213,10 +220,12 @@ Result<CompiledShader> compile_shader(const ShaderCompileRequest& request, memor
     session_desc.compilerOptionEntryCount = 4;
     ComPtr<slang::ISession> session;
     if (SLANG_FAILED(global->createSession(session_desc, session.writeRef()))) { return fail("Cannot create Slang session", ErrorCode::internal_error); }
+    if (cancel.stop_requested()) return cancelled();
     ComPtr<slang::IBlob> diagnostics;
     auto* module = session->loadModuleFromSourceString("dk_shader", path->c_str(), source.c_str(), diagnostics.writeRef());
     append_diagnostics(output.diagnostics, diagnostics);
     if (!module) { return fail("Slang source compilation failed"); }
+    if (cancel.stop_requested()) return cancelled();
     ComPtr<slang::IEntryPoint> entry;
     if (SLANG_FAILED(module->findEntryPointByName(output.entry.c_str(), entry.writeRef()))) {
         return fail("Entry point not found; declare a stage using [shader(...)] or a Slang-recognized stage attribute", ErrorCode::not_found);
@@ -226,18 +235,22 @@ Result<CompiledShader> compile_shader(const ShaderCompileRequest& request, memor
     auto status = session->createCompositeComponentType(parts, 2, program.writeRef(), diagnostics.writeRef());
     append_diagnostics(output.diagnostics, diagnostics);
     if (SLANG_FAILED(status)) { return fail("Slang composition failed"); }
+    if (cancel.stop_requested()) return cancelled();
     ComPtr<slang::IComponentType> linked;
     status = program->link(linked.writeRef(), diagnostics.writeRef());
     append_diagnostics(output.diagnostics, diagnostics);
     if (SLANG_FAILED(status)) { return fail("Slang linking failed"); }
+    if (cancel.stop_requested()) return cancelled();
     auto* layout = linked->getLayout(0, diagnostics.writeRef());
     append_diagnostics(output.diagnostics, diagnostics);
     if (!layout) { return fail("Slang layout failed"); }
     if (auto result = reflect(layout, output); !result) { return fail(result.error().message, result.error().code); }
+    if (cancel.stop_requested()) return cancelled();
     ComPtr<slang::IBlob> code;
     status = linked->getEntryPointCode(0, 0, code.writeRef(), diagnostics.writeRef());
     append_diagnostics(output.diagnostics, diagnostics);
     if (SLANG_FAILED(status)) { return fail("Slang SPIR-V generation failed"); }
+    if (cancel.stop_requested()) return cancelled();
     if (!code || code->getBufferSize() < 20 || code->getBufferSize() % sizeof(std::uint32_t) != 0) {
         return fail("Invalid SPIR-V artifact from Slang", ErrorCode::internal_error);
     }
@@ -258,6 +271,28 @@ Result<CompiledShader> compile_shader(const ShaderCompileRequest& request, memor
     std::ranges::sort(output.dependencies);
     output.dependencies.erase(std::unique(output.dependencies.begin(), output.dependencies.end()), output.dependencies.end());
     return output;
+}
+} // namespace
+
+Result<CompiledShader> compile_shader(const ShaderCompileRequest& request,memory::ResourceHandle resource,std::stop_token cancel)
+{
+    ComPtr<slang::IGlobalSession> global;
+    return compile_shader_impl(request,std::move(resource),global,cancel);
+}
+Result<Vector<CompiledShader>> compile_shaders(std::span<const ShaderCompileRequest> requests,
+    memory::ResourceHandle resource,std::stop_token cancel)
+{
+    if (!resource || resource.state()!=memory::ResourceState::open)
+        return std::unexpected(Error{ErrorCode::invalid_state,"Shader compilation requires an open Memory resource"});
+    if (requests.empty()) return std::unexpected(Error{ErrorCode::invalid_argument,"Shader batch must not be empty"});
+    Vector<CompiledShader> outputs{memory::Allocator<CompiledShader>{resource}};
+    ComPtr<slang::IGlobalSession> global;
+    for (const auto& request:requests) {
+        auto compiled=compile_shader_impl(request,resource,global,cancel);
+        if (!compiled) return std::unexpected(compiled.error());
+        outputs.push_back(std::move(*compiled));
+    }
+    return outputs;
 }
 
 String shader_reflection_json(const CompiledShader& shader)

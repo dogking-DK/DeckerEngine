@@ -1,7 +1,7 @@
 ---
 module: physics-api
 created_at: "2026-10-08T17:14:07+08:00"
-updated_at: "2026-10-09T15:37:04+08:00"
+updated_at: "2026-10-09T19:38:24+08:00"
 status: accepted
 ---
 
@@ -120,10 +120,11 @@ GPU timestamp/Tracy 由独立队列接口与探针显式启用，见 [性能设�
 | 观测 | 后续目标 | 完成含义 |
 | --- | --- | --- |
 | 长任务受理、query/进度、pause和cancel请求 | p95≤100ms、单次≤250ms | 查询可返回初始化中；pause受理与暂停完成分别计时，观察到paused后步数稳定；cancel须真实受理，不能以客户端超时替代 |
-| Stop、cancel终态、shutdown至进程退出 | p95≤250ms、单次≤1000ms | 在途工作到达安全完成/故障边界，资源有界回收；Stop保持Edit，已提交工作不伪装撤销 |
+| Stop、cancel终态、shutdown受理 | p95≤250ms、单次≤1000ms | 在途工作到达安全完成/故障边界，资源有界回收；Stop保持Edit，已提交工作不伪装撤销 |
+| shutdown至进程退出 | p95≤400ms、单次≤1000ms | 包含SDK请求、worker回收、GUI/驱动及进程卸载；2026-10-09按用户要求由250ms放宽至400ms |
 | GUI事件循环心跳间隔 | p95≤50ms、单次≤100ms | 在冷初始化和持续实验期间采样单调时钟；与呈现帧率分开验收 |
 
-100ms请求预算给本机SDK/dk-ctl约30ms空闲成本留出调度和短批次余量；250ms/1000ms是
+100ms请求预算给本机SDK/dk-ctl约30ms空闲成本留出调度和短批次余量；250ms/400ms及1000ms是
 外部调用/排空的有界上限目标，不是跨设备硬实时承诺。冷初始化shader总耗时可以更长，
 但不能因此阻塞查询、受理或事件循环；需要异步状态与安全发布，具体实现见下文M11.3设计。
 
@@ -177,3 +178,28 @@ particles/export只允许已初始化、无fault、稳定paused/succeeded/cancel
 真实CPU/GPU有限300拍、暂停稳定/取消上界/Stop保护/冷受理/空闲发布和退出，核对数值容差、命令发现与CPU-only。
 不以本阶段功能验证替代M11.4的大样本GUI/IPC响应性复测。M11.2“pause回复后稳定”对任务明确为观察到paused终态后稳定，
 受理延迟和到达安全边界的延迟分开测量。
+
+## M11.4 冷取消与宿主验收
+
+`request_shutdown()` 只请求有限任务 stop，资源仍由服务持有，服务析构必须 join；
+同步 `shutdown()` 保留立即清理契约。GUI 确认关闭时同样先发关闭请求，再清理窗口。
+
+有限任务的cancel/Stop/shutdown向初始化传递stop_token；暂停仍等待初始化成功进入稳定态。
+设备创建返回后、各shader/pipeline之间及初始上传前检查取消，退出未发布候选；不强行中断单次驱动/编译调用。
+协作取消和普通Error分离：取消初始化保留initialized=false、零完成拍数和cancelled，普通失败仍failed。
+GPU初始化创建/销毁保持同线程；已经提交的初始化上传必须先退休；正常求解的提交/完成边界不变。
+GUI宿主沿用owner pump与相同有限任务命令，不将同步start/step自动改写为异步，也不提前交付M12模拟工作台。
+在实际SDL/ImGui事件循环采样心跳，包含最小化后的循环；仅验收模式写原始证据，常规运行无文件/采样开销。
+具体试验协议见[性能设计](foundation-profiling.md#m114-响应性复测协议)。
+
+M11.4首批编译复测显示Stop/退出尾延迟超标，因此cancel/Stop的token也传到批次建图与编译。
+领取的批次若尚未提交，可在安全点退出并保留旧计数；提交后仍必须等待真实完成。
+
+## M11.4 宿主提供GPU设备
+
+SimulationService/Runtime提供仅宿主初始化使用的set_gpu_device，CPU-only拒绝非空设备，
+有活动Play时拒绝替换；空值恢复独立设备路径。非空设备必须实际具有第二条队列。
+服务持有只读设备寿命，有限worker在自身线程创建独立SubmissionQueue并使用同族index 1，
+同步legacy GPU与CPU实验的显式GPU导出也复用该队列，但任意时刻服务只有一个Play/执行所有者。
+服务销毁先结束Play并join worker，再释放宿主设备引用。不同队列的模拟和UI资源不共享；
+runner未提供设备时保持独立设备、原有验证/取消/数值契约。

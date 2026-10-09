@@ -5,6 +5,7 @@
 #include <chrono>
 
 namespace dk {
+namespace graphics { class Device; }
 struct SimulationIdTag;
 using SimulationId = StableId<SimulationIdTag>;
 enum class SimulationMode { edit, running, paused, initializing, pausing, cancelling, stopping };
@@ -54,6 +55,7 @@ class SimulationService final {
 public:
     using Clock = std::chrono::steady_clock;
     using TimePoint = Clock::time_point;
+    [[nodiscard]] Result<void> set_gpu_device(std::shared_ptr<const graphics::Device>);
     [[nodiscard]] Result<void> run(const SceneService&, EditGuard, std::uint32_t count,
         ClothConfig = {}, bool gpu = false, std::int64_t dt_ns = 10000000, std::uint32_t batch_steps = 8);
     [[nodiscard]] Result<void> cancel(SimulationId);
@@ -75,6 +77,8 @@ public:
     void pump(TimePoint now = Clock::now());
     [[nodiscard]] TimePoint next_deadline(TimePoint fallback) const;
     void shutdown() noexcept { play_.reset(); }
+    // Request now, join at service destruction so host teardown can overlap.
+    void request_shutdown() noexcept;
 private:
     struct PlayWorld {
         SimulationId id;
@@ -96,6 +100,7 @@ private:
     [[nodiscard]] Result<void> check_run(SimulationId) const;
     [[nodiscard]] SimulationRunState run_state() const;
     [[nodiscard]] Result<void> advance_solver(const FixedStepClock&, std::uint32_t);
-    std::unique_ptr<PlayWorld> play_;
+    std::shared_ptr<const graphics::Device> gpu_device_;
+    std::unique_ptr<PlayWorld> play_; // Join before releasing the host's device lifetime.
 };
 }

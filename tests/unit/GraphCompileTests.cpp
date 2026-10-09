@@ -404,3 +404,16 @@ TEST_CASE("graph dense preserving passes retain unique hazards and deterministic
     CHECK(std::adjacent_find(plan.dependencies().begin(),plan.dependencies().end())==plan.dependencies().end());
     consistent(plan);
 }
+
+TEST_CASE("Graph cancelled compilation preserves its declarations and prior immutable plan") {
+    Fixture f;
+    add(f.graph,"side effect",{},true);
+    const auto prior=take(f.graph.compile());
+    const auto original=names(prior);
+    std::stop_source stop; stop.request_stop();
+    auto cancelled=f.graph.compile(stop.get_token());
+    REQUIRE_FALSE(cancelled);
+    REQUIRE(cancelled.error().context==std::vector<std::string>{"graph.compile.cancelled"});
+    REQUIRE(names(prior)==original);
+    REQUIRE(names(take(f.graph.compile()))==original);
+}

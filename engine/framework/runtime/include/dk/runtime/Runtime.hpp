@@ -41,6 +41,10 @@ class Runtime final
     [[nodiscard]] Result<PlaySceneSnapshot> read_play_scene(SimulationId run_id) const;
     [[nodiscard]] Result<PlayParticleSnapshot> read_play_particles(SimulationId run_id) const;
     void pump();
+    [[nodiscard]] Result<void> set_simulation_gpu_device(std::shared_ptr<const graphics::Device> device) {
+        return simulation_.set_gpu_device(std::move(device));
+    }
+    [[nodiscard]] SimulationState simulation_state() const { return simulation_.state(); }
     [[nodiscard]] std::chrono::steady_clock::time_point next_pump_deadline(std::chrono::steady_clock::time_point fallback) const;
     [[nodiscard]] bool stopping() const noexcept
     {

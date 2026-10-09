@@ -1,7 +1,7 @@
 ---
 module: graphics-graph
 created_at: "2026-10-02T23:00:00+08:00"
-updated_at: "2026-10-09T14:26:13+08:00"
+updated_at: "2026-10-09T19:38:24+08:00"
 status: accepted
 ---
 
@@ -204,3 +204,11 @@ execute 在启用队列观测时围绕每个保留 Pass 的 prepare/record/finis
 分类从声明的访问阶段得出：compute 优先、graphics 次之、transfer 次之，其余 other；名称为拥有型副本。
 整个提交区间另包含导入/最终屏障等 GPU 工作；CPU 建图/编译/录制分别埋点。观测不进入编译计划或缓存键。
 失败放弃的图不发布 GPU 时间；完整结果由 Execution.submission().gpu_profile() 查询。
+
+## M11.4 编译协作取消
+
+首批XPBD图的冷编译使Stop/退出样本超过250ms；因此compile接受可选stop_token，
+在依赖分析、候选复制、裁剪、排序阶段之间和外层遍历中检查取消。取消仅丢弃未发布Plan候选，
+返回invalid_state/context=graph.compile.cancelled；原Graph及旧CompiledGraph不变，不涉及GPU提交。
+依赖归一排序在每4096次比较检查取消，避免大图排序形成长的无检查区间；
+比较器仍使用同一全序，只在取消时抛出候选私有错误。不改变依赖、裁剪或缓存键，内存释放和驱动调用仍不可硬抢占。

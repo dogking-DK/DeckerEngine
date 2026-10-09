@@ -53,10 +53,13 @@ struct Fake {
     bool layer = true, debug = true;
     bool throw_instance_adoption = false, throw_device_adoption = false, teardown_callback = false;
     int device_queue_lookups = 0;
+    std::uint32_t available_queues=1,requested_queues=0;
     std::uint32_t loader_version = device_api_version;
     std::uint32_t physical_version = device_api_version;
     bool maintenance4 = true, buffer_requirements = true, image_requirements = true;
     int feature_queries = 0, device_creates = 0;
+    std::stop_source* cancel = nullptr;
+    bool cancel_at_device = false;
     memory::ResourceHandle close_resource;
     int fills = 0, creates = 0, alternate_creates = 0;
     std::string destroyed;
@@ -73,6 +76,7 @@ struct Fake {
         REQUIRE(info->pApplicationInfo->apiVersion == VK_API_VERSION_1_4);
         if (info->pNext) active->callback_info = *static_cast<const VkDebugUtilsMessengerCreateInfoEXT*>(info->pNext);
         if (active->instance_result == VK_SUCCESS) *value = handle<VkInstance>(1);
+        if (active->cancel && !active->cancel_at_device) active->cancel->request_stop();
         return active->instance_result;
     }
     static VKAPI_ATTR void VKAPI_CALL destroy_instance(VkInstance, const VkAllocationCallbacks*)
@@ -119,10 +123,11 @@ struct Fake {
         f13->maintenance4 = active->maintenance4 ? VK_TRUE : VK_FALSE;
     }
     static VKAPI_ATTR void VKAPI_CALL queues(VkPhysicalDevice, std::uint32_t* count, VkQueueFamilyProperties* data)
-    { *count = 1; if (data) data[0] = {VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, 1, 64, {1, 1, 1}}; }
+    { *count = 1; if (data) data[0] = {VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, active->available_queues, 64, {1, 1, 1}}; }
     static VKAPI_ATTR VkResult VKAPI_CALL device(VkPhysicalDevice, const VkDeviceCreateInfo* info, const VkAllocationCallbacks*, VkDevice* value)
     {
         ++active->device_creates;
+        active->requested_queues=info->pQueueCreateInfos->queueCount;
         const auto* f12 = static_cast<const VkPhysicalDeviceVulkan12Features*>(info->pNext);
         const auto* f13 = static_cast<const VkPhysicalDeviceVulkan13Features*>(f12->pNext);
         active->feature_contract = f12->timelineSemaphore && f13->synchronization2 && f13->dynamicRendering &&
@@ -130,10 +135,11 @@ struct Fake {
             info->queueCreateInfoCount == 1 && info->pQueueCreateInfos->queueCount == 1 &&
             info->pQueueCreateInfos->queueFamilyIndex == 0 && *info->pQueueCreateInfos->pQueuePriorities == 1.0f;
         if (active->device_result == VK_SUCCESS) *value = handle<VkDevice>(3);
+        if (active->cancel && active->cancel_at_device) active->cancel->request_stop();
         return active->device_result;
     }
-    static VKAPI_ATTR void VKAPI_CALL queue(VkDevice, std::uint32_t, std::uint32_t, VkQueue* value)
-    { *value = active->null_queue ? VK_NULL_HANDLE : handle<VkQueue>(5); }
+    static VKAPI_ATTR void VKAPI_CALL queue(VkDevice, std::uint32_t, std::uint32_t index, VkQueue* value)
+    { *value = active->null_queue ? VK_NULL_HANDLE : handle<VkQueue>(5+index); }
     static VKAPI_ATTR void VKAPI_CALL buffer_memory_requirements(VkDevice, const VkDeviceBufferMemoryRequirements*, VkMemoryRequirements2*) {}
     static VKAPI_ATTR void VKAPI_CALL image_memory_requirements(VkDevice, const VkDeviceImageMemoryRequirements*, VkMemoryRequirements2*) {}
     static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL device_proc(VkDevice, const char* name)
@@ -193,6 +199,24 @@ struct Fake {
         return graphics::detail::DeviceAccess::create(resource, options, resolver, &api);
     }
 };
+}
+
+TEST_CASE("device creation cancellation unwinds only acquired native owners")
+{
+    for (int phase=0; phase<3; ++phase) {
+        Memory memory;
+        Fake fake;
+        std::stop_source stop;
+        if (phase==0) stop.request_stop();
+        else { fake.cancel=&stop; fake.cancel_at_device=phase==2; }
+        auto result=fake.create(memory.resource, {.cancel=stop.get_token()});
+        REQUIRE_FALSE(result);
+        REQUIRE(result.error().code==ErrorCode::invalid_state);
+        REQUIRE(result.error().context==std::vector<std::string>{"graphics.device.create.cancelled"});
+        REQUIRE(fake.creates==(phase==0 ? 0 : 1));
+        REQUIRE(fake.device_creates==(phase==2 ? 1 : 0));
+        REQUIRE(fake.destroyed==(phase==0 ? "" : phase==1 ? "MI" : "DMI"));
+    }
 }
 
 TEST_CASE("adapter selection ranks suitable devices and honors explicit choice")
@@ -444,4 +468,33 @@ TEST_CASE("device move assignment releases previous owner and preserves RAII ref
     }
     REQUIRE(fake.destroyed == "ADMIADMI");
     REQUIRE(memory.resource.snapshot().live_allocations == 0);
+}
+
+TEST_CASE("shared queue views retain one native device until the last owner")
+{
+    Memory memory; Fake fake; fake.available_queues=2;
+    std::optional<Device> worker;
+    {
+        auto owner=fake.create(memory.resource,{.secondary_queue=true}); REQUIRE(owner);
+        REQUIRE(owner->queue_count()==2); CHECK(fake.requested_queues==2);
+        auto second=owner->share_queue(1); REQUIRE(second);
+        CHECK(second->native_device()==owner->native_device());
+        CHECK(second->allocator()==owner->allocator());
+        CHECK(*second->queue()!=*owner->queue()); CHECK(second->queue_index()==1);
+        CHECK_FALSE(owner->share_queue(2));
+        worker.emplace(std::move(*second));
+    }
+    CHECK(fake.destroyed.empty());
+    worker.reset(); CHECK(fake.destroyed=="ADMI");
+    CHECK(memory.resource.snapshot().live_allocations==0);
+}
+TEST_CASE("secondary queue request preserves single queue fallback")
+{
+    Memory memory; Fake fake;
+    {
+        auto device=fake.create(memory.resource,{.secondary_queue=true}); REQUIRE(device);
+        CHECK(device->queue_count()==1); CHECK(fake.requested_queues==1);
+        CHECK_FALSE(device->share_queue(1)); CHECK(device->queue_index()==0);
+    }
+    CHECK(fake.destroyed=="ADMI");
 }

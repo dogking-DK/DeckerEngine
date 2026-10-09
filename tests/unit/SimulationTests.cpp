@@ -268,9 +268,11 @@ TEST_CASE("finite simulation service publishes exact results on owner pump and p
     Simulation s; s.create();
     const auto original=s.edit->read_snapshot(s.guard()); REQUIRE(original);
     ClothConfig cloth; cloth.seed=42;
+    REQUIRE(s.play.set_gpu_device({}));
     REQUIRE_FALSE(s.play.run(*s.edit,s.guard(),0,cloth));
     REQUIRE_FALSE(s.play.state().run);
     REQUIRE(s.play.run(*s.edit,s.guard(),300,cloth));
+    REQUIRE_FALSE(s.play.set_gpu_device({}));
     const auto id=s.play.state().run->run_id;
     REQUIRE(s.play.state().run->task->target_steps==300);
     REQUIRE(s.play.next_deadline(SimulationService::Clock::now()+1s)<SimulationService::Clock::now()+50ms);
@@ -325,4 +327,8 @@ TEST_CASE("finite simulation commands discover bounds cancel and reject stale id
     REQUIRE(s.call("simulation.cancel",{{"run_id",id}})==state);
     REQUIRE_FALSE(s.invoke("simulation.resume",{{"run_id",id}}));
     s.call("runtime.shutdown"); REQUIRE(s.runtime->stopping());
+    REQUIRE_FALSE(s.runtime->dispatch("simulation.query",Json::object()));
+    // The owner retains Play until destruction; shutdown ACK is not a claim of GPU release.
+    REQUIRE(s.runtime->simulation_state().run.has_value());
+    s.runtime.reset();
 }

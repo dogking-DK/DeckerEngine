@@ -52,10 +52,11 @@ def particles(client, key, size):
     return result
 
 
-def exercise(args, root, report):
-    with server(args, root, "dk-task-" + uuid4().hex) as client:
+def exercise(args, root, report, host=server, existing_scene=False):
+    with host(args, root, "dk-task-" + uuid4().hex) as client:
         client.timeout = 60
-        state = client.call("scene.new", {"name": "Finite task EditWorld"}).value
+        state = (client.call("scene.query").value["state"] if existing_scene else
+                 client.call("scene.new", {"name": "Finite task EditWorld"}).value)
         before = client.call("scene.query").value
         history = client.call("history.status").value
         caps = client.call("runtime.capabilities").value

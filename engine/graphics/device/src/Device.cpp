@@ -170,6 +170,8 @@ struct Device::Impl {
     vk::raii::PhysicalDevice physical{nullptr};
     vk::raii::Device device{nullptr};
     vk::raii::Queue queue{nullptr};
+    vk::raii::Queue secondary{nullptr};
+    std::uint32_t queue_count=1;
     AllocatorOwner allocator;
     void report(const Diagnostic& diagnostic) noexcept
     {
@@ -199,6 +201,8 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
                                            PFN_vkGetInstanceProcAddr resolver, const AllocatorApi* allocator_api)
 {
     DK_PROFILE_ZONE("graphics.device.create");
+    const auto cancelled = [] { return std::unexpected(Error{ErrorCode::invalid_state,
+        "Device creation cancelled", {"graphics.device.create.cancelled"}}); };
     if (!resource || resource.state() != memory::ResourceState::open)
         return std::unexpected(Error{ErrorCode::invalid_argument, "device requires an open Memory resource"});
     if (!options.loader_path.empty() && !options.loader_path.is_absolute())
@@ -210,6 +214,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
         return std::unexpected(Error{ErrorCode::invalid_argument, "surface requires a lifetime owner and instance extensions"});
     for (const auto* extension : options.surface.instance_extensions)
         if (!extension || !*extension) return std::unexpected(Error{ErrorCode::invalid_argument, "instance extension names must not be empty"});
+    if (options.cancel.stop_requested()) return cancelled();
     Vector<const char*> instance_extensions{memory::Allocator<const char*>{resource}};
     const auto enable_extension = [&](const char* name) {
         for (const auto* prior : instance_extensions) if (std::strcmp(prior, name) == 0) return;
@@ -221,7 +226,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
         enable_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
         enable_extension(VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME);
     }
-    auto impl = memory::make_unique_in<Device::Impl>(resource, resource);
+    auto impl = memory::make_shared_in<Device::Impl>(resource, resource);
     if (allocator_api) impl->allocator.api = *allocator_api;
     impl->sink = options.diagnostic_sink;
     impl->sink_data = options.diagnostic_user_data;
@@ -254,6 +259,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     auto extensions = enumerate<VkExtensionProperties>(resource, "vkEnumerateInstanceExtensionProperties",
         [&](std::uint32_t* count, VkExtensionProperties* data) { return extensions_fn(nullptr, count, data); });
     if (!extensions) return std::unexpected(extensions.error());
+    if (options.cancel.stop_requested()) return cancelled();
     for (const auto* required : instance_extensions) {
         bool found = false;
         for (const auto& extension : *extensions) if (std::strcmp(required, extension.extensionName) == 0) found = true;
@@ -285,11 +291,13 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     debug_info.pUserData = impl.get();
     impl->context.emplace(resolver);
     detail::InstanceOwner pending_instance;
+    if (options.cancel.stop_requested()) return cancelled();
     const auto bootstrapped = detail::bootstrap_instance(resolver, impl->validation, debug_info, pending_instance, instance_extensions);
     if (!bootstrapped) return std::unexpected(bootstrapped.error());
     if (!pending_instance.destroy_instance)
         return std::unexpected(Error{ErrorCode::internal_error, "Vulkan instance is missing vkDestroyInstance"});
     pending_instance.adopt(*impl->context, impl->instance, impl->messenger);
+    if (options.cancel.stop_requested()) return cancelled();
     const auto native_instance = static_cast<VkInstance>(*impl->instance);
     load_instance_table(resolver, native_instance, impl->instance_table);
     if (presentation) {
@@ -314,8 +322,10 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     auto physicals = enumerate<VkPhysicalDevice>(resource, "vkEnumeratePhysicalDevices",
         [&](std::uint32_t* count, VkPhysicalDevice* data) { return physical_fn(native_instance, count, data); });
     if (!physicals) return std::unexpected(physicals.error());
+    if (options.cancel.stop_requested()) return cancelled();
     Vector<AdapterInfo> adapters{memory::Allocator<AdapterInfo>{resource}};
     for (const auto physical : *physicals) {
+        if (options.cancel.stop_requested()) return cancelled();
         AdapterInfo info{resource};
         const vk::raii::PhysicalDevice physical_device{impl->instance, physical};
         auto properties = physical_device.getProperties2();
@@ -375,11 +385,12 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     impl->physical = vk::raii::PhysicalDevice{impl->instance, native_physical};
     impl->family = selection->queue_family;
     impl->info = std::move(adapters[selection->adapter_index]);
-    const float priority = 1.0f;
+    const float priorities[]{1.0f,1.0f};
+    impl->queue_count=options.secondary_queue && impl->info.queues[impl->family].queueCount>1 ? 2u : 1u;
     vk::DeviceQueueCreateInfo queue_info{};
     queue_info.queueFamilyIndex = impl->family;
-    queue_info.queueCount = 1;
-    queue_info.pQueuePriorities = &priority;
+    queue_info.queueCount = impl->queue_count;
+    queue_info.pQueuePriorities = priorities;
     vk::PhysicalDeviceVulkan13Features features13{};
     features13.synchronization2 = VK_TRUE;
     features13.dynamicRendering = VK_TRUE;
@@ -397,8 +408,10 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     const std::array<const char*, 2> device_extensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME};
     if (presentation) device_info.setPEnabledExtensionNames(device_extensions);
     PendingDevice pending_device{VK_NULL_HANDLE, destroy_device};
+    if (options.cancel.stop_requested()) return cancelled();
     auto result = create_device(native_physical, reinterpret_cast<const VkDeviceCreateInfo*>(&device_info), nullptr, &pending_device.handle);
     if (result != VK_SUCCESS) { pending_device.handle = VK_NULL_HANDLE; return std::unexpected(vk_error("vkCreateDevice", result)); }
+    if (options.cancel.stop_requested()) return cancelled();
     load_device_table(resolver, impl->get_device_proc, pending_device.handle, impl->device_table);
     if (!impl->device_table.vkDestroyDevice || !impl->device_table.vkGetDeviceQueue)
         return std::unexpected(Error{ErrorCode::internal_error, "Vulkan device is missing required entry points"});
@@ -408,6 +421,10 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     pending_device.handle = VK_NULL_HANDLE;
     impl->queue = impl->device.getQueue(impl->family, 0);
     if (!*impl->queue) return std::unexpected(Error{ErrorCode::internal_error, "vkGetDeviceQueue returned a null queue"});
+    if (impl->queue_count==2) {
+        impl->secondary=impl->device.getQueue(impl->family,1);
+        if (!*impl->secondary) return std::unexpected(Error{ErrorCode::internal_error,"vkGetDeviceQueue returned a null secondary queue"});
+    }
     const auto functions = allocator_functions(impl->instance_table, impl->device_table);
     VmaAllocatorCreateInfo allocator_info{};
     allocator_info.instance = native_instance;
@@ -417,17 +434,23 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     allocator_info.pVulkanFunctions = &functions;
     result = impl->allocator.api.create(&allocator_info, &impl->allocator.handle);
     if (result != VK_SUCCESS) { impl->allocator.handle = VK_NULL_HANDLE; return std::unexpected(vk_error("vmaCreateAllocator", result)); }
+    if (options.cancel.stop_requested()) return cancelled();
     return Device{std::move(impl)};
 }
 
-Device::Device(memory::UniquePtr<Impl> impl) noexcept : impl_(std::move(impl)) {}
+Device::Device(std::shared_ptr<Impl> impl,std::uint32_t index) noexcept : impl_(std::move(impl)),queue_index_(index) {}
 Device::~Device() = default;
 Device::Device(Device&&) noexcept = default;
 Device& Device::operator=(Device&&) noexcept = default;
 const vk::raii::Instance& Device::instance() const noexcept { return impl_->instance; }
 const vk::raii::PhysicalDevice& Device::physical_device() const noexcept { return impl_->physical; }
 const vk::raii::Device& Device::logical_device() const noexcept { return impl_->device; }
-const vk::raii::Queue& Device::queue() const noexcept { return impl_->queue; }
+const vk::raii::Queue& Device::queue() const noexcept { return queue_index_ ? impl_->secondary : impl_->queue; }
+std::uint32_t Device::queue_count() const noexcept { return impl_->queue_count; }
+Result<Device> Device::share_queue(std::uint32_t index) const {
+    if (index>=impl_->queue_count) return std::unexpected(Error{ErrorCode::invalid_argument,"Queue index is not available"});
+    return Device{impl_,index};
+}
 VkDevice Device::native_device() const noexcept { return static_cast<VkDevice>(*impl_->device); }
 VmaAllocator Device::allocator() const noexcept { return impl_->allocator.handle; }
 std::uint32_t Device::queue_family() const noexcept { return impl_->family; }
