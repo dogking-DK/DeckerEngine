@@ -332,3 +332,29 @@ TEST_CASE("finite simulation commands discover bounds cancel and reject stale id
     REQUIRE(s.runtime->simulation_state().run.has_value());
     s.runtime.reset();
 }
+TEST_CASE("finite simulation commands prepare at zero and step exact counts without changing Edit") {
+    Commands s; s.call("scene.new");
+    const auto edit=s.call("scene.query"), history=s.call("history.status");
+    const auto descriptor=s.call("commands.describe",{{"name","simulation.run"}});
+    REQUIRE(descriptor["parameters"]["properties"]["paused"]["type"]=="boolean");
+    for (const auto name : {"simulation.run","simulation.step"}) {
+        const auto d=s.call("commands.describe",{{"name",name}});
+        REQUIRE(d["effect"]=="control"); REQUIRE(d["undoable"]==false);
+    }
+    REQUIRE_FALSE(s.invoke("simulation.run",{{"count",3},{"paused",1}},true));
+    auto state=s.call("simulation.run",{{"count",3},{"paused",true}},true);
+    const auto id=state["run"]["run_id"];
+    const auto wait=[&](const char* status) {
+        const auto end=SimulationService::Clock::now()+5s;
+        do { state=s.call("simulation.query"); std::this_thread::sleep_for(1ms); }
+        while (state["run"]["task"]["status"]!=status && SimulationService::Clock::now()<end);
+        REQUIRE(state["run"]["task"]["status"]==status);
+    };
+    wait("paused"); REQUIRE(state["run"]["steps"]==0);
+    REQUIRE_FALSE(s.invoke("simulation.step",{{"run_id",id},{"count",4}}));
+    s.call("simulation.step",{{"run_id",id}}); wait("paused"); REQUIRE(state["run"]["steps"]==1);
+    s.call("simulation.step",{{"run_id",id},{"count",2}}); wait("succeeded"); REQUIRE(state["run"]["steps"]==3);
+    REQUIRE_FALSE(s.invoke("simulation.step",{{"run_id",id}}));
+    REQUIRE(s.call("simulation.particles",{{"run_id",id}})["steps"]==3);
+    REQUIRE(s.call("scene.query")==edit); REQUIRE(s.call("history.status")==history);
+}

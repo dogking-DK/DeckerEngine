@@ -196,11 +196,13 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
         ImGui::DockBuilderAddNode(dock,ImGuiDockNodeFlags_DockSpace);
         ImGui::DockBuilderSetNodeSize(dock,ImGui::GetMainViewport()->WorkSize);
         auto center=dock;
-        const auto left=ImGui::DockBuilderSplitNode(center,ImGuiDir_Left,0.18f,nullptr,&center);
+        auto left=ImGui::DockBuilderSplitNode(center,ImGuiDir_Left,0.24f,nullptr,&center);
+        const auto simulation=ImGui::DockBuilderSplitNode(left,ImGuiDir_Down,0.65f,nullptr,&left);
         const auto right=ImGui::DockBuilderSplitNode(center,ImGuiDir_Right,0.31f,nullptr,&center);
         auto bottom=ImGui::DockBuilderSplitNode(center,ImGuiDir_Down,0.26f,nullptr,&center);
         const auto log=ImGui::DockBuilderSplitNode(bottom,ImGuiDir_Right,0.48f,nullptr,&bottom);
         ImGui::DockBuilderDockWindow("Hierarchy",left); ImGui::DockBuilderDockWindow("Inspector",right);
+        ImGui::DockBuilderDockWindow("Simulation",simulation);
         ImGui::DockBuilderDockWindow("Viewport",center); ImGui::DockBuilderDockWindow("Assets",bottom);
         ImGui::DockBuilderDockWindow("Console",log); ImGui::DockBuilderFinish(dock);
         layout_=true;
@@ -236,6 +238,6 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
         }
     }
     ImGui::End();
-    assets(); console(); confirmation();
+    assets(); console(); simulation(); confirmation();
 }
 }

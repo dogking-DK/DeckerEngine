@@ -12,6 +12,7 @@ struct WorkbenchOptions {
     // Bounded native UI acceptance run. Caller must supply a disposable project.
     bool smoke = false;
     bool interaction_smoke = false;
+    bool simulation_smoke = false;
     bool consistency_smoke = false;
     bool simulation_response_probe = false;
     unsigned frames = 0;

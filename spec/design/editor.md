@@ -1,11 +1,27 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-09T19:38:24+08:00"
+updated_at: "2026-10-09T20:08:06+08:00"
 status: accepted
 ---
 
 # M8.1 编辑器工作台
+
+## M12.1 模拟面板与运行控制
+
+Simulation面板经Workspace调用已有Runtime命令，CPU/GPU能力依构建显示；无GPU时不提供GPU选项。
+模型保存会话级SimulationDraft（布片全部参数、固定纳秒步长、目标步数、批次上限），不写场景或历史。
+草稿仅在新实验启动时应用，运行中可修改供下一次启动；活动配置和当前run_id单列，外部IPC不覆盖草稿。
+启动要求已打开场景且Inspector已Apply/Revert，guard取当前快照；普通失败保留草稿、Edit和活动运行。
+Play用simulation.run异步启动，Prepare paused以paused=true从零步准备；稳定paused后Step只推进1拍。
+Pause/Resume/Cancel/Stop携带本帧观察到的run_id，过期请求由服务拒绝，不自动重定向新运行。
+每帧从Runtime读取已发布状态，显示初始化/暂停中/取消中/停止中、终态与fault；受理不冒充完成。
+终态仅允许Stop和只读查看，停止回收期间禁止重启；外部legacy同步运行也按其实际状态提供控制。
+GPU冷初始化和有限任务单步在worker执行，不经旧同步start绕开M11响应性路径。
+当前视口仍为EditWorld，面板明确提示尚无实时模拟预览；数值/性能采样、导出UI和Play视口留给后续阶段。
+验证覆盖参数拒绝/旧run_id、草稿与Edit/history隔离、真实IPC外部控制，以及ImGui按钮输入的CPU/GPU零步准备、单步和停止。
+默认Simulation放在左下，Inspector保留完整高度；控制分行、参数用可滚动双列表，避免默认窗口宽度裁切按钮。
+一次性smoke与response probe统一单列已知AMD Loader Message原文，其他warning/error及存活分配仍失败；普通工作台退出策略不变。
 
 ## 边界
 

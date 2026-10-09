@@ -104,6 +104,7 @@ struct AsyncSimulation::Impl {
     std::condition_variable changed;
     SimulationTaskState progress;
     Request requested = Request::run;
+    std::uint32_t manual_steps = 0;
     std::optional<SimulationTaskStatus> terminal;
     std::exception_ptr fatal;
     bool finished = false;
@@ -118,7 +119,7 @@ struct AsyncSimulation::Impl {
         else if (terminal) state.status = *terminal;
         else if (requested == Request::cancel) state.status = SimulationTaskStatus::cancelling;
         else if (requested == Request::pause)
-            state.status = state.initialized && !state.batch_active ? SimulationTaskStatus::paused : SimulationTaskStatus::pausing;
+            state.status = state.initialized && !state.batch_active && !manual_steps ? SimulationTaskStatus::paused : SimulationTaskStatus::pausing;
         else state.status = state.initialized ? SimulationTaskStatus::running : SimulationTaskStatus::initializing;
         return state;
     }
@@ -153,14 +154,15 @@ struct AsyncSimulation::Impl {
             }
             for (;;) {
                 std::unique_lock lock{mutex};
-                changed.wait(lock,[&] { return requested == Request::stop || diagnostic || (!terminal && requested == Request::run); });
+                changed.wait(lock,[&] { return requested == Request::stop || diagnostic || (!terminal && (requested == Request::run || manual_steps)); });
                 if (requested == Request::stop) break;
                 if (diagnostic) {
                     auto call = std::move(diagnostic); diagnostic = {};
                     lock.unlock(); call(*backend); continue;
                 }
-                const auto count = static_cast<std::uint32_t>(std::min<std::uint64_t>(progress.batch_steps,
+                const auto count = manual_steps ? manual_steps : static_cast<std::uint32_t>(std::min<std::uint64_t>(progress.batch_steps,
                     progress.target_steps-progress.completed_steps));
+                manual_steps = 0;
                 progress.batch_active = true; // Claim one batch under the same lock as cancel/pause.
                 lock.unlock();
                 DK_PROFILE_ZONE("simulation.task.batch");
@@ -209,16 +211,17 @@ struct AsyncSimulation::Impl {
         return result.get();
     }
 };
-AsyncSimulation::AsyncSimulation(Factory factory, std::int64_t dt, std::uint32_t count, std::uint32_t batch)
+AsyncSimulation::AsyncSimulation(Factory factory, std::int64_t dt, std::uint32_t count, std::uint32_t batch, bool paused)
     : impl_(std::make_unique<Impl>()) {
     if (!factory || !count || count > 1000000 || !batch || batch > 8 || dt < 1000000 || dt > 33333333)
         throw std::invalid_argument{"Invalid simulation task limits"};
     impl_->progress.target_steps = count; impl_->progress.batch_steps = batch;
+    if (paused) impl_->requested = Impl::Request::pause;
     impl_->worker = std::jthread{[p=impl_.get(),factory=std::move(factory),dt]() mutable { p->work(std::move(factory),dt); }};
 }
 std::shared_ptr<AsyncSimulation> AsyncSimulation::create(XpbdSolver cpu, bool gpu, std::int64_t dt, std::uint32_t count, std::uint32_t batch,
-    std::shared_ptr<const graphics::Device> device) {
-    return std::make_shared<AsyncSimulation>([cpu=std::move(cpu),gpu,device=std::move(device)] { return std::make_unique<Backend>(cpu,gpu,device); },dt,count,batch);
+    std::shared_ptr<const graphics::Device> device, bool paused) {
+    return std::make_shared<AsyncSimulation>([cpu=std::move(cpu),gpu,device=std::move(device)] { return std::make_unique<Backend>(cpu,gpu,device); },dt,count,batch,paused);
 }
 AsyncSimulation::~AsyncSimulation() { stop(); impl_->worker.join(); }
 SimulationTaskState AsyncSimulation::state() const { std::lock_guard lock{impl_->mutex}; return impl_->state_locked(); }
@@ -243,6 +246,7 @@ Result<void> AsyncSimulation::cancel() {
         return std::unexpected(Error{ErrorCode::invalid_state,"Task is stopping"});
     if (!impl_->terminal) {
         impl_->requested = Impl::Request::cancel;
+        impl_->manual_steps = 0;
         impl_->initialization_stop.request_stop();
         if (!impl_->progress.batch_active && impl_->progress.initialized) impl_->terminal = SimulationTaskStatus::cancelled;
     }
@@ -250,9 +254,18 @@ Result<void> AsyncSimulation::cancel() {
 }
 void AsyncSimulation::stop() noexcept {
     std::lock_guard lock{impl_->mutex}; impl_->requested = Impl::Request::stop;
+    impl_->manual_steps = 0;
     impl_->initialization_stop.request_stop(); impl_->changed.notify_all();
 }
 bool AsyncSimulation::closed() const { std::lock_guard lock{impl_->mutex}; return impl_->finished; }
+Result<void> AsyncSimulation::step(std::uint32_t count) {
+    std::lock_guard lock{impl_->mutex};
+    if (impl_->state_locked().status != SimulationTaskStatus::paused || impl_->diagnostic)
+        return std::unexpected(Error{ErrorCode::invalid_state,"Single stepping requires a settled healthy paused task"});
+    if (!count || count > impl_->progress.batch_steps || count > impl_->progress.target_steps-impl_->progress.completed_steps)
+        return std::unexpected(Error{ErrorCode::invalid_argument,"Step must fit one batch and the remaining target"});
+    impl_->manual_steps=count; impl_->changed.notify_all(); return {};
+}
 Result<XpbdSnapshot> AsyncSimulation::read() { return impl_->inspect<XpbdSnapshot>([](auto& backend) { return backend.read(); }); }
 #ifdef DK_SIMULATION_GPU
 Result<SimulationImage> AsyncSimulation::capture(std::int64_t dt,const ClothConfig& cloth,std::uint32_t width,std::uint32_t height) {

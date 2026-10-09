@@ -57,7 +57,7 @@ public:
     using TimePoint = Clock::time_point;
     [[nodiscard]] Result<void> set_gpu_device(std::shared_ptr<const graphics::Device>);
     [[nodiscard]] Result<void> run(const SceneService&, EditGuard, std::uint32_t count,
-        ClothConfig = {}, bool gpu = false, std::int64_t dt_ns = 10000000, std::uint32_t batch_steps = 8);
+        ClothConfig = {}, bool gpu = false, std::int64_t dt_ns = 10000000, std::uint32_t batch_steps = 8, bool paused = false);
     [[nodiscard]] Result<void> cancel(SimulationId);
     [[nodiscard]] Result<void> start(const SceneService&, EditGuard, FixedStepConfig = {},
                                      bool paused = false, std::optional<TimePoint> now = {}, std::optional<ClothConfig> cloth = {}, bool gpu = false);

@@ -501,6 +501,13 @@ endif()
 
 if(TARGET dk_editor_app AND WIN32)
     find_program(DK_POWERSHELL NAMES pwsh powershell REQUIRED)
+    add_test(NAME dk.editor.simulation_gpu_validation
+        COMMAND "${DK_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass
+            -File "${CMAKE_CURRENT_SOURCE_DIR}/EditorSimulationTest.ps1"
+            -Editor "$<TARGET_FILE:dk_editor_app>" -Fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+            -WorkDir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+    set_tests_properties(dk.editor.simulation_gpu_validation PROPERTIES TIMEOUT 150 SKIP_RETURN_CODE 77 LABELS "gpu" RUN_SERIAL TRUE
+        ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
     add_test(NAME dk.editor.workbench_gpu_validation
         COMMAND "${DK_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass
             -File "${CMAKE_CURRENT_SOURCE_DIR}/EditorSmokeTest.ps1"

@@ -51,6 +51,8 @@
 | 跨进程记录/重放、身份/事务/文件/漂移拒绝 | dk_run、dk_ctl | `^dk\.replay\.cpu$`（启用 Luau 时从脚本保存的工程开始） |
 | 记录/重放截图及 Job/逻辑状态核验 | dk_run、dk_ctl | `^dk\.replay\.gpu$`（需要 Python 3.11+ 和 render capture；gpu label） |
 | 独立客户端帮助入口（windows-client，无 Runtime/Renderer） | dk_ctl | `^dk\.ipc\.client_help$` |
+| 模拟面板草稿/旧run保护、GUI与IPC共享控制 | dk_editor_tests | `^dk\.editor\.workspace simulation` |
+| CPU/GPU模拟面板真实按钮、零步准备/单步与场景隔离 | dk_editor_app | `^dk\.editor\.simulation_gpu_validation$`（required及同步validation） |
 | 编辑器 IPC 草稿/manifest 刷新（无需 GPU） | dk_editor_tests | `^dk\.editor\.workspace IPC ` |
 | 编辑器外部 IPC 与窗口退出 | dk_editor_app、dk_run、dk_ctl | `^dk\.ipc\.editor_gpu_validation$`（gpu label） |
 | GUI/IPC 指定 revision、视口/截图像素与保存后 runner 重现（M8.4） | dk_editor_app、dk_run、dk_ctl | `^dk\.editor\.consistency_gpu_validation$`（gpu label） |

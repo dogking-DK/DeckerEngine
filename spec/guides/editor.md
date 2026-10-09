@@ -1,4 +1,4 @@
-# 编辑器工作台（M8.1–M8.4）
+# 编辑器工作台
 
 Windows 可加 `--pipe NAME` 开放本机命令端点，用 `dk-ctl --pipe NAME --method scene.query` 查询。
 构建、guard 编辑和重试见 [IPC 指南](ipc.md)。默认不开放 IPC；外部 `runtime.shutdown` 不自动保存。
@@ -35,6 +35,30 @@ cmake --build out/build/windows-editor --config Debug --target dk_editor_app
   有未保存修改时提供 Save / Discard / Cancel。保存失败不会继续切换/关闭。
   本阶段不修改 manifest 和资产映射，也不提供新建项目向导。
 - **Assets / Console**：只读查看项目资产映射和最近 64 条操作/失败信息。
+
+## Simulation面板（M12.1）
+
+默认布局左下显示Simulation，Inspector保留右侧完整高度；参数位于Next experiment，包含CPU/GPU求解器、目标拍数、每批拍数、
+固定纳秒步长及布片尺寸/seed/间距/高度/质量/compliance/迭代/重力/地面/阻尼。未编译GPU时仅提供CPU。
+参数多时滚动面板查看。Reset draft恢复默认值，不改变当前运行。草稿仅保存在本次编辑器会话中。
+
+- **Play**：异步初始化并执行目标拍数；默认1000000拍、每批8拍，按工作线程进度推进，不按墙钟帧率限速。
+- **Prepare paused**：异步准备求解器，完成后保持0拍，适合从初态单步。
+- **Pause / Resume**：请求暂停或继续；pausing尚未稳定，paused才表示暂停完成。
+- **Step**：稳定paused时推进恰好1拍，完成后再次暂停；达到目标时显示succeeded。
+- **Cancel**：结束有限任务并保留已完成结果；取消后不可恢复。
+- **Stop**：回收当前运行，回到edit后才允许新建实验。错误/终态可通过Stop清理。
+
+活动配置、run_id、状态、完成拍数及故障与Next experiment草稿分开显示；运行时修改草稿只影响下一次启动。
+启动前先Apply/Revert未提交的Inspector草稿，参数错误会显示原因并保留输入。
+外部`simulation.*`通过`--pipe`进入同一服务，面板随实际状态更新，不覆盖本地参数草稿。
+旧run_id请求拒绝，Stop保留最新编辑场景及撤销历史；运行结果不会自动写回场景。
+**本阶段Viewport仍显示编辑场景，尚无实时布片预览**；实时模拟视口属于M12.2，指标采样与导出UI属于M12.3。
+
+定向真实窗口验收：`dk.editor.simulation_gpu_validation`以ImGui输入操作CPU/GPU按钮，保存面板截图；
+只使用带`.dk-editor-smoke`标记的一次性项目。该模式启用required+同步验证，仅单列已知AMD加载层版本警告。
+
+## 编辑预览与外部命令
 
 预览在版本或面板尺寸变化后同步渲染；每个文档会话复用 GPU 资产。
 初版通过 RGBA8 读回/上传桥接 ImGui 纹理，大场景导入会短暂阻塞窗口。

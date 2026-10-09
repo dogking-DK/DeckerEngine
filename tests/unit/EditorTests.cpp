@@ -4,6 +4,7 @@
 #include <dk/scene/SceneDocument.hpp>
 #include <catch2/catch_approx.hpp>
 #include <algorithm>
+#include <thread>
 using namespace dk;
 using namespace dk::editor;
 namespace {
@@ -96,6 +97,48 @@ TEST_CASE("runtime read scene returns independent guarded snapshot") {
     REQUIRE(result); REQUIRE(result->result);
     CHECK(runtime->read_scene(guard).error().code==ErrorCode::conflict);
     CHECK(old->scene.entities().size()==count); CHECK(old->state.revision==guard.revision);
+}
+TEST_CASE("workspace simulation draft and controls preserve Edit and reject invalid or stale requests") {
+    using namespace std::chrono_literals;
+    EditorFixture f; auto& model=*f.model; f.select();
+    const auto original=model.snapshot()->scene;
+    const auto revision=model.snapshot()->state.revision;
+    const auto dirty=model.snapshot()->state.dirty;
+    const auto wait=[&](auto predicate) {
+        const auto end=std::chrono::steady_clock::now()+5s;
+        do { model.pump(); std::this_thread::sleep_for(1ms); }
+        while (!predicate(model.simulation_state()) && std::chrono::steady_clock::now()<end);
+        REQUIRE(predicate(model.simulation_state()));
+    };
+    model.draft()->modified=true; REQUIRE_FALSE(model.start_simulation(true)); REQUIRE(model.pending());
+    REQUIRE(model.revert());
+    auto& draft=model.simulation_draft(); draft.target_steps=3; draft.cloth.rows=0;
+    REQUIRE_FALSE(model.start_simulation(true)); REQUIRE(draft.cloth.rows==0); REQUIRE_FALSE(model.simulation_state().run);
+    draft.cloth.rows=8; draft.fixed_dt_ns=0;
+    REQUIRE_FALSE(model.start_simulation(true)); REQUIRE_FALSE(model.simulation_state().run);
+    draft.fixed_dt_ns=10000000;
+    REQUIRE(model.start_simulation(true));
+    wait([](const auto& state) { return state.mode==SimulationMode::paused; });
+    const auto id=model.simulation_state().run->run_id;
+    REQUIRE(model.simulation_state().run->clock.steps==0);
+    draft.cloth.rows=16; REQUIRE(model.simulation_state().run->cloth->rows==8);
+    REQUIRE_FALSE(model.start_simulation());
+    REQUIRE(model.control_simulation(SimulationId::generate().value(),SimulationControl::step).error().code==ErrorCode::conflict);
+    REQUIRE(model.control_simulation(id,SimulationControl::step));
+    wait([](const auto& state) { return state.mode==SimulationMode::paused; });
+    REQUIRE(model.simulation_state().run->clock.steps==1);
+    REQUIRE(model.control_simulation(id,SimulationControl::resume));
+    wait([](const auto& state) { return state.run->task->status==SimulationTaskStatus::succeeded; });
+    REQUIRE(model.simulation_state().run->clock.steps==3);
+    REQUIRE_FALSE(model.control_simulation(id,SimulationControl::step));
+    REQUIRE(model.control_simulation(id,SimulationControl::stop));
+    wait([](const auto& state) { return !state.run; });
+    REQUIRE(model.start_simulation(true));
+    wait([](const auto& state) { return state.mode==SimulationMode::paused; });
+    REQUIRE(model.simulation_state().run->cloth->rows==16);
+    REQUIRE(model.control_simulation(id,SimulationControl::stop).error().code==ErrorCode::conflict);
+    REQUIRE(model.snapshot()->scene.same_content(original)); REQUIRE(model.snapshot()->state.revision==revision);
+    REQUIRE(model.snapshot()->state.dirty==dirty); REQUIRE(model.history().undo_count==0);
 }
 TEST_CASE("camera projected positions match rays across resize orbit pan and focus") {
     Camera camera{true};

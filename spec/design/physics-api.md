@@ -1,7 +1,7 @@
 ---
 module: physics-api
 created_at: "2026-10-08T17:14:07+08:00"
-updated_at: "2026-10-09T19:38:24+08:00"
+updated_at: "2026-10-09T20:08:06+08:00"
 status: accepted
 ---
 
@@ -140,7 +140,7 @@ UI心跳必须在实际GUI事件循环测量；M11.2只建立该目标，没有G
 
 ## M11.3 有界有限步任务
 
-新增simulation.run(guard, count, solver=xpbd_cpu, cloth, fixed_dt_ns=10000000, batch_steps=8)，
+新增simulation.run(guard, count, solver=xpbd_cpu, cloth, fixed_dt_ns=10000000, batch_steps=8, paused=false)，
 创建独立Play并受理有限实验，count为1..1000000、batch_steps为1..8，只支持CPU/GPU XPBD。
 沿用run_id标识唯一活动实验，simulation.query返回task进度；它不是Commands的TaskId或Foundation的JobId。
 同一Service只允许一个Play，无额外排队；终态在Stop前保留一个摘要和后端，不保留无限历史。
@@ -151,6 +151,13 @@ GPU设备、shader编译、首批Graph编译和后续录制不阻塞owner。work
 选择单个持久worker是因为GPU后端的ThreadContext和设备生命周期要在同一线程结束，不扩建通用Jobs调度器。
 一个任务最多一个活动批次、一个GPU提交和一个显式诊断请求；GPU推进后以零超时轮询完成，未完成期间保活frame/资源，
 不默认回读粒子。内部进度和异常通过互斥保护的单份快照传递；owner的pump发布到Play时钟。
+
+M12.1补充paused=true：worker启动前设置暂停意图，初始化完成后在0拍进入paused，不先提交批次再暂停。
+有限任务simulation.step仅允许稳定、健康、非终态paused，count为1..batch_steps且不超过剩余目标；
+互斥保护下接受一个手动批次，立即返回受理，状态为pausing，完成后回到paused或达到目标时succeeded。
+待领取的手动批次也使状态非paused；不接受重入step/resume或诊断读回。Pause不撤销已受理单步；
+Cancel/Stop可丢弃未领取单步，已领取工作遵守原安全边界，失败仍冻结，不伪造完成拍数。
+旧同步start/step契约不变；GUI采用新异步路径，命令effect/undo/guard规则不变。
 owner等待截止时间最多5ms后检查任务，不依赖后续命令才完成发布；未在worker设置ECS或公开时钟。
 
 task包含目标/已提交/已完成步数、批次上限、是否有活动批次、初始化是否完成、状态；错误通过run.fault发布。

@@ -1,7 +1,7 @@
 ---
 module: command-reference-simulation
 created_at: "2026-10-08T17:23:40+08:00"
-updated_at: "2026-10-09T15:30:00+08:00"
+updated_at: "2026-10-09T20:08:06+08:00"
 status: accepted
 ---
 
@@ -53,6 +53,7 @@ Play 保留启动输入；Stop 保留最新 Edit，不把 Play 写回。
 必填 `guard` 和 `count`（整数1–1000000），要求活动编辑场景且无 Play。
 可选 `solver` 默认 xpbd_cpu，也支持已编译的 xpbd_gpu，拒绝 none；`cloth` 同下文；
 `fixed_dt_ns` 默认10000000、范围1000000–33333333；`batch_steps` 默认8、范围1–8。
+`paused` 可选bool，默认false；true在worker开始前设置暂停意图，异步初始化完成后保持0拍paused，适合面板单步。
 校验并复制输入后受理任务，冷设备/shader初始化和求解在专属工作线程执行；不等待全部 count 完成。
 新 run_id 标识任务，命令响应的 TaskId 只记录受理命令，`tasks.get` 不代表实验进度；使用 simulation.query。
 无场景/已有 Play 为 invalid_state，过期 guard 为 conflict，非法配置为 invalid_argument；未编译GPU时xpbd_gpu不在schema允许的solver列表内。
@@ -125,12 +126,19 @@ resume 仅允许未终结的 paused 任务，继续剩余目标，不追赶墙�
 ## simulation.step
 
 必填 `run_id:UUID`；可选 `count:integer`，默认1，范围1–10000。
-仅旧同步入口的健康 paused 状态允许（有限任务拒绝 step）；精确完成 count 拍后仍为 paused，返回公共状态。
+旧同步入口要求健康 paused；精确完成 count 拍后仍为 paused，返回公共状态。
 GPU 每次 count 为 1–8（超限 invalid_argument），脚本分批到精确 N；count 不受 max_catch_up_steps 的当前取值限制。
 xpbd_cpu另有20000000工作单元上限：count*(粒子数+iterations*(粒子数+约束数))，超限invalid_argument，需显式分多次请求。
 CPU 一次 step 中任一拍数值失效会保留整个调用前的粒子、指标和时钟。GPU 提交前错误保留旧状态；提交后等待/设备失败会冻结 fault 并保留已提交步数，不能回滚。GPU 不默认回读数值，显式 particles/export 才检查有限值。
 无 Play、running、有 fault 或模拟时间溢出为 invalid_state；过期 ID 为 conflict；
 非法 UUID/count 为 invalid_argument。参数拒绝不增加计数。
+
+有限任务（simulation.run）也允许单步，但要求已初始化、无fault、非终态且稳定paused。
+count必须为1..batch_steps并且不超过剩余目标，超限invalid_argument；一次仅受理一个手动批次，
+返回pausing表示尚未完成（很快完成时可直接返回paused/succeeded）。等待query的task.status=paused
+后才确认count拍已完成；达到目标则succeeded。待领取/在途单步拒绝再次step、resume及particles/export。
+Pause不撤销已受理单步，Cancel/Stop可取消未领取工作，已提交工作仍到安全边界；终态拒绝step。
+该异步行为仅扩展有限任务，旧start对应的step仍同步。effect=control、不可撤销，不修改Edit或历史。
 
 ```json
 {"jsonrpc":"2.0","id":5,"method":"simulation.step","params":{"run_id":"<run_id>","count":100}}

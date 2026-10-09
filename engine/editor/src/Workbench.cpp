@@ -97,7 +97,7 @@ int session(const WorkbenchOptions& options,memory::ResourceHandle heap,Diagnost
     ShutdownPhase viewport_phase{shutdown,"viewport"};
     Viewport viewport{heap,queue,options.consistency_smoke};
     WorkbenchUi ui{*model,options.fixture_camera};
-    SmokeDriver smoke{options.interaction_smoke};
+    SmokeDriver smoke{options.interaction_smoke,options.simulation_smoke};
     std::optional<ConsistencyDriver> consistency;
     std::optional<ResponseProbe> response;
     if (options.simulation_response_probe) response.emplace(options.root);
@@ -201,7 +201,7 @@ int run_workbench(const WorkbenchOptions& options) {
         std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()));
     std::printf("validation errors=%u warnings=%u liveAllocations=%zu knownLoaderWarnings=%u\n",
         diagnostics.errors.load(),diagnostics.warnings.load(),live,diagnostics.known_loader_warnings.load());
-    const auto allowed=options.simulation_response_probe ? diagnostics.known_loader_warnings.load() : 0;
+    const auto allowed=(options.simulation_response_probe || options.smoke) ? diagnostics.known_loader_warnings.load() : 0;
     if (result==0 && (diagnostics.errors || diagnostics.warnings!=allowed || live || !closed)) return 1;
     return result;
 }

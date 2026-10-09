@@ -12,6 +12,13 @@ struct InspectorDraft {
     EntityData entity;
     bool modified = false;
 };
+struct SimulationDraft {
+    ClothConfig cloth;
+    bool gpu = false;
+    int target_steps = 1000000, batch_steps = 8;
+    std::int64_t fixed_dt_ns = 10000000;
+};
+enum class SimulationControl { pause, resume, step, cancel, stop };
 class Workspace final {
 public:
     [[nodiscard]] static Result<std::unique_ptr<Workspace>> create(const std::filesystem::path& root);
@@ -31,6 +38,10 @@ public:
     }
     [[nodiscard]] Result<void> request_shutdown();
     [[nodiscard]] SimulationState simulation_state() const { return runtime_->simulation_state(); }
+    [[nodiscard]] static bool gpu_simulation_available();
+    [[nodiscard]] SimulationDraft& simulation_draft() { return simulation_draft_; }
+    [[nodiscard]] Result<void> start_simulation(bool paused = false);
+    [[nodiscard]] Result<void> control_simulation(SimulationId observed_run, SimulationControl);
     [[nodiscard]] bool stopping() const { return runtime_->stopping(); }
 #ifdef _WIN32
     [[nodiscard]] Result<void> start_ipc(std::string_view name);
@@ -55,6 +66,7 @@ private:
     std::optional<InspectorDraft> draft_;
     std::filesystem::path manifest_;
     HistoryStatus history_{};
+    SimulationDraft simulation_draft_;
 #ifdef _WIN32
     std::unique_ptr<IpcServer> ipc_;
 #endif

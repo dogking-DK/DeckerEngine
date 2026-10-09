@@ -83,7 +83,10 @@ def exercise(args, root, report, host=server, existing_scene=False):
         assert run["steps"] <= bound
         time.sleep(.08)
         assert client.call("simulation.query").value["run"] == run
-        rejected(client, "simulation.step", {**key, "count": 1})
+        before_step = run["steps"]
+        timed("simulation.step", {**key, "count": 1})
+        run = settled(client, "paused")
+        assert run["steps"] == before_step + 1
         timed("simulation.resume", key)
         wait(client, lambda s: s["run"]["steps"] > run["steps"])
         rejected(client, "simulation.particles", key)

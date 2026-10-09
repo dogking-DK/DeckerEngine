@@ -29,6 +29,7 @@ int main(int argc,char** argv) {
             else if (arg=="--no-validation") options.disable_validation=true;
             else if (arg=="--smoke") options.smoke=true;
             else if (arg=="--interaction-smoke") { options.smoke=true; options.interaction_smoke=true; }
+            else if (arg=="--simulation-smoke") { options.smoke=true; options.simulation_smoke=true; }
             else if (arg=="--consistency-smoke") options.consistency_smoke=true;
             else if (arg=="--simulation-response-probe") options.simulation_response_probe=true;
             else if (arg=="--fixture-camera") options.fixture_camera=true;
@@ -42,13 +43,15 @@ int main(int argc,char** argv) {
             else if (arg=="--help") {
                 std::puts("dk-editor [--root PROJECT_ROOT] [--manifest RELATIVE_MANIFEST] [--validation|--no-validation] [--pipe NAME]\n"
                     "Acceptance: --frames N --screenshot OUTPUT.ppm [--fixture-camera]\n"
-                    "            --smoke/--interaction-smoke --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
+                    "            --smoke/--interaction-smoke/--simulation-smoke --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --simulation-response-probe --pipe NAME --root DISPOSABLE_PROJECT");
                 return 0;
             } else throw std::runtime_error("Unknown dk-editor option");
         }
         if (options.validation && options.disable_validation) throw std::runtime_error("--validation and --no-validation are mutually exclusive");
+        if (options.simulation_smoke && (options.interaction_smoke || options.frames || options.screenshot.empty()))
+            throw std::runtime_error("--simulation-smoke requires --screenshot and is incompatible with interaction/frames");
         if (!options.screenshot.empty() && options.screenshot.extension()!=".ppm")
             throw std::runtime_error("screenshot must have .ppm extension");
         if (options.consistency_smoke && (options.smoke || options.frames || options.pipe.empty() || !options.fixture_camera || options.screenshot.empty()))

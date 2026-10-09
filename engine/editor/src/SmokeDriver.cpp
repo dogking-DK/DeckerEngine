@@ -15,6 +15,7 @@ constexpr std::array<const char*,26> actions={
 };
 }
 void SmokeDriver::input(Workspace& model,WorkbenchUi& ui,platform::Window& window,const Viewport& viewport) {
+    if (simulation_) { simulation_input(model,ui); return; }
     if (interaction_) { interaction_input(model,ui,window,viewport); return; }
     auto& io=ImGui::GetIO();
     // Consume this frame's backend polling and then our deterministic input as one frame.

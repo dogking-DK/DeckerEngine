@@ -27,14 +27,15 @@ class AsyncSimulation final {
 public:
     using Factory = std::function<std::unique_ptr<SimulationTaskBackend>()>;
     static std::shared_ptr<AsyncSimulation> create(XpbdSolver, bool gpu, std::int64_t dt, std::uint32_t count, std::uint32_t batch,
-        std::shared_ptr<const graphics::Device> device={});
-    AsyncSimulation(Factory, std::int64_t dt, std::uint32_t count, std::uint32_t batch);
+        std::shared_ptr<const graphics::Device> device={}, bool paused=false);
+    AsyncSimulation(Factory, std::int64_t dt, std::uint32_t count, std::uint32_t batch, bool paused=false);
     ~AsyncSimulation();
     AsyncSimulation(const AsyncSimulation&) = delete;
     AsyncSimulation& operator=(const AsyncSimulation&) = delete;
     SimulationTaskState state() const; // Owner publishes this snapshot, including fatal exceptions.
     Result<void> pause();
     Result<void> resume();
+    Result<void> step(std::uint32_t count);
     Result<void> cancel();
     void stop() noexcept;
     bool closed() const;

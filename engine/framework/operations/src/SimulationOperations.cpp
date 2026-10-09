@@ -124,13 +124,14 @@ Result<void> register_simulation_commands(CommandRegistry& registry, SimulationS
         {"revision", integer(0, std::numeric_limits<std::uint64_t>::max())}}, {"document_id", "revision"});
     added = registry.add({"simulation.run", "Accept a bounded finite-step experiment with asynchronous initialization",
         schema::object({{"guard",guard},{"count",integer(1,1000000)},{"batch_steps",integer(1,8)},
-            {"fixed_dt_ns",integer(1000000,33333333)},{"solver",solver_schema(true)},{"cloth",cloth_schema()}},{"guard","count"}),
+            {"fixed_dt_ns",integer(1000000,33333333)},{"solver",solver_schema(true)},{"cloth",cloth_schema()},
+            {"paused",schema::boolean()}},{"guard","count"}),
         status_schema(),CommandEffect::control,false}, [&service,&edit](const Json& p) -> Result<Json> {
             auto g=parse_edit_guard(p["guard"]); if (!g) return std::unexpected(g.error());
             const auto solver=p.value("solver",std::string{"xpbd_cpu"});
             return control_result(service,service.run(edit,*g,p["count"].get<std::uint32_t>(),
                 read_cloth(p.value("cloth",Json::object())),solver=="xpbd_gpu",p.value("fixed_dt_ns",std::int64_t{10000000}),
-                p.value("batch_steps",std::uint32_t{8})));
+                p.value("batch_steps",std::uint32_t{8}),p.value("paused",false)));
         });
     if (!added) return added;
     added = registry.add({"simulation.start", "Clone the editing scene into an independent simulation world",

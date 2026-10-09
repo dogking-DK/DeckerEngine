@@ -18,7 +18,7 @@ Result<void> SimulationService::set_gpu_device(std::shared_ptr<const graphics::D
     return {};
 }
 Result<void> SimulationService::run(const SceneService& edit, EditGuard guard, std::uint32_t count,
-    ClothConfig cloth, bool gpu, std::int64_t dt, std::uint32_t batch) {
+    ClothConfig cloth, bool gpu, std::int64_t dt, std::uint32_t batch, bool paused) {
     if (!count || count > 1000000 || !batch || batch > 8 || dt < 1000000 || dt > 33333333)
         return std::unexpected(Error{ErrorCode::invalid_argument,"Task needs count 1..1000000, batch 1..8 and XPBD dt"});
 #ifndef DK_SIMULATION_GPU
@@ -31,8 +31,8 @@ Result<void> SimulationService::run(const SceneService& edit, EditGuard guard, s
     auto candidate = std::move(play_);
     candidate->task_gpu = gpu;
     candidate->paused = false;
-    candidate->task = detail::AsyncSimulation::create(*candidate->solver,gpu,dt,count,batch,gpu_device_);
-    candidate->progress = SimulationTaskState{SimulationTaskStatus::initializing,count,0,0,batch};
+    candidate->task = detail::AsyncSimulation::create(*candidate->solver,gpu,dt,count,batch,gpu_device_,paused);
+    candidate->progress = SimulationTaskState{paused ? SimulationTaskStatus::pausing : SimulationTaskStatus::initializing,count,0,0,batch};
     play_ = std::move(candidate);
     return {};
 }
@@ -99,7 +99,7 @@ Result<void> SimulationService::resume(SimulationId id, TimePoint now) {
 }
 Result<void> SimulationService::step(SimulationId id, std::uint32_t count) {
     auto valid = check_run(id); if (!valid) return valid;
-    if (play_->task) return std::unexpected(Error{ErrorCode::invalid_state,"Finite task owns its target; use resume or a new run"});
+    if (play_->task) { auto result = play_->task->step(count); pump(); return result; }
     if (!play_->paused || play_->fault)
         return std::unexpected(Error{ErrorCode::invalid_state, "Single stepping requires a paused healthy simulation"});
     auto clock = play_->clock;

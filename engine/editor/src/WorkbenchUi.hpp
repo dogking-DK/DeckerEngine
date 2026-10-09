@@ -15,6 +15,7 @@ public:
     [[nodiscard]] const std::map<std::string,ImVec2>& controls() const { return controls_; }
     [[nodiscard]] unsigned errors() const { return errors_; }
     [[nodiscard]] const ViewportInput& input() const { return input_; }
+    [[nodiscard]] const SimulationState& displayed_simulation() const { return displayed_simulation_; }
 private:
     void mark(const char* id);
     bool report(const char*,Result<void>);
@@ -25,6 +26,7 @@ private:
     void inspector();
     void assets();
     void console();
+    void simulation();
     void confirmation();
     Workspace& model_;
     ViewportInput input_;
@@ -32,6 +34,8 @@ private:
     std::map<std::string,ImVec2> controls_;
     std::vector<std::string> log_;
     std::string viewport_error_;
+    std::string simulation_error_;
+    SimulationState displayed_simulation_{SimulationMode::edit,{}};
     PendingAction pending_ = PendingAction::none;
     bool popup_ = false,closing_ = false,layout_ = false,scroll_log_ = true;
     unsigned errors_ = 0;

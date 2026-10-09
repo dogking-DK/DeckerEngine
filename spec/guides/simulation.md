@@ -49,6 +49,11 @@ Stop先返回stopping，等mode=edit后再建新实验。取消保留结果；�
 已初始化且健康的paused/succeeded/cancelled可显式particles/export，诊断和文件导出仍为同步操作。
 冷初始化未完成时也能query/pause/cancel/stop；退出会安全等待所属线程释放资源，不承诺抢占第三方编译/驱动调用。
 
+需要从零步交互时，run附带`"paused": true`，等待task.status=paused后确认steps=0。
+再调用`client.call("simulation.step", {**key, "count": 1})`，等待paused或succeeded确认单步完成；
+请求返回只是受理，不能立即把旧steps当成结果。有限任务每次单步不超过batch_steps或剩余目标。
+Editor的[Simulation面板](editor.md)复用这一异步路径，不需要先用同步start初始化GPU。
+
 ## 严格执行 N 步
 
 Luau 示例从暂停态启动，严格推进100拍（每拍10 ms），检查时间为1 s，再 Stop：

@@ -53,8 +53,8 @@ struct Fake final : SimulationTaskBackend {
 struct Fixture {
     std::shared_ptr<Gate> gate=std::make_shared<Gate>();
     std::unique_ptr<AsyncSimulation> task;
-    void start(std::uint32_t count=100) {
-        task=std::make_unique<AsyncSimulation>([g=gate] { return std::make_unique<Fake>(g); },10000000,count,8);
+    void start(std::uint32_t count=100, bool paused=false) {
+        task=std::make_unique<AsyncSimulation>([g=gate] { return std::make_unique<Fake>(g); },10000000,count,8,paused);
     }
     ~Fixture() { gate->initialize=true; gate->submit=true; gate->complete=true; task.reset(); }
 };
@@ -168,4 +168,38 @@ TEST_CASE("finite task cancellation during preparation does not fabricate submit
     until([&] { return f.task->state().status==SimulationTaskStatus::cancelled; });
     REQUIRE(f.task->state().submitted_steps==0); REQUIRE(f.task->state().completed_steps==0);
     REQUIRE(f.gate->polls==0); REQUIRE_FALSE(f.task->state().error);
+}
+TEST_CASE("finite task prepared paused accepts one exact asynchronous step and rejects overlapping work") {
+    Fixture f; f.start(3,true); until([&] { return f.gate->entered.load(); });
+    REQUIRE_FALSE(f.task->step(1)); REQUIRE(f.gate->submits==0);
+    f.gate->initialize=true;
+    until([&] { return f.task->state().status==SimulationTaskStatus::paused; });
+    REQUIRE(f.task->state().completed_steps==0); REQUIRE(f.gate->submits==0);
+    REQUIRE_FALSE(f.task->step(0)); REQUIRE_FALSE(f.task->step(4)); REQUIRE_FALSE(f.task->step(9));
+    REQUIRE(f.task->step(1));
+    REQUIRE(f.task->state().status==SimulationTaskStatus::pausing);
+    REQUIRE_FALSE(f.task->step(1)); REQUIRE_FALSE(f.task->resume()); REQUIRE_FALSE(f.task->read());
+    REQUIRE(f.task->pause()); // Does not discard an accepted manual batch.
+    f.gate->submit=true;
+    until([&] { return f.task->state().submitted_steps==1; });
+    REQUIRE(f.task->state().completed_steps==0);
+    f.gate->complete=true;
+    until([&] { return f.task->state().status==SimulationTaskStatus::paused; });
+    REQUIRE(f.task->state().completed_steps==1); REQUIRE(f.gate->submits==1);
+    REQUIRE(f.task->step(2));
+    until([&] { return f.task->state().status==SimulationTaskStatus::succeeded; });
+    REQUIRE(f.task->state().completed_steps==3); REQUIRE(f.gate->submits==2);
+    REQUIRE_FALSE(f.task->step(1)); REQUIRE_FALSE(f.task->resume());
+}
+TEST_CASE("finite task manual batch cancel or stop preserves submitted work until completion") {
+    for (bool stop : {false,true}) {
+        Fixture f; f.gate->initialize=true; f.gate->submit=true; f.start(100,true);
+        until([&] { return f.task->state().status==SimulationTaskStatus::paused; });
+        REQUIRE(f.task->step(1)); until([&] { return f.task->state().submitted_steps==1; });
+        if (stop) f.task->stop(); else REQUIRE(f.task->cancel());
+        REQUIRE_FALSE(f.task->step(1)); REQUIRE_FALSE(f.task->closed());
+        f.gate->complete=true;
+        until([&] { return stop ? f.task->closed() : f.task->state().status==SimulationTaskStatus::cancelled; });
+        REQUIRE(f.task->state().completed_steps==1); REQUIRE(f.gate->submits==1);
+    }
 }
