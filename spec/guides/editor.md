@@ -53,9 +53,24 @@ cmake --build out/build/windows-editor --config Debug --target dk_editor_app
 启动前先Apply/Revert未提交的Inspector草稿，参数错误会显示原因并保留输入。
 外部`simulation.*`通过`--pipe`进入同一服务，面板随实际状态更新，不覆盖本地参数草稿。
 旧run_id请求拒绝，Stop保留最新编辑场景及撤销历史；运行结果不会自动写回场景。
-**本阶段Viewport仍显示编辑场景，尚无实时布片预览**；实时模拟视口属于M12.2，指标采样与导出UI属于M12.3。
+启动布片后Viewport自动显示实时模拟图像；指标采样与导出UI属于M12.3。
 
-定向真实窗口验收：`dk.editor.simulation_gpu_validation`以ImGui输入操作CPU/GPU按钮，保存面板截图；
+## 实时布片与相机（M12.2）
+
+点击**Prepare paused**观察0拍初态，再用**Step**逐拍查看；**Play/Resume**持续更新CPU或GPU布片。
+视口标注图像对应的完成步数，可能略晚于面板中的任务进度。暂停后最终图像保持稳定，移动相机仍可重绘。
+
+- 首次运行自动取景；**Frame cloth**或鼠标在视口内按**F/Home**重新取景。
+- **右键拖动**环绕、**中键拖动**平移、**滚轮**缩放；模拟相机与编辑相机相互独立。
+- **Edit view / Simulation view**切换显示。模拟图像没有实体拾取和Gizmo；可切回编辑视图或使用Inspector编辑场景。
+- **Stop**恢复最新编辑场景，保留原相机、选择、修改和撤销历史；缩放/最小化恢复后自动更新图像尺寸。
+- 预览失败显示原因并保留最近有效图像，**Retry preview**重新请求。求解故障仍需Stop后重启。
+
+GPU预览直接使用GPU输出与图像，不经CPU读回再上传；CPU预览只上传当前位置。预览最多约30Hz，
+不是模拟墙钟限速；默认有限实验仍以工作线程速度运行。显示使用共享设备的第二队列，设备不具备该能力时明确提示不可用。
+
+定向真实窗口验收：`dk.editor.simulation_gpu_validation`以ImGui输入操作CPU/GPU按钮、相机及窗口生命周期，
+检查连续图像变化与暂停稳定，并保存带运行中布片的工作台截图；
 只使用带`.dk-editor-smoke`标记的一次性项目。该模式启用required+同步验证，仅单列已知AMD加载层版本警告。
 
 ## 编辑预览与外部命令

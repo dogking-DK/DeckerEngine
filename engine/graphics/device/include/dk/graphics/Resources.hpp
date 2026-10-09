@@ -24,7 +24,7 @@ struct AccessState {
     bool initialized = false;
     bool operator==(const AccessState&) const = default;
 };
-namespace detail { struct ResourceState; struct QueueState; struct BatchState; struct SubmissionAccess; struct ObjectAccess; struct PresentationAccess; }
+namespace detail { struct ResourceState; struct QueueState; struct BatchState; struct SubmissionAccess; struct ObjectAccess; struct PresentationAccess; struct ImageTransferState; }
 class CommandBatch;
 class SubmissionQueue;
 class ResourceFactory;
@@ -90,6 +90,20 @@ private:
     friend struct detail::PresentationAccess;
     explicit Image(std::shared_ptr<detail::ResourceState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::ResourceState> state_;
+};
+// Single-consumer transfer of a completed, sealed image between queues of one device/family.
+class ImageTransfer final {
+public:
+    ImageTransfer() = default;
+    ImageTransfer(ImageTransfer&&) noexcept = default;
+    ImageTransfer& operator=(ImageTransfer&&) noexcept = default;
+    ImageTransfer(const ImageTransfer&) = delete;
+    ImageTransfer& operator=(const ImageTransfer&) = delete;
+    [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
+private:
+    friend class SubmissionQueue;
+    explicit ImageTransfer(std::shared_ptr<detail::ImageTransferState> state) : state_(std::move(state)) {}
+    std::shared_ptr<detail::ImageTransferState> state_;
 };
 class Submission final {
 public:
@@ -186,6 +200,9 @@ public:
     [[nodiscard]] Result<void> configure_gpu_profiling(GpuProfilingOptions options);
     [[nodiscard]] Result<Buffer> create_buffer(const BufferDesc& description);
     [[nodiscard]] Result<Image> create_image(const ImageDesc& description);
+    // Export seals all source aliases. Import consumes only on success; no pixel copy/readback.
+    [[nodiscard]] Result<ImageTransfer> export_image(const Image&);
+    [[nodiscard]] Result<Image> import_image(ImageTransfer&&);
     [[nodiscard]] Result<CommandBatch> begin();
     // Consumes a valid local batch on success or driver failure, never publishes on failure.
     [[nodiscard]] Result<Submission> submit(CommandBatch&& batch);

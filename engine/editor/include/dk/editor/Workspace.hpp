@@ -38,6 +38,10 @@ public:
     }
     [[nodiscard]] Result<void> request_shutdown();
     [[nodiscard]] SimulationState simulation_state() const { return runtime_->simulation_state(); }
+#ifdef DK_SIMULATION_GPU
+    [[nodiscard]] Result<void> request_simulation_preview(SimulationId id,const SimulationView& view) { return runtime_->request_simulation_preview(id,view); }
+    [[nodiscard]] Result<std::shared_ptr<SimulationPreview>> take_simulation_preview(SimulationId id) { return runtime_->take_simulation_preview(id); }
+#endif
     [[nodiscard]] static bool gpu_simulation_available();
     [[nodiscard]] SimulationDraft& simulation_draft() { return simulation_draft_; }
     [[nodiscard]] Result<void> start_simulation(bool paused = false);

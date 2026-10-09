@@ -5,11 +5,12 @@ namespace dk::editor::detail {
 class SmokeDriver final {
 public:
     explicit SmokeDriver(bool interaction=false, bool simulation=false) : interaction_(interaction),simulation_(simulation) {}
-    void input(Workspace&,WorkbenchUi&,platform::Window&,const Viewport&);
+    void input(Workspace&,WorkbenchUi&,platform::Window&,Viewport&);
+    void poll_window(platform::Window&,bool minimized);
     [[nodiscard]] bool done() const { return done_; }
 private:
     void interaction_input(Workspace&,WorkbenchUi&,platform::Window&,const Viewport&);
-    void simulation_input(Workspace&,WorkbenchUi&);
+    void simulation_input(Workspace&,WorkbenchUi&,platform::Window&,Viewport&);
     void verify(Workspace&,WorkbenchUi&,const Viewport&,unsigned stage);
     ImVec2 pointer_{-10000,-10000};
     unsigned tick_ = 0;
@@ -25,6 +26,9 @@ private:
     unsigned simulation_stage_=0,simulation_phase_=0;
     std::optional<SceneSnapshot> simulation_scene_;
     std::optional<SimulationId> simulation_id_;
+    unsigned simulation_backend_=0,simulation_stable_=0,suspended_frames_=0;
+    std::uint64_t simulation_observed_step_=0,simulation_camera_revision_=0;
+    std::chrono::steady_clock::time_point restore_at_{};
     ImVec2 start_pointer_{};
     std::size_t history_=0;
     std::uint64_t stage_revision_=0,stage_pixels_=0,camera_pixels_=0;

@@ -13,9 +13,11 @@ void Viewport::release_texture() {
     if (descriptor_) ImGui_ImplVulkan_RemoveTexture(descriptor_);
     descriptor_=VK_NULL_HANDLE;
     attempted_.reset();
+    simulation_view_.reset();
 }
 void Viewport::update(const SceneReadSnapshot& snapshot,std::uint32_t width,std::uint32_t height,bool srgb,const Camera& camera,
     const std::optional<TransformEdit>& edit,std::uint64_t preview_revision) {
+    show_edit();
     const Key key{snapshot.state.document_id,snapshot.state.revision,width,height,srgb,camera.revision(),preview_revision};
     if (attempted_==key) return;
     attempted_=key;

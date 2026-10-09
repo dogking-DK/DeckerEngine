@@ -25,8 +25,8 @@ namespace detail {
 namespace {
 class Backend final : public SimulationTaskBackend {
 public:
-    Backend(XpbdSolver input, bool gpu,std::shared_ptr<const graphics::Device> device)
-        : cpu_(std::move(input)), use_gpu_(gpu),device_(std::move(device)) {}
+    Backend(XpbdSolver input, bool gpu,std::shared_ptr<const graphics::Device> device,ClothConfig cloth)
+        : cpu_(std::move(input)), use_gpu_(gpu),device_(std::move(device)),cloth_(cloth) {}
     Result<bool> initialize(std::stop_token stop) override {
         if (stop.stop_requested()) return false;
 #ifdef DK_SIMULATION_GPU
@@ -86,15 +86,26 @@ public:
         }
         return renderer->capture(dt,cloth,width,height);
     }
+    Result<graphics::ImageTransfer> preview(const SimulationView& view) override {
+        if (gpu_) return gpu_->preview(dt_,cloth_,view);
+        if (!preview_) {
+            auto created=GpuSimulation::create(cpu_,{},device_,true);
+            if (!created) return std::unexpected(created.error());
+            preview_=std::move(*created);
+        }
+        return preview_->preview(dt_,cloth_,view,cpu_.positions());
+    }
 #endif
 private:
     XpbdSolver cpu_;
     bool use_gpu_;
     std::shared_ptr<const graphics::Device> device_;
+    ClothConfig cloth_;
     std::int64_t dt_ = 10000000;
     std::uint64_t steps_ = 0;
 #ifdef DK_SIMULATION_GPU
     std::shared_ptr<GpuSimulation> gpu_;
+    std::shared_ptr<GpuSimulation> preview_;
 #endif
 };
 }
@@ -111,6 +122,20 @@ struct AsyncSimulation::Impl {
     std::function<void(SimulationTaskBackend&)> diagnostic;
     std::jthread worker;
     std::stop_source initialization_stop;
+#ifdef DK_SIMULATION_GPU
+    std::optional<SimulationView> preview_view, preview_attempt;
+    std::uint64_t preview_steps=UINT64_MAX;
+    std::chrono::steady_clock::time_point preview_time{},preview_expiry{};
+    Result<std::shared_ptr<SimulationPreview>> preview_result{nullptr};
+    bool preview_due() const {
+        const auto now=std::chrono::steady_clock::now();
+        return preview_view && progress.initialized && !progress.error && requested!=Request::stop &&
+            now<preview_expiry && (preview_attempt!=preview_view || preview_steps!=progress.completed_steps) &&
+            (requested!=Request::run || now-preview_time>=std::chrono::milliseconds{33});
+    }
+#else
+    bool preview_due() const { return false; }
+#endif
 
     SimulationTaskState state_locked() const {
         if (fatal) std::rethrow_exception(fatal);
@@ -154,12 +179,29 @@ struct AsyncSimulation::Impl {
             }
             for (;;) {
                 std::unique_lock lock{mutex};
-                changed.wait(lock,[&] { return requested == Request::stop || diagnostic || (!terminal && (requested == Request::run || manual_steps)); });
+                changed.wait(lock,[&] { return requested == Request::stop || diagnostic || preview_due() || (!terminal && (requested == Request::run || manual_steps)); });
                 if (requested == Request::stop) break;
                 if (diagnostic) {
                     auto call = std::move(diagnostic); diagnostic = {};
                     lock.unlock(); call(*backend); continue;
                 }
+#ifdef DK_SIMULATION_GPU
+                if (preview_due() && !manual_steps) {
+                    const auto view=*preview_view;
+                    const auto steps=progress.completed_steps;
+                    preview_attempt=view; preview_steps=steps; preview_time=std::chrono::steady_clock::now();
+                    lock.unlock();
+                    auto image=backend->preview(view);
+                    Result<std::shared_ptr<SimulationPreview>> result=std::unexpected(Error{ErrorCode::internal_error,"Preview failed"});
+                    if (image) {
+                        auto frame=std::make_shared<SimulationPreview>();
+                        frame->view=view; frame->steps=steps; frame->image=std::move(*image); result=std::move(frame);
+                    } else result=std::unexpected(image.error());
+                    lock.lock();
+                    if (requested!=Request::stop && preview_view==view) preview_result=std::move(result);
+                    continue;
+                }
+#endif
                 const auto count = manual_steps ? manual_steps : static_cast<std::uint32_t>(std::min<std::uint64_t>(progress.batch_steps,
                     progress.target_steps-progress.completed_steps));
                 manual_steps = 0;
@@ -220,8 +262,8 @@ AsyncSimulation::AsyncSimulation(Factory factory, std::int64_t dt, std::uint32_t
     impl_->worker = std::jthread{[p=impl_.get(),factory=std::move(factory),dt]() mutable { p->work(std::move(factory),dt); }};
 }
 std::shared_ptr<AsyncSimulation> AsyncSimulation::create(XpbdSolver cpu, bool gpu, std::int64_t dt, std::uint32_t count, std::uint32_t batch,
-    std::shared_ptr<const graphics::Device> device, bool paused) {
-    return std::make_shared<AsyncSimulation>([cpu=std::move(cpu),gpu,device=std::move(device)] { return std::make_unique<Backend>(cpu,gpu,device); },dt,count,batch,paused);
+    std::shared_ptr<const graphics::Device> device, bool paused, ClothConfig cloth) {
+    return std::make_shared<AsyncSimulation>([cpu=std::move(cpu),gpu,device=std::move(device),cloth] { return std::make_unique<Backend>(cpu,gpu,device,cloth); },dt,count,batch,paused);
 }
 AsyncSimulation::~AsyncSimulation() { stop(); impl_->worker.join(); }
 SimulationTaskState AsyncSimulation::state() const { std::lock_guard lock{impl_->mutex}; return impl_->state_locked(); }
@@ -268,6 +310,17 @@ Result<void> AsyncSimulation::step(std::uint32_t count) {
 }
 Result<XpbdSnapshot> AsyncSimulation::read() { return impl_->inspect<XpbdSnapshot>([](auto& backend) { return backend.read(); }); }
 #ifdef DK_SIMULATION_GPU
+void AsyncSimulation::request_preview(const SimulationView& view) {
+    std::lock_guard lock{impl_->mutex};
+    if (impl_->requested==Impl::Request::stop) return;
+    impl_->preview_view=view;
+    impl_->preview_expiry=std::chrono::steady_clock::now()+std::chrono::milliseconds{250};
+    impl_->changed.notify_all();
+}
+Result<std::shared_ptr<SimulationPreview>> AsyncSimulation::take_preview() {
+    std::lock_guard lock{impl_->mutex};
+    return std::exchange(impl_->preview_result,Result<std::shared_ptr<SimulationPreview>>{nullptr});
+}
 Result<SimulationImage> AsyncSimulation::capture(std::int64_t dt,const ClothConfig& cloth,std::uint32_t width,std::uint32_t height) {
     return impl_->inspect<SimulationImage>([=](auto& backend) { return backend.capture(dt,cloth,width,height); });
 }

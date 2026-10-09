@@ -15,7 +15,12 @@ template<class F> void until(F condition) {
 struct Gate {
     std::atomic<bool> initialize=false, submit=false, complete=false, entered=false, submitting=false, destroyed=false;
     std::atomic<unsigned> submits=0, polls=0, max_batch=0;
-    int fail=0;
+    std::atomic<int> fail=0;
+#ifdef DK_SIMULATION_GPU
+    std::atomic<bool> preview_release=true;
+    std::atomic<unsigned> previews=0;
+    std::function<void()> on_preview;
+#endif
     std::thread::id initialized_on, destroyed_on;
 };
 struct Fake final : SimulationTaskBackend {
@@ -49,6 +54,15 @@ struct Fake final : SimulationTaskBackend {
         if (gate->fail==5) return std::unexpected(Error{ErrorCode::invalid_state,"non-finite readback"});
         return XpbdSolver::cloth()->snapshot();
     }
+#ifdef DK_SIMULATION_GPU
+    Result<graphics::ImageTransfer> preview(const SimulationView&) override {
+        ++gate->previews;
+        while (!gate->preview_release) std::this_thread::sleep_for(1ms);
+        if (gate->on_preview) gate->on_preview();
+        if (gate->fail==8) return std::unexpected(Error{ErrorCode::internal_error,"display failed"});
+        return graphics::ImageTransfer{};
+    }
+#endif
 };
 struct Fixture {
     std::shared_ptr<Gate> gate=std::make_shared<Gate>();
@@ -56,9 +70,56 @@ struct Fixture {
     void start(std::uint32_t count=100, bool paused=false) {
         task=std::make_unique<AsyncSimulation>([g=gate] { return std::make_unique<Fake>(g); },10000000,count,8,paused);
     }
-    ~Fixture() { gate->initialize=true; gate->submit=true; gate->complete=true; task.reset(); }
+    ~Fixture() { gate->initialize=true; gate->submit=true; gate->complete=true;
+#ifdef DK_SIMULATION_GPU
+        gate->preview_release=true;
+#endif
+        task.reset(); }
 };
 }
+#ifdef DK_SIMULATION_GPU
+TEST_CASE("finite task preview coalesces views preserves paused steps and isolates display failure") {
+    Fixture f; f.gate->initialize=true; f.gate->preview_release=false; f.start(16,true);
+    until([&] { return f.task->state().status==SimulationTaskStatus::paused; });
+    SimulationView view; view.sequence=1; f.task->request_preview(view);
+    until([&] { return f.gate->previews==1; });
+    view.sequence=2; f.task->request_preview(view);
+    view.sequence=3; f.task->request_preview(view);
+    f.gate->preview_release=true;
+    std::shared_ptr<SimulationPreview> frame;
+    until([&] { auto result=f.task->take_preview(); REQUIRE(result); if (*result) frame=std::move(*result); return bool(frame); });
+    REQUIRE(frame->view.sequence==3); REQUIRE(frame->steps==0); REQUIRE(f.gate->previews==2);
+    REQUIRE(f.task->state().completed_steps==0); REQUIRE_FALSE(f.task->state().batch_active);
+    f.gate->submit=true; f.gate->complete=true; REQUIRE(f.task->step(1));
+    frame.reset();
+    until([&] { auto result=f.task->take_preview(); REQUIRE(result); if (*result) frame=std::move(*result); return frame && frame->steps==1; });
+    REQUIRE(f.task->state().status==SimulationTaskStatus::paused);
+    const auto calls=f.gate->previews.load();
+    std::this_thread::sleep_for(40ms); f.task->request_preview(view);
+    REQUIRE(f.gate->previews==calls); REQUIRE_FALSE(*f.task->take_preview());
+    f.gate->fail=8; view.sequence=4; f.task->request_preview(view);
+    bool display_failed=false;
+    until([&] { if (!f.task->take_preview()) display_failed=true; return display_failed; });
+    REQUIRE_FALSE(f.task->state().error); REQUIRE(f.task->state().completed_steps==1);
+    REQUIRE(f.task->step(1)); until([&] { return f.task->state().completed_steps==2; });
+    f.task->stop(); until([&] { return f.task->closed(); });
+    const auto stopped=f.gate->previews.load(); view.sequence=5; f.task->request_preview(view);
+    REQUIRE(f.gate->previews==stopped);
+}
+TEST_CASE("finite task preview camera churn cannot starve simulation batches") {
+    Fixture f; f.gate->initialize=true; f.gate->submit=true; f.gate->complete=true;
+    f.gate->preview_release=false; f.start(16,true);
+    until([&] { return f.task->state().status==SimulationTaskStatus::paused; });
+    std::uint64_t sequence=1;
+    f.gate->on_preview=[&] { SimulationView next; next.sequence=++sequence; f.task->request_preview(next); };
+    SimulationView first; first.sequence=1; f.task->request_preview(first);
+    until([&] { return f.gate->previews==1; });
+    REQUIRE(f.task->resume()); f.gate->preview_release=true;
+    until([&] { return f.task->state().status==SimulationTaskStatus::succeeded; });
+    REQUIRE(f.task->state().completed_steps==16); REQUIRE(f.gate->submits==2);
+    f.task->stop(); until([&] { return f.task->closed(); });
+}
+#endif
 TEST_CASE("finite task pause during initialization then cancel claimed batch waits for GPU completion") {
     Fixture f; f.start(); until([&] { return f.gate->entered.load(); });
     REQUIRE(f.task->state().status==SimulationTaskStatus::initializing);

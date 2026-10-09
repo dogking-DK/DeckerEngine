@@ -14,6 +14,14 @@ public:
     // Previous GUI submission must be complete. Backend must be initialized.
     void update(const SceneReadSnapshot&,std::uint32_t width,std::uint32_t height,bool srgb,const Camera&,
         const std::optional<TransformEdit>&,std::uint64_t preview_revision);
+    void update_simulation(Workspace&,const SimulationRunState&,std::uint32_t width,std::uint32_t height,const Camera&);
+    void show_edit();
+    void retry_simulation() { simulation_view_.reset(); }
+    [[nodiscard]] std::optional<SimulationId> simulation_run() const { return simulation_run_; }
+    [[nodiscard]] std::uint64_t simulation_steps() const { return simulation_steps_; }
+    [[nodiscard]] bool simulation_view_current() const { return simulation_published_==simulation_sequence_; }
+    // Explicit acceptance-only observation; the regular viewport never reads back a simulation image.
+    std::uint64_t capture_simulation_pixels();
     [[nodiscard]] Result<std::optional<EntityId>> pick(const Vec2d& uv) const;
     [[nodiscard]] geometry::Bounds bounds(EntityId,const SceneSnapshot&) const;
     [[nodiscard]] bool camera_current(const Camera& camera) const { return published_camera_==camera.revision(); }
@@ -39,6 +47,9 @@ private:
     render::ScenePipeline pipeline_;
     std::optional<DocumentId> asset_session_,published_session_;
     std::optional<Key> attempted_;
+    std::optional<SimulationId> simulation_run_;
+    std::optional<SimulationView> simulation_view_;
+    std::uint64_t simulation_steps_=0,simulation_sequence_=0,simulation_published_=0;
     render::GpuAssets assets_;
     graphics::Image image_;
     graphics::ImageView view_;

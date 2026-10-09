@@ -108,6 +108,7 @@ int session(const WorkbenchOptions& options,memory::ResourceHandle heap,Diagnost
         for (;;) {
             if (response) response->tick(model->simulation_state());
             const auto status=take(window.poll_events(event_sink,&ui));
+            if (options.simulation_smoke) smoke.poll_window(window,status.minimized);
             if (status.close_requested) { check(window.clear_close_request()); ui.request_close(); }
             model->pump();
             if (ui.closing()) check(model->request_shutdown());
@@ -150,7 +151,10 @@ int session(const WorkbenchOptions& options,memory::ResourceHandle heap,Diagnost
             if (capture) write_capture(options.screenshot,*capture);
             if (finish) {
                 if (options.smoke && !smoke.done()) throw std::runtime_error("Frame limit interrupted smoke");
-                if (!viewport.texture() || !viewport.error().empty() || !viewport.current(model->snapshot()->state))
+                const auto simulation=model->simulation_state();
+                const bool current=viewport.simulation_run() ? simulation.run && viewport.simulation_run()==simulation.run->run_id && viewport.simulation_view_current() :
+                    viewport.current(model->snapshot()->state);
+                if (!viewport.texture() || !viewport.error().empty() || !current)
                     throw std::runtime_error("Viewport did not publish the current scene");
                 std::printf("workbench frames=%u revision=%llu draws=%zu viewport=%ux%u smoke=%s\n",frames,
                     static_cast<unsigned long long>(viewport.info().revision),viewport.info().draw_count,

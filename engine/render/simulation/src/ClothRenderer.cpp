@@ -135,13 +135,52 @@ Result<SimulationFrame> ClothRenderer::render(SubmissionQueue& queue,GpuXpbdSolv
     return frame;
 }
 Result<const Image*> SimulationFrame::color() const {
-    if (!physics_) return std::unexpected(Error{ErrorCode::invalid_state,"empty simulation frame"});
-    return physics_.execution()->image(color_);
+    if (!physics_ && !cpu_) return std::unexpected(Error{ErrorCode::invalid_state,"empty simulation frame"});
+    return execution()->image(color_);
 }
 Result<void> SimulationFrame::read_rgba8(std::span<std::byte> bytes) const {
-    if (!physics_ || !has_readback_) return std::unexpected(Error{ErrorCode::invalid_state,"image readback was not requested"});
+    if ((!physics_ && !cpu_) || !has_readback_) return std::unexpected(Error{ErrorCode::invalid_state,"image readback was not requested"});
     if (bytes.size()!=std::uint64_t{width_}*height_*4) return std::unexpected(Error{ErrorCode::invalid_argument,"RGBA8 size mismatch"});
-    auto buffer=physics_.execution()->buffer(readback_); if (!buffer) return std::unexpected(buffer.error());
+    auto buffer=execution()->buffer(readback_); if (!buffer) return std::unexpected(buffer.error());
     return (*buffer)->read(0,bytes);
+}
+Result<SimulationFrame> ClothRenderer::render_positions(SubmissionQueue& queue,std::span<const ParticlePosition> positions,const ClothView& view) {
+    if (!state_ || state_->heap.state()!=memory::ResourceState::open || queue.stats().closed || queue.stats().device_lost)
+        return std::unexpected(Error{ErrorCode::invalid_state,"cloth renderer unavailable"});
+    if (view.columns<2 || view.columns>32 || view.rows<2 || view.rows>32 || view.columns*view.rows!=positions.size() ||
+        !view.width || !view.height || view.width>4096 || view.height>4096 || !std::isfinite(view.floor_y) ||
+        !std::ranges::all_of(view.view_projection,[](float x){return std::isfinite(x);}) ||
+        !std::ranges::all_of(positions,[](const auto& p){return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z);}))
+        return std::unexpected(Error{ErrorCode::invalid_argument,"Invalid CPU cloth positions or view"});
+    const auto& limits=queue.device().adapter().properties.limits;
+    if (view.width>limits.maxFramebufferWidth || view.height>limits.maxFramebufferHeight ||
+        view.width>limits.maxViewportDimensions[0] || view.height>limits.maxViewportDimensions[1])
+        return std::unexpected(Error{ErrorCode::not_supported,"cloth extent exceeds device limits"});
+    try {
+        auto graph=take(graph::Graph::create(state_->heap));
+        auto upload=take(queue.create_buffer({positions.size_bytes(),vk::BufferUsageFlagBits::eTransferSrc,BufferMemory::upload}));
+        check(upload.write(0,std::as_bytes(positions)));
+        const auto staging=take(graph.declare_buffer("CPU positions upload",upload.description(),graph::Lifetime::external,true));
+        const auto buffer=take(graph.declare_buffer("CPU particle positions",{positions.size_bytes(),
+            vk::BufferUsageFlagBits::eTransferDst|vk::BufferUsageFlagBits::eStorageBuffer}));
+        const std::array uses{graph::Use{staging,{{vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead}}},
+            graph::Use{buffer,{{vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite},0,VK_WHOLE_SIZE,{},true}}};
+        static_cast<void>(take(graph.add_pass({"CPU cloth upload",uses})));
+        const auto bytes=positions.size_bytes();
+        std::vector<graph::PassCallback> callbacks{{0,[](graph::PassContext& pass,void* data) {
+            return pass.copy_buffer(0,1,*static_cast<const std::size_t*>(data));
+        },const_cast<std::size_t*>(&bytes)}};
+        std::vector<graph::FinalAccess> finals;
+        Context context{*state_,view};
+        GpuParticleGraph output{graph,buffer,1,static_cast<std::uint32_t>(positions.size()),callbacks,finals};
+        check(append(output,&context));
+        const auto plan=take(graph.compile());
+        const std::array bindings{graph::ExternalBinding{0,&upload}};
+        SimulationFrame frame;
+        frame.cpu_=take(graph::execute(plan,queue,{bindings,callbacks,finals}));
+        frame.color_=context.color; frame.readback_=context.readback;
+        frame.width_=view.width; frame.height_=view.height; frame.has_readback_=view.image_readback;
+        return frame;
+    } catch (Error& error) { return std::unexpected(std::move(error)); }
 }
 }

@@ -210,6 +210,8 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     hierarchy(); inspector();
     const bool visible=ImGui::Begin("Viewport",nullptr,ImGuiWindowFlags_NoScrollWithMouse|ImGuiWindowFlags_NoScrollbar);
     if (!visible) input_.cancel();
+    if (!simulation_view(preview,visible)) {
+    preview.show_edit();
     ImGui::TextUnformatted("UNLIT PREVIEW"); ImGui::SameLine();
     ImGui::BeginDisabled(input_.active());
     if (ImGui::SmallButton("Refresh")) preview.retry();
@@ -236,6 +238,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
             viewport_error_=preview.error();
             if (!viewport_error_.empty()) report("Viewport",std::unexpected(Error{ErrorCode::internal_error,viewport_error_}));
         }
+    }
     }
     ImGui::End();
     assets(); console(); simulation(); confirmation();

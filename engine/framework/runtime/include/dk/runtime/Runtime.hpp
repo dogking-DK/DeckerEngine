@@ -45,6 +45,10 @@ class Runtime final
         return simulation_.set_gpu_device(std::move(device));
     }
     [[nodiscard]] SimulationState simulation_state() const { return simulation_.state(); }
+#ifdef DK_SIMULATION_GPU
+    [[nodiscard]] Result<void> request_simulation_preview(SimulationId id,const SimulationView& view) { return simulation_.request_preview(id,view); }
+    [[nodiscard]] Result<std::shared_ptr<SimulationPreview>> take_simulation_preview(SimulationId id) { return simulation_.take_preview(id); }
+#endif
     [[nodiscard]] std::chrono::steady_clock::time_point next_pump_deadline(std::chrono::steady_clock::time_point fallback) const;
     [[nodiscard]] bool stopping() const noexcept
     {

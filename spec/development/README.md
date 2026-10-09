@@ -84,5 +84,6 @@
 | 0080 | [M11.3 有界模拟任务与暂停/取消](0080-bounded-simulation-tasks.md) | physics-api, physics-xpbd-gpu, runtime, scripting-luau | completed |
 | 0081 | [M11.4 响应性集成与性能复测](0081-simulation-responsiveness.md) | physics-api, physics-xpbd-gpu, editor, foundation-profiling, graphics-device, graphics-graph, graphics-resources, runtime, automation-transport, graphics-shaders | completed |
 | 0082 | [M12.1 模拟面板与运行控制](0082-editor-simulation-controls.md) | editor, physics-api | completed |
+| 0083 | [M12.2 实时模拟视口](0083-editor-simulation-viewport.md) | editor, editor-interaction, physics-api, render-simulation, graphics-resources | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

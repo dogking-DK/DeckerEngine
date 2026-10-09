@@ -30,7 +30,7 @@ struct GpuSimulation::Impl {
 GpuSimulation::GpuSimulation(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
 GpuSimulation::~GpuSimulation() = default;
 Result<std::shared_ptr<GpuSimulation>> GpuSimulation::create(const XpbdSolver& cpu, std::stop_token stop,
-    std::shared_ptr<const graphics::Device> host_device) {
+    std::shared_ptr<const graphics::Device> host_device, bool renderer_only) {
     try {
         if (stop.stop_requested()) return std::shared_ptr<GpuSimulation>{};
         auto impl = std::make_unique<Impl>();
@@ -41,10 +41,12 @@ Result<std::shared_ptr<GpuSimulation>> GpuSimulation::create(const XpbdSolver& c
         if (!device) return std::unexpected(device.error().with_context("simulation.gpu.device"));
         if (stop.stop_requested()) return std::shared_ptr<GpuSimulation>{};
         impl->queue.emplace(take(graphics::SubmissionQueue::create(impl->heap, std::move(*device))));
+        if (!renderer_only) {
         auto solver = GpuXpbdSolver::create(impl->heap, *impl->queue, cpu, DK_XPBD_SHADER, stop);
         if (!solver && solver.error().context == std::vector<std::string>{"physics.gpu.initialize.cancelled"})
             return std::shared_ptr<GpuSimulation>{};
         impl->solver = take(std::move(solver));
+        }
         if (stop.stop_requested()) return std::shared_ptr<GpuSimulation>{};
         return std::shared_ptr<GpuSimulation>(new GpuSimulation(std::move(impl)));
     } catch (Error& e) { return std::unexpected(std::move(e)); }
@@ -95,6 +97,20 @@ Result<SimulationImage> GpuSimulation::capture(std::int64_t dt, const ClothConfi
         SimulationImage result{take(frame.physics().read_particles()), std::vector<std::byte>(std::size_t{width}*height*4)};
         check(frame.read_rgba8(result.rgba));
         return result;
+    } catch (Error& e) { return std::unexpected(std::move(e)); }
+}
+Result<graphics::ImageTransfer> GpuSimulation::preview(std::int64_t dt,const ClothConfig& cloth,const SimulationView& request,
+    std::span<const ParticlePosition> cpu_positions) {
+    auto& s = *impl_; memory::ExecutionScope scope{s.context,s.heap};
+    try {
+        if (!s.renderer) s.renderer.emplace(take(render::ClothRenderer::create(s.heap,*s.queue,DK_CLOTH_SHADER)));
+        render::ClothView view;
+        view.columns=cloth.columns; view.rows=cloth.rows; view.width=request.width; view.height=request.height;
+        view.floor_y=cloth.physics.floor_y; view.view_projection=request.view_projection;
+        auto frame=cpu_positions.empty() ? take(s.renderer->render(*s.queue,s.solver,dt,0,view)) :
+            take(s.renderer->render_positions(*s.queue,cpu_positions,view));
+        if (!take(frame.wait(*s.queue))) throw Error{ErrorCode::invalid_state,"Preview did not complete"};
+        return s.queue->export_image(*take(frame.color()));
     } catch (Error& e) { return std::unexpected(std::move(e)); }
 }
 }

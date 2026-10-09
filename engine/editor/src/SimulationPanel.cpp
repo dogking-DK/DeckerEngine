@@ -58,7 +58,7 @@ void WorkbenchUi::simulation() {
             ImGui::TreePop();
         }
     } else ImGui::TextUnformatted("State: edit (no active simulation)");
-    ImGui::TextWrapped("Viewport shows the editing scene. Live cloth preview is not available yet.");
+    ImGui::TextWrapped("The viewport follows the active cloth. Switch to Edit view to edit the scene; Stop restores it.");
     if (ImGui::CollapsingHeader("Next experiment",ImGuiTreeNodeFlags_DefaultOpen)) {
         auto& d=model_.simulation_draft(); auto& c=d.cloth;
         ImGui::TextWrapped("Changes apply when starting a new experiment.");

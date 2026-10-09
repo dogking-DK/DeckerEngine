@@ -21,17 +21,24 @@ struct ResourceState {
     VkImage image = VK_NULL_HANDLE;
     VmaAllocation allocation = VK_NULL_HANDLE;
     std::shared_ptr<void> external_owner;
+    std::shared_ptr<ImageTransferState> imported;
     std::weak_ptr<BatchState> external_batch;
     BufferDesc buffer_desc;
     ImageDesc image_desc;
     Vector<AccessState> states;
     std::size_t uses = 0;
     bool reserved = false;
+    bool sealed = false;
     ~ResourceState()
     {
         if (buffer) vmaDestroyBuffer(owner->device.allocator(), buffer, allocation);
-        if (image && !external_owner) vmaDestroyImage(owner->device.allocator(), image, allocation);
+        if (image && !external_owner && !imported) vmaDestroyImage(owner->device.allocator(), image, allocation);
     }
+};
+struct ImageTransferState {
+    std::shared_ptr<ResourceState> source;
+    std::shared_ptr<vk::raii::Semaphore> timeline;
+    std::uint64_t value = 0;
 };
 struct Use {
     Use(std::shared_ptr<ResourceState> value, memory::ResourceHandle memory)
@@ -78,7 +85,7 @@ struct QueueState {
           descriptor_pages(memory::Allocator<std::weak_ptr<PoolPage>>{resource}) {}
     memory::ResourceHandle resource;
     std::shared_ptr<DeviceLifetime> owner;
-    vk::raii::Semaphore timeline{nullptr};
+    std::shared_ptr<vk::raii::Semaphore> timeline;
     Vector<Slot> slots;
     Vector<std::weak_ptr<PoolPage>> descriptor_pages;
     SubmissionApi api;
@@ -103,7 +110,7 @@ struct QueueState {
     }
     VkResult wait_value(std::uint64_t value, std::uint64_t timeout) const noexcept
     {
-        const VkSemaphore semaphore = static_cast<VkSemaphore>(*timeline);
+        const VkSemaphore semaphore = static_cast<VkSemaphore>(**timeline);
         const VkSemaphoreWaitInfo info{VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO, nullptr, 0, 1, &semaphore, &value};
         return api.wait(owner->device.native_device(), &info, timeout);
     }
@@ -185,6 +192,8 @@ struct BatchState {
         if (auto result = valid(); !result) return result;
         if (!resource || resource->owner != queue->owner)
             return std::unexpected(Error{ErrorCode::invalid_argument, "resource is empty or belongs to another submission queue"});
+        if (resource->sealed)
+            return std::unexpected(Error{ErrorCode::invalid_state, "image was sealed for transfer"});
         if (resource->external_owner && resource->external_batch.lock().get() != this)
             return std::unexpected(Error{ErrorCode::invalid_state, "external image is not acquired for this batch"});
         const bool retained = std::any_of(uses.begin(), uses.end(), [&](const Use& use) { return use.resource == resource; });

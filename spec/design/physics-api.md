@@ -1,11 +1,22 @@
 ---
 module: physics-api
 created_at: "2026-10-08T17:14:07+08:00"
-updated_at: "2026-10-09T20:08:06+08:00"
+updated_at: "2026-10-09T20:40:16+08:00"
 status: accepted
 ---
 
 # 模拟世界与固定步长
+
+## M12.2 只读预览请求
+
+宿主的request_preview/take_preview携带run_id及有界尺寸/有限矩阵/视图序号；校验失败不替换有效请求。
+该C++可选接口不新增JSON命令，不修改实验参数、步数或EditWorld。启用GPU构建时，公开SimulationPreview头文件
+通过PUBLIC graphics_device表达图像类型依赖，render_simulation仍为PRIVATE；CPU-only链接边界不变。有限任务在worker批次边界绘制，
+只保留最新请求和结果；同一视图在暂停时不反复绘制，运行时有界采样。无订阅者不产生额外渲染成本。
+预览失败单独返回错误并保留上一有效图，不将显示失败当成求解成功或改写实验状态；Stop优先于新预览。
+旧同步start也可在owner稳定边界生成预览；其既有同步性质不变。GPU显示必须与宿主共享设备/队列族。
+CPU绘制只上传当前数组，GPU直接使用求解器零步Graph；后台不调用粒子或图像readback。
+结果只包含已完成图像、步骤和视图身份，经主线程核对后显示；资源交接与最终回收见[资源设计](graphics-resources.md)。
 
 ## 目标、边界与依赖
 

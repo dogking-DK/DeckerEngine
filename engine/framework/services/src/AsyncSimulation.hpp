@@ -18,6 +18,9 @@ public:
     virtual std::uint64_t submitted() const = 0;
     virtual Result<XpbdSnapshot> read() = 0;
 #ifdef DK_SIMULATION_GPU
+    virtual Result<graphics::ImageTransfer> preview(const SimulationView&) {
+        return std::unexpected(Error{ErrorCode::not_supported,"Backend does not support previews"});
+    }
     virtual Result<SimulationImage> capture(std::int64_t, const ClothConfig&, std::uint32_t, std::uint32_t) {
         return std::unexpected(Error{ErrorCode::not_supported,"Backend does not support images"});
     }
@@ -27,7 +30,7 @@ class AsyncSimulation final {
 public:
     using Factory = std::function<std::unique_ptr<SimulationTaskBackend>()>;
     static std::shared_ptr<AsyncSimulation> create(XpbdSolver, bool gpu, std::int64_t dt, std::uint32_t count, std::uint32_t batch,
-        std::shared_ptr<const graphics::Device> device={}, bool paused=false);
+        std::shared_ptr<const graphics::Device> device={}, bool paused=false, ClothConfig cloth={});
     AsyncSimulation(Factory, std::int64_t dt, std::uint32_t count, std::uint32_t batch, bool paused=false);
     ~AsyncSimulation();
     AsyncSimulation(const AsyncSimulation&) = delete;
@@ -41,6 +44,8 @@ public:
     bool closed() const;
     Result<XpbdSnapshot> read();
 #ifdef DK_SIMULATION_GPU
+    void request_preview(const SimulationView&);
+    Result<std::shared_ptr<SimulationPreview>> take_preview();
     Result<SimulationImage> capture(std::int64_t, const ClothConfig&, std::uint32_t, std::uint32_t);
 #endif
 private:

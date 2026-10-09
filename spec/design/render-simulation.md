@@ -1,11 +1,19 @@
 ---
 module: render-simulation
 created_at: "2026-10-09T10:59:13+08:00"
-updated_at: "2026-10-09T11:55:00+08:00"
+updated_at: "2026-10-09T20:40:16+08:00"
 status: accepted
 ---
 
 # 模拟布片可视化
+
+## M12.2 编辑器输出
+
+ClothRenderer增加CPU位置绘制入口：Graph上传连续ParticlePosition并复用相同布片pass，不创建CPU结果的GPU求解器。
+GPU继续零步render，不推进物理、不回读。CPU帧使用独立Graph Execution而无物理帧；统一提供submission/wait/color。
+视图矩阵由编辑器Camera产生；输出图像保持ShaderReadOnlyOptimal。普通预览image_readback=false。
+后台完成输出后封装可移动ImageTransfer交接给同设备同族呈现队列，保留信号timeline和图像至消费者GPU完成。
+旧导出/示例的显式粒子和图像读回语义保持不变。
 
 ## 边界和接口
 

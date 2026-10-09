@@ -178,7 +178,7 @@ Result<SubmissionQueue> detail::SubmissionAccess::create(memory::ResourceHandle 
         vk::SemaphoreTypeCreateInfo type{vk::SemaphoreType::eTimeline, 0};
         vk::SemaphoreCreateInfo semaphore{};
         semaphore.pNext = &type;
-        state->timeline = vk::raii::Semaphore{logical, semaphore};
+        state->timeline = memory::make_shared_in<vk::raii::Semaphore>(resource, logical, semaphore);
         state->slots.reserve(slots);
         for (std::uint32_t i = 0; i < slots; ++i) {
             state->slots.emplace_back(resource);
@@ -197,6 +197,34 @@ SubmissionQueue::~SubmissionQueue() = default;
 SubmissionQueue::SubmissionQueue(SubmissionQueue&&) noexcept = default;
 SubmissionQueue& SubmissionQueue::operator=(SubmissionQueue&&) noexcept = default;
 const Device& SubmissionQueue::device() const noexcept { return state_->owner->device; }
+Result<ImageTransfer> SubmissionQueue::export_image(const Image& image) {
+    if (auto valid = state_->accepting(); !valid) return std::unexpected(valid.error());
+    const auto& source = image.state_;
+    if (!source || source->owner != state_->owner || source->external_owner || source->imported)
+        return std::unexpected(Error{ErrorCode::invalid_argument,"Transfer requires a local ordinary image"});
+    if (source->sealed || source->uses || source->reserved || !state_->completed ||
+        !std::ranges::all_of(source->states,[](const auto& access) {
+            return access.initialized && access.layout == vk::ImageLayout::eShaderReadOnlyOptimal;
+        })) return std::unexpected(Error{ErrorCode::invalid_state,"Transfer requires a completed shader-readable image"});
+    auto transfer = std::make_shared<detail::ImageTransferState>();
+    transfer->source = source; transfer->timeline = state_->timeline; transfer->value = state_->completed;
+    source->sealed = true; // Commit only after allocation and validation.
+    return ImageTransfer{std::move(transfer)};
+}
+Result<Image> SubmissionQueue::import_image(ImageTransfer&& transfer) {
+    if (auto valid = state_->accepting(); !valid) return std::unexpected(valid.error());
+    if (!transfer.state_) return std::unexpected(Error{ErrorCode::invalid_argument,"Empty image transfer"});
+    const auto& source = transfer.state_->source;
+    if (source->owner->device.native_device() != device().native_device() ||
+        source->owner->device.queue_family() != device().queue_family())
+        return std::unexpected(Error{ErrorCode::invalid_argument,"Image transfer requires the same device and queue family"});
+    auto alias = memory::make_shared_in<detail::ResourceState>(state_->resource,state_->owner,state_->resource);
+    alias->image_desc = source->image_desc;
+    alias->states.assign(source->states.begin(),source->states.end());
+    alias->imported = std::move(transfer.state_);
+    alias->image = source->image;
+    return Image{std::move(alias)};
+}
 Result<Buffer> SubmissionQueue::create_buffer(const BufferDesc& description)
 {
     DK_PROFILE_ZONE("graphics.buffer.create");
@@ -301,14 +329,21 @@ Result<Submission> SubmissionQueue::submit_impl(CommandBatch&& batch, vk::Semaph
     DK_PROFILE_ZONE_VALUE(ticket.value_);
     const vk::CommandBufferSubmitInfo command{*slot.command};
     const std::array<vk::SemaphoreSubmitInfo, 2> signals{{
-        {*state_->timeline, ticket.value_, vk::PipelineStageFlagBits2::eAllCommands},
+        {**state_->timeline, ticket.value_, vk::PipelineStageFlagBits2::eAllCommands},
         {binary_signal, 0, vk::PipelineStageFlagBits2::eAllCommands}}};
-    const vk::SemaphoreSubmitInfo acquire{wait, 0, vk::PipelineStageFlagBits2::eAllCommands};
+    std::vector<vk::SemaphoreSubmitInfo> waits;
+    if (wait) waits.emplace_back(wait,0,vk::PipelineStageFlagBits2::eAllCommands);
+    for (const auto& use : recording->uses) if (const auto& imported = use.resource->imported) {
+        const auto semaphore = **imported->timeline;
+        auto prior = std::ranges::find(waits,semaphore,&vk::SemaphoreSubmitInfo::semaphore);
+        if (prior == waits.end()) waits.emplace_back(semaphore,imported->value,vk::PipelineStageFlagBits2::eAllCommands);
+        else prior->value = std::max(prior->value,imported->value);
+    }
     vk::SubmitInfo2 submit{};
     submit.setCommandBufferInfos(command);
     submit.signalSemaphoreInfoCount = binary_signal ? 2u : 1u;
     submit.pSignalSemaphoreInfos = signals.data();
-    if (wait) submit.setWaitSemaphoreInfos(acquire);
+    submit.setWaitSemaphoreInfos(waits);
     const auto result = state_->api.submit(static_cast<VkQueue>(*device().queue()), 1,
         reinterpret_cast<const VkSubmitInfo2*>(&submit), VK_NULL_HANDLE);
     if (result != VK_SUCCESS) return std::unexpected(state_->failure("vkQueueSubmit2", result));
@@ -337,7 +372,7 @@ Result<void> SubmissionQueue::poll()
     DK_PROFILE_ZONE("graphics.collect");
     if (state_->owner->lost) return std::unexpected(Error{ErrorCode::invalid_state, "submission device is lost"});
     std::uint64_t value = 0;
-    const auto result = state_->api.counter(device().native_device(), static_cast<VkSemaphore>(*state_->timeline), &value);
+    const auto result = state_->api.counter(device().native_device(), static_cast<VkSemaphore>(**state_->timeline), &value);
     if (result != VK_SUCCESS) return std::unexpected(state_->failure("vkGetSemaphoreCounterValue", result));
     if (value > state_->submitted) return std::unexpected(Error{ErrorCode::internal_error, "timeline advanced beyond submitted work"});
     state_->collect(value);

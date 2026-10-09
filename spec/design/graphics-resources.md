@@ -1,11 +1,22 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-09T19:38:24+08:00"
+updated_at: "2026-10-09T20:40:16+08:00"
 status: accepted
 ---
 
 # Vulkan 资源与提交生命周期
+
+## M12.2 已完成图像交接
+
+ImageTransfer是同一逻辑设备、同一队列族之间的单次拥有型交接；不提供通用多队列调度或跨族ownership transfer。
+生产队列export_image仅接受本队列无在途/录制使用、已初始化且处于ShaderReadOnlyOptimal的普通图像；
+成功后封存原资源，后续生产队列录制拒绝它。所有校验/分配完成才封存；失败不改变图像。
+transfer保留源图像、设备和共享timeline及已完成值，不保留QueueState/command pools；允许生产队列先销毁。
+消费队列import_image核对同设备同族，创建独立本地ledger和拥有源资源的alias，成功才消费transfer；不复制像素。
+首次及后续使用alias的提交显式wait源timeline值，保证计算/绘制到采样的设备内存依赖；WSI acquire wait同时保留。
+alias由消费提交保活，转入后可按现有本地资源操作；原源资源不可再次使用或重复交接。
+测试覆盖跨队列像素、未完成/非法/重复交接拒绝、源队列提前销毁、消费提交失败和在途回收；GPU同步验证独立执行。
 
 ## CPU 描述与访问校验
 

@@ -11,8 +11,9 @@ target_link_libraries(dk_simulation_services PUBLIC dk::scene_services dk::physi
 target_link_libraries(dk_simulation_services PRIVATE dk::profiling Threads::Threads)
 dk_target_defaults(dk_simulation_services)
 if(TARGET dk_render_simulation)
+    target_sources(dk_simulation_services PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/services/SimulationPreview.hpp)
     target_sources(dk_simulation_services PRIVATE src/GpuSimulation.cpp src/SimulationExport.cpp)
-    target_link_libraries(dk_simulation_services PRIVATE dk::render_simulation nlohmann_json::nlohmann_json)
+    target_link_libraries(dk_simulation_services PUBLIC dk::graphics_device PRIVATE dk::render_simulation nlohmann_json::nlohmann_json)
     target_compile_definitions(dk_simulation_services PUBLIC DK_SIMULATION_GPU=1 PRIVATE
         DK_XPBD_SHADER="${PROJECT_SOURCE_DIR}/shaders/physics/xpbd.slang"
         DK_CLOTH_SHADER="${PROJECT_SOURCE_DIR}/shaders/render/cloth.slang")

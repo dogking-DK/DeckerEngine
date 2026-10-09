@@ -1,5 +1,6 @@
 #include <dk/services/SimulationService.hpp>
 #include <algorithm>
+#include <cmath>
 #include "AsyncSimulation.hpp"
 #ifdef DK_SIMULATION_GPU
 #include "GpuSimulation.hpp"
@@ -31,7 +32,7 @@ Result<void> SimulationService::run(const SceneService& edit, EditGuard guard, s
     auto candidate = std::move(play_);
     candidate->task_gpu = gpu;
     candidate->paused = false;
-    candidate->task = detail::AsyncSimulation::create(*candidate->solver,gpu,dt,count,batch,gpu_device_,paused);
+    candidate->task = detail::AsyncSimulation::create(*candidate->solver,gpu,dt,count,batch,gpu_device_,paused,cloth);
     candidate->progress = SimulationTaskState{paused ? SimulationTaskStatus::pausing : SimulationTaskStatus::initializing,count,0,0,batch};
     play_ = std::move(candidate);
     return {};
@@ -244,4 +245,42 @@ SimulationService::TimePoint SimulationService::next_deadline(TimePoint fallback
     if (play_->last_pump > TimePoint::max() - remaining) return fallback;
     return std::min(fallback, play_->last_pump + remaining);
 }
+#ifdef DK_SIMULATION_GPU
+Result<void> SimulationService::request_preview(SimulationId id,const SimulationView& view) {
+    auto valid=check_run(id); if (!valid) return valid;
+    if (!view.width || !view.height || view.width>1600 || view.height>1200 ||
+        !std::ranges::all_of(view.view_projection,[](float x){return std::isfinite(x);}))
+        return std::unexpected(Error{ErrorCode::invalid_argument,"Preview requires finite camera and extent 1..1600 x 1..1200"});
+    if (!gpu_device_) return std::unexpected(Error{ErrorCode::not_supported,"Live preview requires a shared device with two queues"});
+    if (!play_->cloth || play_->fault || (play_->progress && play_->progress->status==SimulationTaskStatus::stopping))
+        return std::unexpected(Error{ErrorCode::invalid_state,"Preview requires an active healthy cloth run"});
+    if (play_->task) { play_->task->request_preview(view); return {}; }
+    if (play_->preview_view==view && play_->preview_steps==play_->clock.state().steps) return {};
+    auto renderer=play_->gpu;
+    if (!renderer) {
+        if (!play_->preview_renderer) {
+            auto created=detail::GpuSimulation::create(*play_->solver,{},gpu_device_,true);
+            if (!created) return std::unexpected(created.error());
+            play_->preview_renderer=std::move(*created);
+        }
+        renderer=play_->preview_renderer;
+    }
+    auto image=renderer->preview(play_->clock.config().fixed_dt_ns,*play_->cloth,view,
+        play_->gpu ? std::span<const ParticlePosition>{} : play_->solver->positions());
+    if (!image) return std::unexpected(image.error());
+    auto result=std::make_shared<SimulationPreview>();
+    result->run_id=id; result->view=view; result->steps=play_->clock.state().steps; result->image=std::move(*image);
+    play_->preview_view=view; play_->preview_steps=result->steps; play_->preview=std::move(result);
+    return {};
+}
+Result<std::shared_ptr<SimulationPreview>> SimulationService::take_preview(SimulationId id) {
+    auto valid=check_run(id); if (!valid) return std::unexpected(valid.error());
+    if (play_->task) {
+        auto result=play_->task->take_preview();
+        if (result && *result) (*result)->run_id=id;
+        return result;
+    }
+    return std::exchange(play_->preview,{});
+}
+#endif
 }

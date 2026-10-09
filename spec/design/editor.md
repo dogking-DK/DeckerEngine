@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-09T20:08:06+08:00"
+updated_at: "2026-10-09T20:40:16+08:00"
 status: accepted
 ---
 
@@ -18,8 +18,25 @@ Pause/Resume/Cancel/Stop携带本帧观察到的run_id，过期请求由服务�
 每帧从Runtime读取已发布状态，显示初始化/暂停中/取消中/停止中、终态与fault；受理不冒充完成。
 终态仅允许Stop和只读查看，停止回收期间禁止重启；外部legacy同步运行也按其实际状态提供控制。
 GPU冷初始化和有限任务单步在worker执行，不经旧同步start绕开M11响应性路径。
-当前视口仍为EditWorld，面板明确提示尚无实时模拟预览；数值/性能采样、导出UI和Play视口留给后续阶段。
+M12.1提供控制，Play视口接入见下节；数值/性能采样与导出UI仍留给M12.3。
 验证覆盖参数拒绝/旧run_id、草稿与Edit/history隔离、真实IPC外部控制，以及ImGui按钮输入的CPU/GPU零步准备、单步和停止。
+
+## M12.2 实时模拟视口
+
+Viewport在活动布片实验时默认显示Simulation，可切换回Edit；Stop立即停止请求并恢复最新编辑视图。
+只读预览经Workspace/Runtime/SimulationService请求，不执行step，也不改Scene/历史。
+有限任务worker在已完成批次边界响应合并后的视图请求，最多一个待处理请求、一个正在绘制的帧和一个待领取结果；
+运行期间最多约30Hz生成预览，暂停时仅步数/相机/尺寸改变才重绘；请求具有250ms租期，视口不再请求后停止采样。
+结果绑定run_id、完成步数和视图序号；旧run/旧视图结果不发布。
+GUI使用最近已完成图像，不等待后台编译或求解；显示图像对应步数及准备/过期/失败状态，不假称图像等于最新任务进度。
+CPU布片上传当前位置后绘制；GPU布片通过零步Graph直接读取求解输出，不回读粒子或图像。
+GPU图像通过[已完成图像交接](graphics-resources.md)转入呈现队列，ImGui直接采样。
+图像/描述符仅在前一GUI提交完成后替换；窗口缩放保留旧图直至新尺寸完成，最小化不新增预览请求；
+Stop/关闭不丢弃在途GPU所有权，worker排空，图像可独立保活至GUI完成。
+模拟相机与编辑相机独立；首次运行自动取景，Frame/F/Home重置取景，RMB环绕/MMB平移/滚轮缩放。
+模拟图像禁用实体拾取/Gizmo，Inspector仍可编辑EditWorld。相机取景按布片输入包围范围，不隐式回读GPU粒子。
+无共享双队列设备时明确显示实时预览不可用；不偷偷使用CPU图像回传。CPU-only模型不增加Vulkan依赖。
+验收覆盖CPU/GPU连续变化、精确暂停图像稳定、相机/缩放/最小化恢复、Stop新run隔离、带活动预览关闭及同步/寿命。
 默认Simulation放在左下，Inspector保留完整高度；控制分行、参数用可滚动双列表，避免默认窗口宽度裁切按钮。
 一次性smoke与response probe统一单列已知AMD Loader Message原文，其他warning/error及存活分配仍失败；普通工作台退出策略不变。
 

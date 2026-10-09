@@ -13,6 +13,10 @@ struct ClothView {
 class SimulationFrame final {
 public:
     [[nodiscard]] const GpuXpbdFrame& physics() const noexcept { return physics_; }
+    [[nodiscard]] graphics::Submission submission() const noexcept { return physics_ ? physics_.submission() : cpu_.submission(); }
+    [[nodiscard]] Result<bool> wait(graphics::SubmissionQueue& queue, std::uint64_t timeout_ns = UINT64_MAX) const {
+        return queue.wait(submission(),timeout_ns);
+    }
     [[nodiscard]] Result<const graphics::Image*> color() const;
     [[nodiscard]] Result<void> read_rgba8(std::span<std::byte>) const;
     [[nodiscard]] std::uint32_t width() const noexcept { return width_; }
@@ -20,6 +24,8 @@ public:
 private:
     friend class ClothRenderer;
     GpuXpbdFrame physics_;
+    graphics::graph::Execution cpu_;
+    const graphics::graph::Execution* execution() const { return physics_ ? physics_.execution() : &cpu_; }
     std::size_t color_ = 0, readback_ = 0;
     std::uint32_t width_ = 0, height_ = 0;
     bool has_readback_ = false;
@@ -32,6 +38,8 @@ public:
     // One Graph/one submission for candidate simulation, visualization and optional diagnostics.
     [[nodiscard]] Result<SimulationFrame> render(graphics::SubmissionQueue&, GpuXpbdSolver&, std::int64_t dt_ns,
         std::uint32_t count, const ClothView& = {}, GpuXpbdOptions = {});
+    // CPU results upload once through Graph; no GPU solver and no implicit readback.
+    [[nodiscard]] Result<SimulationFrame> render_positions(graphics::SubmissionQueue&, std::span<const ParticlePosition>, const ClothView&);
 private:
     explicit ClothRenderer(std::shared_ptr<detail::ClothRendererState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::ClothRendererState> state_;

@@ -17,4 +17,4 @@ if ($code -eq 77) { exit 77 }
 if ($code -ne 0) { throw "Simulation panel smoke failed: $caseDir" }
 if (!(Test-Path -LiteralPath $image) -or (Get-Item -LiteralPath $image).Length -lt 100000) { throw 'Missing simulation panel screenshot' }
 if ((Get-FileHash -LiteralPath (Join-Path $projectDir 'scene.json')).Hash -ne $before) { throw 'Simulation changed scene file' }
-Write-Output "Simulation panel CPU/GPU buttons, state and scene isolation passed: $caseDir"
+Write-Output "Simulation CPU/GPU live viewport, camera, paused pixels, resize/minimize/Stop/active close and scene isolation passed: $caseDir"

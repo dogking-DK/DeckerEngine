@@ -6,6 +6,13 @@
 
 namespace dk {
 namespace graphics { class Device; }
+struct SimulationView {
+    std::uint32_t width = 640, height = 480;
+    std::uint64_t sequence = 0;
+    std::array<float,16> view_projection{};
+    bool operator==(const SimulationView&) const = default;
+};
+struct SimulationPreview;
 struct SimulationIdTag;
 using SimulationId = StableId<SimulationIdTag>;
 enum class SimulationMode { edit, running, paused, initializing, pausing, cancelling, stopping };
@@ -70,6 +77,8 @@ public:
     [[nodiscard]] Result<PlayParticleSnapshot> read_particles(SimulationId) const;
     [[nodiscard]] Result<SimulationParticlePage> particle_page(SimulationId, std::size_t offset = 0, std::size_t limit = 128) const;
 #ifdef DK_SIMULATION_GPU
+    [[nodiscard]] Result<void> request_preview(SimulationId, const SimulationView&);
+    [[nodiscard]] Result<std::shared_ptr<SimulationPreview>> take_preview(SimulationId);
     // Returns the normalized project-relative directory. Never overwrites an existing target.
     [[nodiscard]] Result<std::string> export_experiment(SimulationId, std::uint64_t expected_steps,
         std::string_view output, std::uint32_t width = 640, std::uint32_t height = 480);
@@ -96,6 +105,12 @@ private:
         std::shared_ptr<detail::AsyncSimulation> task;
         bool task_gpu = false;
         std::optional<SimulationTaskState> progress;
+#ifdef DK_SIMULATION_GPU
+        std::shared_ptr<detail::GpuSimulation> preview_renderer;
+        std::shared_ptr<SimulationPreview> preview;
+        std::optional<SimulationView> preview_view;
+        std::uint64_t preview_steps = UINT64_MAX;
+#endif
     };
     [[nodiscard]] Result<void> check_run(SimulationId) const;
     [[nodiscard]] SimulationRunState run_state() const;
