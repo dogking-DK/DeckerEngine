@@ -48,12 +48,18 @@ TEST_CASE("Luau simulation example executes exact ticks and capability modes pro
     LuauOptions query; query.access = LuauAccess::query;
     REQUIRE(run_luau(*s.runtime, R"(
 assert(dk.command("simulation.query").ok)
-for _, method in {"simulation.start", "simulation.pause", "simulation.resume", "simulation.step", "simulation.stop", "simulation.export"} do
+for _, method in {"simulation.start", "simulation.run", "simulation.cancel", "simulation.pause", "simulation.resume", "simulation.step", "simulation.stop", "simulation.export"} do
     local r = dk.command(method)
     assert(not r.ok and r.error.name == "not_supported" and r.task_id == dk.null)
 end
 )", "query-simulation.luau", query));
     REQUIRE(s.call("simulation.query")["mode"] == "edit");
+    REQUIRE(run_luau(*s.runtime, R"(
+local s = dk.command("scene.query").value.state
+local r = dk.command("simulation.run", {guard = {document_id = s.document_id, revision = s.revision}, count = 1000000})
+assert(r.ok and r.value.run.task.target_steps == 1000000)
+assert(dk.command("simulation.cancel", {run_id = r.value.run.run_id}).ok)
+)", "finite-simulation.luau", edit));
 }
 TEST_CASE("Luau XPBD cloth example validates physics through controlled commands") {
     Script s;

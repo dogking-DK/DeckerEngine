@@ -1,10 +1,35 @@
 #include <dk/services/SimulationService.hpp>
 #include <algorithm>
+#include "AsyncSimulation.hpp"
 #ifdef DK_SIMULATION_GPU
 #include "GpuSimulation.hpp"
 #endif
 
 namespace dk {
+Result<void> SimulationService::run(const SceneService& edit, EditGuard guard, std::uint32_t count,
+    ClothConfig cloth, bool gpu, std::int64_t dt, std::uint32_t batch) {
+    if (!count || count > 1000000 || !batch || batch > 8 || dt < 1000000 || dt > 33333333)
+        return std::unexpected(Error{ErrorCode::invalid_argument,"Task needs count 1..1000000, batch 1..8 and XPBD dt"});
+#ifndef DK_SIMULATION_GPU
+    if (gpu) return std::unexpected(Error{ErrorCode::not_supported,"GPU simulation is not compiled"});
+#endif
+    // Reuse validated CPU/scene candidate construction. No worker exists until it succeeds;
+    // remove the unpublished candidate again if worker allocation/creation throws.
+    auto created = start(edit,guard,{dt,batch},true,{},cloth,false);
+    if (!created) return created;
+    auto candidate = std::move(play_);
+    candidate->task_gpu = gpu;
+    candidate->paused = false;
+    candidate->task = detail::AsyncSimulation::create(*candidate->solver,gpu,dt,count,batch);
+    candidate->progress = SimulationTaskState{SimulationTaskStatus::initializing,count,0,0,batch};
+    play_ = std::move(candidate);
+    return {};
+}
+Result<void> SimulationService::cancel(SimulationId id) {
+    auto valid = check_run(id); if (!valid) return valid;
+    if (!play_->task) return std::unexpected(Error{ErrorCode::invalid_state,"Cancel requires a finite simulation task"});
+    auto result = play_->task->cancel(); pump(); return result;
+}
 Result<void> SimulationService::start(const SceneService& edit, EditGuard guard, FixedStepConfig config,
                                       bool paused, std::optional<TimePoint> now, std::optional<ClothConfig> cloth, bool gpu) {
     if (play_) return std::unexpected(Error{ErrorCode::invalid_state, "Stop the active simulation before starting"});
@@ -50,17 +75,20 @@ Result<void> SimulationService::check_run(SimulationId id) const {
 }
 Result<void> SimulationService::pause(SimulationId id) {
     auto valid = check_run(id); if (!valid) return valid;
+    if (play_->task) { auto result = play_->task->pause(); pump(); return result; }
     if (!play_->paused) { play_->paused = true; play_->clock.discard_fraction(); }
     return {};
 }
 Result<void> SimulationService::resume(SimulationId id, TimePoint now) {
     auto valid = check_run(id); if (!valid) return valid;
     if (play_->fault) return std::unexpected(Error{ErrorCode::invalid_state, "Stop and restart the faulted simulation"});
+    if (play_->task) { auto result = play_->task->resume(); pump(); return result; }
     if (play_->paused) { play_->last_pump = now; play_->paused = false; }
     return {};
 }
 Result<void> SimulationService::step(SimulationId id, std::uint32_t count) {
     auto valid = check_run(id); if (!valid) return valid;
+    if (play_->task) return std::unexpected(Error{ErrorCode::invalid_state,"Finite task owns its target; use resume or a new run"});
     if (!play_->paused || play_->fault)
         return std::unexpected(Error{ErrorCode::invalid_state, "Single stepping requires a paused healthy simulation"});
     auto clock = play_->clock;
@@ -86,15 +114,29 @@ Result<void> SimulationService::advance_solver(const FixedStepClock& clock, std:
 }
 Result<void> SimulationService::stop(SimulationId id) {
     auto valid = check_run(id); if (!valid) return valid;
+    if (play_->task) { play_->task->stop(); pump(); return {}; }
     play_.reset();
     return {};
 }
 SimulationRunState SimulationService::run_state() const {
     return {play_->id, play_->source, play_->clock.config(), play_->clock.state(), play_->fault, play_->cloth,
-        play_->solver && !play_->gpu ? std::optional{play_->solver->metrics()} : std::nullopt, bool(play_->gpu)};
+        play_->solver && !play_->gpu && !play_->task ? std::optional{play_->solver->metrics()} : std::nullopt,
+        bool(play_->gpu) || play_->task_gpu, play_->progress};
 }
 SimulationState SimulationService::state() const {
     if (!play_) return {SimulationMode::edit, {}};
+    if (play_->progress) {
+        SimulationMode mode = SimulationMode::paused;
+        switch (play_->progress->status) {
+        case SimulationTaskStatus::initializing: mode = SimulationMode::initializing; break;
+        case SimulationTaskStatus::running: mode = SimulationMode::running; break;
+        case SimulationTaskStatus::pausing: mode = SimulationMode::pausing; break;
+        case SimulationTaskStatus::cancelling: mode = SimulationMode::cancelling; break;
+        case SimulationTaskStatus::stopping: mode = SimulationMode::stopping; break;
+        default: break;
+        }
+        return {mode,run_state()};
+    }
     return {play_->paused ? SimulationMode::paused : SimulationMode::running, run_state()};
 }
 Result<PlaySceneSnapshot> SimulationService::read_snapshot(SimulationId id) const {
@@ -106,6 +148,16 @@ Result<PlaySceneSnapshot> SimulationService::read_snapshot(SimulationId id) cons
 Result<PlayParticleSnapshot> SimulationService::read_particles(SimulationId id) const {
     auto valid = check_run(id); if (!valid) return std::unexpected(valid.error());
     if (!play_->solver) return std::unexpected(Error{ErrorCode::invalid_state, "The active simulation has no particle solver"});
+    if (play_->task) {
+        // Backend completion can race ahead of the last owner pump. Do not label a newer
+        // particle array with the owner's older clock; require a published stable boundary.
+        if (!play_->paused || play_->fault)
+            return std::unexpected(Error{ErrorCode::invalid_state,"Task diagnostics require a published healthy stable boundary"});
+        auto snapshot = play_->task->read();
+        if (!snapshot) return std::unexpected(snapshot.error());
+        auto run = run_state(); run.metrics = snapshot->metrics;
+        return PlayParticleSnapshot{run,std::move(*snapshot)};
+    }
     auto snapshot = play_->solver->snapshot();
 #ifdef DK_SIMULATION_GPU
     if (play_->gpu) {
@@ -137,6 +189,21 @@ Result<SimulationParticlePage> SimulationService::particle_page(SimulationId id,
     return SimulationParticlePage{snapshot->run, offset, positions.size(), {p.begin(), p.end()}, {v.begin(), v.end()}};
 }
 void SimulationService::pump(TimePoint now) {
+    if (play_ && play_->task) {
+        const auto state = play_->task->state();
+        if (state.status == SimulationTaskStatus::stopping && play_->task->closed()) { play_.reset(); return; }
+        // Worker completion is only published here on the service owner thread.
+        auto clock = play_->clock;
+        if (state.completed_steps < clock.state().steps) throw std::logic_error{"Task completion moved backwards"};
+        while (clock.state().steps < state.completed_steps) {
+            auto advanced = clock.step(static_cast<std::uint32_t>(std::min<std::uint64_t>(10000,state.completed_steps-clock.state().steps)));
+            if (!advanced) throw std::logic_error{"Task completion exceeds the validated clock budget"};
+        }
+        play_->clock = clock; play_->progress = state; play_->fault = state.error;
+        play_->paused = state.status == SimulationTaskStatus::paused || state.status == SimulationTaskStatus::succeeded ||
+            state.status == SimulationTaskStatus::cancelled || state.status == SimulationTaskStatus::failed;
+        return;
+    }
     if (!play_ || play_->paused) return;
     const auto previous = play_->last_pump.time_since_epoch();
     const auto current = now.time_since_epoch();
@@ -155,6 +222,7 @@ void SimulationService::pump(TimePoint now) {
     play_->last_pump = now;
 }
 SimulationService::TimePoint SimulationService::next_deadline(TimePoint fallback) const {
+    if (play_ && play_->task) return play_->paused ? fallback : std::min(fallback,Clock::now()+std::chrono::milliseconds{5});
     if (!play_ || play_->paused) return fallback;
     const auto remaining = std::chrono::duration_cast<Clock::duration>(std::chrono::nanoseconds{
         play_->clock.config().fixed_dt_ns - play_->clock.state().accumulator_ns});

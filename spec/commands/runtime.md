@@ -1,7 +1,7 @@
 ---
 module: command-reference-runtime
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-10-09T12:03:00+08:00"
+updated_at: "2026-10-09T15:30:00+08:00"
 status: accepted
 ---
 
@@ -24,7 +24,7 @@ max_line_bytes=1048576、max_batch_requests=128、transactions=true、guard="doc
 {"jsonrpc":"2.0","id":19,"method":"runtime.capabilities"}
 ```
 
-另返回 `simulation={fixed_step:true,solver:"xpbd_cpu",gpu:boolean,experiment_export:boolean}`：可用独立模拟世界、固定时钟及CPU XPBD；start仍默认none计时模式；gpu/experiment_export 表示可选 RenderSimulation 编译能力，不保证当前设备可用；见 [模拟命令](simulation.md)。
+另返回 `simulation={fixed_step:true,solver:"xpbd_cpu",gpu:boolean,experiment_export:boolean,finite_tasks:true,max_task_steps:1000000,max_batch_steps:8,max_in_flight_batches:1}`：可用独立模拟世界、固定时钟及CPU XPBD；start仍默认none计时模式；gpu/experiment_export 表示可选 RenderSimulation 编译能力，不保证当前设备可用；见 [模拟命令](simulation.md)。
 
 ## tasks.list
 
@@ -66,3 +66,5 @@ effect=query，undoable=false；返回一条 TaskRecord。未知或已淘汰 ID 
 ```json
 {"jsonrpc":"2.0","id":22,"method":"runtime.shutdown"}
 ```
+
+有限模拟任务由 simulation.run/query/cancel 和 run_id 管理。async_tasks 仍为 false；Commands TaskId 表示受理命令已同步完成，不表示整个模拟实验完成。

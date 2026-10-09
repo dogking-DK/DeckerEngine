@@ -1,13 +1,13 @@
 ---
 module: command-reference-simulation
 created_at: "2026-10-08T17:23:40+08:00"
-updated_at: "2026-10-09T12:09:00+08:00"
+updated_at: "2026-10-09T15:30:00+08:00"
 status: accepted
 ---
 
 # 模拟世界命令
 
-[返回命令目录](README.md)。Framework/Scene Runtime 提供七条基础命令；启用 RenderSimulation 后另提供 simulation.export 和 xpbd_gpu 后端。
+[返回命令目录](README.md)。Framework/Scene Runtime 提供九条基础命令；启用 RenderSimulation 后另提供 simulation.export 和 xpbd_gpu 后端。
 支持默认none固定时钟与显式xpbd_cpu布片求解器；capabilities.simulation.solver="xpbd_cpu"表示已编译CPU求解器，gpu/experiment_export 两个布尔字段表示可选编译能力（不保证当前设备可用）。
 实现：[SimulationOperations](../../engine/framework/operations/src/SimulationOperations.cpp)、
 [SimulationService](../../engine/framework/services/src/SimulationService.cpp)。
@@ -15,22 +15,23 @@ status: accepted
 
 ## 公共结果和状态
 
-除 particles 分页查询和 export 文件结果外，六条控制/状态命令均返回 `{mode,run}`。mode 为 `edit`、`running`、`paused`；edit 时 run=null，其他状态为：
+除 particles 分页查询和 export 文件结果外，控制/状态命令均返回 `{mode,run}`。mode 为 `edit`、`running`、`paused`；有限任务还可为 `initializing`、`pausing`、`cancelling`、`stopping`；edit 时 run=null，其他状态为：
 
 | run 字段 | 含义 |
 | --- | --- |
-| run_id | 本轮 SimulationId；非 nil UUID，每次成功 start 生成新值 |
+| run_id | 本轮 SimulationId；非 nil UUID，每次成功 start/run 生成新值 |
 | source | 启动时编辑文档 State：document_id、scene_id、revision、dirty、entity_count；不会随编辑刷新 |
 | fixed_dt_ns | 每拍的整数纳秒时长 |
-| max_catch_up_steps | 一次自动 pump 的最大步数 |
-| steps | none/CPU 的已完成拍数；GPU 的已提交拍数，成功命令已等待完成；等待失败时仍保留提交数 |
+| max_catch_up_steps | 旧入口一次自动 pump 的最大步数；有限任务为 batch_steps |
+| steps | 有限任务为已完成拍数；旧入口 none/CPU 为完成数、GPU 为提交数（成功命令已等待完成，等待失败保留提交数） |
 | simulated_time_ns | 精确的 steps × fixed_dt_ns |
 | accumulator_ns | 小于 fixed_dt_ns 的未满一拍余量 |
 | dropped_time_ns | 追赶超限时丢弃的墙钟整拍时间；不算入模拟时间 |
 | solver | 本轮 none、xpbd_cpu 或 xpbd_gpu |
 | cloth | 任一 XPBD 后端返回完整有效布片配置；none时null |
-| metrics | xpbd_cpu时返回本轮已提交数值指标；none/GPU 时 null，GPU 指标在显式导出文件中读取 |
-| fault | 正常为 null；自动推进或 GPU 等待/诊断失败时为引擎错误名称，模式冻结为 paused，需要 stop/start |
+| metrics | 旧入口 xpbd_cpu 返回本轮已完成数值指标；none/GPU/有限任务查询为 null；显式导出读取指标 |
+| fault | 正常为 null；推进、初始化或 GPU 等待/诊断失败时为引擎错误名称，冻结并等待 Stop 后重建 |
+| task | 旧入口为 null；有限任务的状态、目标、提交/完成计数及批次状态，见下文 |
 
 计数和纳秒时间为整数，时间不超过 int64；布片/指标/粒子为浮点数。未知字段及浮点整数 token（如 count=1.0）拒绝。
 所有控制 effect=control、undoable=false；不进入场景撤销历史，不允许加入 scene.transaction。
@@ -46,6 +47,43 @@ Play 保留启动输入；Stop 保留最新 Edit，不把 Play 写回。
 ```json
 {"jsonrpc":"2.0","id":1,"method":"simulation.query"}
 ```
+
+## simulation.run
+
+必填 `guard` 和 `count`（整数1–1000000），要求活动编辑场景且无 Play。
+可选 `solver` 默认 xpbd_cpu，也支持已编译的 xpbd_gpu，拒绝 none；`cloth` 同下文；
+`fixed_dt_ns` 默认10000000、范围1000000–33333333；`batch_steps` 默认8、范围1–8。
+校验并复制输入后受理任务，冷设备/shader初始化和求解在专属工作线程执行；不等待全部 count 完成。
+新 run_id 标识任务，命令响应的 TaskId 只记录受理命令，`tasks.get` 不代表实验进度；使用 simulation.query。
+无场景/已有 Play 为 invalid_state，过期 guard 为 conflict，非法配置为 invalid_argument；未编译GPU时xpbd_gpu不在schema允许的solver列表内。
+同步校验失败不发布 Play；异步初始化/推进失败保留 failed 和 fault。
+
+| task 字段 | 含义 |
+| --- | --- |
+| status | initializing / running / pausing / paused / cancelling / cancelled / succeeded / failed / stopping |
+| target_steps | 本轮总目标 count |
+| submitted_steps | 后端已成功提交的累计拍数 |
+| completed_steps | 已确认完成的累计拍数，与 run.steps 相同 |
+| batch_steps | 每批最多1–8拍，末批仅执行剩余拍数 |
+| in_flight_steps | submitted_steps − completed_steps，不超过 batch_steps；等待失败后也保留真实差值 |
+| initialized | 后端初始化成功 |
+| batch_active | 已领取初始化或一个批次，包括提交前编译/录制；不能只靠 in_flight_steps 判断是否可读回 |
+
+终态 succeeded/cancelled/failed 的 mode 为 paused，以 task.status 区分；终态保留到 Stop。
+无墙钟追赶，accumulator_ns/dropped_time_ns 为0。查询不回读粒子，GPU提交不等同于完成或数值健康。
+最多一个活动任务、一个活动批次和一个GPU提交；新任务不会无限排队。
+
+```json
+{"jsonrpc":"2.0","id":10,"method":"simulation.run","params":{"guard":{"document_id":"<document_id>","revision":0},"count":300,"solver":"xpbd_gpu","fixed_dt_ns":10000000,"batch_steps":8,"cloth":{"seed":42}}}
+```
+
+## simulation.cancel
+
+必填 `run_id:UUID`，仅有限任务允许。立即接受取消并返回 cancelling 或已有终态；
+已领取的一个批次可以继续提交/完成，不再领取下一批。只有 cancelled 才表示取消完成、步数稳定。
+完成先发生则保留 succeeded；取消先受理则 cancelled，即使末批恰好完成全部目标。
+重复取消终态幂等，不能恢复 cancelled/succeeded/failed；已停止或旧同步 Play 返回 invalid_state。
+过期 ID 为 conflict，非法/nil UUID 为 invalid_argument。保留已完成结果，直到 Stop；未初始化成功或 fault 时不能诊断读回。
 
 ## simulation.start
 
@@ -70,9 +108,9 @@ CPU/GPU XPBD 要求 fixed_dt_ns<=33333333；cloth配置语义错误为invalid_ar
 
 ## simulation.pause / simulation.resume
 
-必填 `run_id:UUID`，无默认值。pause 将 running 变 paused，清除不足一拍余量；已暂停为 no-op。
+必填 `run_id:UUID`，无默认值。旧同步入口中，pause 将 running 变 paused，清除不足一拍余量；已暂停为 no-op。
 resume 从当前墙钟重新计时，暂停时间不追赶；已 running 为 no-op，不重设时钟。
-返回公共状态。pause 响应后的空闲时间不会增加步数，但 pause 分派前仍会正常 pump。
+返回公共状态。旧同步入口 pause 响应后的空闲时间不会增加步数，但 pause 分派前仍会正常 pump。
 无 Play 为 invalid_state；过期 run_id 为 conflict；nil/非法 UUID 为 invalid_argument；
 有 fault 时 resume 为 invalid_state，pause 仍可返回当前状态。
 
@@ -81,10 +119,13 @@ resume 从当前墙钟重新计时，暂停时间不追赶；已 running 为 no-
 {"jsonrpc":"2.0","id":4,"method":"simulation.resume","params":{"run_id":"<run_id>"}}
 ```
 
+有限任务 pause 返回 pausing 或稳定状态；等待 task.status=paused 后才保证步数不变。
+resume 仅允许未终结的 paused 任务，继续剩余目标，不追赶墙钟；pausing/running/终态拒绝恢复，已受理取消/Stop不能被撤回。
+
 ## simulation.step
 
 必填 `run_id:UUID`；可选 `count:integer`，默认1，范围1–10000。
-仅健康 paused 状态允许；精确完成 count 拍后仍为 paused，返回公共状态。
+仅旧同步入口的健康 paused 状态允许（有限任务拒绝 step）；精确完成 count 拍后仍为 paused，返回公共状态。
 GPU 每次 count 为 1–8（超限 invalid_argument），脚本分批到精确 N；count 不受 max_catch_up_steps 的当前取值限制。
 xpbd_cpu另有20000000工作单元上限：count*(粒子数+iterations*(粒子数+约束数))，超限invalid_argument，需显式分多次请求。
 CPU 一次 step 中任一拍数值失效会保留整个调用前的粒子、指标和时钟。GPU 提交前错误保留旧状态；提交后等待/设备失败会冻结 fault 并保留已提交步数，不能回滚。GPU 不默认回读数值，显式 particles/export 才检查有限值。
@@ -97,7 +138,9 @@ CPU 一次 step 中任一拍数值失效会保留整个调用前的粒子、指�
 
 ## simulation.stop
 
-必填 `run_id:UUID`；从 running/paused（含 fault）丢弃 Play，返回 `{mode:"edit",run:null}`。
+必填 `run_id:UUID`；旧同步入口从 running/paused（含 fault）丢弃 Play，返回 `{mode:"edit",run:null}`。
+有限任务先返回 stopping 或 edit；worker 在原线程安全退休并释放资源后，owner pump 才返回 edit。
+等待 edit 后才能新建 Play，stopping 期间重复 Stop 可继续请求清理。
 无 Play 为 invalid_state；过期 ID 为 conflict；nil/非法 UUID 为 invalid_argument。
 GPU Stop 会排空队列并释放资源。不保存、恢复旧编辑快照或取消既有截图任务。再次 start 会使用当前 Edit 和新 run_id。
 
@@ -111,7 +154,7 @@ GPU Stop 会排空队列并释放资源。不保存、恢复旧编辑快照或�
 
 ## XPBD cloth 配置和指标
 
-cloth所有字段可省略，额外字段拒绝；配置只在start接受。数值以float32保存，结果会反映舍入后的有效值；输入上下限按 float32 表示，允许导出配置在边界值直接重放。
+cloth所有字段可省略，额外字段拒绝；配置只在start/run接受。数值以float32保存，结果会反映舍入后的有效值；输入上下限按 float32 表示，允许导出配置在边界值直接重放。
 
 | 字段 | 默认 | 范围/单位 |
 | --- | --- | --- |
@@ -140,7 +183,7 @@ max_speed单位m/s；kinetic_energy、gravity_potential_energy、compliant_energ
 
 参数必填run_id，offset可选默认0、范围0–1024且不能超过当前粒子数；limit默认128、范围1–256。
 effect=query、undoable=false，无EditGuard；要求当前 run_id 对应 CPU/GPU XPBD 世界，none/无Play为invalid_state，
-旧ID为conflict，nil/非法ID、越界分页为invalid_argument。可读取fault后保留的最后完整状态。
+旧ID为conflict，nil/非法ID、越界分页为invalid_argument。旧同步CPU可读取fault后保留的最后完整状态；有限任务要求已初始化、无fault、稳定paused/succeeded/cancelled。
 返回run_id、steps、simulated_time_ns、offset、total、has_more和particles数组；每项为
 `{index,position:[x,y,z],velocity:[x,y,z],inverse_mass}`。offset=total返回空页。
 运行中每页可能属于不同step；须核对版本或先pause再分页，不将跨拍数组拼作一个快照。
@@ -158,7 +201,7 @@ simulation.particles 在 GPU 运行中要求 paused 且无 fault；每次是显�
 ## simulation.export
 
 仅 RenderSimulation 构建注册；effect=external、undoable=false，不允许 scene.transaction；Luau 仅 project 权限可用。
-要求 paused、无 fault、有布片。使用 run_id 和 expected_steps 固定导出版本，不需要新的 EditGuard；目标相对启动时项目。
+要求 paused、无 fault、有布片；有限任务还须已初始化且状态为 paused/succeeded/cancelled。使用 run_id 和 expected_steps 固定导出版本，不需要新的 EditGuard；目标相对启动时项目。
 
 | 参数 | 必填 | 默认/范围 |
 | --- | --- | --- |

@@ -1,7 +1,7 @@
 ---
 module: physics-xpbd-gpu
 created_at: "2026-10-09T10:59:13+08:00"
-updated_at: "2026-10-09T14:26:13+08:00"
+updated_at: "2026-10-09T15:30:00+08:00"
 status: accepted
 ---
 
@@ -60,3 +60,13 @@ seed=42 的 8×8 布片 300 拍、dt=10ms 对照同一 CPU 输入。
 布片消费者归 draw。增加 CPU 建图与初始化区间，shader 编译/Graph 编译/提交/等待单列。
 观测不更改 dt、步数、分色、buffer、缓存键或数值发布点。采集失败仅影响观测，不撤销已提交状态。
 独立 GPU profiling 探针比较相同输入的开关结果并导出区间；本节不新增模拟命令或改变同步服务。
+
+## M11.3 有限任务的服务封装
+
+私有 GpuSimulation 增加 submit/poll，submit 只推进并保留一个 pending frame；已有pending时拒绝再次提交。
+poll 使用 frame.wait(queue, 0)，未完成返回false并继续保活；仅成功完成才退休frame并验证驱动诊断。
+GPU提交计数由solver持有，完成数由任务单独记录；等待失败不能伪装回滚或完成。
+有限任务的设备、MemorySystem、ThreadContext、queue和frame始终在同一专属worker创建/使用/销毁，
+owner只读进度并发控制请求，不跨线程借用GPU状态。Stop排空后由owner移除Play；不detach在途worker。
+原 step/read/capture 仍提供同步契约，有限任务显式诊断在稳定边界交给worker执行。
+详见[任务状态契约](physics-api.md#m113-有界有限步任务)及[0080](../development/0080-bounded-simulation-tasks.md)。

@@ -5,7 +5,7 @@
 | physics-xpbd-gpu | [GPU XPBD](physics-xpbd-gpu.md) | accepted | 分色求解、候选状态、异步输出与命令接入 | [Physics](../../engine/physics) | [集成](../../tests/integration/CMakeLists.txt) |
 | render-simulation | [模拟可视化](render-simulation.md) | accepted | 同图布片绘制与显式读回 | [Render](../../engine/render) | [集成](../../tests/integration/CMakeLists.txt) |
 | physics-xpbd | [CPU XPBD参考](physics-xpbd.md) | accepted | 连续粒子、分色距离约束、布片/地面与数值指标 | [Physics](../../engine/physics) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
-| physics-api | [模拟世界与固定步长](physics-api.md) | accepted | Edit/Play、整数时钟、运行控制与 owner 调度 | [Physics](../../engine/physics)、[Services](../../engine/framework/services) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
+| physics-api | [模拟世界与固定步长](physics-api.md) | accepted | Edit/Play、整数时钟、有限任务进度/取消与 owner 调度 | [Physics](../../engine/physics)、[Services](../../engine/framework/services) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | automation-replay | [自动化记录与重放](automation-replay.md) | accepted | 输入/版本/seed、身份映射、逐步逻辑核验与失败保护 | [SDK](../../sdk/python) | [集成](../../tests/integration/CMakeLists.txt) |
 | automation-python | [Python 自动化客户端](automation-python.md) | accepted | dk-ctl 封装、截止时间、批量、作业等待与截图产物 | [SDK](../../sdk/python) | [集成](../../tests/integration/CMakeLists.txt) |
 | scripting-luau | [Luau 场景命令绑定](scripting-luau.md) | accepted | 源码编译、命令绑定、执行预算、取消/关闭与错误恢复 | [luau](../../engine/scripting/luau) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |

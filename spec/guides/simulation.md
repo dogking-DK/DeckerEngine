@@ -4,6 +4,51 @@
 显式solver="xpbd_cpu"可推进独立粒子。场景实体保持启动输入。可选 GPU 后端与 CPU 使用同一组命令，支持统一实验导出，见下文。
 完整字段见 [模拟命令](../commands/simulation.md)，内部约定见 [Physics API](../design/physics-api.md)。
 
+## 有限任务、进度与取消
+
+长实验使用 `simulation.run`。它受理后返回run_id，设备冷初始化和每批求解在后台进行。
+旧start/step示例仍保持同步语义。以下代码用于已有Client和活动编辑场景（连接方式见[Python指南](python.md)）：
+
+```python
+import time
+from decker import guard
+
+edit = client.call("scene.query").value["state"]
+run = client.call("simulation.run", {
+    "guard": guard(edit), "count": 300, "solver": "xpbd_cpu",
+    "fixed_dt_ns": 10_000_000, "batch_steps": 8, "cloth": {"seed": 42},
+}).value["run"]
+key = {"run_id": run["run_id"]}
+try:
+    deadline = time.monotonic() + 60
+    while True:
+        run = client.call("simulation.query").value["run"]
+        assert run["run_id"] == key["run_id"]
+        status = run["task"]["status"]
+        if status in ("succeeded", "cancelled", "failed"):
+            break
+        if time.monotonic() >= deadline:
+            raise TimeoutError("Simulation has not reached a terminal state")
+        time.sleep(.02)
+    assert status == "succeeded", run
+    assert run["steps"] == 300 and run["task"]["submitted_steps"] == 300
+    page = client.call("simulation.particles", key).value
+finally:
+    client.call("simulation.stop", key)
+    deadline = time.monotonic() + 60
+    while client.call("simulation.query").value["mode"] != "edit":
+        if time.monotonic() >= deadline:
+            raise TimeoutError("Simulation is still stopping")
+        time.sleep(.02)
+```
+
+启用GPU的构建可将solver改为xpbd_gpu。query不回读粒子，steps表示完成数，task.submitted_steps表示已提交数，差值最多一个批次。
+用 `client.call("simulation.pause", key)` 请求暂停，观察 task.status=paused 后才读取稳定结果，再调用resume继续。
+用 `client.call("simulation.cancel", key)` 接受取消，等待cancelled或已存在终态；已领取的一批可以完成，取消不会撤销GPU提交。
+Stop先返回stopping，等mode=edit后再建新实验。取消保留结果；成功/取消/失败都不能resume，需要Stop后重新run。
+已初始化且健康的paused/succeeded/cancelled可显式particles/export，诊断和文件导出仍为同步操作。
+冷初始化未完成时也能query/pause/cancel/stop；退出会安全等待所属线程释放资源，不承诺抢占第三方编译/驱动调用。
+
 ## 严格执行 N 步
 
 Luau 示例从暂停态启动，严格推进100拍（每拍10 ms），检查时间为1 s，再 Stop：

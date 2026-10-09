@@ -23,6 +23,7 @@ struct GpuSimulation::Impl {
     memory::ThreadContext context{memory, heap};
     std::optional<graphics::SubmissionQueue> queue;
     GpuXpbdSolver solver;
+    std::optional<GpuXpbdFrame> pending;
     std::optional<render::ClothRenderer> renderer;
     ~Impl() { if (queue) { memory::ExecutionScope scope{context, heap}; (void)queue->close(); } }
 };
@@ -44,6 +45,25 @@ Result<void> GpuSimulation::step(std::int64_t dt, std::uint32_t count) {
     auto& s = *impl_; memory::ExecutionScope scope{s.context, s.heap};
     try { auto frame = take(s.solver.advance(*s.queue, dt, count)); wait(frame, *s.queue); return {}; }
     catch (Error& e) { return std::unexpected(std::move(e)); }
+}
+Result<void> GpuSimulation::submit(std::int64_t dt, std::uint32_t count) {
+    auto& s = *impl_; memory::ExecutionScope scope{s.context, s.heap};
+    if (s.pending) return std::unexpected(Error{ErrorCode::invalid_state,"Simulation already has an in-flight batch"});
+    auto frame = s.solver.advance(*s.queue,dt,count);
+    if (!frame) return std::unexpected(frame.error());
+    s.pending = std::move(*frame);
+    return {};
+}
+Result<bool> GpuSimulation::poll() {
+    auto& s = *impl_; memory::ExecutionScope scope{s.context, s.heap};
+    if (!s.pending) return true;
+    auto completed = s.pending->wait(*s.queue,0);
+    if (!completed) return std::unexpected(completed.error());
+    if (!*completed) return false;
+    s.pending.reset();
+    if (s.queue->device().validation_errors())
+        return std::unexpected(Error{ErrorCode::internal_error,"Simulation Vulkan validation failed"});
+    return true;
 }
 Result<GpuParticles> GpuSimulation::read(std::int64_t dt) {
     auto& s = *impl_; memory::ExecutionScope scope{s.context, s.heap};

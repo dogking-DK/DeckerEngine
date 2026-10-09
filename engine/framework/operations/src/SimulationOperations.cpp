@@ -54,8 +54,8 @@ Json metrics_json(const XpbdMetrics& m) {
         {"gravity_potential_energy", m.gravity_potential_energy}, {"compliant_energy", m.compliant_energy},
         {"min_height", m.min_height}, {"max_penetration", m.max_penetration}, {"max_pin_displacement", m.max_pin_displacement}};
 }
-Json solver_schema() {
-    auto values = Json::array({"none", "xpbd_cpu"});
+Json solver_schema(bool finite = false) {
+    auto values = finite ? Json::array({"xpbd_cpu"}) : Json::array({"none", "xpbd_cpu"});
 #ifdef DK_SIMULATION_GPU
     values.push_back("xpbd_gpu");
 #endif
@@ -63,15 +63,20 @@ Json solver_schema() {
 }
 Json status_schema() {
     const auto number = integer(0, static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()));
+    const auto task = schema::object({{"status",{{"type","string"},{"enum",{"initializing","running","pausing","paused","cancelling","cancelled","succeeded","failed","stopping"}}}},
+        {"target_steps",integer(1,1000000)},{"submitted_steps",integer(0,1000000)},{"completed_steps",integer(0,1000000)},
+        {"batch_steps",integer(1,8)},{"in_flight_steps",integer(0,8)},{"batch_active",schema::boolean()},
+        {"initialized",schema::boolean()}},
+        {"status","target_steps","submitted_steps","completed_steps","batch_steps","in_flight_steps","batch_active","initialized"});
     const auto run = schema::object({{"run_id", schema::string(36, 36)}, {"source", document_state_schema()},
         {"fixed_dt_ns", integer(1000000, 1000000000)}, {"max_catch_up_steps", integer(1, 64)},
         {"steps", number}, {"simulated_time_ns", number}, {"accumulator_ns", number},
         {"dropped_time_ns", number}, {"fault", schema::nullable(schema::string())},
         {"solver", solver_schema()},
-        {"cloth", schema::nullable(cloth_schema(true))}, {"metrics", schema::nullable(metrics_schema())}},
+        {"cloth", schema::nullable(cloth_schema(true))}, {"metrics", schema::nullable(metrics_schema())}, {"task",schema::nullable(task)}},
         {"run_id", "source", "fixed_dt_ns", "max_catch_up_steps", "steps", "simulated_time_ns",
-         "accumulator_ns", "dropped_time_ns", "fault", "solver", "cloth", "metrics"});
-    return schema::object({{"mode", {{"type", "string"}, {"enum", {"edit", "running", "paused"}}}},
+         "accumulator_ns", "dropped_time_ns", "fault", "solver", "cloth", "metrics", "task"});
+    return schema::object({{"mode", {{"type", "string"}, {"enum", {"edit", "running", "paused", "initializing", "pausing", "cancelling", "stopping"}}}},
         {"run", schema::nullable(run)}}, {"mode", "run"});
 }
 Json status_json(const SimulationService& service) {
@@ -85,9 +90,25 @@ Json status_json(const SimulationService& service) {
             {"accumulator_ns", r.clock.accumulator_ns}, {"dropped_time_ns", r.clock.dropped_time_ns},
             {"fault", r.fault ? Json(error_code_name(*r.fault)) : Json(nullptr)},
             {"solver", r.gpu ? "xpbd_gpu" : r.cloth ? "xpbd_cpu" : "none"}, {"cloth", r.cloth ? cloth_json(*r.cloth) : Json(nullptr)},
-            {"metrics", r.metrics ? metrics_json(*r.metrics) : Json(nullptr)}};
+            {"metrics", r.metrics ? metrics_json(*r.metrics) : Json(nullptr)}, {"task",nullptr}};
+        if (r.task) {
+            const auto& t=*r.task;
+            run["task"]={{"status",simulation_task_status_name(t.status)},{"target_steps",t.target_steps},
+                {"submitted_steps",t.submitted_steps},{"completed_steps",t.completed_steps},{"batch_steps",t.batch_steps},
+                {"in_flight_steps",t.submitted_steps-t.completed_steps},{"initialized",t.initialized},{"batch_active",t.batch_active}};
+        }
     }
-    return {{"mode", state.mode == SimulationMode::edit ? "edit" : state.mode == SimulationMode::paused ? "paused" : "running"},
+    const char* mode="edit";
+    switch (state.mode) {
+    case SimulationMode::edit: break;
+    case SimulationMode::running: mode="running"; break;
+    case SimulationMode::paused: mode="paused"; break;
+    case SimulationMode::initializing: mode="initializing"; break;
+    case SimulationMode::pausing: mode="pausing"; break;
+    case SimulationMode::cancelling: mode="cancelling"; break;
+    case SimulationMode::stopping: mode="stopping"; break;
+    }
+    return {{"mode", mode},
         {"run", std::move(run)}};
 }
 Result<Json> control_result(const SimulationService& service, Result<void> result) {
@@ -101,6 +122,17 @@ Result<void> register_simulation_commands(CommandRegistry& registry, SimulationS
     if (!added) return added;
     const auto guard = schema::object({{"document_id", schema::string(36, 36)},
         {"revision", integer(0, std::numeric_limits<std::uint64_t>::max())}}, {"document_id", "revision"});
+    added = registry.add({"simulation.run", "Accept a bounded finite-step experiment with asynchronous initialization",
+        schema::object({{"guard",guard},{"count",integer(1,1000000)},{"batch_steps",integer(1,8)},
+            {"fixed_dt_ns",integer(1000000,33333333)},{"solver",solver_schema(true)},{"cloth",cloth_schema()}},{"guard","count"}),
+        status_schema(),CommandEffect::control,false}, [&service,&edit](const Json& p) -> Result<Json> {
+            auto g=parse_edit_guard(p["guard"]); if (!g) return std::unexpected(g.error());
+            const auto solver=p.value("solver",std::string{"xpbd_cpu"});
+            return control_result(service,service.run(edit,*g,p["count"].get<std::uint32_t>(),
+                read_cloth(p.value("cloth",Json::object())),solver=="xpbd_gpu",p.value("fixed_dt_ns",std::int64_t{10000000}),
+                p.value("batch_steps",std::uint32_t{8})));
+        });
+    if (!added) return added;
     added = registry.add({"simulation.start", "Clone the editing scene into an independent simulation world",
         schema::object({{"guard", guard}, {"fixed_dt_ns", integer(1000000, 1000000000)},
             {"max_catch_up_steps", integer(1, 64)}, {"paused", schema::boolean()},
@@ -117,7 +149,7 @@ Result<void> register_simulation_commands(CommandRegistry& registry, SimulationS
                 p.value("paused", false), {}, cloth, solver == "xpbd_gpu"));
         });
     if (!added) return added;
-    for (const auto method : {"simulation.pause", "simulation.resume", "simulation.step", "simulation.stop"}) {
+    for (const auto method : {"simulation.pause", "simulation.resume", "simulation.step", "simulation.stop", "simulation.cancel"}) {
         auto parameters = schema::object({{"run_id", schema::string(36, 36)}}, {"run_id"});
         if (std::string_view{method} == "simulation.step") parameters["properties"]["count"] = integer(1, 10000);
         added = registry.add({method, "Control the identified simulation run", parameters, status_schema(), CommandEffect::control, false},
@@ -128,6 +160,7 @@ Result<void> register_simulation_commands(CommandRegistry& registry, SimulationS
                 if (name == "simulation.pause") return control_result(service, service.pause(*id));
                 if (name == "simulation.resume") return control_result(service, service.resume(*id));
                 if (name == "simulation.step") return control_result(service, service.step(*id, p.value("count", std::uint32_t{1})));
+                if (name == "simulation.cancel") return control_result(service, service.cancel(*id));
                 return control_result(service, service.stop(*id));
             });
         if (!added) return added;

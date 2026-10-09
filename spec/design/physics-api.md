@@ -1,7 +1,7 @@
 ---
 module: physics-api
 created_at: "2026-10-08T17:14:07+08:00"
-updated_at: "2026-10-09T15:00:00+08:00"
+updated_at: "2026-10-09T15:37:04+08:00"
 status: accepted
 ---
 
@@ -26,7 +26,7 @@ SceneService 始终拥有 EditWorld，现有 scene/entity/history/save/load、re
 只读 Play 快照携带 run_id、来源、时钟、Project 和独立 SceneSnapshot，不暴露可写文档引用。
 当前 Play 场景内容保持启动时的值；XPBD求解输出存放在独立粒子数组，不通过 SceneDocument 逐粒子编辑。
 
-状态为 edit（无 Play）、running、paused。start 默认 running，可用 paused=true 原子进入暂停态。
+旧同步start入口状态为 edit（无 Play）、running、paused；有限任务的扩展状态与边界见下文M11.3。start 默认 running，可用 paused=true 原子进入暂停态。
 活动期间再 start 返回 invalid_state；pause/resume 同态为 no-op；step 仅在 paused 下允许。
 pause 清除不足一拍的余量，resume 从当前 steady_clock 重新计时，暂停时间不补算。
 stop 丢弃 Play，返回 edit；不把 Play 写回 Edit，不调用 undo，不自动保存。无 Play 的控制返回 invalid_state。
@@ -113,19 +113,19 @@ GPU timestamp/Tracy 由独立队列接口与探针显式启用，见 [性能设�
 重跑入口见[指南](../guides/simulation-benchmark.md)。直接API时间与真实SDK/Named Pipe端到端延迟分别报告；
 当前单连接管道使控制还需等待忙碌连接释放，延迟不是纯owner队列耗时。
 冷start和首个批次均同步阻塞owner；同一count/readback组合热运行可复用Graph计划。
-这些是现行行为，M11.2不改变调度、命令契约或取消能力。
+这些是M11.2基线所用同步入口的行为；M11.3另增有限任务入口，见下文。
 
 后续M11.3–4以相同设备、RelWithDebInfo、固定三种规模/seed42/dt10ms/迭代12/批次上限8为参考验收环境：
 
 | 观测 | 后续目标 | 完成含义 |
 | --- | --- | --- |
-| 长任务受理、query/进度、pause和cancel请求 | p95≤100ms、单次≤250ms | 查询可返回初始化中；pause回复后步数稳定；cancel须真实受理，不能以客户端超时替代 |
+| 长任务受理、query/进度、pause和cancel请求 | p95≤100ms、单次≤250ms | 查询可返回初始化中；pause受理与暂停完成分别计时，观察到paused后步数稳定；cancel须真实受理，不能以客户端超时替代 |
 | Stop、cancel终态、shutdown至进程退出 | p95≤250ms、单次≤1000ms | 在途工作到达安全完成/故障边界，资源有界回收；Stop保持Edit，已提交工作不伪装撤销 |
 | GUI事件循环心跳间隔 | p95≤50ms、单次≤100ms | 在冷初始化和持续实验期间采样单调时钟；与呈现帧率分开验收 |
 
 100ms请求预算给本机SDK/dk-ctl约30ms空闲成本留出调度和短批次余量；250ms/1000ms是
 外部调用/排空的有界上限目标，不是跨设备硬实时承诺。冷初始化shader总耗时可以更长，
-但不能因此阻塞查询、受理或事件循环；需要异步状态与安全发布，具体实现在M11.3设计。
+但不能因此阻塞查询、受理或事件循环；需要异步状态与安全发布，具体实现见下文M11.3设计。
 
 M11.4每个规模分别覆盖进程首次初始化、首次Graph编译和稳定实验，保存全部成功、超时、错误及重叠证据。
 热query/进度至少100个请求；pause/cancel/stop/exit以及冷场景每项至少20次独立试验，
@@ -136,3 +136,44 @@ UI心跳必须在实际GUI事件循环测量；M11.2只建立该目标，没有G
 
 数值继续要求精确N拍、位置最大分量差≤2e-3m、速度≤2e-2m/s、固定点不动、无地面穿透，
 暂停完成后稳定、Stop前后Edit相同；性能改动不得放宽这些条件或依赖禁用validation才能正确。
+
+## M11.3 有界有限步任务
+
+新增simulation.run(guard, count, solver=xpbd_cpu, cloth, fixed_dt_ns=10000000, batch_steps=8)，
+创建独立Play并受理有限实验，count为1..1000000、batch_steps为1..8，只支持CPU/GPU XPBD。
+沿用run_id标识唯一活动实验，simulation.query返回task进度；它不是Commands的TaskId或Foundation的JobId。
+同一Service只允许一个Play，无额外排队；终态在Stop前保留一个摘要和后端，不保留无限历史。
+旧start/step的同步返回语义保持兼容，长实验和冷初始化使用run；GUI与旧入口的响应性集成归M11.4。
+
+owner完成参数/guard/初始CPU布片校验和Scene克隆后才发布候选Play。专属worker拥有并创建/销毁求解后端，
+GPU设备、shader编译、首批Graph编译和后续录制不阻塞owner。worker不访问Scene、Runtime、命令注册表或stdout。
+选择单个持久worker是因为GPU后端的ThreadContext和设备生命周期要在同一线程结束，不扩建通用Jobs调度器。
+一个任务最多一个活动批次、一个GPU提交和一个显式诊断请求；GPU推进后以零超时轮询完成，未完成期间保活frame/资源，
+不默认回读粒子。内部进度和异常通过互斥保护的单份快照传递；owner的pump发布到Play时钟。
+owner等待截止时间最多5ms后检查任务，不依赖后续命令才完成发布；未在worker设置ECS或公开时钟。
+
+task包含目标/已提交/已完成步数、批次上限、是否有活动批次、初始化是否完成、状态；错误通过run.fault发布。
+状态为initializing/running/pausing/paused/cancelling/cancelled/succeeded/failed/stopping。
+公开steps对任务表示已完成步数，submitted_steps可能领先最多batch_steps；simulated_time_ns按完成数计算。
+CPU推进成功后在同一批次发布提交/完成（跨两次锁观察时也可能短暂看到提交领先）；GPU提交成功即更新提交数，只有实际完成轮询成功才增加完成数。
+提交前错误不增加计数；提交后等待/设备失败保留真实提交数、旧完成数并冻结failed，禁止继续推进。
+普通Error成为任务fault，基础设施异常保留exception_ptr并由owner重抛，不伪装成可恢复业务失败。
+
+pause/cancel/stop不等待冷编译：返回pausing/cancelling/stopping表示受理。
+已被worker领取的一个批次可以提交/完成，之后不得领取下一批；不会假装撤销已提交GPU工作。
+paused/cancelled仅在当前批次完成且初始化安全点到达后发布；只有paused状态才表示暂停完成、步数稳定。
+resume只恢复未终结的paused任务，保留剩余目标，不追赶墙钟；cancelled/succeeded/failed不能恢复。
+cancel保留已完成结果可显式读回，重复取消终态幂等；pause/resume不能撤销已接受cancel/stop。
+cancel与完成竞争由同一互斥边界决定：完成先发生则succeeded，取消先被接受则cancelled，可已完成全部目标。
+Stop先置stopping，worker完成当前批次并在所属线程销毁GPU/context后，owner才清除Play返回edit；期间拒绝新实验。
+shutdown拒绝后续命令、请求关闭并join，不detach、不持锁join；不可抢占第三方编译/驱动调用，不承诺硬截止。
+
+particles/export只允许已初始化、无fault、稳定paused/succeeded/cancelled状态，由有界单请求通道在worker执行诊断。
+诊断还要求owner已发布稳定边界，不能把后台新粒子附到旧完成步数；未发布时拒绝，等待下一次pump。
+这些显式读回/文件操作仍同步；query/控制不会通过读回获取进度。导出保持原目录发布和Edit保护契约。
+取消初始化尚未建立有效后端时不能读回；Stop/关闭仍安全。输入校验失败不发布Play；异步初始化失败保留failed状态供查询。
+
+验证：可控假后端闸门验证初始化/提交前后暂停取消、完成竞争、故障冻结、单在途上限、过期run_id和关闭；
+真实CPU/GPU有限300拍、暂停稳定/取消上界/Stop保护/冷受理/空闲发布和退出，核对数值容差、命令发现与CPU-only。
+不以本阶段功能验证替代M11.4的大样本GUI/IPC响应性复测。M11.2“pause回复后稳定”对任务明确为观察到paused终态后稳定，
+受理延迟和到达安全边界的延迟分开测量。

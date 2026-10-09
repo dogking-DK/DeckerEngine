@@ -7,8 +7,17 @@
 namespace dk {
 struct SimulationIdTag;
 using SimulationId = StableId<SimulationIdTag>;
-enum class SimulationMode { edit, running, paused };
-namespace detail { class GpuSimulation; }
+enum class SimulationMode { edit, running, paused, initializing, pausing, cancelling, stopping };
+enum class SimulationTaskStatus { initializing, running, pausing, paused, cancelling, cancelled, succeeded, failed, stopping };
+[[nodiscard]] std::string_view simulation_task_status_name(SimulationTaskStatus) noexcept;
+struct SimulationTaskState {
+    SimulationTaskStatus status = SimulationTaskStatus::initializing;
+    std::uint64_t target_steps = 0, submitted_steps = 0, completed_steps = 0;
+    std::uint32_t batch_steps = 8;
+    bool initialized = false, batch_active = false;
+    std::optional<ErrorCode> error;
+};
+namespace detail { class GpuSimulation; class AsyncSimulation; }
 struct SimulationRunState {
     SimulationId run_id;
     DocumentState source;
@@ -18,6 +27,7 @@ struct SimulationRunState {
     std::optional<ClothConfig> cloth;
     std::optional<XpbdMetrics> metrics;
     bool gpu = false;
+    std::optional<SimulationTaskState> task;
 };
 struct SimulationState {
     SimulationMode mode;
@@ -39,11 +49,14 @@ struct SimulationParticlePage {
     std::vector<ParticlePosition> positions;
     std::vector<ParticleVelocity> velocities;
 };
-// Owner-thread service. Only start reads EditWorld; no operation writes it.
+// Owner-thread service. Only start/run read EditWorld; no operation writes it.
 class SimulationService final {
 public:
     using Clock = std::chrono::steady_clock;
     using TimePoint = Clock::time_point;
+    [[nodiscard]] Result<void> run(const SceneService&, EditGuard, std::uint32_t count,
+        ClothConfig = {}, bool gpu = false, std::int64_t dt_ns = 10000000, std::uint32_t batch_steps = 8);
+    [[nodiscard]] Result<void> cancel(SimulationId);
     [[nodiscard]] Result<void> start(const SceneService&, EditGuard, FixedStepConfig = {},
                                      bool paused = false, std::optional<TimePoint> now = {}, std::optional<ClothConfig> cloth = {}, bool gpu = false);
     [[nodiscard]] Result<void> pause(SimulationId);
@@ -76,6 +89,9 @@ private:
         TimePoint last_pump;
         std::optional<ErrorCode> fault;
         std::shared_ptr<detail::GpuSimulation> gpu;
+        std::shared_ptr<detail::AsyncSimulation> task;
+        bool task_gpu = false;
+        std::optional<SimulationTaskState> progress;
     };
     [[nodiscard]] Result<void> check_run(SimulationId) const;
     [[nodiscard]] SimulationRunState run_state() const;

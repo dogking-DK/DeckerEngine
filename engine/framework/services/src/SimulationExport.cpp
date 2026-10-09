@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include "GpuSimulation.hpp"
+#include "AsyncSimulation.hpp"
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -77,8 +78,11 @@ Result<std::string> SimulationService::export_experiment(SimulationId id, std::u
         // Preallocate the result and unique sibling name before performing any external commit.
         auto result = take(path_to_utf8(output.lexically_relative(play_->project.paths().root())));
         auto temporary = output.parent_path() / (".dk-experiment-" + take(SimulationId::generate()).to_string());
-        auto gpu = play_->gpu ? play_->gpu : take(detail::GpuSimulation::create(*play_->solver));
-        auto image = gpu->capture(play_->clock.config().fixed_dt_ns, *play_->cloth, width, height);
+        auto image = [&]() -> Result<detail::SimulationImage> {
+            if (play_->task) return play_->task->capture(play_->clock.config().fixed_dt_ns,*play_->cloth,width,height);
+            auto gpu = play_->gpu ? play_->gpu : take(detail::GpuSimulation::create(*play_->solver));
+            return gpu->capture(play_->clock.config().fixed_dt_ns, *play_->cloth, width, height);
+        }();
         if (!image) {
             if (play_->gpu && (image.error().code == ErrorCode::invalid_state || image.error().code == ErrorCode::internal_error))
                 play_->fault = image.error().code;

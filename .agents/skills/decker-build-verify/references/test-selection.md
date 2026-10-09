@@ -35,7 +35,8 @@
 | Luau 绑定、值转换、预算、取消/关闭和能力模式 | dk_luau_tests | `^dk\.luau\.`（含 Windows 控制台取消；target 自动构建 runner 夹具，CLI 进程测试另见下行） |
 | Luau runner 创建/保存重载、预算参数和诊断 | dk_run | `^dk\.luau\.runner_roundtrip$` |
 | 服务、事务、历史、Operations | dk_service_tests | `^dk\.services\.` |
-| Edit/Play、固定纳秒时钟、模拟命令与失败保护 | dk_simulation_tests | `^dk\.simulation\.(fixed clock \|simulation )` |
+| Edit/Play、固定纳秒时钟、有限任务暂停/取消、故障与关闭 | dk_simulation_tests | `^dk\.simulation\.(fixed clock \|simulation \|finite )` |
+| 真实有限任务IPC、冷初始化控制、三规模300拍、数值与资源退出 | dk_run、dk_ctl | `^dk\.simulation\.task_(cpu\|gpu)$`（Windows/Python；GPU要求RenderSimulation） |
 | CPU XPBD解析解、布片、分组、接触、数值与失败回滚 | dk_xpbd_tests | `^dk\.xpbd\.` |
 | GPU 命令、Python/Luau 严格步数实验与配置/指标/图像重放 | dk_run、dk_ctl | `^dk\.simulation\.experiment_gpu$`（RenderSimulation + Luau + Python，gpu label） |
 | 真实 stdio/pipe 空闲模拟、暂停与关闭 | dk_run、dk_ctl | `^dk\.simulation\.(stdio\|pipe)$`（Windows，Python 3.11+） |

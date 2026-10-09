@@ -101,7 +101,10 @@ Result<void> Runtime::register_runtime_commands()
                                             {"async_jobs", schema::boolean()},
                                             {"render_capture",schema::boolean()},
                                             {"simulation", schema::object({{"fixed_step", schema::boolean()},
-                                                {"solver", schema::string()}, {"gpu",schema::boolean()}, {"experiment_export",schema::boolean()}}, {"fixed_step", "solver", "gpu", "experiment_export"})},
+                                                {"solver", schema::string()}, {"gpu",schema::boolean()}, {"experiment_export",schema::boolean()},
+                                                {"finite_tasks",schema::boolean()},{"max_task_steps",schema::integer()},
+                                                {"max_batch_steps",schema::integer()},{"max_in_flight_batches",schema::integer()}},
+                                                {"fixed_step", "solver", "gpu", "experiment_export","finite_tasks","max_task_steps","max_batch_steps","max_in_flight_batches"})},
                                             {"capture_limits",schema::nullable(schema::object({{"queued",schema::integer()},
                                                 {"active",schema::integer()},{"terminal",schema::integer()},{"input_bytes",schema::integer()},
                                                 {"max_dimension",schema::integer()}},{"queued","active","terminal","input_bytes","max_dimension"}))},
@@ -121,7 +124,8 @@ Result<void> Runtime::register_runtime_commands()
                                            {"task_retention", 256},           {"max_line_bytes", 1024 * 1024},
                                            {"max_batch_requests", 128},       {"transactions", true},
                                            {"guard", "document_id+revision"},
-                                           {"simulation", {{"fixed_step", true}, {"solver", "xpbd_cpu"}}}};
+                                           {"simulation", {{"fixed_step", true}, {"solver", "xpbd_cpu"},{"finite_tasks",true},
+                                               {"max_task_steps",1000000},{"max_batch_steps",8},{"max_in_flight_batches",1}}}};
                                value["simulation"]["gpu"] = false;
                                value["simulation"]["experiment_export"] = false;
 #ifdef DK_SIMULATION_GPU

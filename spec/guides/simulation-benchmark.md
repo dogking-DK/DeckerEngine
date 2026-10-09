@@ -2,7 +2,9 @@
 
 协议见[性能设计](../design/foundation-profiling.md#m112-模拟基线协议)，
 实测结果见[M11.2报告](../benchmarks/2026-10-09-simulation.md)。
-这些工具测量已有实现；不会自动优化模拟或改变服务的暂停/取消能力。
+这些工具测量M11.2同步入口基线。M11.3新增有限任务后，旧IPC控制采集器会检测cancel命令并主动拒绝采样，
+防止套用旧完成/暂停假设；M11.4将更新夹具并对照历史基线。独立求解/数值基准仍可运行。
+有限任务的功能验收见[0080](../development/0080-bounded-simulation-tasks.md)，用法见[模拟指南](simulation.md)。
 
 ## 构建与正确性
 

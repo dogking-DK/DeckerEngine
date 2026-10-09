@@ -2,6 +2,7 @@
 #include <dk/runtime/Runtime.hpp>
 #include <dk/operations/SceneOperations.hpp>
 #include <limits>
+#include <thread>
 
 using namespace dk;
 using namespace std::chrono_literals;
@@ -74,6 +75,8 @@ TEST_CASE("simulation pause resume and exact stepping ignore paused wall time") 
     s.play.pump(s.now + 25ms);
     REQUIRE(s.play.state().run->clock.steps == 2);
     REQUIRE_FALSE(s.play.step(id));
+    std::this_thread::sleep_for(100ms);
+    REQUIRE_FALSE(s.play.read_particles(id)); // Completion must first be published by the owner.
     REQUIRE(s.play.pause(id)); REQUIRE(s.play.pause(id));
     s.play.pump(s.now + 1h);
     REQUIRE(s.play.state().run->clock.accumulator_ns == 0);
@@ -260,4 +263,66 @@ TEST_CASE("simulation XPBD commands validate configuration and return versioned 
     const auto clock_only = s.call("simulation.start", {{"paused", true}}, true)["run"];
     REQUIRE(clock_only["solver"] == "none"); REQUIRE(clock_only["metrics"].is_null());
     REQUIRE_FALSE(s.invoke("simulation.particles", {{"run_id", clock_only["run_id"]}}));
+}
+TEST_CASE("finite simulation service publishes exact results on owner pump and preserves editing state") {
+    Simulation s; s.create();
+    const auto original=s.edit->read_snapshot(s.guard()); REQUIRE(original);
+    ClothConfig cloth; cloth.seed=42;
+    REQUIRE_FALSE(s.play.run(*s.edit,s.guard(),0,cloth));
+    REQUIRE_FALSE(s.play.state().run);
+    REQUIRE(s.play.run(*s.edit,s.guard(),300,cloth));
+    const auto id=s.play.state().run->run_id;
+    REQUIRE(s.play.state().run->task->target_steps==300);
+    REQUIRE(s.play.next_deadline(SimulationService::Clock::now()+1s)<SimulationService::Clock::now()+50ms);
+    REQUIRE_FALSE(s.play.start(*s.edit,s.guard()));
+    REQUIRE_FALSE(s.play.step(id));
+    const auto deadline=SimulationService::Clock::now()+5s;
+    do { s.play.pump(); std::this_thread::sleep_for(1ms); }
+    while (s.play.state().run->task->status!=SimulationTaskStatus::succeeded && SimulationService::Clock::now()<deadline);
+    const auto state=s.play.state(); REQUIRE(state.mode==SimulationMode::paused);
+    REQUIRE(state.run->task->status==SimulationTaskStatus::succeeded);
+    REQUIRE(state.run->clock.steps==300); REQUIRE(state.run->clock.simulated_time_ns==3000000000);
+    auto cpu=XpbdSolver::cloth(cloth); REQUIRE(cpu); REQUIRE(cpu->advance(10000000,300));
+    const auto read=s.play.read_particles(id); REQUIRE(read);
+    REQUIRE(read->data.positions==std::vector<ParticlePosition>(cpu->positions().begin(),cpu->positions().end()));
+    REQUIRE(read->data.velocities==std::vector<ParticleVelocity>(cpu->velocities().begin(),cpu->velocities().end()));
+    REQUIRE(s.play.particle_page(id,63,256)->positions.size()==1);
+    REQUIRE(s.play.cancel(id)); REQUIRE_FALSE(s.play.resume(id));
+    REQUIRE(s.play.stop(id));
+    while (s.play.state().run && SimulationService::Clock::now()<deadline) { s.play.pump(); std::this_thread::sleep_for(1ms); }
+    REQUIRE(s.play.state().mode==SimulationMode::edit);
+    REQUIRE(s.edit->read_snapshot(s.guard())->scene.same_content(original->scene));
+    REQUIRE(document_state_json(s.edit->state().value())==document_state_json(original->state));
+}
+TEST_CASE("finite simulation commands discover bounds cancel and reject stale identities") {
+    Commands s; s.call("scene.new");
+    const auto caps=s.call("runtime.capabilities");
+    REQUIRE(caps["async_tasks"]==false); REQUIRE(caps["simulation"]["finite_tasks"]==true);
+    REQUIRE(caps["simulation"]["max_in_flight_batches"]==1);
+    for (const auto name:{"simulation.run","simulation.cancel"}) {
+        auto d=s.call("commands.describe",{{"name",name}});
+        REQUIRE(d["effect"]=="control"); REQUIRE(d["undoable"]==false);
+        if (std::string_view{name} == "simulation.run") {
+            const auto& solvers = d["parameters"]["properties"]["solver"]["enum"];
+            REQUIRE(std::find(solvers.begin(), solvers.end(), "none") == solvers.end());
+        }
+    }
+    REQUIRE_FALSE(s.invoke("simulation.run",{{"count",1}}));
+    REQUIRE_FALSE(s.invoke("simulation.run",{{"count",1000001}},true));
+    REQUIRE_FALSE(s.invoke("simulation.run",{{"count",1},{"batch_steps",9}},true));
+    REQUIRE_FALSE(s.invoke("simulation.run",{{"count",1},{"solver","none"}},true));
+    auto accepted=s.call("simulation.run",{{"count",1000000},{"cloth",{{"columns",32},{"rows",32}}}},true);
+    const auto id=accepted["run"]["run_id"];
+    REQUIRE_FALSE(s.invoke("simulation.cancel",{{"run_id",SimulationId::generate()->to_string()}}));
+    auto state=s.call("simulation.cancel",{{"run_id",id}});
+    const auto bound=state["run"]["task"]["submitted_steps"].get<std::uint64_t>()+8;
+    const auto deadline=SimulationService::Clock::now()+5s;
+    while (state["run"]["task"]["status"]!="cancelled" && SimulationService::Clock::now()<deadline)
+        state=s.call("simulation.query");
+    REQUIRE(state["run"]["task"]["status"]=="cancelled");
+    REQUIRE(state["run"]["steps"].get<std::uint64_t>()<=bound);
+    REQUIRE(state["run"]["task"]["in_flight_steps"]==0);
+    REQUIRE(s.call("simulation.cancel",{{"run_id",id}})==state);
+    REQUIRE_FALSE(s.invoke("simulation.resume",{{"run_id",id}}));
+    s.call("runtime.shutdown"); REQUIRE(s.runtime->stopping());
 }

@@ -1,7 +1,7 @@
 ---
 module: scripting-luau
 created_at: "2026-10-08T14:52:00+08:00"
-updated_at: "2026-10-09T11:55:00+08:00"
+updated_at: "2026-10-09T15:30:00+08:00"
 status: accepted
 ---
 
@@ -140,3 +140,8 @@ Windows Ctrl+C/Ctrl+Break handler 只请求 stop_source；同步执行返回后�
 M10.2 增加 simulation.particles 到所有模式的查询白名单，start可选xpbd_cpu，step/query复用原能力门槛；见 [XPBD](physics-xpbd.md)。
 
 M10.4：simulation.export 仅 project 权限允许，query/edit 在进入 Runtime 前拒绝；GPU 控制仍复用既有命令预算。真实 GPU 脚本须给足同步原生调用预算（示例120秒）；不承诺硬抢占 GPU wait。见 [实验示例](../../examples/scripting/gpu-experiment.luau)。
+
+M11.3：edit/project 白名单增加 simulation.run/cancel；query 权限仍只能读取模拟状态/粒子。
+run返回受理结果，脚本通过query的task状态判断完成，不能以命令TaskId成功代替模拟成功。
+取消Luau脚本本身不等于取消Play；须显式simulation.cancel或由Runtime关闭清理。
+有限任务的paused/cancelled安全边界见[模拟命令](../commands/simulation.md)。

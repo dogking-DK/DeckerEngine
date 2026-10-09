@@ -296,7 +296,8 @@ bool allowed(std::string_view name, LuauAccess access) {
         "scene.new", "scene.load", "scene.query", "scene.save", "scene.transaction", "project.save",
         "entity.create", "entity.get", "entity.delete", "entity.set_name", "entity.set_transform",
         "entity.set_parent", "entity.set_assets", "history.status", "history.undo", "history.redo",
-        "simulation.start", "simulation.pause", "simulation.resume", "simulation.step", "simulation.stop", "simulation.export"};
+        "simulation.start", "simulation.pause", "simulation.resume", "simulation.step", "simulation.stop", "simulation.export",
+        "simulation.run", "simulation.cancel"};
     return std::find(names.begin(), names.end(), name) != names.end();
 }
 int command(lua_State* state) {

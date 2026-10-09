@@ -302,6 +302,25 @@ if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
     if(TARGET dk_ctl)
         find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
         if(Python3_Interpreter_FOUND)
+            foreach(kind IN ITEMS cpu gpu)
+                if(kind STREQUAL "gpu" AND NOT TARGET dk_render_simulation)
+                    continue()
+                endif()
+                set(_dk_task_extra)
+                if(kind STREQUAL "gpu")
+                    set(_dk_task_extra --gpu)
+                endif()
+                add_test(NAME dk.simulation.task_${kind}
+                    COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python"
+                        "PYTHONDONTWRITEBYTECODE=1" "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/SimulationTaskTest.py"
+                        --runner "$<TARGET_FILE:dk_run>" --client "$<TARGET_FILE:dk_ctl>"
+                        --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/simulation-tasks" ${_dk_task_extra})
+                set_tests_properties(dk.simulation.task_${kind} PROPERTIES TIMEOUT 180 LABELS "${kind}")
+                if(kind STREQUAL "gpu")
+                    set_tests_properties(dk.simulation.task_gpu PROPERTIES RUN_SERIAL TRUE ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
+                endif()
+            endforeach()
             if(TARGET dk_render_simulation AND TARGET dk_scripting_luau)
                 add_test(NAME dk.simulation.experiment_gpu
                     COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python"

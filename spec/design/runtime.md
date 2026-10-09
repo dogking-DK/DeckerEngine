@@ -1,7 +1,7 @@
 ---
 module: runtime
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-10-09T11:55:00+08:00"
+updated_at: "2026-10-09T15:30:00+08:00"
 status: accepted
 ---
 
@@ -126,3 +126,14 @@ CPU Runtime 新增的 Physics API/SimulationServices 均不依赖 GPU。
 M10.2 显式选择 xpbd_cpu 后，由同一 owner 调度推进物理与时钟；read_play_particles(run_id) 返回拥有型数组/指标快照。默认 none 保留原时钟模式，详见 [XPBD](physics-xpbd.md)。
 
 M10.4：capabilities.simulation 保留 fixed_step/solver，增加 gpu/experiment_export 编译能力。GPU 设备延迟到 start 或 CPU 实验图像导出时创建；普通 CPU start/query 不创建 Vulkan。GPU 每批最多8拍并等待退休，不默认读回；可选 external simulation.export 使用启动时项目及独立 run_id/expected_steps，详细失败语义见 [Physics API](physics-api.md)。
+
+## M11.3 有限模拟任务装配
+
+simulation.run 接受1..1000000拍，单批1..8，simulation.cancel 协作取消；
+capabilities.simulation 增加 finite_tasks/max_task_steps/max_batch_steps/max_in_flight_batches。
+此能力属于SimulationService，以run_id查询进度；async_tasks=false和原同步Commands TaskId、Jobs JobId不变。
+SimulationServices PRIVATE依赖Threads与Profiling，使用一个专属后端worker；无通用任务池或队列扩张。
+Runtime::pump在owner发布进度/故障/完成时钟；活动任务next_pump_deadline最多5ms后再次检查，暂停/终态无空转。
+Stop只受理stopping，worker安全销毁后pump清除Play；shutdown停止接收新命令并请求关闭/join。
+专属worker不访问Scene/Runtime，不发协议响应；线程基础设施异常传回owner，不作为普通任务失败吞掉。
+旧start/step仍同步，显式particles/export仍可阻塞；GUI与全样本响应性验收属于M11.4。
