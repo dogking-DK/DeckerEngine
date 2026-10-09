@@ -7,6 +7,7 @@ struct SubmissionApi {
     PFN_vkQueueSubmit2 submit = nullptr;
     PFN_vkGetSemaphoreCounterValue counter = nullptr;
     PFN_vkWaitSemaphores wait = nullptr;
+    PFN_vkGetQueryPoolResults query = nullptr;
 };
 struct SubmissionAccess {
     static Result<SubmissionQueue> create(memory::ResourceHandle resource, Device&& device,

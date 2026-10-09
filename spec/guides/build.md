@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-09T11:20:00+08:00"
+updated_at: "2026-10-09T14:20:00+08:00"
 ---
 
 # 构建与依赖配置
@@ -172,3 +172,6 @@ ctest --test-dir out/build/local-stduuid -C Debug --output-on-failure
 `DK_BUILD_LOGGING`、`DK_BUILD_MATH`、`DK_BUILD_IO`、`DK_BUILD_EXAMPLES` 默认开启；bootstrap 关闭日志、数学、IO、示例和单元测试。
 DK_BUILD_TESTS=OFF 会关闭全部测试；DK_BUILD_UNIT_TESTS=OFF 仅保留可用的集成探针。
 `DK_WARNINGS_AS_ERRORS` 可按需开启。
+
+GPU timestamp/Tracy 专用预设 `windows-graphics-profiling` 继承 graphics 并启用 profiling；
+构建、采集和测量口径见 [GPU 性能观测](gpu-profiling.md)。

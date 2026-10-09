@@ -1,3 +1,4 @@
+#include <dk/profiling/Profiler.hpp>
 #include "GraphInternal.hpp"
 #include "GraphPlanInternal.hpp"
 #include <algorithm>
@@ -163,6 +164,7 @@ Result<void> lifetimes(PlanState& plan) {
 } // namespace
 
 Result<CompiledGraph> Graph::compile() const try {
+    DK_PROFILE_ZONE("graph.compile");
     if (!state_ || state_->resource.state() != memory::ResourceState::open)
         return std::unexpected(Error{ErrorCode::invalid_state, "graph is empty, moved from, or its memory domain is closing"});
     auto candidate = memory::make_shared_in<PlanState>(state_->resource, state_->resource);

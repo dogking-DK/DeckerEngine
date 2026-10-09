@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-03T16:55:00+08:00"
+updated_at: "2026-10-09T14:26:13+08:00"
 status: accepted
 ---
 
@@ -118,12 +118,16 @@ wait/submit 的 device lost 标记终态，停止新工作，关闭时允许按 
 
 ## Tracy GPU 接入边界
 
-本阶段用现有 DK_PROFILE_ZONE 标记资源创建、录制、submit、wait、collect 的 CPU 成本，
-不把它们当成 GPU 时间。后续 GPU context 必须归此单队列、晚于 slot query/zone 结果回收才销毁；
-每槽的 timestamp query 只能在完成票据确认后读取/重置，begin/end 同一 command buffer，
-检查 timestampValidBits/timestampPeriod，禁用 profiling 不建 query/context。
-Tracy Vulkan adapter 留在 graphics 私有实现，不使 foundation/profiling 依赖 Vulkan，也不借用 volk 全局表。
-M5.2 交付该生命周期边界；GPU timestamp zone/capture 待实际 Pass（M5.4–M7）专项验收。
+M11.1 通过 configure_gpu_profiling 显式启用 timestamp；默认不分配 query pool。
+设置只允许全部槽 free，closed/lost 拒绝；候选资源全部建立后发布，失败保留原配置。
+每槽独立 query pool，容量 max_zones=8192（含提交区间），允许 1..32768；超额省略子区间并标 dropped_zones，
+不改变 GPU 工作。关闭采集在空闲点释放 pool，旧 Submission 只保留 CPU 结果。context 归队列、重复开关复用。
+reset 只录入已退休槽的下一次 command buffer，timeline 确认完成后才读取查询和释放 pending。
+读取使用 64-bit/availability，无额外等待；缺失/失败标 unavailable，不伪装为零耗时或让已提交求解回滚。
+设备丢失标 device_lost；timeout 保持 pending；close/析构沿用排空规则，先收集再销毁 query/context。
+每次 begin 先分配观测结果/事件容量；提交点后不得分配。原始 timestamp 不对外冒充墙钟，区间时长为 ns。
+CPU 结果对象由票据分享，丢弃票据不影响 pending 回收；外部串行契约同队列。
+Tracy 适配与 CPU 对齐限制见 [性能设计](foundation-profiling.md#m111-gpu-观测)。
 
 ## 验证
 

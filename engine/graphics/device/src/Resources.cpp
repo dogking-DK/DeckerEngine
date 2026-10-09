@@ -170,6 +170,7 @@ Result<SubmissionQueue> detail::SubmissionAccess::create(memory::ResourceHandle 
     if (!api.submit) api.submit = logical.getDispatcher()->vkQueueSubmit2;
     if (!api.counter) api.counter = logical.getDispatcher()->vkGetSemaphoreCounterValue;
     if (!api.wait) api.wait = logical.getDispatcher()->vkWaitSemaphores;
+    if (!api.query) api.query = logical.getDispatcher()->vkGetQueryPoolResults;
     if (!api.submit || !api.counter || !api.wait)
         return std::unexpected(Error{ErrorCode::not_supported, "submission requires synchronization2 and timeline entry points"});
     state->api = api;
@@ -263,6 +264,7 @@ Result<CommandBatch> SubmissionQueue::begin()
         }
         batch->active = true;
         slot.phase = detail::SlotPhase::recording;
+        detail::begin_gpu_profile(*batch);
         return CommandBatch{std::move(batch)};
     }
     return std::unexpected(Error{ErrorCode::conflict, "all submission slots are recording or pending; wait/poll before reuse"});
@@ -281,10 +283,13 @@ Result<Submission> SubmissionQueue::submit_impl(CommandBatch&& batch, vk::Semaph
         return std::unexpected(Error{ErrorCode::invalid_argument, "submission requires an active batch from this queue"});
     if (batch.state_->invalid || batch.state_->rendering)
         return std::unexpected(Error{ErrorCode::invalid_state, "cannot submit invalid or open-rendering batch"});
+    if (batch.state_->profile && batch.state_->profile->pass_open)
+        return std::unexpected(Error{ErrorCode::invalid_state, "cannot submit with an open GPU zone"});
     if (state_->submitted == std::numeric_limits<std::uint64_t>::max())
         return std::unexpected(Error{ErrorCode::invalid_state, "timeline value exhausted"});
     auto recording = std::move(batch.state_);
     auto& slot = state_->slots[recording->slot];
+    detail::finish_gpu_profile(*recording);
     try { slot.command.end(); }
     catch (const vk::SystemError& error) {
         return std::unexpected(state_->failure("vkEndCommandBuffer", static_cast<VkResult>(error.code().value())));
@@ -292,6 +297,8 @@ Result<Submission> SubmissionQueue::submit_impl(CommandBatch&& batch, vk::Semaph
     Submission ticket;
     ticket.owner_ = state_;
     ticket.value_ = state_->submitted + 1;
+    ticket.profile_ = detail::GpuProfileAccess::make(recording->profile);
+    DK_PROFILE_ZONE_VALUE(ticket.value_);
     const vk::CommandBufferSubmitInfo command{*slot.command};
     const std::array<vk::SemaphoreSubmitInfo, 2> signals{{
         {*state_->timeline, ticket.value_, vk::PipelineStageFlagBits2::eAllCommands},
@@ -312,6 +319,8 @@ Result<Submission> SubmissionQueue::submit_impl(CommandBatch&& batch, vk::Semaph
     slot.external_sync_owner = std::move(recording->external_sync_owner);
     static_assert(noexcept(slot.requests = std::move(recording->requests)));
     slot.requests = std::move(recording->requests);
+    slot.profile = std::move(recording->profile);
+    if (slot.profile) slot.profile->submission = ticket.value_;
     for (auto& request : slot.requests) request->status = ReadbackStatus::pending;
     for (auto& use : slot.uses) {
         std::copy(use.states.begin(), use.states.end(), use.resource->states.begin());
@@ -337,6 +346,7 @@ Result<void> SubmissionQueue::poll()
 Result<bool> SubmissionQueue::wait(const Submission& submission, std::uint64_t timeout_ns)
 {
     DK_PROFILE_ZONE("graphics.wait");
+    DK_PROFILE_ZONE_VALUE(submission.value_);
     if (submission.owner_.lock() != state_ || !submission.value_ || submission.value_ > state_->submitted)
         return std::unexpected(Error{ErrorCode::invalid_argument, "completion ticket does not belong to this queue"});
     if (state_->owner->lost) return std::unexpected(Error{ErrorCode::invalid_state, "submission device is lost"});

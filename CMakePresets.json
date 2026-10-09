@@ -163,6 +163,20 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "windows-graphics-profiling",
+      "inherits": "windows-graphics",
+      "displayName": "Windows GPU timestamps and Tracy",
+      "cacheVariables": {
+        "DK_ENABLE_PROFILING": "ON",
+        "DK_PROFILE_MEMORY": "OFF",
+        "DK_PROFILE_CALLSTACK_DEPTH": "0"
+      },
+      "environment": {
+        "TRACY_ONLY_LOCALHOST": "1",
+        "TRACY_ONLY_IPV4": "1"
+      }
     }
   ],
   "buildPresets": [

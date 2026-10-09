@@ -36,6 +36,7 @@ cmake --build --preset windows-debug --target dk_run
 | Edit/Play、固定步长、CPU/GPU XPBD与可视化 | [模拟指南](spec/guides/simulation.md)、[脚本示例](examples/scripting/fixed-step.luau) |
 | Python 批量编辑、作业等待与截图产物 | [Python 指南](spec/guides/python.md)、[可执行示例](examples/automation/batch_capture.py) |
 | 登记、改名、导入、缓存、异步加载与作业 | [资产指南](spec/guides/assets.md) |
+| GPU timestamp、Tracy 区间、CPU/GPU阶段关联 | [GPU 性能观测](spec/guides/gpu-profiling.md) |
 | heap、拥有型容器、scratch、pool、线程上下文、Tracy | [Memory 指南](spec/guides/memory.md) |
 | Vulkan 使用层、上传/读回、绘制/计算与 GPU 探针 | [Graphics 指南](spec/guides/graphics.md) |
 | Slang 离线编译、SPIR-V、反射与 dk-shaderc | [Shader 指南](spec/guides/shaders.md) |

@@ -1,7 +1,7 @@
 ---
 module: physics-api
 created_at: "2026-10-08T17:14:07+08:00"
-updated_at: "2026-10-09T12:09:00+08:00"
+updated_at: "2026-10-09T14:26:13+08:00"
 status: accepted
 ---
 
@@ -100,3 +100,9 @@ config 可从零重放，不是中途恢复检查点；同环境同输入复现�
 Luau 仅 project 权限允许导出；Python 示例使用 Client.call 从配置分批严格步进并重放，
 M9 场景 Recorder v1 的身份归一化/白名单保持原协议，物理实验使用独立版本化配置，不混入墙钟控制记录。
 验证真实命令发现、严格 N/暂停/Stop、重复运行、CPU/GPU 容差、导出失败无半成品、Luau 权限和 CPU-only 能力。
+
+## M11.1 观测边界
+
+GPU timestamp/Tracy 由独立队列接口与探针显式启用，见 [性能设计](foundation-profiling.md#m111-gpu-观测)。
+本阶段不变更 simulation 命令、时钟或每批同步等待行为；不将脚本总耗时或 wait CPU zone 当成求解 GPU 时间。
+长任务控制与基线仍按 Roadmap 的后续子阶段验收。

@@ -1,7 +1,7 @@
 ---
 module: foundation-profiling
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-09-28T18:34:00+08:00"
+updated_at: "2026-10-09T14:26:13+08:00"
 status: accepted
 ---
 
@@ -21,10 +21,10 @@ M1.7.1 已完成 CPU 接入、OFF/ON 定向验证和真实采集，见 [0023](..
 M1.7.2 已提供 heap backing 事件与真实配对采集，见 [0024](../development/0024-mimalloc-heap.md)。
 M1.7.4 已接入 arena 用量曲线，见 [0026](../development/0026-scratch-arena.md)；M1.7.5 已接入 pool 曲线，
 见 [0027](../development/0027-memory-pools.md)。M1.7.6 已验收双系统共享 client、缓存退休与延迟释放，
-见 [0029](../development/0029-memory-context-routing.md)。GPU 埋点仍为规划。
+见 [0029](../development/0029-memory-context-routing.md)。M11.1 GPU 观测见下节与 [0078](../development/0078-gpu-profiling.md)。
 M5.2 已在 graphics 标记资源创建/录制/submit/wait/collect 的 CPU zone；
 GPU context、每槽 query 和延迟回收的接入契约见[资源设计](graphics-resources.md#tracy-gpu-接入边界)，
-尚未启用 GPU timestamp zone/capture，不使 foundation 依赖 Vulkan。
+M11.1 的 timestamp/Tracy adapter 位于 graphics 私有实现，不使 foundation 依赖 Vulkan。
 accepted 表示采用当前方案，不代表所有小节已验收或已经测得性能改进。
 
 2026-09-23 实施核验官方最新提交 `33d78c1ed898a06938f31312167c7abefd229455`，
@@ -57,7 +57,7 @@ CPU 或内存开关关闭时内存适配内联为空操作；CPU 关闭时不要
 
 | 选项/配置 | 语义 |
 | --- | --- |
-| DK_ENABLE_PROFILING=OFF | 默认轻量构建；不查找、安装或链接 Tracy；所有埋点编译消除 |
+| DK_ENABLE_PROFILING=OFF | 默认轻量构建；不查找、安装或链接 Tracy；CPU/Tracy 埋点编译消除，独立 GPU timestamp 仍可显式启用 |
 | 专用 profiling preset | 开启分析，优先 RelWithDebInfo + PDB；优化下测量，Debug 用于行为调试 |
 | DK_PROFILE_MEMORY=ON | 默认 ON，仅在 profiling 开启时有效；启用 heap backing alloc/free，默认无逐分配 plot |
 | DK_PROFILE_CALLSTACK_DEPTH=0 | 默认不采集每次分配/zone 调用栈；诊断 preset 可提高深度 |
@@ -93,7 +93,7 @@ CPU 包装：`DK_PROFILE_ZONE("literal")`、`DK_PROFILE_ZONE_VALUE(id)`、
 | M1.7.4–5 | arena/pool 用量、高水位、增长/重置/trim zone | 临时空间和池保留量是否过大 |
 | M1.7.6–7 | 线程 context、移交探针、重复工作负载 | 跨线程生命周期与各策略实际开销 |
 | M4 | 导入/解码/hash/cache、Jobs worker/等待/主线程发布 | 作业排队、执行、发布分别耗时多久 |
-| M5–M7 | Vulkan GPU zone、上传/Pass/frame-slot/fence | CPU/GPU 对齐与帧资源复用；另做专项验收 |
+| M11.1 | 提交与 Graph Pass timestamp、Tracy GPU zone | 关联 CPU 录制/提交/等待、求解与绘制；限定单队列 |
 
 Jobs 的排队、执行与发布各自为线程内 zone，通过 JobId 关联；不能在主线程打开一个 RAII zone、
 到 worker 线程关闭。CPU-only 程序不伪装成固定帧循环，FrameMark 留给有真实 frame 的模块。
@@ -212,3 +212,23 @@ probe 输出独立 heap 计数供 inspector 比对，不固定 STL chunk 布局�
 [事件队列实现](https://github.com/wolfpld/tracy/blob/v0.14.1/public/client/TracyProfiler.hpp)、
 [M1.7 路线](../roadmap.md#m17memory-与性能分析补充)、
 [0022 设计记录](../development/0022-memory-profiling-design.md)。
+
+## M11.1 GPU 观测
+
+GPU timestamp 与 Tracy 适配位于 graphics/device 私有实现，Foundation 不增加 Vulkan 依赖。
+队列显式 configure_gpu_profiling({enabled, max_zones})，默认关闭；timestamp 本身不要求 Tracy。
+DK_ENABLE_PROFILING 只控制 Tracy 事件，windows-graphics-profiling 提供优化且带符号的独立配置。
+每次成功提交的 Submission 持有纯 CPU 观测结果，可在队列完成/销毁后读取，不保活 Vulkan 对象。
+区间区分 submission、compute、draw、transfer、other，保留 Graph Pass 名称、CPU 录制起止与提交编号。
+CPU zone 覆盖 Shader.compile、physics.gpu.graph_build、graph.compile、graph.execute、graphics.submit/wait/collect。
+
+Tracy 使用私有延迟发布适配：录制时只保存事件，GPU 完成后以原 CPU 时间/线程和查询值发完整事件序列。
+未提交、录制失败、提交失败不发 GPU zone；连接跨代或断开时丢弃该批 Tracy 事件，原生计时仍可读。
+context 首次启用时用独立单 timestamp 提交及 queue-idle 做一次非校准时钟对齐，记录对齐等待窗口；
+这是显式设置成本，不混入求解/绘制成本。CPU/GPU 绝对对齐存在该窗口误差和时钟漂移，不能据此测控制延迟。
+GPU 时长按 timestampPeriod 和 timestampValidBits 换算；区间短于计数器一次回绕是调用前提。
+同一 command buffer 的 BOTTOM_OF_PIPE 时间戳包含执行/依赖停顿，不等于纯 shader 指令成本；父区间不可与子区间相加。
+
+验收：真实 XPBD 与绘制，开关前后粒子/像素一致；有界查询复用、未完成/超时、放弃/提交失败、
+查询失败显式缺失、关闭排空；Tracy capture 实际读回 GPU 区间和 CPU 阶段；CPU-only 独立构建。
+多规模性能/采集开销及控制延迟基线归 M11.2。

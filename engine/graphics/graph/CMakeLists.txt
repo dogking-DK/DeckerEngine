@@ -5,5 +5,5 @@ add_library(dk_graphics_graph STATIC src/Graph.cpp src/GraphCompile.cpp src/Grap
 add_library(dk::graphics_graph ALIAS dk_graphics_graph)
 target_sources(dk_graphics_graph PUBLIC FILE_SET HEADERS BASE_DIRS include FILES
     include/dk/graphics/Graph.hpp include/dk/graphics/GraphExecution.hpp include/dk/graphics/GraphDiagnostics.hpp)
-target_link_libraries(dk_graphics_graph PUBLIC dk::graphics_device)
+target_link_libraries(dk_graphics_graph PUBLIC dk::graphics_device PRIVATE dk::profiling)
 dk_target_defaults(dk_graphics_graph)

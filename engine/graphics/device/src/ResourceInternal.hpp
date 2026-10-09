@@ -1,5 +1,6 @@
 #pragma once
 #include "SubmissionInternal.hpp"
+#include "GpuProfilingInternal.hpp"
 #include <dk/graphics/Transfer.hpp>
 #include <algorithm>
 
@@ -61,6 +62,7 @@ struct Slot {
     SlotPhase phase = SlotPhase::free;
     std::shared_ptr<void> external_sync_owner;
     std::uint64_t value = 0;
+    std::shared_ptr<GpuProfileState> profile;
 };
 inline void release_uses(Vector<Use>& uses, bool recording) noexcept
 {
@@ -80,6 +82,8 @@ struct QueueState {
     Vector<Slot> slots;
     Vector<std::weak_ptr<PoolPage>> descriptor_pages;
     SubmissionApi api;
+    std::shared_ptr<GpuProfiler> profiler;
+    TracyGpuContext tracy;
     std::uint64_t submitted = 0, completed = 0;
     bool closed = false;
     VkResult object_creation_failure = VK_SUCCESS; // Private one-shot failure seam after native creation.
@@ -106,7 +110,13 @@ struct QueueState {
     void collect(std::uint64_t value) noexcept
     {
         completed = std::max(completed, value);
-        for (auto& slot : slots) if (slot.phase == SlotPhase::pending && slot.value <= completed) {
+        for (;;) {
+            Slot* next = nullptr;
+            for (auto& candidate : slots)
+                if (candidate.phase == SlotPhase::pending && candidate.value <= completed && (!next || candidate.value < next->value)) next = &candidate;
+            if (!next) break;
+            auto& slot = *next; // Publish telemetry in queue order, even after slot reuse.
+            collect_gpu_profile(*this, slot);
             release_uses(slot.uses, false);
             slot.objects.clear();
             complete_requests(slot.requests, ReadbackStatus::ready);
@@ -117,6 +127,8 @@ struct QueueState {
     void discard_lost() noexcept
     {
         for (auto& slot : slots) if (slot.phase == SlotPhase::pending) {
+            if (slot.profile) slot.profile->status = GpuProfileStatus::device_lost;
+            slot.profile.reset();
             release_uses(slot.uses, false);
             slot.objects.clear();
             complete_requests(slot.requests, ReadbackStatus::device_lost);
@@ -149,6 +161,7 @@ struct BatchState {
     Vector<std::shared_ptr<ObjectState>> objects;
     Vector<std::shared_ptr<ReadbackState>> requests;
     std::shared_ptr<EncoderState> encoding;
+    std::shared_ptr<GpuProfileState> profile;
     std::shared_ptr<void> external_sync_owner;
     bool external_sync = false;
     std::uint64_t generation = 1;

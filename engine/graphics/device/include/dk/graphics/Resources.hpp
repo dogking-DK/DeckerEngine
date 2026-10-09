@@ -1,5 +1,6 @@
 #pragma once
 #include <dk/graphics/Device.hpp>
+#include <dk/graphics/GpuProfiling.hpp>
 #include <cstddef>
 #include <limits>
 
@@ -94,10 +95,12 @@ class Submission final {
 public:
     Submission() = default;
     [[nodiscard]] std::uint64_t value() const noexcept { return value_; }
+    [[nodiscard]] GpuProfile gpu_profile() const noexcept { return profile_; }
 private:
     friend class SubmissionQueue;
     std::weak_ptr<detail::QueueState> owner_;
     std::uint64_t value_ = 0;
+    GpuProfile profile_;
 };
 class CommandBatch final {
 public:
@@ -128,6 +131,9 @@ public:
     // End a typed pass: all declared writes must have executed, rendering must have ended.
     // Clears preparations and invalidates borrowed encoders on success.
     [[nodiscard]] Result<void> finish_pass();
+    // One non-nested pass interval inside the automatic submission interval.
+    [[nodiscard]] Result<void> begin_gpu_zone(std::string_view name, GpuZoneKind kind = GpuZoneKind::other);
+    [[nodiscard]] Result<void> end_gpu_zone();
     [[nodiscard]] Result<void> barrier(std::span<const ResourceBarrier> barriers);
     [[nodiscard]] Result<RenderEncoder> begin_rendering(const RenderingDesc& description);
     [[nodiscard]] Result<ComputeEncoder> compute();
@@ -176,6 +182,8 @@ public:
     SubmissionQueue& operator=(const SubmissionQueue&) = delete;
     [[nodiscard]] const Device& device() const noexcept;
     [[nodiscard]] ResourceFactory resources() const noexcept;
+    // Requires all slots free. Enabling performs one bounded-resource clock alignment submission.
+    [[nodiscard]] Result<void> configure_gpu_profiling(GpuProfilingOptions options);
     [[nodiscard]] Result<Buffer> create_buffer(const BufferDesc& description);
     [[nodiscard]] Result<Image> create_image(const ImageDesc& description);
     [[nodiscard]] Result<CommandBatch> begin();

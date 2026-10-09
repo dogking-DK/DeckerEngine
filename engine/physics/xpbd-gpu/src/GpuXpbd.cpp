@@ -1,3 +1,4 @@
+#include <dk/profiling/Profiler.hpp>
 #include <dk/physics/GpuXpbd.hpp>
 #include <dk/graphics/GraphDiagnostics.hpp>
 #include <dk/graphics/ShaderCompiler.hpp>
@@ -73,6 +74,7 @@ Error allocation_error() { return {ErrorCode::internal_error,"GPU XPBD allocatio
 }
 Result<GpuXpbdSolver> GpuXpbdSolver::create(memory::ResourceHandle heap, SubmissionQueue& queue,
     const XpbdSolver& cpu, const std::filesystem::path& shader) {
+    DK_PROFILE_ZONE("physics.gpu.initialize");
     if (!heap || heap.state()!=memory::ResourceState::open || queue.stats().closed || queue.stats().device_lost)
         return std::unexpected(Error{ErrorCode::invalid_state,"GPU XPBD requires an open heap and queue"});
     try {
@@ -131,6 +133,7 @@ Result<GpuXpbdSolver> GpuXpbdSolver::create(memory::ResourceHandle heap, Submiss
 }
 Result<GpuXpbdFrame> GpuXpbdSolver::advance(SubmissionQueue& queue,std::int64_t dt_ns,std::uint32_t count,
     GpuXpbdOptions options,GpuParticleConsumer consumer) {
+    DK_PROFILE_ZONE("physics.gpu.advance");
     if (!state_ || state_->heap.state()!=memory::ResourceState::open || queue.stats().closed || queue.stats().device_lost)
         return std::unexpected(Error{ErrorCode::invalid_state,"GPU XPBD solver, heap or queue unavailable"});
     const auto colors=state_->colors.size()-1;
@@ -143,6 +146,11 @@ Result<GpuXpbdFrame> GpuXpbdSolver::advance(SubmissionQueue& queue,std::int64_t 
         auto graph=take(graph::Graph::create(state_->heap));
         std::array<graph::BufferId,10> ids;
         std::array<graph::ExternalBinding,4> external;
+        std::vector<graph::PassCallback> callbacks;
+        std::vector<graph::FinalAccess> finals;
+        std::deque<Dispatch> dispatches; // Stable callback addresses while building the graph.
+        {
+        DK_PROFILE_ZONE("physics.gpu.graph_build");
         constexpr std::array names{"previous positions","previous velocities","distance constraints","initial directions"};
         for (std::size_t i=0;i<4;++i) {
             ids[i]=take(graph.declare_buffer(names[i],state_->buffers[i].description(),graph::Lifetime::external,true));
@@ -158,9 +166,6 @@ Result<GpuXpbdFrame> GpuXpbdSolver::advance(SubmissionQueue& queue,std::int64_t 
             ids[i]=take(graph.declare_buffer(i==8 ? "position readback" : "velocity readback",{bytes,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
             check(graph.mark_output(ids[i]));
         }
-        std::vector<graph::PassCallback> callbacks;
-        std::vector<graph::FinalAccess> finals;
-        std::deque<Dispatch> dispatches; // Stable callback addresses while building the graph.
         auto add=[&](std::string_view name,std::initializer_list<graph::Use> uses,graph::PassRecorder recorder,void* context=nullptr) {
             auto index=graph.counts().passes;
             static_cast<void>(take(graph.add_pass({std::string{name}+" #"+std::to_string(index),{uses.begin(),uses.size()}})));
@@ -209,6 +214,7 @@ Result<GpuXpbdFrame> GpuXpbdSolver::advance(SubmissionQueue& queue,std::int64_t 
                     return pass.copy_buffer(5,9,(*p)->size());
                 });
             for (std::size_t i=8;i<10;++i) finals.push_back({i,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}});
+        }
         }
         graph::CompiledGraph candidate_plan;
         const bool cached=!consumer.append && state_->cached_plan && state_->cached_count==count && state_->cached_readback==options.readback;

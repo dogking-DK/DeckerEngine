@@ -7,6 +7,16 @@
 
 using namespace dk::graphics;
 namespace policy = dk::graphics::detail;
+TEST_CASE("GPU timestamp conversion masks valid bits and handles wrap")
+{
+    REQUIRE(policy::timestamp_delta(250, 3, 8) == 9);
+    REQUIRE(policy::timestamp_delta(0xfffa, 0xff03, 8) == 9);
+    REQUIRE(policy::timestamp_delta(UINT64_MAX-4, 7, 64) == 12);
+    REQUIRE(policy::timestamp_delta(123, 123, 36) == 0);
+    const GpuProfile disabled;
+    REQUIRE(disabled.status() == GpuProfileStatus::disabled);
+    REQUIRE(disabled.timings().empty());
+}
 TEST_CASE("buffer descriptions reject unsupported features and invalid roles")
 {
     REQUIRE_FALSE(policy::validate_buffer({}));

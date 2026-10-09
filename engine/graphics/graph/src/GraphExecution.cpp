@@ -2,6 +2,7 @@
 #include "GraphPlanInternal.hpp"
 #include <algorithm>
 #include <exception>
+#include <dk/profiling/Profiler.hpp>
 
 namespace dk::graphics::graph {
 namespace detail {
@@ -82,6 +83,17 @@ Result<void> capture(detail::ExecutionState& result, CommandBatch& batch, std::s
 }
 Error pass_error(const PlannedPass& pass, std::size_t index, const Error& error) {
     return error.with_context("graph pass #" + std::to_string(index) + " '" + std::string(pass.name) + "'");
+}
+GpuZoneKind zone_kind(const PlannedPass& pass) {
+    vk::PipelineStageFlags2 stages{};
+    for (const auto& use : pass.uses) stages |= use.access.state.stages;
+    if (stages & vk::PipelineStageFlagBits2::eComputeShader) return GpuZoneKind::compute;
+    if (stages & (vk::PipelineStageFlagBits2::eAllGraphics | vk::PipelineStageFlagBits2::eVertexShader |
+        vk::PipelineStageFlagBits2::eFragmentShader | vk::PipelineStageFlagBits2::eColorAttachmentOutput |
+        vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests)) return GpuZoneKind::draw;
+    if (stages & (vk::PipelineStageFlagBits2::eAllTransfer | vk::PipelineStageFlagBits2::eCopy |
+        vk::PipelineStageFlagBits2::eClear | vk::PipelineStageFlagBits2::eBlit)) return GpuZoneKind::transfer;
+    return GpuZoneKind::other;
 }
 }
 
@@ -179,6 +191,7 @@ Result<const Image*> Execution::image(std::size_t resource) const {
 }
 
 Result<Execution> execute(const CompiledGraph& plan, SubmissionQueue& queue, const ExecutionDesc& description) {
+    DK_PROFILE_ZONE("graph.execute");
     if (!plan) return std::unexpected(Error{ErrorCode::invalid_state, "empty compiled graph"});
     const auto heap = detail::ExecutionAccess::state(plan)->resource;
     if (heap.state() != memory::ResourceState::open) return std::unexpected(Error{ErrorCode::invalid_state, "graph Memory resource is closed"});
@@ -257,6 +270,8 @@ Result<Execution> execute(const CompiledGraph& plan, SubmissionQueue& queue, con
             }
             const auto index = plan.order()[position];
             const auto& pass = plan.passes()[index];
+            if (auto started = batch.begin_gpu_zone(std::string_view{pass.name}.substr(0,1024), zone_kind(pass)); !started)
+                return std::unexpected(pass_error(pass,index,started.error()));
             uses.clear(); indices.clear();
             for (const auto& use : pass.uses) {
                 uses.push_back(use_for(result->resources[use.resource], use.access));
@@ -273,6 +288,7 @@ Result<Execution> execute(const CompiledGraph& plan, SubmissionQueue& queue, con
             }();
             if (!recorded) return std::unexpected(pass_error(pass,index,recorded.error()));
             if (auto finished = batch.finish_pass(); !finished) return std::unexpected(pass_error(pass,index,finished.error()));
+            if (auto ended = batch.end_gpu_zone(); !ended) return std::unexpected(pass_error(pass,index,ended.error()));
             for (const auto& allocation : plan.allocations()) if (allocation.release_after == position)
                 result->resources[allocation.resource] = {};
         }
@@ -301,6 +317,7 @@ Result<Execution> execute(const CompiledGraph& plan, SubmissionQueue& queue, con
             }
         }
         auto submission = queue.submit(std::move(batch)); if (!submission) return std::unexpected(submission.error().with_context("graph submit"));
+        DK_PROFILE_ZONE_VALUE(submission->value());
         result->submission = *submission;
         for (std::size_t i = 0; i < resources.size(); ++i) if (!resources[i].output) result->resources[i] = {};
         return detail::ExecutionAccess::publish(std::move(result));

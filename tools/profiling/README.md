@@ -123,3 +123,8 @@ CPU-only 必须无内存事件和曲线；csvexport 另核对 case/batch/pipelin
 `summary.json` 保存 CPU/OS/内存/电源计划、编译器/优化选项、依赖基线、二进制与 DLL 哈希和每次检查结果。
 `baseline.csv` 保存各配置完整矩阵的吞吐中位数/范围、batch 分位延迟、峰值/保留量和相对 OFF 耗时比。
 原始文件留 out，版本化报告见 [2026-09-28 基线](../../spec/benchmarks/2026-09-28-memory.md)。
+
+## GPU timestamp 与 Tracy 区间
+
+M11.1 使用相同 0.14.1 工具，运行 [capture-gpu-profiling.ps1](../../scripts/capture-gpu-profiling.ps1)。
+独立配置、原生计时 API 和限制见 [GPU 性能观测指南](../../spec/guides/gpu-profiling.md)。

@@ -1,7 +1,7 @@
 ---
 module: graphics-graph
 created_at: "2026-10-02T23:00:00+08:00"
-updated_at: "2026-10-09T11:22:58+08:00"
+updated_at: "2026-10-09T14:26:13+08:00"
 status: accepted
 ---
 
@@ -189,7 +189,7 @@ Offscreen 的 draw/dispatch 改为 Graph 客户端，GPU 上传、计算、绘�
 每个资源 barrier 输入（Pass 索引或 final、资源索引、mip/layer、before 和目标 state）。
 buffer 为整对象，image 逐子资源；目标 state 的 initialized 沿用 before（barrier 不创造内容），
 read/read 时目标访问是本次请求，可能与账本累计的访问不同。顺序与 prepare 的发出顺序一致。
-记录只在执行候选中分配，失败仍不发布/提交半个结果；不做 GPU timestamp 或性能推断。
+计划诊断只在执行候选中分配，失败仍不发布/提交半个结果；该文本不含运行计时，GPU 观测见 M11.1。
 错误补充执行阶段、Pass 名字/索引或资源名字/索引上下文，保留原 Error code/message/context。
 
 ## M7.2 颜色 footprint 与深度清除
@@ -197,3 +197,10 @@ read/read 时目标访问是本次请求，可能与账本累计的访问不同�
 PassContext 的 image copy 按 Device 的 color_texel_bytes 计算实际 buffer 范围（含 RGBA32F），
 不得用四字节假设放过欠声明范围。clear_depth 只访问已声明 depth 子资源并委托 typed Device 操作，
 完整写入的 content/lifetime/submit 规则保持不变。关联 [0062](../development/0062-render-pipeline.md)。
+
+## M11.1 Pass 观测
+
+execute 在启用队列观测时围绕每个保留 Pass 的 prepare/record/finish 记录区间，裁剪 Pass 不发事件。
+分类从声明的访问阶段得出：compute 优先、graphics 次之、transfer 次之，其余 other；名称为拥有型副本。
+整个提交区间另包含导入/最终屏障等 GPU 工作；CPU 建图/编译/录制分别埋点。观测不进入编译计划或缓存键。
+失败放弃的图不发布 GPU 时间；完整结果由 Execution.submission().gpu_profile() 查询。
