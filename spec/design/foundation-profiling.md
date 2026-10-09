@@ -1,7 +1,7 @@
 ---
 module: foundation-profiling
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-10-09T14:26:13+08:00"
+updated_at: "2026-10-09T15:04:00+08:00"
 status: accepted
 ---
 
@@ -231,4 +231,42 @@ GPU 时长按 timestampPeriod 和 timestampValidBits 换算；区间短于计数
 
 验收：真实 XPBD 与绘制，开关前后粒子/像素一致；有界查询复用、未完成/超时、放弃/提交失败、
 查询失败显式缺失、关闭排空；Tracy capture 实际读回 GPU 区间和 CPU 阶段；CPU-only 独立构建。
-多规模性能/采集开销及控制延迟基线归 M11.2。
+多规模性能/采集开销及控制延迟采用下述协议。
+
+## M11.2 模拟基线协议
+
+基准程序属于 tests/integration，只调用既有公开接口，不增加生产计时状态或修改命令语义。
+固定 seed=42、dt=10ms、300拍、12次迭代、spacing=0.15m，其余 ClothConfig 默认值；
+8×8、16×16、32×32扩大物理尺寸而非网格加密。CPU/GPU均按8拍分批，最后4拍。
+每个独立进程只测一个规模/后端。冷启动指进程内首次创建和首批，保留OS/驱动磁盘缓存；
+第2–4批预热，第5–37批为等长8拍稳态样本，最后4拍单列，预热计入严格300拍。
+
+墙钟分别测CPU初始化/advance、GPU设备和队列创建、采集设置、shader/pipeline/初始上传、
+advance调用及显式wait、最终粒子readback。GPU timestamp区分提交父区间与compute/draw/transfer子区间，
+缺失数据为null或失败，不作为0进入统计。父子不可相加，CPU advance包含录制/提交，wait不等于GPU求解。
+求解稳态不读回、不绘制；300拍后另测固定256×256、count=0的8帧绘制（首帧冷、后7帧热），
+保持粒子不变。Tracy原始CSV补充Shader.compile、graph_build、compile、execute、submit、wait阶段。
+
+同一优化构建配置，3次独立重复，轮换OFF、仅原生timestamp、timestamp+Tracy实际连接采集的顺序。
+保存每批原始数据、构建开关/编译器/二进制hash/源码版本及dirty状态、设备驱动和时钟信息。
+每轮计算nearest-rank p50/p95/p99/max，报告各轮p50中位数和范围；开销按配对轮次计算，
+不得从单次波动宣称优化。CPU参考固定300拍，全量位置/速度与GPU对比（2e-3m/2e-2m/s），
+检查有限值、固定点、地面、约束误差并保存数组以核对不同采集模式；数值校验在计时区间外。
+性能程序显式关闭validation；另用required+同步验证运行正确性冒烟。真实服务维持原有validation策略，
+因此服务延迟与无validation的直接API时间不直接相减。
+
+IPC探针经Python Client和dk-ctl真实Named Pipe，记录包含子进程启动/握手/传输/排队/解析的端到端时间。
+对每个规模和CPU/GPU测空闲query、冷start期间query、首批step期间query/pause/stop/shutdown、
+预热后自动pump期间query/pause/stop/shutdown；保存busy调用与控制调用起止及重叠关系。
+busy夹具先在已连接Named Pipe上写入请求并发出ready，再延迟50ms发SDK控制，避免子进程调度导致shutdown抢先。
+当前PipeServer只有一个连接，端到端延迟还包括等待busy连接释放，不能全归因于owner排队。
+若两个客户端区间未重叠明确标记，不能充作受阻样本；不把客户端超时当作取消。
+pause后两次query步数一致、stop前后Edit相同、shutdown回复和进程退出分别计时。
+simulation取消当前未实现，记录unsupported；未来任务cancel需单独验收。
+进程夹具仅结束自己创建的进程，超时/错误保留原始日志并使采集失败。
+原始数据目录是当次采集的所有者，不覆盖旧目录；manifest发布采集阶段结果，summary另行发布聚合结果。
+复算失败保留原始采集证据并返回非零，不撤销已完成的模拟，也不能沿用旧summary宣称新一轮验证通过。
+
+实测结果见[基线报告](../benchmarks/2026-10-09-simulation.md)，复现入口见[指南](../guides/simulation-benchmark.md)。
+响应阈值已据当前设备、样本数和工作负载写入[模拟服务设计](physics-api.md#m112-响应性测量与后续验收目标)；
+它是M11.3–4的目标，不把本阶段未优化的长等待说成满足响应性。GUI事件循环尚未由此IPC基准验证。

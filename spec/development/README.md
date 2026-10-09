@@ -80,5 +80,6 @@
 | 0076 | [M10.3 GPU XPBD与可视化](0076-gpu-xpbd.md) | physics-xpbd-gpu, render-simulation, physics-xpbd, physics-api, architecture, graphics-graph | completed |
 | 0077 | [M10.4 脚本化物理实验](0077-simulation-experiments.md) | physics-api, physics-xpbd-gpu, render-simulation, physics-xpbd, scripting-luau, automation-python, automation-transport, runtime, architecture | completed |
 | 0078 | [M11.1 GPU 性能观测](0078-gpu-profiling.md) | foundation-profiling, graphics-resources, graphics-graph, physics-xpbd-gpu, physics-api | completed |
+| 0079 | [M11.2 可复现性能与响应性基线](0079-simulation-performance-baseline.md) | foundation-profiling, physics-api | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

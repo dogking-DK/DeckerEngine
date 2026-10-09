@@ -17,6 +17,7 @@
 | 多系统上下文与 worker 退休探针 | dk_context_probe | `^dk\.memory\.context_probe$` |
 | 重复工作负载 smoke、参数/部分失败 | dk_memory_benchmark | `^dk\.memory\.benchmark_` |
 | CPU profiling 探针 | dk_profiling_probe | `^dk\.profiling\.smoke$` |
+| 固定300拍模拟基准、参数拒绝、聚合防误报、32×32 GPU数值与绘制 | dk_simulation_benchmark | `^dk\.simulation\.benchmark_`；GPU要求RenderSimulation，实际基线用scripts/benchmark-simulation.py |
 | GPU timestamp、Tracy开关、数值/像素一致与查询寿命 | dk_gpu_profiling_probe | `^dk\.profiling\.gpu_validation$`（gpu label；77 为跳过）；真实 capture 用 scripts/capture-gpu-profiling.ps1 |
 | profiling 关闭时无副作用 | dk_profiling_disabled_test | `^dk\.profiling\.disabled_no_side_effects$` |
 | Jobs 排队、取消、完成、关闭与保留上限 | dk_jobs_tests | `^dk\.jobs\.` |

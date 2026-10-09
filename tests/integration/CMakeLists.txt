@@ -1,3 +1,32 @@
+if(TARGET dk_physics_xpbd)
+    find_package(nlohmann_json CONFIG REQUIRED)
+    add_executable(dk_simulation_benchmark SimulationBenchmark.cpp)
+    set_target_properties(dk_simulation_benchmark PROPERTIES OUTPUT_NAME dk-simulation-benchmark)
+    target_link_libraries(dk_simulation_benchmark PRIVATE dk::physics_xpbd dk::profiling nlohmann_json::nlohmann_json)
+    target_compile_definitions(dk_simulation_benchmark PRIVATE
+        DK_BENCH_COMPILER="${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}" DK_BENCH_CONFIG="$<CONFIG>")
+    dk_target_defaults(dk_simulation_benchmark)
+    add_test(NAME dk.simulation.benchmark_cpu COMMAND dk_simulation_benchmark --size 32 --output "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/benchmark-cpu.json")
+    set_tests_properties(dk.simulation.benchmark_cpu PROPERTIES TIMEOUT 60)
+    add_test(NAME dk.simulation.benchmark_invalid COMMAND dk_simulation_benchmark --size 33
+        --output "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/benchmark-invalid.json")
+    set_tests_properties(dk.simulation.benchmark_invalid PROPERTIES WILL_FAIL TRUE)
+    find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME dk.simulation.benchmark_aggregation COMMAND "${CMAKE_COMMAND}" -E env "PYTHONDONTWRITEBYTECODE=1"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/SimulationBenchmarkTest.py")
+    endif()
+    if(TARGET dk_render_simulation)
+        target_link_libraries(dk_simulation_benchmark PRIVATE dk::render_simulation)
+        target_compile_definitions(dk_simulation_benchmark PRIVATE DK_BENCH_GPU=1
+            DK_XPBD_SHADER="${PROJECT_SOURCE_DIR}/shaders/physics/xpbd.slang" DK_CLOTH_SHADER="${PROJECT_SOURCE_DIR}/shaders/render/cloth.slang")
+        dk_deploy_slang(dk_simulation_benchmark)
+        add_test(NAME dk.simulation.benchmark_gpu COMMAND dk_simulation_benchmark --gpu --timestamps --validation --size 32
+            --output "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/benchmark-gpu.json")
+        set_tests_properties(dk.simulation.benchmark_gpu PROPERTIES TIMEOUT 240 LABELS "gpu" RUN_SERIAL TRUE
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+    endif()
+endif()
 if(TARGET dk_render_simulation)
     find_package(nlohmann_json CONFIG REQUIRED)
     add_executable(dk_gpu_profiling_probe GpuProfilingProbe.cpp)
