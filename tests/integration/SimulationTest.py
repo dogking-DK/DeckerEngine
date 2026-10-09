@@ -109,7 +109,42 @@ def exercise(call, root):
         elif name != "query":
             assert description["parameters"]["required"] == ["run_id"]
     # Shutdown with a live running PlayWorld must still flush and terminate promptly.
+    xpbd(call, state, root)
     call("simulation.start", {"guard": guard(state)})
+
+
+def xpbd(call, state, root):
+    assert call("runtime.capabilities")["simulation"]["solver"] == "xpbd_cpu"
+    before = call("scene.query")
+    results = []
+    for _ in range(2):
+        run = call("simulation.start", {"guard": guard(state), "solver": "xpbd_cpu", "paused": True,
+                                        "fixed_dt_ns": 10000000, "cloth": {"seed": 42}})["run"]
+        key = {"run_id": run["run_id"]}
+        initial = call("simulation.particles", key)["particles"]
+        final = call("simulation.step", {**key, "count": 300})["run"]
+        assert final["steps"] == 300 and final["simulated_time_ns"] == 3000000000
+        metrics = final["metrics"]
+        assert metrics["particle_count"] == 64 and metrics["constraint_count"] == 210
+        assert metrics["max_pin_displacement"] == 0 and metrics["max_penetration"] <= 1e-6
+        assert metrics["max_relative_error"] < 0.08
+        particles = []
+        for offset in range(0, 64, 16):
+            page = call("simulation.particles", {**key, "offset": offset, "limit": 16})
+            assert page["steps"] == 300 and page["run_id"] == run["run_id"]
+            assert page["has_more"] == (offset < 48)
+            particles.extend(page["particles"])
+        assert particles[:8] == initial[:8], "Pins moved"
+        assert particles[-1]["position"][1] < initial[-1]["position"][1] - 0.1
+        assert call("simulation.query")["run"] == final
+        description = call("commands.describe", {"name": "simulation.particles"})
+        assert description["effect"] == "query" and not description["undoable"]
+        call("simulation.stop", key)
+        assert call("scene.query") == before
+        results.append({"cloth": final["cloth"], "metrics": metrics, "particles": particles,
+                        "steps": final["steps"], "simulated_time_ns": final["simulated_time_ns"]})
+    assert results[0] == results[1], "Repeated seed and N produced different CPU states"
+    (root / "xpbd-report.json").write_text(json.dumps(results[0], indent=2), encoding="utf-8")
 
 
 def main():
@@ -123,7 +158,7 @@ def main():
     root.mkdir(parents=True)
     with host(args, root) as call:
         exercise(call, root)
-    print(f"Simulation {args.mode}: idle ticks, pause, exact steps, Edit preservation and shutdown passed")
+    print(f"Simulation {args.mode}: idle ticks, pause, XPBD 300 steps and repeatability, Edit preservation and shutdown passed")
 
 
 if __name__ == "__main__":

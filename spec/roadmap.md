@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-08T17:32:08+08:00"
+updated_at: "2026-10-09T10:46:49+08:00"
 status: accepted
 ---
 
@@ -44,7 +44,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 [0061](development/0061-render-data-resources.md)；M7.2 最小渲染管线完成，见
 [0062](development/0062-render-pipeline.md)。M7.3 磁盘场景与资产集成完成，见
 [0063](development/0063-render-disk.md)。M7.4 截图任务与自动化验收完成，见
-[0064](development/0064-render-capture.md)；M7 与交付 B 已验收。M8.1 编辑器工作台已完成，见 [0065](development/0065-editor-workbench.md)；M8.2 拾取、Gizmo 与相机已完成，见 [0066](development/0066-editor-interaction.md)；M8.3 IPC 与 dk-ctl 已完成，见 [0067](development/0067-ipc-client.md)；M8.4 跨入口一致性完成，见 [0068](development/0068-editor-consistency.md)。M8 与交付 C 已验收；M9.1 Luau 命令绑定已完成，见 [0070](development/0070-luau-command-bindings.md)，M9.2 执行限制与取消已完成，见 [0071](development/0071-luau-execution-limits.md)，M9.3 Python 客户端已完成，见 [0072](development/0072-python-automation.md)，M9.4 记录/重放已完成，见 [0073](development/0073-automation-replay.md)；M9 已验收；M10.1 模拟世界与固定步长已完成，见 [0074](development/0074-simulation-world.md)，下一项为 M10.2。
+[0064](development/0064-render-capture.md)；M7 与交付 B 已验收。M8.1 编辑器工作台已完成，见 [0065](development/0065-editor-workbench.md)；M8.2 拾取、Gizmo 与相机已完成，见 [0066](development/0066-editor-interaction.md)；M8.3 IPC 与 dk-ctl 已完成，见 [0067](development/0067-ipc-client.md)；M8.4 跨入口一致性完成，见 [0068](development/0068-editor-consistency.md)。M8 与交付 C 已验收；M9.1 Luau 命令绑定已完成，见 [0070](development/0070-luau-command-bindings.md)，M9.2 执行限制与取消已完成，见 [0071](development/0071-luau-execution-limits.md)，M9.3 Python 客户端已完成，见 [0072](development/0072-python-automation.md)，M9.4 记录/重放已完成，见 [0073](development/0073-automation-replay.md)；M9 已验收；M10.1 模拟世界与固定步长已完成，见 [0074](development/0074-simulation-world.md)，M10.2 CPU XPBD参考求解器已完成，见 [0075](development/0075-cpu-xpbd.md)，下一项为 M10.3。
 
 默认先交付 Windows x64；CPU-only 构建始终保留。
 优先正确性、可观测性和可复现操作；提早建立多线程内存契约与性能测量，复杂并行优化仍由测量驱动。
@@ -502,12 +502,12 @@ M5 的图像/计算样例迁移后输出保持符合原验证条件。
 | 子阶段 | 范围 | 前置 | 验收与证据 | 状态 |
 | --- | --- | --- | --- | --- |
 | M10.1 | 模拟世界与固定步长 | M7、M9 | 独立 Play、整数固定步长、命令/脚本控制、暂停/Stop 保护与空闲推进通过，见 [0074](development/0074-simulation-world.md) | 已完成 |
-| M10.2 | 首个 CPU 参考求解器 | M10.1 | 明确单一算法、数据布局、边界条件与数值指标 | 待开始 |
+| M10.2 | 首个 CPU 参考求解器 | M10.1 | XPBD距离约束、连续粒子/分色、布片地面边界与解析/300拍指标验收，见 [0075](development/0075-cpu-xpbd.md) | 已完成 |
 | M10.3 | GPU 求解与可视化 | M10.2 | 图同步正确，小规模 CPU/GPU 对比满足容差 | 待开始 |
 | M10.4 | 脚本化实验验收 | M10.3 | 严格 N 步、配置/指标/图像可复现；检查点若需要另立阶段 | 待开始 |
 
-**先写设计：** [physics-api.md](design/physics-api.md) 已在 M10.1 建立；后续编写 `physics-<solver>.md`、
-`render-<simulation>.md`，并更新 runtime 的固定步长与世界切换设计。
+**先写设计：** [physics-api.md](design/physics-api.md) 与 [physics-xpbd.md](design/physics-xpbd.md) 已建立；
+M10.3编写GPU求解与 `render-<simulation>.md`，同步数据/提交和渲染读取契约。
 若要交付检查点恢复，另写 `simulation-checkpoint.md`，不得复用场景文件语义。
 
 **验收：** 同一输入和 seed 下严格执行 N 个 step，导出步数/时间/数值指标和图像；
@@ -547,8 +547,9 @@ M9.1 Luau 命令绑定完成，见 [0070](development/0070-luau-command-bindings
 M9.2 执行限制与取消完成，见 [0071](development/0071-luau-execution-limits.md)：有限默认预算、VM额度、宿主取消和 Windows 控制台退出已验收，保留已提交状态。
 M9.3 Python 自动化客户端完成，见 [0072](development/0072-python-automation.md)：超时/错误、批量/事务、Job 等待和 CPU/GPU 真实链路已验收。
 M9.4 记录与重放完成，见 [0073](development/0073-automation-replay.md)：版本/输入/seed/上下文、逐步状态核验及跨进程 CPU/GPU 链路已验收，M9 全部完成。
-M10.1 已完成，见 [0074](development/0074-simulation-world.md)：独立 PlayWorld、固定纳秒时钟、运行控制、Luau 与真实 stdio/pipe 空闲调度通过。当前无求解器，M10 仍进行中。
-下一项为 **M10.2 首个 CPU 参考求解器**：选择单一算法、演示场景、连续数据布局、边界条件与数值指标。
+M10.1 已完成，见 [0074](development/0074-simulation-world.md)：独立 PlayWorld、固定纳秒时钟、运行控制、Luau 与真实 stdio/pipe 空闲调度通过。M10仍进行中。
+M10.2已完成，见 [0075](development/0075-cpu-xpbd.md)：CPU XPBD布片、连续数组、边界、解析解与300拍数值/脚本/IPC验收通过。
+下一项为 **M10.3 GPU 求解与可视化**：将同一XPBD计算步骤接入Graph，建立粒子输出到独立渲染Pass的数据契约，并按容差比较CPU/GPU结果。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 

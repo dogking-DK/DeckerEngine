@@ -1,21 +1,21 @@
 ---
 module: command-reference-simulation
 created_at: "2026-10-08T17:23:40+08:00"
-updated_at: "2026-10-08T17:23:40+08:00"
+updated_at: "2026-10-09T10:43:38+08:00"
 status: accepted
 ---
 
 # 模拟世界命令
 
-[返回命令目录](README.md)。Framework/Scene Runtime 均提供这六条命令，无 GPU 前置条件。
-M10.1 仅提供独立 PlayWorld 和固定时钟，当前无动力学求解器（capabilities.simulation.solver="none"）。
+[返回命令目录](README.md)。Framework/Scene Runtime 均提供这七条命令，无 GPU 前置条件。
+支持默认none固定时钟与显式xpbd_cpu布片求解器；capabilities.simulation.solver="xpbd_cpu"表示已编译CPU求解器。
 实现：[SimulationOperations](../../engine/framework/operations/src/SimulationOperations.cpp)、
 [SimulationService](../../engine/framework/services/src/SimulationService.cpp)。
 用法见 [模拟指南](../guides/simulation.md)。
 
 ## 公共结果和状态
 
-六条命令均返回 `{mode,run}`。mode 为 `edit`、`running`、`paused`；edit 时 run=null，其他状态为：
+除particles分页查询外，六条控制/状态命令均返回 `{mode,run}`。mode 为 `edit`、`running`、`paused`；edit 时 run=null，其他状态为：
 
 | run 字段 | 含义 |
 | --- | --- |
@@ -23,15 +23,18 @@ M10.1 仅提供独立 PlayWorld 和固定时钟，当前无动力学求解器（
 | source | 启动时编辑文档 State：document_id、scene_id、revision、dirty、entity_count；不会随编辑刷新 |
 | fixed_dt_ns | 每拍的整数纳秒时长 |
 | max_catch_up_steps | 一次自动 pump 的最大步数 |
-| steps | 已完成固定拍数；当前每拍只推进时钟，不计算动力学 |
+| steps | 已完成固定拍数；none仅推进时钟，xpbd_cpu同时推进粒子 |
 | simulated_time_ns | 精确的 steps × fixed_dt_ns |
 | accumulator_ns | 小于 fixed_dt_ns 的未满一拍余量 |
 | dropped_time_ns | 追赶超限时丢弃的墙钟整拍时间；不算入模拟时间 |
+| solver | 本轮none或xpbd_cpu |
+| cloth | xpbd_cpu时返回完整有效布片配置；none时null |
+| metrics | xpbd_cpu时返回本轮已提交数值指标；none时null |
 | fault | 正常为 null；自动推进失败时为引擎错误名称，模式冻结为 paused，需要 stop/start |
 
 所有数值为整数，时间不超过 int64；未知字段及浮点整数 token（如 count=1.0）拒绝。
 所有控制 effect=control、undoable=false；不进入场景撤销历史，不允许加入 scene.transaction。
-所有成功操作都不修改编辑文档、revision、dirty、历史或文件。Play 期间仍可编辑/保存/new/load，
+所有成功模拟操作都不修改编辑文档、revision、dirty、历史或文件。Play 期间仍可编辑/保存/new/load，
 Play 保留启动输入；Stop 保留最新 Edit，不把 Play 写回。
 `scene.query`、`entity.get`、`read_scene`、编辑器视口和 `render.capture` 始终使用 Edit。
 
@@ -54,9 +57,12 @@ Play 保留启动输入；Stop 保留最新 Edit，不把 Play 写回。
 | fixed_dt_ns | 否 | 16666667；1000000–1000000000，即 1 ms–1 s |
 | max_catch_up_steps | 否 | 8；1–64 |
 | paused | 否 | false；true 原子进入暂停态，适合严格步数实验 |
+| solver | 否 | none或xpbd_cpu，默认none |
+| cloth | 否 | 仅xpbd_cpu允许；省略或空对象使用下文默认配置 |
 
 无活动场景或已有 Play 返回 invalid_state；过期 guard 返回 conflict；非法参数返回 invalid_argument。
 失败不发布 Play，不改变 Edit。克隆复制内存实体/层级/Project 映射，不固定外部资产文件字节。
+xpbd_cpu要求fixed_dt_ns<=33333333；cloth配置语义错误为invalid_argument。生成的粒子独立于Scene实体。
 
 ```json
 {"jsonrpc":"2.0","id":2,"method":"simulation.start","params":{"guard":{"document_id":"<document_id>","revision":0},"fixed_dt_ns":10000000,"paused":true}}
@@ -80,6 +86,8 @@ resume 从当前墙钟重新计时，暂停时间不追赶；已 running 为 no-
 必填 `run_id:UUID`；可选 `count:integer`，默认1，范围1–10000。
 仅健康 paused 状态允许；精确完成 count 拍后仍为 paused，返回公共状态。
 count 不受 max_catch_up_steps 限制；后者只限制实时 pump。
+xpbd_cpu另有20000000工作单元上限：count*(粒子数+iterations*(粒子数+约束数))，超限invalid_argument，需显式分多次请求。
+一次step中任一拍数值失效会保留整个调用前的粒子、指标和时钟，返回invalid_state；失败不会部分提交。
 无 Play、running、有 fault 或模拟时间溢出为 invalid_state；过期 ID 为 conflict；
 非法 UUID/count 为 invalid_argument。失败不增加计数。
 
@@ -99,3 +107,45 @@ count 不受 max_catch_up_steps 限制；后者只限制实时 pump。
 
 示例中的身份须替换为实际响应值；精确步数从 paused=true 开始，不能以先运行后暂停替代。
 配置和运行计数不写场景文件，scene.save/project.save 不是检查点；进程结束丢弃 Play。
+
+
+## XPBD cloth 配置和指标
+
+cloth所有字段可省略，额外字段拒绝；配置只在start接受。数值以float32保存，结果会反映舍入后的有效值。
+
+| 字段 | 默认 | 范围/单位 |
+| --- | --- | --- |
+| columns / rows | 8 / 8 | 整数2–32；粒子索引=row*columns+column，row=0固定 |
+| seed | 1 | uint32；非固定点初始高度扰动的确定性种子 |
+| spacing | 0.15 | 0.01–1 m |
+| height | 0.75 | -100–100 m，必须>floor_y |
+| particle_mass | 0.1 | 0.001–100 kg；固定点逆质量为0 |
+| compliance | 0.000001 | 0–0.01 m/N；0为硬距离约束 |
+| iterations | 12 | 整数1–32，每拍迭代轮数 |
+| gravity_y | -9.81 | -1000–1000 m/s² |
+| floor_y | 0 | -10000–10000 m，无摩擦/反弹水平地面 |
+| damping | 0.5 | 0–100 /s，全局速度阻尼 |
+
+metrics字段：particle_count、constraint_count、color_count；max_constraint_error、rms_constraint_error、
+min_height、max_penetration、max_pin_displacement单位m；max_relative_error为相对原长的最大绝对误差；
+max_speed单位m/s；kinetic_energy、gravity_potential_energy、compliant_energy单位J。
+动能/重力势能仅计动态粒子，地面为零势能；compliant_energy只计非零compliance约束的弹性能。
+固定点、碰撞投影和阻尼不保证能量守恒，无自碰撞、弯曲或撕裂；详见 [XPBD设计](../design/physics-xpbd.md)。
+
+```json
+{"jsonrpc":"2.0","id":7,"method":"simulation.start","params":{"guard":{"document_id":"<document_id>","revision":0},"solver":"xpbd_cpu","paused":true,"fixed_dt_ns":10000000,"cloth":{"seed":42}}}
+```
+
+## simulation.particles
+
+参数必填run_id，offset可选默认0、范围0–1024且不能超过当前粒子数；limit默认128、范围1–256。
+effect=query、undoable=false，无EditGuard；要求当前run_id对应xpbd_cpu世界，none/无Play为invalid_state，
+旧ID为conflict，nil/非法ID、越界分页为invalid_argument。可读取fault后保留的最后完整状态。
+返回run_id、steps、simulated_time_ns、offset、total、has_more和particles数组；每项为
+`{index,position:[x,y,z],velocity:[x,y,z],inverse_mass}`。offset=total返回空页。
+运行中每页可能属于不同step；须核对版本或先pause再分页，不将跨拍数组拼作一个快照。
+只读命令无文件输出；调用者可保存JSON用于分析，保存场景不会保存这些运行态数组。
+
+```json
+{"jsonrpc":"2.0","id":8,"method":"simulation.particles","params":{"run_id":"<run_id>","offset":0,"limit":128}}
+```

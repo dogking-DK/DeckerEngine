@@ -6,7 +6,7 @@ dk_target_defaults(dk_scene_services)
 add_library(dk_simulation_services STATIC src/SimulationService.cpp)
 add_library(dk::simulation_services ALIAS dk_simulation_services)
 target_sources(dk_simulation_services PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/services/SimulationService.hpp)
-target_link_libraries(dk_simulation_services PUBLIC dk::scene_services dk::physics_api)
+target_link_libraries(dk_simulation_services PUBLIC dk::scene_services dk::physics_api dk::physics_xpbd)
 dk_target_defaults(dk_simulation_services)
 
 if(TARGET dk_asset_runtime)

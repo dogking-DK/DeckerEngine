@@ -1,7 +1,7 @@
 ---
 module: application-services
 created_at: "2026-09-22T13:28:00+08:00"
-updated_at: "2026-10-08T17:32:08+08:00"
+updated_at: "2026-10-09T10:43:38+08:00"
 status: accepted
 ---
 
@@ -83,3 +83,5 @@ M8.3 的只读快照同时携带活动 manifest 的工程相对路径（新建�
 SimulationService 独立拥有启动时复制的 Project、来源 DocumentState 和暂存 SceneDocument。
 它只读取 SceneService 取得启动快照，绝不替换编辑文档或修改历史/持久化。
 控制命令使用运行身份保护，详见 [Physics API](physics-api.md) 与 [模拟命令](../commands/simulation.md)。
+
+M10.2 SimulationService 可选拥有CPU XPBD连续粒子/约束，独立于SceneDocument；物理求解成功才提交候选时钟，查询经Operations分页返回。见 [XPBD](physics-xpbd.md)。

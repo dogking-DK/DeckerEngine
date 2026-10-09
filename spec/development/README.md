@@ -76,5 +76,6 @@
 | 0072 | [M9.3 Python 自动化客户端](0072-python-automation.md) | automation-python, automation-client, architecture | completed |
 | 0073 | [M9.4 自动化记录与重放](0073-automation-replay.md) | automation-replay, automation-python, architecture | completed |
 | 0074 | [M10.1 模拟世界与固定步长](0074-simulation-world.md) | physics-api, runtime, application-services, scripting-luau, architecture | completed |
+| 0075 | [M10.2 CPU XPBD参考求解器](0075-cpu-xpbd.md) | physics-xpbd, physics-api, runtime, architecture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

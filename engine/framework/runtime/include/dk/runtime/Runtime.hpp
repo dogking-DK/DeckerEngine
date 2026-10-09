@@ -39,6 +39,7 @@ class Runtime final
     // Immutable owner-thread copy, checked against the active session and revision.
     [[nodiscard]] Result<SceneReadSnapshot> read_scene(EditGuard guard) const;
     [[nodiscard]] Result<PlaySceneSnapshot> read_play_scene(SimulationId run_id) const;
+    [[nodiscard]] Result<PlayParticleSnapshot> read_play_particles(SimulationId run_id) const;
     void pump();
     [[nodiscard]] std::chrono::steady_clock::time_point next_pump_deadline(std::chrono::steady_clock::time_point fallback) const;
     [[nodiscard]] bool stopping() const noexcept

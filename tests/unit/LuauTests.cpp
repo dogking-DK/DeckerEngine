@@ -55,6 +55,22 @@ end
 )", "query-simulation.luau", query));
     REQUIRE(s.call("simulation.query")["mode"] == "edit");
 }
+TEST_CASE("Luau XPBD cloth example validates physics through controlled commands") {
+    Script s;
+    std::ifstream input(DK_XPBD_EXAMPLE, std::ios::binary); REQUIRE(input);
+    const std::string source{std::istreambuf_iterator<char>{input}, {}};
+    LuauOptions edit; edit.access = LuauAccess::edit;
+    REQUIRE(run_luau(*s.runtime, source, "xpbd-cloth.luau", edit));
+    s.call("simulation.start", {{"solver", "xpbd_cpu"}, {"paused", true}, {"guard", {
+        {"document_id", s.call("scene.query")["state"]["document_id"]}, {"revision", 0}}}});
+    LuauOptions query; query.access = LuauAccess::query;
+    REQUIRE(run_luau(*s.runtime, R"(
+local run = dk.command("simulation.query").value.run
+local page = dk.command("simulation.particles", {run_id = run.run_id})
+assert(page.ok and page.value.total == 64)
+assert(dk.command("simulation.step", {run_id = run.run_id}).error.name == "not_supported")
+)", "xpbd-query.luau", query));
+}
 TEST_CASE("Luau example creates edits saves and reloads the same service state") {
     Script s;
     std::ifstream input(DK_LUAU_EXAMPLE, std::ios::binary);

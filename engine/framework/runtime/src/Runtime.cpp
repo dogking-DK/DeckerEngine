@@ -23,6 +23,10 @@ Result<PlaySceneSnapshot> Runtime::read_play_scene(SimulationId id) const
 {
     return simulation_.read_snapshot(id);
 }
+Result<PlayParticleSnapshot> Runtime::read_play_particles(SimulationId id) const
+{
+    return simulation_.read_particles(id);
+}
 namespace
 {
 Json task_schema()
@@ -117,7 +121,7 @@ Result<void> Runtime::register_runtime_commands()
                                            {"task_retention", 256},           {"max_line_bytes", 1024 * 1024},
                                            {"max_batch_requests", 128},       {"transactions", true},
                                            {"guard", "document_id+revision"},
-                                           {"simulation", {{"fixed_step", true}, {"solver", "none"}}}};
+                                           {"simulation", {{"fixed_step", true}, {"solver", "xpbd_cpu"}}}};
                                value["async_jobs"] = false; value["job_limits"] = nullptr;
 #ifdef DK_RUNTIME_ASSETS
                                const auto limits = assets_->limits(); value["async_jobs"] = true;

@@ -286,7 +286,7 @@ Json failure(const Error& error, const Json& task) {
 }
 bool allowed(std::string_view name, LuauAccess access) {
     constexpr std::array queries = {"commands.list", "commands.describe", "runtime.capabilities", "tasks.list",
-        "tasks.get", "scene.query", "entity.get", "history.status", "simulation.query"};
+        "tasks.get", "scene.query", "entity.get", "history.status", "simulation.query", "simulation.particles"};
     if (std::find(queries.begin(), queries.end(), name) != queries.end()) return true;
     if (access == LuauAccess::query) return false;
     if (access == LuauAccess::edit && (name == "scene.load" || name == "scene.save" || name == "project.save"))

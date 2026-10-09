@@ -1,0 +1,5 @@
+add_library(dk_physics_xpbd STATIC src/Xpbd.cpp)
+add_library(dk::physics_xpbd ALIAS dk_physics_xpbd)
+target_sources(dk_physics_xpbd PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/physics/Xpbd.hpp)
+target_link_libraries(dk_physics_xpbd PUBLIC dk::core)
+dk_target_defaults(dk_physics_xpbd)

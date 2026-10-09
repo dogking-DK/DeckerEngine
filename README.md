@@ -6,7 +6,7 @@
 当前提供 Foundation、Memory/Tracy、Scene 持久化、命令/事务、CPU Runtime、
 资产导入与缓存、有界 Jobs、异步 CPU Ready，以及可选的 Vulkan 使用层（对象/管线/绑定/录制/同步/传输）、Slang 编译、离屏绘制/计算读回，以及 SDL3 窗口与 Vulkan 呈现。
 GPU Graph 提供资源/Pass 声明、CPU 编译、裁剪、transient 资源管理及单队列同步执行、状态导入导出和诊断；离屏样例已由 Graph 编排。
-Render 已提供只读场景/视图提取、GpuMesh/纹理上传与缓存卸载；已接通磁盘资产、场景 Graph 管线与 Runtime 截图。编辑器提供工作台、拾取/Gizmo、命令编辑和保存加载；Windows 本机 Named Pipe 与轻量 dk-ctl 已接入。GUI、外部命令、截图及保存后 runner 的指定视图一致性已验收，见 [M8.4 / 交付 C](spec/development/0068-editor-consistency.md)。Luau 支持通过同一服务创建、编辑、保存场景，并提供错误恢复、执行预算、能力模式及取消，见[脚本指南](spec/guides/scripting.md)。Python SDK 提供超时/结构化错误、批量/事务、作业等待和截图产物收集，见[Python 指南](spec/guides/python.md)。已提供版本化命令记录和逐步逻辑状态重放，见[重放指南](spec/guides/replay.md)。已提供独立模拟世界、固定步长和运行控制，见[模拟指南](spec/guides/simulation.md)；物理求解器和网络远程控制尚未实现。
+Render 已提供只读场景/视图提取、GpuMesh/纹理上传与缓存卸载；已接通磁盘资产、场景 Graph 管线与 Runtime 截图。编辑器提供工作台、拾取/Gizmo、命令编辑和保存加载；Windows 本机 Named Pipe 与轻量 dk-ctl 已接入。GUI、外部命令、截图及保存后 runner 的指定视图一致性已验收，见 [M8.4 / 交付 C](spec/development/0068-editor-consistency.md)。Luau 支持通过同一服务创建、编辑、保存场景，并提供错误恢复、执行预算、能力模式及取消，见[脚本指南](spec/guides/scripting.md)。Python SDK 提供超时/结构化错误、批量/事务、作业等待和截图产物收集，见[Python 指南](spec/guides/python.md)。已提供版本化命令记录和逐步逻辑状态重放，见[重放指南](spec/guides/replay.md)。已提供独立模拟世界、固定步长和运行控制，见[模拟指南](spec/guides/simulation.md)；已提供CPU XPBD布片参考求解器与数值指标；GPU模拟和网络远程控制尚未实现。
 阶段状态、依赖和下一项统一见[开发 Roadmap](spec/roadmap.md)。
 
 ## 快速开始
@@ -33,7 +33,7 @@ cmake --build --preset windows-debug --target dk_run
 | Luau 场景构造/编辑、保存与脚本错误 | [脚本指南](spec/guides/scripting.md)、[可执行示例](examples/scripting/create-scene.luau) |
 | Named Pipe、dk-ctl、超时/重试与独立客户端 | [IPC 指南](spec/guides/ipc.md)、[IPC 协议参考](spec/commands/ipc.md) |
 | 记录/重放、输入指纹、seed 与逻辑状态核验 | [重放指南](spec/guides/replay.md)、[录制示例](examples/automation/record_experiment.py) |
-| Edit/Play、固定步长、暂停和严格 N 步 | [模拟指南](spec/guides/simulation.md)、[脚本示例](examples/scripting/fixed-step.luau) |
+| Edit/Play、固定步长、CPU XPBD与严格 N 步 | [模拟指南](spec/guides/simulation.md)、[脚本示例](examples/scripting/fixed-step.luau) |
 | Python 批量编辑、作业等待与截图产物 | [Python 指南](spec/guides/python.md)、[可执行示例](examples/automation/batch_capture.py) |
 | 登记、改名、导入、缓存、异步加载与作业 | [资产指南](spec/guides/assets.md) |
 | heap、拥有型容器、scratch、pool、线程上下文、Tracy | [Memory 指南](spec/guides/memory.md) |

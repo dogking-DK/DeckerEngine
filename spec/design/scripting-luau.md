@@ -1,7 +1,7 @@
 ---
 module: scripting-luau
 created_at: "2026-10-08T14:52:00+08:00"
-updated_at: "2026-10-08T17:32:08+08:00"
+updated_at: "2026-10-09T10:43:38+08:00"
 status: accepted
 ---
 
@@ -136,3 +136,5 @@ Windows Ctrl+C/Ctrl+Break handler 只请求 stop_source；同步执行返回后�
 白名单增加 simulation.query（所有能力模式）与 simulation.start/pause/resume/step/stop（edit/project）。
 运行态控制不加入场景事务；严格步数实验从 paused=true 启动并显式 step。
 长循环仍不会后台推进模拟，只有宿主 pump/命令安全点调度，详见 [Physics API](physics-api.md)。
+
+M10.2 增加 simulation.particles 到所有模式的查询白名单，start可选xpbd_cpu，step/query复用原能力门槛；见 [XPBD](physics-xpbd.md)。

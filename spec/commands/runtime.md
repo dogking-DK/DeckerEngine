@@ -1,7 +1,7 @@
 ---
 module: command-reference-runtime
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-10-08T17:26:08+08:00"
+updated_at: "2026-10-09T10:43:38+08:00"
 status: accepted
 ---
 
@@ -24,7 +24,7 @@ max_line_bytes=1048576、max_batch_requests=128、transactions=true、guard="doc
 {"jsonrpc":"2.0","id":19,"method":"runtime.capabilities"}
 ```
 
-另返回 `simulation={fixed_step:true,solver:"none"}`：可用独立模拟世界和固定时钟，目前无动力学求解器；见 [模拟命令](simulation.md)。
+另返回 `simulation={fixed_step:true,solver:"xpbd_cpu"}`：可用独立模拟世界、固定时钟及CPU XPBD；start仍默认none计时模式；见 [模拟命令](simulation.md)。
 
 ## tasks.list
 

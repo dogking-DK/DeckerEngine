@@ -1,7 +1,7 @@
 ---
 module: runtime
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-10-08T17:32:08+08:00"
+updated_at: "2026-10-09T10:33:53+08:00"
 status: accepted
 ---
 
@@ -122,3 +122,5 @@ read_scene 与所有既有编辑/保存/截图仍使用 SceneService。pump 以 
 next_pump_deadline(fallback) 用于 stdio/pipe/jobs.wait 的有限等待，避免无输入时停止模拟。
 shutdown 释放 Play；运行与编辑的身份、时钟边界和失败保护见 [Physics API](physics-api.md)。
 CPU Runtime 新增的 Physics API/SimulationServices 均不依赖 GPU。
+
+M10.2 显式选择 xpbd_cpu 后，由同一 owner 调度推进物理与时钟；read_play_particles(run_id) 返回拥有型数组/指标快照。默认 none 保留原时钟模式，详见 [XPBD](physics-xpbd.md)。

@@ -1,7 +1,7 @@
 ---
 module: physics-api
 created_at: "2026-10-08T17:14:07+08:00"
-updated_at: "2026-10-08T17:32:08+08:00"
+updated_at: "2026-10-09T10:46:49+08:00"
 status: accepted
 ---
 
@@ -9,11 +9,11 @@ status: accepted
 
 ## 目标、边界与依赖
 
-M10.1 建立 Edit/Play 所有权和固定时钟，不计算物理动力学。首个求解器、连续粒子数据、
-GPU Graph 和模拟可视化分别由 M10.2/M10.3 设计，不为粒子创建场景实体。
+M10.1 建立 Edit/Play 所有权和固定时钟；M10.2 增加可选 [CPU XPBD](physics-xpbd.md) 和连续粒子数据，
+不为粒子创建场景实体。GPU Graph 和模拟可视化在 M10.3 设计。
 `engine/physics/api` 提供 `dk::physics_api`，PUBLIC 仅 Core；整数纳秒时钟不依赖 Scene、窗口或 GPU。
 Framework/Scene 同时开启时装配该模块和 `dk::simulation_services`、`dk::simulation_operations`；
-Service PUBLIC 依赖 SceneServices/Physics API，Operations PUBLIC 依赖 Commands/SimulationServices，
+Service PUBLIC 依赖 SceneServices/Physics API/Physics XPBD，Operations PUBLIC 依赖 Commands/SimulationServices，
 PRIVATE 复用 SceneOperations 的 guard/state 编解码。Runtime 拥有 Service，注册表先于服务析构。
 无新增三方库或依赖 feature。
 
@@ -24,7 +24,7 @@ SceneService 始终拥有 EditWorld，现有 scene/entity/history/save/load、re
 构造独立 PlayWorld，生成非持久 SimulationId，全部成功后发布。Play 保留 SceneId/EntityId，
 保存启动时 DocumentState 作为来源；独立 SceneDocument revision 从 0 起，不能作编辑 guard。
 只读 Play 快照携带 run_id、来源、时钟、Project 和独立 SceneSnapshot，不暴露可写文档引用。
-当前 Play 场景内容保持启动时的值；后续求解输出不会通过 SceneDocument 逐粒子编辑。
+当前 Play 场景内容保持启动时的值；XPBD求解输出存放在独立粒子数组，不通过 SceneDocument 逐粒子编辑。
 
 状态为 edit（无 Play）、running、paused。start 默认 running，可用 paused=true 原子进入暂停态。
 活动期间再 start 返回 invalid_state；pause/resume 同态为 no-op；step 仅在 paused 下允许。
@@ -44,7 +44,8 @@ FixedStepClock 独立接受整数 elapsed_ns，维护 steps、simulated_time_ns�
 墙钟推进计算整拍，单次最多 max_catch_up_steps；超出的整拍计入 dropped_time_ns，保留小于 dt 的余量。
 因此过载时减慢模拟，不无限追赶；dropped 指墙钟整拍，暂停清除的不足一拍余量不计入其中。
 负 elapsed、非法配置/count、纳秒累积或模拟时间 int64 溢出在提交前拒绝，计数保持原样。
-无求解器时每拍仅更新时钟；能力发现明确 solver="none"，不声称已有物理结果。
+默认 solver="none" 每拍仅更新时钟；显式 xpbd_cpu 每拍推进物理，能力发现 solver="xpbd_cpu" 表示已编译实现。
+求解状态与候选时钟成功后一起提交；数值/预算失败均保留旧状态。步长/布片/指标约定见 [XPBD设计](physics-xpbd.md)。
 
 SimulationService 在 owner 线程用 steady_clock 驱动，启动基准在克隆完成后采样，不计入克隆耗时；
 start 可显式提供受控时间，pump(now) 支持受控时间测试。
@@ -57,9 +58,9 @@ jobs.wait 使用它；编辑器沿用逐帧 pump。同步 batch/Luau 只在命�
 
 ## 命令、持久化与失败边界
 
-六条命令 start/pause/resume/step/stop/query 的准确参数与结果见
-[模拟命令参考](../commands/simulation.md)（共五条控制加一条查询）。全部不可撤销、不可加入 scene.transaction，
-query 为 query effect，其他为 control。start 使用编辑 guard，后续使用独立 run_id。
+七条命令 start/pause/resume/step/stop/query/particles 的准确参数与结果见
+[模拟命令参考](../commands/simulation.md)（共五条控制加两条查询）。全部不可撤销、不可加入 scene.transaction，
+query/particles 为 query effect，其他为 control。start 使用编辑 guard，后续使用独立 run_id。
 Luau query 模式可查询模拟；edit/project 可使用所有模拟控制，仍受原命令预算约束。
 Python 可通过通用 Client.call 调用；M9 记录重放白名单本节不扩大，实验记录在 M10.4 接入。
 运行配置/计数为会话内状态，不写入场景文件；场景保存不等于模拟检查点，不提供恢复检查点。

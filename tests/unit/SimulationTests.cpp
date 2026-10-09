@@ -154,7 +154,7 @@ TEST_CASE("simulation failed starts and controls preserve worlds and expose pump
 TEST_CASE("simulation commands enforce schemas guards identity and discovery") {
     Commands s;
     REQUIRE(s.call("simulation.query") == Json{{"mode", "edit"}, {"run", nullptr}});
-    REQUIRE(s.call("runtime.capabilities")["simulation"] == Json{{"fixed_step", true}, {"solver", "none"}});
+    REQUIRE(s.call("runtime.capabilities")["simulation"] == Json{{"fixed_step", true}, {"solver", "xpbd_cpu"}});
     s.call("scene.new");
     const auto edit = s.call("scene.query");
     const auto guard = Json{{"document_id", edit["state"]["document_id"]}, {"revision", edit["state"]["revision"]}};
@@ -189,4 +189,63 @@ TEST_CASE("simulation commands enforce schemas guards identity and discovery") {
     REQUIRE(restarted["run"]["run_id"] != id);
     s.call("runtime.shutdown");
     REQUIRE_FALSE(s.runtime->read_play_scene(*SimulationId::parse(restarted["run"]["run_id"].get<std::string>())));
+}
+TEST_CASE("simulation XPBD commits particles and clock together and isolates the editing world") {
+    Simulation s; s.create();
+    ClothConfig cloth;
+    REQUIRE_FALSE(s.play.start(*s.edit, s.guard(), {1000000000, 8}, true, s.now, cloth));
+    REQUIRE(s.play.state().mode == SimulationMode::edit);
+    REQUIRE(s.play.start(*s.edit, s.guard(), {10000000, 8}, true, s.now, cloth));
+    const auto id = s.play.state().run->run_id;
+    const auto initial = s.play.read_particles(id); REQUIRE(initial);
+    const auto edit = s.edit->read_snapshot(s.guard()); REQUIRE(edit);
+    REQUIRE_FALSE(s.play.step(id, 10000)); // work budget rejection preserves physics and clock
+    REQUIRE(s.play.state().run->clock.steps == 0);
+    REQUIRE(s.play.read_particles(id)->data.positions == initial->data.positions);
+    REQUIRE(s.play.step(id, 10));
+    auto after = s.play.read_particles(id); REQUIRE(after);
+    REQUIRE(after->run.clock.steps == 10); REQUIRE(after->data.positions != initial->data.positions);
+    REQUIRE(after->run.metrics->particle_count == 64);
+    s.play.pump(s.now + std::chrono::hours{1});
+    REQUIRE(s.play.read_particles(id)->data.positions == after->data.positions);
+    REQUIRE(s.play.resume(id, s.now)); s.play.pump(s.now + std::chrono::milliseconds{30});
+    REQUIRE(s.play.state().run->clock.steps == 13);
+    REQUIRE(s.play.pause(id));
+    REQUIRE_FALSE(s.play.particle_page(id, 65)); REQUIRE_FALSE(s.play.particle_page(id, 0, 257));
+    const auto page = s.play.particle_page(id, 63, 128); REQUIRE(page);
+    REQUIRE(page->positions.size() == 1); REQUIRE(page->total == 64); REQUIRE(page->run.clock.steps == 13);
+    REQUIRE(s.play.particle_page(id, 64)->positions.empty());
+    REQUIRE(s.play.stop(id));
+    REQUIRE(s.edit->read_snapshot(s.guard())->scene.same_content(edit->scene));
+    REQUIRE(document_state_json(s.edit->state().value()) == document_state_json(edit->state));
+    REQUIRE(initial->data.positions.size() == 64); REQUIRE_FALSE(s.play.read_particles(id));
+}
+TEST_CASE("simulation XPBD commands validate configuration and return versioned particles and metrics") {
+    Commands s; s.call("scene.new");
+    REQUIRE_FALSE(s.invoke("simulation.start", {{"cloth", Json::object()}}, true));
+    REQUIRE_FALSE(s.invoke("simulation.start", {{"solver", "xpbd_cpu"}, {"cloth", {{"seed", -1}}}}, true));
+    REQUIRE_FALSE(s.invoke("simulation.start", {{"solver", "xpbd_cpu"}, {"cloth", {{"rows", 33}}}}, true));
+    REQUIRE_FALSE(s.invoke("simulation.start", {{"solver", "xpbd_cpu"}, {"cloth", {{"height", 0}}}}, true));
+    // Float32 minimum must validate both input and resolved result schemas.
+    auto run = s.call("simulation.start", {{"solver", "xpbd_cpu"}, {"paused", true},
+        {"cloth", {{"spacing", 0.01}, {"seed", 4294967295u}}}}, true)["run"];
+    REQUIRE(run["solver"] == "xpbd_cpu"); REQUIRE(run["cloth"]["seed"] == 4294967295u);
+    const auto id = run["run_id"]; const auto edit = s.call("scene.query");
+    const auto original = s.call("simulation.particles", {{"run_id", id}, {"limit", 4}});
+    REQUIRE(original["has_more"] == true); REQUIRE(original["total"] == 64);
+    REQUIRE(s.runtime->read_play_particles(*SimulationId::parse(id.get<std::string>())));
+    run = s.call("simulation.step", {{"run_id", id}, {"count", 10}})["run"];
+    REQUIRE(run["metrics"]["max_penetration"] == 0); REQUIRE(run["steps"] == 10);
+    const auto page = s.call("simulation.particles", {{"run_id", id}, {"offset", 63}});
+    REQUIRE(page["steps"] == 10); REQUIRE(page["particles"].size() == 1);
+    REQUIRE(page["has_more"] == false); REQUIRE(page["particles"][0]["index"] == 63);
+    const auto d = s.call("commands.describe", {{"name", "simulation.particles"}});
+    REQUIRE(d["effect"] == "query"); REQUIRE(d["undoable"] == false);
+    REQUIRE(d["parameters"]["required"] == Json::array({"run_id"}));
+    REQUIRE_FALSE(s.invoke("simulation.particles", {{"run_id", id}, {"offset", 65}}));
+    s.call("simulation.stop", {{"run_id", id}});
+    REQUIRE(s.call("scene.query") == edit);
+    const auto clock_only = s.call("simulation.start", {{"paused", true}}, true)["run"];
+    REQUIRE(clock_only["solver"] == "none"); REQUIRE(clock_only["metrics"].is_null());
+    REQUIRE_FALSE(s.invoke("simulation.particles", {{"run_id", clock_only["run_id"]}}));
 }
