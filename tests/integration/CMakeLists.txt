@@ -1,3 +1,16 @@
+if(TARGET dk_render_simulation)
+    add_executable(dk_gpu_xpbd_probe GpuXpbdProbe.cpp)
+    set_target_properties(dk_gpu_xpbd_probe PROPERTIES OUTPUT_NAME dk-gpu-xpbd-probe)
+    target_link_libraries(dk_gpu_xpbd_probe PRIVATE dk::render_simulation)
+    target_include_directories(dk_gpu_xpbd_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
+    target_compile_definitions(dk_gpu_xpbd_probe PRIVATE DK_XPBD_SHADER="${PROJECT_SOURCE_DIR}/shaders/physics/xpbd.slang"
+        DK_CLOTH_SHADER="${PROJECT_SOURCE_DIR}/shaders/render/cloth.slang")
+    dk_target_defaults(dk_gpu_xpbd_probe)
+    dk_deploy_slang(dk_gpu_xpbd_probe)
+    add_test(NAME dk.xpbd.gpu_validation COMMAND dk_gpu_xpbd_probe "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/gpu-xpbd")
+    set_tests_properties(dk.xpbd.gpu_validation PROPERTIES TIMEOUT 240 SKIP_RETURN_CODE 77 LABELS "gpu" RUN_SERIAL TRUE
+        ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+endif()
 if(DK_BUILD_RENDER_DISK AND DK_BUILD_RENDER_PIPELINE)
     add_executable(dk_render_disk_probe RenderDiskProbe.cpp)
     set_target_properties(dk_render_disk_probe PROPERTIES OUTPUT_NAME dk-render-disk-probe)

@@ -167,5 +167,5 @@ XpbdMetrics XpbdSolver::measure(std::span<const ParticlePosition> p, std::span<c
     if (!constraints_.empty()) m.rms_constraint_error = std::sqrt(sum/static_cast<double>(constraints_.size()));
     return m;
 }
-XpbdSnapshot XpbdSolver::snapshot() const { return {config_, positions_, velocities_, constraints_, color_offsets_, metrics_}; }
+XpbdSnapshot XpbdSolver::snapshot() const { return {config_, positions_, velocities_, constraints_, color_offsets_, metrics_, directions_}; }
 }

@@ -1,7 +1,7 @@
 ---
 module: physics-xpbd
 created_at: "2026-10-09T10:33:53+08:00"
-updated_at: "2026-10-09T10:33:53+08:00"
+updated_at: "2026-10-09T11:20:00+08:00"
 status: accepted
 ---
 
@@ -13,7 +13,7 @@ M10.2 选择单一 XPBD 算法，演示固定上沿的布片在重力下垂落�
 `engine/physics/xpbd` 提供 `dk::physics_xpbd`，PUBLIC 仅 Core，使用标准库连续数组和 float32 运算；
 不依赖 ECS、Eigen、Vulkan、Graph、窗口或文件 IO，不新增三方库。
 SimulationServices PUBLIC 链接它；粒子不对应 Scene Entity，编辑/Play 场景文档保持 M10.1 隔离语义。
-GPU 求解/绘制在 M10.3 另写设计，M10.2 不创建假 GPU 接口或渲染 Pass。
+GPU 求解与独立绘制见 [GPU XPBD](physics-xpbd-gpu.md) 和 [模拟渲染](render-simulation.md)；CPU模块自身仍无GPU依赖。
 
 ## 数据、输入与执行顺序
 
@@ -22,7 +22,7 @@ GPU 求解/绘制在 M10.3 另写设计，M10.2 不创建假 GPU 接口或渲染
 均为 alignas(16)、16-byte float32 记录；约束=(uint32 a,b,float rest_length,compliance)，同为16-byte。
 逆质量为0表示固定粒子，固定位置不变、速度为0。位置/速度/约束各自连续存储，不传递 ECS 句柄。
 约束按输入顺序做确定性贪心着色，再按色稳定分组；color_offsets 包含末尾偏移。
-每色内所有端点均不共享（含固定点）；每轮按色递增执行，可供后续 GPU 每色并行、色间同步对照。
+每色内所有端点均不共享（含固定点）；每轮按色递增执行，与GPU每色并行、色间同步使用同一顺序。
 每拍 lambda 清零，拍内按约束累计；lambda 和原位置为内部工作数组，不是持久检查点。
 只读 spans 在下次 advance/析构时失效；snapshot 返回独立拥有型数组及配置/指标，不暴露可变引用。
 
@@ -83,3 +83,7 @@ Runtime::read_play_particles(run_id) 返回完整拥有型物理快照。Luau qu
 不以GPU结果或视觉截图代替CPU数值验证；不声称完整布料材料模型。
 
 相关：[Physics API](physics-api.md)、[0075](../development/0075-cpu-xpbd.md)。
+
+## GPU 数据互通
+
+拥有型 XpbdSnapshot 补充与有序约束对应的初始单位方向（float3 数组），用于 [GPU 求解](physics-xpbd-gpu.md) 在动态重合时复用相同退化规则。导出已经推进的 CPU 状态不重新定义方向；CPU 算法不变。

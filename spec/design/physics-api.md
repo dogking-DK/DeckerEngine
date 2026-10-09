@@ -1,7 +1,7 @@
 ---
 module: physics-api
 created_at: "2026-10-08T17:14:07+08:00"
-updated_at: "2026-10-09T10:46:49+08:00"
+updated_at: "2026-10-09T11:15:12+08:00"
 status: accepted
 ---
 
@@ -10,7 +10,7 @@ status: accepted
 ## 目标、边界与依赖
 
 M10.1 建立 Edit/Play 所有权和固定时钟；M10.2 增加可选 [CPU XPBD](physics-xpbd.md) 和连续粒子数据，
-不为粒子创建场景实体。GPU Graph 和模拟可视化在 M10.3 设计。
+不为粒子创建场景实体。独立 [GPU Graph求解](physics-xpbd-gpu.md) 与 [可视化](render-simulation.md) 已提供；本服务尚未选择GPU后端，M10.4继续命令/脚本实验接入。
 `engine/physics/api` 提供 `dk::physics_api`，PUBLIC 仅 Core；整数纳秒时钟不依赖 Scene、窗口或 GPU。
 Framework/Scene 同时开启时装配该模块和 `dk::simulation_services`、`dk::simulation_operations`；
 Service PUBLIC 依赖 SceneServices/Physics API/Physics XPBD，Operations PUBLIC 依赖 Commands/SimulationServices，

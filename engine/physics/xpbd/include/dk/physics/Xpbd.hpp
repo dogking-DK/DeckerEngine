@@ -43,6 +43,7 @@ struct XpbdSnapshot {
     std::vector<DistanceConstraint> constraints;
     std::vector<std::uint32_t> color_offsets;
     XpbdMetrics metrics;
+    std::vector<std::array<float, 3>> initial_directions;
 };
 // Single-owner CPU reference. No scene entities, device objects or filesystem access.
 class XpbdSolver final {

@@ -106,7 +106,9 @@
         "DK_BUILD_RENDER_RESOURCES": "ON",
         "DK_BUILD_RENDER_PIPELINE": "ON",
         "DK_BUILD_RENDER_DISK": "ON",
-        "DK_BUILD_RENDER_CAPTURE": "ON"
+        "DK_BUILD_RENDER_CAPTURE": "ON",
+        "DK_BUILD_PHYSICS_GPU": "ON",
+        "DK_BUILD_RENDER_SIMULATION": "ON"
       }
     },
     {

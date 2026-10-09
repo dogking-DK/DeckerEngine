@@ -49,7 +49,7 @@ struct GraphState {
 
 // Shared declaration analysis. Populates ordering constraints only; no culling.
 Result<void> analyze(const std::shared_ptr<GraphState>& state, Vector<Dependency>& dependencies);
-void append_dependency(Vector<Dependency>& dependencies, const Dependency& dependency);
+void normalize_dependencies(Vector<Dependency>& dependencies);
 std::size_t resource_number(const ResourceId& id, const GraphState& state);
 Use complete_use(const ResourceId& id, const GraphState& state);
 } // namespace detail

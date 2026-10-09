@@ -384,3 +384,23 @@ TEST_CASE("graph compile partial allocation failures preserve graph and prior pl
     CHECK(failed); CHECK(partial_failure); CHECK(succeeded);
     CHECK(names(prior) == std::vector<std::string_view>{"producer", "observer"});
 }
+
+TEST_CASE("graph dense preserving passes retain unique hazards and deterministic order", "[graphics][graph]") {
+    Fixture f;
+    constexpr std::size_t count=256;
+    const auto image=take(f.graph.declare_image("iterative state",{4,4,vk::Format::eR8G8B8A8Unorm,vk::ImageUsageFlagBits::eStorage,2},Lifetime::external,true));
+    // Two disjoint mips generate the same logical resource edge; both hazard and content edges must deduplicate.
+    for (std::size_t i=0;i<count;++i) {
+        const auto access=vk::AccessFlagBits2::eShaderStorageRead|vk::AccessFlagBits2::eShaderStorageWrite;
+        const std::array uses{Use{image,{{vk::PipelineStageFlagBits2::eComputeShader,access,vk::ImageLayout::eGeneral},0,VK_WHOLE_SIZE,{vk::ImageAspectFlagBits::eColor,0,1,0,1}}},
+            Use{image,{{vk::PipelineStageFlagBits2::eComputeShader,access,vk::ImageLayout::eGeneral},0,VK_WHOLE_SIZE,{vk::ImageAspectFlagBits::eColor,1,1,0,1}}}};
+        take(f.graph.add_pass({"iteration "+std::to_string(i),uses}));
+    }
+    REQUIRE(f.graph.mark_output(image));
+    const auto plan=take(f.graph.compile());
+    REQUIRE(plan.order().size()==count);
+    for (std::size_t i=0;i<count;++i) CHECK(plan.order()[i]==i);
+    CHECK(plan.dependencies().size()==3*count*(count-1)/2+count-1);
+    CHECK(std::adjacent_find(plan.dependencies().begin(),plan.dependencies().end())==plan.dependencies().end());
+    consistent(plan);
+}

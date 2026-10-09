@@ -1,5 +1,9 @@
 set(CMAKE_FOLDER "Examples")
 
+if(TARGET dk_render_simulation)
+    add_subdirectory(simulation)
+endif()
+
 if(DK_BUILD_MATH AND DK_BUILD_IO)
     add_subdirectory(foundation)
 else()

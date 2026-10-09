@@ -22,11 +22,16 @@ template<class T, class E> T take(std::expected<T, E>&& result) {
     return std::move(*result);
 }
 void check(Result<void> result) { if (!result) throw std::runtime_error(result.error().message); }
-struct Diagnostics { std::atomic<unsigned> errors = 0, warnings = 0; };
+struct Diagnostics { std::atomic<unsigned> errors = 0, warnings = 0, loader_warnings = 0; };
 void diagnostic(void* pointer, const Diagnostic& message) noexcept {
     auto& counts = *static_cast<Diagnostics*>(pointer);
     if (message.severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) ++counts.errors;
-    if (message.severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) ++counts.warnings;
+    if (message.severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+        // Keep this known implicit-layer API mismatch visible without counting it as a validation diagnostic.
+        if (message.name == "Loader Message" && message.message.find("VK_LAYER_AMD_switchable_graphics uses API version 1.3") != std::string_view::npos)
+            ++counts.loader_warnings;
+        else ++counts.warnings;
+    }
     if (message.severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
         std::fprintf(stderr, "%.*s: %.*s\n", static_cast<int>(message.name.size()), message.name.data(),
             static_cast<int>(message.message.size()), message.message.data());
@@ -409,7 +414,7 @@ int main(int argc, char** argv) {
             std::printf("graph roundtrips=4 pending=%u allocations=%u\n",queue.stats().pending_slots,allocations(queue));
         }
         device = std::unexpected(Error{ErrorCode::invalid_state,"released"});
-        std::printf("errors=%u warnings=%u liveAllocations=%zu\n",diagnostics.errors.load(),diagnostics.warnings.load(),heap.snapshot().live_allocations);
+        std::printf("errors=%u warnings=%u loader_warnings=%u liveAllocations=%zu\n",diagnostics.errors.load(),diagnostics.warnings.load(),diagnostics.loader_warnings.load(),heap.snapshot().live_allocations);
         return diagnostics.errors == 0 && diagnostics.warnings == 0 && heap.snapshot().live_allocations == 0 && system.try_close().closed() ? 0 : 1;
     } catch (const std::exception& error) { std::fprintf(stderr,"graph probe failed: %s\n",error.what()); return 1; }
 }

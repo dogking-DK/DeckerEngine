@@ -75,6 +75,8 @@ template<class F> void latest_writers(const GraphState& graph, const Use& use, s
 
 void cull(const GraphState& graph, PlanState& plan) {
     Vector<std::size_t> pending(0, memory::Allocator<std::size_t>{plan.resource});
+    Vector<Dependency> required(0, memory::Allocator<Dependency>{plan.resource});
+    for (const auto& edge : plan.dependencies) if (edge.kind == DependencyKind::explicit_order) required.push_back(edge);
     const auto keep = [&](std::size_t index) {
         if (plan.passes[index].retained) return;
         plan.passes[index].retained = true;
@@ -85,7 +87,8 @@ void cull(const GraphState& graph, PlanState& plan) {
         for (const auto& use : graph.passes[p]->uses) {
             if (use.access.full_overwrite) continue;
             latest_writers(graph, use, p, [&](std::size_t producer) {
-                detail::append_dependency(plan.dependencies, {producer, p, DependencyKind::contents, detail::resource_number(use.resource, graph)});
+                const Dependency edge{producer, p, DependencyKind::contents, detail::resource_number(use.resource, graph)};
+                plan.dependencies.push_back(edge); required.push_back(edge);
             });
         }
     }
@@ -94,18 +97,16 @@ void cull(const GraphState& graph, PlanState& plan) {
         resource.output = resource.retained = true;
         latest_writers(graph, detail::complete_use(output, graph), graph.passes.size(), keep);
     }
+    std::ranges::sort(required, {}, &Dependency::after);
     while (!pending.empty()) {
         const auto consumer = pending.back(); pending.pop_back();
-        for (const auto& edge : plan.dependencies) {
-            if (edge.after == consumer && (edge.kind == DependencyKind::contents || edge.kind == DependencyKind::explicit_order)) keep(edge.before);
-        }
+        for (auto edge = std::ranges::lower_bound(required, consumer, {}, &Dependency::after);
+            edge != required.end() && edge->after == consumer; ++edge) keep(edge->before);
     }
     std::erase_if(plan.dependencies, [&](const Dependency& edge) {
         return !plan.passes[edge.before].retained || !plan.passes[edge.after].retained;
     });
-    std::ranges::sort(plan.dependencies, [](const Dependency& a, const Dependency& b) {
-        return std::tie(a.before, a.after, a.kind, a.resource) < std::tie(b.before, b.after, b.kind, b.resource);
-    });
+    detail::normalize_dependencies(plan.dependencies);
 }
 
 Result<void> schedule(PlanState& plan) {
@@ -124,9 +125,10 @@ Result<void> schedule(PlanState& plan) {
         const auto next = ready.back(); ready.pop_back();
         plan.passes[next].order_index = plan.order.size();
         plan.order.push_back(next);
-        for (const auto& edge : plan.dependencies) {
-            if (edge.before == next && --indegree[edge.after] == 0) {
-                ready.push_back(edge.after);
+        for (auto edge = std::ranges::lower_bound(plan.dependencies, next, {}, &Dependency::before);
+            edge != plan.dependencies.end() && edge->before == next; ++edge) {
+            if (--indegree[edge->after] == 0) {
+                ready.push_back(edge->after);
                 std::ranges::push_heap(ready, std::greater<std::size_t>{});
             }
         }

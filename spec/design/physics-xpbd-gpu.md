@@ -1,0 +1,56 @@
+---
+module: physics-xpbd-gpu
+created_at: "2026-10-09T10:59:13+08:00"
+updated_at: "2026-10-09T11:36:11+08:00"
+status: accepted
+---
+
+# GPU XPBD
+
+## 范围与依赖
+
+M10.3 将 [CPU XPBD](physics-xpbd.md) 的预测、分色距离约束、地面投影、速度重建映射为
+[Graph](graphics-graph.md) Pass。`engine/physics/xpbd-gpu` 提供 `dk::physics_xpbd_gpu`，
+PUBLIC 依赖 CPU XPBD/Graph，PRIVATE Shaders；不依赖 Render、Scene、Framework 或窗口。
+可选 `DK_BUILD_PHYSICS_GPU` 默认关闭；windows-graphics 开启。CPU Runtime 命令仍使用 CPU 求解器，
+完整 GPU 命令/脚本实验属于 M10.4。渲染由独立 [布片 Pass](render-simulation.md) 消费。
+
+## 数据和算法
+
+初始化接收有效 CPU 求解器的拥有型快照，保留其约束顺序、颜色区间和初始退化方向；
+位置/逆质量、速度、约束各为连续 16-byte 记录，方向为 float4。上传仅在初始化发生。
+每色约束不共享端点，可无原子浮点写并行求解；颜色之间、每次迭代地面投影之间由 Graph 建立屏障。
+每拍清零 lambda，拍内累计；dt 的 float 换算、阻尼和地面规则与 CPU 相同。
+每个 dispatch 使用 64 线程并检查尾部边界。不实现自碰撞、弯曲或异步 compute。
+
+`advance(queue, dt_ns, count, options, append)` 使用显式固定 dt（1..33.333333 ms），count 为 0..8；
+总计算 Pass 不超过 4096。count=0 复制当前数据，可在暂停时绘制，步数不变。
+初始位置、速度、约束和方向上传到设备；每批从已发布位置/速度复制到候选缓冲区。
+预测临时位置、lambda 属于该次执行；新位置/速度为输出。步数仅在成功提交时增加。
+不会默认读回粒子或等待 GPU。显式 readback 选项生成位置/速度读回，完成前读取返回错误。
+快照补充初始方向，避免从已经推进过的 CPU 状态重算方向导致退化行为不同。
+
+## 状态、提交与寿命
+
+求解器拥有配置、静态数据和最新 GPU 输出；frame 拥有一次 Execution、提交票据和步数。
+所有接口外部串行、单队列；不保存借用 queue 指针。参数、预算、录制、扩展 Pass 或提交失败均不发布候选，
+原缓冲区/步数不变。所有分配在提交前完成；提交后仅移动 Execution 和分享输出所有权。
+图执行保留所有在途输入、临时资源、descriptor 和 pipeline，销毁 solver/frame 不提前释放资源；queue.close 排空。
+连续无消费者的相同步数/readback模式复用一个不可变编译计划；固定拓扑/配置保证声明相同，
+dt只进入当次push constant，外部buffer和录制上下文每次重新绑定。缓存仅在提交成功后替换；含消费者的图独立编译。
+提交成功不是 GPU 完成，也不是数值健康证明。设备丢失由 queue 报错；不承诺恢复。
+显式诊断读回检查有限性及 CPU 相同的 1e6 数值边界，异常返回 invalid_state；GPU 数值异常不能撤销已提交批次，
+调用者需停止该实验并重建。常规无读回路径不承诺同步报告数值发散，不沿用 CPU 整批数值回滚保证。
+
+扩展回调仅在 advance 的同步建图期间借用 Graph、位置 BufferId/资源索引与粒子数，追加只读消费者，
+回调数据须存活至 advance 返回；不得提交、改写物理资源或保留借用引用。共享图中先声明所有物理 buffer，
+消费者追加 buffer/image 后编译一次、提交一次。诊断可捕获计划与实际同步列表。
+
+## 验证
+
+真实 Vulkan 同步验证；单粒子自由落体、柔性单边/质量权重、退化方向和地面，
+seed=42 的 8×8 布片 300 拍、dt=10ms 对照同一 CPU 输入。
+预先限定最大位置分量绝对差 ≤ 2e-3 m、速度 ≤ 2e-2 m/s，固定点与地面 ≤ 1e-6 m；
+短解析例位置/速度 ≤ 2e-5。比较全量数组及独立计算的约束误差，不承诺跨 GPU 逐位一致。
+验证 count=0、分批步数、非法参数、扩展录制失败、驱动提交失败、旧帧不变、待完成读回拒绝、在途销毁和关闭。
+证据见 [0076](../development/0076-gpu-xpbd.md)。

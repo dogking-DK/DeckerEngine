@@ -72,6 +72,7 @@
 | 交换链 capability 策略与错误分类（无需 GPU） | dk_presentation_tests | `^dk\.presentation\.unit\.` |
 | 窗口三角形、帧同步、实际图像读回与恢复 | dk_presentation_probe | `^dk\.presentation\.(frames\|recovery)_validation$` |
 | 窗口三角形公开接口示例 | dk_presentation_demo | `^dk\.presentation\.example_smoke$` |
+| GPU XPBD数值/同图绘制/失败与寿命 | dk_gpu_xpbd_probe | `^dk\.xpbd\.gpu_validation$`（gpu label；77 为跳过） |
 | Vulkan 真设备、验证消息、VMA 分配与双设备销毁 | dk_device_probe | `^dk\.device\.gpu_`（gpu label；77 为跳过） |
 | Vulkan 资源描述、范围/对齐/布局与空对象（无需 GPU） | dk_graphics_resource_tests | `^dk\.graphics\.unit\.` |
 | VMA 上传/读回、timeline、延迟释放与提交失败 | dk_graphics_resource_probe | `^dk\.graphics\.gpu_`（gpu label；77 为跳过） |

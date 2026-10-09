@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-09T10:46:49+08:00"
+updated_at: "2026-10-09T11:20:00+08:00"
 status: accepted
 ---
 
@@ -55,8 +55,8 @@ render/pipeline 通过 Graph 执行 depth/opaque/tone/readback，提供绑定场
 | engine/assets | 资产类型、运行时、导入器 | 与设备资源和图资源分离 |
 | engine/scene | 组件、层级、序列化、迁移 | 基础层与资产引用，不持有 Vulkan 资源 |
 | engine/graphics | device、shaders、offscreen、presentation、graph 声明/编译/执行 | 离屏底座不依赖场景，正式业务后续统一进入 Graph |
-| engine/render | 已实现只读数据/视图、GPU 资产缓存、最小离屏管线、磁盘输入 | data 依赖 Scene/Memory；resources 依赖 asset_data/Device/Graph；pipeline 依赖前两者、Graph/Shaders；disk 组合 Scene/资产导入和 runtime，不依赖 Framework/Editor |
-| engine/physics | 固定步长API、CPU XPBD距离约束与布片；GPU求解待接入 | CPU只依赖Core；后续GPU可用Device/Graph |
+| engine/render | 已实现只读数据/视图、GPU 资产缓存、最小离屏管线、磁盘输入、模拟布片绘制 | data 依赖 Scene/Memory；resources 依赖 asset_data/Device/Graph；pipeline 依赖前两者、Graph/Shaders；disk 组合 Scene/资产导入和 runtime，不依赖 Framework/Editor；simulation 依赖 GPU Physics/Shaders |
+| engine/physics | 固定步长API、CPU/GPU XPBD距离约束与布片 | CPU只依赖Core；可选GPU依赖Graph/Shaders |
 | engine/framework | commands、services、operations、runtime | 应用服务与模块装配；通用命令层保持独立 |
 | engine/automation | 协议、传输、客户端、服务端 | 客户端不链接完整 Runtime/Renderer |
 | sdk/python | Python 标准库调用、批量、等待、产物与记录/重放 | 通过 dk-ctl 使用已有协议；不嵌入引擎，不持有 Runtime 或 GPU 对象 |
@@ -139,6 +139,6 @@ Memory/Tracy 补充 → 资产加载/导入 → Vulkan Device/Shader → GPU Gra
 
 [Physics API](physics-api.md) 提供仅依赖 Core 的固定纳秒时钟；Framework 的 SimulationService
 拥有独立 PlayWorld。Runtime 将模拟调度接入 owner pump，控制通过同一命令/脚本入口。
-M10.1仅建立时钟，M10.2的CPU求解见下文；尚无模拟渲染Pass，编辑与截图继续使用 EditWorld。
+M10.1仅建立时钟，M10.2的CPU求解见下文；编辑与Runtime截图继续使用 EditWorld；独立GPU模拟绘制见下文。
 
-M10.2 增加 [CPU XPBD](physics-xpbd.md)：独立连续粒子/分色距离约束、布片和地面边界，经模拟服务推进；GPU求解和模拟渲染尚未接入。
+M10.2 增加 [CPU XPBD](physics-xpbd.md)：独立连续粒子/分色距离约束、布片和地面边界，经模拟服务推进；另有可选 [GPU XPBD](physics-xpbd-gpu.md) 与 [布片绘制](render-simulation.md)，通过同一Graph连接，直接消费GPU粒子；M10.3以C++模块/示例交付，Runtime GPU实验接入留给M10.4。

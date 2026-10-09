@@ -11,3 +11,7 @@ endif()
 if(DK_BUILD_RENDER_DISK)
     add_subdirectory(disk)
 endif()
+
+if(DK_BUILD_RENDER_SIMULATION)
+    add_subdirectory(simulation)
+endif()

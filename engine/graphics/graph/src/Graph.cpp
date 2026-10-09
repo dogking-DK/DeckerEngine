@@ -1,6 +1,7 @@
 #include "GraphInternal.hpp"
 #include <algorithm>
 #include <new>
+#include <tuple>
 
 namespace dk::graphics::graph {
 
@@ -112,13 +113,15 @@ Result<void> acyclic(const GraphState& state, std::span<const Dependency> edges)
     struct Visit { std::size_t node, next_edge; };
     Vector<unsigned char> color(state.passes.size(), 0, memory::Allocator<unsigned char>{state.resource});
     Vector<Visit> stack(0, memory::Allocator<Visit>{state.resource});
+    const auto first_edge = [&](std::size_t node) {
+        return static_cast<std::size_t>(std::ranges::lower_bound(edges, node, {}, &Dependency::before) - edges.begin());
+    };
     for (std::size_t root = 0; root < state.passes.size(); ++root) {
         if (color[root]) continue;
-        stack.push_back({root, 0}); color[root] = 1;
+        stack.push_back({root, first_edge(root)}); color[root] = 1;
         while (!stack.empty()) {
             auto& current = stack.back();
-            while (current.next_edge < edges.size() && edges[current.next_edge].before != current.node) ++current.next_edge;
-            if (current.next_edge == edges.size()) { color[current.node] = 2; stack.pop_back(); continue; }
+            if (current.next_edge == edges.size() || edges[current.next_edge].before != current.node) { color[current.node] = 2; stack.pop_back(); continue; }
             const auto next = edges[current.next_edge++].after;
             if (color[next] == 2) continue;
             if (color[next] == 1) {
@@ -128,7 +131,7 @@ Result<void> acyclic(const GraphState& state, std::span<const Dependency> edges)
                 cycle += pass_context(state, next);
                 return std::unexpected(Error{ErrorCode::conflict, std::move(cycle)});
             }
-            stack.push_back({next, 0}); color[next] = 1;
+            stack.push_back({next, first_edge(next)}); color[next] = 1;
         }
     }
     return {};
@@ -251,14 +254,14 @@ Result<void> detail::analyze(const std::shared_ptr<GraphState>& state, Vector<De
             return std::unexpected(invalid("graph output is not fully initialized").with_context(resource_context(output, *state)));
     }
     for (const auto& edge : state->dependencies)
-        append_dependency(edges, {edge.before, edge.after, DependencyKind::explicit_order, {}});
+        edges.push_back({edge.before, edge.after, DependencyKind::explicit_order, {}});
     for (std::size_t before = 0; before < state->passes.size(); ++before) {
         for (std::size_t after = before + 1; after < state->passes.size(); ++after) {
             for (const auto& a : state->passes[before]->uses) {
                 for (const auto& b : state->passes[after]->uses) {
                     if (!overlaps(a, b)) continue;
                     const auto resource = resource_number(a.resource, *state);
-                    const auto add = [&](DependencyKind kind) { append_dependency(edges, {before, after, kind, resource}); };
+                    const auto add = [&](DependencyKind kind) { edges.push_back({before, after, kind, resource}); };
                     if (access_writes(a.access.state.access) && access_reads(b.access.state.access)) add(DependencyKind::read_after_write);
                     if (access_reads(a.access.state.access) && access_writes(b.access.state.access)) add(DependencyKind::write_after_read);
                     if (access_writes(a.access.state.access) && access_writes(b.access.state.access)) add(DependencyKind::write_after_write);
@@ -267,10 +270,14 @@ Result<void> detail::analyze(const std::shared_ptr<GraphState>& state, Vector<De
             }
         }
     }
+    normalize_dependencies(edges);
     return acyclic(*state, edges);
 }
-void detail::append_dependency(Vector<Dependency>& dependencies, const Dependency& dependency) {
-    if (std::ranges::find(dependencies, dependency) == dependencies.end()) dependencies.push_back(dependency);
+void detail::normalize_dependencies(Vector<Dependency>& dependencies) {
+    std::ranges::sort(dependencies, [](const Dependency& a, const Dependency& b) {
+        return std::tie(a.before,a.after,a.kind,a.resource) < std::tie(b.before,b.after,b.kind,b.resource);
+    });
+    dependencies.erase(std::unique(dependencies.begin(),dependencies.end()),dependencies.end());
 }
 std::size_t detail::resource_number(const ResourceId& id, const GraphState& state) {
     if (const auto* buffer = std::get_if<BufferId>(&id)) return HandleAccess::index(*buffer);

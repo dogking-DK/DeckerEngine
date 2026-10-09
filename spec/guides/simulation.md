@@ -1,7 +1,7 @@
 # 模拟世界与固定步长
 
 支持独立 PlayWorld、固定时钟和可选CPU XPBD布片求解器。start默认none，只推进调度拍数；
-显式solver="xpbd_cpu"可推进独立粒子。场景实体保持启动输入，模拟GPU求解/可视化在M10.3接入。
+显式solver="xpbd_cpu"可推进独立粒子。场景实体保持启动输入。另有独立GPU求解/可视化C++模块和示例，见下文。
 完整字段见 [模拟命令](../commands/simulation.md)，内部约定见 [Physics API](../design/physics-api.md)。
 
 ## 严格执行 N 步
@@ -91,5 +91,40 @@ client.call("simulation.stop", {"run_id": run["run_id"]})
 
 较大布片需分页，暂停态下取得稳定快照；位置/速度为float32有效值，指标用double归约。
 step工作量超限时显式分批，不自动改变步长或减少请求步数。每批失败保持该批开始前的全部粒子和计数，
-更早的成功批次保留。相同输入/seed/步数在同一构建中可重复；跨CPU/GPU仅计划数值容差对照，不承诺逐位一致。
+更早的成功批次保留。相同输入/seed/步数在同一构建中可重复；跨CPU/GPU使用设计中的数值容差对照，不承诺逐位一致。
 结果JSON是分析产物，不是可加载检查点，也尚未接入M9 Recorder。
+
+## GPU XPBD 与布片图像
+
+`windows-graphics` 开启 `DK_BUILD_PHYSICS_GPU` 和 `DK_BUILD_RENDER_SIMULATION`，不影响 CPU-only 预设。
+从仓库根运行：
+
+```powershell
+cmake --preset windows-graphics
+cmake --build out/build/windows-graphics --config Debug --target dk_xpbd_demo
+./out/build/windows-graphics/bin/Debug/dk-xpbd-demo.exe out/xpbd-gpu-demo
+```
+
+[示例源码](../../examples/simulation/src/main.cpp) 使用 seed=42、8×8布片、dt=10000000 ns，
+严格推进300拍（3秒）；输出目录生成 `cloth-initial.ppm` 和 `cloth-300.ppm`。
+程序会覆盖输出目录内这两个同名文件；PPM为RGB图像，可用支持PPM的查看器打开。
+图中青色棋盘为布片、灰色网格为地面。位置由GPU直接传入vertex shader，示例仅显式读回最终图像。
+可视化使用默认正交相机；换网格尺度时同步设置 ClothView.view_projection 和 floor_y。
+
+C++ 调用 `GpuXpbdSolver::create(heap,queue,cpu,shader)` 上传初态，然后 `advance(queue,dt,count)` 推进。
+每批 count=0..8 且最多4096计算Pass；count=0适合暂停展示。`ClothRenderer::render` 将推进与绘制放进一次Graph提交。
+frame.physics().steps() 为从GPU初始化起成功提交的拍数，wait确认完成；它不是数值健康或GPU完成的隐含证明。
+`GpuXpbdOptions.readback` 可显式申请粒子诊断读回；`ClothView.image_readback` 控制图像读回，默认均关闭。
+在wait成功前读回会报错；数值发散的诊断读取也会报错，调用者应停止并重建实验。
+
+现有 `simulation.start`/`step` 和 `render.capture` 命令仍分别使用CPU模拟和EditWorld截图；
+GPU命令/脚本实验与配置、指标、图像统一导出由M10.4继续，当前没有GPU检查点或编辑器Play视口。
+真实设备的容差、同步/失败与寿命验证入口：
+
+```powershell
+& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Target dk_gpu_xpbd_probe -TestRegex '^dk\.xpbd\.gpu_validation$' -Reason 'GPU XPBD数值、同图绘制与资源寿命'
+```
+
+输出在 `out/build/windows-graphics/test-artifacts/Debug/gpu-xpbd`：对比JSON、图计划和初态/300拍PPM。
+无GPU或验证层不可用时测试返回77跳过；不能把跳过当作验收通过。
+接口与限制见 [GPU设计](../design/physics-xpbd-gpu.md)、[绘制设计](../design/render-simulation.md)。
