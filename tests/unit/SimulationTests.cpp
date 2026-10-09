@@ -154,7 +154,15 @@ TEST_CASE("simulation failed starts and controls preserve worlds and expose pump
 TEST_CASE("simulation commands enforce schemas guards identity and discovery") {
     Commands s;
     REQUIRE(s.call("simulation.query") == Json{{"mode", "edit"}, {"run", nullptr}});
-    REQUIRE(s.call("runtime.capabilities")["simulation"] == Json{{"fixed_step", true}, {"solver", "xpbd_cpu"}});
+    auto capabilities = s.call("runtime.capabilities")["simulation"];
+    REQUIRE(capabilities["fixed_step"] == true); REQUIRE(capabilities["solver"] == "xpbd_cpu");
+#ifdef DK_SIMULATION_GPU
+    REQUIRE(capabilities["gpu"] == true); REQUIRE(capabilities["experiment_export"] == true);
+#else
+    REQUIRE(capabilities["gpu"] == false); REQUIRE(capabilities["experiment_export"] == false);
+    REQUIRE_FALSE(s.runtime->has_command("simulation.export"));
+    REQUIRE_FALSE(s.invoke("simulation.start", {{"solver","xpbd_gpu"}}, true));
+#endif
     s.call("scene.new");
     const auto edit = s.call("scene.query");
     const auto guard = Json{{"document_id", edit["state"]["document_id"]}, {"revision", edit["state"]["revision"]}};
@@ -245,6 +253,10 @@ TEST_CASE("simulation XPBD commands validate configuration and return versioned 
     REQUIRE_FALSE(s.invoke("simulation.particles", {{"run_id", id}, {"offset", 65}}));
     s.call("simulation.stop", {{"run_id", id}});
     REQUIRE(s.call("scene.query") == edit);
+    // A resolved float32 boundary configuration is accepted verbatim for replay.
+    const auto replay = s.call("simulation.start", {{"solver","xpbd_cpu"},{"paused",true},{"cloth",run["cloth"]}}, true)["run"];
+    REQUIRE(replay["cloth"] == run["cloth"]);
+    s.call("simulation.stop", {{"run_id",replay["run_id"]}});
     const auto clock_only = s.call("simulation.start", {{"paused", true}}, true)["run"];
     REQUIRE(clock_only["solver"] == "none"); REQUIRE(clock_only["metrics"].is_null());
     REQUIRE_FALSE(s.invoke("simulation.particles", {{"run_id", clock_only["run_id"]}}));

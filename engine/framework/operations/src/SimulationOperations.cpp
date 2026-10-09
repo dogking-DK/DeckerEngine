@@ -11,8 +11,8 @@ Json number(double minimum, double maximum) {
     auto result = schema::number(); result["minimum"] = minimum; result["maximum"] = maximum; return result;
 }
 Json cloth_schema(bool complete = false) {
-    const auto scalar = [complete](double low, double high) {
-        return complete ? number(static_cast<float>(low), static_cast<float>(high)) : number(low, high);
+    const auto scalar = [](double low, double high) {
+        return number(static_cast<float>(low), static_cast<float>(high));
     };
     const auto properties = Json{{"columns", integer(2, 32)}, {"rows", integer(2, 32)},
         {"seed", integer(0, std::numeric_limits<std::uint32_t>::max())}, {"spacing", scalar(0.01, 1)},
@@ -54,13 +54,20 @@ Json metrics_json(const XpbdMetrics& m) {
         {"gravity_potential_energy", m.gravity_potential_energy}, {"compliant_energy", m.compliant_energy},
         {"min_height", m.min_height}, {"max_penetration", m.max_penetration}, {"max_pin_displacement", m.max_pin_displacement}};
 }
+Json solver_schema() {
+    auto values = Json::array({"none", "xpbd_cpu"});
+#ifdef DK_SIMULATION_GPU
+    values.push_back("xpbd_gpu");
+#endif
+    return {{"type", "string"}, {"enum", values}};
+}
 Json status_schema() {
     const auto number = integer(0, static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()));
     const auto run = schema::object({{"run_id", schema::string(36, 36)}, {"source", document_state_schema()},
         {"fixed_dt_ns", integer(1000000, 1000000000)}, {"max_catch_up_steps", integer(1, 64)},
         {"steps", number}, {"simulated_time_ns", number}, {"accumulator_ns", number},
         {"dropped_time_ns", number}, {"fault", schema::nullable(schema::string())},
-        {"solver", {{"type", "string"}, {"enum", {"none", "xpbd_cpu"}}}},
+        {"solver", solver_schema()},
         {"cloth", schema::nullable(cloth_schema(true))}, {"metrics", schema::nullable(metrics_schema())}},
         {"run_id", "source", "fixed_dt_ns", "max_catch_up_steps", "steps", "simulated_time_ns",
          "accumulator_ns", "dropped_time_ns", "fault", "solver", "cloth", "metrics"});
@@ -77,7 +84,7 @@ Json status_json(const SimulationService& service) {
             {"steps", r.clock.steps}, {"simulated_time_ns", r.clock.simulated_time_ns},
             {"accumulator_ns", r.clock.accumulator_ns}, {"dropped_time_ns", r.clock.dropped_time_ns},
             {"fault", r.fault ? Json(error_code_name(*r.fault)) : Json(nullptr)},
-            {"solver", r.cloth ? "xpbd_cpu" : "none"}, {"cloth", r.cloth ? cloth_json(*r.cloth) : Json(nullptr)},
+            {"solver", r.gpu ? "xpbd_gpu" : r.cloth ? "xpbd_cpu" : "none"}, {"cloth", r.cloth ? cloth_json(*r.cloth) : Json(nullptr)},
             {"metrics", r.metrics ? metrics_json(*r.metrics) : Json(nullptr)}};
     }
     return {{"mode", state.mode == SimulationMode::edit ? "edit" : state.mode == SimulationMode::paused ? "paused" : "running"},
@@ -97,16 +104,17 @@ Result<void> register_simulation_commands(CommandRegistry& registry, SimulationS
     added = registry.add({"simulation.start", "Clone the editing scene into an independent simulation world",
         schema::object({{"guard", guard}, {"fixed_dt_ns", integer(1000000, 1000000000)},
             {"max_catch_up_steps", integer(1, 64)}, {"paused", schema::boolean()},
-            {"solver", {{"type", "string"}, {"enum", {"none", "xpbd_cpu"}}}}, {"cloth", cloth_schema()}}, {"guard"}),
+            {"solver", solver_schema()}, {"cloth", cloth_schema()}}, {"guard"}),
         status_schema(), CommandEffect::control, false}, [&service, &edit](const Json& p) -> Result<Json> {
             auto g = parse_edit_guard(p["guard"]); if (!g) return std::unexpected(g.error());
-            const bool xpbd = p.value("solver", std::string{"none"}) == "xpbd_cpu";
+            const auto solver = p.value("solver", std::string{"none"});
+            const bool xpbd = solver != "none";
             if (!xpbd && p.contains("cloth"))
-                return std::unexpected(Error{ErrorCode::invalid_argument, "cloth requires solver=xpbd_cpu"});
+                return std::unexpected(Error{ErrorCode::invalid_argument, "cloth requires an XPBD solver"});
             const auto cloth = xpbd ? std::optional{read_cloth(p.value("cloth", Json::object()))} : std::nullopt;
             return control_result(service, service.start(edit, *g,
                 {p.value("fixed_dt_ns", std::int64_t{16666667}), p.value("max_catch_up_steps", std::uint32_t{8})},
-                p.value("paused", false), {}, cloth));
+                p.value("paused", false), {}, cloth, solver == "xpbd_gpu"));
         });
     if (!added) return added;
     for (const auto method : {"simulation.pause", "simulation.resume", "simulation.step", "simulation.stop"}) {
@@ -127,7 +135,7 @@ Result<void> register_simulation_commands(CommandRegistry& registry, SimulationS
     const auto particle = schema::object({{"index", integer(0, 1023)}, {"position", schema::array(schema::number(), 3, 3)},
         {"velocity", schema::array(schema::number(), 3, 3)}, {"inverse_mass", schema::number()}},
         {"index", "position", "velocity", "inverse_mass"});
-    return registry.add({"simulation.particles", "Read a versioned page of simulation particles",
+    added = registry.add({"simulation.particles", "Read a versioned page of simulation particles",
         schema::object({{"run_id", schema::string(36, 36)}, {"offset", integer(0, 1024)}, {"limit", integer(1, 256)}}, {"run_id"}),
         schema::object({{"run_id", schema::string(36, 36)}, {"steps", integer(0, std::numeric_limits<std::int64_t>::max())},
             {"simulated_time_ns", integer(0, std::numeric_limits<std::int64_t>::max())}, {"offset", integer(0, 1024)},
@@ -148,5 +156,27 @@ Result<void> register_simulation_commands(CommandRegistry& registry, SimulationS
                 {"simulated_time_ns", page->run.clock.simulated_time_ns}, {"offset", page->offset}, {"total", page->total},
                 {"has_more", page->offset + page->positions.size() < page->total}, {"particles", std::move(particles)}};
         });
+    if (!added) return added;
+#ifdef DK_SIMULATION_GPU
+    return registry.add({"simulation.export", "Export a paused experiment as a new directory",
+        schema::object({{"run_id",schema::string(36,36)},{"expected_steps",integer(0,std::numeric_limits<std::int64_t>::max())},
+            {"output",schema::string(1,1024)},{"width",integer(1,2048)},{"height",integer(1,2048)}},
+            {"run_id","expected_steps","output"}),
+        schema::object({{"output",schema::string(1,1024)},{"steps",integer(0,std::numeric_limits<std::int64_t>::max())},
+            {"simulated_time_ns",integer(0,std::numeric_limits<std::int64_t>::max())},
+            {"files",schema::array(schema::string(),5,5)}},{"output","steps","simulated_time_ns","files"}),
+        CommandEffect::external,false}, [&service](const Json& p) -> Result<Json> {
+            auto id = SimulationId::parse(p["run_id"].get_ref<const std::string&>());
+            if (!id) return std::unexpected(id.error());
+            auto output = service.export_experiment(*id,p["expected_steps"].get<std::uint64_t>(),p["output"].get_ref<const std::string&>(),
+                p.value("width",std::uint32_t{640}),p.value("height",std::uint32_t{480}));
+            if (!output) return std::unexpected(output.error());
+            const auto run = service.state().run;
+            return Json{{"output",*output},{"steps",run->clock.steps},{"simulated_time_ns",run->clock.simulated_time_ns},
+                {"files",{"config.json","metrics.json","particles.json","image.ppm","provenance.json"}}};
+        });
+#else
+    return {};
+#endif
 }
 }

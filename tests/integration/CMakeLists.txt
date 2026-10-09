@@ -261,6 +261,18 @@ if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
     if(TARGET dk_ctl)
         find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
         if(Python3_Interpreter_FOUND)
+            if(TARGET dk_render_simulation AND TARGET dk_scripting_luau)
+                add_test(NAME dk.simulation.experiment_gpu
+                    COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python"
+                        "PYTHONDONTWRITEBYTECODE=1" "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/SimulationExperimentTest.py"
+                        --runner "$<TARGET_FILE:dk_run>" --client "$<TARGET_FILE:dk_ctl>"
+                        --example "${PROJECT_SOURCE_DIR}/examples/automation/cloth_experiment.py"
+                        --luau "${PROJECT_SOURCE_DIR}/examples/scripting/gpu-experiment.luau"
+                        --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/simulation-experiments")
+                set_tests_properties(dk.simulation.experiment_gpu PROPERTIES TIMEOUT 300 SKIP_RETURN_CODE 77 LABELS "gpu" RUN_SERIAL TRUE
+                    ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
+            endif()
             foreach(mode IN ITEMS stdio pipe)
                 add_test(NAME dk.simulation.${mode}
                     COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python"

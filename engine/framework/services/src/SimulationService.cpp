@@ -1,10 +1,18 @@
 #include <dk/services/SimulationService.hpp>
 #include <algorithm>
+#ifdef DK_SIMULATION_GPU
+#include "GpuSimulation.hpp"
+#endif
 
 namespace dk {
 Result<void> SimulationService::start(const SceneService& edit, EditGuard guard, FixedStepConfig config,
-                                      bool paused, std::optional<TimePoint> now, std::optional<ClothConfig> cloth) {
+                                      bool paused, std::optional<TimePoint> now, std::optional<ClothConfig> cloth, bool gpu) {
     if (play_) return std::unexpected(Error{ErrorCode::invalid_state, "Stop the active simulation before starting"});
+    if (gpu && (!cloth || config.max_catch_up_steps > 8))
+        return std::unexpected(Error{ErrorCode::invalid_argument, "GPU simulation requires cloth and max_catch_up_steps <= 8"});
+#ifndef DK_SIMULATION_GPU
+    if (gpu) return std::unexpected(Error{ErrorCode::not_supported, "GPU simulation is not compiled"});
+#endif
     auto clock = FixedStepClock::create(config);
     if (!clock) return std::unexpected(clock.error());
     std::optional<XpbdSolver> solver;
@@ -22,7 +30,14 @@ Result<void> SimulationService::start(const SceneService& edit, EditGuard guard,
     auto id = SimulationId::generate();
     if (!id) return std::unexpected(id.error());
     auto candidate = std::make_unique<PlayWorld>(PlayWorld{*id, input->state, std::move(input->project),
-        std::move(input->manifest), std::move(*scene), *clock, cloth, std::move(solver), paused, {}, {}});
+        std::move(input->manifest), std::move(*scene), *clock, cloth, std::move(solver), paused, {}, {}, {}});
+#ifdef DK_SIMULATION_GPU
+    if (gpu) {
+        auto created = detail::GpuSimulation::create(*candidate->solver);
+        if (!created) return std::unexpected(created.error());
+        candidate->gpu = std::move(*created);
+    }
+#endif
     candidate->last_pump = now.value_or(Clock::now());
     play_ = std::move(candidate);
     return {};
@@ -50,12 +65,24 @@ Result<void> SimulationService::step(SimulationId id, std::uint32_t count) {
         return std::unexpected(Error{ErrorCode::invalid_state, "Single stepping requires a paused healthy simulation"});
     auto clock = play_->clock;
     auto advanced = clock.step(count); if (!advanced) return advanced;
-    if (play_->solver) {
-        advanced = play_->solver->advance(clock.config().fixed_dt_ns, count);
-        if (!advanced) return advanced;
-    }
+    advanced = advance_solver(clock, count);
+    if (!advanced) return advanced;
     play_->clock = clock;
     return {};
+}
+Result<void> SimulationService::advance_solver(const FixedStepClock& clock, std::uint32_t count) {
+    if (!count || !play_->solver) return {};
+#ifdef DK_SIMULATION_GPU
+    if (play_->gpu) {
+        auto result = play_->gpu->step(clock.config().fixed_dt_ns, count);
+        // A completed submit is irreversible even if its wait/device subsequently fails.
+        if (!result && play_->gpu->steps() != play_->clock.state().steps) {
+            play_->clock = clock; play_->paused = true; play_->fault = result.error().code;
+        }
+        return result;
+    }
+#endif
+    return play_->solver->advance(clock.config().fixed_dt_ns, count);
 }
 Result<void> SimulationService::stop(SimulationId id) {
     auto valid = check_run(id); if (!valid) return valid;
@@ -64,7 +91,7 @@ Result<void> SimulationService::stop(SimulationId id) {
 }
 SimulationRunState SimulationService::run_state() const {
     return {play_->id, play_->source, play_->clock.config(), play_->clock.state(), play_->fault, play_->cloth,
-        play_->solver ? std::optional{play_->solver->metrics()} : std::nullopt};
+        play_->solver && !play_->gpu ? std::optional{play_->solver->metrics()} : std::nullopt, bool(play_->gpu)};
 }
 SimulationState SimulationService::state() const {
     if (!play_) return {SimulationMode::edit, {}};
@@ -79,17 +106,35 @@ Result<PlaySceneSnapshot> SimulationService::read_snapshot(SimulationId id) cons
 Result<PlayParticleSnapshot> SimulationService::read_particles(SimulationId id) const {
     auto valid = check_run(id); if (!valid) return std::unexpected(valid.error());
     if (!play_->solver) return std::unexpected(Error{ErrorCode::invalid_state, "The active simulation has no particle solver"});
-    return PlayParticleSnapshot{run_state(), play_->solver->snapshot()};
+    auto snapshot = play_->solver->snapshot();
+#ifdef DK_SIMULATION_GPU
+    if (play_->gpu) {
+        if (!play_->paused || play_->fault)
+            return std::unexpected(Error{ErrorCode::invalid_state, "GPU readback requires a paused healthy simulation"});
+        auto particles = play_->gpu->read(play_->clock.config().fixed_dt_ns);
+        if (!particles) {
+            play_->fault = particles.error().code;
+            return std::unexpected(particles.error());
+        }
+        auto metrics = play_->solver->evaluate(particles->positions, particles->velocities);
+        if (!metrics) { play_->fault = metrics.error().code; return std::unexpected(metrics.error()); }
+        snapshot.positions = std::move(particles->positions); snapshot.velocities = std::move(particles->velocities);
+        snapshot.metrics = *metrics;
+    }
+#endif
+    auto run = run_state(); run.metrics = snapshot.metrics;
+    return PlayParticleSnapshot{run, std::move(snapshot)};
 }
 Result<SimulationParticlePage> SimulationService::particle_page(SimulationId id, std::size_t offset, std::size_t limit) const {
     auto valid = check_run(id); if (!valid) return std::unexpected(valid.error());
     if (!play_->solver) return std::unexpected(Error{ErrorCode::invalid_state, "The active simulation has no particle solver"});
-    const auto positions = play_->solver->positions(); const auto velocities = play_->solver->velocities();
-    if (offset > positions.size() || limit < 1 || limit > 256)
+    if (offset > play_->solver->positions().size() || limit < 1 || limit > 256)
         return std::unexpected(Error{ErrorCode::invalid_argument, "Invalid simulation particle page"});
+    auto snapshot = read_particles(id); if (!snapshot) return std::unexpected(snapshot.error());
+    const auto positions = std::span{snapshot->data.positions}; const auto velocities = std::span{snapshot->data.velocities};
     const auto count = std::min(limit, positions.size()-offset);
     const auto p = positions.subspan(offset, count); const auto v = velocities.subspan(offset, count);
-    return SimulationParticlePage{run_state(), offset, positions.size(), {p.begin(), p.end()}, {v.begin(), v.end()}};
+    return SimulationParticlePage{snapshot->run, offset, positions.size(), {p.begin(), p.end()}, {v.begin(), v.end()}};
 }
 void SimulationService::pump(TimePoint now) {
     if (!play_ || play_->paused) return;
@@ -103,7 +148,7 @@ void SimulationService::pump(TimePoint now) {
     const auto advanced = clock.advance(elapsed);
     if (!advanced) { play_->paused = true; play_->fault = advanced.error().code; return; }
     if (play_->solver && *advanced > 0) {
-        const auto solved = play_->solver->advance(clock.config().fixed_dt_ns, *advanced);
+        const auto solved = advance_solver(clock, *advanced);
         if (!solved) { play_->paused = true; play_->fault = solved.error().code; return; }
     }
     play_->clock = clock;

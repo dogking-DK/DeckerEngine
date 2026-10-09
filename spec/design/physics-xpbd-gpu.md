@@ -1,7 +1,7 @@
 ---
 module: physics-xpbd-gpu
 created_at: "2026-10-09T10:59:13+08:00"
-updated_at: "2026-10-09T11:36:11+08:00"
+updated_at: "2026-10-09T11:55:00+08:00"
 status: accepted
 ---
 
@@ -12,8 +12,7 @@ status: accepted
 M10.3 将 [CPU XPBD](physics-xpbd.md) 的预测、分色距离约束、地面投影、速度重建映射为
 [Graph](graphics-graph.md) Pass。`engine/physics/xpbd-gpu` 提供 `dk::physics_xpbd_gpu`，
 PUBLIC 依赖 CPU XPBD/Graph，PRIVATE Shaders；不依赖 Render、Scene、Framework 或窗口。
-可选 `DK_BUILD_PHYSICS_GPU` 默认关闭；windows-graphics 开启。CPU Runtime 命令仍使用 CPU 求解器，
-完整 GPU 命令/脚本实验属于 M10.4。渲染由独立 [布片 Pass](render-simulation.md) 消费。
+可选 `DK_BUILD_PHYSICS_GPU` 默认关闭；windows-graphics 开启。CPU-only Runtime 仍使用 CPU 求解器；可选 [模拟服务](physics-api.md) 在 M10.4 接入 GPU 命令/脚本实验。渲染由独立 [布片 Pass](render-simulation.md) 消费。
 
 ## 数据和算法
 

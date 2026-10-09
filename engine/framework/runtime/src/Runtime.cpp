@@ -101,7 +101,7 @@ Result<void> Runtime::register_runtime_commands()
                                             {"async_jobs", schema::boolean()},
                                             {"render_capture",schema::boolean()},
                                             {"simulation", schema::object({{"fixed_step", schema::boolean()},
-                                                {"solver", schema::string()}}, {"fixed_step", "solver"})},
+                                                {"solver", schema::string()}, {"gpu",schema::boolean()}, {"experiment_export",schema::boolean()}}, {"fixed_step", "solver", "gpu", "experiment_export"})},
                                             {"capture_limits",schema::nullable(schema::object({{"queued",schema::integer()},
                                                 {"active",schema::integer()},{"terminal",schema::integer()},{"input_bytes",schema::integer()},
                                                 {"max_dimension",schema::integer()}},{"queued","active","terminal","input_bytes","max_dimension"}))},
@@ -122,6 +122,12 @@ Result<void> Runtime::register_runtime_commands()
                                            {"max_batch_requests", 128},       {"transactions", true},
                                            {"guard", "document_id+revision"},
                                            {"simulation", {{"fixed_step", true}, {"solver", "xpbd_cpu"}}}};
+                               value["simulation"]["gpu"] = false;
+                               value["simulation"]["experiment_export"] = false;
+#ifdef DK_SIMULATION_GPU
+                               value["simulation"]["gpu"] = true;
+                               value["simulation"]["experiment_export"] = true;
+#endif
                                value["async_jobs"] = false; value["job_limits"] = nullptr;
 #ifdef DK_RUNTIME_ASSETS
                                const auto limits = assets_->limits(); value["async_jobs"] = true;

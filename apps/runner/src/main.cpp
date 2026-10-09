@@ -13,6 +13,7 @@
 #endif
 #endif
 #include <filesystem>
+#include <charconv>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -34,7 +35,7 @@ int run(const std::vector<std::filesystem::path> &args)
                      "         [--script-access query|edit|project] (Ctrl+C/Ctrl+Break cancels on Windows)\n";
 #endif
 #ifdef _WIN32
-        std::cout << "       dk-run --project-root ROOT --pipe NAME\n";
+        std::cout << "       dk-run --project-root ROOT --pipe NAME [--pipe-timeout-ms 1..60000] (default 5000)\n";
 #endif
 #endif
         return 0;
@@ -50,6 +51,9 @@ int run(const std::vector<std::filesystem::path> &args)
     dk::runner::ScriptOptions script_options;
 #endif
     std::string pipe_name;
+#ifdef _WIN32
+    std::optional<std::chrono::milliseconds> pipe_timeout;
+#endif
     bool auto_guard = false, stdio = false;
     for (std::size_t i = 0; i < args.size(); ++i)
     {
@@ -72,6 +76,17 @@ int run(const std::vector<std::filesystem::path> &args)
             pipe_name.assign(reinterpret_cast<const char*>(name.data()), name.size());
             if (!dk::ipc::valid_endpoint(pipe_name)) { std::cerr << "Invalid pipe name.\n"; return 2; }
         }
+        else if (args[i] == "--pipe-timeout-ms" && !pipe_timeout && i + 1 < args.size())
+        {
+            const auto encoded = args[++i].u8string();
+            const auto* text = reinterpret_cast<const char*>(encoded.data());
+            unsigned value = 0;
+            const auto parsed = std::from_chars(text, text + encoded.size(), value);
+            if (parsed.ec != std::errc{} || parsed.ptr != text + encoded.size() || value < 1 || value > 60000) {
+                std::cerr << "Invalid pipe timeout; expected 1..60000 ms.\n"; return 2;
+            }
+            pipe_timeout = std::chrono::milliseconds{value};
+        }
 #endif
         else
         {
@@ -87,6 +102,9 @@ int run(const std::vector<std::filesystem::path> &args)
     }
     if (root.empty() || (static_cast<int>(stdio) + static_cast<int>(!batch.empty()) + static_cast<int>(!pipe_name.empty()) + static_cast<int>(!script.empty()) != 1)
         || (auto_guard && batch.empty())
+#ifdef _WIN32
+        || (pipe_timeout && pipe_name.empty())
+#endif
 #ifdef DK_RUN_WITH_LUAU
         || (script.empty() && !script_options.specified.empty())
 #endif
@@ -114,7 +132,9 @@ int run(const std::vector<std::filesystem::path> &args)
 #ifdef _WIN32
     if (!pipe_name.empty())
     {
-        auto server = dk::IpcServer::listen(**runtime, pipe_name);
+        dk::ipc::PipeOptions options;
+        if (pipe_timeout) options.timeout = *pipe_timeout;
+        auto server = dk::IpcServer::listen(**runtime, pipe_name, options);
         if (!server) { std::cerr << server.error().message << '\n'; return 3; }
         while (!(*runtime)->stopping())
         {

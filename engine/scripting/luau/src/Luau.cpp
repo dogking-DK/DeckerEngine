@@ -289,14 +289,14 @@ bool allowed(std::string_view name, LuauAccess access) {
         "tasks.get", "scene.query", "entity.get", "history.status", "simulation.query", "simulation.particles"};
     if (std::find(queries.begin(), queries.end(), name) != queries.end()) return true;
     if (access == LuauAccess::query) return false;
-    if (access == LuauAccess::edit && (name == "scene.load" || name == "scene.save" || name == "project.save"))
+    if (access == LuauAccess::edit && (name == "scene.load" || name == "scene.save" || name == "project.save" || name == "simulation.export"))
         return false;
     constexpr std::array names = {
         "commands.list", "commands.describe", "runtime.capabilities", "tasks.list", "tasks.get",
         "scene.new", "scene.load", "scene.query", "scene.save", "scene.transaction", "project.save",
         "entity.create", "entity.get", "entity.delete", "entity.set_name", "entity.set_transform",
         "entity.set_parent", "entity.set_assets", "history.status", "history.undo", "history.redo",
-        "simulation.start", "simulation.pause", "simulation.resume", "simulation.step", "simulation.stop"};
+        "simulation.start", "simulation.pause", "simulation.resume", "simulation.step", "simulation.stop", "simulation.export"};
     return std::find(names.begin(), names.end(), name) != names.end();
 }
 int command(lua_State* state) {

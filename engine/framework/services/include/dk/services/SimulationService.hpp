@@ -8,6 +8,7 @@ namespace dk {
 struct SimulationIdTag;
 using SimulationId = StableId<SimulationIdTag>;
 enum class SimulationMode { edit, running, paused };
+namespace detail { class GpuSimulation; }
 struct SimulationRunState {
     SimulationId run_id;
     DocumentState source;
@@ -16,6 +17,7 @@ struct SimulationRunState {
     std::optional<ErrorCode> fault;
     std::optional<ClothConfig> cloth;
     std::optional<XpbdMetrics> metrics;
+    bool gpu = false;
 };
 struct SimulationState {
     SimulationMode mode;
@@ -43,7 +45,7 @@ public:
     using Clock = std::chrono::steady_clock;
     using TimePoint = Clock::time_point;
     [[nodiscard]] Result<void> start(const SceneService&, EditGuard, FixedStepConfig = {},
-                                     bool paused = false, std::optional<TimePoint> now = {}, std::optional<ClothConfig> cloth = {});
+                                     bool paused = false, std::optional<TimePoint> now = {}, std::optional<ClothConfig> cloth = {}, bool gpu = false);
     [[nodiscard]] Result<void> pause(SimulationId);
     [[nodiscard]] Result<void> resume(SimulationId, TimePoint now = Clock::now());
     [[nodiscard]] Result<void> step(SimulationId, std::uint32_t count = 1);
@@ -52,6 +54,11 @@ public:
     [[nodiscard]] Result<PlaySceneSnapshot> read_snapshot(SimulationId) const;
     [[nodiscard]] Result<PlayParticleSnapshot> read_particles(SimulationId) const;
     [[nodiscard]] Result<SimulationParticlePage> particle_page(SimulationId, std::size_t offset = 0, std::size_t limit = 128) const;
+#ifdef DK_SIMULATION_GPU
+    // Returns the normalized project-relative directory. Never overwrites an existing target.
+    [[nodiscard]] Result<std::string> export_experiment(SimulationId, std::uint64_t expected_steps,
+        std::string_view output, std::uint32_t width = 640, std::uint32_t height = 480);
+#endif
     void pump(TimePoint now = Clock::now());
     [[nodiscard]] TimePoint next_deadline(TimePoint fallback) const;
     void shutdown() noexcept { play_.reset(); }
@@ -68,9 +75,11 @@ private:
         bool paused;
         TimePoint last_pump;
         std::optional<ErrorCode> fault;
+        std::shared_ptr<detail::GpuSimulation> gpu;
     };
     [[nodiscard]] Result<void> check_run(SimulationId) const;
     [[nodiscard]] SimulationRunState run_state() const;
+    [[nodiscard]] Result<void> advance_solver(const FixedStepClock&, std::uint32_t);
     std::unique_ptr<PlayWorld> play_;
 };
 }

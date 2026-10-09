@@ -138,6 +138,14 @@ Result<void> XpbdSolver::advance(std::int64_t fixed_dt_ns, std::uint32_t count) 
     positions_.swap(p); velocities_.swap(v); metrics_ = metrics;
     return {};
 }
+Result<XpbdMetrics> XpbdSolver::evaluate(std::span<const ParticlePosition> p, std::span<const ParticleVelocity> v) const {
+    if (p.size() != initial_.size() || v.size() != p.size()) return invalid("Mismatched XPBD measurement arrays");
+    for (std::size_t i = 0; i < p.size(); ++i) {
+        if (!finite_vector(p[i]) || !finite_vector(v[i]) || p[i].inverse_mass != initial_[i].inverse_mass || v[i].padding != 0)
+            return numerical();
+    }
+    return measure(p, v);
+}
 XpbdMetrics XpbdSolver::measure(std::span<const ParticlePosition> p, std::span<const ParticleVelocity> v) const {
     XpbdMetrics m;
     m.particle_count = static_cast<std::uint32_t>(p.size());

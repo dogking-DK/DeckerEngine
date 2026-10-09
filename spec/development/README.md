@@ -78,5 +78,6 @@
 | 0074 | [M10.1 模拟世界与固定步长](0074-simulation-world.md) | physics-api, runtime, application-services, scripting-luau, architecture | completed |
 | 0075 | [M10.2 CPU XPBD参考求解器](0075-cpu-xpbd.md) | physics-xpbd, physics-api, runtime, architecture | completed |
 | 0076 | [M10.3 GPU XPBD与可视化](0076-gpu-xpbd.md) | physics-xpbd-gpu, render-simulation, physics-xpbd, physics-api, architecture, graphics-graph | completed |
+| 0077 | [M10.4 脚本化物理实验](0077-simulation-experiments.md) | physics-api, physics-xpbd-gpu, render-simulation, physics-xpbd, scripting-luau, automation-python, automation-transport, runtime, architecture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

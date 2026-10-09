@@ -48,7 +48,7 @@ TEST_CASE("Luau simulation example executes exact ticks and capability modes pro
     LuauOptions query; query.access = LuauAccess::query;
     REQUIRE(run_luau(*s.runtime, R"(
 assert(dk.command("simulation.query").ok)
-for _, method in {"simulation.start", "simulation.pause", "simulation.resume", "simulation.step", "simulation.stop"} do
+for _, method in {"simulation.start", "simulation.pause", "simulation.resume", "simulation.step", "simulation.stop", "simulation.export"} do
     local r = dk.command(method)
     assert(not r.ok and r.error.name == "not_supported" and r.task_id == dk.null)
 end
@@ -60,6 +60,10 @@ TEST_CASE("Luau XPBD cloth example validates physics through controlled commands
     std::ifstream input(DK_XPBD_EXAMPLE, std::ios::binary); REQUIRE(input);
     const std::string source{std::istreambuf_iterator<char>{input}, {}};
     LuauOptions edit; edit.access = LuauAccess::edit;
+    REQUIRE(run_luau(*s.runtime, R"(
+local r = dk.command("simulation.export", {})
+assert(not r.ok and r.error.name == "not_supported" and r.task_id == dk.null)
+)", "export-denied.luau", edit));
     REQUIRE(run_luau(*s.runtime, source, "xpbd-cloth.luau", edit));
     s.call("simulation.start", {{"solver", "xpbd_cpu"}, {"paused", true}, {"guard", {
         {"document_id", s.call("scene.query")["state"]["document_id"]}, {"revision", 0}}}});

@@ -6,7 +6,7 @@
 当前提供 Foundation、Memory/Tracy、Scene 持久化、命令/事务、CPU Runtime、
 资产导入与缓存、有界 Jobs、异步 CPU Ready，以及可选的 Vulkan 使用层（对象/管线/绑定/录制/同步/传输）、Slang 编译、离屏绘制/计算读回，以及 SDL3 窗口与 Vulkan 呈现。
 GPU Graph 提供资源/Pass 声明、CPU 编译、裁剪、transient 资源管理及单队列同步执行、状态导入导出和诊断；离屏样例已由 Graph 编排。
-Render 已提供只读场景/视图提取、GpuMesh/纹理上传与缓存卸载；已接通磁盘资产、场景 Graph 管线与 Runtime 截图。编辑器提供工作台、拾取/Gizmo、命令编辑和保存加载；Windows 本机 Named Pipe 与轻量 dk-ctl 已接入。GUI、外部命令、截图及保存后 runner 的指定视图一致性已验收，见 [M8.4 / 交付 C](spec/development/0068-editor-consistency.md)。Luau 支持通过同一服务创建、编辑、保存场景，并提供错误恢复、执行预算、能力模式及取消，见[脚本指南](spec/guides/scripting.md)。Python SDK 提供超时/结构化错误、批量/事务、作业等待和截图产物收集，见[Python 指南](spec/guides/python.md)。已提供版本化命令记录和逐步逻辑状态重放，见[重放指南](spec/guides/replay.md)。已提供独立模拟世界、固定步长和运行控制，见[模拟指南](spec/guides/simulation.md)；已提供CPU XPBD参考、GPU分色求解和同图布片可视化。GPU目前通过独立C++模块/示例使用，模拟命令仍为CPU后端；网络远程控制尚未实现。
+Render 已提供只读场景/视图提取、GpuMesh/纹理上传与缓存卸载；已接通磁盘资产、场景 Graph 管线与 Runtime 截图。编辑器提供工作台、拾取/Gizmo、命令编辑和保存加载；Windows 本机 Named Pipe 与轻量 dk-ctl 已接入。GUI、外部命令、截图及保存后 runner 的指定视图一致性已验收，见 [M8.4 / 交付 C](spec/development/0068-editor-consistency.md)。Luau 支持通过同一服务创建、编辑、保存场景，并提供错误恢复、执行预算、能力模式及取消，见[脚本指南](spec/guides/scripting.md)。Python SDK 提供超时/结构化错误、批量/事务、作业等待和截图产物收集，见[Python 指南](spec/guides/python.md)。已提供版本化命令记录和逐步逻辑状态重放，见[重放指南](spec/guides/replay.md)。已提供独立模拟世界、固定步长和运行控制，见[模拟指南](spec/guides/simulation.md)；已提供CPU XPBD参考、GPU分色求解和同图布片可视化。GPU 模拟已接入命令、Python/Luau 严格步数实验和统一配置/指标/图像导出；网络远程控制尚未实现。
 阶段状态、依赖和下一项统一见[开发 Roadmap](spec/roadmap.md)。
 
 ## 快速开始

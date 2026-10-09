@@ -1,7 +1,7 @@
 ---
 module: automation-transport
 created_at: "2026-10-08T12:30:00+08:00"
-updated_at: "2026-10-08T13:07:24+08:00"
+updated_at: "2026-10-09T12:02:00+08:00"
 status: accepted
 ---
 
@@ -57,3 +57,5 @@ editor 通过 Workspace 的 owner 安全点接入并刷新快照，未应用草�
 实现依据：[Win32 Pipe security](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-security-and-access-rights)、
 [ConnectNamedPipe](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-connectnamedpipe)。
 关联：[客户端](automation-client.md)、[协议](automation-protocol.md)、[Runtime](runtime.md)、[0067](../development/0067-ipc-client.md)。
+
+M10.4：runner 显式 `--pipe-timeout-ms 1..60000` 覆盖 PipeOptions.timeout（默认5000不变，只能与 --pipe 同用）。GPU 冷编译可能超过5秒，实验宿主使用60000，客户端独立设置60秒。超时断连不取消已接受命令，保留原 ticket/未知执行状态语义；不把客户端等待期当服务端配置。

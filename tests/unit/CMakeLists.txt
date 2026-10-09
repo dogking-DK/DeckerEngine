@@ -203,7 +203,7 @@ if(DK_BUILD_SCENE)
         add_executable(dk_simulation_tests SimulationTests.cpp)
         target_link_libraries(dk_simulation_tests PRIVATE dk::runtime dk::scene_operations Catch2::Catch2WithMain)
         dk_target_defaults(dk_simulation_tests)
-        if(TARGET dk_render_services)
+        if(TARGET dk_render_services OR TARGET dk_render_simulation)
             dk_deploy_slang(dk_simulation_tests)
         endif()
         catch_discover_tests(dk_simulation_tests TEST_PREFIX "dk.simulation."

@@ -13,6 +13,6 @@ if(TARGET dk_scripting_luau)
     target_compile_definitions(dk_run PRIVATE DK_RUN_WITH_LUAU=1)
 endif()
 
-if(TARGET dk_render_services)
+if(TARGET dk_render_services OR TARGET dk_render_simulation)
     dk_deploy_slang(dk_run)
 endif()

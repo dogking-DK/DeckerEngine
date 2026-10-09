@@ -1,7 +1,7 @@
 ---
 module: render-simulation
 created_at: "2026-10-09T10:59:13+08:00"
-updated_at: "2026-10-09T11:36:11+08:00"
+updated_at: "2026-10-09T11:55:00+08:00"
 status: accepted
 ---
 
@@ -37,3 +37,5 @@ GPU 实际执行错误和数值发散沿用求解器契约，不承诺跨设备�
 CPU/GPU 数值对照之后生成初态和 300 拍图像；检查非背景覆盖、帧间像素变化、暂停 count=0 不改变粒子/步数。
 实际同步诊断必须包含 Compute/ShaderStorageWrite → Compute/ShaderStorageRead → VertexShader/ShaderStorageRead；启用 Vulkan 同步验证。
 非法尺寸/网格/相机、无读回模式、旧帧和在途销毁验证见 [0076](../development/0076-gpu-xpbd.md)。
+
+M10.4 的 [simulation.export](../commands/simulation.md) 用零步 Graph 同时回读粒子与图像，统一发布实验目录；普通模拟步进不请求回读。

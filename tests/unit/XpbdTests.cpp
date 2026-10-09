@@ -20,6 +20,19 @@ void same_state(const XpbdSnapshot& a, const XpbdSnapshot& b) {
     REQUIRE(a.metrics == b.metrics);
 }
 }
+TEST_CASE("XPBD external measurements preserve topology and original pins") {
+    auto solver = make({1, -10, -100, 0}, {{0, 1, 0, 0}, {2, 1, 0, 1}}, {{}, {}}, {{0, 1, 2, .001f}});
+    auto data = solver.snapshot();
+    data.positions[0].y += 1; data.positions[1].x += 1; data.velocities[1].x = 2;
+    const auto m = solver.evaluate(data.positions,data.velocities); REQUIRE(m);
+    REQUIRE(m->max_pin_displacement == Approx(1)); REQUIRE(m->kinetic_energy == Approx(2));
+    REQUIRE(m->max_constraint_error == Approx(std::sqrt(10.0)-2));
+    REQUIRE(solver.metrics().max_pin_displacement == 0);
+    REQUIRE_FALSE(solver.evaluate({},data.velocities));
+    data.positions[0].inverse_mass = 1; REQUIRE_FALSE(solver.evaluate(data.positions,data.velocities));
+    data.positions[0].inverse_mass = 0; data.velocities[1].x = std::numeric_limits<float>::infinity();
+    REQUIRE_FALSE(solver.evaluate(data.positions,data.velocities));
+}
 TEST_CASE("XPBD free fall matches the discrete analytic solution and energy") {
     auto solver = make({1, -10, -100, 0}, {{0, 10, 0, 0.5f}}, {{1, 0, 0, 0}});
     REQUIRE(solver.advance(10000000, 20));

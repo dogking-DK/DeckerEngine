@@ -1,7 +1,7 @@
 ---
 module: automation-python
 created_at: "2026-10-08T16:00:00+08:00"
-updated_at: "2026-10-08T16:57:18+08:00"
+updated_at: "2026-10-09T11:55:00+08:00"
 status: accepted
 ---
 
@@ -69,3 +69,5 @@ SDK 不缓存或重写 Scene guard；成功编辑的提交点仍在 Services，�
 ## 相关记录
 
 [0072 M9.3 实现与验收](../development/0072-python-automation.md)。
+
+M10.4 的 [布片实验示例](../../examples/automation/cloth_experiment.py) 复用 Client.call：读取版本化配置、从暂停态分批执行精确 N、统一导出并 Stop；支持覆盖后端作 CPU/GPU 对照。失败保留活动运行供检查，不自动重试不确定结果。M9 Recorder v1 仍只用于原场景协议。

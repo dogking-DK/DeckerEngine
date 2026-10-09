@@ -1,7 +1,7 @@
 ---
 module: physics-xpbd
 created_at: "2026-10-09T10:33:53+08:00"
-updated_at: "2026-10-09T11:20:00+08:00"
+updated_at: "2026-10-09T11:55:00+08:00"
 status: accepted
 ---
 
@@ -70,7 +70,7 @@ SimulationService 同时准备候选FixedStepClock，求解成功后才提交时
 
 ## 接入和验证计划
 
-simulation.start 增加可选 solver="none"（默认）/"xpbd_cpu" 与 cloth；cloth仅允许xpbd_cpu。
+simulation.start 增加可选 solver="none"（默认）/"xpbd_cpu" 与 cloth；cloth 允许 CPU 或可选 GPU 后端，服务装配见 [Physics API](physics-api.md)。
 旧时钟模式及步长范围保持兼容；XPBD限制dt<=33333333 ns。query结果增加 solver、cloth、metrics；
 新增 simulation.particles(run_id,offset=0,limit=128) 查询拥有型粒子页，返回run_id/steps/时间，防止拼接不同拍。
 Runtime::read_play_particles(run_id) 返回完整拥有型物理快照。Luau query允许粒子查询；Python沿用Client.call。
@@ -87,3 +87,5 @@ Runtime::read_play_particles(run_id) 返回完整拥有型物理快照。Luau qu
 ## GPU 数据互通
 
 拥有型 XpbdSnapshot 补充与有序约束对应的初始单位方向（float3 数组），用于 [GPU 求解](physics-xpbd-gpu.md) 在动态重合时复用相同退化规则。导出已经推进的 CPU 状态不重新定义方向；CPU 算法不变。
+
+`XpbdSolver::evaluate(p,v)` 对外部只读数组按原拓扑和初始固定点测量；校验尺寸、有限值、逆质量与 padding，不修改求解器。M10.4 GPU 导出复用此指标定义，避免重新创建求解器改变固定点基准。

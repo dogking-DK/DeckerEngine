@@ -1,7 +1,7 @@
 # 模拟世界与固定步长
 
 支持独立 PlayWorld、固定时钟和可选CPU XPBD布片求解器。start默认none，只推进调度拍数；
-显式solver="xpbd_cpu"可推进独立粒子。场景实体保持启动输入。另有独立GPU求解/可视化C++模块和示例，见下文。
+显式solver="xpbd_cpu"可推进独立粒子。场景实体保持启动输入。可选 GPU 后端与 CPU 使用同一组命令，支持统一实验导出，见下文。
 完整字段见 [模拟命令](../commands/simulation.md)，内部约定见 [Physics API](../design/physics-api.md)。
 
 ## 严格执行 N 步
@@ -16,7 +16,7 @@ New-Item -ItemType Directory -Force out/simulation-demo | Out-Null
 ```
 
 [完整示例](../../examples/scripting/fixed-step.luau) 成功时不输出 stdout、不保存文件。
-Luau query 权限可调用 simulation.query/particles；edit/project 可调用全部模拟命令。
+Luau query 权限可调用 simulation.query/particles；edit/project 可调用模拟控制；文件导出仅 project。
 一条 step(count=N) 消耗一条脚本命令预算，N 最多10000。
 
 外部 Python/IPC 在已有活动场景上使用同样流程（Client 启动见 [Python 指南](python.md)）：
@@ -54,7 +54,7 @@ Play 从启动时的内存场景完整克隆，包括未保存编辑、实体身
 Runtime::read_play_scene(run_id) 取得拥有型只读 Play 快照，即使 Stop 后该副本仍有效。
 
 场景保存不含运行配置、步数或检查点，Stop/shutdown 不自动保存。
-M9 的记录重放白名单尚未接入模拟命令；实验配置、指标与图像的重放在 M10.4 接入。
+M9 的记录重放白名单尚未接入模拟命令；物理实验使用独立版本化 config.json 与下述 Python 示例重放。
 
 
 ## CPU XPBD 布片实验
@@ -117,8 +117,8 @@ frame.physics().steps() 为从GPU初始化起成功提交的拍数，wait确认�
 `GpuXpbdOptions.readback` 可显式申请粒子诊断读回；`ClothView.image_readback` 控制图像读回，默认均关闭。
 在wait成功前读回会报错；数值发散的诊断读取也会报错，调用者应停止并重建实验。
 
-现有 `simulation.start`/`step` 和 `render.capture` 命令仍分别使用CPU模拟和EditWorld截图；
-GPU命令/脚本实验与配置、指标、图像统一导出由M10.4继续，当前没有GPU检查点或编辑器Play视口。
+`simulation.start(solver="xpbd_gpu")` 和 step 已接入 GPU；`render.capture` 仍只截图 EditWorld。
+物理实验用 simulation.export；当前没有 GPU 检查点或编辑器 Play 视口。
 真实设备的容差、同步/失败与寿命验证入口：
 
 ```powershell
@@ -128,3 +128,68 @@ GPU命令/脚本实验与配置、指标、图像统一导出由M10.4继续，�
 输出在 `out/build/windows-graphics/test-artifacts/Debug/gpu-xpbd`：对比JSON、图计划和初态/300拍PPM。
 无GPU或验证层不可用时测试返回77跳过；不能把跳过当作验收通过。
 接口与限制见 [GPU设计](../design/physics-xpbd-gpu.md)、[绘制设计](../design/render-simulation.md)。
+
+
+## Python / Luau 完整实验与重放
+
+构建带 Luau 的图形 runner（复用固定依赖，无窗口）：
+
+```powershell
+cmake --preset windows-graphics -DDK_BUILD_SCRIPTING_LUAU=ON
+cmake --build out/build/windows-graphics --config Debug --target dk_run dk_ctl
+New-Item -ItemType Directory -Force out/cloth-experiment | Out-Null
+./out/build/windows-graphics/bin/Debug/dk-run.exe --project-root out/cloth-experiment --script examples/scripting/gpu-experiment.luau --script-timeout-ms 120000
+```
+
+[Luau 示例](../../examples/scripting/gpu-experiment.luau) 从 paused 启动，每批最多8拍，最后4拍到300；
+导出 `out/cloth-experiment/luau-experiment` 后 Stop。重复执行需换新项目目录或自行归档旧产物，不覆盖旧目录。
+默认 VM 的5秒预算不足以涵盖冷编译，示例显式配置120秒；原生命令协作取消，不承诺中途硬抢占 GPU 等待。
+
+Python 在另一个终端连接专用宿主。先创建目录，在终端 A 启动：
+
+```powershell
+New-Item -ItemType Directory -Force out/cloth-python | Out-Null
+./out/build/windows-graphics/bin/Debug/dk-run.exe --project-root out/cloth-python --pipe cloth-experiment --pipe-timeout-ms 60000
+```
+
+终端 B 从仓库根运行 [Python 示例](../../examples/automation/cloth_experiment.py)：
+
+```powershell
+$env:PYTHONPATH = "$PWD/sdk/python"
+python examples/automation/cloth_experiment.py --pipe cloth-experiment --ctl out/build/windows-graphics/bin/Debug/dk-ctl.exe --output gpu --seed 42 --steps 300
+python examples/automation/cloth_experiment.py --pipe cloth-experiment --ctl out/build/windows-graphics/bin/Debug/dk-ctl.exe --config out/cloth-python/gpu/config.json --output repeat
+python examples/automation/cloth_experiment.py --pipe cloth-experiment --ctl out/build/windows-graphics/bin/Debug/dk-ctl.exe --config out/cloth-python/gpu/config.json --solver xpbd_cpu --output cpu
+./out/build/windows-graphics/bin/Debug/dk-ctl.exe --pipe cloth-experiment --method runtime.shutdown
+```
+
+客户端等待60秒，宿主也显式设置60秒；只增加客户端等待不能改变服务端默认5秒限制。
+GPU 冷编译耗时较长，同步步进期间 owner 不处理其他命令。示例要求独占控制，失败时保留活动运行供查询，
+不自动重试不确定执行结果或 Stop；可用原 ticket 查询已执行结果，参见 [IPC 指南](ipc.md)。
+Python --config 从零重放（0..10000拍），--solver 可切换参照后端；--seed/--steps 仅在无 --config 时使用。
+当前固定视图适配默认布片，极端网格/高度可能超出画面；v1 不允许更换相机矩阵。
+
+每个实验目录有五个文件：
+
+| 文件 | 内容 |
+| --- | --- |
+| config.json | DeckerSimulationExperiment v1、solver、完整 cloth/seed、N、fixed_dt_ns、固定视图和像素尺寸 |
+| metrics.json | 同版本 steps、simulated_time_ns 及全部数值指标 |
+| particles.json | 按索引排列的全部 position、velocity、inverse_mass |
+| image.ppm | 当前布片的 RGB8 图像 |
+| provenance.json | 启动文档/场景/revision、本轮 run_id 和主要产物文件名 |
+
+GPU 常规 step 不回读粒子；query.metrics 为 null。particles 和 export 才显式等待并读取，后者用同一零步 Graph
+读取当前粒子和图像；CPU 导出图像会上传当前 CPU 数组，因此完整图像导出也需要 Vulkan。
+相同构建/设备/输入重放时 config、metrics、particles、image 可逐字比较；provenance 的会话身份预期不同。
+CPU/GPU 采用数值容差：默认300拍位置最大分量差<0.002 m、速度<0.02 m/s；不承诺跨设备逐位一致。
+这些产物不是检查点；没有中途恢复/撤销导出。
+
+定向验收（需上述 Luau 配置）：
+
+```powershell
+& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Target @('dk_run','dk_ctl') -TestRegex '^dk\.simulation\.experiment_gpu$' -Reason '严格300拍、导出重放、CPU/GPU容差及失败保护'
+```
+
+产物保留在 `out/build/windows-graphics/test-artifacts/Debug/simulation-experiments/<独立目录>`。
+
+验收测试在设备初始化明确返回不可用/不支持时以77跳过，其余错误按失败处理；跳过不算GPU验收通过。

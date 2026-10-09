@@ -54,6 +54,8 @@ public:
     // All N steps commit together; any reported failure preserves arrays and metrics.
     [[nodiscard]] Result<void> advance(std::int64_t fixed_dt_ns, std::uint32_t count = 1);
     [[nodiscard]] XpbdSnapshot snapshot() const;
+    // Measure an external snapshot against this solver's original topology and pins.
+    [[nodiscard]] Result<XpbdMetrics> evaluate(std::span<const ParticlePosition>, std::span<const ParticleVelocity>) const;
     [[nodiscard]] const XpbdMetrics& metrics() const noexcept { return metrics_; }
     // Views expire at the next successful advance or destruction.
     [[nodiscard]] std::span<const ParticlePosition> positions() const noexcept { return positions_; }

@@ -94,3 +94,5 @@ cmake --build out/build/windows-client --config Debug --target dk_ctl
 
 该配置只启用 Core/Commands/协议/管道客户端，无 Scene、Runtime、Vulkan、SDL 或 Renderer。
 使用工程现有固定 baseline，不额外引入三方库。本阶段仅实现 Windows Named Pipe，Unix socket、网络远程控制尚未实现。
+
+GPU 实验等较长同步命令可用 runner `--pipe-timeout-ms 60000`，范围1..60000、默认5000，只能与 --pipe 同用。它覆盖服务端 IO/等待 owner 上限；客户端 `--timeout-ms` 或 Python timeout 仍须独立配置。断连不表示已接受命令未执行，不自动新票据重试。

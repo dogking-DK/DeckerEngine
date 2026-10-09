@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-09T11:20:00+08:00"
+updated_at: "2026-10-09T12:09:00+08:00"
 status: accepted
 ---
 
@@ -141,4 +141,4 @@ Memory/Tracy 补充 → 资产加载/导入 → Vulkan Device/Shader → GPU Gra
 拥有独立 PlayWorld。Runtime 将模拟调度接入 owner pump，控制通过同一命令/脚本入口。
 M10.1仅建立时钟，M10.2的CPU求解见下文；编辑与Runtime截图继续使用 EditWorld；独立GPU模拟绘制见下文。
 
-M10.2 增加 [CPU XPBD](physics-xpbd.md)：独立连续粒子/分色距离约束、布片和地面边界，经模拟服务推进；另有可选 [GPU XPBD](physics-xpbd-gpu.md) 与 [布片绘制](render-simulation.md)，通过同一Graph连接，直接消费GPU粒子；M10.3以C++模块/示例交付，Runtime GPU实验接入留给M10.4。
+M10.2 增加 [CPU XPBD](physics-xpbd.md)：独立连续粒子/分色距离约束、布片和地面边界，经模拟服务推进；另有可选 [GPU XPBD](physics-xpbd-gpu.md) 与 [布片绘制](render-simulation.md)，通过同一Graph连接，直接消费GPU粒子；M10.4 经 Runtime 接入 GPU 控制、Python/Luau 严格步数实验与统一配置/指标/图像导出。

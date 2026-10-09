@@ -1,7 +1,7 @@
 ---
 module: runtime
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-10-09T10:33:53+08:00"
+updated_at: "2026-10-09T11:55:00+08:00"
 status: accepted
 ---
 
@@ -124,3 +124,5 @@ shutdown 释放 Play；运行与编辑的身份、时钟边界和失败保护见
 CPU Runtime 新增的 Physics API/SimulationServices 均不依赖 GPU。
 
 M10.2 显式选择 xpbd_cpu 后，由同一 owner 调度推进物理与时钟；read_play_particles(run_id) 返回拥有型数组/指标快照。默认 none 保留原时钟模式，详见 [XPBD](physics-xpbd.md)。
+
+M10.4：capabilities.simulation 保留 fixed_step/solver，增加 gpu/experiment_export 编译能力。GPU 设备延迟到 start 或 CPU 实验图像导出时创建；普通 CPU start/query 不创建 Vulkan。GPU 每批最多8拍并等待退休，不默认读回；可选 external simulation.export 使用启动时项目及独立 run_id/expected_steps，详细失败语义见 [Physics API](physics-api.md)。

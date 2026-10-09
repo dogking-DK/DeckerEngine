@@ -23,7 +23,8 @@ def require(condition, message):
 def server(args, root, endpoint):
     # Files avoid pipe backpressure while the server lives. Only this child is reaped.
     with (root / f"{uuid4().hex}.stdout").open("wb") as output, (root / f"{uuid4().hex}.stderr").open("w+b") as errors:
-        process = subprocess.Popen([args.runner, "--project-root", str(root), "--pipe", endpoint],
+        extra = ["--pipe-timeout-ms", str(args.pipe_timeout_ms)] if hasattr(args, "pipe_timeout_ms") else []
+        process = subprocess.Popen([args.runner, "--project-root", str(root), "--pipe", endpoint, *extra],
                                    stdin=subprocess.DEVNULL, stdout=output, stderr=errors,
                                    creationflags=subprocess.CREATE_NO_WINDOW)
         client = Client(endpoint, args.client)

@@ -35,6 +35,7 @@
 | 服务、事务、历史、Operations | dk_service_tests | `^dk\.services\.` |
 | Edit/Play、固定纳秒时钟、模拟命令与失败保护 | dk_simulation_tests | `^dk\.simulation\.(fixed clock \|simulation )` |
 | CPU XPBD解析解、布片、分组、接触、数值与失败回滚 | dk_xpbd_tests | `^dk\.xpbd\.` |
+| GPU 命令、Python/Luau 严格步数实验与配置/指标/图像重放 | dk_run、dk_ctl | `^dk\.simulation\.experiment_gpu$`（RenderSimulation + Luau + Python，gpu label） |
 | 真实 stdio/pipe 空闲模拟、暂停与关闭 | dk_run、dk_ctl | `^dk\.simulation\.(stdio\|pipe)$`（Windows，Python 3.11+） |
 | JSON-RPC、JSON Lines、任务 | dk_protocol_tests | `^dk\.protocol\.` |
 | IPC ticket、断连/超时、分帧、有界队列、owner 分派 | dk_ipc_tests | `^dk\.ipc\.(IPC \|Named pipe \|Disconnected \|Pipe )` |

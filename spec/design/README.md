@@ -2,7 +2,7 @@
 
 | 模块 | 文档 | 状态 | 范围 | 源码入口 | 测试入口 |
 | --- | --- | --- | --- | --- | --- |
-| physics-xpbd-gpu | [GPU XPBD](physics-xpbd-gpu.md) | accepted | 分色求解、候选状态与异步输出 | [Physics](../../engine/physics) | [集成](../../tests/integration/CMakeLists.txt) |
+| physics-xpbd-gpu | [GPU XPBD](physics-xpbd-gpu.md) | accepted | 分色求解、候选状态、异步输出与命令接入 | [Physics](../../engine/physics) | [集成](../../tests/integration/CMakeLists.txt) |
 | render-simulation | [模拟可视化](render-simulation.md) | accepted | 同图布片绘制与显式读回 | [Render](../../engine/render) | [集成](../../tests/integration/CMakeLists.txt) |
 | physics-xpbd | [CPU XPBD参考](physics-xpbd.md) | accepted | 连续粒子、分色距离约束、布片/地面与数值指标 | [Physics](../../engine/physics) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | physics-api | [模拟世界与固定步长](physics-api.md) | accepted | Edit/Play、整数时钟、运行控制与 owner 调度 | [Physics](../../engine/physics)、[Services](../../engine/framework/services) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
