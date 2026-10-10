@@ -19,6 +19,12 @@ struct SimulationDraft {
     std::int64_t fixed_dt_ns = 10000000;
 };
 enum class SimulationControl { pause, resume, step, cancel, stop };
+struct SimulationExportReceipt {
+    SimulationId run_id;
+    std::uint64_t steps = 0;
+    std::int64_t simulated_time_ns = 0;
+    std::string output;
+};
 class Workspace final {
 public:
     [[nodiscard]] static Result<std::unique_ptr<Workspace>> create(const std::filesystem::path& root);
@@ -46,6 +52,11 @@ public:
     [[nodiscard]] SimulationDraft& simulation_draft() { return simulation_draft_; }
     [[nodiscard]] Result<void> start_simulation(bool paused = false);
     [[nodiscard]] Result<void> control_simulation(SimulationId observed_run, SimulationControl);
+    [[nodiscard]] Result<void> sample_simulation(SimulationId observed_run, std::uint64_t observed_steps);
+    [[nodiscard]] Result<void> export_simulation(SimulationId observed_run, std::uint64_t observed_steps,
+        std::string_view output, int width = 640, int height = 480);
+    [[nodiscard]] const std::optional<SimulationExportReceipt>& simulation_export() const { return simulation_export_; }
+    [[nodiscard]] const std::string& simulation_export_error() const { return simulation_export_error_; }
     [[nodiscard]] bool stopping() const { return runtime_->stopping(); }
 #ifdef _WIN32
     [[nodiscard]] Result<void> start_ipc(std::string_view name);
@@ -71,6 +82,8 @@ private:
     std::filesystem::path manifest_;
     HistoryStatus history_{};
     SimulationDraft simulation_draft_;
+    std::optional<SimulationExportReceipt> simulation_export_;
+    std::string simulation_export_error_;
 #ifdef _WIN32
     std::unique_ptr<IpcServer> ipc_;
 #endif

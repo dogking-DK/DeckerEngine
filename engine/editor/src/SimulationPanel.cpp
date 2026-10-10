@@ -41,8 +41,10 @@ void WorkbenchUi::simulation() {
             state.mode==SimulationMode::paused ? std::string_view{"paused"} : std::string_view{"running"};
         ImGui::Text("State: %.*s  |  %s",static_cast<int>(status.size()),status.data(),run->gpu ? "GPU XPBD" : run->cloth ? "CPU XPBD" : "Clock only");
         ImGui::Text("Completed: %llu",static_cast<unsigned long long>(run->clock.steps));
+        ImGui::Text("Simulated time: %.6f s",static_cast<double>(run->clock.simulated_time_ns)/1000000000.0);
         if (task) ImGui::Text("Target: %llu  |  In flight: %llu",static_cast<unsigned long long>(task->target_steps),
             static_cast<unsigned long long>(task->submitted_steps-task->completed_steps));
+        if (task) ImGui::ProgressBar(static_cast<float>(task->completed_steps)/static_cast<float>(task->target_steps),ImVec2{-1,6},"");
         if (run->fault) ImGui::TextWrapped("Simulation failed: %.*s. Stop before restarting.",
             static_cast<int>(error_code_name(*run->fault).size()),error_code_name(*run->fault).data());
         if (ImGui::TreeNode("Active configuration")) {
@@ -58,8 +60,16 @@ void WorkbenchUi::simulation() {
             ImGui::TreePop();
         }
     } else ImGui::TextUnformatted("State: edit (no active simulation)");
-    ImGui::TextWrapped("The viewport follows the active cloth. Switch to Edit view to edit the scene; Stop restores it.");
-    if (ImGui::CollapsingHeader("Next experiment",ImGuiTreeNodeFlags_DefaultOpen)) {
+    const auto current_run=run ? std::optional{run->run_id} : std::nullopt;
+    const bool changed=!simulation_panel_initialized_ || current_run!=simulation_panel_run_;
+    if (changed) { simulation_panel_initialized_=true; simulation_panel_run_=current_run; simulation_sample_error_.clear(); }
+    if (ImGui::BeginTabBar("simulation_tabs")) {
+    const bool results=ImGui::BeginTabItem("Results",nullptr,changed && run ? ImGuiTabItemFlags_SetSelected : 0);
+    mark("sim_results");
+    if (results) { simulation_results(run); ImGui::EndTabItem(); }
+    const bool setup=ImGui::BeginTabItem("Next experiment",nullptr,changed && !run ? ImGuiTabItemFlags_SetSelected : 0);
+    mark("sim_setup");
+    if (setup) {
         auto& d=model_.simulation_draft(); auto& c=d.cloth;
         ImGui::TextWrapped("Changes apply when starting a new experiment.");
         ImGui::SetNextItemWidth(140);
@@ -98,6 +108,9 @@ void WorkbenchUi::simulation() {
             ImGui::EndTable();
         }
         if (ImGui::Button("Reset draft")) d=SimulationDraft{};
+        ImGui::EndTabItem();
+    }
+        ImGui::EndTabBar();
     }
     ImGui::End();
 }

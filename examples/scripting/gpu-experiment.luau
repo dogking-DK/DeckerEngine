@@ -17,6 +17,8 @@ for first = 0, n - 1, 8 do
     run = call("simulation.step", {run_id = run.run_id, count = count}).run
     assert(run.steps == first + count and run.fault == dk.null)
 end
+local sampled = call("simulation.sample", {run_id = run.run_id, expected_steps = n}).run.metrics_sample
+assert(sampled.steps == n and sampled.simulated_time_ns == n * 10000000)
 local exported = call("simulation.export", {
     run_id = run.run_id, expected_steps = n, output = "luau-experiment", width = 640, height = 480
 })

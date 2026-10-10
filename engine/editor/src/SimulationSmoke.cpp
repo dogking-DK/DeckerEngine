@@ -13,7 +13,7 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
     const auto require=[](bool value,const char* text) { if (!value) throw std::runtime_error(std::string{"Simulation UI smoke: "}+text); };
     auto& io=ImGui::GetIO(); io.ConfigInputTrickleEventQueue=false;
     if (tick_++<20 || done_) return;
-    constexpr std::array actions{"sim_prepare",":initial","sim_step",":stepped","sim_resume",":running","sim_pause",":paused",
+    constexpr std::array actions{"sim_prepare",":initial","sim_sample","sim_step",":stepped","sim_sample","sim_export","sim_export_duplicate","sim_resume",":running","sim_pause",":paused",
         ":orbit",":pan",":zoom","simulation_frame",":resize",":minimize","simulation_edit_view","simulation_view",
         "sim_cancel","sim_stop","sim_play",":running","sim_stop"};
     const bool select_gpu=simulation_backend_==1 && simulation_stage_<2;
@@ -39,11 +39,20 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
     const auto control=[&](const std::string& name) {
         const auto found=ui.controls().find(name); require(found!=ui.controls().end(),("Missing control: "+name).c_str()); return found->second;
     };
+    const auto export_bytes=[&] {
+        std::vector<ByteBuffer> files;
+        const auto& receipt=model.simulation_export(); require(receipt.has_value(),"Missing export receipt");
+        const auto directory=model.snapshot()->project.paths().root()/take(path_from_utf8(receipt->output));
+        for (const auto* name : {"config.json","metrics.json","particles.json","image.ppm","provenance.json"})
+            files.push_back(take(read_file_bytes(directory/name)));
+        return files;
+    };
     if (phase==0) {
         simulation_stable_=0; simulation_observed_step_=0;
         simulation_camera_revision_=ui.simulation_camera().revision();
         if (viewport.simulation_run() && viewport.texture()) stage_pixels_=viewport.capture_simulation_pixels();
         io.AddFocusEvent(true);
+        if (action=="sim_export_duplicate") { ++simulation_expected_errors_; simulation_export_bytes_=export_bytes(); }
         if (action==":resize") check(window.resize(simulation_backend_ ? 1360 : 1280,simulation_backend_ ? 820 : 800));
         else if (action==":minimize") {
             suspended_frames_=0; check(window.minimize()); restore_at_=std::chrono::steady_clock::now()+std::chrono::milliseconds{150};
@@ -52,7 +61,7 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
             io.AddMousePosEvent(pointer_.x,pointer_.y);
             if (navigation) io.AddMouseButtonEvent(button,true); else io.AddMouseWheelEvent(0,2);
         } else if (!action.starts_with(":")) {
-            pointer_=control(action); io.AddMousePosEvent(pointer_.x,pointer_.y); io.AddMouseButtonEvent(0,true);
+            pointer_=control(action=="sim_export_duplicate" ? "sim_export" : action); io.AddMousePosEvent(pointer_.x,pointer_.y); io.AddMouseButtonEvent(0,true);
         }
     }
     if (navigation && phase==2) pointer_={start_pointer_.x+36,start_pointer_.y+18};
@@ -60,7 +69,7 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
     if (phase==1 && !action.starts_with(":")) io.AddMouseButtonEvent(0,false);
     if (navigation && phase==3) io.AddMouseButtonEvent(button,false);
     if (phase<6) return;
-    require(ui.errors()==0,"A control or edit viewport failed");
+    require(ui.errors()==simulation_expected_errors_,"Unexpected control, export or viewport failure");
     const auto state=model.simulation_state(); const auto& shown=ui.displayed_simulation();
     require(model.snapshot()->state.document_id==session_ && model.snapshot()->state.revision==revision_ &&
         model.history().undo_count==history_ && model.snapshot()->scene.same_content(*simulation_scene_),"Simulation changed Edit/history");
@@ -78,11 +87,28 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
             ready=status==SimulationTaskStatus::paused && shown.run->task->status==status && image;
             if (ready) {
                 require(state.run->clock.steps==0 && viewport.simulation_steps()==0,"Prepare advanced before Step");
+                require(!state.run->metrics_sample && !state.run->task->performance,"New run inherited old metrics");
                 require(state.run->gpu==model.simulation_draft().gpu,"Wrong solver"); simulation_id_=state.run->run_id;
             }
         } else if (action=="sim_step") {
             ready=status==SimulationTaskStatus::paused && shown.run->clock.steps==1 && image && viewport.simulation_steps()==1;
-            if (ready) require(state.run->clock.steps==1 && state.run->run_id==simulation_id_,"Step did not preserve run / exact count");
+            if (ready) {
+                require(state.run->clock.steps==1 && state.run->run_id==simulation_id_,"Step did not preserve run / exact count");
+                require(state.run->metrics_sample && state.run->metrics_sample->steps==0,"Step did not preserve stale metrics");
+                require(state.run->task->performance && state.run->task->performance->steps==1,"Missing completed batch timing");
+            }
+        } else if (action=="sim_sample") {
+            ready=state.run->metrics_sample && shown.run->metrics_sample && state.run->metrics_sample->steps==state.run->clock.steps &&
+                shown.run->metrics_sample->steps==state.run->clock.steps;
+            if (ready) require(state.run->metrics_sample->metrics.particle_count==64,"Wrong metrics sample");
+        } else if (action=="sim_export" || action=="sim_export_duplicate") {
+            const auto& receipt=model.simulation_export();
+            ready=receipt && receipt->run_id==state.run->run_id && receipt->steps==1;
+            if (ready) {
+                require(receipt->simulated_time_ns==10000000,"Wrong export clock");
+                require(model.simulation_export_error().empty()==(action=="sim_export"),"Export failure not visible");
+                if (action=="sim_export_duplicate") require(export_bytes()==simulation_export_bytes_,"Failed export overwrote valid files");
+            }
         } else if (action=="sim_resume" || action=="sim_play") ready=status==SimulationTaskStatus::running && state.run->clock.steps>1 && image;
         else if (action=="sim_pause") ready=status==SimulationTaskStatus::paused && image && viewport.simulation_steps()==state.run->clock.steps;
         else if (action=="sim_cancel") ready=status==SimulationTaskStatus::cancelled && shown.run->task->status==status;
@@ -94,7 +120,10 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
             if (image && viewport.simulation_steps()>1) {
                 if (!simulation_observed_step_) simulation_observed_step_=viewport.simulation_steps();
                 else ready=viewport.simulation_steps()>simulation_observed_step_;
-                if (ready) require(viewport.capture_simulation_pixels()!=pixels_,"Running cloth did not change initial pixels");
+                if (ready) {
+                    require(viewport.capture_simulation_pixels()!=pixels_,"Running cloth did not change initial pixels");
+                    if (state.run->run_id==simulation_id_) require(state.run->metrics_sample && state.run->metrics_sample->steps==1,"Running overwrote explicit sample");
+                }
             }
         } else if (action==":paused") {
             if (image && viewport.simulation_steps()==state.run->clock.steps) {

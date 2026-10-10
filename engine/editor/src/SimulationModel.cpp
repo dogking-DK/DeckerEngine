@@ -20,6 +20,23 @@ Result<void> Workspace::start_simulation(bool paused) {
     if (!result) return std::unexpected(result.error());
     return {};
 }
+Result<void> Workspace::sample_simulation(SimulationId id, std::uint64_t steps) {
+    auto result=call("simulation.sample",{{"run_id",id.to_string()},{"expected_steps",steps}});
+    if (!result) return std::unexpected(result.error());
+    return {};
+}
+Result<void> Workspace::export_simulation(SimulationId id, std::uint64_t steps, std::string_view output, int width, int height) {
+    auto result=call("simulation.export",{{"run_id",id.to_string()},{"expected_steps",steps},
+        {"output",output},{"width",width},{"height",height}});
+    if (!result) {
+        simulation_export_error_=std::string(error_code_name(result.error().code))+": "+result.error().message;
+        return std::unexpected(result.error());
+    }
+    simulation_export_=SimulationExportReceipt{SimulationId::parse(result->at("run_id").get<std::string>()).value(),
+        result->at("steps").get<std::uint64_t>(),result->at("simulated_time_ns").get<std::int64_t>(),result->at("output").get<std::string>()};
+    simulation_export_error_.clear();
+    return {};
+}
 Result<void> Workspace::control_simulation(SimulationId id, SimulationControl control) {
     const char* method=nullptr;
     switch (control) {

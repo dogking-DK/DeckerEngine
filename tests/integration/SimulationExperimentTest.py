@@ -47,6 +47,11 @@ def main():
         assert caps["gpu"] and caps["experiment_export"]
         description = client.call("commands.describe", {"name": "simulation.export"}).value
         assert description["effect"] == "external" and description["undoable"] is False
+        commands = client.call("commands.list").value
+        assert any(c["name"] == "simulation.sample" for c in commands)
+        sample_description = client.call("commands.describe", {"name": "simulation.sample"}).value
+        assert sample_description["effect"] == "query" and sample_description["undoable"] is False
+        assert sample_description["parameters"]["required"] == ["run_id", "expected_steps"]
         state = client.call("scene.new", {"name": "Experiment EditWorld"}).value
         state = client.call("entity.create", {"guard": guard(state)}).value["state"]
         before = client.call("scene.query").value
@@ -67,7 +72,10 @@ def main():
         time.sleep(.1)
         assert client.call("simulation.query").value["run"]["steps"] == 0
         export = {**identity, "expected_steps": 0, "output": "initial"}
-        client.call("simulation.export", export)
+        initial_export = client.call("simulation.export", export).value
+        assert initial_export["run_id"] == identity["run_id"]
+        initial_sample = client.call("simulation.sample", {**identity, "expected_steps": 0}).value["run"]["metrics_sample"]
+        assert initial_sample["steps"] == 0 and initial_sample["metrics"] == read(root, "initial", "metrics.json")["metrics"]
         assert client.call("simulation.query").value["run"]["steps"] == 0
         page = client.call("simulation.particles", {**identity, "offset": 60, "limit": 8}).value
         assert page["steps"] == 0 and len(page["particles"]) == 4 and not page["has_more"]
@@ -87,8 +95,17 @@ def main():
         for first in range(0, 300, 8):
             run = client.call("simulation.step", {**identity, "count": min(8, 300-first)}).value["run"]
         assert run["steps"] == 300 and run["simulated_time_ns"] == 3000000000
+        assert run["metrics_sample"] == initial_sample
+        rejected(client, "simulation.sample", {**identity, "expected_steps": 0})
+        sampled = client.call("simulation.sample", {**identity, "expected_steps": 300}).value["run"]["metrics_sample"]
         exported = client.call("simulation.export", {**export, "output": "gpu", "expected_steps": 300}).value
         assert len(exported["files"]) == 5 and exported["steps"] == 300
+        assert exported["run_id"] == identity["run_id"]
+        assert sampled["metrics"] == read(root, "gpu", "metrics.json")["metrics"]
+        provenance = read(root, "gpu", "provenance.json")
+        assert provenance["run_id"] == identity["run_id"] and provenance["steps"] == 300
+        assert provenance["simulated_time_ns"] == 3000000000 and provenance["width"] == 640 and provenance["height"] == 480
+        assert provenance["performance"] is None  # legacy synchronous entry point has no batch timing
         time.sleep(.1)
         assert client.call("simulation.query").value["run"]["steps"] == 300
         # Edit continues independently; stopping must preserve these latest edits/history.

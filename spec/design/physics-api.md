@@ -1,11 +1,30 @@
 ---
 module: physics-api
 created_at: "2026-10-08T17:14:07+08:00"
-updated_at: "2026-10-09T20:40:16+08:00"
+updated_at: "2026-10-10T11:18:00+08:00"
 status: accepted
 ---
 
 # 模拟世界与固定步长
+
+## M12.3 指标采样与导出身份
+
+`simulation.sample` 为显式 query/non-undoable 诊断，要求 run_id、expected_steps 与已发布的健康暂停布片匹配；
+有限任务也允许已初始化的 succeeded/cancelled。复用 worker 的单诊断通道，GPU 仅在用户调用时同步回读。
+成功缓存数值样本（steps、simulated_time_ns、metrics）在当前 Play，query 仅返回缓存，不隐式回读；
+推进后保留旧样本，由样本步数与已完成步数判定过期，Stop 后随 Play 销毁。拒绝参数或采样失败不覆盖旧样本；
+后端数值/设备错误沿用 fault 契约，不把失败值当零。旧 run.metrics 字段保持兼容。
+
+有限任务每次成功完成批次时，随完成计数发布最近一次 performance（steps、batch_steps、wall_time_ns）。
+使用 steady_clock 测量 submit 调用前到 poll 确认完成的墙钟区间，包含 CPU 录制/求解、提交与 GPU 等待/轮询；
+排除初始化、预览、显式诊断和批次之间的暂停。它不是 GPU timestamp 或端到端吞吐；未完成首批、旧同步入口为不可用。
+计时失败批次不发布新样本，查询不产生采集操作。
+
+导出沿用同步 capture 和同目录 staging/rename 发布，图片采用 config 中记录的固定实验相机。
+返回值增加 run_id；provenance 增加 steps、simulated_time_ns、图像尺寸与最近批次性能样本，
+将同一目录内配置、数值、粒子与图像绑定到明确运行和完成边界。可重放的 config/metrics 内容不加入会话身份或非确定性计时。
+成功发布后缓存同拍数值；失败不覆盖已有目录或最近有效数值。文件操作失败与模拟数值故障分别处理。
+本阶段不新增后台导出任务；显式采样/导出可能等待 GPU/磁盘，不属于普通 query/control 的响应承诺。
 
 ## M12.2 只读预览请求
 

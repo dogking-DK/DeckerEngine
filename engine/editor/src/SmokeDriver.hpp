@@ -1,6 +1,7 @@
 #pragma once
 #include "WorkbenchUi.hpp"
 #include <dk/platform/Window.hpp>
+#include <dk/io/File.hpp>
 namespace dk::editor::detail {
 class SmokeDriver final {
 public:
@@ -27,6 +28,8 @@ private:
     std::optional<SceneSnapshot> simulation_scene_;
     std::optional<SimulationId> simulation_id_;
     unsigned simulation_backend_=0,simulation_stable_=0,suspended_frames_=0;
+    unsigned simulation_expected_errors_=0;
+    std::vector<ByteBuffer> simulation_export_bytes_;
     std::uint64_t simulation_observed_step_=0,simulation_camera_revision_=0;
     std::chrono::steady_clock::time_point restore_at_{};
     ImVec2 start_pointer_{};

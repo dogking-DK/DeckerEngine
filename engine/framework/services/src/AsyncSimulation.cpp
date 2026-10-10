@@ -208,6 +208,7 @@ struct AsyncSimulation::Impl {
                 progress.batch_active = true; // Claim one batch under the same lock as cancel/pause.
                 lock.unlock();
                 DK_PROFILE_ZONE("simulation.task.batch");
+                const auto batch_start = std::chrono::steady_clock::now();
                 const auto submitted = backend->submit(dt,count,initialization_stop.get_token());
                 lock.lock(); progress.submitted_steps = backend->submitted();
                 if (!submitted) { fail_locked(submitted.error()); continue; }
@@ -217,7 +218,12 @@ struct AsyncSimulation::Impl {
                     const auto complete = backend->poll();
                     lock.lock();
                     if (!complete) { fail_locked(complete.error()); break; }
-                    if (*complete) { progress.completed_steps = progress.submitted_steps; boundary_locked(); break; }
+                    if (*complete) {
+                        progress.completed_steps = progress.submitted_steps;
+                        progress.performance = SimulationPerformanceSample{progress.completed_steps,count,
+                            std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-batch_start).count()};
+                        boundary_locked(); break;
+                    }
                     // Cancel/pause cannot retire an unfinished GPU frame. Poll without queue-idle or blocking wait.
                     changed.wait_for(lock,std::chrono::milliseconds{1});
                     lock.unlock();

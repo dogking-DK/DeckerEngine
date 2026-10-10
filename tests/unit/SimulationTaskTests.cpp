@@ -214,6 +214,24 @@ TEST_CASE("finite task diagnostic failure freezes a completed experiment without
     REQUIRE(f.task->state().submitted_steps==8); REQUIRE(f.task->state().completed_steps==8);
     REQUIRE_FALSE(f.task->resume()); REQUIRE_FALSE(f.task->read());
 }
+TEST_CASE("finite task performance publishes completed batches and retains last sample after failure") {
+    Fixture f; f.gate->initialize=true; f.gate->submit=true; f.start(20,true);
+    until([&] { return f.task->state().status==SimulationTaskStatus::paused; });
+    REQUIRE_FALSE(f.task->state().performance);
+    REQUIRE(f.task->step(3)); until([&] { return f.task->state().submitted_steps==3; });
+    REQUIRE_FALSE(f.task->state().performance); // submitted is not completed
+    std::this_thread::sleep_for(5ms); f.gate->complete=true;
+    until([&] { return f.task->state().status==SimulationTaskStatus::paused; });
+    const auto sample=f.task->state().performance; REQUIRE(sample);
+    REQUIRE(sample->steps==3); REQUIRE(sample->batch_steps==3); REQUIRE(sample->wall_time_ns>=5000000);
+    REQUIRE(f.task->read()); // diagnostics do not replace batch timing
+    REQUIRE(f.task->state().performance->wall_time_ns==sample->wall_time_ns);
+    f.gate->fail=3; REQUIRE(f.task->step(2));
+    until([&] { return f.task->state().status==SimulationTaskStatus::failed; });
+    REQUIRE(f.task->state().submitted_steps==5); REQUIRE(f.task->state().completed_steps==3);
+    REQUIRE(f.task->state().performance->steps==3);
+    REQUIRE(f.task->state().performance->wall_time_ns==sample->wall_time_ns);
+}
 TEST_CASE("finite task cooperative initialization cancellation is distinct from a failed backend") {
     Fixture f; f.gate->fail=6; f.start(); until([&] { return f.gate->entered.load(); });
     REQUIRE(f.task->cancel()); f.gate->initialize=true;

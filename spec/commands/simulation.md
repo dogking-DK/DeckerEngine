@@ -1,13 +1,13 @@
 ---
 module: command-reference-simulation
 created_at: "2026-10-08T17:23:40+08:00"
-updated_at: "2026-10-09T20:08:06+08:00"
+updated_at: "2026-10-10T11:23:00+08:00"
 status: accepted
 ---
 
 # 模拟世界命令
 
-[返回命令目录](README.md)。Framework/Scene Runtime 提供九条基础命令；启用 RenderSimulation 后另提供 simulation.export 和 xpbd_gpu 后端。
+[返回命令目录](README.md)。Framework/Scene Runtime 提供十条基础命令；启用 RenderSimulation 后另提供 simulation.export 和 xpbd_gpu 后端。
 支持默认none固定时钟与显式xpbd_cpu布片求解器；capabilities.simulation.solver="xpbd_cpu"表示已编译CPU求解器，gpu/experiment_export 两个布尔字段表示可选编译能力（不保证当前设备可用）。
 实现：[SimulationOperations](../../engine/framework/operations/src/SimulationOperations.cpp)、
 [SimulationService](../../engine/framework/services/src/SimulationService.cpp)。
@@ -29,7 +29,8 @@ status: accepted
 | dropped_time_ns | 追赶超限时丢弃的墙钟整拍时间；不算入模拟时间 |
 | solver | 本轮 none、xpbd_cpu 或 xpbd_gpu |
 | cloth | 任一 XPBD 后端返回完整有效布片配置；none时null |
-| metrics | 旧入口 xpbd_cpu 返回本轮已完成数值指标；none/GPU/有限任务查询为 null；显式导出读取指标 |
+| metrics | 旧入口 xpbd_cpu 返回本轮已完成数值指标；none/GPU/有限任务查询为 null；新采样见 metrics_sample |
+| metrics_sample | null 表示无样本；否则为最近成功 sample/export 的 `{steps,simulated_time_ns,metrics}`；steps 不等于当前完成步数时是旧样本，故障/停止时不作为当前健康结果 |
 | fault | 正常为 null；推进、初始化或 GPU 等待/诊断失败时为引擎错误名称，冻结并等待 Stop 后重建 |
 | task | 旧入口为 null；有限任务的状态、目标、提交/完成计数及批次状态，见下文 |
 
@@ -43,6 +44,7 @@ Play 保留启动输入；Stop 保留最新 Edit，不把 Play 写回。
 
 参数 `{}`，effect=query、undoable=false。无需活动文档、guard 或 run_id；返回公共状态。
 与其他 Runtime 命令一样，分派前会 pump：running 下查询可能观察到新拍数；paused 下不会自动推进。
+query 只返回缓存的数值和批次性能，不读回 GPU；Stop 丢弃当前运行样本，新运行初始 metrics_sample=null。
 
 ```json
 {"jsonrpc":"2.0","id":1,"method":"simulation.query"}
@@ -61,6 +63,7 @@ Play 保留启动输入；Stop 保留最新 Edit，不把 Play 写回。
 
 | task 字段 | 含义 |
 | --- | --- |
+| performance | null 表示尚无成功完成批次；否则 `{steps,batch_steps,wall_time_ns}` 是最近完成批次的结束步数、实际拍数和墙钟纳秒；失败保留旧样本 |
 | status | initializing / running / pausing / paused / cancelling / cancelled / succeeded / failed / stopping |
 | target_steps | 本轮总目标 count |
 | submitted_steps | 后端已成功提交的累计拍数 |
@@ -187,6 +190,24 @@ max_speed单位m/s；kinetic_energy、gravity_potential_energy、compliant_energ
 {"jsonrpc":"2.0","id":7,"method":"simulation.start","params":{"guard":{"document_id":"<document_id>","revision":0},"solver":"xpbd_cpu","paused":true,"fixed_dt_ns":10000000,"cloth":{"seed":42}}}
 ```
 
+## simulation.sample
+
+参数必填 `run_id`（当前非 nil UUID）、`expected_steps`（整数0..int64_max）；无 EditGuard，effect=query、undoable=false。
+要求健康、稳定暂停的 CPU/GPU 布片；有限任务也允许已初始化的 succeeded/cancelled。
+返回公共 `{mode,run}`，run.metrics_sample 包含本次 steps、simulated_time_ns 和全部 XPBD metrics。
+调用显式等待数值诊断；GPU 在 worker/后端同步回读一次，不推进拍数，也不写 Edit/history 或文件。
+成功替换当前运行的数值样本；重复同拍采样仍执行诊断。恢复/步进只让样本变旧，不自动采样。
+旧 run_id 或步数不匹配为 conflict；无运行、无布片、运行中、尚未完成暂停或 fault 为 invalid_state；
+nil/非法 UUID、负数/非整数为 invalid_argument。失败保留旧样本，数值/设备错误沿用 fault 规则。
+
+```json
+{"jsonrpc":"2.0","id":9,"method":"simulation.sample","params":{"run_id":"<run_id>","expected_steps":300}}
+```
+
+有限任务 performance 使用 steady_clock，从 submit 调用前到 poll 确认完成；包含 CPU 录制/求解、提交和 GPU 等待/轮询。
+不含初始化、预览、显式采样/导出和批间暂停，也不代表纯 GPU timestamp 或整轮吞吐。
+`wall_time_ns / batch_steps` 得到本批每步平均墙钟耗时；旧同步 start 没有该性能样本。
+
 ## simulation.particles
 
 参数必填run_id，offset可选默认0、范围0–1024且不能超过当前粒子数；limit默认128、范围1–256。
@@ -218,17 +239,20 @@ simulation.particles 在 GPU 运行中要求 paused 且无 fault；每次是显�
 | output | 是 | 1–1024 UTF-8 字节，新目录，项目相对路径；父目录必须存在 |
 | width / height | 否 | 640 / 480；1–2048 |
 
-返回 `{output,steps,simulated_time_ns,files}`；output 是规范项目相对目录，files 固定包含
+返回 `{run_id,output,steps,simulated_time_ns,files}`；output 是规范项目相对目录，files 固定包含
 config.json、metrics.json、particles.json、image.ppm、provenance.json。
 CPU/GPU 导出同样格式，CPU 图像也需要 Vulkan；零步 Graph 使用当前粒子，导出不推进模拟。
 config 保存完整参数、seed、N、dt 和固定视图，metrics 保存同版本拍数/整数时间/全部 XPBD 指标；
-particles 保存所有位置/速度/逆质量；provenance 保存来源 document/scene/revision 与本轮 run_id。
+particles 保存所有位置/速度/逆质量；provenance 保存来源 document/scene/revision 与本轮 run_id、steps、simulated_time_ns、width/height。
+provenance.performance 为最近批次的 `{steps,batch_steps,wall_time_ns,scope:"batch_submit_to_completion"}`，无样本时为 null；
+非确定性计时和会话身份只进 provenance，config/metrics/particles/image 保持可重复内容。成功导出同时更新 run.metrics_sample。
 PPM 为 RGB8；v1 视图固定适配默认布片，极端尺寸/高度可能离开画面。配置用于从零重放，不是检查点。
 
 已有目标（包括空目录）或 expected_steps/旧 run_id 不匹配为 conflict；running/无布片/fault 为 invalid_state；
 非法尺寸、绝对/越界路径、链接/重解析点、.decker 路径为 invalid_argument；父目录缺失或写入/发布失败为 io_error。
 先准备完整数据，再写同父临时目录，最后 rename 发布；普通失败不留下目标半成品，不覆盖已有文件。
-不承诺断电持久性或恶意并发路径替换隔离。GPU 数值/设备故障可冻结 fault，但不改变 Edit 或步数。
+不承诺断电持久性或恶意并发路径替换隔离。失败保留最近成功数值样本和已有有效目录；GPU 数值/设备故障可冻结 fault，但不改变 Edit 或步数。
+采样与导出是显式同步诊断，可能等待 GPU 和文件 IO，不具有后台导出任务句柄。
 
 ```json
 {"jsonrpc":"2.0","id":8,"method":"simulation.export","params":{"run_id":"<run_id>","expected_steps":300,"output":"cloth-300","width":640,"height":480}}

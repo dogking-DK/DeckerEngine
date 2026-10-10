@@ -28,6 +28,7 @@ private:
     void assets();
     void console();
     void simulation();
+    void simulation_results(const SimulationRunState*);
     bool simulation_view(Viewport&,bool visible);
     void frame_simulation(const ClothConfig&,double aspect);
     void simulation_navigation();
@@ -39,6 +40,10 @@ private:
     std::vector<std::string> log_;
     std::string viewport_error_;
     std::string simulation_error_;
+    std::string simulation_sample_error_,simulation_output_;
+    int simulation_export_width_=640,simulation_export_height_=480;
+    std::optional<SimulationId> simulation_panel_run_;
+    bool simulation_panel_initialized_=false;
     SimulationState displayed_simulation_{SimulationMode::edit,{}};
     Camera simulation_camera_;
     std::optional<SimulationId> simulation_camera_run_;

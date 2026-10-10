@@ -63,19 +63,24 @@ Json solver_schema(bool finite = false) {
 }
 Json status_schema() {
     const auto number = integer(0, static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()));
+    const auto performance = schema::object({{"steps",number},{"batch_steps",integer(1,8)},{"wall_time_ns",number}},
+        {"steps","batch_steps","wall_time_ns"});
+    const auto sample = schema::object({{"steps",number},{"simulated_time_ns",number},{"metrics",metrics_schema()}},
+        {"steps","simulated_time_ns","metrics"});
     const auto task = schema::object({{"status",{{"type","string"},{"enum",{"initializing","running","pausing","paused","cancelling","cancelled","succeeded","failed","stopping"}}}},
         {"target_steps",integer(1,1000000)},{"submitted_steps",integer(0,1000000)},{"completed_steps",integer(0,1000000)},
         {"batch_steps",integer(1,8)},{"in_flight_steps",integer(0,8)},{"batch_active",schema::boolean()},
-        {"initialized",schema::boolean()}},
-        {"status","target_steps","submitted_steps","completed_steps","batch_steps","in_flight_steps","batch_active","initialized"});
+        {"initialized",schema::boolean()},{"performance",schema::nullable(performance)}},
+        {"status","target_steps","submitted_steps","completed_steps","batch_steps","in_flight_steps","batch_active","initialized","performance"});
     const auto run = schema::object({{"run_id", schema::string(36, 36)}, {"source", document_state_schema()},
         {"fixed_dt_ns", integer(1000000, 1000000000)}, {"max_catch_up_steps", integer(1, 64)},
         {"steps", number}, {"simulated_time_ns", number}, {"accumulator_ns", number},
         {"dropped_time_ns", number}, {"fault", schema::nullable(schema::string())},
         {"solver", solver_schema()},
-        {"cloth", schema::nullable(cloth_schema(true))}, {"metrics", schema::nullable(metrics_schema())}, {"task",schema::nullable(task)}},
+        {"cloth", schema::nullable(cloth_schema(true))}, {"metrics", schema::nullable(metrics_schema())}, {"task",schema::nullable(task)},
+        {"metrics_sample",schema::nullable(sample)}},
         {"run_id", "source", "fixed_dt_ns", "max_catch_up_steps", "steps", "simulated_time_ns",
-         "accumulator_ns", "dropped_time_ns", "fault", "solver", "cloth", "metrics", "task"});
+         "accumulator_ns", "dropped_time_ns", "fault", "solver", "cloth", "metrics", "task", "metrics_sample"});
     return schema::object({{"mode", {{"type", "string"}, {"enum", {"edit", "running", "paused", "initializing", "pausing", "cancelling", "stopping"}}}},
         {"run", schema::nullable(run)}}, {"mode", "run"});
 }
@@ -90,12 +95,20 @@ Json status_json(const SimulationService& service) {
             {"accumulator_ns", r.clock.accumulator_ns}, {"dropped_time_ns", r.clock.dropped_time_ns},
             {"fault", r.fault ? Json(error_code_name(*r.fault)) : Json(nullptr)},
             {"solver", r.gpu ? "xpbd_gpu" : r.cloth ? "xpbd_cpu" : "none"}, {"cloth", r.cloth ? cloth_json(*r.cloth) : Json(nullptr)},
-            {"metrics", r.metrics ? metrics_json(*r.metrics) : Json(nullptr)}, {"task",nullptr}};
+            {"metrics", r.metrics ? metrics_json(*r.metrics) : Json(nullptr)}, {"task",nullptr},{"metrics_sample",nullptr}};
+        if (r.metrics_sample) {
+            const auto& s=*r.metrics_sample;
+            run["metrics_sample"]={{"steps",s.steps},{"simulated_time_ns",s.simulated_time_ns},{"metrics",metrics_json(s.metrics)}};
+        }
         if (r.task) {
             const auto& t=*r.task;
             run["task"]={{"status",simulation_task_status_name(t.status)},{"target_steps",t.target_steps},
                 {"submitted_steps",t.submitted_steps},{"completed_steps",t.completed_steps},{"batch_steps",t.batch_steps},
-                {"in_flight_steps",t.submitted_steps-t.completed_steps},{"initialized",t.initialized},{"batch_active",t.batch_active}};
+                {"in_flight_steps",t.submitted_steps-t.completed_steps},{"initialized",t.initialized},{"batch_active",t.batch_active},{"performance",nullptr}};
+            if (t.performance) {
+                const auto& p=*t.performance;
+                run["task"]["performance"]={{"steps",p.steps},{"batch_steps",p.batch_steps},{"wall_time_ns",p.wall_time_ns}};
+            }
         }
     }
     const char* mode="edit";
@@ -119,6 +132,15 @@ Result<Json> control_result(const SimulationService& service, Result<void> resul
 Result<void> register_simulation_commands(CommandRegistry& registry, SimulationService& service, const SceneService& edit) {
     auto added = registry.add({"simulation.query", "Inspect simulation mode, source and fixed clock", schema::object(),
         status_schema(), CommandEffect::query, false}, [&service](const Json&) -> Result<Json> { return status_json(service); });
+    if (!added) return added;
+    added = registry.add({"simulation.sample", "Sample numerical metrics at an exact settled step without advancing",
+        schema::object({{"run_id",schema::string(36,36)},
+            {"expected_steps",integer(0,std::numeric_limits<std::int64_t>::max())}},{"run_id","expected_steps"}),
+        status_schema(),CommandEffect::query,false}, [&service](const Json& p) -> Result<Json> {
+            auto id=SimulationId::parse(p["run_id"].get_ref<const std::string&>());
+            if (!id) return std::unexpected(id.error());
+            return control_result(service,service.sample_metrics(*id,p["expected_steps"].get<std::uint64_t>()));
+        });
     if (!added) return added;
     const auto guard = schema::object({{"document_id", schema::string(36, 36)},
         {"revision", integer(0, std::numeric_limits<std::uint64_t>::max())}}, {"document_id", "revision"});
@@ -196,9 +218,9 @@ Result<void> register_simulation_commands(CommandRegistry& registry, SimulationS
         schema::object({{"run_id",schema::string(36,36)},{"expected_steps",integer(0,std::numeric_limits<std::int64_t>::max())},
             {"output",schema::string(1,1024)},{"width",integer(1,2048)},{"height",integer(1,2048)}},
             {"run_id","expected_steps","output"}),
-        schema::object({{"output",schema::string(1,1024)},{"steps",integer(0,std::numeric_limits<std::int64_t>::max())},
+        schema::object({{"run_id",schema::string(36,36)},{"output",schema::string(1,1024)},{"steps",integer(0,std::numeric_limits<std::int64_t>::max())},
             {"simulated_time_ns",integer(0,std::numeric_limits<std::int64_t>::max())},
-            {"files",schema::array(schema::string(),5,5)}},{"output","steps","simulated_time_ns","files"}),
+            {"files",schema::array(schema::string(),5,5)}},{"run_id","output","steps","simulated_time_ns","files"}),
         CommandEffect::external,false}, [&service](const Json& p) -> Result<Json> {
             auto id = SimulationId::parse(p["run_id"].get_ref<const std::string&>());
             if (!id) return std::unexpected(id.error());
@@ -206,7 +228,7 @@ Result<void> register_simulation_commands(CommandRegistry& registry, SimulationS
                 p.value("width",std::uint32_t{640}),p.value("height",std::uint32_t{480}));
             if (!output) return std::unexpected(output.error());
             const auto run = service.state().run;
-            return Json{{"output",*output},{"steps",run->clock.steps},{"simulated_time_ns",run->clock.simulated_time_ns},
+            return Json{{"run_id",id->to_string()},{"output",*output},{"steps",run->clock.steps},{"simulated_time_ns",run->clock.simulated_time_ns},
                 {"files",{"config.json","metrics.json","particles.json","image.ppm","provenance.json"}}};
         });
 #else

@@ -77,6 +77,9 @@ assert(not r.ok and r.error.name == "not_supported" and r.task_id == dk.null)
     REQUIRE(run_luau(*s.runtime, R"(
 local run = dk.command("simulation.query").value.run
 local page = dk.command("simulation.particles", {run_id = run.run_id})
+local sampled = dk.command("simulation.sample", {run_id = run.run_id, expected_steps = run.steps})
+assert(sampled.ok and sampled.value.run.metrics_sample.steps == run.steps)
+assert(sampled.value.run.metrics_sample.metrics.particle_count == 64)
 assert(page.ok and page.value.total == 64)
 assert(dk.command("simulation.step", {run_id = run.run_id}).error.name == "not_supported")
 )", "xpbd-query.luau", query));

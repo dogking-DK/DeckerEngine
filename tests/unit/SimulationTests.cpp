@@ -296,6 +296,44 @@ TEST_CASE("finite simulation service publishes exact results on owner pump and p
     REQUIRE(s.edit->read_snapshot(s.guard())->scene.same_content(original->scene));
     REQUIRE(document_state_json(s.edit->state().value())==document_state_json(original->state));
 }
+TEST_CASE("simulation metric samples preserve identity exact steps stale values and editing history") {
+    Commands s; s.call("scene.new");
+    const auto edit=s.call("scene.query"), history=s.call("history.status");
+    const auto description=s.call("commands.describe",{{"name","simulation.sample"}});
+    REQUIRE(description["effect"]=="query"); REQUIRE(description["undoable"]==false);
+    REQUIRE(description["parameters"]["required"]==Json::array({"run_id","expected_steps"}));
+    const auto run=s.call("simulation.run",{{"count",3},{"paused",true}},true)["run"];
+    const auto id=run["run_id"];
+    const auto settled=[&] {
+        const auto end=SimulationService::Clock::now()+5s; Json result;
+        do { result=s.call("simulation.query"); if (result["mode"]=="paused" || result["mode"]=="edit") return result;
+            std::this_thread::sleep_for(1ms); } while (SimulationService::Clock::now()<end);
+        FAIL("Simulation did not settle"); return result;
+    };
+    const auto initial=settled(); REQUIRE(initial["run"]["metrics_sample"].is_null());
+    REQUIRE(initial["run"]["task"]["performance"].is_null());
+    const Json request{{"run_id",id},{"expected_steps",0}};
+    const auto sampled=s.call("simulation.sample",request)["run"]["metrics_sample"];
+    REQUIRE(sampled["steps"]==0); REQUIRE(sampled["simulated_time_ns"]==0);
+    REQUIRE(sampled["metrics"]["particle_count"]==64);
+    s.call("simulation.step",{{"run_id",id}}); const auto stepped=settled()["run"];
+    REQUIRE(stepped["steps"]==1); REQUIRE(stepped["metrics_sample"]==sampled);
+    REQUIRE(stepped["task"]["performance"]["steps"]==1);
+    REQUIRE(s.invoke("simulation.sample",request).error().code==ErrorCode::conflict);
+    REQUIRE(s.invoke("simulation.sample",{{"run_id",SimulationId::generate()->to_string()},{"expected_steps",1}}).error().code==ErrorCode::conflict);
+    REQUIRE(s.call("simulation.query")["run"]["metrics_sample"]==sampled);
+    s.call("simulation.resume",{{"run_id",id}}); const auto finished=settled()["run"];
+    REQUIRE(finished["steps"]==3); REQUIRE(finished["metrics_sample"]==sampled);
+    const auto final=s.call("simulation.sample",{{"run_id",id},{"expected_steps",3}})["run"];
+    REQUIRE(final["metrics_sample"]["steps"]==3); REQUIRE(final["metrics_sample"]["simulated_time_ns"]==30000000);
+    REQUIRE(final["task"]["performance"]["batch_steps"]==2);
+    REQUIRE(s.call("simulation.query")["run"]["metrics_sample"]==final["metrics_sample"]);
+    s.call("simulation.stop",{{"run_id",id}}); REQUIRE(settled()["mode"]=="edit");
+    const auto next=s.call("simulation.start",{{"paused",true},{"solver","xpbd_cpu"}},true)["run"];
+    REQUIRE(next["metrics_sample"].is_null()); REQUIRE(next["run_id"]!=id);
+    REQUIRE_FALSE(s.invoke("simulation.sample",request));
+    REQUIRE(s.call("scene.query")==edit); REQUIRE(s.call("history.status")==history);
+}
 TEST_CASE("finite simulation commands discover bounds cancel and reject stale identities") {
     Commands s; s.call("scene.new");
     const auto caps=s.call("runtime.capabilities");

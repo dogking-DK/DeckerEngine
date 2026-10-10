@@ -1,7 +1,7 @@
 ---
 module: scripting-luau
 created_at: "2026-10-08T14:52:00+08:00"
-updated_at: "2026-10-09T15:30:00+08:00"
+updated_at: "2026-10-10T11:26:00+08:00"
 status: accepted
 ---
 
@@ -145,3 +145,6 @@ M11.3：edit/project 白名单增加 simulation.run/cancel；query 权限仍只�
 run返回受理结果，脚本通过query的task状态判断完成，不能以命令TaskId成功代替模拟成功。
 取消Luau脚本本身不等于取消Play；须显式simulation.cancel或由Runtime关闭清理。
 有限任务的paused/cancelled安全边界见[模拟命令](../commands/simulation.md)。
+
+M12.3：所有访问模式允许 simulation.sample，在健康稳定边界显式采样数值并缓存带步数的结果。
+它不推进或写文件；仍受同步原生诊断的预算/不可硬抢占限制，参数与旧身份拒绝复用 Runtime。

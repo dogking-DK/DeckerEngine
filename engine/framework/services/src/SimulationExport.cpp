@@ -101,7 +101,14 @@ Result<std::string> SimulationService::export_experiment(SimulationId id, std::u
             const auto& p = image->particles.positions[i]; const auto& v = image->particles.velocities[i];
             particles.push_back({{"position",{p.x,p.y,p.z}},{"velocity",{v.x,v.y,v.z}},{"inverse_mass",p.inverse_mass}});
         }
-        const Json provenance{{"run_id",id.to_string()},{"document_id",run.source.document_id.to_string()},
+        Json performance = nullptr;
+        if (run.task && run.task->performance) {
+            const auto& p = *run.task->performance;
+            performance = {{"steps",p.steps},{"batch_steps",p.batch_steps},{"wall_time_ns",p.wall_time_ns},
+                {"scope","batch_submit_to_completion"}};
+        }
+        const Json provenance{{"run_id",id.to_string()},{"steps",run.clock.steps},{"simulated_time_ns",run.clock.simulated_time_ns},
+            {"width",width},{"height",height},{"performance",std::move(performance)},{"document_id",run.source.document_id.to_string()},
             {"scene_id",run.source.scene_id.to_string()},{"revision",run.source.revision},
             {"files",{"config.json","metrics.json","particles.json","image.ppm"}}};
         const auto header = "P6\n" + std::to_string(width) + " " + std::to_string(height) + "\n255\n";
@@ -122,6 +129,7 @@ Result<std::string> SimulationService::export_experiment(SimulationId id, std::u
         std::filesystem::rename(staging.path,output,ec);
         require(!ec, "Cannot publish experiment directory", ErrorCode::io_error);
         staging.path.clear();
+        play_->metrics_sample = SimulationMetricSample{run.clock.steps,run.clock.simulated_time_ns,*metrics};
         return result;
     } catch (Error& e) { return std::unexpected(e.with_context("simulation.export")); }
 }

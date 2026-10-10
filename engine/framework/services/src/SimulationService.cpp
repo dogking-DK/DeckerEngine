@@ -137,7 +137,7 @@ Result<void> SimulationService::stop(SimulationId id) {
 SimulationRunState SimulationService::run_state() const {
     return {play_->id, play_->source, play_->clock.config(), play_->clock.state(), play_->fault, play_->cloth,
         play_->solver && !play_->gpu && !play_->task ? std::optional{play_->solver->metrics()} : std::nullopt,
-        bool(play_->gpu) || play_->task_gpu, play_->progress};
+        bool(play_->gpu) || play_->task_gpu, play_->progress, play_->metrics_sample};
 }
 SimulationState SimulationService::state() const {
     if (!play_) return {SimulationMode::edit, {}};
@@ -154,6 +154,17 @@ SimulationState SimulationService::state() const {
         return {mode,run_state()};
     }
     return {play_->paused ? SimulationMode::paused : SimulationMode::running, run_state()};
+}
+Result<void> SimulationService::sample_metrics(SimulationId id, std::uint64_t expected) {
+    auto valid = check_run(id); if (!valid) return valid;
+    if (!play_->paused || play_->fault || !play_->solver)
+        return std::unexpected(Error{ErrorCode::invalid_state,"Sampling requires a paused healthy cloth simulation"});
+    if (play_->clock.state().steps != expected)
+        return std::unexpected(Error{ErrorCode::conflict,"Metrics steps do not match expected_steps"});
+    auto snapshot = read_particles(id);
+    if (!snapshot) return std::unexpected(snapshot.error());
+    play_->metrics_sample = SimulationMetricSample{snapshot->run.clock.steps,snapshot->run.clock.simulated_time_ns,snapshot->data.metrics};
+    return {};
 }
 Result<PlaySceneSnapshot> SimulationService::read_snapshot(SimulationId id) const {
     auto valid = check_run(id); if (!valid) return std::unexpected(valid.error());

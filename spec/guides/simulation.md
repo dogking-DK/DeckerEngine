@@ -4,6 +4,18 @@
 显式solver="xpbd_cpu"可推进独立粒子。场景实体保持启动输入。可选 GPU 后端与 CPU 使用同一组命令，支持统一实验导出，见下文。
 完整字段见 [模拟命令](../commands/simulation.md)，内部约定见 [Physics API](../design/physics-api.md)。
 
+## 编辑器指标与导出
+
+在 Simulation 的 Next experiment 页配置参数，使用 Prepare paused 从零步准备，或 Play 开始实验。
+Results 页显示已完成步数、模拟时间和最近批次墙钟耗时。暂停后点击 Sample metrics 获取数值；
+Current 表示对应当前完成步数，Stale 表示旧样本，Unavailable 表示尚无样本。继续运行不会自动回读 GPU 数值。
+All numerical metrics 可展开查看全部误差、速度、能量、地面穿透和固定点漂移。
+
+暂停后点击 Export，默认在项目根创建 `experiment-<run_id>-<steps>`；Export options 可设置新相对目录和图像尺寸。
+五个文件包含配置、指标、粒子、PPM 图像和 provenance；图像使用固定实验相机，视图矩阵记录在 config.json。
+Last successful export 保留成功路径、运行身份和步数；重用已有目录会显示失败并保留原产物。
+采样/导出是显式同步操作，可能等待 GPU/磁盘。批次耗时包含 CPU 工作、提交与 GPU 完成等待，不是纯 GPU timestamp。
+
 ## 有限任务、进度与取消
 
 长实验使用 `simulation.run`。它受理后返回run_id，设备冷初始化和每批求解在后台进行。

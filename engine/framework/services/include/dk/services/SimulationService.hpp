@@ -18,12 +18,24 @@ using SimulationId = StableId<SimulationIdTag>;
 enum class SimulationMode { edit, running, paused, initializing, pausing, cancelling, stopping };
 enum class SimulationTaskStatus { initializing, running, pausing, paused, cancelling, cancelled, succeeded, failed, stopping };
 [[nodiscard]] std::string_view simulation_task_status_name(SimulationTaskStatus) noexcept;
+// Wall time from batch submit entry to confirmed completion; excludes previews and diagnostics.
+struct SimulationPerformanceSample {
+    std::uint64_t steps = 0;
+    std::uint32_t batch_steps = 0;
+    std::int64_t wall_time_ns = 0;
+};
+struct SimulationMetricSample {
+    std::uint64_t steps = 0;
+    std::int64_t simulated_time_ns = 0;
+    XpbdMetrics metrics;
+};
 struct SimulationTaskState {
     SimulationTaskStatus status = SimulationTaskStatus::initializing;
     std::uint64_t target_steps = 0, submitted_steps = 0, completed_steps = 0;
     std::uint32_t batch_steps = 8;
     bool initialized = false, batch_active = false;
     std::optional<ErrorCode> error;
+    std::optional<SimulationPerformanceSample> performance;
 };
 namespace detail { class GpuSimulation; class AsyncSimulation; }
 struct SimulationRunState {
@@ -36,6 +48,7 @@ struct SimulationRunState {
     std::optional<XpbdMetrics> metrics;
     bool gpu = false;
     std::optional<SimulationTaskState> task;
+    std::optional<SimulationMetricSample> metrics_sample;
 };
 struct SimulationState {
     SimulationMode mode;
@@ -73,6 +86,7 @@ public:
     [[nodiscard]] Result<void> step(SimulationId, std::uint32_t count = 1);
     [[nodiscard]] Result<void> stop(SimulationId);
     [[nodiscard]] SimulationState state() const;
+    [[nodiscard]] Result<void> sample_metrics(SimulationId, std::uint64_t expected_steps);
     [[nodiscard]] Result<PlaySceneSnapshot> read_snapshot(SimulationId) const;
     [[nodiscard]] Result<PlayParticleSnapshot> read_particles(SimulationId) const;
     [[nodiscard]] Result<SimulationParticlePage> particle_page(SimulationId, std::size_t offset = 0, std::size_t limit = 128) const;
@@ -105,6 +119,7 @@ private:
         std::shared_ptr<detail::AsyncSimulation> task;
         bool task_gpu = false;
         std::optional<SimulationTaskState> progress;
+        std::optional<SimulationMetricSample> metrics_sample;
 #ifdef DK_SIMULATION_GPU
         std::shared_ptr<detail::GpuSimulation> preview_renderer;
         std::shared_ptr<SimulationPreview> preview;
