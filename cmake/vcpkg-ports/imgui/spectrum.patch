@@ -1,0 +1,545 @@
+diff --git a/imgui.cpp b/imgui.cpp
+--- a/imgui.cpp
++++ b/imgui.cpp
+@@ -3963,7 +3963,7 @@
+ 
+ // Internal ImGui functions to render text
+ // RenderText***() functions calls ImDrawList::AddText() calls ImBitmapFont::RenderText()
+-void ImGui::RenderText(ImVec2 pos, const char* text, const char* text_end, bool hide_text_after_hash)
++void ImGui::RenderText(ImVec2 pos, const char* text, const char* text_end, bool hide_text_after_hash, ImU32 color)
+ {
+     ImGuiContext& g = *GImGui;
+     ImGuiWindow* window = g.CurrentWindow;
+@@ -3983,13 +3983,13 @@
+ 
+     if (text != text_display_end)
+     {
+-        window->DrawList->AddText(g.Font, g.FontSize, pos, GetColorU32(ImGuiCol_Text), text, text_display_end);
++        window->DrawList->AddText(g.Font, g.FontSize, pos, (color == 0 ? GetColorU32(ImGuiCol_Text) : color), text, text_display_end);
+         if (g.LogEnabled)
+             LogRenderedText(&pos, text, text_display_end);
+     }
+ }
+ 
+-void ImGui::RenderTextWrapped(ImVec2 pos, const char* text, const char* text_end, float wrap_width)
++void ImGui::RenderTextWrapped(ImVec2 pos, const char* text, const char* text_end, float wrap_width, ImU32 color)
+ {
+     ImGuiContext& g = *GImGui;
+     ImGuiWindow* window = g.CurrentWindow;
+@@ -3999,7 +3999,7 @@
+ 
+     if (text != text_end)
+     {
+-        window->DrawList->AddText(g.Font, g.FontSize, pos, GetColorU32(ImGuiCol_Text), text, text_end, wrap_width);
++        window->DrawList->AddText(g.Font, g.FontSize, pos, (color == 0 ? GetColorU32(ImGuiCol_Text) : color), text, text_end, wrap_width);
+         if (g.LogEnabled)
+             LogRenderedText(&pos, text, text_end);
+     }
+@@ -4010,7 +4010,7 @@
+ // FIXME-OPT: Since we have or calculate text_size we could coarse clip whole block immediately, especially for text above draw_list->DrawList.
+ // Effectively as this is called from widget doing their own coarse clipping it's not very valuable presently. Next time function will take
+ // better advantage of the render function taking size into account for coarse clipping.
+-void ImGui::RenderTextClippedEx(ImDrawList* draw_list, const ImVec2& pos_min, const ImVec2& pos_max, const char* text, const char* text_display_end, const ImVec2* text_size_if_known, const ImVec2& align, const ImRect* clip_rect)
++void ImGui::RenderTextClippedEx(ImDrawList* draw_list, const ImVec2& pos_min, const ImVec2& pos_max, const char* text, const char* text_display_end, const ImVec2* text_size_if_known, const ImVec2& align, const ImRect* clip_rect, ImU32 color)
+ {
+     // Perform CPU side clipping for single clipped element to avoid using scissor state
+     ImVec2 pos = pos_min;
+@@ -4030,15 +4030,15 @@
+     if (need_clipping)
+     {
+         ImVec4 fine_clip_rect(clip_min->x, clip_min->y, clip_max->x, clip_max->y);
+-        draw_list->AddText(NULL, 0.0f, pos, GetColorU32(ImGuiCol_Text), text, text_display_end, 0.0f, &fine_clip_rect);
++        draw_list->AddText(NULL, 0.0f, pos, (color != 0 ? color : GetColorU32(ImGuiCol_Text)), text, text_display_end, 0.0f, &fine_clip_rect);
+     }
+     else
+     {
+-        draw_list->AddText(NULL, 0.0f, pos, GetColorU32(ImGuiCol_Text), text, text_display_end, 0.0f, NULL);
+-    }
+-}
+-
+-void ImGui::RenderTextClipped(const ImVec2& pos_min, const ImVec2& pos_max, const char* text, const char* text_end, const ImVec2* text_size_if_known, const ImVec2& align, const ImRect* clip_rect)
++        draw_list->AddText(NULL, 0.0f, pos, (color != 0 ? color : GetColorU32(ImGuiCol_Text)), text, text_display_end, 0.0f, NULL);
++    }
++}
++
++void ImGui::RenderTextClipped(const ImVec2& pos_min, const ImVec2& pos_max, const char* text, const char* text_end, const ImVec2* text_size_if_known, const ImVec2& align, const ImRect* clip_rect, ImU32 color)
+ {
+     // Hide anything after a '##' string
+     const char* text_display_end = FindRenderedTextEnd(text, text_end);
+@@ -4048,7 +4048,7 @@
+ 
+     ImGuiContext& g = *GImGui;
+     ImGuiWindow* window = g.CurrentWindow;
+-    RenderTextClippedEx(window->DrawList, pos_min, pos_max, text, text_display_end, text_size_if_known, align, clip_rect);
++    RenderTextClippedEx(window->DrawList, pos_min, pos_max, text, text_display_end, text_size_if_known, align, clip_rect, color);
+     if (g.LogEnabled)
+         LogRenderedText(&pos_min, text, text_display_end);
+ }
+diff --git a/imgui_internal.h b/imgui_internal.h
+--- a/imgui_internal.h
++++ b/imgui_internal.h
+@@ -4007,10 +4007,10 @@
+     // Render helpers
+     // AVOID USING OUTSIDE OF IMGUI.CPP! NOT FOR PUBLIC CONSUMPTION. THOSE FUNCTIONS ARE A MESS. THEIR SIGNATURE AND BEHAVIOR WILL CHANGE, THEY NEED TO BE REFACTORED INTO SOMETHING DECENT.
+     // NB: All position are in absolute pixels coordinates (we are never using window coordinates internally)
+-    IMGUI_API void          RenderText(ImVec2 pos, const char* text, const char* text_end = NULL, bool hide_text_after_hash = true);
+-    IMGUI_API void          RenderTextWrapped(ImVec2 pos, const char* text, const char* text_end, float wrap_width);
+-    IMGUI_API void          RenderTextClipped(const ImVec2& pos_min, const ImVec2& pos_max, const char* text, const char* text_end, const ImVec2* text_size_if_known, const ImVec2& align = ImVec2(0, 0), const ImRect* clip_rect = NULL);
+-    IMGUI_API void          RenderTextClippedEx(ImDrawList* draw_list, const ImVec2& pos_min, const ImVec2& pos_max, const char* text, const char* text_end, const ImVec2* text_size_if_known, const ImVec2& align = ImVec2(0, 0), const ImRect* clip_rect = NULL);
++    IMGUI_API void          RenderText(ImVec2 pos, const char* text, const char* text_end = NULL, bool hide_text_after_hash = true, ImU32 color = 0);
++    IMGUI_API void          RenderTextWrapped(ImVec2 pos, const char* text, const char* text_end, float wrap_width, ImU32 color = 0);
++    IMGUI_API void          RenderTextClipped(const ImVec2& pos_min, const ImVec2& pos_max, const char* text, const char* text_end, const ImVec2* text_size_if_known, const ImVec2& align = ImVec2(0, 0), const ImRect* clip_rect = NULL, ImU32 color = 0);
++    IMGUI_API void          RenderTextClippedEx(ImDrawList* draw_list, const ImVec2& pos_min, const ImVec2& pos_max, const char* text, const char* text_end, const ImVec2* text_size_if_known, const ImVec2& align = ImVec2(0, 0), const ImRect* clip_rect = NULL, ImU32 color = 0);
+     IMGUI_API void          RenderTextEllipsis(ImDrawList* draw_list, const ImVec2& pos_min, const ImVec2& pos_max, float ellipsis_max_x, const char* text, const char* text_end, const ImVec2* text_size_if_known);
+     IMGUI_API void          RenderFrame(ImVec2 p_min, ImVec2 p_max, ImU32 fill_col, bool borders = true, float rounding = 0.0f);
+     IMGUI_API void          RenderFrameBorder(ImVec2 p_min, ImVec2 p_max, float rounding = 0.0f);
+diff --git a/imgui_draw.cpp b/imgui_draw.cpp
+--- a/imgui_draw.cpp
++++ b/imgui_draw.cpp
+@@ -34,6 +34,7 @@
+ #endif
+ 
+ #include "imgui.h"
++#include "imgui_spectrum.h"
+ #ifndef IMGUI_DISABLE
+ #include "imgui_internal.h"
+ #ifdef IMGUI_ENABLE_FREETYPE
+@@ -6045,29 +6046,34 @@
+     float r = h * 0.40f * scale;
+     ImVec2 center = pos + ImVec2(h * 0.50f, h * 0.50f * scale);
+ 
++    constexpr float m = 0.5f; // "length" of the arrow
++    constexpr float n = 0.866f; // "width" of the arrow
+     ImVec2 a, b, c;
+     switch (dir)
+     {
+     case ImGuiDir_Up:
+     case ImGuiDir_Down:
+         if (dir == ImGuiDir_Up) r = -r;
+-        a = ImVec2(+0.000f, +0.750f) * r;
+-        b = ImVec2(-0.866f, -0.750f) * r;
+-        c = ImVec2(+0.866f, -0.750f) * r;
++        a = ImVec2(+.0f, +m) * r;
++        b = ImVec2(-n, -m) * r;
++        c = ImVec2(+n, -m) * r;
+         break;
+     case ImGuiDir_Left:
+     case ImGuiDir_Right:
+         if (dir == ImGuiDir_Left) r = -r;
+-        a = ImVec2(+0.750f, +0.000f) * r;
+-        b = ImVec2(-0.750f, +0.866f) * r;
+-        c = ImVec2(-0.750f, -0.866f) * r;
++        a = ImVec2(+m, +.0f) * r;
++        b = ImVec2(-m, +n) * r;
++        c = ImVec2(-m, -n) * r;
+         break;
+     case ImGuiDir_None:
+     case ImGuiDir_COUNT:
+         IM_ASSERT(0);
+         break;
+     }
+-    draw_list->AddTriangleFilled(center + a, center + b, center + c, col);
++    draw_list->PathLineTo(center + c);
++    draw_list->PathLineTo(center + a);
++    draw_list->PathLineTo(center + b);
++    draw_list->PathStroke(col, 3.0f, ImDrawFlags_None);
+ }
+ 
+ void ImGui::RenderBullet(ImDrawList* draw_list, ImVec2 pos, ImU32 col)
+diff --git a/imgui_widgets.cpp b/imgui_widgets.cpp
+--- a/imgui_widgets.cpp
++++ b/imgui_widgets.cpp
+@@ -41,6 +41,7 @@
+ #endif
+ 
+ #include "imgui.h"
++#include "imgui_spectrum.h"
+ #ifndef IMGUI_DISABLE
+ #include "imgui_internal.h"
+ 
+@@ -812,10 +813,9 @@
+     const ImU32 col = GetColorU32((held && hovered) ? ImGuiCol_ButtonActive : hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button);
+     RenderNavCursor(bb, id);
+     RenderFrame(bb.Min, bb.Max, col, true, style.FrameRounding);
+-
+     if (g.LogEnabled)
+         LogSetNextTextDecoration("[", "]");
+-    RenderTextClipped(bb.Min + style.FramePadding, bb.Max - style.FramePadding, label, label_end, &label_size, style.ButtonTextAlign, &bb);
++    RenderTextClipped(bb.Min + style.FramePadding, bb.Max - style.FramePadding, label, label_end, &label_size, style.ButtonTextAlign, &bb, GetColorU32(ImGuiCol_Text));
+ 
+     // Automatically close popups
+     //if (pressed && !(flags & ImGuiButtonFlags_DontClosePopups) && (window->Flags & ImGuiWindowFlags_Popup))
+@@ -1297,20 +1297,34 @@
+     if (is_visible)
+     {
+         RenderNavCursor(total_bb, id);
+-        ImU32 bg_col = GetColorU32((held && hovered) ? ImGuiCol_FrameBgActive : hovered ? ImGuiCol_FrameBgHovered : (mixed_value || checked) ? ImGuiCol_CheckboxSelectedBg : ImGuiCol_FrameBg);
++        // ImGui-Spectrum change: checked and unchecked state draw differently
++        //RenderFrame(check_bb.Min, check_bb.Max, GetColorU32((held && hovered) ? ImGuiCol_FrameBgActive : hovered ? ImGuiCol_FrameBgHovered : (mixed_value || checked) ? ImGuiCol_CheckboxSelectedBg : ImGuiCol_FrameBg), true, style.FrameRounding);
+         ImU32 check_col = GetColorU32(ImGuiCol_CheckMark);
+-        RenderFrame(check_bb.Min, check_bb.Max, bg_col, true, style.FrameRounding);
++        ImU32 frame_col = GetColorU32((held && hovered) ? Spectrum::ColorToOutput(Spectrum::Colors->BLUE700) : hovered ? Spectrum::ColorToOutput(Spectrum::Colors->BLUE600) : Spectrum::ColorToOutput(Spectrum::Colors->BLUE500));
++        const ImVec2 offset(style.FramePadding.y, style.FramePadding.y);
++        const ImRect check2_bb(check_bb.Min + offset, check_bb.Max - offset);
+         if (mixed_value)
+         {
+             // Undocumented tristate/mixed/indeterminate checkbox (#2644)
+             // This may seem awkwardly designed because the aim is to make ImGuiItemFlags_MixedValue supported by all widgets (not just checkbox)
+-            ImVec2 pad(ImMax(1.0f, IM_TRUNC(square_sz / 3.6f)), ImMax(1.0f, IM_TRUNC(square_sz / 3.6f)));
+-            window->DrawList->AddRectFilled(check_bb.Min + pad, check_bb.Max - pad, check_col, style.FrameRounding);
++            RenderFrame(check2_bb.Min, check2_bb.Max, frame_col, false, Spectrum::CHECKBOX_ROUNDING);
++            ImVec2 pad(ImMax(1.0f, IM_TRUNC(check2_bb.GetWidth() / 3.6f)), ImMax(1.0f, IM_TRUNC(check2_bb.GetWidth() / 3.6f)));
++            window->DrawList->AddRectFilled(check2_bb.Min + pad, check2_bb.Max - pad, check_col, style.FrameRounding);
+         }
+         else if (*v)
+         {
+-            const float pad = ImMax(1.0f, IM_TRUNC(square_sz / 6.0f));
++            const float pad = ImMax(1.0f, IM_TRUNC(square_sz / 4.f));
++            RenderFrame(check2_bb.Min, check2_bb.Max, frame_col, false, Spectrum::CHECKBOX_ROUNDING);
+             RenderCheckMark(window->DrawList, check_bb.Min + ImVec2(pad, pad), check_col, square_sz - pad * 2.0f);
++        }
++        else
++        {
++            ImU32 border_col = (held && hovered) ? Spectrum::ColorToOutput(Spectrum::Colors->GRAY800) : hovered ? Spectrum::ColorToOutput(Spectrum::Colors->GRAY700) : Spectrum::ColorToOutput(Spectrum::Colors->GRAY600);
++            PushStyleVar(ImGuiStyleVar_FrameBorderSize, Spectrum::CHECKBOX_BORDER_SIZE);
++            PushStyleColor(ImGuiCol_Border, border_col);
++            RenderFrameBorder(check2_bb.Min, check2_bb.Max, Spectrum::CHECKBOX_ROUNDING);
++            PopStyleVar();
++            PopStyleColor();
+         }
+     }
+     const ImVec2 label_pos = ImVec2(check_bb.Max.x + style.ItemInnerSpacing.x, check_bb.Min.y + style.FramePadding.y);
+@@ -1402,24 +1416,22 @@
+ 
+     RenderNavCursor(total_bb, id);
+     const int num_segment = window->DrawList->_CalcCircleAutoSegmentCount(radius);
+-    window->DrawList->AddCircleFilled(center, radius, GetColorU32((held && hovered) ? ImGuiCol_FrameBgActive : hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg), num_segment);
+     if (active)
+     {
+-        const float pad = ImMax(1.0f, IM_TRUNC(square_sz / 6.0f));
+-        window->DrawList->AddCircleFilled(center, radius - pad, GetColorU32(ImGuiCol_CheckMark));
+-    }
+-
+-    if (style.FrameBorderSize > 0.0f)
+-    {
+-        window->DrawList->AddCircle(center + ImVec2(1, 1), radius, GetColorU32(ImGuiCol_BorderShadow), num_segment, style.FrameBorderSize);
+-        window->DrawList->AddCircle(center, radius, GetColorU32(ImGuiCol_Border), num_segment, style.FrameBorderSize);
++        window->DrawList->AddCircleFilled(center, radius * 0.8f, GetColorU32(((held && hovered) ? Spectrum::ColorToOutput(Spectrum::Colors->BLUE700) : hovered ? Spectrum::ColorToOutput(Spectrum::Colors->BLUE600) : Spectrum::ColorToOutput(Spectrum::Colors->BLUE500))), num_segment);
++        window->DrawList->AddCircleFilled(center, radius * 0.25f, GetColorU32(Spectrum::ColorToOutput(Spectrum::Colors->GRAY75)), num_segment);
++    }
++    else
++    {
++        window->DrawList->AddCircleFilled(center, radius * 0.8f, GetColorU32(((held && hovered) ? Spectrum::ColorToOutput(Spectrum::Colors->GRAY800) : hovered ? Spectrum::ColorToOutput(Spectrum::Colors->GRAY700): Spectrum::ColorToOutput(Spectrum::Colors->GRAY600))), num_segment);
++        window->DrawList->AddCircleFilled(center, radius * 0.6f, GetColorU32(Spectrum::ColorToOutput(Spectrum::Colors->GRAY75)), num_segment);
+     }
+ 
+     ImVec2 label_pos = ImVec2(check_bb.Max.x + style.ItemInnerSpacing.x, check_bb.Min.y + style.FramePadding.y);
+     if (g.LogEnabled)
+         LogRenderedText(&label_pos, active ? "(x)" : "( )");
+     if (label_size.x > 0.0f)
+-        RenderText(label_pos, label, label_end, false);
++        RenderText(label_pos, label, label_end, false, GetColorU32(hovered ? Spectrum::ColorToOutput(Spectrum::Colors->GRAY900) : Spectrum::ColorToOutput(Spectrum::Colors->GRAY800)));
+ 
+     IMGUI_TEST_ENGINE_ITEM_INFO(id, label, g.LastItemData.StatusFlags);
+     return pressed;
+@@ -2074,7 +2086,9 @@
+     // We don't use BeginPopupEx() solely because we have a custom name string, which we could make an argument to BeginPopupEx()
+     ImGuiWindowFlags window_flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_Popup | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove;
+     PushStyleVarX(ImGuiStyleVar_WindowPadding, g.Style.FramePadding.x); // Horizontally align ourselves with the framed text
++    PushStyleVar(ImGuiStyleVar_PopupRounding, 4.0f);
+     bool ret = Begin(name, NULL, window_flags);
++    PopStyleVar();
+     PopStyleVar();
+     if (!ret)
+     {
+@@ -7163,8 +7177,8 @@
+             // Unframed typed for tree nodes
+             if (hovered || selected)
+             {
+-                const ImU32 bg_col = GetColorU32((held && hovered) ? ImGuiCol_HeaderActive : hovered ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
+-                RenderFrame(frame_bb.Min, frame_bb.Max, bg_col, false, 0.0f);
++                const ImU32 bg_col = GetColorU32((held && hovered) ? ImGuiCol_HeaderActive : hovered ? ImGuiCol_HeaderHovered : ImGuiCol_Header, 0.15f);
++                RenderFrame(frame_bb.Min, frame_bb.Max, bg_col, true, 0.0f);
+             }
+             RenderNavCursor(frame_bb, id, nav_render_cursor_flags, 0.0f);
+             if (span_all_columns && !span_all_columns_label)
+@@ -7182,7 +7196,7 @@
+ 
+         // Label
+         if (display_frame)
+-            RenderTextClipped(text_pos, frame_bb.Max, label, label_end, &label_size);
++            RenderTextClipped(text_pos, frame_bb.Max, label, label_end, &label_size, ImVec2(0, 0), nullptr, GetColorU32(Spectrum::ColorToOutput(Spectrum::Colors->GRAY50)));
+         else
+             RenderText(text_pos, label, label_end, false);
+ 
+@@ -7551,6 +7565,11 @@
+         {
+             // Between 1.91.0 and 1.91.4 we made selected Selectable use an arbitrary lerp between _Header and _HeaderHovered. Removed that now. (#8106)
+             ImU32 col = GetColorU32((held && highlighted) ? ImGuiCol_HeaderActive : highlighted ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
++
++            // Spectrum: add alpha to the color
++            const ImVec4 color_vec4 = ImColor(col);
++            col = ImColor(color_vec4.x, color_vec4.y, color_vec4.z, color_vec4.w * 0.15f);
++
+             RenderFrame(bb.Min, bb.Max, col, false, style.SelectableRounding);
+         }
+         if (g.NavId == id)
+@@ -7572,7 +7591,7 @@
+ 
+     // Text stays at the submission position. Alignment/clipping extents ignore SpanAllColumns.
+     if (is_visible)
+-        RenderTextClipped(pos, ImVec2(ImMin(pos.x + size.x, window->WorkRect.Max.x), pos.y + size.y), label, label_end, &label_size, style.SelectableTextAlign, &bb);
++        RenderTextClipped(pos, ImVec2(ImMin(pos.x + size.x, window->WorkRect.Max.x), pos.y + size.y), label, label_end, &label_size, style.SelectableTextAlign, &bb, selected ? GetColorU32(Spectrum::ColorToOutput(Spectrum::Colors->BLUE600)) : 0U);
+ 
+ #ifdef IMGUI_DEBUG_BOXSELECT
+     if (g.BoxSelectState.UnclipMode) { GetForegroundDrawList()->AddText(pos, IM_COL32(255,255,0,200), label, label_end); }
+@@ -10963,7 +10982,9 @@
+         const ImGuiID close_button_id = p_open ? GetIDWithSeed("#CLOSE", NULL, docked_window ? docked_window->ID : id) : 0;
+         bool just_closed;
+         bool text_clipped;
++        if (tab_contents_visible || held || hovered) PushStyleColor(ImGuiCol_Text, Spectrum::ColorToOutput(Spectrum::Colors->GRAY50));
+         TabItemLabelAndCloseButton(display_draw_list, bb, tab_just_unsaved ? (flags & ~ImGuiTabItemFlags_UnsavedDocument) : flags, tab_bar->FramePadding, label, id, close_button_id, tab_contents_visible, &just_closed, &text_clipped);
++        if (tab_contents_visible || held || hovered) PopStyleColor();
+         if (just_closed && p_open != NULL)
+         {
+             *p_open = false;
+diff --git a/imgui_spectrum.h b/imgui_spectrum.h
+new file mode 100644
+--- /dev/null
++++ b/imgui_spectrum.h
+@@ -0,0 +1,99 @@
++#pragma once
++#include "imgui.h"
++
++/*
++Color definitions in ImGui are a good starting point,
++but do not cover all the intricacies of Spectrum's possible colors
++in controls and widgets.
++
++One big difference is that ImGui communicates widget activity
++(hover, pressed) with their background, while spectrum uses a mix
++of background and border, with border being the most common choice.
++
++Because of this, we reference extra colors in spectrum from
++imgui_widgets.cpp directly. Theme-dependent colors are accessed at
++runtime via Spectrum::Colors (a pointer swapped by StyleColorsSpectrum()).
++*/
++
++namespace ImGui {
++    namespace Spectrum {
++        // Widget metric constants
++        const float CHECKBOX_BORDER_SIZE = 2.0f;
++        const float CHECKBOX_ROUNDING = 2.0f;
++
++
++        // Sets the ImGui style to Spectrum. Pass dark=true for dark theme.
++        // To switch themes at runtime, call again with the new value.
++        IMGUI_API void StyleColorsSpectrum(bool dark = false);
++
++        // DeckerEngine: palette literals stay sRGB; convert only when drawing to an sRGB target.
++        // Does not apply style.Alpha. Call ImGui::GetColorU32 for direct draw-list colors.
++        IMGUI_API void SetLinearColorOutput(bool enabled);
++        IMGUI_API ImU32 ColorToOutput(ImU32 srgb);
++
++        namespace { // Unnamed namespace, since we only use this here.
++            unsigned int Color(unsigned int c) {
++                // ImGui ImU32 format is 0xAABBGGRR; standard RGB literals are 0xRRGGBB.
++                // Swap R and B channels and add full alpha.
++                const unsigned int a = 0xFF;
++                const short r = (c >> 16) & 0xFF;
++                const short g = (c >> 8) & 0xFF;
++                const short b = (c >> 0) & 0xFF;
++                return (a << 24) | (r << 0) | (g << 8) | (b << 16);
++            }
++        }
++
++        inline unsigned int color_alpha(unsigned int alpha, unsigned int c) {
++            return ((alpha & 0xFF) << 24) | (c & 0x00FFFFFF);
++        }
++
++        namespace Static { // static colors (same in both light and dark themes)
++            const unsigned int NONE = 0x00000000; // transparent
++            const unsigned int WHITE = Color(0xFFFFFF);
++            const unsigned int BLACK = Color(0x000000);
++            const unsigned int GRAY200 = Color(0xF4F4F4);
++            const unsigned int GRAY300 = Color(0xEAEAEA);
++            const unsigned int GRAY400 = Color(0xD3D3D3);
++            const unsigned int GRAY500 = Color(0xBCBCBC);
++            const unsigned int GRAY600 = Color(0x959595);
++            const unsigned int GRAY700 = Color(0x767676);
++            const unsigned int GRAY800 = Color(0x505050);
++            const unsigned int GRAY900 = Color(0x323232);
++            const unsigned int BLUE400 = Color(0x378EF0);
++            const unsigned int BLUE500 = Color(0x2680EB);
++            const unsigned int BLUE600 = Color(0x1473E6);
++            const unsigned int BLUE700 = Color(0x0D66D0);
++            const unsigned int RED400 = Color(0xEC5B62);
++            const unsigned int RED500 = Color(0xE34850);
++            const unsigned int RED600 = Color(0xD7373F);
++            const unsigned int RED700 = Color(0xC9252D);
++            const unsigned int ORANGE400 = Color(0xF29423);
++            const unsigned int ORANGE500 = Color(0xE68619);
++            const unsigned int ORANGE600 = Color(0xDA7B11);
++            const unsigned int ORANGE700 = Color(0xCB6F10);
++            const unsigned int GREEN400 = Color(0x33AB84);
++            const unsigned int GREEN500 = Color(0x2D9D78);
++            const unsigned int GREEN600 = Color(0x268E6C);
++            const unsigned int GREEN700 = Color(0x12805C);
++        }
++
++        // Theme-dependent color palette. Access via Spectrum::Colors->.
++        struct SpectrumPalette {
++            unsigned int GRAY50, GRAY75, GRAY100, GRAY200, GRAY300, GRAY400, GRAY500, GRAY600, GRAY700, GRAY800, GRAY900;
++            unsigned int BLUE400, BLUE500, BLUE600, BLUE700;
++            unsigned int RED400, RED500, RED600, RED700;
++            unsigned int ORANGE400, ORANGE500, ORANGE600, ORANGE700;
++            unsigned int GREEN400, GREEN500, GREEN600, GREEN700;
++            unsigned int INDIGO400, INDIGO500, INDIGO600, INDIGO700;
++            unsigned int CELERY400, CELERY500, CELERY600, CELERY700;
++            unsigned int MAGENTA400, MAGENTA500, MAGENTA600, MAGENTA700;
++            unsigned int YELLOW400, YELLOW500, YELLOW600, YELLOW700;
++            unsigned int FUCHSIA400, FUCHSIA500, FUCHSIA600, FUCHSIA700;
++            unsigned int SEAFOAM400, SEAFOAM500, SEAFOAM600, SEAFOAM700;
++            unsigned int CHARTREUSE400, CHARTREUSE500, CHARTREUSE600, CHARTREUSE700;
++            unsigned int PURPLE400, PURPLE500, PURPLE600, PURPLE700;
++        };
++
++        extern const SpectrumPalette* Colors;
++    }
++}
+diff --git a/imgui_spectrum.cpp b/imgui_spectrum.cpp
+new file mode 100644
+--- /dev/null
++++ b/imgui_spectrum.cpp
+@@ -0,0 +1,131 @@
++#include "imgui_spectrum.h"
++
++#include "imgui.h"
++#include <cmath>
++
++namespace ImGui {
++    namespace Spectrum {
++        static bool LinearColorOutput = false;
++
++        void SetLinearColorOutput(bool enabled) { LinearColorOutput = enabled; }
++
++        ImU32 ColorToOutput(ImU32 srgb) {
++            if (!LinearColorOutput) return srgb;
++            ImVec4 color = ColorConvertU32ToFloat4(srgb);
++            const auto linear = [](float v) { return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f); };
++            color.x = linear(color.x); color.y = linear(color.y); color.z = linear(color.z);
++            return ColorConvertFloat4ToU32(color);
++        }
++
++        static const SpectrumPalette LightPalette = {
++            /* GRAY50..900 */ Color(0xFFFFFF), Color(0xFAFAFA), Color(0xF5F5F5), Color(0xEAEAEA), Color(0xE1E1E1), Color(0xCACACA), Color(0xB3B3B3), Color(0x8E8E8E), Color(0x707070), Color(0x4B4B4B), Color(0x2C2C2C),
++            /* BLUE */        Color(0x2680EB), Color(0x1473E6), Color(0x0D66D0), Color(0x095ABA),
++            /* RED */         Color(0xE34850), Color(0xD7373F), Color(0xC9252D), Color(0xBB121A),
++            /* ORANGE */      Color(0xE68619), Color(0xDA7B11), Color(0xCB6F10), Color(0xBD640D),
++            /* GREEN */       Color(0x2D9D78), Color(0x268E6C), Color(0x12805C), Color(0x107154),
++            /* INDIGO */      Color(0x6767EC), Color(0x5C5CE0), Color(0x5151D3), Color(0x4646C6),
++            /* CELERY */      Color(0x44B556), Color(0x3DA74E), Color(0x379947), Color(0x318B40),
++            /* MAGENTA */     Color(0xD83790), Color(0xCE2783), Color(0xBC1C74), Color(0xAE0E66),
++            /* YELLOW */      Color(0xDFBF00), Color(0xD2B200), Color(0xC4A600), Color(0xB79900),
++            /* FUCHSIA */     Color(0xC038CC), Color(0xB130BD), Color(0xA228AD), Color(0x93219E),
++            /* SEAFOAM */     Color(0x1B959A), Color(0x16878C), Color(0x0F797D), Color(0x096C6F),
++            /* CHARTREUSE */  Color(0x85D044), Color(0x7CC33F), Color(0x73B53A), Color(0x6AA834),
++            /* PURPLE */      Color(0x9256D9), Color(0x864CCC), Color(0x7A42BF), Color(0x6F38B1),
++        };
++
++        static const SpectrumPalette DarkPalette = {
++            /* GRAY50..900 */ Color(0x252525), Color(0x2F2F2F), Color(0x323232), Color(0x393939), Color(0x3E3E3E), Color(0x4D4D4D), Color(0x5C5C5C), Color(0x7B7B7B), Color(0x999999), Color(0xCDCDCD), Color(0xFFFFFF),
++            /* BLUE */        Color(0x2680EB), Color(0x378EF0), Color(0x4B9CF5), Color(0x5AA9FA),
++            /* RED */         Color(0xE34850), Color(0xEC5B62), Color(0xF76D74), Color(0xFF7B82),
++            /* ORANGE */      Color(0xE68619), Color(0xF29423), Color(0xF9A43F), Color(0xFFB55B),
++            /* GREEN */       Color(0x2D9D78), Color(0x33AB84), Color(0x39B990), Color(0x3FC89C),
++            /* INDIGO */      Color(0x6767EC), Color(0x7575F1), Color(0x8282F6), Color(0x9090FA),
++            /* CELERY */      Color(0x44B556), Color(0x4BC35F), Color(0x51D267), Color(0x58E06F),
++            /* MAGENTA */     Color(0xD83790), Color(0xE2499D), Color(0xEC5AAA), Color(0xF56BB7),
++            /* YELLOW */      Color(0xDFBF00), Color(0xEDCC00), Color(0xFAD900), Color(0xFFE22E),
++            /* FUCHSIA */     Color(0xC038CC), Color(0xCF3EDC), Color(0xD951E5), Color(0xE366EF),
++            /* SEAFOAM */     Color(0x1B959A), Color(0x20A3A8), Color(0x23B2B8), Color(0x26C0C7),
++            /* CHARTREUSE */  Color(0x85D044), Color(0x8EDE49), Color(0x9BEC54), Color(0xA3F858),
++            /* PURPLE */      Color(0x9256D9), Color(0x9D64E1), Color(0xA873E9), Color(0xB483F0),
++        };
++
++        const SpectrumPalette* Colors = &LightPalette;
++
++        void StyleColorsSpectrum(bool dark) {
++            Colors = dark ? &DarkPalette : &LightPalette;
++
++            ImGuiStyle* style = &ImGui::GetStyle();
++            style->WindowRounding  = 4.0f;
++            style->FrameRounding   = 4.0f;
++            style->FrameBorderSize = 1.0f;
++            style->GrabRounding    = 4.0f;
++
++            ImVec4* col = style->Colors;
++            col[ImGuiCol_Text] = ColorConvertU32ToFloat4(Colors->GRAY800); // text on hovered controls is gray900
++            col[ImGuiCol_TextDisabled] = ColorConvertU32ToFloat4(Colors->GRAY500);
++            col[ImGuiCol_WindowBg] = ColorConvertU32ToFloat4(Colors->GRAY100);
++            col[ImGuiCol_ChildBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
++            col[ImGuiCol_PopupBg] = ColorConvertU32ToFloat4(Colors->GRAY50); // not sure about this. Note: applies to tooltips too.
++            col[ImGuiCol_Border] = ColorConvertU32ToFloat4(Colors->GRAY300);
++            col[ImGuiCol_BorderShadow] = ColorConvertU32ToFloat4(Spectrum::Static::NONE); // We don't want shadows. Ever.
++            col[ImGuiCol_FrameBg] = ColorConvertU32ToFloat4(Colors->GRAY75); // this isnt right, spectrum does not do this, but it's a good fallback
++            col[ImGuiCol_FrameBgHovered] = ColorConvertU32ToFloat4(Colors->GRAY50);
++            col[ImGuiCol_FrameBgActive] = ColorConvertU32ToFloat4(Colors->GRAY200);
++            col[ImGuiCol_TitleBg] = ColorConvertU32ToFloat4(Colors->GRAY300); // those titlebar values are totally made up, spectrum does not have this.
++            col[ImGuiCol_TitleBgActive] = ColorConvertU32ToFloat4(Colors->GRAY200);
++            col[ImGuiCol_TitleBgCollapsed] = ColorConvertU32ToFloat4(Colors->GRAY400);
++            col[ImGuiCol_MenuBarBg] = ColorConvertU32ToFloat4(Colors->GRAY100);
++            col[ImGuiCol_ScrollbarBg] = ColorConvertU32ToFloat4(Colors->GRAY100); // same as regular background
++            col[ImGuiCol_ScrollbarGrab] = ColorConvertU32ToFloat4(Colors->GRAY400);
++            col[ImGuiCol_ScrollbarGrabHovered] = ColorConvertU32ToFloat4(Colors->GRAY600);
++            col[ImGuiCol_ScrollbarGrabActive] = ColorConvertU32ToFloat4(Colors->GRAY700);
++            col[ImGuiCol_CheckMark] = ColorConvertU32ToFloat4(Colors->BLUE500);
++            col[ImGuiCol_SliderGrab] = ColorConvertU32ToFloat4(Colors->GRAY700);
++            col[ImGuiCol_SliderGrabActive] = ColorConvertU32ToFloat4(Colors->GRAY800);
++            col[ImGuiCol_Button] = ColorConvertU32ToFloat4(Colors->GRAY75); // match default button to Spectrum's 'Action Button'.
++            col[ImGuiCol_ButtonHovered] = ColorConvertU32ToFloat4(Colors->GRAY50);
++            col[ImGuiCol_ButtonActive] = ColorConvertU32ToFloat4(Colors->GRAY200);
++            col[ImGuiCol_Header] = ColorConvertU32ToFloat4(Colors->BLUE400);
++            col[ImGuiCol_HeaderHovered] = ColorConvertU32ToFloat4(Colors->BLUE500);
++            col[ImGuiCol_HeaderActive] = ColorConvertU32ToFloat4(Colors->BLUE600);
++            col[ImGuiCol_Separator] = ColorConvertU32ToFloat4(Colors->GRAY400);
++            col[ImGuiCol_SeparatorHovered] = ColorConvertU32ToFloat4(Colors->GRAY600);
++            col[ImGuiCol_SeparatorActive] = ColorConvertU32ToFloat4(Colors->GRAY700);
++            col[ImGuiCol_ResizeGrip] = ColorConvertU32ToFloat4(Colors->GRAY400);
++            col[ImGuiCol_ResizeGripHovered] = ColorConvertU32ToFloat4(Colors->GRAY600);
++            col[ImGuiCol_ResizeGripActive] = ColorConvertU32ToFloat4(Colors->GRAY700);
++            col[ImGuiCol_PlotLines] = ColorConvertU32ToFloat4(Colors->BLUE400);
++            col[ImGuiCol_PlotLinesHovered] = ColorConvertU32ToFloat4(Colors->BLUE600);
++            col[ImGuiCol_PlotHistogram] = ColorConvertU32ToFloat4(Colors->BLUE400);
++            col[ImGuiCol_PlotHistogramHovered] = ColorConvertU32ToFloat4(Colors->BLUE600);
++            col[ImGuiCol_TextSelectedBg] = ColorConvertU32ToFloat4((Colors->BLUE400 & 0x00FFFFFF) | 0x33000000);
++            col[ImGuiCol_DragDropTarget] = ImVec4(1.00f, 1.00f, 0.00f, 0.90f);
++            col[ImGuiCol_NavCursor] = ColorConvertU32ToFloat4((Colors->GRAY900 & 0x00FFFFFF) | 0x0A000000);
++            col[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
++            col[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
++            col[ImGuiCol_ModalWindowDimBg] = ImVec4(0.20f, 0.20f, 0.20f, 0.35f);
++            col[ImGuiCol_CheckMark] = ColorConvertU32ToFloat4(Colors->GRAY50);
++            col[ImGuiCol_Tab] = ColorConvertU32ToFloat4(Colors->GRAY300);
++            col[ImGuiCol_TabSelected] = ColorConvertU32ToFloat4(Colors->BLUE500);
++            col[ImGuiCol_TabHovered] = ColorConvertU32ToFloat4(Colors->BLUE700);
++            col[ImGuiCol_TabDimmed] = ColorConvertU32ToFloat4(Colors->GRAY400);
++            col[ImGuiCol_TabDimmedSelected] = ColorConvertU32ToFloat4(Colors->BLUE700);
++            col[ImGuiCol_TableHeaderBg] = ColorConvertU32ToFloat4(Colors->GRAY200);
++            col[ImGuiCol_TableBorderStrong] = ColorConvertU32ToFloat4(Colors->GRAY400);
++            col[ImGuiCol_TableBorderLight] = ColorConvertU32ToFloat4(Colors->GRAY300);
++            col[ImGuiCol_TableRowBg] = ImVec4(0, 0, 0, 0);
++            col[ImGuiCol_TableRowBgAlt] = ColorConvertU32ToFloat4(color_alpha(40, Colors->GRAY400));
++            col[ImGuiCol_TabSelectedOverline] = ColorConvertU32ToFloat4(Colors->BLUE600);
++            col[ImGuiCol_TabDimmedSelectedOverline] = ColorConvertU32ToFloat4(Colors->BLUE500);
++            col[ImGuiCol_CheckboxSelectedBg] = ColorConvertU32ToFloat4(Colors->BLUE500);
++            col[ImGuiCol_InputTextCursor] = col[ImGuiCol_Text];
++            col[ImGuiCol_TreeLines] = ColorConvertU32ToFloat4(Colors->GRAY400);
++#ifdef IMGUI_HAS_DOCK
++            col[ImGuiCol_DockingPreview] = ColorConvertU32ToFloat4(color_alpha(150, Colors->BLUE500));
++            col[ImGuiCol_DockingEmptyBg] = ColorConvertU32ToFloat4(Colors->GRAY75);
++#endif
++
++        }
++
++    }
++}

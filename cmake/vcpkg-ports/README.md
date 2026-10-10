@@ -19,9 +19,14 @@ The official vcpkg 3.5.3 port, source SHA512 and existing patch are preserved. O
 
 ## ImGui 1.92.9 (v1.92.9b-docking)
 
-The official fixed-baseline port, source tag and SHA512 are preserved. The only change adds
+The official fixed-baseline source tag and SHA512 are preserved. The overlay adds
 PRIVATE VK_NO_PROTOTYPES when IMGUI_BUILD_VULKAN_BINDING is enabled. DeckerEngine fills the
 backend's private dispatch table through ImGui_ImplVulkan_LoadFunctions and its Device resolver.
 This avoids collisions between Vulkan function symbols and Volk's same-named global variables.
-No source vendoring or floating download was introduced. Compare this one-line build adjustment
-when upgrading the official port. Copied port files share the adjacent vcpkg license.
+
+Overlay revision 1 also provides the opt-in `spectrum` feature, selected by the editor and requiring
+docking. [Spectrum patch notes](imgui/SPECTRUM.md) identify the pinned Adobe source and local
+compatibility fixes. vcpkg applies the patch to the official archive and compiles/installs the extra
+theme source/header. Other consumers that do not request this feature retain the original widgets.
+Compare both the build adjustment and Spectrum patch when upgrading ImGui. Copied port files share
+the adjacent vcpkg license; the Adobe code retains its [source license](imgui/LICENSE-spectrum.txt).

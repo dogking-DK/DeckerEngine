@@ -89,5 +89,6 @@
 | 0085 | [M12.4 GUI/IPC/脚本一致性](0085-editor-simulation-consistency.md) | editor, editor-interaction, physics-api, render-simulation | completed |
 | 0086 | [布料视口持续导航卡顿修复](0086-simulation-camera-progress.md) | editor, editor-interaction, physics-api | completed |
 | 0087 | [编辑器后台窗口与自动化免打扰](0087-editor-background-window.md) | platform, editor | completed |
+| 0088 | [Adobe Spectrum 编辑器主题迁移](0088-editor-spectrum-theme.md) | editor | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

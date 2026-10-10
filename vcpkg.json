@@ -88,6 +88,7 @@
           "name": "imgui",
           "features": [
             "docking-experimental",
+            "spectrum",
             "sdl3-binding",
             "vulkan-binding"
           ]

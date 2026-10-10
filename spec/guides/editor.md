@@ -1,5 +1,8 @@
 # 编辑器工作台
 
+默认使用 Adobe Spectrum 浅色主题（白色/浅灰背景），包含其控件绘制、停靠与表格配色，保留中文系统字体和 DPI 缩放。
+依赖仍由 vcpkg 管理；补丁来源和升级规则见 [Spectrum overlay](../../cmake/vcpkg-ports/imgui/SPECTRUM.md)。
+
 Windows 可加 `--pipe NAME` 开放本机命令端点，用 `dk-ctl --pipe NAME --method scene.query` 查询。
 构建、guard 编辑和重试见 [IPC 指南](ipc.md)。默认不开放 IPC；外部 `runtime.shutdown` 不自动保存。
 

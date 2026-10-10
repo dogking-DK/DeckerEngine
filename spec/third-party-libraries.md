@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-10-09T14:20:00+08:00"
+updated_at: "2026-10-10T15:51:00+08:00"
 status: accepted
 ---
 
@@ -169,12 +169,16 @@ SDL3 / `sdl3` 3.4.16#1 已由 dk::platform PRIVATE 链接；独立 platform feat
 
 ## M8.1 编辑器依赖
 
-Dear ImGui / `imgui` 1.92.9 已接入 dk_editor，feature 为 docking-experimental、sdl3-binding、
+Dear ImGui / `imgui` 1.92.9（本地 overlay 修订 #1）已接入 dk_editor，feature 为 docking-experimental、spectrum、sdl3-binding、
 vulkan-binding。2026-10-08 核验 [官方 port](https://raw.githubusercontent.com/microsoft/vcpkg/master/ports/imgui/vcpkg.json)
 仍为 1.92.9、无 port 修订；实际源码 tag 是 v1.92.9b-docking，与固定 baseline 一致。
 复用 SDL3 3.4.16#1，不在本次升级已集成窗口依赖；官方 SDL3 已为 3.4.18。
-[同版本 overlay](../cmake/vcpkg-ports/README.md) 仅为 ImGui Vulkan backend 启用 VK_NO_PROTOTYPES，
+[同版本 overlay](../cmake/vcpkg-ports/README.md) 为 ImGui Vulkan backend 启用 VK_NO_PROTOTYPES，
 由 Device resolver 填充 backend 私有函数表；避免直接链接的函数符号与 volk 全局变量冲突。
+2026-10-10 增加显式 spectrum feature，通过[固定来源补丁](../cmake/vcpkg-ports/imgui/SPECTRUM.md)
+移植 Adobe Spectrum 控件与浅色主题，继续使用官方源码 tag/hash 和原 baseline。
+保留中文系统字体，补齐 docking/table、sRGB 输出及禁用透明度；未引入内嵌字体。
+补丁及验收见 [0088](development/0088-editor-spectrum-theme.md)，后续升级需重核补丁兼容性。
 三方 UI 内部容器使用默认分配器，引擎 GPU 资源和渲染数据继续遵循 Memory/VMA 所有权。
 实际编译/窗口/退出证据见 [0065](development/0065-editor-workbench.md)。
 

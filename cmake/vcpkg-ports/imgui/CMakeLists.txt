@@ -30,6 +30,10 @@ target_sources(
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_11)
 
+if(IMGUI_BUILD_SPECTRUM)
+    target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/imgui_spectrum.cpp)
+endif()
+
 if(IMGUI_BUILD_ALLEGRO5_BINDING)
     find_package(Allegro CONFIG REQUIRED)
     target_link_libraries(${PROJECT_NAME} PRIVATE Allegro::allegro Allegro::allegro_ttf Allegro::allegro_font Allegro::allegro_main)
@@ -192,6 +196,9 @@ foreach(BINDING_TARGET ${BINDING_TARGETS})
 endforeach()
 
 if(NOT IMGUI_SKIP_HEADERS)
+    if(IMGUI_BUILD_SPECTRUM)
+        install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/imgui_spectrum.h DESTINATION include)
+    endif()
     install(FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/imgui.h
         ${CMAKE_CURRENT_SOURCE_DIR}/imconfig.h

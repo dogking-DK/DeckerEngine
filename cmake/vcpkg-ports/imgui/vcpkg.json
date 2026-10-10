@@ -1,6 +1,7 @@
 {
   "name": "imgui",
   "version": "1.92.9",
+  "port-version": 1,
   "description": "Bloat-free Immediate Mode Graphical User interface for C++ with minimal dependencies.",
   "homepage": "https://github.com/ocornut/imgui",
   "license": "MIT",
@@ -15,6 +16,15 @@
     }
   ],
   "features": {
+    "spectrum": {
+      "description": "Adobe Spectrum controls adapted to the pinned ImGui docking version",
+      "dependencies": [
+        {
+          "name": "imgui",
+          "features": ["docking-experimental"]
+        }
+      ]
+    },
     "allegro5-binding": {
       "description": "Make available Allegro5 binding",
       "dependencies": [

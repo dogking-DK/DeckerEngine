@@ -2,6 +2,7 @@
 #include "EditorSupport.hpp"
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_vulkan.h>
+#include <imgui_spectrum.h>
 #include <array>
 #include <cmath>
 #include <SDL3/SDL_stdinc.h>
@@ -57,14 +58,10 @@ GuiRenderer::GuiRenderer(graphics::SubmissionQueue& queue,platform::Window& wind
                 }
             }
         }
-        ImGui::StyleColorsDark();
+        ImGui::Spectrum::SetLinearColorOutput(false);
+        ImGui::Spectrum::StyleColorsSpectrum(false);
         auto& style=ImGui::GetStyle();
-        style.WindowRounding=3; style.FrameRounding=3; style.GrabRounding=3;
         style.FramePadding={7,5}; style.ItemSpacing={8,7};
-        style.Colors[ImGuiCol_WindowBg]={0.065f,0.078f,0.095f,1};
-        style.Colors[ImGuiCol_Header]={0.13f,0.24f,0.30f,1};
-        style.Colors[ImGuiCol_Button]={0.14f,0.28f,0.34f,1};
-        style.Colors[ImGuiCol_CheckMark]={0.25f,0.78f,0.78f,1};
         style_srgb_=style;
         if (!ImGui_ImplSDL3_InitForVulkan(take(window.native_sdl_window()))) throw std::runtime_error("ImGui SDL3 initialization failed");
         platform_=true;
@@ -92,7 +89,9 @@ void GuiRenderer::initialize(const graphics::Frame& frame) {
     if (!ImGui_ImplVulkan_LoadFunctions(graphics::device_api_version,resolve,const_cast<graphics::Device*>(&device)))
         throw std::runtime_error("ImGui Vulkan function loading failed");
     ImGui::GetStyle()=style_srgb_;
-    if (frame.format()==vk::Format::eB8G8R8A8Srgb || frame.format()==vk::Format::eR8G8B8A8Srgb) {
+    const bool linear_colors=frame.format()==vk::Format::eB8G8R8A8Srgb || frame.format()==vk::Format::eR8G8B8A8Srgb;
+    ImGui::Spectrum::SetLinearColorOutput(linear_colors);
+    if (linear_colors) {
         for (auto& color : ImGui::GetStyle().Colors) {
             const auto linear=[](float v) { return v<=0.04045f ? v/12.92f : std::pow((v+0.055f)/1.055f,2.4f); };
             color.x=linear(color.x); color.y=linear(color.y); color.z=linear(color.z);

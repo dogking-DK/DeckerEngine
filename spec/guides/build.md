@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-09T14:20:00+08:00"
+updated_at: "2026-10-10T15:51:00+08:00"
 ---
 
 # 构建与依赖配置
@@ -105,7 +105,7 @@ JSON 由 Scene 私有使用，原规划的 GLM 已从清单移除。
 | shaders | shader-slang、nlohmann-json（DK_BUILD_GRAPHICS_SHADERS 自动选择，要求 Memory/IO） |
 | graphics | vulkan、volk、vk-bootstrap、vulkan-memory-allocator、shader-slang |
 | platform | sdl3[vulkan]（DK_BUILD_PLATFORM 自动选择；不含 ImGui） |
-| editor | sdl3[vulkan]、imgui[docking-experimental,sdl3-binding,vulkan-binding]（DK_BUILD_EDITOR 自动选择） |
+| editor | sdl3[vulkan]、imgui[docking-experimental,spectrum,sdl3-binding,vulkan-binding]（DK_BUILD_EDITOR 自动选择） |
 | scripting | luau 0.741（DK_BUILD_SCRIPTING_LUAU 自动选择；私有链接 Compiler/VM） |
 | tests | catch2（已接入 Core、数学和 IO 单元测试） |
 | profiling | tracy[on-demand]（关闭默认 features；启用 DK_ENABLE_PROFILING 时自动选择） |

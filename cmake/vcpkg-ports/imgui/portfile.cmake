@@ -1,5 +1,10 @@
 vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
 
+set(DK_IMGUI_PATCHES)
+if ("spectrum" IN_LIST FEATURES)
+    list(APPEND DK_IMGUI_PATCHES spectrum.patch)
+endif()
+
 # Upstream tag is v1.92.9b (a patch of 1.92.9); the letter suffix is not a valid vcpkg version.
 if ("docking-experimental" IN_LIST FEATURES)
     vcpkg_from_github(
@@ -8,6 +13,7 @@ if ("docking-experimental" IN_LIST FEATURES)
         REF "v${VERSION}b-docking"
         SHA512 7eddcdb475f1db1fc8242d918533b955c964d2267abe713bdf23f8e2444770946d3c79c7855e360bab6168e36231b95bd05a84106c08f876dcd53daac9caccac
         HEAD_REF docking
+        PATCHES ${DK_IMGUI_PATCHES}
     )
 else()
     vcpkg_from_github(
@@ -16,6 +22,7 @@ else()
         REF "v${VERSION}b"
         SHA512 1a8fc7e4d7fe8926289ed9598f39dd5b601baffa3b2a7a0889ed0f9a8f252c85710f4ba65b2a6801bb5b46a17d1fd30b5542e11f67b8989c6640b498ef68bb2d
         HEAD_REF master
+        PATCHES ${DK_IMGUI_PATCHES}
     )
 endif()
 
@@ -24,6 +31,7 @@ file(COPY "${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt" DESTINATION "${SOURCE_PATH}
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
     FEATURES
+    spectrum                    IMGUI_BUILD_SPECTRUM
     allegro5-binding            IMGUI_BUILD_ALLEGRO5_BINDING
     android-binding             IMGUI_BUILD_ANDROID_BINDING
     dx9-binding                 IMGUI_BUILD_DX9_BINDING
@@ -101,8 +109,11 @@ endif()
 vcpkg_copy_pdbs()
 vcpkg_cmake_config_fixup()
 
+set(DK_IMGUI_LICENSES "${SOURCE_PATH}/LICENSE.txt")
 if ("test-engine" IN_LIST FEATURES)
-    vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE.txt" "${SOURCE_PATH}/test-engine/LICENSE.txt")
-else()
-    vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE.txt")
+    list(APPEND DK_IMGUI_LICENSES "${SOURCE_PATH}/test-engine/LICENSE.txt")
 endif()
+if ("spectrum" IN_LIST FEATURES)
+    list(APPEND DK_IMGUI_LICENSES "${CMAKE_CURRENT_LIST_DIR}/LICENSE-spectrum.txt")
+endif()
+vcpkg_install_copyright(FILE_LIST ${DK_IMGUI_LICENSES})

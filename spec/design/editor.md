@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-10T14:49:00+08:00"
+updated_at: "2026-10-10T15:51:00+08:00"
 status: accepted
 ---
 
@@ -85,8 +85,19 @@ CPU和GPU串行执行，禁止另建GUI模拟状态或在夹具里直接修改Wo
 `windows-editor` 启用已有呈现/渲染模块。CPU-only Runtime 不新增窗口或 GPU 依赖。
 ImGui 使用固定 baseline 中的 1.92.9 docking/SDL3/Vulkan backend；本次核验官方 port 仍为该版本。
 SDL3 复用已接入版本，不升级 baseline。
-ImGui overlay 保留官方 port/tag/hash，仅对该库启用 VK_NO_PROTOTYPES，
+ImGui overlay 保留官方源码 tag/hash，在 1.92.9b-docking 上应用 Adobe Spectrum 的定版外观补丁，并对该库启用 VK_NO_PROTOTYPES，
 由 Device 借用 resolver 初始化 backend 私有函数表，避免其直接调用与 volk 同名的全局符号。
+
+### Spectrum 主题
+
+通过项目内 overlay 的显式 spectrum feature 保存补丁与来源提交，继续由 vcpkg 编译和安装 imgui::imgui；不修改安装缓存。
+移植 Adobe 的色板、控件、文字及箭头绘制，保留当前 docking 和 SDL3/Vulkan backend。
+默认采用 Spectrum 浅色（白色/浅灰背景），补齐停靠、表格及新版 ImGui 颜色；沿用现有中文系统字体和 DPI 支持，
+不引入 Adobe 内嵌 Source Sans Pro 字体或新增主题切换设置。
+标准 style 颜色和控件直接使用的 Spectrum 色板均按交换链格式执行一次 sRGB 到线性转换，
+重建时从原始色值恢复；透明度沿用 ImGui Alpha/DisabledAlpha，避免禁用控件仍以不透明色绘制。
+补丁适配当前 PathStroke 参数和 mixed checkbox 几何；保持输入命中、导航和场景操作语义。
+验证集中于主题颜色/禁用状态、真实工作台、停靠和交互；自动窗口始终使用 --background。
 
 ## 工作流与命令
 
