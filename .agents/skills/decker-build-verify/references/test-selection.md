@@ -46,6 +46,8 @@
 | IPC ticket、断连/超时、分帧、有界队列、owner 分派 | dk_ipc_tests | `^dk\.ipc\.(IPC \|Named pipe \|Disconnected \|Pipe )` |
 | runner 与轻量客户端真实进程、重启与 Unicode 参数 | dk_run、dk_ctl | `^dk\.ipc\.runner_client$` |
 | Python 客户端参数/错误/截止时间与 CPU IPC 批量/重载 | dk_run、dk_ctl | `^dk\.python\.(unit\|cpu)$`（需要 Python 3.11+） |
+| 实验计划稳定展开、预算拒绝、索引来源/摘要/失败保护 | dk_run、dk_ctl | `^dk\.experiments\.(unit\|index_cpu)$`（Python；CPU-only 可独立运行） |
+| 实验计划与真实 GPU 五文件导出来源核验 | dk_run、dk_ctl | `^dk\.experiments\.index_gpu$`（RenderSimulation，gpu label） |
 | Python 批量编辑、截图等待与产物收集 | dk_run、dk_ctl | `^dk\.python\.capture_gpu$`（需要 Python 3.11+ 和 render capture；gpu label） |
 | 记录格式/输入/失败与 Python SDK 单元回归 | dk_run、dk_ctl | `^dk\.python\.unit$`（需要 Python 3.11+） |
 | 跨进程记录/重放、身份/事务/文件/漂移拒绝 | dk_run、dk_ctl | `^dk\.replay\.cpu$`（启用 Luau 时从脚本保存的工程开始） |

@@ -1,0 +1,10 @@
+{
+  "format": "DeckerExperimentPlan",
+  "version": 1,
+  "base": {"steps": 300, "fixed_dt_ns": 10000000, "cloth": {}},
+  "sweep": {"cloth.iterations": [8, 12], "cloth.compliance": [0.000001, 0.00001]},
+  "seeds": [42, 43],
+  "solvers": ["xpbd_cpu"],
+  "output": {"image": false, "width": 640, "height": 480},
+  "budget": {"max_experiments": 8, "max_total_steps": 2400, "max_work_units": 10000000}
+}
