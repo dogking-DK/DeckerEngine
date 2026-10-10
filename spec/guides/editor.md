@@ -18,6 +18,14 @@ cmake --build out/build/windows-editor --config Debug --target dk_editor_app
 其他项目使用 `--root PROJECT_ROOT --manifest project.json`。Open 输入项目根内的相对 manifest；
 切换项目根请重新启动。窗口面板可停靠、移动和调整尺寸，布局仅在当前会话保留。
 
+Windows后台运行可加 `--background`：启动及程序恢复窗口时不抢焦点，并放在其他窗口后方；
+仍正常渲染，用户可主动从任务栏切入。普通运行不加该参数，窗口照常自动弹出。
+所有仓库编辑器自动化测试及GUI响应基准都使用后台模式；手动限帧截图也应加上：
+
+```powershell
+.\out\build\windows-editor\bin\Debug\dk-editor.exe --background --validation --frames 8 --screenshot out/editor-preview.ppm
+```
+
 - **Hierarchy**：显示实体层级，点击选择，与视口共用选择。存在未应用草稿时先 Apply 或 Revert。
 - **Inspector**：修改名称、本地 translation、四元数 rotation（X/Y/Z/W）和 scale。
   Apply 以一次事务提交，Undo/Redo 使用引擎现有历史；无效变换或过期版本会报错并保留草稿。
@@ -131,7 +139,7 @@ try {
 只读、限帧预览可用：
 
 ```powershell
-.\out\build\windows-editor\bin\Debug\dk-editor.exe --validation --frames 8 --screenshot out/editor-sponza.ppm
+.\out\build\windows-editor\bin\Debug\dk-editor.exe --background --validation --frames 8 --screenshot out/editor-sponza.ppm
 ```
 
 `--fixture-camera` 使用面向原点的小场景初始相机，仅供测试夹具。没有该参数时采用 Sponza 初始相机。

@@ -106,7 +106,7 @@ def host(args, kind, directory):
         save(directory / "scene.json", {"format": "DeckerScene", "version": 1, "scene_id": str(uuid4()),
              "revision": 0, "entities": []})
         (directory / ".dk-editor-smoke").touch()
-        command = [args.editor, "--root", directory, "--pipe", endpoint, "--fixture-camera",
+        command = [args.editor, "--background", "--root", directory, "--pipe", endpoint, "--fixture-camera",
                    "--validation" if args.gui_validation == "required" else "--no-validation",
                    "--simulation-response-probe"]
     else:

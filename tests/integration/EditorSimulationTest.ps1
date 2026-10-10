@@ -11,7 +11,7 @@ $projectDir = Join-Path $caseDir 'project'
 Set-Content -LiteralPath (Join-Path $projectDir '.dk-editor-smoke') -Value 'disposable simulation panel fixture'
 $image = Join-Path $caseDir 'simulation-panel.ppm'
 $before = (Get-FileHash -LiteralPath (Join-Path $projectDir 'scene.json')).Hash
-& $Editor --root $projectDir --manifest project.json --validation --simulation-smoke --fixture-camera --screenshot $image
+& $Editor --background --root $projectDir --manifest project.json --validation --simulation-smoke --fixture-camera --screenshot $image
 $code = $LASTEXITCODE
 if ($code -eq 77) { exit 77 }
 if ($code -ne 0) { throw "Simulation panel smoke failed: $caseDir" }

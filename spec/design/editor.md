@@ -1,11 +1,18 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-10T14:33:00+08:00"
+updated_at: "2026-10-10T14:49:00+08:00"
 status: accepted
 ---
 
 # M8.1 编辑器工作台
+
+## 窗口启动方式
+
+WorkbenchOptions.background及CLI `--background`为Windows可选后台显示：创建和最小化恢复时不抢焦点，放在其他窗口后方。
+普通启动默认false，仍自动显示；参数只作用本次进程，不改项目或持久设置。窗口保持可聚焦，用户可主动切换进去。
+窗口政策由[Platform](platform.md)负责；所有编辑器自动化入口、IPC夹具和GUI响应基准显式传入该参数。
+测试仍走真实交换链、ImGui注入、截图和生命周期，不能通过最小化整个测试过程跳过渲染。
 
 ## M12.1 模拟面板与运行控制
 

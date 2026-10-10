@@ -63,7 +63,9 @@ int session(const WorkbenchOptions& options,memory::ResourceHandle heap,Diagnost
     if (!options.pipe.empty()) check(model->start_ipc(options.pipe));
 #endif
     ShutdownPhase window_phase{shutdown,"window"};
-    auto window=take(platform::Window::create(heap,{"DeckerEngine | Scene Workbench",1440,900}));
+    platform::WindowDesc window_desc{"DeckerEngine | Scene Workbench",1440,900};
+    window_desc.background=options.background;
+    auto window=take(platform::Window::create(heap,window_desc));
     graphics::DeviceOptions device;
     device.validation=options.validation ? graphics::ValidationMode::required : options.disable_validation ?
         graphics::ValidationMode::disabled : graphics::ValidationMode::if_available;

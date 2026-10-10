@@ -11,7 +11,7 @@ Copy-Item -LiteralPath $Fixtures -Destination (Join-Path $caseDir 'project') -Re
 $projectDir = Join-Path $caseDir 'project'
 Set-Content -LiteralPath (Join-Path $projectDir '.dk-editor-smoke') -Value 'disposable interaction fixture'
 $image = Join-Path $caseDir 'interaction.ppm'
-& $Editor --root $projectDir --validation --interaction-smoke --fixture-camera --screenshot $image
+& $Editor --background --root $projectDir --validation --interaction-smoke --fixture-camera --screenshot $image
 $code = $LASTEXITCODE
 if ($code -eq 77) { exit 77 }
 if ($code -ne 0) { throw "Editor interaction failed with exit $code; evidence: $caseDir" }

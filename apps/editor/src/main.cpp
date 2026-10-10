@@ -27,6 +27,7 @@ int main(int argc,char** argv) {
 #endif
             else if (arg=="--validation") options.validation=true;
             else if (arg=="--no-validation") options.disable_validation=true;
+            else if (arg=="--background") options.background=true;
             else if (arg=="--smoke") options.smoke=true;
             else if (arg=="--interaction-smoke") { options.smoke=true; options.interaction_smoke=true; }
             else if (arg=="--simulation-smoke") { options.smoke=true; options.simulation_smoke=true; }
@@ -42,7 +43,8 @@ int main(int argc,char** argv) {
             }
             else if (arg=="--screenshot") options.screenshot=next();
             else if (arg=="--help") {
-                std::puts("dk-editor [--root PROJECT_ROOT] [--manifest RELATIVE_MANIFEST] [--validation|--no-validation] [--pipe NAME]\n"
+                std::puts("dk-editor [--root PROJECT_ROOT] [--manifest RELATIVE_MANIFEST] [--validation|--no-validation] [--pipe NAME] [--background]\n"
+                    "Window: --background shows/restores behind other windows without activation (Windows); default: normal foreground startup\n"
                     "Acceptance: --frames N --screenshot OUTPUT.ppm [--fixture-camera]\n"
                     "            --smoke/--interaction-smoke/--simulation-smoke --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"

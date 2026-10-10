@@ -24,6 +24,7 @@ CMake target 使用 dk_* / dk::*，构建选项和宏使用 DK_*，程序使用 
 构建配置见 [构建指南](spec/guides/build.md)，测试入口见 [选择表](.agents/skills/decker-build-verify/references/test-selection.md)。修改后执行与改动相关的验证，
 并在开发记录或交付说明中区分通过、失败与未运行的检查。
 默认只验证目标功能及直接受影响链路，不固定执行全量或 Debug/Release 双配置。
+自动化启动 dk-editor 时使用 `--background`，避免测试窗口抢占用户焦点；普通交互启动不加此项。
 按任务使用以下 skill，具体操作仍以模块设计和命令文档为准：
 
 - [decker-build-verify](.agents/skills/decker-build-verify/SKILL.md)：选择并执行定向构建/测试。

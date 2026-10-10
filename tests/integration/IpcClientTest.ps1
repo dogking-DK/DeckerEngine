@@ -55,7 +55,7 @@ function Value($Reply) { return $Reply.response.result.value }
 function State { return (Value (Call 'scene.query')).state }
 function Guard($State) { return @{document_id=$State.document_id;revision=$State.revision} }
 function Start-Server {
-    if ($Editor) { return Launch $Editor @('--root',$root,'--pipe',$endpoint,'--validation','--fixture-camera') }
+    if ($Editor) { return Launch $Editor @('--background','--root',$root,'--pipe',$endpoint,'--validation','--fixture-camera') }
     return Launch $Runner @('--project-root',$root,'--pipe',$endpoint)
 }
 function Finish {

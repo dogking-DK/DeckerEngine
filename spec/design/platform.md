@@ -1,7 +1,7 @@
 ---
 module: platform
 created_at: "2026-10-02T21:40:00+08:00"
-updated_at: "2026-10-08T10:13:00+08:00"
+updated_at: "2026-10-10T14:49:00+08:00"
 status: accepted
 ---
 
@@ -22,6 +22,13 @@ Window 是共享窗口寿命的值句柄，create 接收 Memory resource 和 Win
 WindowDesc 用 UTF-8 标题、逻辑尺寸、可调整尺寸/Vulkan/隐藏开关。
 最小化输出零绘制尺寸，恢复后重新读取像素尺寸；关闭事件只标记请求，不隐式销毁。
 
+WindowDesc.background默认false，普通窗口沿用SDL显示/恢复行为。Windows后台窗口先隐藏创建，
+再以原生NOACTIVATE方式显示在其他窗口后方；最小化/恢复也使用不激活的显示状态，恢复后放到后方。
+此设置属于单个窗口，不修改进程级SDL hint，不设始终置顶，不禁用焦点或用户主动切入。
+后台窗口仍可呈现、截图和处理注入输入，不等同隐藏或headless；hidden=true仍保持隐藏创建。
+当前非Windows明确拒绝background请求，不承诺其他窗口管理器行为。Win32细节和user32依赖封装于Platform。
+创建失败不发布窗口；恢复失败返回实际错误，已被操作系统应用的窗口状态不承诺回滚。
+
 SDL video 子系统按共享 lease 成对 InitSubSystem/QuitSubSystem；最后一个窗口及设备引用释放后退出。
 所有窗口调用、最终销毁及呈现对象销毁都在创建它们的主线程执行，外部串行。
 内部 WindowAccess 提供寿命 token 给 Presentation。M8.1 增加 native_sdl_window 显式借用句柄；
@@ -40,6 +47,7 @@ clear_close_request 用于编辑器取消关闭；三者沿用空对象/主线�
 ## 验证
 
 参数、错误线程、双窗口事件隔离、重复创建/销毁、实际像素 resize/minimize/restore 与 Memory 回收。
+Windows平台探针使用后台窗口，记录本进程前台激活事件并要求为零，检查可见/非置顶/可聚焦及恢复尺寸；普通默认开关独立核对。
 平台探针不需要 Vulkan 设备；窗口初始化失败明确报错，不将缺失桌面当作通过。首先验收 Windows x64。
 
 相关：[架构](architecture.md)、[呈现](graphics-presentation.md)、[0054](../development/0054-window-device.md)。

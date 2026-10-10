@@ -12,6 +12,8 @@ struct WindowDesc {
     std::string title = "DeckerEngine";
     std::uint32_t width = 960, height = 640;
     bool resizable = true, vulkan = true, hidden = false;
+    // Windows: show/restore behind other windows without activation; manual focus remains available.
+    bool background = false;
 };
 struct WindowStatus {
     std::uint32_t pixel_width = 0, pixel_height = 0;

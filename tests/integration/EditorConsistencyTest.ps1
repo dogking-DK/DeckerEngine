@@ -132,7 +132,7 @@ function Compare-Capture($Report,[string]$Name,$State=$null) {
 }
 try {
     $diskBefore = Digest (Join-Path $root 'scene.json')
-    $editorProcess = Launch $Editor @('--root',$root,'--pipe',$endpoint,'--validation','--consistency-smoke','--fixture-camera',
+    $editorProcess = Launch $Editor @('--background','--root',$root,'--pipe',$endpoint,'--validation','--consistency-smoke','--fixture-camera',
         '--screenshot',(Join-Path $caseDir 'workbench.ppm'))
     $initial = Checkpoint 'initial'; [void](Compare-State $initial); Compare-Capture $initial 'capture-initial'; Next 'initial'
     $gui = Checkpoint 'gui'; [void](Compare-State $gui); Compare-Capture $gui 'capture-gui'

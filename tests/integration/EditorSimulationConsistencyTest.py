@@ -43,7 +43,7 @@ def main():
     evidence = root / ".dk-simulation-consistency"
     endpoint = "dk-simulation-consistency-" + uuid4().hex
     report = {"status": "failed", "backends": [], "checkpoints": []}
-    command = [args.editor, "--root", root, "--pipe", endpoint, "--fixture-camera", "--validation",
+    command = [args.editor, "--background", "--root", root, "--pipe", endpoint, "--fixture-camera", "--validation",
                "--simulation-consistency-smoke", "--screenshot", directory / "workbench.ppm"]
     with (directory / "stdout.log").open("wb") as out, (directory / "stderr.log").open("wb") as err:
         process = subprocess.Popen([str(x) for x in command], stdin=subprocess.DEVNULL, stdout=out, stderr=err,
