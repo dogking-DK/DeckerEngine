@@ -16,6 +16,15 @@ All numerical metrics 可展开查看全部误差、速度、能量、地面穿�
 Last successful export 保留成功路径、运行身份和步数；重用已有目录会显示失败并保留原产物。
 采样/导出是显式同步操作，可能等待 GPU/磁盘。批次耗时包含 CPU 工作、提交与 GPU 完成等待，不是纯 GPU timestamp。
 
+## GUI、IPC与脚本联合验收
+
+`dk.editor.simulation_consistency_gpu_validation` 在一次性工程中启动真实编辑器，交替使用GUI按钮和Python SDK/dk-ctl：
+Prepare → GUI单步/采样 → IPC精确推进至300拍并编辑场景 → GUI采样/导出 → GUI恢复/IPC暂停 → GUI Stop。
+随后用已有 `cloth_experiment.py` 在同一编辑器管道上重放配置，核对四份确定性文件，并验证最新Edit及Undo/Redo。
+CPU/GPU两轮的检查点、导出、日志和最终截图保留在构建目录的 `test-artifacts/<config>/simulation-consistency-*`。
+夹具入口 `--simulation-consistency-smoke` 仅用于带 `.dk-editor-smoke` 标记的临时工程，要求 `--pipe`、
+`--fixture-camera`、`--screenshot`；与其他smoke/frames模式互斥。普通操作无需启用此标记。
+
 ## 有限任务、进度与取消
 
 长实验使用 `simulation.run`。它受理后返回run_id，设备冷初始化和每批求解在后台进行。

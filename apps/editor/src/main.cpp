@@ -31,6 +31,7 @@ int main(int argc,char** argv) {
             else if (arg=="--interaction-smoke") { options.smoke=true; options.interaction_smoke=true; }
             else if (arg=="--simulation-smoke") { options.smoke=true; options.simulation_smoke=true; }
             else if (arg=="--consistency-smoke") options.consistency_smoke=true;
+            else if (arg=="--simulation-consistency-smoke") options.simulation_consistency_smoke=true;
             else if (arg=="--simulation-response-probe") options.simulation_response_probe=true;
             else if (arg=="--fixture-camera") options.fixture_camera=true;
             else if (arg=="--frames") {
@@ -45,6 +46,7 @@ int main(int argc,char** argv) {
                     "Acceptance: --frames N --screenshot OUTPUT.ppm [--fixture-camera]\n"
                     "            --smoke/--interaction-smoke/--simulation-smoke --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
+                    "            --simulation-consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --simulation-response-probe --pipe NAME --root DISPOSABLE_PROJECT");
                 return 0;
             } else throw std::runtime_error("Unknown dk-editor option");
@@ -56,6 +58,9 @@ int main(int argc,char** argv) {
             throw std::runtime_error("screenshot must have .ppm extension");
         if (options.consistency_smoke && (options.smoke || options.frames || options.pipe.empty() || !options.fixture_camera || options.screenshot.empty()))
             throw std::runtime_error("--consistency-smoke requires --pipe, --fixture-camera and --screenshot; incompatible with --frames and other smoke modes");
+        if (options.simulation_consistency_smoke && (options.smoke || options.consistency_smoke || options.simulation_response_probe ||
+            options.frames || options.pipe.empty() || !options.fixture_camera || options.screenshot.empty()))
+            throw std::runtime_error("--simulation-consistency-smoke requires --pipe, --fixture-camera and --screenshot; incompatible with other acceptance modes");
         if (options.simulation_response_probe && (options.smoke || options.consistency_smoke || options.frames || options.pipe.empty()))
             throw std::runtime_error("--simulation-response-probe requires --pipe and is incompatible with smoke/frames");
         return dk::editor::run_workbench(options);

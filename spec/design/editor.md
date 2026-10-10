@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-10T11:18:00+08:00"
+updated_at: "2026-10-10T14:11:00+08:00"
 status: accepted
 ---
 
@@ -52,6 +52,21 @@ Export 按钮复用 simulation.export，传入按钮当帧观察到的 run_id/st
 失败显示实际错误并保留最近成功回执，供用户找到有效产物。Stop/新运行不把旧回执冒充新实验。
 模型只通过 Runtime 命令采样/导出；没有场景/history 写入或隐式 Play 烘焙。
 验证覆盖无样本/当前/旧样本、旧身份/步数拒绝、CPU/GPU真实按钮采样与导出、产物身份和失败保留。
+
+## M12.4 跨入口验收
+
+增加仅用于一次性工程的 `--simulation-consistency-smoke`，要求 pipe、fixture-camera、screenshot 和 .dk-editor-smoke 标记；
+与其他 smoke/frames/response 模式互斥。固定检查点文件只同步测试步骤，不开放通用命令或修改生产态。
+驱动通过实际 ImGui 鼠标输入操作 CPU/GPU 配置、Prepare、Step、Sample、Export、Resume、Stop，
+外部 Python SDK/dk-ctl 在相邻检查点接管同一 run_id，严格推进到300拍、编辑Edit、暂停并校验当前GUI/视口。
+检查点须在状态/显示/视口都到达预期边界且一帧已呈现后发布；带运行身份、完成步数、样本、图像签名和编辑版本/历史。
+暂停边界比较跨帧像素与时钟，运行边界允许预览落后，不能把旧图像标成最新步数。
+
+GUI导出后Stop保留最近外部编辑和撤销历史；外部脚本在同一窗口宿主重放导出配置，
+比较config/metrics/particles/image逐字节内容，provenance核对新的run_id。重放后的GUI回到最新Edit。
+CPU和GPU串行执行，禁止另建GUI模拟状态或在夹具里直接修改Workspace/Service。
+同步validation、存活分配和退出资源检查沿用工作台；单列既有精确AMD Loader警告。
+定向复用实时视口/活动关闭、图像交接与GUI响应smoke；响应子集仍标partial，不冒充M11完整统计矩阵。
 
 ## 边界
 

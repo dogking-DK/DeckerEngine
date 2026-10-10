@@ -1,11 +1,20 @@
 ---
 module: physics-api
 created_at: "2026-10-08T17:14:07+08:00"
-updated_at: "2026-10-10T11:18:00+08:00"
+updated_at: "2026-10-10T14:11:00+08:00"
 status: accepted
 ---
 
 # 模拟世界与固定步长
+
+## M12.4 统一服务验收
+
+真实编辑器GUI、外部SDK/IPC、Python重放脚本交替进入同一SimulationService。
+验收从GUI零步准备/单步开始，IPC严格推进到300拍，再由GUI显式采样/导出；
+核对source、run_id、完成/提交步数、样本和产物身份，拒绝旧run_id/expected_steps，不重复受理非幂等推进。
+随后GUI恢复、IPC暂停、GUI停止；暂停无新增拍，Stop保留运行期间最新Edit/history。
+脚本从配置重建新的运行并重放，比较可重复产物，运行身份与非确定性性能独立核验。
+本阶段不改变服务状态机；普通控制响应性仍按既有smoke/完整基线区分证据范围。
 
 ## M12.3 指标采样与导出身份
 

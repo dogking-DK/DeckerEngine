@@ -508,6 +508,20 @@ endif()
 
 if(TARGET dk_editor_app AND WIN32)
     find_program(DK_POWERSHELL NAMES pwsh powershell REQUIRED)
+    if(TARGET dk_ctl AND TARGET dk_render_simulation)
+        find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
+        if(Python3_Interpreter_FOUND)
+            add_test(NAME dk.editor.simulation_consistency_gpu_validation
+                COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python" "PYTHONDONTWRITEBYTECODE=1"
+                    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/EditorSimulationConsistencyTest.py"
+                    --editor "$<TARGET_FILE:dk_editor_app>" --client "$<TARGET_FILE:dk_ctl>"
+                    --fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+                    --example "${PROJECT_SOURCE_DIR}/examples/automation/cloth_experiment.py"
+                    --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+            set_tests_properties(dk.editor.simulation_consistency_gpu_validation PROPERTIES TIMEOUT 240 SKIP_RETURN_CODE 77 LABELS "gpu" RUN_SERIAL TRUE
+                ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+        endif()
+    endif()
     add_test(NAME dk.editor.simulation_gpu_validation
         COMMAND "${DK_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass
             -File "${CMAKE_CURRENT_SOURCE_DIR}/EditorSimulationTest.ps1"

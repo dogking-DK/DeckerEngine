@@ -1,7 +1,7 @@
 ---
 module: render-simulation
 created_at: "2026-10-09T10:59:13+08:00"
-updated_at: "2026-10-09T20:40:16+08:00"
+updated_at: "2026-10-10T14:11:00+08:00"
 status: accepted
 ---
 
@@ -14,6 +14,9 @@ GPU继续零步render，不推进物理、不回读。CPU帧使用独立Graph Ex
 视图矩阵由编辑器Camera产生；输出图像保持ShaderReadOnlyOptimal。普通预览image_readback=false。
 后台完成输出后封装可移动ImageTransfer交接给同设备同族呈现队列，保留信号timeline和图像至消费者GPU完成。
 旧导出/示例的显式粒子和图像读回语义保持不变。
+M12.4在真实GUI/IPC交替运行中验证暂停时预览步数与完成步数一致，跨呈现帧像素不变。
+固定实验相机的导出图像与同配置脚本重放逐字节比较；交互视口相机不同，不把两者像素直接比较。
+显式验收读取预览签名不进入普通显示路径；图像交接和活动关闭继续以同步validation/寿命检查验证。
 
 ## 边界和接口
 

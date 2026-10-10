@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-10T11:35:00+08:00"
+updated_at: "2026-10-10T14:21:00+08:00"
 status: accepted
 ---
 
@@ -71,7 +71,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M9 脚本与自动化 SDK | Luau 场景脚本、Python 客户端、批处理与重放 | M3；集成验收需要 M8 | 已完成（M9.1–4） |
 | M10 物理实验闭环 | 固定步长、CPU 参照、首个 GPU 求解器及可视化 | M7、M9 | 已完成 |
 | M11 模拟运行响应性与性能基线 | GPU 性能观测、可复现基准、有界模拟任务与暂停/取消 | M1.7、M8、M10 | 已完成，见0078–0081 |
-| M12 编辑器模拟工作台 | 参数配置、运行控制、实时模拟视口、指标与导出 | M8、M11 | 进行中，M12.1–3已完成 |
+| M12 编辑器模拟工作台 | 参数配置、运行控制、实时模拟视口、指标与导出 | M8、M11 | 已完成，见0082–0085 |
 | M13 实验管理与参数扫描 | 批量实验、产物索引、失败恢复与对比报告 | M9、M12 | 未开始 |
 
 默认执行表中顺序。M5 在 Foundation 补充完成后具备独立探索条件，
@@ -85,7 +85,7 @@ M9 的 Luau 命令绑定在 M3 后可提前做；若调整次序，仍需满足�
 - **C：M8 完成，已验收。** 编辑器和外部 CLI 操作同一套场景服务，保存后可在 runner 重现指定视图画面，见 [0068](development/0068-editor-consistency.md)。
 
 M9、M10 已将这套基础扩展为可脚本化的渲染与物理实验平台。
-后续按 M11 → M12 → M13 推进，先建立测量与响应性基础，再交付交互工作台和批量实验工具。
+M11的测量/响应性基础与M12交互工作台已完成；后续推进M13实验管理与参数扫描。
 
 ## 小阶段执行规则
 
@@ -578,7 +578,7 @@ GPU 未完成前不释放状态，也不默认经 CPU 读回再上传。
 | M12.1 | 模拟面板与运行控制 | M8、M11 | CPU/GPU参数草稿、异步零步准备/单步及运行控制、旧请求/编辑态保护、真实GUI/IPC状态同步通过，见[0082](development/0082-editor-simulation-controls.md) | 已完成 |
 | M12.2 | 实时模拟视口与取景 | M12.1 | CPU/GPU持续预览、直接GPU图像交接、独立相机/自动取景、暂停稳定及缩放/最小化/Stop/关闭通过，见[0083](development/0083-editor-simulation-viewport.md) | 已完成 |
 | M12.3 | 指标显示与实验导出 | M12.2 | 完成步数/时间/批次性能、显式数值及采样状态、CPU/GPU精确导出与失败保留通过，见[0084](development/0084-editor-simulation-metrics-export.md) | 已完成 |
-| M12.4 | GUI/IPC/脚本一致性验收 | M12.3 | 真实窗口与外部客户端共同控制一次实验；严格步进、暂停、导出及 Stop 后编辑态一致；通过响应性与 GPU 同步/寿命回归 | 未开始 |
+| M12.4 | GUI/IPC/脚本一致性验收 | M12.3 | CPU/GPU同窗GUI/IPC精确300拍、暂停/导出/脚本重放及最新Edit/history保护通过；响应smoke与GPU同步/寿命回归通过，见[0085](development/0085-editor-simulation-consistency.md) | 已完成 |
 
 **设计入口：** 实施前更新 [编辑器](design/editor.md)、[编辑器交互](design/editor-interaction.md)、
 [模拟服务](design/physics-api.md) 与 [模拟可视化](design/render-simulation.md)；
@@ -672,8 +672,10 @@ M12.2已完成，见[0083](development/0083-editor-simulation-viewport.md)：CPU
 暂停图像稳定、直接GPU图像交接、窗口恢复及Stop/关闭资源安全通过。
 M12.3已完成，见[0084](development/0084-editor-simulation-metrics-export.md)：数值采样/批次耗时、明确新旧状态、精确导出、
 可见失败与有效产物保留通过；Python/Luau实验重放保持一致。
-M12进行中，M13未开始；下一项为 **M12.4 GUI/IPC/脚本一致性验收**。
-编辑器 Play 视口在 M12 验收，批量实验在 M13 验收；检查点、其他平台与发布打包仍未纳入本轮扩展。
+M12.4已完成，见[0085](development/0085-editor-simulation-consistency.md)：同一真实窗口中GUI/IPC交替控制CPU/GPU实验，
+精确300拍导出与Python脚本重放一致，Stop保留最新Edit/Undo/Redo；响应性子集和GPU同步/寿命回归通过。
+M12全部完成，M13未开始；下一项为 **M13.1 实验计划与产物索引**。
+编辑器 Play 视口已在 M12 验收，批量实验在 M13 验收；检查点、其他平台与发布打包仍未纳入本轮扩展。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 

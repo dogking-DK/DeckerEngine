@@ -14,6 +14,7 @@ struct WorkbenchOptions {
     bool interaction_smoke = false;
     bool simulation_smoke = false;
     bool consistency_smoke = false;
+    bool simulation_consistency_smoke = false;
     bool simulation_response_probe = false;
     unsigned frames = 0;
     std::filesystem::path screenshot;
