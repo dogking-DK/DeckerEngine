@@ -31,6 +31,13 @@ private:
     unsigned simulation_expected_errors_=0;
     std::vector<ByteBuffer> simulation_export_bytes_;
     std::uint64_t simulation_observed_step_=0,simulation_camera_revision_=0;
+    struct NavigationProbe {
+        std::chrono::steady_clock::time_point start{},last_update{};
+        std::uint64_t sequence=0;
+        unsigned updates=0;
+        double max_gap_ms=0;
+        bool finished=false;
+    } navigation_probe_;
     std::chrono::steady_clock::time_point restore_at_{};
     ImVec2 start_pointer_{};
     std::size_t history_=0;

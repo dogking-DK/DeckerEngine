@@ -19,12 +19,13 @@ public:
     void retry_simulation() { simulation_view_.reset(); }
     [[nodiscard]] std::optional<SimulationId> simulation_run() const { return simulation_run_; }
     [[nodiscard]] std::uint64_t simulation_steps() const { return simulation_steps_; }
+    [[nodiscard]] std::uint64_t simulation_view_sequence() const { return simulation_published_; }
     [[nodiscard]] bool simulation_view_current() const { return simulation_published_==simulation_sequence_; }
     // Explicit acceptance-only observation; the regular viewport never reads back a simulation image.
     std::uint64_t capture_simulation_pixels();
     [[nodiscard]] Result<std::optional<EntityId>> pick(const Vec2d& uv) const;
     [[nodiscard]] geometry::Bounds bounds(EntityId,const SceneSnapshot&) const;
-    [[nodiscard]] bool camera_current(const Camera& camera) const { return published_camera_==camera.revision(); }
+    [[nodiscard]] bool camera_current(const Camera& camera) const { return !simulation_run_ && published_camera_==camera.revision(); }
     void retry() { attempted_.reset(); asset_session_.reset(); }
     void release_texture();
     [[nodiscard]] ImTextureID texture() const { return reinterpret_cast<ImTextureID>(descriptor_); }
@@ -32,6 +33,7 @@ public:
     [[nodiscard]] const graphics::ImageView& image_view() const { return view_; }
     [[nodiscard]] std::uint64_t pixel_signature() const { return pixel_signature_; }
     [[nodiscard]] const render::FrameInfo& info() const { return info_; }
+    // Camera of the last Edit image, used for entity picking and Edit consistency checks only.
     [[nodiscard]] const Camera& published_camera() const { return camera_; }
     [[nodiscard]] std::span<const std::byte> retained_pixels() const { return pixels_; }
     [[nodiscard]] bool current(const DocumentState& s) const { return published_session_==s.document_id && info_.revision==s.revision; }

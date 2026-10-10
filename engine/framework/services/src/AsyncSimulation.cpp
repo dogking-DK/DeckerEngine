@@ -198,7 +198,9 @@ struct AsyncSimulation::Impl {
                         frame->view=view; frame->steps=steps; frame->image=std::move(*image); result=std::move(frame);
                     } else result=std::unexpected(image.error());
                     lock.lock();
-                    if (requested!=Request::stop && preview_view==view) preview_result=std::move(result);
+                    // A newer request must not starve completed images during continuous navigation.
+                    // Keep the rendered view identity; the single result slot coalesces completed frames.
+                    if (requested!=Request::stop) preview_result=std::move(result);
                     continue;
                 }
 #endif

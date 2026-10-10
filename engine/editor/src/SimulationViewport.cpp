@@ -15,7 +15,7 @@ void Viewport::show_edit() {
 void Viewport::update_simulation(Workspace& model,const SimulationRunState& run,std::uint32_t width,std::uint32_t height,const Camera& camera) {
     if (simulation_run_!=run.run_id) {
         release_texture(); view_={}; image_={}; info_={}; pixels_.clear(); error_.clear();
-        simulation_run_=run.run_id; simulation_steps_=0;
+        simulation_run_=run.run_id; simulation_steps_=0; simulation_published_=0; simulation_view_.reset();
     }
 #ifdef DK_SIMULATION_GPU
     if (run.fault) { error_="Simulation faulted; showing the last completed preview."; return; }
@@ -29,16 +29,18 @@ void Viewport::update_simulation(Workspace& model,const SimulationRunState& run,
         }
         check(model.request_simulation_preview(run.run_id,view));
         auto result=take(model.take_simulation_preview(run.run_id));
-        if (!result || result->run_id!=run.run_id || result->view!=view) return;
+        // Publish progress even if input has moved on. Never relabel an older image as the latest view.
+        if (!result || result->run_id!=run.run_id || result->view.sequence>view.sequence ||
+            result->view.sequence<simulation_published_ || result->steps<simulation_steps_) return;
         auto image=take(queue_.import_image(std::move(result->image)));
         auto image_view=take(queue_.resources().create_view(image));
         auto descriptor=ImGui_ImplVulkan_AddTexture(static_cast<VkImageView>(image_view.handle()),VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         if (!descriptor) throw std::runtime_error("Simulation texture registration failed");
         if (descriptor_) ImGui_ImplVulkan_RemoveTexture(descriptor_);
         image_=std::move(image); view_=std::move(image_view); descriptor_=descriptor;
-        info_.width=width; info_.height=height; info_.draw_count=1; ++info_.frame;
-        simulation_published_=view.sequence; simulation_steps_=result->steps;
-        published_camera_=camera.revision(); camera_=camera; error_.clear();
+        info_.width=result->view.width; info_.height=result->view.height; info_.draw_count=1; ++info_.frame;
+        simulation_published_=result->view.sequence; simulation_steps_=result->steps;
+        error_.clear();
     } catch (const std::exception& error) { error_=error.what(); }
 #else
     error_="Simulation preview is not compiled in this editor.";

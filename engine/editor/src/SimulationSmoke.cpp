@@ -1,6 +1,7 @@
 #include "SmokeDriver.hpp"
 #include "EditorSupport.hpp"
 #include <array>
+#include <cmath>
 #include <cstdio>
 
 namespace dk::editor::detail {
@@ -13,7 +14,7 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
     const auto require=[](bool value,const char* text) { if (!value) throw std::runtime_error(std::string{"Simulation UI smoke: "}+text); };
     auto& io=ImGui::GetIO(); io.ConfigInputTrickleEventQueue=false;
     if (tick_++<20 || done_) return;
-    constexpr std::array actions{"sim_prepare",":initial","sim_sample","sim_step",":stepped","sim_sample","sim_export","sim_export_duplicate","sim_resume",":running","sim_pause",":paused",
+    constexpr std::array actions{"sim_prepare",":initial","sim_sample","sim_step",":stepped","sim_sample","sim_export","sim_export_duplicate","sim_resume",":running",":orbit_running",":pan_running","sim_pause",":paused",
         ":orbit",":pan",":zoom","simulation_frame",":resize",":minimize","simulation_edit_view","simulation_view",
         "sim_cancel","sim_stop","sim_play",":running","sim_stop"};
     const bool select_gpu=simulation_backend_==1 && simulation_stage_<2;
@@ -34,8 +35,9 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
         session_=model.snapshot()->state.document_id; history_=model.history().undo_count;
     }
     const auto phase=simulation_phase_++;
-    const bool navigation=action==":orbit" || action==":pan";
-    const int button=action==":orbit" ? 1 : action==":pan" ? 2 : 0;
+    const bool orbit=action==":orbit" || action==":orbit_running";
+    const bool navigation=orbit || action==":pan" || action==":pan_running";
+    const int button=orbit ? 1 : navigation ? 2 : 0;
     const auto control=[&](const std::string& name) {
         const auto found=ui.controls().find(name); require(found!=ui.controls().end(),("Missing control: "+name).c_str()); return found->second;
     };
@@ -60,14 +62,38 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
             pointer_=control("simulation_viewport"); start_pointer_=pointer_;
             io.AddMousePosEvent(pointer_.x,pointer_.y);
             if (navigation) io.AddMouseButtonEvent(button,true); else io.AddMouseWheelEvent(0,2);
+            if (navigation) {
+                const auto now=std::chrono::steady_clock::now();
+                navigation_probe_={now,now,viewport.simulation_view_sequence()};
+                simulation_observed_step_=model.simulation_state().run->clock.steps;
+            }
         } else if (!action.starts_with(":")) {
             pointer_=control(action=="sim_export_duplicate" ? "sim_export" : action); io.AddMousePosEvent(pointer_.x,pointer_.y); io.AddMouseButtonEvent(0,true);
         }
     }
-    if (navigation && phase==2) pointer_={start_pointer_.x+36,start_pointer_.y+18};
+    if (navigation && !navigation_probe_.finished) {
+        const auto now=std::chrono::steady_clock::now();
+        const auto elapsed=std::chrono::duration<double,std::milli>(now-navigation_probe_.start).count();
+        const auto gap=std::chrono::duration<double,std::milli>(now-navigation_probe_.last_update).count();
+        if (viewport.simulation_view_sequence()!=navigation_probe_.sequence) {
+            navigation_probe_.max_gap_ms=std::max(navigation_probe_.max_gap_ms,gap);
+            navigation_probe_.last_update=now; navigation_probe_.sequence=viewport.simulation_view_sequence();
+            ++navigation_probe_.updates;
+        }
+        if (elapsed>=1000) {
+            navigation_probe_.max_gap_ms=std::max(navigation_probe_.max_gap_ms,
+                std::chrono::duration<double,std::milli>(now-navigation_probe_.last_update).count());
+            std::printf("Simulation navigation backend=%s action=%s duration_ms=%.1f updates=%u max_gap_ms=%.1f\n",
+                simulation_backend_ ? "GPU" : "CPU",action.c_str(),elapsed,navigation_probe_.updates,navigation_probe_.max_gap_ms);
+            require(navigation_probe_.updates>=5 && navigation_probe_.max_gap_ms<400,"Continuous camera input starved completed images");
+            navigation_probe_.finished=true; io.AddMouseButtonEvent(button,false);
+        } else if (phase>=2) {
+            const float angle=float(phase-1)*0.06f;
+            pointer_={start_pointer_.x+36*std::sin(angle),start_pointer_.y+18*(1-std::cos(angle))};
+        }
+    }
     io.AddMousePosEvent(pointer_.x,pointer_.y);
     if (phase==1 && !action.starts_with(":")) io.AddMouseButtonEvent(0,false);
-    if (navigation && phase==3) io.AddMouseButtonEvent(button,false);
     if (phase<6) return;
     require(ui.errors()==simulation_expected_errors_,"Unexpected control, export or viewport failure");
     const auto state=model.simulation_state(); const auto& shown=ui.displayed_simulation();
@@ -133,8 +159,12 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
                 ready=++simulation_stable_>=8;
             }
         } else if (navigation || action==":zoom" || action=="simulation_frame") {
-            ready=image && ui.simulation_camera().revision()!=simulation_camera_revision_;
-            if (ready) require(viewport.capture_simulation_pixels()!=stage_pixels_,"Camera input did not alter cloth image");
+            ready=(!navigation || navigation_probe_.finished) && image && ui.simulation_camera().revision()!=simulation_camera_revision_;
+            if (ready) {
+                require(viewport.capture_simulation_pixels()!=stage_pixels_,"Camera input did not alter cloth image");
+                if (navigation) require(action.ends_with("_running") ? state.run->clock.steps>simulation_observed_step_ :
+                    state.run->clock.steps==simulation_observed_step_,"Camera input changed paused steps or starved running simulation");
+            }
         } else if (action==":resize") ready=image && viewport.capture_simulation_pixels()!=stage_pixels_;
         else if (action==":minimize") { ready=image && restore_at_==std::chrono::steady_clock::time_point{}; if (ready) require(suspended_frames_>0,"Minimized loop not exercised"); }
         else if (action=="simulation_view") ready=image && viewport.simulation_steps()==state.run->clock.steps;

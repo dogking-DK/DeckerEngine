@@ -87,7 +87,7 @@ TEST_CASE("finite task preview coalesces views preserves paused steps and isolat
     view.sequence=3; f.task->request_preview(view);
     f.gate->preview_release=true;
     std::shared_ptr<SimulationPreview> frame;
-    until([&] { auto result=f.task->take_preview(); REQUIRE(result); if (*result) frame=std::move(*result); return bool(frame); });
+    until([&] { auto result=f.task->take_preview(); REQUIRE(result); if (*result) frame=std::move(*result); return frame && frame->view.sequence==3; });
     REQUIRE(frame->view.sequence==3); REQUIRE(frame->steps==0); REQUIRE(f.gate->previews==2);
     REQUIRE(f.task->state().completed_steps==0); REQUIRE_FALSE(f.task->state().batch_active);
     f.gate->submit=true; f.gate->complete=true; REQUIRE(f.task->step(1));
@@ -118,6 +118,28 @@ TEST_CASE("finite task preview camera churn cannot starve simulation batches") {
     until([&] { return f.task->state().status==SimulationTaskStatus::succeeded; });
     REQUIRE(f.task->state().completed_steps==16); REQUIRE(f.gate->submits==2);
     f.task->stop(); until([&] { return f.task->closed(); });
+}
+TEST_CASE("finite task preview publishes completed view while a newer view is rendering") {
+    Fixture f; f.gate->initialize=true; f.start(16,true);
+    until([&] { return f.task->state().status==SimulationTaskStatus::paused; });
+    SimulationView first{320,240}; first.sequence=1; first.view_projection[0]=1;
+    auto next=first; next.width=640; next.sequence=2; next.view_projection[0]=2;
+    f.gate->on_preview=[&] {
+        if (f.gate->previews==1) {
+            f.gate->preview_release=false;
+            f.task->request_preview(next);
+        }
+    };
+    f.task->request_preview(first);
+    until([&] { return f.gate->previews==2; }); // Next view is blocked; the first image must already be available.
+    auto result=f.task->take_preview(); REQUIRE(result); REQUIRE(*result);
+    REQUIRE((*result)->view==first); REQUIRE((*result)->steps==0);
+    REQUIRE_FALSE(*f.task->take_preview());
+    f.gate->preview_release=true;
+    std::shared_ptr<SimulationPreview> frame;
+    until([&] { auto ready=f.task->take_preview(); REQUIRE(ready); if (*ready) frame=std::move(*ready); return bool(frame); });
+    REQUIRE(frame->view==next); REQUIRE(frame->steps==0);
+    REQUIRE(f.task->state().completed_steps==0); REQUIRE(f.gate->submits==0);
 }
 #endif
 TEST_CASE("finite task pause during initialization then cancel claimed batch waits for GPU completion") {
