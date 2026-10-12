@@ -296,6 +296,14 @@ if(TARGET dk_asset_services AND WIN32)
     endforeach()
 endif()
 if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
+    find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME dk.environment.process COMMAND "${CMAKE_COMMAND}" -E env "PYTHONDONTWRITEBYTECODE=1"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/EnvironmentProcessTest.py"
+            --runner "$<TARGET_FILE:dk_run>" --example "${PROJECT_SOURCE_DIR}/examples/automation/environment.jsonl"
+            --work "${CMAKE_CURRENT_BINARY_DIR}/test-artifacts/$<CONFIG>/environment")
+        set_tests_properties(dk.environment.process PROPERTIES TIMEOUT 60 LABELS "cpu")
+    endif()
     if(TARGET dk_scripting_luau)
         add_test(NAME dk.luau.runner_roundtrip
             COMMAND "${CMAKE_COMMAND}"

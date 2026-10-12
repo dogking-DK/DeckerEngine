@@ -286,3 +286,82 @@ TEST_CASE("a transaction uses one remaining revision and rejects overflow atomic
     REQUIRE(s.call("scene.query") == before);
     REQUIRE(s.call("history.status") == history);
 }
+
+TEST_CASE("environment commands share guard atomic history no-op and persistence")
+{
+    Session s;
+    REQUIRE_FALSE(s.commands.execute("environment.query"));
+    s.call("scene.new");
+    const auto base = s.call("environment.query")["environment"];
+    auto e = base; e["enabled"] = true; e["sun"]["direction"] = {0, 2, 0};
+    const auto stale = s.guard();
+    const auto changed = s.edit("environment.set", {{"environment", e}});
+    CHECK(changed["created_id"].is_null()); CHECK(changed["state"]["revision"] == 1);
+    const auto normalized = s.call("environment.query")["environment"];
+    CHECK(normalized["sun"]["direction"] == Json::array({0, 1, 0}));
+    CHECK(s.commands.execute("environment.set", {{"guard", stale}, {"environment", e}}).error().code == ErrorCode::conflict);
+    s.edit("scene.save");
+    const auto before = s.call("environment.query"), history = s.call("history.status");
+    s.edit("environment.set", {{"environment", normalized}});
+    CHECK(s.call("environment.query") == before); CHECK(s.call("history.status") == history);
+    s.edit("history.undo"); CHECK(s.call("environment.query")["environment"] == base);
+    const auto undone = s.call("environment.query"), undone_history = s.call("history.status");
+    s.edit("environment.set", {{"environment", base}});
+    CHECK(s.call("environment.query") == undone); CHECK(s.call("history.status") == undone_history);
+    auto invalid = normalized; invalid["atmosphere"]["mie_anisotropy"] = 1;
+    REQUIRE_FALSE(s.commands.execute("environment.set", {{"guard", s.guard()}, {"environment", invalid}}));
+    const auto id = EntityId::generate()->to_string();
+    Json steps = {{{"method", "entity.create"}, {"params", {{"id", id}}}},
+                  {{"method", "environment.set"}, {"params", {{"environment", invalid}}}}};
+    REQUIRE_FALSE(s.commands.execute("scene.transaction", {{"guard", s.guard()}, {"commands", steps}}));
+    CHECK(s.call("environment.query") == undone); CHECK(s.call("history.status") == undone_history);
+    steps = {{{"method", "environment.set"}, {"params", {{"environment", normalized}}}},
+             {{"method", "entity.delete"}, {"params", {{"id", id}}}}};
+    REQUIRE_FALSE(s.commands.execute("scene.transaction", {{"guard", s.guard()}, {"commands", steps}}));
+    CHECK(s.call("environment.query") == undone); CHECK(s.call("history.status") == undone_history);
+    steps[1] = {{"method", "entity.create"}, {"params", {{"id", id}}}};
+    const auto revision = s.service->state()->revision;
+    s.edit("scene.transaction", {{"commands", steps}});
+    CHECK(s.service->state()->revision == revision + 1); CHECK(s.service->state()->entity_count == 1);
+    s.edit("history.undo"); CHECK(s.service->state()->entity_count == 0);
+    CHECK(s.call("environment.query")["environment"] == base);
+    s.edit("history.redo"); CHECK(s.service->state()->entity_count == 1);
+    CHECK(s.call("environment.query")["environment"] == normalized);
+    s.edit("scene.save"); s.edit("project.save", {{"manifest", "project.json"}});
+    const auto saved_guard = s.guard();
+    s.edit("scene.load", {{"manifest", "project.json"}});
+    CHECK(s.call("environment.query")["environment"] == normalized);
+    CHECK_FALSE(s.service->state()->dirty); CHECK(s.call("history.status")["undo_count"] == 0);
+    CHECK_FALSE(s.commands.execute("environment.set", {{"guard", saved_guard}, {"environment", normalized}}));
+}
+TEST_CASE("environment discovery schemas and history budget reject changes before commit")
+{
+    Session s; s.call("scene.new");
+    auto e = s.call("environment.query")["environment"];
+    const auto descriptor = s.call("commands.describe", {{"name", "environment.set"}});
+    CHECK(descriptor["effect"] == "memory_edit"); CHECK(descriptor["undoable"] == true);
+    CHECK(s.call("commands.describe", {{"name", "environment.query"}})["effect"] == "query");
+    const auto before = s.call("environment.query");
+    for (const auto* scope : {"sun", "atmosphere"}) {
+        auto bad = e; bad[scope]["unknown"] = 1;
+        CHECK_FALSE(s.commands.execute("environment.set", {{"guard", s.guard()}, {"environment", bad}}));
+    }
+    for (const auto version : {Json(2), Json(1.0), Json("1")}) {
+        auto bad = e; bad["version"] = version;
+        CHECK_FALSE(s.commands.execute("environment.set", {{"guard", s.guard()}, {"environment", bad}}));
+    }
+    auto missing = e; missing["sun"].erase("irradiance");
+    CHECK_FALSE(s.commands.execute("environment.set", {{"guard", s.guard()}, {"environment", missing}}));
+    CHECK(s.call("environment.query") == before); CHECK(s.call("history.status")["undo_count"] == 0);
+    const auto bytes = (*s.service->document())->snapshot()->logical_bytes();
+    Session tiny({1, 2 * bytes - 1}); tiny.call("scene.new");
+    e["enabled"] = true;
+    CHECK_FALSE(tiny.commands.execute("environment.set", {{"guard", tiny.guard()}, {"environment", e}}));
+    CHECK(tiny.call("environment.query")["environment"]["enabled"] == false);
+    CHECK(tiny.call("history.status")["logical_bytes"] == 0); CHECK(tiny.service->state()->revision == 0);
+    // A direct typed service request is subject to the same physical validation.
+    EnvironmentDescription bad; bad.sun.direction = {};
+    auto state = s.service->state().value();
+    CHECK_FALSE(s.service->edit({state.document_id, state.revision}, SetEnvironment{bad}));
+    CHECK(s.call("environment.query") == before);
+}

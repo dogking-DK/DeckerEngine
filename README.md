@@ -45,6 +45,7 @@ cmake --build --preset windows-debug --target dk_run
 | 离屏三角形、compute 与结果读回 | [离屏指南](spec/guides/offscreen.md) |
 | GPU Graph 声明、编译与单队列执行 | [Graph 指南](spec/guides/graph.md) |
 | 编辑器工作台、面板与保存加载 | [编辑器指南](spec/guides/editor.md) |
+| 环境CPU参数、太阳方向、场景迁移与撤销 | [环境命令](spec/commands/environment.md)、[可执行示例](examples/automation/environment.jsonl) |
 | 场景/视图、GPU 资产、磁盘场景渲染与读回 | [Render 指南](spec/guides/render.md) |
 | SDL3 窗口三角形、缩放/最小化与交换链恢复 | [呈现指南](spec/guides/presentation.md) |
 | Core、数学、IO、Scene 与 CPU 示例 | [Foundation/Scene 指南](spec/guides/foundation.md) |

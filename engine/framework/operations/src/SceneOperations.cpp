@@ -1,5 +1,6 @@
 #include <dk/operations/SceneOperations.hpp>
 #include <limits>
+#include "EnvironmentJson.hpp"
 
 namespace dk
 {
@@ -142,6 +143,8 @@ Result<EditGuard> parse_edit_guard(const Json &value)
 }
 Result<SceneEdit> decode_scene_edit(std::string_view method, const Json &p)
 {
+    if (method == "environment.set")
+        return SetEnvironment{operations_detail::read_environment(p.at("environment"))};
     if (method == "entity.create")
     {
         std::optional<EntityId> id;
@@ -327,6 +330,31 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
             });
     if (!r)
         return r;
+    r = add("environment.query", "Query the scene environment in meters and scene-linear RGB", schema::object(),
+        schema::object({{"state", state_schema()}, {"environment", operations_detail::environment_schema()}},
+            {"state", "environment"}), CommandEffect::query,
+        [&service](const Json&) -> Result<Json> {
+            auto doc = service.document();
+            if (!doc) return std::unexpected(doc.error());
+            return Json{{"state", document_state_json(*service.state())},
+                {"environment", operations_detail::environment_json((*doc)->environment())}};
+        });
+    if (!r) return r;
+    r = add("environment.set", "Replace the complete scene environment",
+        schema::object({{"guard", guard_schema()}, {"environment", operations_detail::environment_schema()}},
+            {"guard", "environment"}),
+        schema::object({{"state", state_schema()}, {"created_id", schema::nullable(id_schema())}},
+            {"state", "created_id"}), CommandEffect::memory_edit,
+        [&service](const Json& p) -> Result<Json> {
+            auto guard = parse_edit_guard(p.at("guard"));
+            if (!guard) return std::unexpected(guard.error());
+            auto edit = decode_scene_edit("environment.set", p);
+            if (!edit) return std::unexpected(edit.error());
+            auto result = service.edit(*guard, *edit);
+            if (!result) return std::unexpected(result.error());
+            return Json{{"state", document_state_json(*service.state())}, {"created_id", nullptr}};
+        });
+    if (!r) return r;
     for (const auto *method : {"entity.create", "entity.delete", "entity.set_name", "entity.set_transform",
                                "entity.set_parent", "entity.set_assets"})
     {
@@ -377,7 +405,7 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
             return r;
     }
     r = add(
-        "scene.transaction", "Commit an atomic batch of undoable entity edits",
+        "scene.transaction", "Commit an atomic batch of undoable scene edits",
         schema::object({{"guard", guard_schema()},
                         {"commands", schema::array(schema::object({{"method", schema::string(1, 96)},
                                                                    {"params", {{"type", "object"}}}},
@@ -399,7 +427,7 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
                 const auto name = item["method"].get<std::string>();
                 if (name != "entity.create" && name != "entity.delete" && name != "entity.set_name" &&
                     name != "entity.set_transform" && name != "entity.set_parent" &&
-                    name != "entity.set_assets")
+                    name != "entity.set_assets" && name != "environment.set")
                     return std::unexpected(Error{
                         ErrorCode::invalid_argument, "Command is not permitted in a transaction", {name}});
                 auto params = item["params"];

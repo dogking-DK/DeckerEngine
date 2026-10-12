@@ -97,3 +97,18 @@ TEST_CASE("render extraction budget failure unwinds candidate and preserves prio
     } while (true);
     CHECK(failed); CHECK(partial); CHECK(success);
 }
+
+TEST_CASE("render environment extraction is immutable across scene edits and owner shutdown") {
+    Fixture f; auto source = SceneDocument::create().value();
+    auto old = RenderScene::extract(f.heap, source->snapshot().value()).value();
+    EnvironmentDescription e; e.enabled = true; e.sun.irradiance = {2,3,4};
+    REQUIRE(source->set_environment(e));
+    const auto entity = source->create_entity().value();
+    auto snapshot = source->snapshot().value();
+    auto current = RenderScene::extract(f.heap, snapshot).value();
+    auto preview = RenderScene::extract(f.heap, snapshot, LocalTransformOverride{entity, {}}).value();
+    CHECK_FALSE(old.environment().enabled); CHECK(current.environment() == e); CHECK(preview.environment() == e);
+    REQUIRE(source->set_environment({})); source.reset(); f.heap.begin_close();
+    CHECK(current.environment() == e); CHECK(current.revision() == snapshot.revision());
+    CHECK_FALSE(RenderScene{}.environment().enabled);
+}

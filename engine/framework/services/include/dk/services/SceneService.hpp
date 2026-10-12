@@ -54,7 +54,11 @@ struct SetAssets
     EntityId id;
     std::vector<AssetReference> assets;
 };
-using SceneEdit = std::variant<CreateEntity, DeleteEntity, SetName, SetTransform, SetParent, SetAssets>;
+struct SetEnvironment
+{
+    EnvironmentDescription environment;
+};
+using SceneEdit = std::variant<CreateEntity, DeleteEntity, SetName, SetTransform, SetParent, SetAssets, SetEnvironment>;
 struct HistoryLimits
 {
     std::size_t entries = 64;

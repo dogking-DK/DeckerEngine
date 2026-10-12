@@ -11,6 +11,7 @@ struct SceneState {
     explicit SceneState(memory::ResourceHandle heap)
         : entities(0, memory::Allocator<RenderEntity>{heap}), references(0, memory::Allocator<AssetReference>{heap}) {}
     SceneId id;
+    EnvironmentDescription environment;
     std::uint64_t revision = 0;
     Vector<RenderEntity> entities;
     Vector<AssetReference> references;
@@ -25,6 +26,7 @@ Result<RenderScene> RenderScene::extract(memory::ResourceHandle heap, const Scen
             return std::unexpected(Error{ErrorCode::not_found,"Preview entity missing"});
         auto output = memory::make_shared_in<detail::SceneState>(heap, heap);
         output->id = source.id(); output->revision = source.revision();
+        output->environment = source.environment();
         struct Node { const EntityData* source; Transformd world; unsigned state = 0; };
         Vector<Node> nodes(0, memory::Allocator<Node>{heap});
         nodes.reserve(source.entities().size());
@@ -72,6 +74,7 @@ Result<RenderScene> RenderScene::extract(memory::ResourceHandle heap, const Scen
         return std::unexpected(Error{ErrorCode::internal_error, "render extraction allocation failed"});
     }
 }
+EnvironmentDescription RenderScene::environment() const noexcept { return state_ ? state_->environment : EnvironmentDescription{}; }
 SceneId RenderScene::id() const noexcept { return state_ ? state_->id : SceneId{}; }
 std::uint64_t RenderScene::revision() const noexcept { return state_ ? state_->revision : 0; }
 std::span<const RenderEntity> RenderScene::entities() const noexcept { return state_ ? std::span<const RenderEntity>{state_->entities} : std::span<const RenderEntity>{}; }

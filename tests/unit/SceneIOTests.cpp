@@ -164,7 +164,7 @@ TEST_CASE("scene invalid schemas and references never replace a live document", 
     const auto revision = fixture.doc->revision();
     std::vector<Json> invalid;
     auto add = [&](auto change) { auto value = base; change(value); invalid.push_back(std::move(value)); };
-    add([](Json& j) { j["version"] = 2; });
+    add([](Json& j) { j["version"] = 3; });
     add([](Json& j) { j["revision"] = -1; });
     add([](Json& j) { j["revision"] = 1.5; });
     add([](Json& j) { j["scene_id"] = "not-a-uuid"; });

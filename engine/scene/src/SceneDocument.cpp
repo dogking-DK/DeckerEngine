@@ -64,6 +64,7 @@ struct SceneDocument::Impl {
     SceneId id;
     std::uint64_t revision = 0;
     bool dirty = true;
+    EnvironmentDescription environment;
     std::shared_ptr<const int> origin = std::make_shared<const int>(0);
 
     Result<void> can_edit() const
@@ -229,8 +230,23 @@ Result<void> SceneDocument::destroy_entity(EntityId id)
     return {};
 }
 
+EnvironmentDescription SceneDocument::environment() const noexcept { return impl_->environment; }
+Result<void> SceneDocument::set_environment(const EnvironmentDescription& value)
+{
+    auto candidate = normalize_environment(value);
+    if (!candidate) return std::unexpected(candidate.error());
+    if (*candidate == impl_->environment) return {};
+    auto editable = impl_->can_edit();
+    if (!editable) return editable;
+    impl_->environment = *candidate; // Fixed-size value assignment cannot allocate or throw.
+    impl_->changed();
+    return {};
+}
+
 Result<void> SceneDocument::validate() const
 {
+    auto environment_valid = normalize_environment(impl_->environment);
+    if (!environment_valid) return std::unexpected(environment_valid.error());
     if (static_cast<std::size_t>(impl_->world.count<detail::SceneIdentity>()) != entity_count()) {
         return scene_error(ErrorCode::internal_error, "Entity index and ECS count disagree", "SceneDocument.validate");
     }
@@ -334,12 +350,12 @@ Result<SceneSnapshot> SceneDocument::snapshot() const
     std::vector<EntityData> data;
     data.reserve(entity_count());
     for (const auto key : entity_ids()) { data.push_back(impl_->value(key).data); }
-    return SceneSnapshot{id(), revision(), std::move(data), impl_->origin};
+    return SceneSnapshot{id(), revision(), std::move(data), impl_->environment, impl_->origin};
 }
 
 bool SceneSnapshot::same_content(const SceneSnapshot& other) const noexcept
 {
-    if (id_ != other.id_ || entities_.size() != other.entities_.size()) return false;
+    if (id_ != other.id_ || environment_ != other.environment_ || entities_.size() != other.entities_.size()) return false;
     for (std::size_t i = 0; i < entities_.size(); ++i) {
         const auto& a = entities_[i]; const auto& b = other.entities_[i];
         if (a.id != b.id || a.name != b.name || !same_trs(a.local, b.local) || a.parent != b.parent || a.assets != b.assets) return false;
@@ -354,7 +370,7 @@ std::size_t SceneSnapshot::logical_bytes() const noexcept
 }
 Result<std::unique_ptr<SceneDocument>> SceneDocument::stage(const SceneSnapshot& snapshot)
 {
-    return detail::ScenePersistence::build(snapshot.id(), 0, {snapshot.entities().begin(), snapshot.entities().end()});
+    return detail::ScenePersistence::build(snapshot.id(), 0, {snapshot.entities().begin(), snapshot.entities().end()}, snapshot.environment());
 }
 Result<bool> SceneDocument::apply_snapshot(const SceneSnapshot& desired)
 {
@@ -362,7 +378,7 @@ Result<bool> SceneDocument::apply_snapshot(const SceneSnapshot& desired)
     auto current = snapshot(); if (!current) return std::unexpected(current.error());
     if (current->same_content(desired)) return false;
     auto editable = impl_->can_edit(); if (!editable) return std::unexpected(editable.error());
-    auto candidate = detail::ScenePersistence::build(id(), revision() + 1, {desired.entities().begin(), desired.entities().end()});
+    auto candidate = detail::ScenePersistence::build(id(), revision() + 1, {desired.entities().begin(), desired.entities().end()}, desired.environment());
     if (!candidate) return std::unexpected(candidate.error());
     (*candidate)->impl_->origin = impl_->origin;
     impl_.swap((*candidate)->impl_);
@@ -370,8 +386,10 @@ Result<bool> SceneDocument::apply_snapshot(const SceneSnapshot& desired)
 }
 
 Result<std::unique_ptr<SceneDocument>> detail::ScenePersistence::build(
-    SceneId id, std::uint64_t revision, std::vector<EntityData> entities)
+    SceneId id, std::uint64_t revision, std::vector<EntityData> entities, const EnvironmentDescription& environment)
 {
+    auto normalized_environment = normalize_environment(environment);
+    if (!normalized_environment) return std::unexpected(normalized_environment.error());
     if (entities.size() > 10000) {
         return scene_error(ErrorCode::invalid_argument, "Scene entity limit is 10000", "SceneDocument.import");
     }
@@ -404,6 +422,7 @@ Result<std::unique_ptr<SceneDocument>> detail::ScenePersistence::build(
     for (auto& [key, value] : *prepared) {
         doc.impl_->world.entity(doc.impl_->entities.at(key)).get_mut<SceneComponents>().value.swap(value);
     }
+    doc.impl_->environment = *normalized_environment;
     doc.impl_->revision = revision;
     return result;
 }

@@ -1,15 +1,22 @@
 ---
 module: scene
 created_at: "2026-09-22T12:05:49+08:00"
-updated_at: "2026-09-28T16:00:00+08:00"
+updated_at: "2026-10-12T15:10:00+08:00"
 status: accepted
 ---
 
 # SceneDocument 设计
 
+## M14.1 环境与格式迁移
+
+环境值/单位/约束详见[大气CPU契约](render-atmosphere.md#m141-cpu环境契约)。
+SceneDocument保存环境并提供受校验完整替换；快照内容比较、逻辑字节、暂存与恢复包含该值。
+DeckerScene当前写v2（新增version=1的environment），读v1补默认disabled；未知版本/字段拒绝。
+来源令牌、revision/dirty和原子保存保持下文约定；下文v1结构描述作为迁移输入。
+
 ## M3.3 内存内容提交
 
-SceneSnapshot 增加 same_content 与 logical_bytes；比较忽略 revision/来源，仅比较 SceneId 和有序实体值。
+SceneSnapshot 增加 same_content 与 logical_bytes；比较忽略 revision/来源，仅比较 SceneId、环境和有序实体值。
 SceneDocument::stage(snapshot) 复制内容进入独立 ECS，revision=0、dirty=true、独立快照来源；不检查磁盘资源。
 apply_snapshot(snapshot) 要求同 SceneId，内容相同返回 false；否则先完整构建/验证候选世界，再交换 Impl，
 保留当前快照来源、revision 加 1、dirty=true。溢出或验证失败保持原状态。
@@ -111,7 +118,7 @@ Transform translation/scale 为 3 个有限 double，rotation 为 [x,y,z,w]，�
 Hierarchy.parent 为 null 或非 nil EntityId；AssetReferences.items 为 {id,kind} 数组。
 仅持久化局部 TRS，重算 world。未知组件/字段/版本、重复 ID/键、缺失引用、
 循环、非法数值均拒绝；JSON 沿用 16 MiB/64 层限制，实体上限 10000。
-输出实体按 ID 排序，保留资产引用列表顺序；不序列化 ECS 句柄，不提供迁移。
+输出实体按 ID 排序，保留资产引用列表顺序；不序列化 ECS 句柄，v1读入时迁移为默认disabled环境。
 
 两遍恢复在独立候选文档完成：第一遍登记所有 EntityId 和局部组件；
 第二遍解析父级/资产引用并拓扑重算。输入顺序可以子在父前，整体 O(N+E)。

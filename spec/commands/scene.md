@@ -1,7 +1,7 @@
 ---
 module: command-reference-scene
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-09-22T17:00:46+08:00"
+updated_at: "2026-10-12T15:10:00+08:00"
 status: accepted
 ---
 
@@ -35,6 +35,7 @@ status: accepted
 必填 `manifest:string`，工程根下的清单相对路径，schema 长度 1–4096 个 Unicode 码点。
 `guard` 与 scene.new 相同：首次加载省略，替换已有场景时必填。
 加载清单和其中指定的场景，返回 State；effect=control，undoable=false。
+读取场景v1时补disabled默认环境，v2恢复完整环境；未知版本拒绝。
 成功保留磁盘 SceneId/EntityId/revision、生成新 DocumentId、dirty=false、清空历史；失败保留原状态。
 常见错误：文件/所用资产缺失 not_found，格式/引用非法 invalid_argument，版本不支持 not_supported，旧 guard 为 conflict。
 
@@ -59,6 +60,7 @@ status: accepted
 ## scene.save
 
 必填 `guard`，需要活动场景；返回 State。effect=external，undoable=false。
+保存包含完整环境的DeckerScene v2；Project清单版本不变。
 保存到 scene.new/已加载清单指定的场景文件，不接受另一个输出路径参数。
 检查资产引用，验证临时文件后原子替换；成功清除当前保存版本的 dirty，不增加 revision、不清空历史。
 父目录须已存在；当前安全保存范围为 Windows 本地普通文件。
@@ -83,7 +85,7 @@ scene.save 和 project.save 是两个独立的文件操作，不提供跨文件�
 ## scene.transaction
 
 必填 `guard`、`commands`（1–128 项 `{method, params}`）；需要活动场景。
-effect=memory_edit，undoable=true。内部仅允许 entity.create/delete/set_name/set_transform/set_parent/set_assets。
+effect=memory_edit，undoable=true。内部允许 entity.create/delete/set_name/set_transform/set_parent/set_assets 以及 [environment.set](environment.md)。
 每个 params 不得带 guard；多个操作引用同批新建实体时，在创建时指定 ID。
 查询、保存、会话替换、历史操作和嵌套事务均不允许。
 

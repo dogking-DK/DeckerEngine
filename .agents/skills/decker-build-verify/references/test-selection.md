@@ -99,6 +99,7 @@
 | 离屏 draw/dispatch 参数、SPIR-V/布局和设备限制（无需 GPU） | dk_offscreen_tests | `^dk\.offscreen\.unit\.` |
 | Graph 完整管线、离屏绘制/计算读回、M5 基线与同步寿命 | dk_offscreen_probe | `^dk\.offscreen\.gpu_`（gpu label；77 为跳过） |
 | Foundation 进程示例 | dk_foundation_demo | `^dk\.foundation\.` |
+| 环境命令发现、CPU示例与v1/v2跨进程保存重载 | dk_run | `^dk\.environment\.process$` |
 | Scene 跨进程往返 | dk_scene_demo | `^dk\.scene_demo\.` |
 
 Core 查找范围包含单独的日志探针：选择该用例时也要构建 dk_log_probe。

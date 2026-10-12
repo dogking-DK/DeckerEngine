@@ -1,7 +1,7 @@
 ---
 module: application-services
 created_at: "2026-09-22T13:28:00+08:00"
-updated_at: "2026-10-09T10:43:38+08:00"
+updated_at: "2026-10-12T15:00:00+08:00"
 status: accepted
 ---
 
@@ -11,6 +11,12 @@ services 提供 dk::scene_services，PUBLIC 依赖 Scene；operations 提供 dk:
 PUBLIC 依赖 commands 和 services。framework 与 Scene 同时开启时构建；没有窗口、GPU 或传输依赖。
 服务拥有捕获的工程根、只读 Project 和唯一 SceneDocument；不暴露可变文档。
 操作层负责 JSON 与强类型转换、schema 和命令注册，服务负责生命周期/状态约束。
+
+## M14.1 环境编辑
+
+新增environment.query/set，完整环境对象和参数校验见[环境契约](render-atmosphere.md)。
+SetEnvironment加入SceneEdit，与实体编辑共用暂存、guard、事务/历史预算和一次提交；
+无变化及失败保留redo和dirty。query通过只读文档取值，不创建GPU资源。
 
 ## 状态和并发约定
 
@@ -57,11 +63,11 @@ edit_batch(guard, edits) 限 1–128 条。先快照并构建独立暂存文档�
 
 历史保存 before/after 不可变内存快照，undo/redo 恢复内容但 revision 继续单调递增，dirty=true。
 保存不清历史，new/load 清空历史；新编辑丢弃 redo。撤销不读取外部文件，缺失资产不影响内存回滚，
-再次保存时仍检查资源。历史默认最多 64 单元、32 MiB 逻辑载荷，计入 before/after 的实体、名称和资产值，
+再次保存时仍检查资源。历史默认最多 64 单元、32 MiB 逻辑载荷，计入 before/after 的实体、名称、资产值和固定大小环境值，
 不声称是分配器/进程内存硬上限。超限时淘汰最旧 undo；单个单元超预算则修改前拒绝。
 HistoryLimits 可设更小的正数用于宿主控制和预算测试，不能超过默认上限。
 
-scene.transaction(guard,commands[{method,params}]) 只接受六种 entity 内存编辑，params 不含内层 guard；
+scene.transaction(guard,commands[{method,params}]) 接受六种 entity 内存编辑及 environment.set，params 不含内层 guard；
 复用注册表 schema 和同一个 decode_scene_edit，再交服务原子执行。返回 state 和逐条 created_ids（非创建为 null）。
 禁止保存、查询、new/load、history 和嵌套事务；命令发现标明 entity 编辑和事务 undoable。
 history.status 返回 undo_count/redo_count/logical_bytes；history.undo/redo 要求 guard，空栈返回 invalid_state。

@@ -1,16 +1,16 @@
 ---
 module: render-atmosphere
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-12T14:48:32+08:00"
-status: draft
+updated_at: "2026-10-12T15:15:23+08:00"
+status: accepted
 ---
 
-# 大气渲染设计草案
+# 大气渲染设计
 
 ## 目标与当前基线
 
-本次交付是M14/M15的开发任务计划，不是功能实现。阶段、顺序与验收状态统一维护在
-[Roadmap](../roadmap.md)；本设计确定大气模块的边界和必须满足的约定，各小阶段开工时再细化具体接口。
+M14.1确定CPU环境模型、持久化与命令；后续GPU章节仍是规划。阶段、顺序与验收状态统一维护在
+[Roadmap](../roadmap.md)；各后续小阶段开工时再细化具体接口。
 
 默认面向Windows x64、Vulkan/Slang、地球尺度的地表至高空实时观察；支持昼间、日出/日落、
 行星遮光造成的暗侧和空气透视，供编辑器与离屏截图使用。采用单太阳、球对称大气、线性RGB近似。
@@ -18,7 +18,7 @@ status: draft
 不含月亮/星空、天文历法、天气流体模拟、完整光谱渲染、地形系统或完整PBR/IBL。
 接入普通ScenePipeline场景视口与render.capture；独立RenderSimulation布料视口不在本轮范围。
 
-代码基线为744e737：
+初始规划代码基线为744e737，以下表格记录当时缺口；M14.1已补齐CPU环境状态和只读提取：
 
 | 已核实的现状 | 本轮需要补齐的能力 |
 | --- | --- |
@@ -44,7 +44,7 @@ Bruneton实现的量纲检查、CPU参考及自动测试作为验证方法参考
 
 ## 模块边界与拟议接口
 
-以下名称为计划，尚无对应新target或能力开关。
+Scene与render/data的CPU契约见M14.1；下表新增GPU模块名称为计划，尚无对应target或能力开关。
 
 | 位置 | 职责和依赖 |
 | --- | --- |
@@ -61,11 +61,11 @@ CPU-only仍能读取、保存和修改环境描述，渲染能力未编译/设�
 ## 数据、坐标与持久状态
 
 - Scene保存一个场景级EnvironmentDescription，缺省disabled，旧工程视觉保持原unlit背景。
-  拟包含AtmosphereParameters、SunParameters及后续CloudParameters；编辑完整候选后一次提交。
+  包含AtmosphereParameters、SunParameters；后续再加入CloudParameters；编辑完整候选后一次提交。
   云字段到M15.1才定义版本和校验，不预先保存无解释占位数据。
 - 所有公开距离/高度用米、时间用显式纳秒或秒并标单位；散射/消光系数用m^-1，光学厚度无量纲。
   Rayleigh/Mie密度与吸收层、地面半径/大气顶、地表反照率和相函数参数有有限值与范围校验。
-  RGB太阳能量与已有线性HDR材质采用显式共同标度，曝光只在tone执行一次；M14.1冻结转换及测试向量。
+  RGB太阳能量与已有线性HDR材质采用显式共同标度，曝光只在tone执行一次；具体转换及测试向量见M14.1契约。
 - 使用现有Y-up局部场景坐标，CPU双精度保存行星中心/地表锚点与相机。
   GPU接收相机相对坐标及已分离的高度/半径；内部改用千米或归一化时同时转换系数。
   禁止直接用两个地球尺度float位置相减求米级高度，亦不把曲率模型等同于现有平面场景地形。
@@ -74,9 +74,49 @@ CPU-only仍能读取、保存和修改环境描述，渲染能力未编译/设�
 - 显式升级场景格式承载环境，旧版本读入补disabled，未知版本/字段拒绝而不静默丢失。
   持久化、SceneSnapshot::same_content/logical_bytes、restore、事务、undo/redo和源身份必须一并覆盖。
   参数无变化不推进revision；无效参数/guard冲突/分配失败保持Scene、dirty和历史不变。
-- 拟议environment.query / environment.set复用Commands→Operations→Services，名称/schema在M14.1定案并同步命令参考。
+- environment.query / environment.set复用Commands→Operations→Services，详见[环境命令参考](../commands/environment.md)。
   ViewId、quality、exposure、time、frame序号属于渲染请求，动画时钟不逐帧修改场景revision；
   自动化固定时间和seed，不能读取不受控wall clock作为内容输入。
+
+## M14.1 CPU环境契约
+
+`EnvironmentDescription`是Scene拥有的值，包含enabled、AtmosphereParameters和SunParameters；
+默认disabled，所有标量及RGB/方向/位置均为double。Scene与Services不引入GPU依赖。
+`SceneDocument::set_environment`先校验并规范化完整候选，精确相等不修改revision/dirty；
+有效变化一次提交。环境进入snapshot、same_content、logical_bytes、stage、apply_snapshot及历史，
+保存来源令牌保持原约定。RenderScene提取环境副本；本阶段管线尚不消费它。
+
+坐标为右手Y-up局部米制；默认半径6360000m、中心(0,-6360000,0)，原点处为地面。
+高度以double的`hypot(position-center)-ground_radius_m`计算，返回带符号高度，不钳制地下/大气顶外。
+半径范围[1,1e9]m、大气厚度[1,1e7]m，中心和高度查询位置各分量绝对值≤1e9m。
+地球默认中心附近1mm、1m、100km和切向位移采用绝对误差≤1e-6m验证。
+GPU相对位置及高度拆分留到后续阶段，不进行地球尺度float相减。
+
+Rayleigh和Mie密度为exp(-h/scale_height_m)，各自scale_height_m在[1,atmosphere_height_m]。
+Rayleigh散射即消光；Mie散射与消光RGB分别保存，逐通道0≤scattering≤extinction≤1 m^-1。
+吸收使用`max(0,1-abs(h-center_height_m)/half_width_m)`三角层，中心在[0,top]、半宽在[1,top]；
+吸收与Rayleigh系数在[0,1] m^-1。地表反照率RGB在[0,1]，Mie g在[-0.99,0.99]。
+这些是首版数值支持边界，不宣称所有组合都符合真实地球。disabled也校验，避免保存无效潜伏状态。
+
+太阳方向定义为采样点指向太阳；任意有限非零方向先按最大分量缩放再归一化，
+单位长度误差≤8 double epsilon时保留系数，确保重复查询/写入/保存不漂移。
+角半径在[1e-6,0.1]rad；RGB irradiance在[0,1e6]，是线性sRGB/D65通道中的场景归一化法向辐照度，
+不是lux或未经光谱转换的W/m²。白色默认E=(1,1,1)，Lambert正入射输出为albedo*E/pi，
+均匀太阳盘radiance=E/(pi*sin(angular_radius_rad)^2)，与材质emissive共享曝光前线性辐亮度标度。
+曝光不持久化到环境。本阶段以解析测试冻结换算，未实现积分、太阳盘或Lambert绘制。
+
+DeckerScene写version=2并要求environment={version:1,enabled,atmosphere,sun}；所有子字段必填，
+未知字段/版本、重复键、非法参数拒绝。读v1严格维持旧字段集合并补默认disabled；Project仍v1。
+迁移保留scene_id/revision，parse为dirty、load为clean，之后保存写v2，失败加载保留旧文档。
+
+`environment.query({})`返回{state,environment}；`environment.set({guard,environment})`完整替换，
+返回{state,created_id:null}。环境对象与场景v2中的环境相同。query为query，set为可撤销memory_edit，
+复用SceneEdit/SceneService；scene.transaction允许与实体编辑混用，仅真实提交递增一次revision。
+参数错误、guard冲突、批内后续失败、revision耗尽或历史预算拒绝保留内容/dirty/undo/redo。
+所有暂存分配/历史准备在真实提交之前；不承诺flecs致命错误/进程中断恢复。
+
+验证覆盖方向幂等/能量换算/精度与非法值、v1→v2/未知版本和字段、来源/旧快照保存、
+事务回滚/撤销/redo/no-op/预算/上限、进程保存重载/命令发现、只读Render提取及CPU-only链接。
 
 ## LUT、管线与最小光照
 
@@ -118,7 +158,7 @@ GPU失败、取消、IO发布失败沿用现有capture保留旧文件的约定�
 
 ## 验证和实施入口
 
-按Roadmap M14.1–M14.7推进，默认下一项M14.1；计划本身不注册虚构测试入口。
+按Roadmap M14.1–M14.7推进；CPU参数/迁移测试加入已有Scene/Services/Render Data target，GPU测试在对应实现阶段注册。
 验证分为：CPU量纲/积分/持久化，GPU格式与同步，大气参考图，GUI/命令/保存重载一致性，最后性能采样。
 真实用例包含海平面/高空、正午/低太阳/日落后、切线/背太阳/朝地面、不同near/far和曝光；
 透射率应在[0,1]，零消光返回T=1/L=0，单段拆分合成与整段参考一致，所有输出有限。

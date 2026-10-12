@@ -40,6 +40,8 @@ public:
     // Retains the local TRS. nullopt detaches; parents with children cannot be deleted.
     [[nodiscard]] Result<void> set_parent(EntityId id, std::optional<EntityId> parent);
     [[nodiscard]] Result<void> set_asset_references(EntityId id, std::vector<AssetReference> references);
+    [[nodiscard]] EnvironmentDescription environment() const noexcept;
+    [[nodiscard]] Result<void> set_environment(const EnvironmentDescription&);
     [[nodiscard]] Result<void> validate() const;
     [[nodiscard]] Result<SceneSnapshot> snapshot() const;
     // Independent staging world, revision zero; no resource file reads.

@@ -1,7 +1,7 @@
 ---
 module: render-data
 created_at: "2026-10-03T15:06:44+08:00"
-updated_at: "2026-10-08T12:06:32+08:00"
+updated_at: "2026-10-12T15:00:00+08:00"
 status: accepted
 ---
 
@@ -24,7 +24,7 @@ engine/render/data 提供 dk_render_data / dk::render_data，公开依赖 Scene 
 ## 数据与接口
 
 RenderScene::extract(heap, snapshot) 返回共享不可变所有者：SceneId、revision、按 EntityId
-排序的 RenderEntity、每实体的原始 AssetReference 顺序。RenderEntity 保存完整双精度世界
+排序的 RenderEntity、独立EnvironmentDescription副本、每实体的原始 AssetReference 顺序。RenderEntity 保存完整双精度世界
 仿射变换，父级组合保留剪切、负缩放和零缩放；不重新分解 TRS。迭代解析父级，避免递归深度限制。
 实体名称和编辑层级不进入结果；无网格实体仍保留，方便稳定 ID 查询和未来可见性筛选。
 资产引用只是引用列表，不将 material/texture 引用猜测为 mesh override，也不隐式加载资源。
@@ -33,6 +33,9 @@ RenderView::create(scene, ViewDescription) 绑定该场景版本和调用方 fra
 相机世界变换及投影矩阵。相机须可逆，投影须有限且可逆；视图保存 world-to-view 和
 projection * world-to-view。投影由调用者按 Vulkan 深度 [0,1] 及目标 Y 约定提供，
 本阶段无 Camera 持久组件、投影生成、裁剪或精度降为 float。
+
+环境由SceneSnapshot复制，与提取revision绑定；无Scene的默认RenderScene返回disabled缺省值。
+环境编辑不更改旧提取，临时变换预览仍保持环境；没有GPU类型或绘制副作用。
 
 ## 寿命与错误
 

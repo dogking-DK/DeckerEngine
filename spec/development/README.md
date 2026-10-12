@@ -95,5 +95,6 @@
 | 0091 | [M13.3 中断恢复与失败重试](0091-experiment-recovery.md) | experiment-management | completed |
 | 0092 | [M13.4 对比报告与闭环验收](0092-experiment-reports.md) | experiment-management | completed |
 | 0093 | [大气渲染与体积云开发任务规划](0093-atmosphere-cloud-plan.md) | render-atmosphere, render-clouds, architecture, render-pipeline | completed |
+| 0094 | [M14.1 CPU环境模型与持久化](0094-environment-model.md) | render-atmosphere、scene、application-services、render-data | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

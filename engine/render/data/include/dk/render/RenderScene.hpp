@@ -19,6 +19,7 @@ public:
     [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
     [[nodiscard]] SceneId id() const noexcept;
     [[nodiscard]] std::uint64_t revision() const noexcept;
+    [[nodiscard]] EnvironmentDescription environment() const noexcept;
     [[nodiscard]] std::span<const RenderEntity> entities() const noexcept;
     [[nodiscard]] Result<std::span<const AssetReference>> assets(std::size_t entity_index) const;
 private:

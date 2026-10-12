@@ -2,6 +2,7 @@
 #include <dk/io/File.hpp>
 #include "JsonSupport.hpp"
 #include "ScenePersistence.hpp"
+#include "EnvironmentJson.hpp"
 #include <cmath>
 
 namespace dk {
@@ -109,8 +110,9 @@ Result<std::string> serialize_scene(const SceneSnapshot& snapshot, const Project
     try {
         auto entities = detail::Json::array();
         for (const auto& entity : snapshot.entities()) { entities.push_back(entity_json(entity)); }
-        detail::Json json{{"format", "DeckerScene"}, {"version", 1}, {"scene_id", snapshot.id().to_string()},
-            {"revision", snapshot.revision()}, {"entities", std::move(entities)}};
+        detail::Json json{{"format", "DeckerScene"}, {"version", 2}, {"scene_id", snapshot.id().to_string()},
+            {"revision", snapshot.revision()}, {"entities", std::move(entities)},
+            {"environment", detail::environment_json(snapshot.environment())}};
         auto text = json.dump(2) + "\n";
         detail::require(text.size() <= detail::json_limit, "Scene exceeds JSON size limit");
         return text;
@@ -122,9 +124,17 @@ Result<std::unique_ptr<SceneDocument>> parse_scene(std::string_view text, const 
 {
     try {
         const auto json = detail::parse_json(text);
-        detail::fields(json, {"format", "version", "scene_id", "revision", "entities"});
+        detail::require(json.is_object() && json.contains("version") && json.at("version").is_number_integer(),
+            "Scene version must be an integer");
+        const auto& version = json.at("version");
+        detail::require(version == 1 || version == 2, "Unsupported scene version", ErrorCode::not_supported);
+        EnvironmentDescription environment;
+        if (version == 1) detail::fields(json, {"format", "version", "scene_id", "revision", "entities"});
+        else {
+            detail::fields(json, {"format", "version", "scene_id", "revision", "entities", "environment"});
+            environment = detail::read_environment(json.at("environment"));
+        }
         detail::require(json.at("format") == "DeckerScene", "Unknown scene format");
-        detail::version_one(json.at("version"));
         const auto id = detail::read_id<SceneId>(json.at("scene_id"));
         const auto& revision = json.at("revision");
         detail::require(revision.is_number_unsigned() || (revision.is_number_integer() && revision >= 0),
@@ -134,7 +144,7 @@ Result<std::unique_ptr<SceneDocument>> parse_scene(std::string_view text, const 
         std::vector<EntityData> entities;
         entities.reserve(values.size());
         for (const auto& value : values) { entities.push_back(read_entity(value)); }
-        auto document = detail::ScenePersistence::build(id, revision.get<std::uint64_t>(), std::move(entities));
+        auto document = detail::ScenePersistence::build(id, revision.get<std::uint64_t>(), std::move(entities), environment);
         if (!document) { return document; }
         const auto references = check_asset_references(**document, project);
         if (!references) { return std::unexpected(references.error()); }

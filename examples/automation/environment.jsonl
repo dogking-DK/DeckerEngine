@@ -1,0 +1,8 @@
+{"jsonrpc":"2.0","id":1,"method":"scene.new","params":{"name":"Environment CPU Example"}}
+{"jsonrpc":"2.0","id":2,"method":"environment.set","params":{"environment":{"version":1,"enabled":true,"atmosphere":{"planet_center_m":[0,-6360000,0],"ground_radius_m":6360000,"atmosphere_height_m":100000,"rayleigh_scattering_per_m":[5.802e-06,1.3558e-05,3.31e-05],"rayleigh_scale_height_m":8000,"mie_scattering_per_m":[3.996e-06,3.996e-06,3.996e-06],"mie_extinction_per_m":[4.44e-06,4.44e-06,4.44e-06],"mie_scale_height_m":1200,"mie_anisotropy":0.8,"absorption_extinction_per_m":[6.5e-07,1.881e-06,8.5e-08],"absorption_center_height_m":25000,"absorption_half_width_m":15000,"ground_albedo":[0.3,0.3,0.3]},"sun":{"direction":[1,0.1,0],"irradiance":[1,1,1],"angular_radius_rad":0.004675}}}}
+{"jsonrpc":"2.0","id":3,"method":"environment.query","params":{}}
+{"jsonrpc":"2.0","id":4,"method":"history.undo","params":{}}
+{"jsonrpc":"2.0","id":5,"method":"history.redo","params":{}}
+{"jsonrpc":"2.0","id":6,"method":"scene.save","params":{}}
+{"jsonrpc":"2.0","id":7,"method":"project.save","params":{"manifest":"project.json"}}
+{"jsonrpc":"2.0","id":8,"method":"environment.query","params":{}}

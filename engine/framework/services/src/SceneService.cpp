@@ -177,6 +177,8 @@ Result<std::optional<EntityId>> SceneService::apply_edit(SceneDocument &doc, con
                     result = doc.set_local_transform(action.id, action.transform);
                 else if constexpr (std::is_same_v<T, SetParent>)
                     result = doc.set_parent(action.id, action.parent);
+                else if constexpr (std::is_same_v<T, SetEnvironment>)
+                    result = doc.set_environment(action.environment);
                 else if constexpr (std::is_same_v<T, SetAssets>)
                 {
                     for (const auto &asset : action.assets)
