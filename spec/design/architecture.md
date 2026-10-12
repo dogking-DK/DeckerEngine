@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-09T12:09:00+08:00"
+updated_at: "2026-10-12T14:48:32+08:00"
 status: accepted
 ---
 
@@ -70,6 +70,19 @@ automation/server 装配 Runtime 适配、stdio 和 IPC owner 队列，runner/ed
 `sdk/python` 为外部客户端，`shaders/common` 为公共 Slang 模块。
 `projects/demo` 预留示例资产、场景和脚本。
 测试按 unit、integration、gpu、replay 分组。
+
+## 大气与体积云扩展规划
+
+[大气](render-atmosphere.md)与[体积云](render-clouds.md)是拟议渲染模块，尚未创建对应实现或构建选项。
+Scene保存纯CPU环境描述，Services/Operations负责校验、事务与持久化；render/data从不可变快照提取。
+拟新增render/atmosphere和render/clouds负责LUT、云场和介质积分，render/pipeline经同一Graph编排
+几何、最小太阳漫反射、天空/介质与tone。依赖方向保持Render→Scene/Graphics，不能反向依赖Framework。
+物理LUT按内容缓存，视图LUT和云历史按稳定ViewId隔离；GPU资源、在途代次与历史都不进入Scene。
+拟议模块使用独立可选target，CPU-only仍可编辑/保存环境，不隐含GPU加载。
+
+首轮接入普通场景视口和render.capture；独立布料RenderSimulation视口的环境集成另行规划。
+云风场采用显式时间驱动的程序化输入，不耦合XPBD或新增天气流体求解器。
+范围、前置和验收由[Roadmap](../roadmap.md)维护；这里不改变上文已实现模块的现状。
 
 ## 关键约束
 

@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-10-08T13:57:00+08:00"
+updated_at: "2026-10-12T14:48:32+08:00"
 status: accepted
 ---
 
@@ -77,3 +77,11 @@ RGBA32F、D32、目标尺寸须满足实际设备能力；无替代格式或隐�
 支持 opaque 和 alpha mask，拒绝 blend。mask 的 depth fragment 与颜色 fragment 使用一致的
 采样 alpha * baseColor.a < cutoff 丢弃，顶点模块一致；深度 Pass 额外声明纹理采样。
 opaque 保留无 fragment 的 depth-only 管线。磁盘装配独立在 [render-disk](render-disk.md)。
+
+## 环境扩展规划（尚未实现）
+
+[大气](render-atmosphere.md)与[体积云](render-clouds.md)草案拟扩展环境快照、ViewId、显式时间和质量输入，
+增加可采样深度、3D资源、太阳漫反射及tone前的天空/介质合成。当前公开入口和Graph顺序仍以上文为准。
+旧场景默认关闭环境并保留unlit输出；云接入时统一组合空气/云区间，避免重复应用空气透视。
+物理缓存和每视图历史按完成状态发布，保持旧RenderFrame的独立寿命；不复用跨帧Graph句柄。
+实施每阶段时同步本设计与真实接口、诊断和测试；阶段顺序见[Roadmap](../roadmap.md)。
