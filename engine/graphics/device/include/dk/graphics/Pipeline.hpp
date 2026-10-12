@@ -8,6 +8,7 @@ struct LayoutBinding {
     ShaderDescriptorType type = ShaderDescriptorType::storage_buffer;
     std::uint32_t count = 1, minimum_buffer_size = 0;
     vk::ShaderStageFlags stages{};
+    ShaderImageShape image_shape = ShaderImageShape::none;
 };
 class PipelineLayout final {
 public:

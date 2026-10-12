@@ -80,7 +80,7 @@ Result<PlanReport> format_plan(const CompiledGraph& plan) {
             out.add("resource #").number(i).add(" ").name(resource.name);
             if (const auto* buffer = std::get_if<BufferDesc>(&resource.description)) out.add(" buffer bytes=").number(buffer->size);
             else { const auto& image = std::get<ImageDesc>(resource.description);
-                out.add(" image extent=").number(image.width).add("x").number(image.height).add(" mips=").number(image.mip_levels).add(" layers=").number(image.array_layers); }
+                out.add(" image extent=").number(image.width).add("x").number(image.height).add("x").number(image.depth).add(" type=").number(static_cast<int>(image.type)).add(" mips=").number(image.mip_levels).add(" layers=").number(image.array_layers); }
             out.add(resource.lifetime == Lifetime::transient ? " transient" : " external").add(resource.retained ? " retained" : " culled")
                 .add(resource.output ? " output" : "").add(resource.initialized ? " initialized" : " uninitialized")
                 .add(" first=").optional(resource.first_use).add(" last=").optional(resource.last_use).add(" allocation=").optional(resource.allocation_index).add("\n");

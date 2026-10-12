@@ -31,9 +31,10 @@ Result<ImageView> ResourceFactory::create_view(const Image& image, const ImageVi
         return std::unexpected(Error{ErrorCode::invalid_argument, "view image is empty or belongs to another device"});
     const auto& range = description.range;
     if (auto valid = detail::validate_subresources(image.description(), range); !valid) return std::unexpected(valid.error());
-    if ((description.type != vk::ImageViewType::e2D && description.type != vk::ImageViewType::e2DArray) ||
-        (description.type == vk::ImageViewType::e2D && range.layerCount != 1))
-        return std::unexpected(Error{ErrorCode::not_supported, "view requires 2D or 2D array matching its range"});
+    const bool compatible = image.description().type == vk::ImageType::e3D
+        ? description.type == vk::ImageViewType::e3D && range.baseArrayLayer == 0 && range.layerCount == 1
+        : description.type == vk::ImageViewType::e2DArray || (description.type == vk::ImageViewType::e2D && range.layerCount == 1);
+    if (!compatible) return std::unexpected(Error{ErrorCode::not_supported, "view dimension must match image type and layer range"});
     constexpr auto view_usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage |
         vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment | vk::ImageUsageFlagBits::eDepthStencilAttachment;
     if (!(image.description().usage & view_usage))
@@ -83,7 +84,7 @@ Result<ShaderModule> ResourceFactory::create_shader(const CompiledShader& shader
     state->stage = shader.stage;
     state->group = shader.thread_group_size;
     for (const auto& binding : shader.bindings)
-        state->bindings.push_back({binding.set, binding.binding, binding.type, binding.count, binding.block_size});
+        state->bindings.push_back({binding.set, binding.binding, binding.type, binding.count, binding.block_size, binding.image_shape});
     state->push.assign(shader.push_constants.begin(), shader.push_constants.end());
     vk::ShaderModuleCreateInfo info{};
     info.setCode(shader.spirv);

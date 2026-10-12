@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-09T20:40:16+08:00"
+updated_at: "2026-10-12T16:40:00+08:00"
 status: accepted
 ---
 
@@ -54,8 +54,10 @@ BufferDesc 指定大小、Vulkan usage、device/upload/readback 内存用途；C
 通过 VMA map、flush/invalidate、unmap 配对处理，设备用途不能直接访问。
 map/范围/角色失败不写用户数据；read 的 invalidate 失败不修改输出；write 的 flush 失败时
 host 内存可能已写入，不保证字节回滚，也不会因此自动提交 GPU 工作。
-ImageDesc 提供多 mip/layer、sample=1 的二维 image，view 支持 2D/2D array。color 支持 RGBA8 UNORM/SRGB、BGRA8 UNORM/SRGB、
-R32_UINT/R32_SFLOAT（每像素 4 字节），以及 RGBA32F（每像素 16 字节）；
+ImageDesc 提供 sample=1 的 2D/2D array 和原生 3D image。追加 type（默认2D）、depth（默认1）和
+require_linear_filter（默认false），保持原聚合初始化含义。2D必须depth=1，3D必须array_layers=1且仅允许color sampled/storage/transfer；
+3D view只能对应3D image，不能用数组层代替z。color支持RGBA8/BGRA8 UNORM/SRGB、R32_UINT/R32_SFLOAT（4字节）、
+RGBA16F（8字节）和RGBA32F（16字节）；
 D32_SFLOAT 支持 depth attachment/sampling 和 TransferDst clear，拒绝 byte copy。
 检查 extent、mip/layer、字节数溢出、usage 和设备 format 能力；Image::state(mip,layer) 替代单值 layout 查询，Buffer::state() 返回整对象的已提交状态。
 Buffer/Image 的 vk::* 句柄只借用，不得额外销毁；VMA allocation 不公开。
@@ -63,7 +65,7 @@ Buffer/Image 的 vk::* 句柄只借用，不得额外销毁；VMA allocation 不
 begin() 获取空闲槽并开始 one-time command buffer。prepare(ResourceUse) 根据局部账本发 barrier；
 barrier(ResourceBarrier) 校验显式 before 状态后使用同一实现，供未来 Graph 直接规划同步。
 copy_buffer、带 ImageCopyRegion 的双向 copy、fill/clear 只执行已准备访问，缺少同步在原生命令前拒绝。
-ImageCopyRegion 指定 mip/layer、像素区域、buffer offset/row length/image height；按 footprint 验证范围和溢出。
+ImageCopyRegion 指定 mip/layer、三轴像素区域、buffer offset/row length/image height；按 footprint 验证范围和溢出。
 写访问消费 prepare 声明，后续依赖需要重新 prepare；连续只读保留声明并累积读取阶段。
 Buffer 范围用于验证，同步保守覆盖整对象；image 按子资源独立处理。
 Undefined 只作为初始布局，read/load 必须有已初始化内容；局部写入不证明整子资源有效。
@@ -190,3 +192,22 @@ D32 新增 TransferDst usage，只用于完整子资源 clear_depth；不开放�
 M11.4允许独立SubmissionQueue消费同设备不同队列索引的Device视图；各自保有独立
 DeviceLifetime、资源ledger和timeline，既有owner检查继续拒绝跨提交域资源。
 共享VMA由其默认内部同步保护；close仅等待本提交域的timeline，不用全设备idle阻塞另一队列。
+
+## 体积传输与能力契约
+
+3D mip尺寸按max(1, axis >> mip)计算；状态仍按mip/layer，3D每个mip只有layer=0，z切片不是独立子资源。
+创建先纯描述校验，再按真实image type/format/usage查询硬件extent/mip/layer上限；
+require_linear_filter要求sampled usage并检查optimalTilingFeatures的SampledImageFilterLinear，否则明确not_supported，无隐式格式替换。
+未要求线性过滤不代表设备支持，调用者使用线性sampler前必须请求此能力；深度测试使用nearest。
+
+ImageCopyRegion追加z/depth（默认0/1），row_length/image_height仍为texel单位；slice_pitch=row_pitch*有效image_height。
+footprint为(depth-1)*slice_pitch+(height-1)*row_pitch+width*texel_bytes，所有乘加、offset及三轴范围均检查溢出。
+共享image_copy_bytes纯函数供Graph检查声明字节区间；legacy base-level copy也覆盖整个depth。
+局部z写入不证明完整mip初始化；只有三轴覆盖整个mip才可兑现整图copy full_overwrite，局部拷贝遇到此声明在录制原生命令前拒绝。
+ReadbackDescription追加depth/slice_pitch，便利readback仍返回紧密数据，按z/y/x排列，不接受带padding输入。
+失败录制/提交不发布状态，readback取消不写用户输出；image/view/bindings随提交保留到timeline完成，遵循已有队列与Memory寿命。
+
+验证包括RGBA16F/32F三维坐标、z方向插值与寻址、mip和padding往返、格式/维度/越界拒绝、
+Graph storage→sample与depth attachment→sample同步、失败与在途销毁，以及既有2D GPU回归。
+参考：[Vulkan image创建](https://docs.vulkan.org/refpages/latest/refpages/source/VkImageCreateInfo.html)、
+[三维拷贝布局](https://docs.vulkan.org/refpages/latest/refpages/source/VkBufferImageCopy.html)。

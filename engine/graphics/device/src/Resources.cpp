@@ -129,7 +129,7 @@ Result<void> CommandBatch::copy_to_image(const Buffer& source, const Image& dest
     state_->barrier();
     vk::BufferImageCopy region{};
     region.imageSubresource = vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1};
-    region.imageExtent = vk::Extent3D{destination.description().width, destination.description().height, 1};
+    region.imageExtent = vk::Extent3D{destination.description().width, destination.description().height, destination.description().depth};
     state_->command().copyBufferToImage(source.handle(), destination.handle(), vk::ImageLayout::eTransferDstOptimal, region);
     state_->find(destination.state_)->states.front().initialized = true;
     state_->barrier();
@@ -152,7 +152,7 @@ Result<void> CommandBatch::copy_to_buffer(const Image& source, const Buffer& des
     state_->barrier();
     vk::BufferImageCopy region{};
     region.imageSubresource = vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1};
-    region.imageExtent = vk::Extent3D{source.description().width, source.description().height, 1};
+    region.imageExtent = vk::Extent3D{source.description().width, source.description().height, source.description().depth};
     state_->command().copyImageToBuffer(source.handle(), vk::ImageLayout::eTransferSrcOptimal, destination.handle(), region);
     state_->barrier();
     return {};
@@ -253,17 +253,20 @@ Result<Image> SubmissionQueue::create_image(const ImageDesc& description)
     if (auto result = detail::validate_image(description); !result) return std::unexpected(result.error());
     try {
         const auto properties = device().physical_device().getImageFormatProperties(description.format,
-            vk::ImageType::e2D, vk::ImageTiling::eOptimal, description.usage, {});
+            description.type, vk::ImageTiling::eOptimal, description.usage, {});
         if (description.width > properties.maxExtent.width || description.height > properties.maxExtent.height ||
-            description.mip_levels > properties.maxMipLevels || description.array_layers > properties.maxArrayLayers)
+            description.depth > properties.maxExtent.depth || description.mip_levels > properties.maxMipLevels || description.array_layers > properties.maxArrayLayers)
             return std::unexpected(Error{ErrorCode::not_supported, "image extent exceeds device format limits"});
     } catch (const vk::SystemError& error) {
         return std::unexpected(state_->failure("vkGetPhysicalDeviceImageFormatProperties", static_cast<VkResult>(error.code().value())));
     }
+    if (description.require_linear_filter && !(device().physical_device().getFormatProperties(description.format).optimalTilingFeatures &
+        vk::FormatFeatureFlagBits::eSampledImageFilterLinear))
+        return std::unexpected(Error{ErrorCode::not_supported, "image format does not support requested linear filtering"});
     auto resource = memory::make_shared_in<detail::ResourceState>(state_->resource, state_->owner, state_->resource);
     resource->states.resize(static_cast<std::size_t>(description.mip_levels) * description.array_layers);
     resource->image_desc = description;
-    vk::ImageCreateInfo info{{}, vk::ImageType::e2D, description.format, vk::Extent3D{description.width, description.height, 1},
+    vk::ImageCreateInfo info{{}, description.type, description.format, vk::Extent3D{description.width, description.height, description.depth},
         description.mip_levels, description.array_layers, vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal, description.usage, vk::SharingMode::eExclusive};
     VmaAllocationCreateInfo allocation{};
     allocation.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;

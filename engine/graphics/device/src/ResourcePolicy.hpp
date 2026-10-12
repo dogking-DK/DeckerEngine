@@ -21,6 +21,7 @@ inline std::uint32_t color_texel_bytes(vk::Format format) noexcept
     switch (format) {
     case vk::Format::eR8G8B8A8Unorm: case vk::Format::eR8G8B8A8Srgb: case vk::Format::eB8G8R8A8Unorm: case vk::Format::eB8G8R8A8Srgb:
     case vk::Format::eR32Uint: case vk::Format::eR32Sfloat: return 4;
+    case vk::Format::eR16G16B16A16Sfloat: return 8;
     case vk::Format::eR32G32B32A32Sfloat: return 16;
     default: return 0;
     }
@@ -30,21 +31,28 @@ inline Result<vk::DeviceSize> image_bytes(const ImageDesc& desc)
     constexpr auto allowed = vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst |
         vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage |
         vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment;
-    if (!desc.width || !desc.height || !desc.usage || (static_cast<VkImageUsageFlags>(desc.usage) & ~static_cast<VkImageUsageFlags>(allowed)))
+    if (!desc.width || !desc.height || !desc.depth || !desc.usage || (static_cast<VkImageUsageFlags>(desc.usage) & ~static_cast<VkImageUsageFlags>(allowed)))
         return std::unexpected(Error{ErrorCode::invalid_argument, "image requires nonzero extent and supported color usage"});
     const auto texel_bytes = detail::color_texel_bytes(desc.format);
     if (!texel_bytes) return std::unexpected(Error{ErrorCode::not_supported, "unsupported color image format"});
     const auto pixels = vk::DeviceSize{desc.width} * desc.height;
-    if (pixels > std::numeric_limits<vk::DeviceSize>::max() / texel_bytes)
+    if (pixels > std::numeric_limits<vk::DeviceSize>::max() / texel_bytes / desc.depth)
         return std::unexpected(Error{ErrorCode::invalid_argument, "image byte count overflow"});
-    return pixels * texel_bytes;
+    return pixels * texel_bytes * desc.depth;
 }
 inline bool valid_range(vk::DeviceSize capacity, vk::DeviceSize offset, vk::DeviceSize size) noexcept
 { return offset <= capacity && size <= capacity - offset; }
 inline Result<void> validate_image(const ImageDesc& desc)
 {
-    if (!desc.width || !desc.height || !desc.mip_levels || !desc.array_layers ||
-        desc.mip_levels > static_cast<std::uint32_t>(std::bit_width(std::max(desc.width, desc.height))))
+    if ((desc.type != vk::ImageType::e2D && desc.type != vk::ImageType::e3D) ||
+        (desc.type == vk::ImageType::e2D && desc.depth != 1) ||
+        (desc.type == vk::ImageType::e3D && (desc.array_layers != 1 || desc.format == vk::Format::eD32Sfloat ||
+            bool(desc.usage & (vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eInputAttachment)))))
+        return std::unexpected(Error{ErrorCode::not_supported, "image type requires matching depth/layers and supported usage"});
+    if (desc.require_linear_filter && !(desc.usage & vk::ImageUsageFlagBits::eSampled))
+        return std::unexpected(Error{ErrorCode::invalid_argument, "linear filtering requires sampled usage"});
+    if (!desc.width || !desc.height || !desc.depth || !desc.mip_levels || !desc.array_layers ||
+        desc.mip_levels > static_cast<std::uint32_t>(std::bit_width(std::max({desc.width, desc.height, desc.depth}))))
         return std::unexpected(Error{ErrorCode::invalid_argument, "invalid image mip/layer/extent"});
     if (desc.format == vk::Format::eD32Sfloat) {
         constexpr auto allowed = vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;

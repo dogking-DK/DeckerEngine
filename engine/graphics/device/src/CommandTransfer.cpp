@@ -4,30 +4,48 @@
 namespace dk::graphics::detail {
 Result<CopyFootprint> copy_footprint(const ImageDesc& image, const ImageCopyRegion& region)
 {
-    if (auto bytes = image_bytes(image); !bytes) return std::unexpected(bytes.error());
+    if (auto valid = validate_image(image); !valid) return std::unexpected(valid.error());
     const auto stride = detail::color_texel_bytes(image.format);
-    if (region.mip >= image.mip_levels || region.layer >= image.array_layers || !region.width || !region.height || region.buffer_offset % stride)
+    if (!stride) return std::unexpected(Error{ErrorCode::not_supported, "copy requires a supported color format"});
+    if (region.mip >= image.mip_levels || region.layer >= image.array_layers || !region.width || !region.height || !region.depth || region.buffer_offset % stride)
         return std::unexpected(Error{ErrorCode::invalid_argument, "invalid copy mip/layer/extent/alignment"});
     const auto width = std::max(1u, image.width >> region.mip), height = std::max(1u, image.height >> region.mip);
+    const auto depth = std::max(1u, image.depth >> region.mip);
     const auto row = region.row_length ? region.row_length : region.width;
-    if (!valid_range(width, region.x, region.width) || !valid_range(height, region.y, region.height) || row < region.width ||
-        (region.image_height && region.image_height < region.height) || row > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max() / stride))
+    const auto rows = region.image_height ? region.image_height : region.height;
+    constexpr auto native_max = static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max());
+    if (!valid_range(width, region.x, region.width) || !valid_range(height, region.y, region.height) ||
+        !valid_range(depth, region.z, region.depth) || row < region.width || rows < region.height ||
+        row > native_max / stride || region.x > native_max || region.y > native_max || region.z > native_max)
         return std::unexpected(Error{ErrorCode::invalid_argument, "copy extent or row pitch is out of range"});
-    const auto texels = vk::DeviceSize{row} * (region.height - 1) + region.width;
-    if (texels > std::numeric_limits<vk::DeviceSize>::max() / stride || region.buffer_offset > std::numeric_limits<vk::DeviceSize>::max() - texels * stride)
+    const auto row_pitch = vk::DeviceSize{row} * stride;
+    const auto slice_pitch = row_pitch * rows; // row_pitch <= INT32_MAX, rows <= UINT32_MAX.
+    const auto tail = row_pitch * (region.height - 1) + vk::DeviceSize{region.width} * stride;
+    constexpr auto maximum = std::numeric_limits<vk::DeviceSize>::max();
+    if (region.depth - 1 > (maximum - tail) / slice_pitch)
         return std::unexpected(Error{ErrorCode::invalid_argument, "copy footprint overflow"});
+    const auto bytes = (region.depth - 1) * slice_pitch + tail;
+    if (region.buffer_offset > maximum - bytes)
+        return std::unexpected(Error{ErrorCode::invalid_argument, "copy buffer offset overflow"});
     CopyFootprint result{};
     result.native = vk::BufferImageCopy{region.buffer_offset, region.row_length, region.image_height,
         vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, region.mip, region.layer, 1},
-        vk::Offset3D{static_cast<std::int32_t>(region.x), static_cast<std::int32_t>(region.y), 0}, vk::Extent3D{region.width, region.height, 1}};
+        vk::Offset3D{static_cast<std::int32_t>(region.x), static_cast<std::int32_t>(region.y), static_cast<std::int32_t>(region.z)},
+        vk::Extent3D{region.width, region.height, region.depth}};
     result.range = vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, region.mip, 1, region.layer, 1};
-    result.bytes = texels * stride;
-    result.full = region.x == 0 && region.y == 0 && region.width == width && region.height == height;
+    result.bytes = bytes;
+    result.full = region.x == 0 && region.y == 0 && region.z == 0 && region.width == width && region.height == height && region.depth == depth;
     return result;
 }
 } // namespace dk::graphics::detail
 
 namespace dk::graphics {
+Result<vk::DeviceSize> image_copy_bytes(const ImageDesc& image, const ImageCopyRegion& region)
+{
+    auto footprint = detail::copy_footprint(image, region);
+    if (!footprint) return std::unexpected(footprint.error());
+    return footprint->bytes;
+}
 namespace {
 Result<void> ready(const std::shared_ptr<detail::BatchState>& state)
 { return state ? detail::outside_rendering(*state) : std::unexpected(Error{ErrorCode::invalid_state, "empty command batch"}); }
@@ -60,6 +78,9 @@ Result<void> CommandBatch::copy_to_image(const Buffer& source, const Image& dest
         return std::unexpected(Error{ErrorCode::invalid_state, "copy destination layout is not prepared"});
     if (auto valid = detail::require_use(*state_, source.state_, vk::PipelineStageFlagBits2::eCopy, vk::AccessFlagBits2::eTransferRead); !valid) return valid;
     if (auto valid = detail::require_use(*state_, destination.state_, vk::PipelineStageFlagBits2::eCopy, vk::AccessFlagBits2::eTransferWrite, &footprint->range, layout, false); !valid) return valid;
+    const auto index = static_cast<std::size_t>(region.layer) * destination.description().mip_levels + region.mip;
+    if (!footprint->full && (state_->find(destination.state_)->prepared[index] & 2u))
+        return std::unexpected(Error{ErrorCode::invalid_argument, "partial image copy cannot fulfill a full overwrite declaration"});
     state_->command().copyBufferToImage(source.handle(), destination.handle(), layout, footprint->native);
     detail::consume_use(*state_, destination.state_, &footprint->range, footprint->full);
     return {};

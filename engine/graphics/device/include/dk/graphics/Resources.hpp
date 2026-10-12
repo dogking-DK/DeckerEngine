@@ -16,6 +16,9 @@ struct ImageDesc {
     vk::Format format = vk::Format::eR8G8B8A8Unorm;
     vk::ImageUsageFlags usage = vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
     std::uint32_t mip_levels = 1, array_layers = 1;
+    std::uint32_t depth = 1;
+    vk::ImageType type = vk::ImageType::e2D;
+    bool require_linear_filter = false; // Request sampled-image linear filtering capability.
 };
 struct AccessState {
     vk::PipelineStageFlags2 stages{};

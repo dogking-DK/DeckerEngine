@@ -23,6 +23,7 @@ struct ReflectedBinding {
     std::uint32_t set, binding;
     ShaderDescriptorType type;
     std::uint32_t count, block_size;
+    ShaderImageShape image_shape = ShaderImageShape::none;
 };
 struct ShaderState : ObjectState {
     ShaderState(std::shared_ptr<DeviceLifetime> device, memory::ResourceHandle resource)

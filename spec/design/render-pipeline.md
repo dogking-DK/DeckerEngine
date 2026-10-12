@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-10-12T14:48:32+08:00"
+updated_at: "2026-10-12T16:40:00+08:00"
 status: accepted
 ---
 
@@ -81,7 +81,12 @@ opaque 保留无 fragment 的 depth-only 管线。磁盘装配独立在 [render-
 ## 环境扩展规划（尚未实现）
 
 [大气](render-atmosphere.md)与[体积云](render-clouds.md)草案拟扩展环境快照、ViewId、显式时间和质量输入，
-增加可采样深度、3D资源、太阳漫反射及tone前的天空/介质合成。当前公开入口和Graph顺序仍以上文为准。
+3D资源和可采样深度底座已接入；后续增加太阳漫反射及tone前的天空/介质合成。当前公开入口和Graph顺序仍以上文为准。
 旧场景默认关闭环境并保留unlit输出；云接入时统一组合空气/云区间，避免重复应用空气透视。
 物理缓存和每视图历史按完成状态发布，保持旧RenderFrame的独立寿命；不复用跨帧Graph句柄。
 实施每阶段时同步本设计与真实接口、诊断和测试；阶段顺序见[Roadmap](../roadmap.md)。
+
+## 深度采样底座
+
+场景D32目标增加Sampled usage，创建时核对附件/clear/sampled组合能力。现有unlit图顺序和输出保持原契约；
+深度写后采样屏障由Graphics Graph体积探针独立验证，世界射线重建和大气合成属于M14.5。

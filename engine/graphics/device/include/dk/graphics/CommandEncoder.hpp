@@ -19,6 +19,7 @@ struct ImageCopyRegion {
     std::uint32_t mip = 0, layer = 0, x = 0, y = 0, width = 0, height = 0;
     vk::DeviceSize buffer_offset = 0;
     std::uint32_t row_length = 0, image_height = 0; // In texels; zero means tightly packed.
+    std::uint32_t z = 0, depth = 1;
 };
 struct ColorAttachment {
     const ImageView* view = nullptr;

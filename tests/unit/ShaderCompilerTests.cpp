@@ -81,7 +81,7 @@ TEST_CASE("compute reflects storage bindings and push constants", "[shaders]")
         CHECK(shader->thread_group_size == std::array<std::uint32_t, 3>{64, 1, 1});
         CHECK(shader->spirv.get_allocator().resource() == fixture.heap);
         auto json = nlohmann::json::parse(shader_reflection_json(*shader));
-        CHECK(json.at("schema_version") == 1);
+        CHECK(json.at("schema_version") == 2);
         CHECK(json.at("entry") == "computeMain");
         CHECK(json.at("push_constants")[0].at("size") == 16);
         CHECK(fixture.heap.snapshot().live_allocations > 0);
@@ -213,4 +213,21 @@ TEST_CASE("scoped shader batch preserves independent artifacts and cancellation"
     auto failed=compile_shaders(failed_requests,fixture.heap); REQUIRE_FALSE(failed);
     CHECK(failed.error().code==dk::ErrorCode::not_found);
     CHECK(fixture.heap.snapshot().live_allocations==0);
+}
+
+TEST_CASE("reflection distinguishes volume array texture and descriptor array shapes", "[shaders]") {
+    Fixture fixture;
+    for (const auto file : {"volume-store.slang", "volume-sample.slang"}) {
+        auto shader=fixture.compile(file); require_success(shader);
+        CHECK(shader->bindings[0].image_shape==ShaderImageShape::image_3d);
+        CHECK(nlohmann::json::parse(shader_reflection_json(*shader))["bindings"][0]["image_shape"]=="3d");
+        CHECK(validate_shader_artifact(*shader));
+        shader->bindings[0].image_shape=ShaderImageShape::none;
+        CHECK_FALSE(validate_shader_artifact(*shader));
+    }
+    auto array=fixture.compile("image-shapes.slang"); require_success(array);
+    CHECK(array->bindings[0].count==2); CHECK(array->bindings[0].image_shape==ShaderImageShape::image_2d_array);
+    auto depth=fixture.compile("depth-sample.slang"); require_success(depth);
+    CHECK(depth->bindings[0].image_shape==ShaderImageShape::image_2d);
+    auto rejected=fixture.compile("unsupported-cube.slang"); CHECK_FALSE(rejected);
 }

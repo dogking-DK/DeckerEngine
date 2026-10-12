@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T19:03:00+08:00"
-updated_at: "2026-09-28T19:12:00+08:00"
+updated_at: "2026-10-12T16:40:00+08:00"
 ---
 
 # dk-shaderc 离线工具
@@ -35,20 +35,21 @@ dk-shaderc --help
 
 ## 返回、错误与副作用
 
-成功 stdout 是一个 JSON 对象（schema_version=1），stderr 可包含 Slang 警告：
+成功 stdout 是一个 JSON 对象（schema_version=2），stderr 可包含 Slang 警告：
 
 | JSON 字段 | 内容 |
 | --- | --- |
 | compiler / target / matrix_layout | 编译器 build tag、spirv_1_5、row_major |
 | entry / stage / spirv_bytes | SPIR-V 入口名、阶段、输出字节数 |
 | thread_group_size | compute 的三个本地维度；graphics 为 `[0,0,0]` |
-| bindings | 按 set/binding 排序；每项含 name、set、binding、type、count、block_size |
+| bindings | 按 set/binding 排序；每项含 name、set、binding、type、count、block_size、image_shape |
 | push_constants | offset/size 字节范围；当前最多一个 offset=0 的块 |
 
+binding的image_shape为none/2d/2d_array/3d；非图像使用none，图像维度与descriptor count独立。
 descriptor type 为 uniform_buffer、storage_buffer、sampled_image、storage_image 或 sampler；
 block_size 仅 uniform_buffer 有效，其余为 0。反射包含组合程序声明的全部全局资源，
 不表示优化后的实际访问集合；不包含成员偏移、顶点输入布局、跨阶段合并或设备能力检查。
-ParameterBlock、嵌套资源、未定长 descriptor 数组、入口 uniform、typed buffer 等当前无法表达的布局明确拒绝。
+ParameterBlock、嵌套资源、未定长 descriptor 数组、入口 uniform、typed buffer、1D/cube/MSAA图像等当前无法表达的布局明确拒绝。
 
 | 退出码 | 含义 |
 | --- | --- |

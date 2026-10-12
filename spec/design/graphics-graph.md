@@ -1,7 +1,7 @@
 ---
 module: graphics-graph
 created_at: "2026-10-02T23:00:00+08:00"
-updated_at: "2026-10-09T19:38:24+08:00"
+updated_at: "2026-10-12T16:40:00+08:00"
 status: accepted
 ---
 
@@ -212,3 +212,12 @@ execute 在启用队列观测时围绕每个保留 Pass 的 prepare/record/finis
 返回invalid_state/context=graph.compile.cancelled；原Graph及旧CompiledGraph不变，不涉及GPU提交。
 依赖归一排序在每4096次比较检查取消，避免大图排序形成长的无检查区间；
 比较器仍使用同一全序，只在取消时抛出候选私有错误。不改变依赖、裁剪或缓存键，内存释放和驱动调用仍不可硬抢占。
+
+## 体积与深度访问
+
+图像描述和external匹配包括type/depth/require_linear_filter；3D范围是完整mip，array layer恒为0，不能独立声明z切片。
+PassContext传输共用Device的image_copy_bytes，包含padding和所有z切片，欠声明buffer范围在原生命令前拒绝。
+storage写使用compute/ShaderStorageWrite/General；后续sample使用compute/ShaderSampledRead/ShaderReadOnlyOptimal。
+D32附件使用Early/LateFragmentTests、DepthStencilAttachmentRead/Write和DepthStencilAttachmentOptimal；
+遵循现有encoder保守读写契约，图中先用transfer clear初始化，再使用附件读写，
+后续采样使用depth aspect与ShaderReadOnlyOptimal。两条路径均通过现有ledger生成同步2屏障，不增加隐式Pass或隐藏barrier。

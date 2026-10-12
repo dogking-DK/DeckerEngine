@@ -123,7 +123,14 @@ TEST_CASE("pipeline interfaces merge stages preserve array counts and reject con
     b[0].count = 2;
     b[0].type = ShaderDescriptorType::storage_buffer;
     REQUIRE_FALSE(policy::merge_interfaces(heap, views, limits));
-    b[0].type = ShaderDescriptorType::uniform_buffer;
+    a[0].type = b[0].type = ShaderDescriptorType::sampled_image;
+    a[0].image_shape = ShaderImageShape::image_2d;
+    b[0].image_shape = ShaderImageShape::image_3d;
+    REQUIRE_FALSE(policy::merge_interfaces(heap, views, limits));
+    a[0].image_shape = ShaderImageShape::image_3d;
+    REQUIRE(policy::merge_interfaces(heap, views, limits));
+    a[0].type = b[0].type = ShaderDescriptorType::uniform_buffer;
+    a[0].image_shape = b[0].image_shape = ShaderImageShape::none;
     limits.maxPerStageDescriptorUniformBuffers = 1;
     REQUIRE_FALSE(policy::merge_interfaces(heap, views, limits));
     limits.maxPerStageDescriptorUniformBuffers = 16;
@@ -184,4 +191,35 @@ TEST_CASE("HDR color footprint uses sixteen byte texels and depth clear usage is
     CHECK(policy::validate_image(depth)); CHECK_FALSE(policy::copy_footprint(depth,{0,0,0,0,4,4}));
     depth.usage|=vk::ImageUsageFlagBits::eTransferSrc; CHECK_FALSE(policy::validate_image(depth));
     CommandBatch batch; CHECK_FALSE(batch.clear_depth({},1,{vk::ImageAspectFlagBits::eDepth,0,1,0,1}));
+}
+
+TEST_CASE("volume descriptions and copies cover depth pitch mip and overflow") {
+    ImageDesc volume{8,4,vk::Format::eR16G16B16A16Sfloat};
+    volume.type=vk::ImageType::e3D; volume.depth=16; volume.mip_levels=5;
+    REQUIRE(validate_image_description(volume)); CHECK(*policy::image_bytes(volume)==4096);
+    ImageCopyRegion region{1,0,0,0,4,2,16,6,3,0,8};
+    auto footprint=policy::copy_footprint(volume,region); REQUIRE(footprint);
+    CHECK(footprint->full); CHECK(footprint->bytes==1088); // 7*144 + 48 + 32.
+    CHECK(*image_copy_bytes(volume,region)==1088);
+    CHECK(footprint->native.imageExtent.depth==8);
+    region.z=1; region.depth=7;
+    footprint=policy::copy_footprint(volume,region); REQUIRE(footprint); CHECK_FALSE(footprint->full);
+    region.depth=8; CHECK_FALSE(image_copy_bytes(volume,region));
+    region.z=0; region.layer=1; CHECK_FALSE(image_copy_bytes(volume,region));
+    region.layer=0; region.depth=0; CHECK_FALSE(image_copy_bytes(volume,region));
+    region.depth=8; region.image_height=1; CHECK_FALSE(image_copy_bytes(volume,region));
+    region.image_height=3; region.buffer_offset=UINT64_MAX-7; CHECK_FALSE(image_copy_bytes(volume,region));
+    region.buffer_offset=4; CHECK_FALSE(image_copy_bytes(volume,region));
+    volume.array_layers=2; CHECK_FALSE(validate_image_description(volume)); volume.array_layers=1;
+    volume.depth=0; CHECK_FALSE(validate_image_description(volume)); volume.depth=16;
+    volume.type=vk::ImageType::e2D; CHECK_FALSE(validate_image_description(volume)); volume.type=vk::ImageType::e3D;
+    volume.usage|=vk::ImageUsageFlagBits::eColorAttachment; CHECK_FALSE(validate_image_description(volume));
+    volume.usage=vk::ImageUsageFlagBits::eStorage; volume.require_linear_filter=true; CHECK_FALSE(validate_image_description(volume));
+    volume.require_linear_filter=false; volume.format=vk::Format::eD32Sfloat; CHECK_FALSE(validate_image_description(volume));
+    volume.format=vk::Format::eR16G16B16A16Sfloat; volume.width=volume.height=volume.depth=UINT32_MAX;
+    CHECK_FALSE(policy::image_bytes(volume));
+    volume.width=volume.height=1; volume.depth=UINT32_MAX; volume.mip_levels=32;
+    CHECK_FALSE(image_copy_bytes(volume,{0,0,0,0,1,1,0,268435455,UINT32_MAX,0,UINT32_MAX}));
+    volume.depth=1; volume.mip_levels=1; REQUIRE(validate_image_description(volume));
+    CHECK(image_copy_bytes(volume,{0,0,0,0,1,1})); // A depth-one volume is still 3D.
 }

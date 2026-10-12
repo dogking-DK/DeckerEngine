@@ -9,6 +9,8 @@ struct ReadbackDescription {
     vk::Format format = vk::Format::eUndefined; // Undefined for a buffer slice.
     std::uint32_t width = 0, height = 0;
     vk::DeviceSize row_pitch = 0; // Image results are tightly packed.
+    std::uint32_t depth = 1;
+    vk::DeviceSize slice_pitch = 0;
 };
 class ReadbackRequest final {
 public:

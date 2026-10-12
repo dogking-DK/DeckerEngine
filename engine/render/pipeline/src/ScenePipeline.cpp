@@ -240,7 +240,7 @@ Result<RenderFrame> ScenePipeline::render(SubmissionQueue& queue,const RenderVie
         const auto hdr=take(graph.declare_image("linear HDR",{width,height,vk::Format::eR32G32B32A32Sfloat,
             vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst}));
         const auto depth=take(graph.declare_image("scene depth",{width,height,vk::Format::eD32Sfloat,
-            vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eTransferDst}));
+            vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled}));
         const auto ldr=take(graph.declare_image("sRGB RGBA8",{width,height,vk::Format::eR8G8B8A8Unorm,
             vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled}));
         const auto white=take(graph.declare_image("default white",{1,1}));

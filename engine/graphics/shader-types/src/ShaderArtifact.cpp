@@ -22,6 +22,16 @@ std::string_view shader_descriptor_name(ShaderDescriptorType type) noexcept
     }
     return "unknown";
 }
+std::string_view shader_image_shape_name(ShaderImageShape shape) noexcept
+{
+    switch (shape) {
+    case ShaderImageShape::none: return "none";
+    case ShaderImageShape::image_2d: return "2d";
+    case ShaderImageShape::image_2d_array: return "2d_array";
+    case ShaderImageShape::image_3d: return "3d";
+    }
+    return "unknown";
+}
 CompiledShader::CompiledShader(memory::ResourceHandle resource)
     : spirv(memory::Allocator<std::uint32_t>{resource}), entry(memory::Allocator<char>{resource}),
       compiler(memory::Allocator<char>{resource}), diagnostics(memory::Allocator<char>{resource}),
@@ -31,6 +41,11 @@ CompiledShader::CompiledShader(memory::ResourceHandle resource)
 namespace { Error invalid(std::string message) { return {ErrorCode::invalid_argument, std::move(message)}; } Error unsupported(std::string message) { return {ErrorCode::not_supported, std::move(message)}; } }
 Result<void> validate_shader_artifact(const CompiledShader& shader)
 {
+    for (const auto& binding : shader.bindings) {
+        const bool image = binding.type == ShaderDescriptorType::sampled_image || binding.type == ShaderDescriptorType::storage_image;
+        if (shader_image_shape_name(binding.image_shape) == "unknown" || image == (binding.image_shape == ShaderImageShape::none))
+            return std::unexpected(invalid("shader descriptor image shape mismatch"));
+    }
     const auto stage = shader.stage;
     if ((stage != ShaderStage::vertex && stage != ShaderStage::fragment && stage != ShaderStage::compute) || shader.entry.empty() || shader.entry.find('\0') != String::npos)
         return std::unexpected(invalid("shader entry/stage does not match the operation"));

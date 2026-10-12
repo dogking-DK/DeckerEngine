@@ -28,7 +28,7 @@ Error invalid(const char* message) { return {ErrorCode::invalid_argument, messag
 Error unsupported(const char* message) { return {ErrorCode::not_supported, message}; }
 bool same_binding(const LayoutBinding& a, const LayoutBinding& b) noexcept
 {
-    return a.set == b.set && a.binding == b.binding && a.type == b.type && a.count == b.count && a.stages == b.stages;
+    return a.set == b.set && a.binding == b.binding && a.type == b.type && a.count == b.count && a.stages == b.stages && a.image_shape == b.image_shape;
 }
 }
 bool compatible_layouts(const LayoutState& a, const LayoutState& b, std::uint32_t set) noexcept
@@ -59,10 +59,10 @@ Result<LayoutDescription> merge_interfaces(memory::ResourceHandle resource, std:
             auto found = std::find_if(result.bindings.begin(), result.bindings.end(), [&](const auto& v) {
                 return v.set == input.set && v.binding == input.binding;
             });
-            if (found == result.bindings.end()) result.bindings.push_back({input.set, input.binding, input.type, input.count, input.block_size, stage});
+            if (found == result.bindings.end()) result.bindings.push_back({input.set, input.binding, input.type, input.count, input.block_size, stage, input.image_shape});
             else {
-                if (found->type != input.type || found->count != input.count)
-                    return std::unexpected(invalid("shader descriptor type/count conflicts across stages"));
+                if (found->type != input.type || found->count != input.count || found->image_shape != input.image_shape)
+                    return std::unexpected(invalid("shader descriptor type/count/shape conflicts across stages"));
                 found->stages |= stage;
                 found->minimum_buffer_size = std::max(found->minimum_buffer_size, input.block_size);
             }
@@ -183,7 +183,7 @@ Result<void> check_stage(const detail::QueueState& queue, const ShaderModule* sh
     for (const auto& binding : s.bindings) {
         const auto found = std::find_if(l.bindings.begin(), l.bindings.end(), [&](const auto& b) {
             return b.set == binding.set && b.binding == binding.binding && b.type == binding.type &&
-                b.count >= binding.count && (b.stages & stage) && b.minimum_buffer_size >= binding.block_size;
+                b.count >= binding.count && b.image_shape == binding.image_shape && (b.stages & stage) && b.minimum_buffer_size >= binding.block_size;
         });
         if (found == l.bindings.end()) return std::unexpected(Error{ErrorCode::invalid_argument, "pipeline layout does not cover shader descriptors"});
     }

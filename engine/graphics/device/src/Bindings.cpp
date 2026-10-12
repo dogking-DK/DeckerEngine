@@ -89,6 +89,10 @@ Result<BindingSet> ResourceFactory::create_bindings(const PipelineLayout& layout
             bound.view = image->view->state_;
             bound.image_layout = image->layout;
             const bool storage = found->type == ShaderDescriptorType::storage_image;
+            const auto shape = bound.view->description.type == vk::ImageViewType::e3D ? ShaderImageShape::image_3d
+                : bound.view->description.type == vk::ImageViewType::e2DArray ? ShaderImageShape::image_2d_array : ShaderImageShape::image_2d;
+            if (shape != found->image_shape || (storage && bound.view->description.range.levelCount != 1))
+                return std::unexpected(Error{ErrorCode::invalid_argument, "descriptor image shape or storage mip range mismatch"});
             if (!(bound.view->image->image_desc.usage & (storage ? vk::ImageUsageFlagBits::eStorage : vk::ImageUsageFlagBits::eSampled)) ||
                 (storage && image->layout != vk::ImageLayout::eGeneral) ||
                 (!storage && image->layout != vk::ImageLayout::eGeneral && image->layout != vk::ImageLayout::eShaderReadOnlyOptimal))

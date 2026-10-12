@@ -1,7 +1,7 @@
 ---
 module: render-atmosphere
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-12T15:15:23+08:00"
+updated_at: "2026-10-12T16:40:00+08:00"
 status: accepted
 ---
 
@@ -9,7 +9,7 @@ status: accepted
 
 ## 目标与当前基线
 
-M14.1确定CPU环境模型、持久化与命令；后续GPU章节仍是规划。阶段、顺序与验收状态统一维护在
+CPU环境模型、持久化与命令已接入；Graphics现支持3D资源与深度采样，后续大气算法章节仍是规划。阶段、顺序与验收状态统一维护在
 [Roadmap](../roadmap.md)；各后续小阶段开工时再细化具体接口。
 
 默认面向Windows x64、Vulkan/Slang、地球尺度的地表至高空实时观察；支持昼间、日出/日落、
@@ -18,14 +18,14 @@ M14.1确定CPU环境模型、持久化与命令；后续GPU章节仍是规划。
 不含月亮/星空、天文历法、天气流体模拟、完整光谱渲染、地形系统或完整PBR/IBL。
 接入普通ScenePipeline场景视口与render.capture；独立RenderSimulation布料视口不在本轮范围。
 
-初始规划代码基线为744e737，以下表格记录当时缺口；M14.1已补齐CPU环境状态和只读提取：
+初始规划代码基线为744e737，以下表格维护当前基线及后续缺口：
 
 | 已核实的现状 | 本轮需要补齐的能力 |
 | --- | --- |
 | [ScenePipeline](../../engine/render/pipeline/include/dk/render/ScenePipeline.hpp)只提供clear/exposure，depth→unlit opaque→tone→readback | 环境输入、太阳漫反射、天空/空气透视合成，保持原unlit路径 |
-| [资源描述](../../engine/graphics/device/include/dk/graphics/Resources.hpp)只有width/height；创建/视图限定2D及2D array | 原生3D image/view、体积采样及传输范围校验，不能把array_layers当连续z坐标 |
-| [深度目标](../../engine/render/pipeline/src/ScenePipeline.cpp)是D32附件，没有sampled usage | 深度只读采样、线性距离/世界射线重建及Graph屏障 |
-| [RenderView](render-data.md)包含双精度相机/投影，但没有持久环境或ViewId | 场景环境快照；稳定视图身份与显式渲染时间约定 |
+| [资源描述](../../engine/graphics/device/include/dk/graphics/Resources.hpp)在M14.2扩展原生3D image/view、RGBA16F和三轴传输 | 后续LUT选择实际设备支持的格式，不把array_layers当连续z坐标 |
+| [深度目标](../../engine/render/pipeline/src/ScenePipeline.cpp)在M14.2增加sampled usage和Graph屏障验收 | M14.5实现线性距离/世界射线重建和合成 |
+| [RenderView](render-data.md)包含双精度相机/投影和环境快照 | 稳定视图身份与显式渲染时间约定 |
 | [截图](render-capture.md)每个作业独立worker/device、输出PPM | 环境版本快照、无历史参考模式及线性HDR测试读回 |
 | [M13实验格式](../../sdk/python/decker/experiments.py)绑定XPBD/cloth | 复用SDK调用及追溯原则，另设有版本的渲染用例清单；不直接塞入布料计划 |
 

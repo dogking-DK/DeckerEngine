@@ -29,7 +29,8 @@ Error range_error() { return invalid("command range exceeds the pass declaration
 bool equal(const BufferDesc& a, const BufferDesc& b) { return a.size == b.size && a.usage == b.usage && a.memory == b.memory; }
 bool equal(const ImageDesc& a, const ImageDesc& b) {
     return a.width == b.width && a.height == b.height && a.format == b.format && a.usage == b.usage &&
-        a.mip_levels == b.mip_levels && a.array_layers == b.array_layers;
+        a.mip_levels == b.mip_levels && a.array_layers == b.array_layers && a.depth == b.depth &&
+        a.type == b.type && a.require_linear_filter == b.require_linear_filter;
 }
 ResourceUse use_for(detail::BoundResource& resource, const AccessDescription& access) {
     return {resource.buffer ? &resource.buffer : nullptr, resource.image ? &resource.image : nullptr,
@@ -133,21 +134,10 @@ Result<void> PassContext::copy_buffer(std::size_t source, std::size_t destinatio
     if (!buffer_range(source, source_offset, size) || !buffer_range(destination, destination_offset, size)) return std::unexpected(range_error());
     return batch_.copy_buffer(**src, **dst, size, source_offset, destination_offset);
 }
-namespace {
-// Match Device texel sizes so a declared buffer slice covers the actual transfer.
-Result<vk::DeviceSize> copy_bytes(const ImageCopyRegion& region, vk::Format format) {
-    const auto stride = color_texel_bytes(format);
-    const auto row = region.row_length ? region.row_length : region.width;
-    if (!stride || !region.width || !region.height || row < region.width) return std::unexpected(range_error());
-    const auto texels = vk::DeviceSize{row} * (region.height - 1) + region.width;
-    if (texels > std::numeric_limits<vk::DeviceSize>::max() / stride) return std::unexpected(range_error());
-    return texels * stride;
-}
-}
 Result<void> PassContext::copy_to_image(std::size_t source, std::size_t destination, const ImageCopyRegion& region) {
     auto src = buffer(source); if (!src) return std::unexpected(src.error());
     auto dst = image(destination); if (!dst) return std::unexpected(dst.error());
-    auto bytes = copy_bytes(region, (*dst)->description().format); if (!bytes) return std::unexpected(bytes.error());
+    auto bytes = image_copy_bytes((*dst)->description(), region); if (!bytes) return std::unexpected(bytes.error());
     if (!buffer_range(source, region.buffer_offset, *bytes) ||
         !image_range(destination, {vk::ImageAspectFlagBits::eColor, region.mip, 1, region.layer, 1})) return std::unexpected(range_error());
     return batch_.copy_to_image(**src, **dst, region);
@@ -155,7 +145,7 @@ Result<void> PassContext::copy_to_image(std::size_t source, std::size_t destinat
 Result<void> PassContext::copy_to_buffer(std::size_t source, std::size_t destination, const ImageCopyRegion& region) {
     auto src = image(source); if (!src) return std::unexpected(src.error());
     auto dst = buffer(destination); if (!dst) return std::unexpected(dst.error());
-    auto bytes = copy_bytes(region, (*src)->description().format); if (!bytes) return std::unexpected(bytes.error());
+    auto bytes = image_copy_bytes((*src)->description(), region); if (!bytes) return std::unexpected(bytes.error());
     if (!buffer_range(destination, region.buffer_offset, *bytes) ||
         !image_range(source, {vk::ImageAspectFlagBits::eColor, region.mip, 1, region.layer, 1})) return std::unexpected(range_error());
     return batch_.copy_to_buffer(**src, **dst, region);

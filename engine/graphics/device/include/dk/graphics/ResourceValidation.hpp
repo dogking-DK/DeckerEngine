@@ -4,6 +4,8 @@
 namespace dk::graphics {
 // Supported color texel byte count; zero for depth/unsupported formats.
 [[nodiscard]] std::uint32_t color_texel_bytes(vk::Format format) noexcept;
+// Validates all three axes and pitched buffer footprint; excludes buffer_offset.
+[[nodiscard]] Result<vk::DeviceSize> image_copy_bytes(const ImageDesc&, const ImageCopyRegion&);
 // Pure value validation shared by recording and graph declaration. No device access.
 struct AccessDescription {
     AccessState state{};

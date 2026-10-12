@@ -119,6 +119,14 @@ Result<void> reflect(slang::ProgramLayout* layout, CompiledShader& output)
         case slang::BindingType::Sampler: result.type = ShaderDescriptorType::sampler; break;
         default: return fail(name + ": unsupported descriptor type");
         }
+        if (result.type == ShaderDescriptorType::sampled_image || result.type == ShaderDescriptorType::storage_image) {
+            switch (leaf->getResourceShape()) {
+            case SLANG_TEXTURE_2D: result.image_shape = ShaderImageShape::image_2d; break;
+            case SLANG_TEXTURE_2D_ARRAY: result.image_shape = ShaderImageShape::image_2d_array; break;
+            case SLANG_TEXTURE_3D: result.image_shape = ShaderImageShape::image_3d; break;
+            default: return fail(name + ": unsupported image shape (expected 2D, 2D array or 3D)");
+            }
+        }
         output.bindings.push_back(std::move(result));
     }
     std::ranges::sort(output.bindings, [](const ShaderBinding& a, const ShaderBinding& b) {
@@ -297,7 +305,7 @@ Result<Vector<CompiledShader>> compile_shaders(std::span<const ShaderCompileRequ
 
 String shader_reflection_json(const CompiledShader& shader)
 {
-    nlohmann::ordered_json json{{"schema_version", 1}, {"compiler", std::string_view{shader.compiler}},
+    nlohmann::ordered_json json{{"schema_version", 2}, {"compiler", std::string_view{shader.compiler}},
         {"target", "spirv_1_5"}, {"matrix_layout", "row_major"}, {"entry", std::string_view{shader.entry}},
         {"stage", shader_stage_name(shader.stage)}, {"spirv_bytes", shader.spirv.size() * sizeof(std::uint32_t)},
         {"thread_group_size", shader.thread_group_size}, {"bindings", nlohmann::ordered_json::array()},
@@ -305,7 +313,7 @@ String shader_reflection_json(const CompiledShader& shader)
     for (const auto& binding : shader.bindings) {
         json["bindings"].push_back({{"name", std::string_view{binding.name}}, {"set", binding.set},
             {"binding", binding.binding}, {"type", shader_descriptor_name(binding.type)}, {"count", binding.count},
-            {"block_size", binding.block_size}});
+            {"block_size", binding.block_size}, {"image_shape", shader_image_shape_name(binding.image_shape)}});
     }
     for (const auto& range : shader.push_constants) {
         json["push_constants"].push_back({{"offset", range.offset}, {"size", range.size}});

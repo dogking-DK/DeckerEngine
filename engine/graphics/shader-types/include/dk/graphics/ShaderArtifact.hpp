@@ -6,6 +6,8 @@
 
 namespace dk::graphics {
 enum class ShaderStage { vertex, fragment, compute };
+enum class ShaderImageShape { none, image_2d, image_2d_array, image_3d };
+[[nodiscard]] std::string_view shader_image_shape_name(ShaderImageShape shape) noexcept;
 enum class ShaderDescriptorType { uniform_buffer, storage_buffer, sampled_image, storage_image, sampler };
 [[nodiscard]] std::string_view shader_stage_name(ShaderStage stage) noexcept;
 [[nodiscard]] std::string_view shader_descriptor_name(ShaderDescriptorType type) noexcept;
@@ -14,6 +16,7 @@ struct ShaderBinding {
     std::uint32_t set = 0, binding = 0;
     ShaderDescriptorType type = ShaderDescriptorType::storage_buffer;
     std::uint32_t count = 1, block_size = 0;
+    ShaderImageShape image_shape = ShaderImageShape::none;
 };
 struct ShaderPushConstant { std::uint32_t offset = 0, size = 0; };
 // Owned CPU artifact. No compiler session or Vulkan dependency.

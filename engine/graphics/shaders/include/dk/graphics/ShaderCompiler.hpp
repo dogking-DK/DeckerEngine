@@ -26,7 +26,7 @@ struct ShaderCompileRequest {
 // One scoped global session, fresh per-entry sessions; no partial batch is published.
 [[nodiscard]] Result<Vector<CompiledShader>> compile_shaders(std::span<const ShaderCompileRequest> requests,
     memory::ResourceHandle resource,std::stop_token cancel={});
-// Stable schema v1; excludes source/output absolute paths and diagnostic prose.
+// Stable schema v2; excludes source/output absolute paths and diagnostic prose.
 [[nodiscard]] String shader_reflection_json(const CompiledShader& shader);
 
 } // namespace dk::graphics

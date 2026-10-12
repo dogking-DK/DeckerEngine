@@ -1,7 +1,7 @@
 ---
 module: graphics-shaders
 created_at: "2026-09-28T19:00:00+08:00"
-updated_at: "2026-10-09T19:38:24+08:00"
+updated_at: "2026-10-12T16:23:00+08:00"
 status: accepted
 ---
 
@@ -76,3 +76,11 @@ compile_shaders接受一组请求，在本次调用内复用一个IGlobalSession
 取消返回invalid_state及唯一context graphics.shader.compile.cancelled，不发布半批产物；真实阶段失败优先保留。
 不承诺中断单个Slang调用。XPBD四个变体共用一次全局会话，减少重复标准库初始化的不可取消窗口。
 定向验证批量与单次产物逐字节一致、预取消无产物/无分配残留、真实任务中途取消及数值。
+
+## 纹理维度反射
+
+ShaderBinding追加ShaderImageShape：none、image_2d、image_2d_array、image_3d。
+编译器从Slang资源shape提取维度，descriptor数组与纹理数组维度分别记录；非图像为none。
+1D/cube/MSAA等当前设备层无法表达的形状明确拒绝。反射JSON schema_version升为2，每条binding包含image_shape；
+旧离线调用需重新编译产物。ShaderModule、布局合并/覆盖/兼容性与BindingSet保留该信息，拒绝维度冲突和错误view。
+这仍是结构校验，不证明用户手工修改的反射与完整SPIR-V一致。storage view只允许一个mip。

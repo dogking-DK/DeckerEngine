@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-10-12T15:10:00+08:00"
+updated_at: "2026-10-12T16:40:00+08:00"
 status: accepted
 ---
 
@@ -12,7 +12,7 @@ status: accepted
 windows-dev 当前 45 条命令；windows-graphics 另含 render.capture 和 simulation.export，共47条。以实际 `commands.list` 为准；关闭 Jobs/Importers 且不装配截图/实验导出时提供34条。
 完整字段 schema 可通过 `commands.describe` 查询。
 
-独立离线 CLI 另见 [dk-shaderc 编译参数与输出](shaderc.md)；它不属于下列 Runtime 命令集。
+独立离线 CLI 另见 [dk-shaderc 编译参数与输出](shaderc.md)（反射schema v2包含纹理维度）；它不属于下列 Runtime 命令集。
 Windows 本机调用使用 [dk-ctl / IPC 协议](ipc.md)，启动、guard 和重试示例见 [IPC 指南](../guides/ipc.md)。
 
 Luau 调用同一套场景/实体/历史服务，入口、值转换与允许命令集合见 [脚本指南](../guides/scripting.md)；不增加新的 Runtime 命令。

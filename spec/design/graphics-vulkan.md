@@ -1,7 +1,7 @@
 ---
 module: graphics-vulkan
 created_at: "2026-09-30T10:18:48+08:00"
-updated_at: "2026-10-03T16:55:00+08:00"
+updated_at: "2026-10-12T16:40:00+08:00"
 status: accepted
 ---
 
@@ -98,18 +98,18 @@ M5.5.2 首版上限为 64 页、每页 32 个同类 descriptor 数量的 set、�
 
 ### 资源范围与默认值
 
-ImageDesc 扩展为 2D/2D array、extent、mip_levels、array_layers、format、usage；首版仍 sample=1。
-ImageViewDesc 表达 aspect、mip/layer 范围与 2D/array 视图；不隐式创建全套 view。
-保留原五种 color 格式，M5.6 补充 BGRA8 sRGB，M7.2 补充 RGBA32F；另有 `D32_SFLOAT` 深度 attachment 路径；每种组合先查询 format/usage 能力，
+ImageDesc 支持 2D/2D array/3D、三轴extent、mip_levels、array_layers、format、usage，sample=1。
+ImageViewDesc 表达 aspect、mip/layer 范围与 2D/array/3D 视图；3D不支持附件或二维切片视图。
+保留原五种 color 格式，M5.6 补充 BGRA8 sRGB，M7.2 补充 RGBA32F，M14.2 补充 RGBA16F；另有 `D32_SFLOAT` 深度 attachment 路径；每种组合先查询 format/usage 能力，
 不因为枚举合法就假定硬件支持。color 传输按每个 mip 的 extent 和数据步长检查；深度读回另列为暂缓。
 
 SamplerDesc 明确 filter、address mode、LOD 范围，默认关闭 anisotropy/compare；
 首版拒绝需要额外 feature 的设置，不悄悄改变 Device 的 feature 启用集合。
-不支持的 3D/cube、压缩格式、stencil、MSAA/resolve 明确返回 not_supported，之后按真实用例扩展。
+不支持的 1D/cube、压缩格式、stencil、MSAA/resolve 明确返回 not_supported，之后按真实用例扩展。
 
 ### 布局、管线与绑定
 
-布局按 `(set, binding)` 合并 shader 反射：type/count 必须相容，stage flags 求并集；
+布局按 `(set, binding)` 合并 shader 反射：type/count/image_shape 必须相容，stage flags 求并集；
 uniform block 大小形成绑定范围的下限要求，不参与伪造 Vulkan 布局兼容性。
 固定数组与多个 set 纳入首版，set 编号空洞用空 layout 占位；限制来自设备 limits。
 push ranges 先为每个 shader stage 求一个覆盖所需字节的合法、4 字节对齐范围，再将完全相同范围合并 stages；
