@@ -294,6 +294,14 @@ if(WIN32 AND TARGET dk_automation_server)
     catch_discover_tests(dk_ipc_tests TEST_PREFIX "dk.ipc." PROPERTIES TIMEOUT 30)
 endif()
 
+if(TARGET dk_render_atmosphere_reference)
+    add_executable(dk_atmosphere_tests AtmosphereTests.cpp)
+    target_link_libraries(dk_atmosphere_tests PRIVATE dk::render_atmosphere_reference Catch2::Catch2WithMain)
+    dk_target_defaults(dk_atmosphere_tests)
+    catch_discover_tests(dk_atmosphere_tests TEST_PREFIX "dk.atmosphere."
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 120 LABELS "cpu")
+endif()
+
 if(TARGET dk_editor_model)
     add_executable(dk_editor_tests EditorTests.cpp)
     target_link_libraries(dk_editor_tests PRIVATE dk::editor_model Catch2::Catch2WithMain)

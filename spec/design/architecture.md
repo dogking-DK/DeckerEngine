@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-12T15:10:00+08:00"
+updated_at: "2026-10-12T17:49:35+08:00"
 status: accepted
 ---
 
@@ -55,7 +55,7 @@ render/pipeline 通过 Graph 执行 depth/opaque/tone/readback，提供绑定场
 | engine/assets | 资产类型、运行时、导入器 | 与设备资源和图资源分离 |
 | engine/scene | 组件、层级、序列化、迁移 | 基础层与资产引用，不持有 Vulkan 资源 |
 | engine/graphics | device、shaders、offscreen、presentation、graph 声明/编译/执行 | 离屏底座不依赖场景，正式业务后续统一进入 Graph |
-| engine/render | 已实现只读数据/视图、GPU 资产缓存、最小离屏管线、磁盘输入、模拟布片绘制 | data 依赖 Scene/Memory；resources 依赖 asset_data/Device/Graph；pipeline 依赖前两者、Graph/Shaders；disk 组合 Scene/资产导入和 runtime，不依赖 Framework/Editor；simulation 依赖 GPU Physics/Shaders |
+| engine/render | 已实现只读数据/视图、GPU 资产缓存、最小离屏管线、磁盘输入、模拟布片绘制、独立大气天空 | data 依赖 Scene/Memory；resources 依赖 asset_data/Device/Graph；pipeline 依赖前两者、Graph/Shaders；disk 组合 Scene/资产导入和 runtime，不依赖 Framework/Editor；simulation 依赖 GPU Physics/Shaders；atmosphere 的CPU reference依赖Scene/Math、GPU依赖Graph/Shaders |
 | engine/physics | 固定步长API、CPU/GPU XPBD距离约束与布片 | CPU只依赖Core；可选GPU依赖Graph/Shaders |
 | engine/framework | commands、services、operations、runtime | 应用服务与模块装配；通用命令层保持独立 |
 | engine/automation | 协议、传输、客户端、服务端 | 客户端不链接完整 Runtime/Renderer |
@@ -73,12 +73,12 @@ automation/server 装配 Runtime 适配、stdio 和 IPC owner 队列，runner/ed
 
 ## 大气与体积云扩展规划
 
-[大气](render-atmosphere.md)已定义CPU环境模型、场景v2迁移和命令；大气GPU与[体积云](render-clouds.md)模块仍属规划，尚无对应GPU实现或构建选项。
+[大气](render-atmosphere.md)提供CPU环境模型、场景v2迁移和命令，以及独立的双精度积分参考、GPU T/MS/Sky LUT和离屏天空。DK_BUILD_RENDER_ATMOSPHERE默认OFF，在windows-graphics开启；[体积云](render-clouds.md)仍属规划。
 Scene保存纯CPU环境描述，Services/Operations负责校验、事务与持久化；render/data从不可变快照提取。
-拟新增render/atmosphere和render/clouds负责LUT、云场和介质积分，render/pipeline经同一Graph编排
+render/atmosphere目前独立调用Graph并发布不可变LUT快照；后续新增render/clouds负责云场，render/pipeline经同一Graph编排
 几何、最小太阳漫反射、天空/介质与tone。依赖方向保持Render→Scene/Graphics，不能反向依赖Framework。
-物理LUT按内容缓存，视图LUT和云历史按稳定ViewId隔离；GPU资源、在途代次与历史都不进入Scene。
-拟议模块使用独立可选target，CPU-only仍可编辑/保存环境，不隐含GPU加载。
+物理LUT按内容缓存，当前Sky按高度和局部太阳角更新；后续视图LUT和云历史按稳定ViewId隔离。GPU资源、在途代次与历史都不进入Scene。
+模块使用独立可选target，CPU-only仍可编辑/保存环境，不隐含GPU加载。
 
 首轮接入普通场景视口和render.capture；独立布料RenderSimulation视口的环境集成另行规划。
 云风场采用显式时间驱动的程序化输入，不耦合XPBD或新增天气流体求解器。

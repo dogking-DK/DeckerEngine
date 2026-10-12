@@ -1,4 +1,7 @@
 set(CMAKE_FOLDER "${CMAKE_FOLDER}/Render")
+if(DK_BUILD_RENDER_ATMOSPHERE)
+    add_subdirectory(atmosphere)
+endif()
 if(DK_BUILD_RENDER_DATA)
     add_subdirectory(data)
 endif()

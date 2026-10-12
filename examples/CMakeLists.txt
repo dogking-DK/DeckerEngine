@@ -18,3 +18,7 @@ endif()
 if(DK_BUILD_RENDER_DISK AND DK_BUILD_RENDER_PIPELINE)
     add_subdirectory(render)
 endif()
+
+if(TARGET dk_render_atmosphere)
+    add_subdirectory(atmosphere)
+endif()

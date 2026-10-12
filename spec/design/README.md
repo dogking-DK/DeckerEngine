@@ -2,7 +2,7 @@
 
 | 模块 | 文档 | 状态 | 范围 | 源码入口 | 测试入口 |
 | --- | --- | --- | --- | --- | --- |
-| render-atmosphere | [大气渲染](render-atmosphere.md) | accepted | CPU环境/持久化/命令、Graphics体积/深度底座；LUT、日光与空气透视仍规划 | [Scene](../../engine/scene)、[Render](../../engine/render)、[Graphics](../../engine/graphics) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
+| render-atmosphere | [大气渲染](render-atmosphere.md) | accepted | CPU环境/积分参考、T/MS/Sky LUT、缓存与离屏天空；日光接收和空气透视仍规划 | [Scene](../../engine/scene)、[Render](../../engine/render)、[Graphics](../../engine/graphics) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | render-clouds | [体积云规划](render-clouds.md) | draft | 拟议程序化云场、介质合成、时域历史与云影；尚未实现 | 拟新增模块，现有接入：[Render](../../engine/render) | 待新增用例：[单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | experiment-management | [实验管理](experiment-management.md) | accepted | 参数展开/预算、恢复/重试、产物核验与数值对比报告 | [SDK](../../sdk/python) | [集成](../../tests/integration/CMakeLists.txt) |
 | physics-xpbd-gpu | [GPU XPBD](physics-xpbd-gpu.md) | accepted | 分色求解、候选状态、异步输出与命令接入 | [Physics](../../engine/physics) | [集成](../../tests/integration/CMakeLists.txt) |

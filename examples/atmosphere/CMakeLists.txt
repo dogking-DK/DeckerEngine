@@ -1,0 +1,6 @@
+add_executable(dk_atmosphere_demo src/main.cpp)
+set_target_properties(dk_atmosphere_demo PROPERTIES OUTPUT_NAME dk-atmosphere-demo)
+target_link_libraries(dk_atmosphere_demo PRIVATE dk::render_atmosphere dk::io)
+target_compile_definitions(dk_atmosphere_demo PRIVATE DK_ATMOSPHERE_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/atmosphere/shaders")
+dk_target_defaults(dk_atmosphere_demo)
+dk_deploy_slang(dk_atmosphere_demo)

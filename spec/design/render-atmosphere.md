@@ -1,7 +1,7 @@
 ---
 module: render-atmosphere
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-12T16:40:00+08:00"
+updated_at: "2026-10-12T17:49:35+08:00"
 status: accepted
 ---
 
@@ -9,7 +9,7 @@ status: accepted
 
 ## 目标与当前基线
 
-CPU环境模型、持久化与命令已接入；Graphics现支持3D资源与深度采样，后续大气算法章节仍是规划。阶段、顺序与验收状态统一维护在
+CPU环境模型、持久化与命令已接入；Graphics支持3D资源与深度采样，独立大气模块提供CPU参考、T/MS/Sky LUT和离屏天空。日光接收、空气透视与场景视口集成仍规划。阶段、顺序与验收状态统一维护在
 [Roadmap](../roadmap.md)；各后续小阶段开工时再细化具体接口。
 
 默认面向Windows x64、Vulkan/Slang、地球尺度的地表至高空实时观察；支持昼间、日出/日落、
@@ -42,19 +42,19 @@ Sky View只用于天空，Aerial Perspective保存视锥中的散射和透射；
 Bruneton实现的量纲检查、CPU参考及自动测试作为验证方法参考，不把两种多次散射近似强行要求逐像素相等。
 依据：[Bruneton作者文档](https://ebruneton.github.io/precomputed_atmospheric_scattering/)。
 
-## 模块边界与拟议接口
+## 模块边界与接口
 
-Scene与render/data的CPU契约见M14.1；下表新增GPU模块名称为计划，尚无对应target或能力开关。
+Scene与render/data的CPU契约见M14.1；M14.3独立模块的公开入口为[Atmosphere.hpp](../../engine/render/atmosphere/include/dk/render/Atmosphere.hpp)与[CPU参考](../../engine/render/atmosphere/include/dk/render/AtmosphereReference.hpp)。
 
 | 位置 | 职责和依赖 |
 | --- | --- |
 | 现有Scene/Services/Operations | CPU环境值类型、校验、持久化、guard/事务/撤销；不依赖Render或Vulkan |
 | 现有render/data | 从SceneSnapshot提取只读环境；相机、尺寸、ViewId和显式时间为逐帧输入 |
-| 拟新增engine/render/atmosphere，dk_render_atmosphere / dk::render_atmosphere | 大气参数到LUT/天空/区间散射，依赖render_data、graphics_graph、graphics_shaders、Memory/Profiling；不依赖Framework/Editor |
-| 现有render/pipeline | 编排大气、几何与tone；同图传递资源，Render模块不调用裸Vulkan |
+| engine/render/atmosphere，dk_render_atmosphere / dk::render_atmosphere | 参数到T/MS/Sky LUT和离屏天空；PUBLIC reference/Graph，PRIVATE Shaders/Profiling；reference仅依赖Scene/Math，不依赖Framework/Editor；区间散射留到M14.5 |
+| 现有render/pipeline | 当前depth/unlit/tone；M14.4/M14.5再编排大气与几何，同图传递资源，Render模块不调用裸Vulkan |
 | 现有render services / editor | 装配、截图任务及界面；通过统一命令改环境，不能持有可变GPU缓存作为场景状态 |
 
-拟用DK_BUILD_RENDER_ATMOSPHERE隔离GPU模块，默认OFF；启用时明确检查target依赖。
+DK_BUILD_RENDER_ATMOSPHERE隔离大气模块，默认OFF、windows-graphics开启；启用时明确检查target依赖。
 CPU-only仍能读取、保存和修改环境描述，渲染能力未编译/设备不支持时明确报告不可用。
 不新增三方依赖；若实际移植外部代码/素材，另行记录版本、许可和来源，不能将参考链接当作已引入依赖。
 
@@ -103,7 +103,7 @@ Rayleigh散射即消光；Mie散射与消光RGB分别保存，逐通道0≤scatt
 角半径在[1e-6,0.1]rad；RGB irradiance在[0,1e6]，是线性sRGB/D65通道中的场景归一化法向辐照度，
 不是lux或未经光谱转换的W/m²。白色默认E=(1,1,1)，Lambert正入射输出为albedo*E/pi，
 均匀太阳盘radiance=E/(pi*sin(angular_radius_rad)^2)，与材质emissive共享曝光前线性辐亮度标度。
-曝光不持久化到环境。本阶段以解析测试冻结换算，未实现积分、太阳盘或Lambert绘制。
+曝光不持久化到环境。M14.1以解析测试冻结换算，M14.3实现积分和太阳盘；Lambert绘制留到M14.4。
 
 DeckerScene写version=2并要求environment={version:1,enabled,atmosphere,sun}；所有子字段必填，
 未知字段/版本、重复键、非法参数拒绝。读v1严格维持旧字段集合并补默认disabled；Project仍v1。
@@ -120,13 +120,13 @@ DeckerScene写version=2并要求environment={version:1,enabled,atmosphere,sun}�
 
 ## LUT、管线与最小光照
 
-初始资源预算候选如下，尺寸和精度必须由参考误差/硬件能力共同验证，不作为既有格式支持声明：
+M14.3固定RGBA32F以建立数值基线，后续AP仍为候选；尺寸/精度变更须重新验证误差和能力：
 
-| 资源 | 初始候选 | 失效输入 |
+| 资源 | 当前实现或后续候选 | 失效输入 |
 | --- | --- | --- |
-| Transmittance | 256×64，RGB透射，候选RGBA16F | 大气物理参数、行星半径/高度、算法/精度版本 |
-| Multiple Scattering | 32×32，候选RGBA16F | 前项、地面反照率；选择太阳能量是否归一化后完整纳入key |
-| Sky View | 192×108，候选RGBA16F | 物理代次、观测高度、太阳方向/能量、该实现使用的视图映射 |
+| Transmittance | 256×64，RGB透射，RGBA32F | 大气物理参数、行星半径/高度、算法/精度版本 |
+| Multiple Scattering | 32×32，RGBA32F | 前项、Mie散射、地面反照率；单位太阳能量响应 |
+| Sky View | 192×108，RGBA32F | MS内容、Mie g、观测高度、太阳局部天顶余弦、MS开关 |
 | Aerial Perspective | 32×32×32，两张候选RGBA16F保存RGB L与RGB T | 前项、相机/投影、积分距离、质量档 |
 
 不能把RGB透射无说明压成alpha单值。设备不支持所需storage/sampling/filter格式时明确拒绝，
@@ -143,7 +143,7 @@ depth=1背景按天空射线处理，几何按重建的实际距离应用`L_out 
 
 ## 缓存、提交点与失败
 
-renderer实例拥有大气缓存；物理LUT可在同设备/队列内共享，视图LUT按ViewId隔离。
+renderer实例拥有最近一组大气缓存；不可变快照可在同队列内共享物理/视图LUT。M14.3使用显式位置和太阳角度区分视图，后续场景集成再引入ViewId管理。
 key必须覆盖实际被shader读取的参数、格式/尺寸和shader版本；曝光不改变物理LUT，
 太阳移动不应无条件重建与其无关的透射表。不能凭scene revision一次性清空所有共享表。
 
@@ -164,10 +164,10 @@ GPU失败、取消、IO发布失败沿用现有capture保留旧文件的约定�
 透射率应在[0,1]，零消光返回T=1/L=0，单段拆分合成与整段参考一致，所有输出有限。
 后续自动化启动dk-editor使用`--background`，普通交互启动保持常规窗口行为。
 
-建议首轮数值门槛：透射绝对误差≤2e-3；固定测试集的线性RGB归一化RMSE≤3%、p99归一化绝对误差≤8%。
+M14.3固定数值门槛：透射绝对误差≤2e-3；固定测试集的线性RGB归一化RMSE≤3%、p99归一化绝对误差≤8%。
 归一化尺度使用参考图RGB亮度p95与固定1e-3下限的较大者，不用测试图自身数值；
 太阳盘/地平线单列最大误差与边界连续性，不从总图平均中隐藏。多次散射近似偏差与离散/插值误差分别记录。
-这些为待参考路径建立后冻结的验收候选值；不得以“看起来正确”替代量化或事后悄悄放宽。
+这些门槛在本次实现前冻结；不得以“看起来正确”替代量化或事后悄悄放宽。
 
 性能候选目标为1080p质量档下大气增量GPU p95≤1.5ms，含每帧Sky/AP更新及合成，
 不把仅物理参数变化时的LUT重建藏入稳态；冷编译/重建、CPU建图/提交、GPU区间、端到端和显存分别报告。
@@ -178,3 +178,53 @@ GPU失败、取消、IO发布失败沿用现有capture保留旧文件的约定�
 [架构](architecture.md)、[管线](render-pipeline.md)、[Graph](graphics-graph.md)、
 [资源](graphics-resources.md)、[Scene](scene.md)、[GPU观测](foundation-profiling.md)、
 [体积云](render-clouds.md)、[0093规划记录](../development/0093-atmosphere-cloud-plan.md)。
+
+## M14.3 积分、LUT与离屏天空实施契约
+
+新增engine/render/atmosphere，DK_BUILD_RENDER_ATMOSPHERE默认OFF，windows-graphics开启。
+CPU参考独立静态target dk::render_atmosphere_reference，仅依赖Scene/Math；GPU target dk::render_atmosphere
+PUBLIC引用参考和Graphics Graph（经Graph公开Memory），PRIVATE引用Shaders/Profiling，不接Framework、Editor或ScenePipeline。
+不复制上游源码；依据上述论文与公开数学公式独立实现，不新增三方依赖。
+
+### 数值与采样
+
+CPU参考使用double米制，世界位置复用Scene的±1e9m边界，直接高度入口上限4e9m；独立高采样直接积分太阳光程（不查LUT）；返回RGB L/T、光程和行星命中标记。
+球面求交使用factored平方差；分段中点密度与解析常系数Beer积分，零消光使用ds极限。
+Rayleigh相函数3(1+c²)/(16π)，Mie采用归一化Henyey–Greenstein，c=dot(view_direction,sun_direction)，朝太阳为正前向峰。
+地面遮挡截断光程，太阳光程穿地则为0；顶外先求大气入口，未相交为真空。太阳盘单独解析评估E/(πsin²α)，不烘入Sky View；GPU使用局部太阳向量与弦长判定边界，避免小角半径的cos舍入为1；盘辐亮度因子和弦长阈值在CPU以double预计算，避免GPU小角sin的相对误差。
+CPU还提供各向同性多次散射闭合参考：球面均匀方向积分平均L和散射反馈F，Psi=L/(1-F)。
+地表项仅包含直射Lambert一次反弹，不宣称完整地表/大气全阶传输或路径追踪真值。
+
+GPU内部km和km^-1；上传独立高度/半径，沿射线高度用有理化半径增量计算，避免地球尺度float位置相减。
+首版明确支持地面半径[100km,100000km]、大气厚度[1km,0.1R]、密度尺度≥100m、相机高度[0,2H]；
+M14.1更宽的持久参数范围保持不变，不支持的渲染范围明确拒绝。高光学厚度或闭合不收敛时拒绝候选，不隐藏NaN/改用旧参数。
+
+固定算法版本1/质量档：RGBA32F，Transmittance 256×64（512段），MS 32×32（1024方向×64段），
+Sky View 192×108（128段）。T使用球面距离/径向光程参数映射；MS使用太阳天顶余弦和平方高度映射；
+Sky使用相对太阳方位角、地平线上下分区的平方仰角映射，分区之间不插值。所有LUT保存单位太阳RGB辐照度响应。
+Sky View内不含太阳盘，不含地表可见表面反射；向地面的射线只积分到地面，场景表面留到M14.4/M14.5。
+MS在天空积分中作为各向同性源sigma_scattering*Psi。参考模式使用512视线段和512太阳光程段直接积分，
+不依赖T/Sky低分辨率插值；MS近似误差通过独立CPU闭合参考单列，不把它当作全阶物理真值。
+
+### 缓存和提交
+
+AtmosphereRenderer::prepare为明确同步的冷/变更更新入口，内部以Graph提交并等待候选完成，再检查有限值/范围及MS反馈<1，最后无分配发布。
+只缓存最近一组物理/视图LUT，内部最多一组候选；不做后台队列或多ViewId管理。外部不可变AtmosphereSky可保留旧代；显存受调用者Memory预算、队列槽和持有快照数约束。
+T key仅包含消光密度/半径/厚度及固定算法格式；MS key额外包含Mie散射和ground_albedo；Sky key额外包含Mie g、相机高度、太阳对局部up的余弦和MS开关。
+太阳能量/角半径、相机朝向、输出尺寸和曝光均不使LUT失效；位置改变只在高度/up-relative太阳角变化时重建Sky。
+新代资源独立分配，不覆盖旧代纹理；创建、记录、submit、wait、数值校验或Memory失败均保留旧缓存/计数。
+失败提交后的资源由现有队列生命周期管理；禁止把未完成候选标为ready。跨队列和关闭域调用明确拒绝。
+
+render_sky提交独立Graph离屏帧，返回拥有型线性RGBA32F和readback，完成票据与读取状态显式；
+准备快照的环境/位置固定，透视相机forward/up/FOV、尺寸、MS/reference模式在公开接口中有边界检查；普通输出每轴上限4096，昂贵的reference模式最多4096像素。
+太阳盘在该帧上按ray/planet遮挡及T添加；只有样例输出PPM时执行曝光/Reinhard/sRGB，CPU参考及HDR读回不tone。
+API的readonly LUT诊断数据支持本阶段定量比较；不把快照缓存写入场景，不改变默认unlit管线。
+
+### 独立验收
+
+CPU：真空T=1/L=0、纯吸收解析、有限能量、单段拆分合成、相函数积分、米级高度/地平线/顶外/地下拒绝。
+GPU：与高采样参考比较正午、低太阳、日落后、1m/10km/100km/顶外、切线/反太阳，T绝对误差≤2e-3；
+单散射及完整天空归一化RMSE≤3%、p99≤8%（尺度=max参考RGB亮度p95,1e-3)；太阳盘和地平线边界另列，不纳入平均掩盖。
+MS用选定点同一闭合的高采样CPU参考比较，记录积分误差与近似模型限制。若候选分辨率未达门槛，先提高采样/分辨率并记录成本，不放宽门槛。
+缓存测试分别改变物理参数/散射/反照率/g/太阳/相机/尺寸，检查代次和旧输出；注入创建/submit/预算失败验证保留旧代。
+required GPU validation覆盖Graph与在途销毁。离屏样例输出正午/日落/高空PPM和线性数值测试证据；性能承诺留到M14.7。
