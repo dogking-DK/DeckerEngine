@@ -11,6 +11,8 @@ import platform
 import tempfile
 from uuid import UUID, uuid4
 
+from ._experiment_lock import snapshot_access
+
 from .experiments import (ExperimentError, INDEX_LIMIT, canonical, clone_json, decode_json,
                           expand_plan, finite, integer, keys, normalize_config, read_json,
                           require, topology)
@@ -93,7 +95,7 @@ def _root(directory):
     return path
 
 
-def _inside(root, name):
+def _relative_parts(name):
     require(type(name) is str and name and "\\" not in name
             and all(c not in name for c in ':\0<>"|?*') and not any(ord(c) < 32 for c in name),
             "Expected normalized relative path")
@@ -104,6 +106,11 @@ def _inside(root, name):
         stem = part.split(".")[0].casefold()
         require(stem not in {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)),
                              *(f"lpt{i}" for i in range(1, 10))}, "Reserved path component")
+    return parts
+
+
+def _inside(root, name):
+    parts = _relative_parts(name)
     path = root
     for part in parts:
         path = path / part
@@ -115,10 +122,19 @@ def _inside(root, name):
 def _read_file(path, limit):
     _no_link(path)
     require(path.is_file(), "Artifact must be a regular file")
-    with path.open("rb") as stream:
+    with _open_read(path) as stream:
         data = stream.read(limit + 1)
     require(len(data) <= limit, "File exceeds byte limit")
     return data
+
+
+@contextmanager
+def _open_read(path):
+    # On Windows, os.replace cannot replace an open destination reliably, even
+    # with FILE_SHARE_DELETE. Keep the open/read/close and final rename disjoint.
+    with snapshot_access(path):
+        with path.open("rb") as stream:
+            yield stream
 
 
 def _inspect(root, entry, directory, expected_run_id):
@@ -236,7 +252,7 @@ def verify_index(directory):
         return _verify(_root(directory))
 
 
-def _publish(root, value):
+def _publish(root, value, filename="index.json"):
     data = canonical(clone_json(value)) + b"\n"
     require(len(data) <= INDEX_LIMIT, "Index exceeds 32 MiB")
     descriptor, name = tempfile.mkstemp(prefix=".index-", suffix=".tmp", dir=root)
@@ -245,7 +261,8 @@ def _publish(root, value):
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(name, root / "index.json")
+        with snapshot_access(root / filename):
+            os.replace(name, root / filename)
     finally:
         if os.path.exists(name):
             os.unlink(name)

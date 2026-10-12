@@ -1,12 +1,12 @@
 ---
 created_at: "2026-10-10T16:18:00+08:00"
-updated_at: "2026-10-10T16:18:00+08:00"
+updated_at: "2026-10-12T10:00:00+08:00"
 ---
 
-# 实验计划与产物索引
+# 实验批处理、计划与产物索引
 
-[返回项目入口](../../README.md)。Python 3.11+ 标准库模块提供执行前计划展开与本地产物核验。
-本页的命令只准备/检查索引；批量启动、恢复和报告按[Roadmap](../roadmap.md)后续阶段交付。
+[返回项目入口](../../README.md)。Python 3.11+ 标准库模块提供计划展开、串行批量执行、进度与本地产物核验。
+批处理连接已有 Windows runner/editor；恢复、重试和对比报告按[Roadmap](../roadmap.md)后续阶段交付。
 单次实验仍使用[模拟指南](simulation.md)的命令和配置，M9 [记录/重放](replay.md)保持独立。
 
 ## 准备计划
@@ -46,6 +46,82 @@ cloth 支持 columns/rows/spacing/height/particle_mass/compliance/iterations/gra
 它用于拒绝超量工作，不预测耗时，也不包括初始化、绘图或 IO 成本。无宿主时可离线展开 GPU 计划；
 是否具备求解/导出能力仍须在实际调用前检查 runtime.capabilities。
 
+## 一次运行整个计划
+
+以下 CPU-only 示例从仓库根开始，使用[构建指南](build.md)的 windows-scripting 构建。
+先在第一个终端创建新工程目录、启动宿主；保留输出的绝对路径：
+
+```powershell
+cmake --build out/build/windows-scripting --config Debug --target dk_run dk_ctl
+$root = Join-Path $PWD ('out/experiment-demo-' + [guid]::NewGuid().ToString('N').Substring(0,12))
+New-Item -ItemType Directory -Path $root | Out-Null
+Write-Output $root
+./out/build/windows-scripting/bin/Debug/dk-run.exe --project-root $root --pipe experiment-demo
+```
+
+第二个终端仍在仓库根，将 `$root` 设为上面输出的路径，然后创建场景并启动一次批处理：
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path sdk/python).Path
+$ctl = (Resolve-Path out/build/windows-scripting/bin/Debug/dk-ctl.exe).Path
+$runner = (Resolve-Path out/build/windows-scripting/bin/Debug/dk-run.exe).Path
+python -c "from decker import Client; import sys; Client('experiment-demo', sys.argv[1]).call('scene.new', {'name':'Cloth sweep'})" $ctl
+python -m decker.experiment_batch run examples/automation/cloth-plan.json --pipe experiment-demo --ctl $ctl --runner $runner --project-root $root --output batch-001
+python -m decker.experiment_batch status "$root/batch-001"
+python -m decker.experiment_index "$root/batch-001"
+```
+
+已有场景可直接运行，省略 scene.new。执行器固定开始时的场景身份与版本，保留 Edit 和撤销历史；
+每项产物登记且 Stop 确认回到 edit 后才开始下一项。运行期间应独占模拟控制，避免 GUI/其他脚本编辑或切换模拟。
+同一 Runtime 的合作批处理进程互斥，即使输出目录不同也不能并行运行。
+批次结束后宿主仍运行，用户可继续使用；需要退出时显式调用 runtime.shutdown。
+
+`--project-root` 必须与宿主工程根一致，`--output` 是其下的新相对目录，父目录须存在。
+不能把上节已准备的索引目录传给 run；本阶段每次运行创建完整的新批次。
+计划/预算/能力/空闲状态预检失败时不创建输出或启动模拟。`--runner` 可选，用于记录实际宿主二进制摘要。
+默认每次调用最多60秒，每项实验最多600秒；可用 `--call-timeout`、`--experiment-timeout`、
+`--poll-interval` 调整。总期限覆盖初始化、运行、收集和Stop，文件IO/进程回收不提供硬实时保证。
+
+CPU-only 的 image=false 自动生成 config.json、metrics.json、particles.json、provenance.json。
+GPU求解或图像输出须使用具备相应能力的图形构建；将计划 solvers 设为
+`["xpbd_cpu", "xpbd_gpu"]` 可逐项对照，image=true 额外生成 image.ppm。
+同步提高 budget 以容纳增加的组合。图像导出复用 simulation.export；不为缺失GPU能力静默降级。
+0拍实验只等待初始化并采集初态；正步数等待完成计数精确达到目标，不以提交计数代替完成。
+
+## 进度与失败结果
+
+运行时 stderr 每行输出一个 JSON 进度事件，含各状态计数、目标/已完成总拍数与当前项；
+stdout 输出最终批次摘要。退出码0表示全部成功，1表示批次执行中停止，2表示预检/用法/状态核验失败。
+`status` 无需连接宿主，可在运行中读取；它输出当前持久化快照并核验已登记产物，不轮询引擎。
+完整目录包括：
+
+- `batch.json`：批次/session/场景身份、每项状态与步数、run_id、受理票据/TaskId、产物attempt_id及错误。
+- `index.json`：原计划、完整配置、环境和已登记文件摘要。
+- `results/<experiment_id>/`：各项独立产物。
+
+项依次经历 pending、submitting、running、collecting、stopping、succeeded；批次顶层保持running直到结束。
+明确失败或取消分别记failed/cancelled，超时、结果未确认或Ctrl+C记unknown；后续项保持pending。
+不会自动取消/Stop已接受的任务、重发命令或覆盖已有产物。先用保存的session、票据、run_id
+检查宿主状态，再决定后续操作；不要把unknown当作未执行。磁盘故障或强杀可留下非终态快照，
+也可能已有有效产物但批次尚未确认成功。index的verified只证明文件/来源一致。
+
+Python API复用已有Client：
+
+```python
+from decker.experiments import read_json
+from decker.experiment_batch import run_plan, read_progress, ExperimentBatchError
+
+try:
+    report = run_plan(client, read_json("examples/automation/cloth-plan.json"),
+                      project_root=root, output="batch-002", progress=print)
+except ExperimentBatchError as error:
+    print(error.progress, error.cause, error.recording_error)
+saved = read_progress(root / "batch-002")
+```
+
+progress回调收到已落盘的独立快照，回调异常会停止调度。写进度本身失败时，异常的recording_error
+说明记录失败，磁盘上保留最近成功快照；异常中的progress可能比磁盘新。API不负责创建场景或启停宿主。
+
 ## 登记已有产物
 
 图像实验应设置 output.image=true，并按完整 config 运行到指定拍数。使用 simulation.export
@@ -70,14 +146,14 @@ verified = verify_index(root)
 create_index(root, plan, execution_environment=observed) 可在准备阶段保存已观察的宿主信息；
 默认只记本机 Python/OS，runtime、executable、device 为 null。environment 的 device 可传入调用方
 已核实的设备/驱动对象，不会凭空推断 GPU。每次登记单独记录环境、attempt_id 和时间。
-SDK 的稳定入口位于 `decker.experiments` 与 `decker.experiment_index`，不改变 Client.call。
+手工准备/登记入口位于 `decker.experiments` 与 `decker.experiment_index`，不改变 Client.call。
 
 image=true 要求目录恰有 config.json、metrics.json、particles.json、image.ppm、provenance.json。
 image=false 要求前述文件去掉 image.ppm；CPU-only 无需创建 Vulkan 设备。
 数值目录使用相同 DeckerSimulationExperiment v1 配置、完整采样指标、粒子数组和 provenance 字段，
 provenance.files 为 config.json/metrics.json/particles.json。来源包含 run_id、document_id、scene_id、revision、
-steps、simulated_time_ns、width、height、performance（无批次观测时 null）。本阶段可登记/核验此格式；
-数值自动收集与运行器尚未提供，真实命令查询的测试示例见[验收夹具](../../tests/integration/ExperimentIndexTest.py)。
+steps、simulated_time_ns、width、height、performance（无批次观测时 null）。批处理自动收集此格式；
+单独登记现有查询结果的测试示例见[验收夹具](../../tests/integration/ExperimentIndexTest.py)。
 
 登记核对完整配置、seed/后端/固定步数、预期 run_id、来源身份、数值长度/范围和图像格式；
 保存文件相对路径、大小、SHA256。再次 verify 会重新展开计划、重读全部登记文件；缺失、字节变化、
@@ -92,7 +168,8 @@ index.json；重复目录、错误产物、写入失败都保留旧索引。一�
 每份产物最大 16 MiB，索引最大 32 MiB，单实验最多 128 次登记。拒绝越界、链接/reparse point 和缓存路径。
 不承诺断电持久性、恶意并发路径替换隔离或对整套伪造证据的真实性认证。
 
-定向验收使用 `scripts/verify.ps1`，CPU-only 筛选 `^dk\.experiments\.(unit|index_cpu)$`，
-图形配置筛选 `^dk\.experiments\.index_gpu$`，目标均为 dk_run、dk_ctl。
-GPU 设备不可用以77跳过，其他失败不转为跳过。设计与实际证据见
-[实验管理](../design/experiment-management.md)、[0089](../development/0089-experiment-plan-index.md)。
+定向验收使用 `scripts/verify.ps1`，CPU-only 批处理筛选 `^dk\.experiments\.(unit|batch_unit|batch_cpu)$`，
+图形批处理筛选 `^dk\.experiments\.batch_gpu$`，目标均为 dk_run、dk_ctl。
+批处理GPU用例要求可用设备，不把跳过当作验收通过。原独立索引用例为index_cpu/index_gpu。
+设计与实际证据见[实验管理](../design/experiment-management.md)、
+[0089](../development/0089-experiment-plan-index.md)、[0090](../development/0090-experiment-batch.md)。

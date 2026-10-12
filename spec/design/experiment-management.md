@@ -1,18 +1,19 @@
 ---
 module: experiment-management
 created_at: "2026-10-10T16:08:00+08:00"
-updated_at: "2026-10-10T16:19:00+08:00"
+updated_at: "2026-10-12T10:00:00+08:00"
 status: accepted
 ---
 
-# 实验计划与产物索引
+# 实验管理
 
 ## 目标与边界
 
 M13.1 在 Python 标准库 SDK 中增加离线计划展开和本地产物核验。入口为
 `decker.experiments`（计划）与 `decker.experiment_index`（索引），不创建 Runtime、
-不调度模拟、不修改 C++ 命令及 M9 Recorder 格式，不增加依赖。
-M13.2 再接串行执行器，M13.3 再接任务恢复，M13.4 再接比较报告。
+不修改 C++ 命令及 M9 Recorder 格式，不增加依赖。
+M13.2 的 `decker.experiment_batch` 通过现有 Client/有限任务实现串行执行与进度；
+不创建/关闭宿主或编辑场景。M13.3 再接任务恢复，M13.4 再接比较报告。
 
 ## 计划格式与稳定身份
 
@@ -52,7 +53,7 @@ experiment_id 为完整单次 config 与 output 的 SHA256，独立于计划位�
 
 登记要求产物位于索引根内的新目录；支持现有五文件 simulation.export，也支持同结构的
 四文件数值产物（config/metrics/particles/provenance）。数值产物的 provenance.files 不含 image，
-配置仍保留固定视图用于未来对照；本阶段定义/核验该格式，不新增数值执行器。
+配置仍保留固定视图用于未来对照；M13.2 执行器通过 sample/particles 自动收集该格式。
 调用者提供 expected_run_id，核对 config、run_id、步数、整数时间、来源 UUID/revision、
 粒子/约束计数、完整粒子数组、有限指标、图像尺寸/完整长度及文件集合。
 首次收集保存摘要，重新 verify 必须重新读取文件并比对，能发现缺失/篡改/交换来源。
@@ -67,8 +68,8 @@ experiment_id 为完整单次 config 与 output 的 SHA256，独立于计划位�
 最后 os.replace 为唯一索引提交点；失败保留旧索引和全部产物，清理本次临时文件/锁。
 崩溃可遗留锁，先人工核实没有写者再移除；不宣称断电原子性、敌对文件系统隔离或多机并发安全。
 
-后续执行器应记录 accepted/unknown/failed/cancelled 等状态，超时先用票据/run_id 核实，
-成功跳过前再次校验证据，重试从零且使用新目录；这些行为本阶段不实现。
+执行器状态及失败边界见下节。M13.3 再实现超时后的票据/run_id核实、成功项跳过及显式重试；
+重试从零且使用新目录，当前不自动恢复或重新发送失败请求。
 后续报告分开数值误差、batch_submit_to_completion、GPU timestamp、端到端时间；
 缺失值保持缺失，同环境与跨后端比较分别声明容差，不从摘要推断数值一致。
 
@@ -77,7 +78,57 @@ experiment_id 为完整单次 config 与 output 的 SHA256，独立于计划位�
 标准库测试覆盖稳定顺序/身份、float32 边界、非法组合、预算拒绝、版本/字段拒绝，
 真实目录下缺失/篡改/来源错配、重复登记、路径和发布故障保护。真实 CPU-only runner
 采集数值证据，真实 GPU runner 使用原 export 五文件，核验配置与源运行绑定。
-不运行批量调度/恢复/报告验收，不扩大到无关渲染或全工程测试。
+M13.2另验证真实单次CLI多组合执行、完成后回到edit、同Runtime跨进程互斥、进度/产物一一对应，
+以及失败/取消/超时/采样错配/发布失败不启动下一项。恢复/报告验收仍不纳入本阶段。
+
+## M13.2 串行执行与进度
+
+`run_plan(client, plan, project_root=..., output=..., experiment_timeout=600,
+poll_interval=0.05, runner_executable=None, progress=None)` 从新相对目录开始一个批次；
+CLI为 `python -m decker.experiment_batch run <plan> --pipe ... --project-root ... --output ...`。
+`read_progress(directory)` / CLI status读取已提交的进度并核对已成功项的索引证据。
+先完整展开计划、校验额度/路径，再检查 capabilities、当前编辑场景和空闲Play。
+所有计划的GPU/图像能力一起预检，失败无输出目录和引擎状态修改。project_root必须由调用者
+指定为宿主工程根；已有协议不暴露该路径，图像路径另以export回执及本地证据核对。
+
+仅Windows本机Named Pipe。用hello的session UUID命名Windows mutex，生命周期覆盖整个批次，
+同Windows登录会话内合作执行器即使选择不同输出目录也不能争用同一Runtime；忙时立即拒绝。
+mutex不阻止GUI/外部脚本，要求独占模拟控制。批次固定初始scene guard/source，后续编辑变化
+导致停止调度；不自动刷新guard、不改Edit、不创建场景。每次控制均使用收到的run_id，
+核对响应session及运行配置/来源；外部换运行或重启宿主不能被记作当前实验成功。
+
+正步数使用simulation.run(count=N,batch_steps=8)，查询completed_steps直到succeeded；
+0拍通过run(count=1,paused=true)只异步准备，initialized且稳定paused/0拍即达到采集条件。
+保留引擎task_status=paused，不伪称它的有限目标已succeeded。每项有独立单调截止时间，
+覆盖受理、轮询、采集、登记和Stop；调用预算不超过客户端上限与剩余时间。
+记录submitted/completed/batch_active而非将已提交步数当成完成数；采集前要求无fault且无在途批次。
+
+image=false通过simulation.sample和有界particles分页收集，同页身份/步数/整数时间/索引/总数
+必须一致，末尾再次查询并核对同一稳定run。四文件先写同父临时目录、fsync并核验，rename发布。
+image=true使用simulation.export的原五文件目录，核对回执输出/run_id/步数/文件集，
+再核对配置及provenance的初始场景来源。两种路径均登记到原index.json。
+结果目录为results/<experiment_id>，每个新批次只有一次尝试；不覆盖现有输出、不复用旧批次。
+
+`DeckerExperimentBatch` version 1 的batch.json与index.json分离，含batch_id、plan_id、
+session/endpoint、源场景、状态、更新序号、时间、每项目标/已提交/已完成拍数、run_id、
+受理TaskId/票据、最后请求/响应摘要、artifact_attempt_id和错误。顶层状态为running、
+succeeded、failed、cancelled或unknown；项状态为pending、submitting、running、collecting、
+stopping、succeeded、failed、cancelled或unknown。每次变化先写临时文件并替换batch.json，
+再调用progress回调；CLI把紧凑JSON进度写stderr，最终结果写stdout。
+读者只读原子快照；Windows按规范化文件路径命名短时mutex，序列化打开/读取/关闭和最终rename，
+避免查询句柄阻止os.replace。准备/编码/写临时文件不持该锁，等待上限5秒；其他平台沿用rename语义。
+成功项须与index对应attempt/run_id吻合；待执行项不冒充零值结果。
+
+成功发布顺序为产物目录 → index登记 → Stop且query确认edit → batch项succeeded → 下一项。
+三者不构成跨文件事务：磁盘错误或进程退出可留下有效产物/索引而进度未确认，保留这些证据，
+不删除、不继续调度。先记录submitting/请求意图再发命令；正常返回保存票据/TaskId/run_id，
+unknown传输错误保存可用票据及最后快照。已受理任务的超时、断连或中断不隐式取消/Stop/重试。
+明确引擎failed/cancelled分别落状态；其余项保持pending。普通采集/写入失败保留活动run供检查。
+KeyboardInterrupt保守记unknown，强杀可能留下非终态；本阶段不声明恢复能力。
+progress回调失败停止调度，不撤销已经提交的文件或运行状态。记录写入本身失败时返回异常并保留
+最近可读快照，不能保证落盘失败时仍写入终态；后续M13.3必须把这类非终态视为需要核实。
+
+无新命令或依赖；验证入口与使用示例见[0090](../development/0090-experiment-batch.md)。
 
 使用入口：[实验管理指南](../guides/experiments.md)、[计划示例](../../examples/automation/cloth-plan.json)。
 相关：[Python](automation-python.md)、[模拟服务](physics-api.md)、

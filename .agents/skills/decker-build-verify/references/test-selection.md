@@ -48,6 +48,8 @@
 | Python 客户端参数/错误/截止时间与 CPU IPC 批量/重载 | dk_run、dk_ctl | `^dk\.python\.(unit\|cpu)$`（需要 Python 3.11+） |
 | 实验计划稳定展开、预算拒绝、索引来源/摘要/失败保护 | dk_run、dk_ctl | `^dk\.experiments\.(unit\|index_cpu)$`（Python；CPU-only 可独立运行） |
 | 实验计划与真实 GPU 五文件导出来源核验 | dk_run、dk_ctl | `^dk\.experiments\.index_gpu$`（RenderSimulation，gpu label） |
+| 实验批处理串行调度、进度/故障保护、CPU-only 数值收集 | dk_run、dk_ctl | `^dk\.experiments\.batch_(unit\|cpu)$`（Python；CPU验收使用无RenderSimulation构建） |
+| 实验批处理CPU/GPU图像导出、真实取消与进程互斥 | dk_run、dk_ctl | `^dk\.experiments\.batch_gpu$`（RenderSimulation；gpu label，要求可用设备） |
 | Python 批量编辑、截图等待与产物收集 | dk_run、dk_ctl | `^dk\.python\.capture_gpu$`（需要 Python 3.11+ 和 render capture；gpu label） |
 | 记录格式/输入/失败与 Python SDK 单元回归 | dk_run、dk_ctl | `^dk\.python\.unit$`（需要 Python 3.11+） |
 | 跨进程记录/重放、身份/事务/文件/漂移拒绝 | dk_run、dk_ctl | `^dk\.replay\.cpu$`（启用 Luau 时从脚本保存的工程开始） |

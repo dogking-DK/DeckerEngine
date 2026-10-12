@@ -4,12 +4,13 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
 from decker.experiments import (ExperimentError, canonical, expand_plan, f32, read_json, topology)
-from decker.experiment_index import (METRICS, create_index, environment, register_artifacts, verify_index)
+from decker.experiment_index import (METRICS, _open_read, create_index, environment, register_artifacts, verify_index)
 
 
 def plan():
@@ -172,6 +173,26 @@ class IndexTests(unittest.TestCase):
         with self.assertRaises(ExperimentError): self.register(run_id)
         with self.assertRaises(ExperimentError): create_index(self.root, self.value)
         self.assertEqual((self.root / "index.json").read_bytes(), content)
+
+    def test_open_snapshot_reader_serializes_with_atomic_registration(self):
+        identity = bundle(self.root, self.entry)
+        old = (self.root / "index.json").read_bytes()
+        entered, errors = threading.Event(), []
+        def register():
+            entered.set()
+            try:
+                self.register(identity)
+            except Exception as error:
+                errors.append(error)
+        with _open_read(self.root / "index.json") as reader:
+            writer = threading.Thread(target=register)
+            writer.start()
+            self.assertTrue(entered.wait(2))
+            self.assertEqual(reader.read(), old)
+        writer.join(timeout=10)
+        self.assertFalse(writer.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(verify_index(self.root)["experiments"][0]["status"], "verified")
 
     def test_bad_source_config_steps_and_missing_outputs_preserve_index(self):
         identity = bundle(self.root, self.entry)
