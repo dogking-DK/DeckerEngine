@@ -63,7 +63,7 @@ def main():
                         snapshots.append({"sequence": current["sequence"], "status": current["status"],
                                           "states": [e["status"] for e in current["experiments"]]})
                     time.sleep(.03)
-                assert process.returncode == 0, (root / "progress.jsonl").read_text(encoding="utf-8")
+                assert process.returncode == 0, (root / "cli.stdout").read_text(encoding="utf-8")
             finally:
                 if process.poll() is None:
                     process.kill()

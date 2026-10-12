@@ -1,12 +1,12 @@
 ---
 created_at: "2026-10-10T16:18:00+08:00"
-updated_at: "2026-10-12T10:00:00+08:00"
+updated_at: "2026-10-12T10:36:00+08:00"
 ---
 
 # 实验批处理、计划与产物索引
 
 [返回项目入口](../../README.md)。Python 3.11+ 标准库模块提供计划展开、串行批量执行、进度与本地产物核验。
-批处理连接已有 Windows runner/editor；恢复、重试和对比报告按[Roadmap](../roadmap.md)后续阶段交付。
+批处理连接已有 Windows runner/editor，支持中断恢复和显式重试；对比报告按[Roadmap](../roadmap.md)后续阶段交付。
 单次实验仍使用[模拟指南](simulation.md)的命令和配置，M9 [记录/重放](replay.md)保持独立。
 
 ## 准备计划
@@ -77,7 +77,7 @@ python -m decker.experiment_index "$root/batch-001"
 批次结束后宿主仍运行，用户可继续使用；需要退出时显式调用 runtime.shutdown。
 
 `--project-root` 必须与宿主工程根一致，`--output` 是其下的新相对目录，父目录须存在。
-不能把上节已准备的索引目录传给 run；本阶段每次运行创建完整的新批次。
+不能把上节已准备的索引目录传给 run；run创建新批次，resume继续已有的批处理进度。
 计划/预算/能力/空闲状态预检失败时不创建输出或启动模拟。`--runner` 可选，用于记录实际宿主二进制摘要。
 默认每次调用最多60秒，每项实验最多600秒；可用 `--call-timeout`、`--experiment-timeout`、
 `--poll-interval` 调整。总期限覆盖初始化、运行、收集和Stop，文件IO/进程回收不提供硬实时保证。
@@ -95,7 +95,7 @@ stdout 输出最终批次摘要。退出码0表示全部成功，1表示批次�
 `status` 无需连接宿主，可在运行中读取；它输出当前持久化快照并核验已登记产物，不轮询引擎。
 完整目录包括：
 
-- `batch.json`：批次/session/场景身份、每项状态与步数、run_id、受理票据/TaskId、产物attempt_id及错误。
+- `batch.json`：批次/session/场景身份、每项状态与步数、run_id、受理票据/TaskId、产物attempt_id、错误及尝试history。
 - `index.json`：原计划、完整配置、环境和已登记文件摘要。
 - `results/<experiment_id>/`：各项独立产物。
 
@@ -121,6 +121,58 @@ saved = read_progress(root / "batch-002")
 
 progress回调收到已落盘的独立快照，回调异常会停止调度。写进度本身失败时，异常的recording_error
 说明记录失败，磁盘上保留最近成功快照；异常中的progress可能比磁盘新。API不负责创建场景或启停宿主。
+
+## 恢复中断的批次
+
+原宿主和场景仍在时，在新的终端继续同一输出目录：
+
+```powershell
+python -m decker.experiment_batch resume --pipe experiment-demo --ctl $ctl --project-root $root --output batch-001
+python -m decker.experiment_batch status "$root/batch-001"
+```
+
+resume从索引中的原计划继续，不接收替换计划。它先重新读取所有已登记文件、检查摘要及来源，
+跳过已核验成功项，再接回未完成项。损坏的成功产物会阻止恢复，不会被静默重新生成。
+已完成批次是仅核验的空操作，不要求原宿主仍运行。
+
+对于已受理的模拟，使用已保存run_id核对配置和来源，等待原任务完成。提交回执丢失但保留了
+原票据时，使用相同session/ticket/参数取回原请求结果，不分配新票据重新启动。
+产物已写完但尚未登记时，核验后登记；索引已更新但进度未更新时，重新绑定原attempt。
+Stop已执行或仍在进行时，确认回到edit后才继续下一项，不把索引verified直接当作任务成功。
+
+恢复要求同一endpoint、Runtime session和完整场景来源。宿主重启、场景切换或编辑变化会拒绝自动接续；
+成功产物仍可离线核验。没有保存run_id或票据、票据已淘汰、出现其他活动run时保留unknown，
+需要人工核实，不能凭相同配置猜测归属。强杀可能发生在发送和保存回执之间，这个窗口不保证自动恢复。
+每次resume使用新的等待期限；`--call-timeout`、`--experiment-timeout`、`--poll-interval`与run相同。
+
+## 显式重试失败或取消项
+
+普通resume保留failed/cancelled，不自动从零重跑。确认需要重试时：
+
+```powershell
+python -m decker.experiment_batch resume --pipe experiment-demo --ctl $ctl --project-root $root --output batch-001 --retry-failed
+```
+
+`--retry-failed`明确包含failed和cancelled项。先核实原运行或当前空闲状态，必要时Stop属于该尝试的运行，
+等到edit，再创建新尝试。无法核实的unknown不会因为该选项而直接重跑。
+每项首次目录为`results/<experiment_id>`，后续为`results/<experiment_id>-retry-2`等，最多128次。
+旧尝试的状态、错误、票据、run_id、产物引用进入history；旧目录和索引记录全部保留。
+再次成功只表示新尝试成功，不改写历史取消/失败；其他已成功项不重跑。
+后续查询失败也不会抹去已确认的取消状态。
+
+Python入口：
+
+```python
+from decker.experiment_batch import resume_plan
+
+report = resume_plan(client, project_root=root, output="batch-001")
+# 仅在显式决定从零重试失败/取消项时：
+report = resume_plan(client, project_root=root, output="batch-001", retry_failed=True)
+```
+
+新批次使用batch v2；v1批次可读取，并在实际恢复时原子升级，plan/index v1保持不变。
+批处理进程退出后输出目录/Runtime的mutex会释放，重新启动可取得；普通进度读取不占用整个批次写锁。
+这恢复的是任务清单与仍存在的任务，不是模拟检查点或宿主重启迁移。
 
 ## 登记已有产物
 
@@ -164,12 +216,15 @@ steps、simulated_time_ns、width、height、performance（无批次观测时 nu
 
 已有根目录不能被 create_index 覆盖，已有产物从不被 SDK 修改。登记以独占锁和临时文件替换更新
 index.json；重复目录、错误产物、写入失败都保留旧索引。一次实验可以登记不同目录的多次尝试。
-索引只支持本地串行写者；崩溃遗留 .index.lock 时，先确认没有写者再人工移除。自动恢复将在后续阶段实现。
+索引只支持本地串行写者；Windows本版本使用随进程退出释放的mutex。
+历史版本遗留.index.lock仍须确认无写者后人工移除；其他平台的离线登记继续使用文件锁。
 每份产物最大 16 MiB，索引最大 32 MiB，单实验最多 128 次登记。拒绝越界、链接/reparse point 和缓存路径。
 不承诺断电持久性、恶意并发路径替换隔离或对整套伪造证据的真实性认证。
 
 定向验收使用 `scripts/verify.ps1`，CPU-only 批处理筛选 `^dk\.experiments\.(unit|batch_unit|batch_cpu)$`，
 图形批处理筛选 `^dk\.experiments\.batch_gpu$`，目标均为 dk_run、dk_ctl。
 批处理GPU用例要求可用设备，不把跳过当作验收通过。原独立索引用例为index_cpu/index_gpu。
+恢复/重试使用`^dk\.experiments\.recovery_(unit|cpu)$`；GPU恢复使用`^dk\.experiments\.recovery_gpu$`。
 设计与实际证据见[实验管理](../design/experiment-management.md)、
-[0089](../development/0089-experiment-plan-index.md)、[0090](../development/0090-experiment-batch.md)。
+[0089](../development/0089-experiment-plan-index.md)、[0090](../development/0090-experiment-batch.md)、
+[0091](../development/0091-experiment-recovery.md)。

@@ -10,6 +10,7 @@ Python 3.11+ 标准库客户端，通过 Windows `dk-ctl` 连接已有 runner/ed
 
 实验计划展开与产物来源核验使用 `decker.experiments` / `decker.experiment_index`；
 `decker.experiment_batch` 提供串行执行CLI/API、持久进度和CPU数值/GPU图像自动收集，
-见 [实验管理指南](../../spec/guides/experiments.md)。批处理创建新目录，尚不支持恢复或重试。
+见 [实验管理指南](../../spec/guides/experiments.md)。run创建新批次，resume核验成功项并接续原任务；
+`resume --retry-failed`显式从零重试失败/取消项，保留旧尝试与产物。
 
 CPU/GPU 物理实验与 config.json 从零重放使用 [cloth_experiment.py](../../examples/automation/cloth_experiment.py)，见 [模拟指南](../../spec/guides/simulation.md)。它复用 Client.call，不改变场景 Recorder v1 格式。

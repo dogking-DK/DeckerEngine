@@ -11,7 +11,7 @@ import platform
 import tempfile
 from uuid import UUID, uuid4
 
-from ._experiment_lock import snapshot_access
+from ._experiment_lock import exclusive_path, snapshot_access
 
 from .experiments import (ExperimentError, INDEX_LIMIT, canonical, clone_json, decode_json,
                           expand_plan, finite, integer, keys, normalize_config, read_json,
@@ -92,7 +92,7 @@ def _root(directory):
     for component in [*reversed(path.parents), path]:
         _no_link(component)
     require(path.is_dir(), "Index root must be a directory")
-    return path
+    return path.resolve(strict=True)  # Canonicalize directory aliases before deriving writer/snapshot lock identities.
 
 
 def _relative_parts(name):
@@ -120,8 +120,6 @@ def _inside(root, name):
 
 
 def _read_file(path, limit):
-    _no_link(path)
-    require(path.is_file(), "Artifact must be a regular file")
     with _open_read(path) as stream:
         data = stream.read(limit + 1)
     require(len(data) <= limit, "File exceeds byte limit")
@@ -133,6 +131,8 @@ def _open_read(path):
     # On Windows, os.replace cannot replace an open destination reliably, even
     # with FILE_SHARE_DELETE. Keep the open/read/close and final rename disjoint.
     with snapshot_access(path):
+        _no_link(path)
+        require(path.is_file(), "Artifact must be a regular file")
         with path.open("rb") as stream:
             yield stream
 
@@ -277,7 +277,7 @@ def create_index(directory, plan, *, execution_environment=None):
     value["experiments"] = [{**entry, "status": "planned", "attempts": []} for entry in expanded["experiments"]]
     with _errors():
         destination = Path(os.path.abspath(directory))
-        _root(destination.parent)
+        destination = _root(destination.parent) / destination.name
         destination.mkdir()  # exclusive ownership; never remove an existing directory
         try:
             _publish(destination, value)
@@ -287,16 +287,28 @@ def create_index(directory, plan, *, execution_environment=None):
     return value
 
 
+@contextmanager
+def _index_writer(root):
+    lock = root / ".index.lock"
+    if os.name == "nt":
+        with exclusive_path("index", root):
+            require(not os.path.lexists(lock), "Legacy index lock requires manual inspection")
+            yield
+    else:
+        descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        try:
+            os.close(descriptor)
+            yield
+        finally:
+            lock.unlink()
+
+
 def register_artifacts(directory, experiment_id, artifact_directory, *, expected_run_id, execution_environment):
     """Append independently verified evidence, atomically retaining all previous attempts."""
     observed_environment = _environment(execution_environment)
     with _errors():
         root = _root(directory)
-        lock = root / ".index.lock"
-        descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-                stream.write(str(os.getpid()))
+        with _index_writer(root):
             current = _verify(root)
             entries = [e for e in current["experiments"] if e["experiment_id"] == experiment_id]
             require(len(entries) == 1, "Unknown experiment_id")
@@ -311,8 +323,6 @@ def register_artifacts(directory, experiment_id, artifact_directory, *, expected
             entry["status"] = "verified"
             _publish(root, current)
             return entry["attempts"][-1]
-        finally:
-            lock.unlink()
 
 
 def main():

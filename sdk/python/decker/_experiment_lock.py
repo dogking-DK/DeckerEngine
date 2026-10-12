@@ -6,8 +6,33 @@ from ctypes import wintypes
 from functools import lru_cache
 import hashlib
 import os
+import threading
 
 from .experiments import require
+
+_owned = set()
+_guard = threading.Lock()
+
+
+def path_identity(path):
+    # Roots reject links. Do not open the target to resolve its name before taking
+    # the lock: even a Windows metadata handle can obstruct the concurrent rename.
+    return hashlib.sha256(os.path.normcase(os.path.abspath(path)).encode("utf-8")).hexdigest()
+
+
+@contextmanager
+def exclusive_path(kind, path):
+    """Process-lifetime writer lease, including rejection of same-thread recursion."""
+    name = kind + "-" + path_identity(path)
+    with _guard:
+        require(name not in _owned, "Experiment directory already has a writer")
+        _owned.add(name)
+    try:
+        with named_mutex(name, 0, "Experiment directory already has a writer"):
+            yield
+    finally:
+        with _guard:
+            _owned.remove(name)
 
 
 @lru_cache(maxsize=1)
@@ -47,6 +72,6 @@ def snapshot_access(path):
     if os.name != "nt":
         yield
         return
-    identity = hashlib.sha256(os.path.normcase(os.path.realpath(path)).encode("utf-8")).hexdigest()
+    identity = path_identity(path)
     with named_mutex("snapshot-" + identity, 5000, "Snapshot reader/writer lock timed out"):
         yield
