@@ -35,7 +35,7 @@ cmake --build --preset windows-debug --target dk_run
 | 记录/重放、输入指纹、seed 与逻辑状态核验 | [重放指南](spec/guides/replay.md)、[录制示例](examples/automation/record_experiment.py) |
 | Edit/Play、固定步长、CPU/GPU XPBD与可视化 | [模拟指南](spec/guides/simulation.md)、[脚本示例](examples/scripting/fixed-step.luau) |
 | Python 批量编辑、作业等待与截图产物 | [Python 指南](spec/guides/python.md)、[可执行示例](examples/automation/batch_capture.py) |
-| 实验计划、批处理恢复/重试、进度与产物来源核验 | [实验管理指南](spec/guides/experiments.md)、[计划示例](examples/automation/cloth-plan.json) |
+| 实验计划、批处理恢复/重试、来源核验与数值对比报告 | [实验管理指南](spec/guides/experiments.md)、[计划示例](examples/automation/cloth-plan.json) |
 | 登记、改名、导入、缓存、异步加载与作业 | [资产指南](spec/guides/assets.md) |
 | GPU timestamp、Tracy 区间、CPU/GPU阶段关联 | [GPU 性能观测](spec/guides/gpu-profiling.md) |
 | CPU/GPU模拟多规模性能、采集开销与控制延迟 | [可复现基准](spec/guides/simulation-benchmark.md)、[实测报告](spec/benchmarks/2026-10-09-simulation.md) |

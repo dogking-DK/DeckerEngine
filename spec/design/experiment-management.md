@@ -1,7 +1,7 @@
 ---
 module: experiment-management
 created_at: "2026-10-10T16:08:00+08:00"
-updated_at: "2026-10-12T10:44:00+08:00"
+updated_at: "2026-10-12T14:17:00+08:00"
 status: accepted
 ---
 
@@ -13,7 +13,8 @@ M13.1 在 Python 标准库 SDK 中增加离线计划展开和本地产物核验�
 `decker.experiments`（计划）与 `decker.experiment_index`（索引），不创建 Runtime、
 不修改 C++ 命令及 M9 Recorder 格式，不增加依赖。
 M13.2 的 `decker.experiment_batch` 通过现有 Client/有限任务实现串行执行与进度；
-不创建/关闭宿主或编辑场景。M13.3增加任务恢复与显式重试，M13.4再接比较报告。
+不创建/关闭宿主或编辑场景。M13.3增加任务恢复与显式重试；M13.4通过
+`decker.experiment_report`离线核验、配对和发布比较报告，CLI执行/恢复后自动生成报告。
 
 ## 计划格式与稳定身份
 
@@ -70,7 +71,7 @@ Windows写者改用进程寿命mutex，强杀后可重新取得；历史版本�
 其他平台离线登记沿用文件锁；不宣称断电原子性、敌对文件系统隔离或多机并发安全。
 
 执行器状态及失败边界见下节，恢复契约见M13.3节；重试从零且使用新目录，不自动重跑失败实验。
-后续报告分开数值误差、batch_submit_to_completion、GPU timestamp、端到端时间；
+报告分开数值误差、batch_submit_to_completion、GPU timestamp、端到端时间；
 缺失值保持缺失，同环境与跨后端比较分别声明容差，不从摘要推断数值一致。
 
 ## 验证计划
@@ -80,7 +81,8 @@ Windows写者改用进程寿命mutex，强杀后可重新取得；历史版本�
 采集数值证据，真实 GPU runner 使用原 export 五文件，核验配置与源运行绑定。
 M13.2另验证真实单次CLI多组合执行、完成后回到edit、同Runtime跨进程互斥、进度/产物一一对应，
 以及失败/取消/超时/采样错配/发布失败不启动下一项。恢复验证增加真实批处理进程强杀、
-重新启动后跳过成功项、接回原任务、跨文件发布中断、明确重试和取消证据保护；报告另行验收。
+重新启动后跳过成功项、接回原任务、跨文件发布中断、明确重试和取消证据保护。
+报告验证覆盖参数/seed配对、容差边界、缺失/失败/篡改、发布失败、真实CPU和GPU扫描与重跑。
 
 ## M13.2 串行执行与进度
 
@@ -168,6 +170,41 @@ unknown必须先核实成可继续的同一运行或明确失败/取消，不能
 宿主重启和场景身份改变拒绝自动迁移；此功能恢复批处理清单与现有任务，不恢复模拟检查点。
 
 无新命令或依赖；验证入口与使用示例见[0090](../development/0090-experiment-batch.md)。
+
+## M13.4 比较报告
+
+`write_report(directory, baseline=None, tolerances=None)`只读取已核验的batch/index，
+在当前批次`reports/<UUID>`发布report.json、experiments.csv、comparisons.csv和report.html。
+HTML为自包含静态表格/SVG，无网络或脚本依赖。每次新目录，先写同父私有临时目录、fsync，
+最后rename作为整份报告提交点；失败清理本次临时目录，保留所有源证据及旧报告。
+读取时按规范化目录排序取得batch/index写锁，禁止与合作执行器/登记者交错；
+所有已登记产物重新校验，额外读取数值时再次核对摘要。损坏/缺失已登记文件拒绝发布，
+未成功项仍出现在表格且指标为null/空单元格/“—”，历史attempt保留身份、状态、错误和文件摘要。
+
+报告v1记录完整参数、seed/solver、batch/plan/experiment/attempt/run身份、源目录及
+batch/index原始字节摘要、环境、每个产物路径/大小/摘要。只取当前succeeded尝试的数值，
+不会将旧失败尝试已有产物当作成功。独立baseline按experiment_id配对（两侧并集，缺项可见），
+同批CPU/GPU按除solver外相同config/output配对，禁止跨seed/步数/参数拼接或与自身比较。
+逐粒子比较位置/速度最大绝对分量差、RMS分量差及逆质量精确一致；所有物理指标逐项列差，
+指标量纲各异，不混为单个误差门槛。哈希不同不等于数值超差。
+
+`DeckerExperimentTolerances` v1包含same_solver和cross_solver两组position_abs/velocity_abs。
+默认同后端为1e-6 m / 1e-5 m/s，跨后端沿用M11的2e-3 m / 2e-2 m/s；报告嵌入实际策略，
+可用JSON显式替换。记录环境相等单独标识，仅表示已记录字段相等，未知设备不证明环境相同。
+比较状态为passed/failed/incomplete/not_compared；缺少对照、未成功项不能获得passed。
+
+性能只引用provenance中**最近一个批次**的batch_submit_to_completion墙钟、累计steps及
+该样本batch_steps，绝不当作整轮求解耗时、GPU timestamp或稳态p50。
+仅样本steps/batch_steps一致时报告配对差值与比率，分母为0时比率为空；没有统计显著性声明。
+GPU timestamp没有该出口，显式null；CLI另以单调时钟记录本次run/resume调用端到端墙钟，
+包含预检、等待、采集、登记和Stop，排除报告生成；恢复的一次调用不代表完整实验生命周期。
+离线再生成没有此观察时保持null，不从持久时间戳相减推算性能。测量口径依据[M11设计](foundation-profiling.md)。
+
+CLI run/resume在执行返回或持久失败后自动报告；可加`--baseline`和`--tolerances`。
+SDK执行API仍返回原批次结构，需要报告时显式调用write_report。报告失败不改变批次状态、
+不重跑/取消引擎；CLI保留执行摘要并给出report_error。离线CLI可重新生成。
+数值失败/不完整使CLI非零退出，批次执行成功与数值验收结果分字段表达。
+实现与验收证据见[0092](../development/0092-experiment-reports.md)。
 
 使用入口：[实验管理指南](../guides/experiments.md)、[计划示例](../../examples/automation/cloth-plan.json)。
 相关：[Python](automation-python.md)、[模拟服务](physics-api.md)、

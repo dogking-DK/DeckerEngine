@@ -2,7 +2,7 @@
 
 | 模块 | 文档 | 状态 | 范围 | 源码入口 | 测试入口 |
 | --- | --- | --- | --- | --- | --- |
-| experiment-management | [实验管理](experiment-management.md) | accepted | 参数展开/预算、批处理恢复/重试、进度与产物核验 | [SDK](../../sdk/python) | [集成](../../tests/integration/CMakeLists.txt) |
+| experiment-management | [实验管理](experiment-management.md) | accepted | 参数展开/预算、恢复/重试、产物核验与数值对比报告 | [SDK](../../sdk/python) | [集成](../../tests/integration/CMakeLists.txt) |
 | physics-xpbd-gpu | [GPU XPBD](physics-xpbd-gpu.md) | accepted | 分色求解、候选状态、异步输出与命令接入 | [Physics](../../engine/physics) | [集成](../../tests/integration/CMakeLists.txt) |
 | render-simulation | [模拟可视化](render-simulation.md) | accepted | 同图布片绘制与显式读回 | [Render](../../engine/render) | [集成](../../tests/integration/CMakeLists.txt) |
 | physics-xpbd | [CPU XPBD参考](physics-xpbd.md) | accepted | 连续粒子、分色距离约束、布片/地面与数值指标 | [Physics](../../engine/physics) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |

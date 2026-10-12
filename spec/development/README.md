@@ -93,5 +93,6 @@
 | 0089 | [M13.1 实验计划与产物索引](0089-experiment-plan-index.md) | experiment-management | completed |
 | 0090 | [M13.2 批量执行与进度](0090-experiment-batch.md) | experiment-management | completed |
 | 0091 | [M13.3 中断恢复与失败重试](0091-experiment-recovery.md) | experiment-management | completed |
+| 0092 | [M13.4 对比报告与闭环验收](0092-experiment-reports.md) | experiment-management | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

@@ -1,12 +1,12 @@
 ---
 created_at: "2026-10-10T16:18:00+08:00"
-updated_at: "2026-10-12T10:36:00+08:00"
+updated_at: "2026-10-12T14:12:00+08:00"
 ---
 
-# 实验批处理、计划与产物索引
+# 实验批处理、恢复与对比报告
 
 [返回项目入口](../../README.md)。Python 3.11+ 标准库模块提供计划展开、串行批量执行、进度与本地产物核验。
-批处理连接已有 Windows runner/editor，支持中断恢复和显式重试；对比报告按[Roadmap](../roadmap.md)后续阶段交付。
+批处理连接已有 Windows runner/editor，支持中断恢复、显式重试及自动生成可追溯对比报告。
 单次实验仍使用[模拟指南](simulation.md)的命令和配置，M9 [记录/重放](replay.md)保持独立。
 
 ## 准备计划
@@ -91,13 +91,16 @@ GPU求解或图像输出须使用具备相应能力的图形构建；将计划 s
 ## 进度与失败结果
 
 运行时 stderr 每行输出一个 JSON 进度事件，含各状态计数、目标/已完成总拍数与当前项；
-stdout 输出最终批次摘要。退出码0表示全部成功，1表示批次执行中停止，2表示预检/用法/状态核验失败。
+stdout 输出最终批次摘要及comparison_report路径。退出码0表示执行成功且已请求的数值比较通过
+（没有对照时标not_compared）；1表示批次停止或数值比较失败/不完整，2表示预检/用法/核验/报告发布失败。
+执行status与comparison_report.comparison_status分别表达执行和数值结果。
 `status` 无需连接宿主，可在运行中读取；它输出当前持久化快照并核验已登记产物，不轮询引擎。
 完整目录包括：
 
 - `batch.json`：批次/session/场景身份、每项状态与步数、run_id、受理票据/TaskId、产物attempt_id、错误及尝试history。
 - `index.json`：原计划、完整配置、环境和已登记文件摘要。
 - `results/<experiment_id>/`：各项独立产物。
+- `reports/<report_id>/`：自动生成的JSON、CSV和HTML报告；每次新目录，不覆盖旧报告。
 
 项依次经历 pending、submitting、running、collecting、stopping、succeeded；批次顶层保持running直到结束。
 明确失败或取消分别记failed/cancelled，超时、结果未确认或Ctrl+C记unknown；后续项保持pending。
@@ -212,6 +215,63 @@ steps、simulated_time_ns、width、height、performance（无批次观测时 nu
 错误版本或身份错配均失败。verified 表示证据一致，不是数值误差合格或模拟任务调度状态。
 不把 JSON 的性能样本当 GPU 时间或端到端时间，performance.scope 保留 batch_submit_to_completion。
 
+## 自动报告与独立重跑
+
+CLI run/resume完成或保留失败进度后，自动核验来源并发布报告。
+打开stdout的`comparison_report.directory`下的report.html，直接查看离线表格与SVG散点图；
+每个点对应表格序号，展开实验可看完整配置、全部指标及原始文件链接。
+report.json含完整来源/环境/摘要、历史尝试、比较值与容差；experiments.csv和comparisons.csv便于后处理。
+报告文件本身不依赖服务/网络；原始文件链接需保持批次目录结构。
+
+在上文宿主和场景仍可用时，从零运行同一计划到新目录，并与已有批次比较：
+
+```powershell
+python -m decker.experiment_batch run examples/automation/cloth-plan.json --pipe experiment-demo --ctl $ctl --runner $runner --project-root $root --output batch-002 --baseline "$root/batch-001"
+```
+
+同批计划同时包含CPU/GPU时自动按其余配置、seed、步数和输出配对；`--baseline`按experiment_id配对独立重跑。
+重排轴/seed数组不影响配对。两侧采用实验并集，缺项、失败、取消、unknown或pending均不会通过数值验收。
+对照目录或batch_id相同拒绝，不能将自己或复制出来的同一批次充当重跑证据。
+已成功项比较全部粒子位置/速度最大绝对分量差和RMS，逆质量要求精确一致；指标逐项列差，不混用量纲。
+图像保留来源和摘要，当前不做像素差异验收。
+
+没有宿主时，可对已有批次重新生成报告；SDK执行API不自动报告，可显式调用：
+
+```powershell
+python -m decker.experiment_report "$root/batch-002" --baseline "$root/batch-001"
+```
+
+```python
+from decker.experiment_report import write_report
+result = write_report(root / "batch-002", baseline=root / "batch-001")
+print(result["directory"], result["comparison_status"])
+```
+
+`DeckerExperimentTolerances` v1默认策略如下，可保存JSON并在两种CLI中传`--tolerances <文件>`，
+SDK用tolerances对象；报告始终嵌入实际使用的策略。默认重跑阈值是本SDK策略，跨后端阈值沿用M11；
+它们不是任意场景/设备的普遍精度保证。
+
+```json
+{
+  "format": "DeckerExperimentTolerances",
+  "version": 1,
+  "same_solver": {"position_abs": 0.000001, "velocity_abs": 0.00001},
+  "cross_solver": {"position_abs": 0.002, "velocity_abs": 0.02}
+}
+```
+
+数值比较状态为passed/failed/incomplete/not_compared。未成功实验的指标为JSON null、CSV空单元格、
+HTML“—”，图中不绘制该点；已登记文件损坏/缺失直接拒绝报告，不能把损坏当普通缺测。
+环境字段是否相等另行标识；没有记录设备不证明两次硬件相同。不同环境仍使用显式same_solver策略，
+须按实际用途选择容差。二进制摘要和产物摘要用于追溯，不用来推断数值是否相同。
+
+计时遵循[M11口径](simulation-benchmark.md)：last_batch只表示最近一次提交到完成的墙钟，
+带累计steps和该样本batch_steps。300拍、每批8拍时末批是4拍，不能将该值当300拍求解耗时。
+只在采样steps/batch_steps相同的配对间列差值和比率；分母0比率留空，不计算稳态p50或宣称显著提速。
+GPU timestamp没有采集出口，明确null。CLI另记录本次run/resume调用总墙钟，包含预检、等待、采集、
+登记和Stop但不含报告生成；一次resume耗时不代表整批生命周期。离线再生成的该项为空。
+报告生成失败时保留已完成批次和旧报告，stdout包含report_error；修复原因后使用离线入口，无需重跑实验。
+
 ## 失败和限制
 
 已有根目录不能被 create_index 覆盖，已有产物从不被 SDK 修改。登记以独占锁和临时文件替换更新
@@ -225,6 +285,7 @@ index.json；重复目录、错误产物、写入失败都保留旧索引。一�
 图形批处理筛选 `^dk\.experiments\.batch_gpu$`，目标均为 dk_run、dk_ctl。
 批处理GPU用例要求可用设备，不把跳过当作验收通过。原独立索引用例为index_cpu/index_gpu。
 恢复/重试使用`^dk\.experiments\.recovery_(unit|cpu)$`；GPU恢复使用`^dk\.experiments\.recovery_gpu$`。
+报告使用`^dk\.experiments\.report_(unit|cpu)$`，GPU图像/数值重跑使用`^dk\.experiments\.report_gpu$`。
 设计与实际证据见[实验管理](../design/experiment-management.md)、
 [0089](../development/0089-experiment-plan-index.md)、[0090](../development/0090-experiment-batch.md)、
-[0091](../development/0091-experiment-recovery.md)。
+[0091](../development/0091-experiment-recovery.md)、[0092](../development/0092-experiment-reports.md)。

@@ -400,6 +400,11 @@ if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
                     "PYTHONDONTWRITEBYTECODE=1" "${Python3_EXECUTABLE}" -m unittest discover
                     -s "${PROJECT_SOURCE_DIR}/sdk/python/tests" -p test_experiment_recovery.py -v)
             set_tests_properties(dk.experiments.recovery_unit PROPERTIES TIMEOUT 60)
+            add_test(NAME dk.experiments.report_unit
+                COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python"
+                    "PYTHONDONTWRITEBYTECODE=1" "${Python3_EXECUTABLE}" -m unittest discover
+                    -s "${PROJECT_SOURCE_DIR}/sdk/python/tests" -p test_experiment_report.py -v)
+            set_tests_properties(dk.experiments.report_unit PROPERTIES TIMEOUT 60)
             foreach(kind IN ITEMS cpu gpu)
                 if(kind STREQUAL "gpu" AND NOT TARGET dk_render_simulation)
                     continue()
@@ -436,6 +441,14 @@ if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
                         --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/experiment-recovery"
                         ${_dk_experiment_extra})
                 set_tests_properties(dk.experiments.recovery_${kind} PROPERTIES TIMEOUT 300)
+                add_test(NAME dk.experiments.report_${kind}
+                    COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python"
+                        "PYTHONDONTWRITEBYTECODE=1" "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/ExperimentReportTest.py"
+                        --runner "$<TARGET_FILE:dk_run>" --client "$<TARGET_FILE:dk_ctl>"
+                        --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/experiment-report"
+                        ${_dk_batch_extra})
+                set_tests_properties(dk.experiments.report_${kind} PROPERTIES TIMEOUT 540)
             endforeach()
             if(TARGET dk_render_simulation)
                 set_tests_properties(dk.experiments.index_gpu PROPERTIES LABELS "gpu" RUN_SERIAL TRUE
@@ -443,6 +456,8 @@ if(TARGET dk_runtime AND TARGET dk_run AND WIN32)
                 set_tests_properties(dk.experiments.batch_gpu PROPERTIES LABELS "gpu" RUN_SERIAL TRUE
                     ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
                 set_tests_properties(dk.experiments.recovery_gpu PROPERTIES LABELS "gpu" RUN_SERIAL TRUE
+                    ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
+                set_tests_properties(dk.experiments.report_gpu PROPERTIES LABELS "gpu" RUN_SERIAL TRUE
                     ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1")
             endif()
             foreach(kind IN ITEMS cpu capture_gpu)

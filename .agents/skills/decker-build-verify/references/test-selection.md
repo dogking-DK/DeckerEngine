@@ -52,6 +52,8 @@
 | 实验批处理CPU/GPU图像导出、真实取消与进程互斥 | dk_run、dk_ctl | `^dk\.experiments\.batch_gpu$`（RenderSimulation；gpu label，要求可用设备） |
 | 实验恢复、票据核实、强杀后接续与显式重试 | dk_run、dk_ctl | `^dk\.experiments\.recovery_(unit\|cpu)$`（CPU-only独立验收） |
 | GPU实验恢复、导出发布中断与重试证据保留 | dk_run、dk_ctl | `^dk\.experiments\.recovery_gpu$`（RenderSimulation；gpu label，要求可用设备） |
+| 实验报告、数值容差/缺失/发布保护、CPU参数扫描与重跑 | dk_run、dk_ctl | `^dk\.experiments\.report_(unit\|cpu)$`（CPU-only独立验收） |
+| CPU/GPU扫描、图像证据与300拍容差重跑报告 | dk_run、dk_ctl | `^dk\.experiments\.report_gpu$`（RenderSimulation；gpu label，要求可用设备） |
 | Python 批量编辑、截图等待与产物收集 | dk_run、dk_ctl | `^dk\.python\.capture_gpu$`（需要 Python 3.11+ 和 render capture；gpu label） |
 | 记录格式/输入/失败与 Python SDK 单元回归 | dk_run、dk_ctl | `^dk\.python\.unit$`（需要 Python 3.11+） |
 | 跨进程记录/重放、身份/事务/文件/漂移拒绝 | dk_run、dk_ctl | `^dk\.replay\.cpu$`（启用 Luau 时从脚本保存的工程开始） |

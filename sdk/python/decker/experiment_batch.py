@@ -506,6 +506,8 @@ def main():
         command.add_argument("--call-timeout", type=float, default=60)
         command.add_argument("--experiment-timeout", type=float, default=600)
         command.add_argument("--poll-interval", type=float, default=.05)
+        command.add_argument("--baseline", type=Path, help="Independent batch for numerical rerun comparison")
+        command.add_argument("--tolerances", type=Path, help="DeckerExperimentTolerances v1 JSON")
     status = subparsers.add_parser("status", help="Inspect durable progress and artifact bindings")
     status.add_argument("directory", type=Path)
     args = parser.parse_args()
@@ -513,13 +515,38 @@ def main():
         if args.action == "status":
             print(json.dumps(read_progress(args.directory), ensure_ascii=False))
         else:
+            from .experiment_report import tolerance_policy, write_report
+            policy = tolerance_policy(read_json(args.tolerances, 4096) if args.tolerances else None)
+            if args.baseline:
+                read_progress(args.baseline)  # Reject invalid comparison inputs before starting simulations.
+                require(args.baseline.resolve() != (args.project_root / args.output).resolve(),
+                        "Baseline must be an independent batch")
             client = Client(args.pipe, args.ctl, timeout=args.call_timeout)
             options = dict(project_root=args.project_root, output=args.output, experiment_timeout=args.experiment_timeout,
                            poll_interval=args.poll_interval, runner_executable=args.runner,
                            progress=lambda event: print(json.dumps(event, ensure_ascii=False), file=sys.stderr, flush=True))
-            report = (run_plan(client, read_json(args.plan, PLAN_LIMIT), **options) if args.action == "run" else
-                      resume_plan(client, retry_failed=args.retry_failed, **options))
-            print(json.dumps(_summary(report), ensure_ascii=False))
+            started = time.monotonic_ns()
+            exit_code = 0
+            try:
+                report = (run_plan(client, read_json(args.plan, PLAN_LIMIT), **options) if args.action == "run" else
+                          resume_plan(client, retry_failed=args.retry_failed, **options))
+                result = _summary(report)
+            except ExperimentBatchError as error:
+                result = {**_summary(error.progress), "error": str(error)}
+                exit_code = 1
+            elapsed = time.monotonic_ns() - started
+            try:
+                result["comparison_report"] = write_report(args.project_root / args.output, baseline=args.baseline,
+                    tolerances=policy, execution_observation={"scope": "batch_cli_invocation",
+                        "action": args.action, "wall_time_ns": elapsed})
+                if result["comparison_report"]["comparison_status"] in ("failed", "incomplete"):
+                    exit_code = 1
+            except ExperimentError as error:
+                result["report_error"] = str(error)
+                exit_code = 2
+            print(json.dumps(result, ensure_ascii=False))
+            if exit_code:
+                parser.exit(exit_code)
     except ExperimentBatchError as error:
         print(json.dumps({**_summary(error.progress), "error": str(error)}, ensure_ascii=False))
         parser.exit(1)
