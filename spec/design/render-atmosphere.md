@@ -1,7 +1,7 @@
 ---
 module: render-atmosphere
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-13T13:12:00+08:00"
+updated_at: "2026-10-13T14:03:00+08:00"
 status: accepted
 ---
 
@@ -57,6 +57,8 @@ Scene与render/data的CPU契约见M14.1；M14.3独立模块的公开入口为[At
 DK_BUILD_RENDER_ATMOSPHERE隔离GPU大气模块，默认OFF、windows-graphics开启；启用时明确检查target依赖。
 DK_BUILD_RENDER_ATMOSPHERE_REFERENCE默认OFF，可在CPU配置单独开启；GPU选项也构建该参考库。
 CPU-only仍能读取、保存和修改环境描述，渲染能力未编译/设备不支持时明确报告不可用。
+直接`atmosphere_transmittance_reference`仅接收大气参数，其校验不依赖默认云壳高度；
+较薄大气仍可供[云参考](render-clouds.md)计算太阳透射，实际云壳由调用方环境入口校验。
 不新增三方依赖；若实际移植外部代码/素材，另行记录版本、许可和来源，不能将参考链接当作已引入依赖。
 
 ## 数据、坐标与持久状态

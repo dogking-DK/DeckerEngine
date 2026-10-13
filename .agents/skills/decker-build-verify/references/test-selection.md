@@ -111,6 +111,8 @@
 | Foundation 进程示例 | dk_foundation_demo | `^dk\.foundation\.` |
 | 确定性云场、密度/风时间与旧代预算（CPU-only） | dk_cloud_field_tests | `^dk\.clouds\.cloud ` |
 | 云天气/3D纹理上传、GPU过滤采样、失败与代次寿命（required GPU） | dk_cloud_field_probe | `^dk\.clouds\.fields_gpu_validation$` |
+| 云球壳、解析解、光照与收敛参考（CPU-only） | dk_cloud_reference_tests | `^dk\.clouds\.reference ` |
+| 无历史云参考GPU解析解、CPU对照、收敛和失败保护（required GPU） | dk_cloud_reference_probe | `^dk\.clouds\.reference_gpu_validation$` |
 | 环境命令发现、CPU示例与v1/v2跨进程保存重载 | dk_run | `^dk\.environment\.process$` |
 | Scene 跨进程往返 | dk_scene_demo | `^dk\.scene_demo\.` |
 

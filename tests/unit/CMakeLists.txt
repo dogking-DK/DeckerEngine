@@ -342,3 +342,10 @@ if(TARGET dk_render_cloud_fields)
     catch_discover_tests(dk_cloud_field_tests TEST_PREFIX "dk.clouds."
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 120 LABELS "cpu")
 endif()
+if(TARGET dk_render_cloud_reference)
+    add_executable(dk_cloud_reference_tests CloudReferenceTests.cpp)
+    target_link_libraries(dk_cloud_reference_tests PRIVATE dk::render_cloud_reference Catch2::Catch2WithMain)
+    dk_target_defaults(dk_cloud_reference_tests)
+    catch_discover_tests(dk_cloud_reference_tests TEST_PREFIX "dk.clouds."
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 240 LABELS "cpu")
+endif()

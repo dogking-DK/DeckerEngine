@@ -55,7 +55,11 @@ Vec3d integral_weight(const Vec3d& extinction,double distance) {
 }
 bool bounded(std::uint32_t steps) { return steps>0 && steps<=8192; }
 Result<void> parameters(const AtmosphereParameters& a) {
-    EnvironmentDescription e; e.atmosphere=a; const auto valid=normalize_environment(e);
+    EnvironmentDescription e; e.atmosphere=a;
+    // This API owns no clouds. A synthetic valid shell must not impose the
+    // default 4 km cloud top on otherwise valid thin atmospheres.
+    e.clouds.bottom_height_m=0; e.clouds.top_height_m=a.atmosphere_height_m*.5;
+    const auto valid=normalize_environment(e);
     if(!valid) return std::unexpected(valid.error());
     return {};
 }

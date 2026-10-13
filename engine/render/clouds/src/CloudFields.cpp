@@ -1,4 +1,5 @@
 #include <dk/render/CloudFields.hpp>
+#include "CloudDensityInternal.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -104,20 +105,23 @@ Result<double> sample_cloud_density(const EnvironmentDescription& e,const CloudF
     if(!height) return std::unexpected(height.error());
     const auto& c=e.clouds;
     if(fields.key()!=cloud_field_key(c)) return std::unexpected(invalid("Cloud field key does not match parameters"));
-    if(!c.enabled || !c.coverage || !c.density || *height<=c.bottom_height_m || *height>=c.top_height_m) return 0.0;
+    return detail::cloud_density_at(e,fields,position,time,*height);
+}
+namespace detail {
+double cloud_density_at(const EnvironmentDescription& e,const CloudFieldData& fields,const EnvironmentVector& position,double time,double height) {
+    const auto& c=e.clouds;
+    if(!c.enabled || !c.coverage || !c.density || height<=c.bottom_height_m || height>=c.top_height_m) return 0.0;
     EnvironmentVector p{position[0]-e.atmosphere.planet_center_m[0]-c.wind_velocity_mps[0]*time,
         position[1]-e.atmosphere.planet_center_m[1],position[2]-e.atmosphere.planet_center_m[2]-c.wind_velocity_mps[1]*time};
     const auto weather=fields.sample(CloudField::weather,{p[0]/c.weather_scale_m,p[2]/c.weather_scale_m,0});
     auto scale=[&](double s){ return EnvironmentVector{p[0]/s,p[1]/s,p[2]/s}; };
     const auto base=fields.sample(CloudField::base,scale(c.shape_scale_m));
     const auto detail=fields.sample(CloudField::detail,scale(c.detail_scale_m));
-    if(!weather) return std::unexpected(weather.error());
-    if(!base) return std::unexpected(base.error());
-    if(!detail) return std::unexpected(detail.error());
     const double coverage=std::clamp(((*weather)[0]-(1-c.coverage))/c.coverage,0.0,1.0);
-    const double h=(*height-c.bottom_height_m)/(c.top_height_m-c.bottom_height_m);
+    const double h=(height-c.bottom_height_m)/(c.top_height_m-c.bottom_height_m);
     const double top=.6+.4*(*weather)[1];
     const double profile=smooth01(h/c.bottom_fade_fraction)*smooth01((top-h)/c.top_fade_fraction);
     return c.density*std::clamp(((*base)[0]*profile-(1-coverage))/.35-.2*(*detail)[0],0.0,1.0);
 }
+} // namespace detail
 } // namespace dk::render

@@ -1,7 +1,7 @@
 ---
 module: render-clouds
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-13T13:12:00+08:00"
+updated_at: "2026-10-13T14:03:00+08:00"
 status: accepted
 ---
 
@@ -32,10 +32,11 @@ status: accepted
 
 ## 模块与数据所有权
 
-`engine/render/clouds`提供两个默认OFF的构建选项：`DK_BUILD_RENDER_CLOUD_FIELDS`构建
+`engine/render/clouds`提供三个默认OFF的构建选项：`DK_BUILD_RENDER_CLOUD_FIELDS`构建
 纯CPU `dk_render_cloud_fields` / `dk::render_cloud_fields`（PUBLIC Scene），
-`DK_BUILD_RENDER_CLOUDS`同时构建GPU `dk_render_clouds` / `dk::render_clouds`（PUBLIC fields、graphics_device）。
-当前只提供场数据和纹理资源；后续积分/合成才按真实用途引入大气、Graph、Shaders、Profiling。
+`DK_BUILD_RENDER_CLOUDS`同时构建GPU `dk_render_clouds` / `dk::render_clouds`（PUBLIC cloud_reference、graphics_device）。
+`DK_BUILD_RENDER_CLOUD_REFERENCE`提供CPU `dk::render_cloud_reference`，PUBLIC fields/atmosphere_reference；
+GPU clouds同时构建reference，并PRIVATE依赖Graph/Shaders。参考积分读取现有云场，不需要编辑器或命令层。
 Scene/Services持有纯CPU CloudParameters；CloudFieldCache拥有不可变CPU天气/噪声代次，
 CloudTextureCache拥有GPU纹理代次。模块不反向依赖Editor/Framework，不新增三方库。
 
@@ -77,7 +78,7 @@ GPU cache额外持有退休代次，只在poll确认队列无在途提交、无�
 CPU预算默认8MiB，统计活代纹理字节+候选；GPU预算默认16MiB，统计活代纹理字节+候选纹理+候选upload载荷。
 预算是逻辑载荷而非分配器/显存硬上限；驱动对齐和scratch另由队列资源统计核验。
 cache不暴露底层可变容器；纹理view按2D/3D类型创建，最终处于shader-read布局，队列提交保活资源。
-队列必须属于创建cache绑定的设备/所有者；跨队列使用不支持。无后台任务、无历史、无云光照/合成；
+队列必须属于创建cache绑定的设备/所有者；跨队列使用不支持。云场缓存无后台任务或历史；
 ScenePipeline::render_environment遇到enabled云返回not_supported，防止把仅参数支持误当作有云截图。
 
 验证覆盖固定seed独立重建字节/摘要、不同seed、范围/周期/插值、球壳/coverage/density边界、
@@ -85,7 +86,7 @@ ScenePipeline::render_environment遇到enabled云返回not_supported，防止把
 GPU要求真实设备、validation与sync validation，逐字节readback及shader过滤采样对照，
 提交失败注入/代次额度/释放和关闭检查，不用skip替代通过。
 
-后续积分/视图接口规划（云场当前接口以上文为准）：
+后续视图/合成接口规划（当前云场及参考积分接口以各契约小节为准）：
 
 | 输入/输出 | 后续约定 |
 | --- | --- |
@@ -101,6 +102,54 @@ GPU要求真实设备、validation与sync validation，逐字节readback及shade
 相函数参数远离奇点；零密度/coverage=0是精确定义的无云状态，光学结果T=1/L=0。
 content seed和帧采样噪声seed分开，风由显式时间平移，不随实际帧率或线程调度累积。
 所有预算（噪声字节、积分步数/距离、光线步数、视图数、在途代次）在提交前验证；无效输入不改环境或历史。
+
+## 无历史参考积分契约
+
+CPU `CloudReference.hpp`提供球壳区间、单射线参考；GPU `CloudReferenceRenderer.hpp`提供同步射线批参考。
+每条输入射线完整执行指定步数，不做半分辨率、抖动、历史、早停或空区跳跃。
+结果为曝光前RGB radiance、scalar transmittance、实际壳内积分长度、消光加权代表距离；
+代表距离在零消光时为0，不是几何深度。最多两个有序壳区间，先裁到非负距离、max_distance和地面；
+内球切点不删除有限长度，外球切点为空区间；地下起点拒绝，方向有限非零并稳定归一化。
+CPU/GPU共同使用CPU求出的主射线区间，GPU太阳射线独立求交；高度和球根使用差平方/有理化形式。
+
+默认主射线每区间256步、太阳每区间64步、大气太阳透射64步；分别允许1..4096、1..512、1..512。
+max_distance有限[0,2e7]米，显式time_seconds沿用[-1e9,1e9]。
+几何参考支持R[1,1e7]、大气厚度≤1e6、云壳厚度≥1米、行星中心各轴绝对值≤1e8；
+射线起终点仍须在Scene位置范围内。GPU再要求R≥1000米且采样尺度≥100米（detail≥10米），
+用每射线double预计算并周期归约的噪声原点、局部位移及稳定球面高度，避免把地球尺度世界坐标直接转float。
+GPU超出支持域返回not_supported，禁止静默降精度。太阳路径不按相机max_distance截断。
+
+ReferenceSettings持有显式模型版本1和实验光照参数，暂不扩Scene/命令协议；
+这些是参考模型输入，须随测量记录，不暗称已可由GUI/持久化编辑。
+相函数使用与大气相同、积分归一的HG，g∈[-.95,.95]（默认.6），cosine为视线与指向太阳的方向点积。
+single_scattering_albedo∈[0,1]默认.9；sky_radiance为非负scene-linear RGB常量，默认0，
+作为可关闭的各向同性天空漫射近似，不声称已经采样天空LUT。
+太阳光乘同一环境的irradiance及大气到太阳的RGB透射；环境空气disabled时使用单位空气透射，
+地球遮挡仍成立。直接大气透射只校验其AtmosphereParameters，不让默认云壳高度限制较薄大气；
+云参考入口另行校验实际云壳。自遮蔽独立沿完整云壳积分云光学厚度tau，开关关闭时只去掉云自遮蔽，保留地球遮挡。
+
+低阶多散射是显式三项能量受控再分配近似（默认strength=.35，可设0关闭）：
+`(1-m)*HG(g)*exp(-tau) + m*(2/3*HG(g/2)*exp(-tau/2) + 1/3*HG(g/4)*exp(-tau/4))`，m∈[0,.5]。
+所有相函数积分为1、权重和为1，降低高阶方向性/消光以近似光在云中的重新分布；
+这不是完整路径追踪/光谱多散射，也不将差异当作步长误差。
+每步先以中点取密度与源项，再用`1-exp(-sigma*ds)`（CPU expm1/GPU小量级数）精确积分常值步段，
+前向累积`L += T*(1-exp(-sigma*ds))*source`、`T *= exp(-sigma*ds)`。
+零coverage/density/extinction/disabled精确返回L=0/T=1；零太阳和零天空给L=0。
+均匀密度诊断模式明确覆盖程序化密度，但仍遵守壳、enabled/零coverage及density倍率；
+用于解析解和相同模型的步长检查，不能拿它代替真实场验证。
+
+CPU每射线、GPU每批工作预算计算最坏`2*steps*(2*sun_steps+atmosphere_steps+1)`，
+GPU最多4096射线、256M采样工作、4MiB输入/输出逻辑载荷；校验在分配/提交前完成。
+GPU owner保存只读程序和队列身份，所有输入先验证/打包，host写输入→Graph计算→读回，等待完成并核验有限范围后
+返回拥有型结果；错误不修改调用方数据、纹理current或旧结果。临时资源由Graph/队列保活并释放。
+CPU没有缓存状态。GPU无帧历史或场景提交点；仅参考API可用，ScenePipeline完整环境入口仍拒绝enabled云。
+
+开工冻结验收：均匀介质CPU解析误差≤1e-10、GPU≤2e-3；真实固定场256/64/64→512/128/128→1024/256/256，
+最后两档T绝对差≤.005、RGB按`max(.01,参考最大通道)`归一误差≤2%，并记录较低档差异。
+GPU与相同步数CPU固定射线集T绝对差≤.005、归一RGB误差≤2%。
+覆盖云下/内/上、切线、地面阻挡、两段壳、固定seed/time、太阳正/逆向、自遮蔽及多散射开关、
+薄/厚介质、纯吸收、零云、ray/work预算、外来队列、提交失败及旧资源可重用。
+不把参考结果当作M15.3的空气/云合成，也不承诺本阶段实时帧时。
 
 ## 积分、光照与大气合成
 
