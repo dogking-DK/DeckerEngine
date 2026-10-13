@@ -157,3 +157,5 @@ VS2026 用户打开 `out/build/windows-editor/DeckerEngine.slnx`，选择 Debug/
 环境面板、后台大气视口、near/far与曝光约定、capture冻结信息和跨入口验收见
 [大气使用指南](atmosphere.md#编辑器和脚本m146)。它使用同一Scene环境和Undo/Redo历史；
 未应用草稿不改变视口，外部编辑导致旧guard冲突时先Revert再编辑。
+
+云面板预设、固定时间/质量/阴影区域与序列截图的一致性设置见[云指南](clouds.md)。

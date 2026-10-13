@@ -60,7 +60,7 @@ def main():
 
         def capture(state, name, side=16):
             return call("render.capture", {"guard": guard(state), "output": name, "width": side, "height": side,
-                        "camera": {"eye": [0, 0, -2], "target": [0, 0, 0], "fov_y": 60}, "validation": "required"})
+                        "camera": {"eye": [0, 0, -2], "target": [0, 0, 0], "fov_y": 60}, "render_options": {"cloud_shadows": False}, "validation": "required"})
 
         def wait(ticket, success=True):
             deadline = time.monotonic() + 90
@@ -92,9 +92,9 @@ def main():
             assert len(found) == 1 and found[0]["effect"] == "external" and not found[0]["undoable"]
             descriptor = call("commands.describe", {"name": "render.capture"})
             assert not descriptor["parameters"]["additionalProperties"]
-            assert "time_seconds" not in descriptor["parameters"]["properties"]
+            assert "time_seconds" in descriptor["parameters"]["properties"]
             quality = descriptor["result"]["properties"]["provenance"]["properties"]["quality"]["enum"]
-            assert set(quality) == {"cloud_reference_v1", "atmosphere_v1", "unlit_v1"}
+            assert set(quality) == {"cloud_reference_v1", "cloud_temporal_v1", "atmosphere_v1", "unlit_v1"}
             (root / "capture.schema.json").write_text(json.dumps(descriptor, indent=2), encoding="utf-8")
             call("scene.load", {"manifest": "project.json"})
             environment = call("environment.query")["environment"]

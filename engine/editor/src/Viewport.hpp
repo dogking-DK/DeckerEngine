@@ -14,7 +14,7 @@ public:
     ~Viewport();
     // Previous GUI submission must be complete. Backend must be initialized.
     void update(const SceneReadSnapshot&,std::uint32_t width,std::uint32_t height,bool srgb,const Camera&,
-        const std::optional<TransformEdit>&,std::uint64_t preview_revision,float exposure=1);
+        const std::optional<TransformEdit>&,std::uint64_t preview_revision,float exposure=1,const render::EnvironmentRenderSettings& environment = {});
     void update_simulation(Workspace&,const SimulationRunState&,std::uint32_t width,std::uint32_t height,const Camera&);
     void show_edit();
     void retry_simulation() { simulation_view_.reset(); }
@@ -29,6 +29,10 @@ public:
     [[nodiscard]] bool camera_current(const Camera& camera) const { return !simulation_run_ && published_camera_==camera.revision(); }
     void retry() { attempted_.reset(); asset_session_.reset(); }
     [[nodiscard]] std::uint64_t environment_discarded() const { return environment_.discarded(); }
+    [[nodiscard]] const render::EnvironmentRenderSettings& environment_settings() const { return published_environment_; }
+    [[nodiscard]] const render::CloudFrameInfo& environment_history() const { return published_history_; }
+    [[nodiscard]] std::uint32_t environment_warmup() const { return published_warmup_; }
+    [[nodiscard]] std::uint64_t environment_shadow() const { return published_shadow_; }
     void release_texture();
     [[nodiscard]] ImTextureID texture() const { return reinterpret_cast<ImTextureID>(descriptor_); }
     [[nodiscard]] const graphics::Image& image() const { return image_; }
@@ -45,6 +49,7 @@ private:
         DocumentId session; std::uint64_t revision; std::uint32_t width,height; bool srgb;
         std::uint64_t camera,preview;
         float exposure;
+        render::EnvironmentRenderSettings environment;
         bool operator==(const Key&) const = default;
     };
     void publish(std::vector<std::byte>,const render::FrameInfo&,render::RenderScene,const Camera&,const Key&);
@@ -52,7 +57,10 @@ private:
     graphics::SubmissionQueue& queue_;
     render::ScenePipeline pipeline_;
     EnvironmentPreview environment_;
-    std::uint64_t environment_sequence_=0;
+    std::uint64_t environment_sequence_=0,published_shadow_=0;
+    render::EnvironmentRenderSettings published_environment_;
+    render::CloudFrameInfo published_history_;
+    std::uint32_t published_warmup_=0;
     std::optional<DocumentId> asset_session_,published_session_;
     std::optional<Key> attempted_,published_;
     std::optional<SimulationId> simulation_run_;

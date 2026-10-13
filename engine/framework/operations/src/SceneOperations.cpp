@@ -330,6 +330,15 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
             });
     if (!r)
         return r;
+    auto preset_version=schema::integer(); preset_version["enum"]={1};
+    r = add("environment.preset", "Query a versioned complete environment preset without editing a scene",
+        schema::object({{"name",{{"type","string"},{"enum",{"clear","sparse","overcast","sunset"}}}}},{"name"}),
+        schema::object({{"version",preset_version}, {"environment",operations_detail::environment_schema()}}, {"version","environment"}),
+        CommandEffect::query, [](const Json& p)->Result<Json> {
+            auto e=environment_preset(p["name"].get<std::string>()); if(!e) return std::unexpected(e.error());
+            return Json{{"version",1},{"environment",operations_detail::environment_json(*e)}};
+        });
+    if (!r) return r;
     r = add("environment.query", "Query the scene environment in meters and scene-linear RGB", schema::object(),
         schema::object({{"state", state_schema()}, {"environment", operations_detail::environment_schema()}},
             {"state", "environment"}), CommandEffect::query,

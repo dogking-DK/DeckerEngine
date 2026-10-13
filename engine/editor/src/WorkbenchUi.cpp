@@ -212,12 +212,14 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
         layout_=true;
     }
     hierarchy(); inspector(); environment();
-    input_.environment(model_.snapshot() && model_.snapshot()->scene.environment().enabled);
+    input_.environment(model_.snapshot() && (model_.snapshot()->scene.environment().enabled || model_.snapshot()->scene.environment().clouds.enabled));
     const bool visible=ImGui::Begin("Viewport",nullptr,ImGuiWindowFlags_NoScrollWithMouse|ImGuiWindowFlags_NoScrollbar);
     if (!visible) input_.cancel();
     if (!simulation_view(preview,visible)) {
     preview.show_edit();
-    ImGui::TextUnformatted(model_.snapshot() && model_.snapshot()->scene.environment().enabled ? "ATMOSPHERE" : "UNLIT PREVIEW"); ImGui::SameLine();
+    const auto* environment = model_.snapshot() ? &model_.snapshot()->scene.environment() : nullptr;
+    ImGui::TextUnformatted(environment && environment->clouds.enabled ? "CLOUDS" :
+                          environment && environment->enabled ? "ATMOSPHERE" : "UNLIT PREVIEW"); ImGui::SameLine();
     ImGui::BeginDisabled(input_.active());
     if (ImGui::SmallButton("Refresh")) preview.retry();
     ImGui::EndDisabled();
@@ -227,11 +229,18 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
             static_cast<unsigned long long>(preview.info().revision),preview.info().draw_count,
             preview.current(s->state) ? "Current scene" : "STALE PREVIEW");
         else ImGui::TextUnformatted("Preparing scene...");
+        if(preview.texture() && (s->scene.environment().enabled || s->scene.environment().clouds.enabled)) {
+            const auto& used=preview.environment_settings();
+            ImGui::Text("t %.3f / %s / warmup %u / history %s / shadow %llu",used.time_seconds,
+                used.mode==render::CloudRenderMode::temporal ? "temporal" : "reference",preview.environment_warmup(),
+                render::cloud_history_reset_name(preview.environment_history().reset),static_cast<unsigned long long>(preview.environment_shadow()));
+        }
         const auto available=ImGui::GetContentRegionAvail();
         if (available.x>=32 && available.y>=32) {
             const auto width=static_cast<std::uint32_t>(std::clamp(available.x,32.0f,1600.0f));
             const auto height=static_cast<std::uint32_t>(std::clamp(available.y,32.0f,1200.0f));
-            preview.update(*s,width,height,srgb,input_.camera(),input_.edit(),input_.revision(),exposure_);
+            environment_settings_.camera_revision=input_.camera().revision();
+            preview.update(*s,width,height,srgb,input_.camera(),input_.edit(),input_.revision(),exposure_,environment_settings_);
             if (preview.texture()) {
                 const auto& info=preview.info();
                 const float scale=std::min(available.x/static_cast<float>(info.width),available.y/static_cast<float>(info.height));

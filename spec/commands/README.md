@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-10-13T14:52:00+08:00"
+updated_at: "2026-10-13T18:54:48+08:00"
 status: accepted
 ---
 
@@ -9,7 +9,7 @@ status: accepted
 
 本目录供人和 AI 查阅当前可调用命令。适用于当前 Runtime；
 `windows-dev` 构建启用此功能，最小 bootstrap 仅提供 `--help/--version`。
-windows-dev 当前 45 条命令；windows-graphics 另含 render.capture 和 simulation.export，共47条。以实际 `commands.list` 为准；关闭 Jobs/Importers 且不装配截图/实验导出时提供34条。
+命令集合随构建选项变化，以实际`commands.list`为准；截图模块提供render.capture/render.sequence，CPU环境预设无需GPU。
 完整字段 schema 可通过 `commands.describe` 查询。
 
 独立离线 CLI 另见 [dk-shaderc 编译参数与输出](shaderc.md)（反射schema v2包含纹理维度）；它不属于下列 Runtime 命令集。
@@ -23,12 +23,12 @@ Luau 调用同一套场景/实体/历史服务，入口、值转换与允许命�
 | --- | --- | --- |
 | [发现](discovery.md) | `commands.list`、`commands.describe` | 列出命令、查询参数和结果 schema |
 | [场景与工程](scene.md) | `scene.new`、`scene.load`、`scene.query`、`scene.save`、`project.save`、`scene.transaction` | 文档会话、查询、保存和事务 |
-| [环境](environment.md) | `environment.query`、`environment.set` | 大气/单太阳/云CPU参数、environment v2、事务/撤销与场景持久化 |
+| [环境](environment.md) | `environment.query`、`environment.preset`、`environment.set` | 大气/单太阳/云CPU参数、environment v2、事务/撤销与场景持久化 |
 | [实体](entity.md) | `entity.create`、`entity.get`、`entity.delete`、`entity.set_name`、`entity.set_transform`、`entity.set_parent`、`entity.set_assets` | 实体编辑和查询 |
 | [历史](history.md) | `history.status`、`history.undo`、`history.redo` | 内存撤销与重做 |
 | [运行时与任务](runtime.md) | `runtime.capabilities`、`runtime.shutdown`、`tasks.list`、`tasks.get` | 能力、同步任务和关闭 |
 | [CPU 资产](assets.md) | `assets.open`、`assets.catalog`、`assets.import`、`assets.register`、`assets.rename`、`assets.load`、`assets.status`、`assets.unload` | 目录会话、持久身份和 CPU Ready |
-| [截图](render.md) | `render.capture` | 冻结场景/环境与相机曝光，支持有界云参考、来源元数据和原子图像输出 |
+| [截图](render.md) | `render.capture`、`render.sequence` | 冻结场景/环境、相机与时间，支持云参考/时域、云影及原子图像或序列报告 |
 | [模拟](simulation.md) | `simulation.start`、`simulation.run`、`simulation.cancel`、`simulation.pause`、`simulation.resume`、`simulation.step`、`simulation.stop`、`simulation.query`、`simulation.sample`、`simulation.particles`、`simulation.export` | 独立 PlayWorld、固定步长、有限任务控制、CPU/GPU XPBD、显式数值/批次性能和实验导出 |
 | [后台作业](jobs.md) | `jobs.get`、`jobs.wait`、`jobs.cancel` | JobId 状态、等待和协作取消 |
 

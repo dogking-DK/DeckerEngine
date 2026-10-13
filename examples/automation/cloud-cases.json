@@ -1,0 +1,352 @@
+{
+  "schema_version": 1,
+  "project": "project.json",
+  "cases": [
+    {
+      "id": "reference",
+      "environment": {
+        "atmosphere": {
+          "absorption_center_height_m": 25000.0,
+          "absorption_extinction_per_m": [
+            6.5e-07,
+            1.881e-06,
+            8.5e-08
+          ],
+          "absorption_half_width_m": 15000.0,
+          "atmosphere_height_m": 100000.0,
+          "ground_albedo": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "ground_radius_m": 6360000.0,
+          "mie_anisotropy": 0.8,
+          "mie_extinction_per_m": [
+            4.44e-06,
+            4.44e-06,
+            4.44e-06
+          ],
+          "mie_scale_height_m": 1200.0,
+          "mie_scattering_per_m": [
+            3.996e-06,
+            3.996e-06,
+            3.996e-06
+          ],
+          "planet_center_m": [
+            0.0,
+            -6360500.0,
+            0.0
+          ],
+          "rayleigh_scale_height_m": 8000.0,
+          "rayleigh_scattering_per_m": [
+            5.802e-06,
+            1.3558e-05,
+            3.31e-05
+          ]
+        },
+        "clouds": {
+          "base_resolution": 16,
+          "bottom_fade_fraction": 0.1,
+          "bottom_height_m": 1500.0,
+          "coverage": 0.85,
+          "density": 0.8,
+          "detail_resolution": 8,
+          "detail_scale_m": 1000.0,
+          "enabled": true,
+          "extinction_per_m": 0.0003,
+          "generator_version": 1,
+          "seed": 1729,
+          "shape_scale_m": 10000.0,
+          "top_fade_fraction": 0.2,
+          "top_height_m": 4000.0,
+          "weather_resolution": 16,
+          "weather_scale_m": 100000.0,
+          "wind_velocity_mps": [
+            10.0,
+            0.0
+          ]
+        },
+        "enabled": true,
+        "sun": {
+          "angular_radius_rad": 0.004675,
+          "direction": [
+            0.2,
+            0.8,
+            -0.3
+          ],
+          "irradiance": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "version": 2
+      },
+      "width": 16,
+      "height": 16,
+      "exposure": 1,
+      "render_options": {
+        "mode": "reference",
+        "cloud_shadows": true,
+        "shadow_center_m": [
+          0,
+          0,
+          0
+        ],
+        "shadow_extent_m": 8192,
+        "shadow_resolution": 32
+      },
+      "warmup_frames": 0,
+      "samples": [
+        {
+          "camera": {
+            "eye": [
+              0,
+              0,
+              -2
+            ],
+            "target": [
+              0,
+              0,
+              0
+            ],
+            "up": [
+              0,
+              1,
+              0
+            ],
+            "fov_y": 65,
+            "near": 1,
+            "far": 10000
+          },
+          "time_seconds": 0,
+          "camera_cut": false
+        },
+        {
+          "camera": {
+            "eye": [
+              0,
+              0,
+              -2
+            ],
+            "target": [
+              0,
+              0,
+              0
+            ],
+            "up": [
+              0,
+              1,
+              0
+            ],
+            "fov_y": 65,
+            "near": 1,
+            "far": 10000
+          },
+          "time_seconds": 0,
+          "camera_cut": false
+        },
+        {
+          "camera": {
+            "eye": [
+              0,
+              0,
+              -2
+            ],
+            "target": [
+              0,
+              0,
+              0
+            ],
+            "up": [
+              0,
+              1,
+              0
+            ],
+            "fov_y": 65,
+            "near": 1,
+            "far": 10000
+          },
+          "time_seconds": 30,
+          "camera_cut": false
+        }
+      ]
+    },
+    {
+      "id": "temporal",
+      "environment": {
+        "atmosphere": {
+          "absorption_center_height_m": 25000.0,
+          "absorption_extinction_per_m": [
+            6.5e-07,
+            1.881e-06,
+            8.5e-08
+          ],
+          "absorption_half_width_m": 15000.0,
+          "atmosphere_height_m": 100000.0,
+          "ground_albedo": [
+            0.3,
+            0.3,
+            0.3
+          ],
+          "ground_radius_m": 6360000.0,
+          "mie_anisotropy": 0.8,
+          "mie_extinction_per_m": [
+            4.44e-06,
+            4.44e-06,
+            4.44e-06
+          ],
+          "mie_scale_height_m": 1200.0,
+          "mie_scattering_per_m": [
+            3.996e-06,
+            3.996e-06,
+            3.996e-06
+          ],
+          "planet_center_m": [
+            0.0,
+            -6360500.0,
+            0.0
+          ],
+          "rayleigh_scale_height_m": 8000.0,
+          "rayleigh_scattering_per_m": [
+            5.802e-06,
+            1.3558e-05,
+            3.31e-05
+          ]
+        },
+        "clouds": {
+          "base_resolution": 16,
+          "bottom_fade_fraction": 0.1,
+          "bottom_height_m": 1500.0,
+          "coverage": 0.85,
+          "density": 0.8,
+          "detail_resolution": 8,
+          "detail_scale_m": 1000.0,
+          "enabled": true,
+          "extinction_per_m": 0.0003,
+          "generator_version": 1,
+          "seed": 1729,
+          "shape_scale_m": 10000.0,
+          "top_fade_fraction": 0.2,
+          "top_height_m": 4000.0,
+          "weather_resolution": 16,
+          "weather_scale_m": 100000.0,
+          "wind_velocity_mps": [
+            10.0,
+            0.0
+          ]
+        },
+        "enabled": true,
+        "sun": {
+          "angular_radius_rad": 0.004675,
+          "direction": [
+            0.2,
+            0.8,
+            -0.3
+          ],
+          "irradiance": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "version": 2
+      },
+      "width": 16,
+      "height": 16,
+      "exposure": 1,
+      "render_options": {
+        "mode": "temporal",
+        "cloud_shadows": true,
+        "shadow_center_m": [
+          0,
+          0,
+          0
+        ],
+        "shadow_extent_m": 8192,
+        "shadow_resolution": 32
+      },
+      "warmup_frames": 32,
+      "samples": [
+        {
+          "camera": {
+            "eye": [
+              0,
+              0,
+              -2
+            ],
+            "target": [
+              0,
+              0,
+              0
+            ],
+            "up": [
+              0,
+              1,
+              0
+            ],
+            "fov_y": 65,
+            "near": 1,
+            "far": 10000
+          },
+          "time_seconds": 0,
+          "camera_cut": false
+        },
+        {
+          "camera": {
+            "eye": [
+              0,
+              0,
+              -2
+            ],
+            "target": [
+              0,
+              0,
+              0
+            ],
+            "up": [
+              0,
+              1,
+              0
+            ],
+            "fov_y": 65,
+            "near": 1,
+            "far": 10000
+          },
+          "time_seconds": 0,
+          "camera_cut": false
+        },
+        {
+          "camera": {
+            "eye": [
+              0,
+              0,
+              -2
+            ],
+            "target": [
+              0,
+              0,
+              0
+            ],
+            "up": [
+              0,
+              1,
+              0
+            ],
+            "fov_y": 65,
+            "near": 1,
+            "far": 10000
+          },
+          "time_seconds": 30,
+          "camera_cut": false
+        }
+      ]
+    }
+  ],
+  "comparisons": [
+    {
+      "reference": "reference",
+      "candidate": "temporal"
+    }
+  ]
+}

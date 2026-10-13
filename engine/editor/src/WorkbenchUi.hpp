@@ -55,5 +55,6 @@ private:
     bool popup_ = false,closing_ = false,layout_ = false,scroll_log_ = true;
     unsigned errors_ = 0;
     float exposure_=1;
+    render::EnvironmentRenderSettings environment_settings_=[] { render::EnvironmentRenderSettings s; s.mode=render::CloudRenderMode::temporal; return s; }();
 };
 }

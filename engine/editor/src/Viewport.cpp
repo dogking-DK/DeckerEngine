@@ -16,20 +16,21 @@ void Viewport::release_texture() {
     simulation_view_.reset();
 }
 void Viewport::update(const SceneReadSnapshot& snapshot,std::uint32_t width,std::uint32_t height,bool srgb,const Camera& camera,
-    const std::optional<TransformEdit>& edit,std::uint64_t preview_revision,float exposure) {
+    const std::optional<TransformEdit>& edit,std::uint64_t preview_revision,float exposure,const render::EnvironmentRenderSettings& environment) {
     show_edit();
-    const Key key{snapshot.state.document_id,snapshot.state.revision,width,height,srgb,camera.revision(),preview_revision,exposure};
-    if(snapshot.scene.environment().enabled) {
+    const Key key{snapshot.state.document_id,snapshot.state.revision,width,height,srgb,camera.revision(),preview_revision,exposure,environment};
+    if(snapshot.scene.environment().enabled || snapshot.scene.environment().clouds.enabled) {
         try {
             if(attempted_!=key) {
                 if(snapshot.scene.logical_bytes()>32U*1024U*1024U) throw std::runtime_error("Environment preview snapshot exceeds 32 MiB");
-                environment_.request({snapshot,camera,width,height,edit,++environment_sequence_,exposure});
+                environment_.request({snapshot,camera,width,height,edit,++environment_sequence_,exposure,environment});
                 attempted_=key; error_.clear();
             }
             if(auto result=environment_.take_result(); result && result->sequence==environment_sequence_) {
                 if(!result->error.empty()) throw std::runtime_error(result->error);
                 publish(std::move(result->pixels),result->info,std::move(result->scene),camera,key);
-                meshes_=std::move(result->meshes);
+                meshes_=std::move(result->meshes); published_environment_=result->environment; published_history_=result->history;
+                published_warmup_=result->warmup_frames; published_shadow_=result->shadow_generation;
             }
         } catch(const std::exception& error) { error_=error.what(); }
         return;
@@ -38,6 +39,7 @@ void Viewport::update(const SceneReadSnapshot& snapshot,std::uint32_t width,std:
     if (attempted_==key) return;
     attempted_=key;
     try {
+        check(render::validate_environment_render_settings(environment));
         if (asset_session_!=key.session) {
             auto source=take(render::DiskScene::load_snapshot(heap_,snapshot.project,snapshot.scene,{GltfImportProfile::unlit_preview}));
             std::vector<PickMesh> queries;
@@ -62,6 +64,7 @@ void Viewport::update(const SceneReadSnapshot& snapshot,std::uint32_t width,std:
         std::vector<std::byte> pixels(static_cast<std::size_t>(width)*height*4);
         check(frame.read_rgba8(pixels));
         publish(std::move(pixels),frame.info(),std::move(scene),camera,key);
+        published_environment_=environment; published_history_={}; published_warmup_=0; published_shadow_=0;
     } catch (const std::exception& error) { error_=error.what(); }
 }
 void Viewport::publish(std::vector<std::byte> pixels,const render::FrameInfo& info,render::RenderScene scene,const Camera& camera,const Key& key) {

@@ -57,10 +57,21 @@ void EnvironmentPreview::run(std::stop_token stop) {
                 auto view=take(render::RenderView::create(result.scene,{request->width,request->height,request->sequence,
                     request->camera.world(),request->camera.projection(double(request->width)/request->height)}));
                 auto settings=render::unlit_preview_settings(); settings.exposure=request->exposure;
-                auto frame=take(pipeline.render_environment(queue,view,assets,settings));
-                if(!take(frame.wait(queue))) throw std::runtime_error("Environment preview did not complete");
-                result.info=frame.info(); result.pixels.resize(std::size_t(request->width)*request->height*4);
-                check(frame.read_rgba8(result.pixels)); result.meshes=meshes;
+                result.environment=request->environment;
+                const auto& clouds=request->snapshot.scene.environment().clouds;
+                const bool cloudy=clouds.enabled && clouds.coverage>0 && clouds.density>0 && clouds.extinction_per_m>0;
+                result.warmup_frames=cloudy && request->environment.mode==render::CloudRenderMode::temporal ? 32u : 0u;
+                if(pipeline.cloud_history(request->environment.view_id)) check(pipeline.release_cloud_history(queue,request->environment.view_id));
+                for(unsigned i=0;i<=result.warmup_frames;++i) {
+                    if(stop.stop_requested() || !current(request->sequence)) break;
+                    auto frame=take(pipeline.render_environment(queue,view,assets,settings,request->environment));
+                    if(!take(frame.wait(queue))) throw std::runtime_error("Environment preview did not complete");
+                    if(i==result.warmup_frames) {
+                        result.info=frame.info(); result.pixels.resize(std::size_t(request->width)*request->height*4);
+                        check(frame.read_rgba8(result.pixels)); result.meshes=meshes;
+                        result.history=frame.cloud_optimization(); result.shadow_generation=frame.cloud_shadow_generation();
+                    }
+                }
             }
         } catch(const std::exception& error) { result.error=error.what(); }
         {

@@ -31,6 +31,19 @@ struct RenderSettings {
     bool sky_diffuse = true; // Used by lit paths; anchor-local sky irradiance.
     bool linear_readback = false; // Diagnostic: <= 65536 pixels, before exposure.
 };
+enum class CloudRenderMode { reference, temporal };
+struct EnvironmentRenderSettings {
+    CloudRenderMode mode=CloudRenderMode::reference;
+    double time_seconds=0;
+    std::uint64_t view_id=1,camera_revision=0;
+    bool cloud_shadows=true;
+    Vec3d shadow_center_m=Vec3d::Zero();
+    double shadow_extent_m=8192;
+    std::uint32_t shadow_resolution=256;
+    bool operator==(const EnvironmentRenderSettings&) const = default;
+};
+[[nodiscard]] Result<void> validate_environment_render_settings(const EnvironmentRenderSettings&);
+[[nodiscard]] const char* cloud_history_reset_name(CloudHistoryReset) noexcept;
 struct AtmosphereSettings {
     bool surface_lighting = true;
     bool sun_disk = true;
@@ -89,7 +102,7 @@ public:
         const AtmosphereSky&, const RenderSettings& = {}, const CloudShadowMap* = nullptr);
     // Synchronous LUT preparation followed by asynchronous frame submission; call from a worker.
     [[nodiscard]] Result<RenderFrame> render_environment(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
-        const RenderSettings& = {});
+        const RenderSettings& = {}, const EnvironmentRenderSettings& = {});
     // Finite forward-Z perspective; the sky anchor must equal camera position.
     [[nodiscard]] Result<RenderFrame> render_atmosphere(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
         const AtmosphereSky&, const RenderSettings& = {}, const AtmosphereSettings& = {}, const CloudShadowMap* = nullptr);

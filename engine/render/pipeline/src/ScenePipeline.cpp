@@ -5,6 +5,7 @@
 #include <dk/memory/SmartPtr.hpp>
 #include <dk/profiling/Profiler.hpp>
 #include <algorithm>
+#include <bit>
 #ifdef DK_RENDER_SUNLIGHT
 #include <dk/render/Atmosphere.hpp>
 #endif
@@ -23,7 +24,7 @@ namespace dk::render {
 using namespace graphics;
 namespace detail {
 #ifdef DK_RENDER_CLOUDS
-struct CloudEnvironment { CloudFieldCache fields; std::unique_ptr<CloudTextureCache> textures; };
+struct CloudEnvironment { CloudFieldCache fields; std::unique_ptr<CloudTextureCache> textures; std::optional<CloudShadowRenderer> shadows; };
 struct CloudHistoryGeneration {
     CloudOptimizedSettings settings;
     ViewDescription view;
@@ -589,6 +590,17 @@ Result<void> copy_pass(graph::PassContext& pass,void* pointer) {
     return {};
 }
 }
+const char* cloud_history_reset_name(CloudHistoryReset value) noexcept {
+    constexpr const char* names[]{"none","new_view","disabled","resize","projection","camera","scene","content","quality","time","failure"};
+    const auto i=static_cast<unsigned>(value); return i<std::size(names) ? names[i] : "unknown";
+}
+Result<void> validate_environment_render_settings(const EnvironmentRenderSettings& s) {
+    if((s.mode!=CloudRenderMode::reference && s.mode!=CloudRenderMode::temporal) || !std::isfinite(s.time_seconds) || std::abs(s.time_seconds)>1e9 ||
+        !s.view_id || !s.shadow_center_m.allFinite() || (s.shadow_center_m.array().abs()>1e9).any() || !std::isfinite(s.shadow_extent_m) ||
+        s.shadow_extent_m<16 || s.shadow_extent_m>65536 || !std::has_single_bit(s.shadow_resolution) || s.shadow_resolution<16 || s.shadow_resolution>512)
+        return std::unexpected(Error{ErrorCode::invalid_argument,"Invalid environment mode, time, view identity or shadow region"});
+    return {};
+}
 Result<void> validate_render_settings(const RenderView& view,const RenderSettings& settings) {
     const auto& desc = view.description();
     if (!view.scene() || !desc.width || !desc.height ||
@@ -647,17 +659,30 @@ Result<RenderFrame> ScenePipeline::render(SubmissionQueue& queue,const RenderVie
 Result<RenderFrame> ScenePipeline::render_sunlight(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings,const CloudShadowMap* shadow) {
     return render_impl(queue,view,assets,settings,view.scene().environment().enabled ? &sky : nullptr,nullptr,nullptr,nullptr,nullptr,shadow);
 }
-Result<RenderFrame> ScenePipeline::render_environment(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings) {
+Result<RenderFrame> ScenePipeline::render_environment(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings,const EnvironmentRenderSettings& environment) {
+    if(auto valid=validate_environment_render_settings(environment); !valid) return std::unexpected(valid.error());
     const bool cloudy=active_clouds(view.scene().environment());
-    if(!cloudy && !view.scene().environment().enabled) return render(queue,view,assets,settings);
+    if(!cloudy && !view.scene().environment().enabled) {
+        auto frame=render(queue,view,assets,settings);
+#ifdef DK_RENDER_CLOUDS
+        if(frame) for(auto& slot:state_->cloud_history) if(slot.id==environment.view_id) slot={};
+#endif
+        return frame;
+    }
 #ifdef DK_RENDER_SUNLIGHT
     if(!state_ || state_->heap.state()!=memory::ResourceState::open) return std::unexpected(Error{ErrorCode::invalid_state,"empty or closed scene pipeline"});
     try {
         check(validate_render_settings(view,settings)); take(detail::perspective_depth(view.description()));
         { auto guard=take(queue.begin()); check(guard.retain(state_->identity)); }
 #ifdef DK_RENDER_CLOUDS
-        CloudCompositionSettings composition;
-        if(cloudy) check(validate_cloud_composition(view.scene().environment(),composition,std::size_t(view.description().width)*view.description().height));
+        CloudCompositionSettings composition; composition.reference.time_seconds=environment.time_seconds;
+        CloudOptimizedSettings optimized; optimized.composition.reference.time_seconds=environment.time_seconds;
+        optimized.view_id=environment.view_id; optimized.camera_revision=environment.camera_revision;
+        if(cloudy) {
+            if(environment.mode==CloudRenderMode::reference) check(validate_cloud_composition(view.scene().environment(),composition,std::size_t(view.description().width)*view.description().height));
+            else check(validate_cloud_optimization(view.scene().environment(),optimized,view.description().width,view.description().height));
+        }
+        check(poll_cloud_history(queue));
 #else
         if(cloudy) throw Error{ErrorCode::not_supported,"cloud composition requires DK_BUILD_RENDER_CLOUDS"};
 #endif
@@ -673,13 +698,23 @@ Result<RenderFrame> ScenePipeline::render_environment(SubmissionQueue& queue,con
             auto& owner=state_->clouds ? *state_->clouds : *cloud_candidate;
             const auto data=take(owner.fields.prepare(view.scene().environment().clouds));
             const auto textures=take(owner.textures->prepare(queue,*data));
-            frame=render_clouds(queue,view,assets,sky,*textures,composition,settings);
+            CloudShadowMap shadow;
+            if(environment.cloud_shadows && view.scene().environment().enabled) {
+                if(!owner.shadows) owner.shadows=take(CloudShadowRenderer::create(state_->heap,queue,state_->directory/"../../engine/render/clouds/shaders"));
+                CloudShadowSettings options; options.time_seconds=environment.time_seconds; options.center_m=environment.shadow_center_m;
+                options.extent_m=environment.shadow_extent_m; options.resolution=environment.shadow_resolution;
+                shadow=take(owner.shadows->prepare(queue,view.scene().environment(),*textures,options));
+            }
+            if(environment.mode==CloudRenderMode::reference) frame=render_clouds(queue,view,assets,sky,*textures,composition,settings,shadow ? &shadow : nullptr);
+            else frame=render_clouds_optimized(queue,view,assets,sky,*textures,optimized,settings,shadow ? &shadow : nullptr);
         } else
 #endif
         frame=render_atmosphere(queue,view,assets,sky,settings);
         if(frame && candidate) state_->atmosphere=std::move(candidate);
 #ifdef DK_RENDER_CLOUDS
         if(frame && cloud_candidate) state_->clouds=std::move(cloud_candidate);
+        if(frame && (environment.mode==CloudRenderMode::reference || !cloudy))
+            for(auto& slot:state_->cloud_history) if(slot.id==environment.view_id) slot={};
 #endif
         return frame;
     } catch(const Error& error) { return std::unexpected(error); }
@@ -772,7 +807,7 @@ Result<std::string> shader_fingerprint(const std::filesystem::path& directory,bo
         append(0);
     }
     // CPU-side sampling/mapping version, including the fixed 64 x 64 x 128 AP grid.
-    for(const unsigned char c:std::string_view{"render-environment-v2:64x64x128:128:cloud-joint-v1:256x64x64:cloud-reconstruct-v1:96to256x8:half-fixed:cloud-shadow-v1:sunward-inner-sphere"}) append(c);
+    for(const unsigned char c:std::string_view{"render-environment-v2:64x64x128:128:cloud-joint-v1:256x64x64:cloud-reconstruct-v1:96to256x8:half-fixed:cloud-shadow-v1:sunward-inner-sphere:environment-session-v1"}) append(c);
     std::ostringstream out; out<<"fnv1a64:"<<std::hex<<std::setfill('0')<<std::setw(16)<<hash; return out.str();
 }
 Result<RenderFrame> ScenePipeline::render_atmosphere(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings,const AtmosphereSettings& atmosphere,const CloudShadowMap* shadow) {

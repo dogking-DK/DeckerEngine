@@ -1,7 +1,7 @@
 ---
 module: render-capture
 created_at: "2026-10-03T21:21:47+08:00"
-updated_at: "2026-10-13T14:47:00+08:00"
+updated_at: "2026-10-13T19:07:53+08:00"
 status: accepted
 ---
 
@@ -67,7 +67,7 @@ GPU 进程验收覆盖版本绑定、编辑后图像变化、无输入自动发�
 
 ## M14.6 环境绑定与可追溯截图
 
-M15.3补充：非零云由共用环境入口选择混合介质参考，quality为`cloud_reference_v1`，固定time=0与256/64/64步，
+M15.3补充：非零云由共用环境入口选择混合介质参考，默认quality为`cloud_reference_v1`、time=0与256/64/64步；M15.6允许显式时间及temporal，
 最多4096像素，超限在worker失败且保留旧输出。云与空气独立开关；零云仍用原atmosphere_v1/unlit_v1。
 指纹覆盖云/空气共享传输与合成shader，ticket/result schema增加该quality值，命令参数/effect/guard/发布流程不变。
 
@@ -76,8 +76,15 @@ render.capture按接受时SceneSnapshot的空气/云开关和非零云参数选�
 worker创建ScenePipeline后调用共用render_environment：冷准备与GPU等待在worker，原取消/原子单文件发布契约保持。
 未构建大气时enabled请求明确失败；disabled保持旧unlit；CPU-only不装配CaptureService，环境命令仍不初始化GPU。
 
-提交ticket和成功result新增provenance：完整冻结environment、camera、exposure、profile、quality（unlit_v1/atmosphere_v1/cloud_reference_v1）、
-time_seconds=0（固定时刻，没有时钟推进）、shader_fingerprint（ticket为null，成功时记录源码集FNV-1a64诊断指纹）。
+提交ticket和成功result新增provenance：完整冻结environment、camera、exposure、profile、quality（unlit_v1/atmosphere_v1/cloud_reference_v1/cloud_temporal_v1）、
+time_seconds（默认0，没有隐式时钟推进）、shader_fingerprint（ticket为null，成功时记录源码集FNV-1a64诊断指纹）。
 指纹不是安全校验；执行期间源码集必须稳定，编译前后摘要变化则失败，保留旧文件。输出仍只有PPM，不增加多文件原子事务。
 后续编辑/保存/撤销不改变冻结版本；GPU/IO/取消均不改旧文件。result保持<=4096字节Jobs元数据上限。
 命令发现/schema及文档同步；Python与Luau例子实际修改环境并使用同一capture命令，GUI/IPC验收保存重载，验收固定参数图像与元数据。
+
+## M15.6 固定时间与独立时域序列
+
+capture保留单PPM原子输出并增加环境渲染会话设置；默认reference、time=0，非零云且空气启用时准备固定世界云影。render.sequence复用相同Service/worker/Jobs路由，冻结完整样本列表，从新Pipeline空历史开始，按序等待每帧；每次作业只发布一个有版本JSON报告。报告内含RGBA8和曝光前线性RGBA，Python工具再提取图像与比较。
+所有相机、时间、模式、预热与像素预算在入队前预检；成功接受只占用一个作业身份，不修改Scene。worker循环检查取消，GPU在途必须等待；失败/取消不发布候选报告。owner drain单次write_file_bytes_atomic是唯一外部提交点，既有PPM/JSON在失败时保持；返回摘要先于提交完成分配。
+每帧最多65536像素、总262144像素、1–128样本、temporal预热0–64且reference禁预热。输入预约保守计入每像素256字节、相机样本和完整Scene；最终JSON≤64MiB、Job摘要≤4096字节。报告保存全部原始线性值/图像、身份、完整参数、source指纹、历史/云影状态和设备；采集时间为端到端wall，gpu_ms为null表示未采集，不伪装成0。
+新命令参数/schema/返回值见[截图命令](../commands/render.md)，完整上层契约见[云设计](render-clouds.md#m156-上层配置预设与用例清单)。

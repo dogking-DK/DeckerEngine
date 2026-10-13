@@ -8,6 +8,12 @@ void WorkbenchUi::environment() {
     if(!draft) { ImGui::TextUnformatted("Open a scene to edit the environment."); ImGui::End(); return; }
     ImGui::TextWrapped("Meters, linear RGB. Apply creates one undo step. Unapplied values do not change the viewport.");
     ImGui::BeginDisabled(input_.active() || (model_.draft() && model_.draft()->modified));
+    ImGui::TextUnformatted("Preset v1 (Apply to commit)");
+    for(const char* name:{"clear","sparse","overcast","sunset"}) {
+        if(name!=std::string_view{"clear"}) ImGui::SameLine();
+        if(ImGui::Button(name)) report("Environment preset",model_.preset_environment(name));
+        const auto id=std::string{"cloud_preset_"}+name; mark(id.c_str());
+    }
     auto& e=draft->value; bool enabled=e.at("enabled").get<bool>();
     if(ImGui::Checkbox("Enable atmosphere",&enabled)) { e["enabled"]=enabled; draft->modified=true; } mark("environment_enabled");
     auto scalar=[&](const char* label,Json& value,const char* format="%.6g") {
@@ -31,6 +37,18 @@ void WorkbenchUi::environment() {
         for(const char* key:{"planet_center_m","rayleigh_scattering_per_m","mie_scattering_per_m","mie_extinction_per_m","absorption_extinction_per_m","ground_albedo"}) vector(key,a[key]);
         for(const char* key:{"ground_radius_m","atmosphere_height_m","rayleigh_scale_height_m","mie_scale_height_m","mie_anisotropy","absorption_center_height_m","absorption_half_width_m"}) scalar(key,a[key]);
     }
+    if(ImGui::CollapsingHeader("Cloud physical parameters")) {
+        auto& c=e["clouds"]; bool clouds=c["enabled"].get<bool>();
+        if(ImGui::Checkbox("Enable clouds",&clouds)) { c["enabled"]=clouds; draft->modified=true; } mark("cloud_enabled");
+        for(const char* name:{"seed","weather_resolution","base_resolution","detail_resolution"}) {
+            auto value=c[name].get<std::uint32_t>();
+            if(ImGui::InputScalar(name,ImGuiDataType_U32,&value)) { c[name]=value; draft->modified=true; }
+        }
+        ImGui::Text("Generator version: %u",c["generator_version"].get<std::uint32_t>());
+        for(const char* name:{"bottom_height_m","top_height_m","coverage","density","extinction_per_m","weather_scale_m","shape_scale_m","detail_scale_m","bottom_fade_fraction","top_fade_fraction"}) scalar(name,c[name]);
+        double wind[]{c["wind_velocity_mps"][0].get<double>(),c["wind_velocity_mps"][1].get<double>()};
+        if(ImGui::InputScalarN("Wind X/Z (m/s)",ImGuiDataType_Double,wind,2)) { c["wind_velocity_mps"]={wind[0],wind[1]}; draft->modified=true; }
+    }
     ImGui::BeginDisabled(!draft->modified);
     if(ImGui::Button("Apply environment")) report("Environment Apply",model_.apply_environment()); mark("environment_apply");
     ImGui::SameLine(); if(ImGui::Button("Revert")) report("Environment Revert",model_.revert_environment()); mark("environment_revert");
@@ -39,7 +57,18 @@ void WorkbenchUi::environment() {
     ImGui::InputFloat("Exposure",&exposure_,.1f,1,"%.3f");
     if(!std::isfinite(exposure_) || exposure_<0) exposure_=1;
     exposure_=std::min(exposure_,1000000.f);
-    ImGui::TextWrapped("Environment: near 1 m / far 10000 m. Disabled: near 0.05 m. Static time 0; fixed atmosphere_v1 quality.");
+    if(ImGui::CollapsingHeader("Cloud render quality and time")) {
+        int mode=environment_settings_.mode==render::CloudRenderMode::temporal ? 1 : 0;
+        if(ImGui::Combo("Mode",&mode,"Reference (no history)\0Temporal (32 warmup)\0")) environment_settings_.mode=mode ? render::CloudRenderMode::temporal : render::CloudRenderMode::reference;
+        ImGui::InputDouble("Time (s)",&environment_settings_.time_seconds,0,0,"%.6f"); mark("cloud_time");
+        if(ImGui::Button("+1 second")) environment_settings_.time_seconds+=1; mark("cloud_time_step");
+        ImGui::Checkbox("Cloud shadows",&environment_settings_.cloud_shadows); mark("cloud_shadow");
+        ImGui::InputScalarN("Shadow center (m)",ImGuiDataType_Double,environment_settings_.shadow_center_m.data(),3);
+        ImGui::InputDouble("Shadow extent (m)",&environment_settings_.shadow_extent_m);
+        ImGui::InputScalar("Shadow resolution",ImGuiDataType_U32,&environment_settings_.shadow_resolution);
+        ImGui::TextWrapped("Time stays fixed until edited. Reference allows at most 4096 pixels. Settings are session-only; sky/geometry coverage errors keep the last image.");
+    }
+    ImGui::TextWrapped("Environment: near 1 m / far 10000 m. Disabled: near 0.05 m.");
     ImGui::End();
 }
 }

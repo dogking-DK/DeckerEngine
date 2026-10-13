@@ -369,3 +369,19 @@ TEST_CASE("environment discovery schemas and history budget reject changes befor
     CHECK_FALSE(s.service->edit({state.document_id, state.revision}, SetEnvironment{bad}));
     CHECK(s.call("environment.query") == before);
 }
+
+TEST_CASE("environment presets are complete versioned queries without scene or history edits") {
+    Session s;
+    const auto clear=s.call("environment.preset",{{"name","clear"}});
+    CHECK(clear["version"]==1); CHECK(clear["environment"]["version"]==2);
+    CHECK_FALSE(clear["environment"]["clouds"]["enabled"].get<bool>());
+    s.call("scene.new"); const auto before=s.call("scene.query"),history=s.call("history.status");
+    for(const char* name:{"sparse","overcast","sunset"}) {
+        const auto a=s.call("environment.preset",{{"name",name}}),b=s.call("environment.preset",{{"name",name}});
+        CHECK(a==b); CHECK(a["environment"]["clouds"]["seed"]==1729); CHECK(a["environment"]["clouds"]["generator_version"]==1);
+        CHECK(a["environment"]["clouds"]["enabled"]==true);
+    }
+    CHECK(s.call("scene.query")==before); CHECK(s.call("history.status")==history);
+    CHECK_FALSE(s.commands.execute("environment.preset",{{"name","unknown"}}));
+    CHECK(s.call("commands.describe",{{"name","environment.preset"}})["effect"]=="query");
+}

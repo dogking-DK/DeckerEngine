@@ -34,6 +34,7 @@ public:
     [[nodiscard]] Result<void> select(std::optional<EntityId> id);
     [[nodiscard]] Result<void> apply();
     [[nodiscard]] Result<void> revert();
+    [[nodiscard]] Result<void> preset_environment(std::string_view name);
     [[nodiscard]] Result<void> apply_environment();
     [[nodiscard]] Result<void> revert_environment();
     [[nodiscard]] EnvironmentDraft* environment_draft() { return environment_ ? &*environment_ : nullptr; }

@@ -78,3 +78,22 @@ TEST_CASE("capture bounded pending work cancellation and close preserve files") 
     CHECK(read_file_bytes(files.root/"old.ppm")->size()==3);
     CHECK_FALSE(service->capture(*scene,guard,{"old.ppm"}));
 }
+
+TEST_CASE("capture sequence budgets modes and schema reject before any publication") {
+    CaptureCommands c; const auto state=c.value("scene.new"); const auto history=c.value("history.status");
+    const Json camera={{"eye",{0,0,-2}},{"target",{0,0,0}},{"near",1},{"far",10000}};
+    const Json sample={{"camera",camera},{"time_seconds",0}};
+    const Json base={{"guard",{{"document_id",state["document_id"]},{"revision",state["revision"]}}},
+        {"output","old.json"},{"width",16},{"height",16},{"samples",Json::array({sample})}};
+    c.files.write("old.json","preserve");
+    auto descriptor=c.value("commands.describe",{{"name","render.sequence"}}); CHECK(descriptor["effect"]=="external"); CHECK(descriptor["undoable"]==false);
+    const Json bad=GENERATE(Json{{"samples",Json::array()}},Json{{"warmup_frames",1}},Json{{"warmup_frames",65}},Json{{"output","wrong.ppm"}},
+        Json{{"width",1024},{"height",1024}},Json{{"render_options",{{"mode","unknown"}}}},
+        Json{{"render_options",{{"shadow_resolution",17}}}},Json{{"time_seconds",1}});
+    auto params=base; params.update(bad); CHECK_FALSE(c.call("render.sequence",params));
+    auto many=base; many["width"]=256; many["height"]=256; many["samples"]=Json::array({sample,sample,sample,sample,sample}); CHECK_FALSE(c.call("render.sequence",many));
+    auto invalid=base; invalid["samples"][0]["time_seconds"]=1e10; CHECK_FALSE(c.call("render.sequence",invalid));
+    CHECK(c.value("scene.query")["state"]==state); CHECK(c.value("history.status")==history);
+    CHECK(read_file_bytes(c.files.root/"old.json")->size()==8);
+    CHECK_FALSE(c.call("scene.transaction",{{"commands",Json::array({{{"method","render.sequence"},{"params",base}}})}},true));
+}

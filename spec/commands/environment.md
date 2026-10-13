@@ -1,7 +1,7 @@
 ---
 module: command-reference-environment
 created_at: "2026-10-12T15:10:00+08:00"
-updated_at: "2026-10-13T14:47:00+08:00"
+updated_at: "2026-10-13T18:54:48+08:00"
 status: accepted
 ---
 
@@ -9,7 +9,7 @@ status: accepted
 
 [返回命令目录](README.md)。环境为场景级CPU状态，默认disabled，保存、事务与历史均包含它。
 启用环境后，已开启大气模块的Edit视口和render.capture显示天空、Lambert日光/天空漫射和空气透视。
-编辑器Environment面板复用这两条命令及同一撤销历史；参数/渲染支持域见[大气指南](../guides/atmosphere.md)。
+编辑器Environment面板复用下列命令及同一撤销历史；参数/渲染支持域见[大气指南](../guides/atmosphere.md)。
 实现：[环境模型](../../engine/scene/include/dk/scene/Environment.hpp)、
 [Operations](../../engine/framework/operations/src/SceneOperations.cpp)。
 
@@ -21,6 +21,27 @@ status: accepted
 
 ```json
 {"jsonrpc":"2.0","id":1,"method":"environment.query"}
+```
+
+## environment.preset
+
+参数`{name}`必填，name为`clear`、`sparse`、`overcast`或`sunset`。effect=query、undoable=false，
+无需活动场景或guard，不修改内容/历史、不保存、不初始化GPU，也不允许放入scene.transaction。
+返回`{version:1,environment:<完整v2对象>}`；未知名称/字段或错误类型为invalid_argument。
+可将返回环境交给environment.set；GUI先放入草稿，再由Apply提交。
+
+| 名称 | 云参数差异 | 太阳 |
+| --- | --- | --- |
+| clear | disabled | [0,1,0] |
+| sparse | enabled、coverage=.35、density=.8 | [0,1,0] |
+| overcast | enabled、coverage=.9、density=1.5 | [0,1,0] |
+| sunset | enabled、coverage=.55、density=1 | 归一化[1,.08,0] |
+
+所有预设开启空气，seed=1729、generator_version=1，其余字段取下表默认值；返回对象完整显式包含它们。
+预设原点在地表，选择后如需改变行星中心应在同一草稿内修改。质量、时间及阴影覆盖属于渲染请求，不进入预设物理环境。
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"environment.preset","params":{"name":"sparse"}}
 ```
 
 ## environment.set
@@ -72,7 +93,7 @@ RGB使用线性sRGB/D65通道，irradiance不是lux或原始W/m²；正入射Lam
 
 | clouds字段 | 默认值 | 单位/支持范围 |
 | --- | --- | --- |
-| enabled | false | bool；非零云通过有界混合参考渲染，需云/大气GPU模块，总像素≤4096；超限失败，普通编辑器大尺寸云预览待优化阶段 |
+| enabled | false | bool；需云/大气GPU模块；reference≤4096像素，temporal≤1920×1080，参数见[截图与序列](render.md) |
 | seed | 1 | uint32整数[0,4294967295]；固定seed重建一致 |
 | generator_version | 1 | 整数，仅支持1 |
 | weather_resolution | 128 | 2D方形边长，2的幂[8,256] |
@@ -87,7 +108,7 @@ RGB使用线性sRGB/D65通道，irradiance不是lux或原始W/m²；正入射Lam
 | wind_velocity_mps | [10,0] | 世界X/Z平移速度，m/s；各[-1000,1000] |
 
 云字段也全部必填。生成器key只有seed、generator_version和分辨率；调coverage/密度/风不会重建纹理。
-时间是采样请求的显式秒数，不写入场景，也不由帧率累计；当前[截图](render.md)固定time=0，未提供时间参数或序列截图。
+时间是采样请求的显式秒数，不写入场景，也不由帧率累计；[截图](render.md)支持time_seconds及独立reference/temporal序列。
 旧environment v1迁移时，top=min(4000,大气厚度/2)，bottom=min(1500,top/2)，保持旧小尺度大气可读。
 
 完整set调用示例（替换guard为query取得的最新state）：

@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-13T11:44:00+08:00"
+updated_at: "2026-10-13T18:27:52+08:00"
 status: accepted
 ---
 
@@ -240,3 +240,9 @@ Undo/Redo/切换文档前处理任一草稿；Save先提交草稿再保存；两
 独立后台worker测试验证连续改参、resize、取消、失败恢复及在途关闭不发布旧结果；
 相机导航允许在旧帧上继续发送新请求，拾取/Gizmo启动仅在完整匹配当前帧时启用；已捕获手势按原guard继续接收输入并提交，
 不因自身异步预览尚未返回而取消，外部revision或尺寸变化仍取消。单独CPU模型验收草稿/历史保护；CPU-only不引入GPU依赖。
+
+## M15.6 云面板与固定时间预览
+
+Environment面板提供clear/sparse/overcast/sunset版本化预设和完整云物理参数。预设查询只填草稿，Apply仍是一次environment.set，Revert/guard冲突/Undo/Redo/保存重载共用原契约。
+会话区提供reference/temporal、固定时间与单步、云影开关/固定覆盖区，不保存到Scene。后台请求携带全部设置；结果包含实际生效时间、mode、history和shadow generation，旧请求的迟到结果不能覆盖新请求。temporal每个请求显式固定时间预热32次后展示，独立重置该视图，保证与相同warmup的序列截图可比；这不是实时帧率承诺。
+空气或云启用时均走后台环境路径。UI显示当前scene revision与结果设置，reference超过4096像素明确报错；temporal供常规视口。外部环境修改、取消、退出延续单active/单replaceable队列与完整资源释放规则。

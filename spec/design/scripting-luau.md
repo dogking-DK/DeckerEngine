@@ -1,7 +1,7 @@
 ---
 module: scripting-luau
 created_at: "2026-10-08T14:52:00+08:00"
-updated_at: "2026-10-13T11:44:00+08:00"
+updated_at: "2026-10-13T19:07:53+08:00"
 status: accepted
 ---
 
@@ -150,8 +150,8 @@ M12.3：所有访问模式允许 simulation.sample，在健康稳定边界显式
 它不推进或写文件；仍受同步原生诊断的预算/不可硬抢占限制，参数与旧身份拒绝复用 Runtime。
 
 
-M14.6：environment.query、jobs.get/wait允许所有能力；environment.set允许edit/project；
-render.capture与jobs.cancel仅project。仍使用Runtime的schema、guard、Job有界队列和原子发布契约；
+环境/序列：environment.query、environment.preset、jobs.get/wait允许所有能力；environment.set允许edit/project；
+render.capture、render.sequence与jobs.cancel仅project。仍使用Runtime的schema、guard、Job有界队列和原子发布契约；
 未构建capture时由Runtime返回not_found，不引入CPU配置的GPU依赖。
 jobs.wait每次最多1000ms，可观察脚本预算/取消；脚本错误不自动撤销已提交Job，runner退出时Runtime取消并join。
 不添加裸文件系统、GPU或任意命令权限。可执行[环境截图示例](../../examples/scripting/environment-capture.luau)

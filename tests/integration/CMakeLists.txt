@@ -788,3 +788,34 @@ if(TARGET dk_render_clouds AND TARGET dk_render_services AND TARGET dk_run AND W
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
     endif()
 endif()
+
+if(TARGET dk_render_clouds AND TARGET dk_scripting_luau AND TARGET dk_run AND TARGET dk_ctl AND WIN32)
+    find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME dk.clouds.cases_unit
+            COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python" "PYTHONDONTWRITEBYTECODE=1"
+                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/RenderCasesUnitTest.py")
+        set_tests_properties(dk.clouds.cases_unit PROPERTIES LABELS "cpu" TIMEOUT 30)
+        add_test(NAME dk.clouds.sequence_gpu_validation
+            COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python" "PYTHONDONTWRITEBYTECODE=1"
+                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/CloudSequenceTest.py"
+                --runner "$<TARGET_FILE:dk_run>" --client "$<TARGET_FILE:dk_ctl>" --fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+                --python-example "${PROJECT_SOURCE_DIR}/examples/automation/cloud_sequence.py"
+                --luau-example "${PROJECT_SOURCE_DIR}/examples/scripting/cloud-sequence.luau"
+                --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+        set_tests_properties(dk.clouds.sequence_gpu_validation PROPERTIES TIMEOUT 480 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+        if(TARGET dk_editor_app)
+            add_test(NAME dk.editor.cloud_consistency_gpu_validation
+                COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python" "PYTHONDONTWRITEBYTECODE=1"
+                    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/EditorEnvironmentTest.py" --clouds
+                    --editor "$<TARGET_FILE:dk_editor_app>" --client "$<TARGET_FILE:dk_ctl>" --runner "$<TARGET_FILE:dk_run>"
+                    --fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+                    --python-example "${PROJECT_SOURCE_DIR}/examples/automation/cloud_sequence.py"
+                    --luau-example "${PROJECT_SOURCE_DIR}/examples/scripting/cloud-sequence.luau"
+                    --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+            set_tests_properties(dk.editor.cloud_consistency_gpu_validation PROPERTIES TIMEOUT 480 RUN_SERIAL TRUE LABELS "gpu"
+                ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+        endif()
+    endif()
+endif()

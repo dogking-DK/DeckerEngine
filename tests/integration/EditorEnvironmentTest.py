@@ -17,6 +17,7 @@ def main():
     parser = argparse.ArgumentParser()
     for name in ("editor", "client", "runner", "fixtures", "python-example", "luau-example", "work-dir"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--clouds", action="store_true")
     args = parser.parse_args()
     directory = args.work_dir / ("environment-" + uuid4().hex)
     root = directory / "project"
@@ -30,6 +31,11 @@ def main():
     environment["sun"]["irradiance"] = [4, 4, 4]
     scene = json.loads((root / "scene.json").read_text())
     scene.update(version=2, environment=environment)
+    if args.clouds:
+        for entity in scene["entities"]:
+            if entity["components"]["dk.Hierarchy"]["parent"] is None:
+                entity["components"]["dk.Transform"]["translation"][1] += 2
+        (root / ".dk-cloud-integration").touch()
     (root / "scene.json").write_text(json.dumps(scene), encoding="utf-8")
     # Legacy unlit ignores sidedness. Our camera sees the back of these fixture quads;
     # mark the disposable materials double-sided so the lit test includes visible receivers.
@@ -52,11 +58,16 @@ def main():
         def checkpoint(name):
             path = evidence / (name + ".json")
             end = time.monotonic() + 100
-            while not path.exists():
+            while True:
+                try:
+                    value = json.loads(path.read_text())
+                    break
+                except (FileNotFoundError, PermissionError):
+                    # Windows may briefly deny opening the just-renamed atomic file.
+                    pass
                 if process.poll() is not None or time.monotonic() >= end:
                     raise RuntimeError("Editor did not present " + name + ": " + (directory / "stderr.log").read_text())
                 time.sleep(.01)
-            value = json.loads(path.read_text())
             query = client.call("environment.query").value
             assert query["state"] == value["state"], (query, value)
             if not value["pending"]:
@@ -75,7 +86,8 @@ def main():
         def params(point, name):
             view = point["viewport"]
             return {"guard": guard(point["state"]), "output": name+".ppm", "width": view["width"], "height": view["height"],
-                    "camera": view["camera"], "exposure": 1, "profile": "unlit_preview", "validation": "required"}
+                    "camera": view["camera"], "exposure": 1, "profile": "unlit_preview", "validation": "required",
+                    "render_options": view["render_options"], "time_seconds": view["time_seconds"], "warmup_frames": view["warmup_frames"]}
 
         def validate_capture(point, ticket, job):
             assert job["state"] == "succeeded", job
@@ -96,6 +108,10 @@ def main():
             initial = checkpoint("initial")
             advance("initial")
             gui = checkpoint("gui")
+            if args.clouds:
+                assert gui["environment_draft"]["clouds"]["enabled"] and gui["environment_draft"]["clouds"]["seed"] == 1729
+                assert gui["viewport"]["shadow_generation"] > 0 and gui["viewport"]["warmup_frames"] == 32
+                assert gui["viewport"]["history_reset"] == "none"
             # Require colored surface receivers; comparing two sky-only frames is insufficient.
             pixels = (root / gui["viewport"]["image"]).read_bytes().split(b"\n", 3)[3]
             assert any((r > g+30 and r > b+30) or (b > r+30 and b > g+30)
@@ -120,8 +136,10 @@ def main():
                     persisted = json.loads((root / "scene.json").read_text())
                     assert persisted["environment"] == point["environment_draft"]
                     # Run the repository Python example against the real editor Runtime.
-                    script = subprocess.run([sys.executable, str(args.python_example), "--pipe", endpoint, "--ctl", str(args.client),
-                                             "--project-root", str(root)], capture_output=True, text=True, timeout=120,
+                    script_args = [sys.executable, str(args.python_example), "--pipe", endpoint, "--ctl", str(args.client)]
+                    if not args.clouds:
+                        script_args += ["--project-root", str(root)]
+                    script = subprocess.run(script_args, capture_output=True, text=True, timeout=150,
                                             creationflags=subprocess.CREATE_NO_WINDOW)
                     assert script.returncode == 0, (script.stdout, script.stderr)
                     report["python"] = json.loads(script.stdout)
@@ -140,8 +158,13 @@ def main():
                                     creationflags=subprocess.CREATE_NO_WINDOW)
             assert script.returncode == 0, (script.stdout, script.stderr)
             assert not script.stderr, script.stderr
-            assert (root / "environment-python.ppm").read_bytes() == (root / "environment-luau.ppm").read_bytes()
-            report["luau"] = "passed; byte-identical to Python example"
+            if args.clouds:
+                a = json.loads((root / "cloud-python.json").read_text())
+                b = json.loads((root / "cloud-luau.json").read_text())
+                assert [(f["rgba8"], f["linear_rgba"]) for f in a["frames"]] == [(f["rgba8"], f["linear_rgba"]) for f in b["frames"]]
+            else:
+                assert (root / "environment-python.ppm").read_bytes() == (root / "environment-luau.ppm").read_bytes()
+            report["luau"] = "passed; identical images/linear values to Python example"
             report["status"] = "passed"
         finally:
             if process.poll() is None:

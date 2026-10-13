@@ -61,6 +61,14 @@ def main():
     assert loaded[6]["result"]["value"] == restored
     assert loaded[7]["result"]["value"]["undo_count"] == 0
     assert scene_path.read_bytes() == persisted_bytes
+    presets = batch("presets", [("environment.preset", {"name": name}) for name in ("clear", "sparse", "overcast", "sunset")])
+    for row in presets:
+        value = row["result"]["value"]
+        assert value["version"] == 1 and value["environment"]["version"] == 2
+        assert value["environment"]["clouds"]["seed"] == 1729
+    assert not presets[0]["result"]["value"]["environment"]["clouds"]["enabled"]
+    assert all(row["result"]["value"]["environment"]["clouds"]["enabled"] for row in presets[1:])
+    assert scene_path.read_bytes() == persisted_bytes
     # Cloud content is authored and reloaded on the pure CPU runner in distinct processes.
     cloud_env = json.loads(json.dumps(initial["environment"]))
     assert cloud_env["version"] == 2

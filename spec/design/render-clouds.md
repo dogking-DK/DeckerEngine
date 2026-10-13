@@ -1,7 +1,7 @@
 ---
 module: render-clouds
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-13T18:20:19+08:00"
+updated_at: "2026-10-13T18:54:48+08:00"
 status: accepted
 ---
 
@@ -255,15 +255,15 @@ required GPU同步验证和预算/外来队列/提交故障/多视图/关闭/在
 
 ## 截图与时域序列边界
 
-截图仍使用固定时间、固定seed、reference无历史模式；优化入口须显式传入view_id和time。
+截图默认固定seed/time=0的reference无历史模式；可显式选择time和temporal，序列从空历史开始。
 序列验收声明预热帧数、相机路径和采样序列，每次从空历史开始，不使用GUI未知预热状态。
-编辑器和命令层接入显式时间序列仍属M15.6；设备/Shader实例替换由调用者重建Pipeline。
+编辑器和命令层共用下文M15.6显式渲染设置；设备/Shader实例替换由调用者重建Pipeline。
 
 ## 云影与交互闭环
 
 M15.5提供显式CloudShadowRenderer/CloudShadowMap与日光/空气/云合成的可选快照参数。
 单层云底以下接收体使用太阳正交R32F云透射图；仅乘太阳直射，不修改天空漫射、自发光、
-太阳盘或观察路径云/空气积分。未传快照保持已有行为；共用编辑器/capture自动配置留给M15.6。
+太阳盘或观察路径云/空气积分。显式接口未传快照保持已有行为；共用编辑器/capture/sequence入口按M15.6设置自动准备。
 
 固定世界center_m与extent_m定义太阳正交平面，U/V仅由太阳方向确定，不依赖相机。
 每条平行太阳射线从云底球面朝太阳一侧的交点积分至云顶，云底以下沿同一直线的接收体共享完整云柱。
@@ -318,3 +318,17 @@ CPU参考验证均匀介质解析解、区间组合、密度范围、确定性�
 [大气](render-atmosphere.md)、[管线](render-pipeline.md)、[Graph](graphics-graph.md)、
 [GPU观测](foundation-profiling.md)、[截图](render-capture.md)、[实验管理](experiment-management.md)、
 [0093规划记录](../development/0093-atmosphere-cloud-plan.md)。
+
+## M15.6 上层配置、预设与用例清单
+
+共享EnvironmentRenderSettings只含渲染会话参数：reference/temporal模式、显式time_seconds、稳定view_id/camera_revision及固定世界云影区域；不进入Scene或撤销历史。
+reference保持256/64/64固定采样、无历史、4096像素上限；temporal复用M15.4采样与每视图历史，最多1920×1080。共用入口按时间准备云场/云影并调用对应路径；空气关闭不施加地表直射云影。云影默认开启，固定center=0、extent=8192m、256²/256步，允许显式关闭或设置区域；超覆盖/云底接收体仍明确失败。
+CPU environment.preset查询提供version=1的clear/sparse/overcast/sunset完整v2对象，seed和generator_version显式固定；查询不修改场景。GUI以返回值替换草稿，Apply复用environment.set及guard/undo，外部变更后的旧草稿仍冲突。
+GUI区分物理云参数与会话质量、固定时间/步进、云影范围；显示已发布scene revision、实际时间、模式和历史重置原因。编辑器空气关闭但非零云时也进入后台环境路径。
+
+render.capture增加显式时间/模式/云影设置；reference单帧不预热。render.sequence是同一CaptureService的有界外部作业，冻结Scene和全部相机/时间样本，独占新Pipeline从空历史开始；temporal允许0–64次首样本固定时间预热，reference必须0次。样本1–128、每帧线性读回≤65536像素、总样本像素≤262144；GPU帧必须完成后才推进历史。时间倒退、跳跃、相机cut及失败沿M15.4重置规则，不能借用GUI已有历史。
+序列原子发布单个schema_version=1 JSON文件，包含冻结环境/完整渲染设置、身份、shader指纹、设备、各帧相机/时间/历史/云影代号、RGBA8、曝光前线性RGBA及摘要。输出JSON≤64MiB；摘要Jobs≤4096字节。没有跨文件发布事务；图像提取与比较在Python用例工具进行。
+
+Python独立版本化render-case清单显式记录工程、环境或预设、尺寸、曝光、采样模式、预热、固定相机/时间列表和云影区域。使用现有Client/guard/jobs调用；每例记录scene/document/revision、seed/generator、规范化输入SHA256、runner和shader摘要、PPM/线性数据摘要与比较结果。必须核对成功result/序列报告来源，失败/取消/缺失保留错误，不生成伪造图像或零耗时。比较只接受相同冻结物理输入、相机、时间、曝光与尺寸，reference和temporal质量模式可不同；报告线性RGB nRMSE/p99和静态帧差，不以sRGB截图代替数值。耗时标注端到端wall，不称GPU pass耗时；M15.7另验收正式性能。
+
+冻结验收：CPU预设/参数/预算/guard与旧文件保护；真实后台GUI preset/apply/undo/redo/IPC冲突/保存重载和相同参数capture像素一致；真实Python/Luau调用；reference及temporal序列可重放、空历史/预热来源明确、云影实际接入；清单摘要和失败/缺失/不兼容比较拒绝。GPU要求required同步validation，不允许跳过。

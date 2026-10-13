@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-13T14:47:00+08:00"
+updated_at: "2026-10-13T18:54:48+08:00"
 status: accepted
 ---
 
@@ -76,7 +76,7 @@ automation/server 装配 Runtime 适配、stdio 和 IPC owner 队列，runner/ed
 [大气](render-atmosphere.md)提供CPU环境模型、场景v2迁移和命令，以及独立的双精度积分参考、GPU T/MS/Sky LUT和离屏天空；ScenePipeline 显式导入快照，提供 Lambert、视锥空气透视和曝光前天空/几何合成。DK_BUILD_RENDER_ATMOSPHERE默认OFF，在windows-graphics开启；[体积云](render-clouds.md)提供版本化CPU参数、确定性云场、有界GPU天气/3D噪声和无历史球壳光照参考，返回每射线散射/透射；ScenePipeline提供最多4096像素的云/空气/几何联合合成及透射/距离诊断，非零云不重复应用完整空气透视。
 Scene保存纯CPU环境描述，Services/Operations负责校验、事务与持久化；render/data从不可变快照提取。
 render/atmosphere独立调用Graph并发布不可变LUT快照；render/pipeline可显式导入T/Sky实现Lambert太阳与天空漫射。
-render/clouds负责云场与单/混合介质参考，render/pipeline组合天空/介质/终端表面与tone；时域与云影待后续阶段。依赖方向保持Render→Scene/Graphics，不能反向依赖Framework。
+render/clouds负责云场与单/混合介质参考，render/pipeline组合天空/介质/终端表面与tone；并提供每视图时域重建、固定世界云透射阴影与共享上层配置。依赖方向保持Render→Scene/Graphics，不能反向依赖Framework。
 物理LUT按内容缓存，当前Sky按高度和局部太阳角更新；后续视图LUT和云历史按稳定ViewId隔离。GPU资源、在途代次与历史都不进入Scene。
 模块使用独立可选target，CPU-only仍可编辑/保存环境，不隐含GPU加载。
 

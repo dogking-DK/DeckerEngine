@@ -2,6 +2,7 @@
 #include <dk/core/Result.hpp>
 #include <array>
 #include <cstdint>
+#include <string_view>
 
 namespace dk {
 using EnvironmentVector = std::array<double, 3>;
@@ -48,6 +49,8 @@ struct EnvironmentDescription {
     CloudParameters clouds;
     bool operator==(const EnvironmentDescription&) const = default;
 };
+// Version 1 CPU presets; complete values, no scene mutation or GPU dependency.
+[[nodiscard]] Result<EnvironmentDescription> environment_preset(std::string_view name);
 // Validates all fields even when disabled; preserves already-unit directions.
 [[nodiscard]] Result<EnvironmentDescription> normalize_environment(EnvironmentDescription);
 [[nodiscard]] Result<void> validate_clouds(const CloudParameters&, double atmosphere_height_m);

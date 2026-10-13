@@ -1,11 +1,11 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-10-13T14:37:00+08:00"
+updated_at: "2026-10-13T18:54:48+08:00"
 status: accepted
 ---
 
-# 场景截图
+# 场景截图与固定时间序列
 
 [返回命令目录](README.md)。需要 DK_BUILD_RENDER_CAPTURE（windows-graphics 默认开启）。
 无需窗口；设备延迟到后台 capture 执行时创建。
@@ -23,6 +23,9 @@ status: accepted
 | camera | 默认 Sponza 相机 | 对象，提供时 eye[3] 和 target[3] 必填；其余可省略 |
 | profile | unlit_preview | strict 或 unlit_preview；后者保留基础色/alpha mask，省略切线和光照纹理 |
 | exposure | 1 | 有限线性曝光，0–1000000；HDR合成后tone时使用 |
+| time_seconds | 0 | 有限秒数，[-1e9,1e9]；不推进场景或模拟时钟 |
+| render_options | 见下表 | reference/temporal模式与固定世界云影区域 |
+| warmup_frames | 0 | 0–64整数，仅temporal允许非零；首样本固定时间预热，从空历史开始 |
 | validation | if_available | if_available 或 required；required 缺少验证层时 Job 失败 |
 
 camera 可选 up=[0,1,0]、fov_y=65（度，1&lt;值&lt;179）、near=0.05、far=100。
@@ -31,8 +34,8 @@ camera 可选 up=[0,1,0]、fov_y=65（度，1&lt;值&lt;179）、near=0.05、far
 
 关闭环境时与编辑器共用线性背景色 (0.04,0.08,0.16)；启用时按冻结环境执行天空、Lambert日光/天空漫射和空气透视。
 需要 DK_BUILD_RENDER_ATMOSPHERE，否则启用环境的 Job 返回 not_supported。
-非零云使用无历史混合介质参考，另需 DK_BUILD_RENDER_CLOUDS，当前总像素≤4096；
-超过上限的 Job 失败且保留原输出。可使用64×64或更小截图，云大分辨率优化尚未接入。
+非零云另需 DK_BUILD_RENDER_CLOUDS。reference使用无历史混合介质参考，总像素≤4096；
+temporal使用半尺寸重建和每作业独立历史，输出最多1920×1080。超过渲染支持域的Job失败且保留旧输出。
 云可在空气关闭时单独渲染；零coverage/density/extinction或关闭云退化为原大气/无环境路径。
 要重现 GUI 当前已提交画面，须显式匹配视口的尺寸、相机和 `profile=unlit_preview`；
 编辑器使用 far=10000，启用环境时 near=1，关闭时 near=.05；截图默认 near=.05/far=100。
@@ -75,12 +78,65 @@ succeeded 的 result 为 `{kind:"capture",document_id,scene_id,revision,frame,wi
 命令尚不支持 PNG、PBR、透明混合、HDR 环境贴图采样或天空盒。
 
 `provenance`包含完整环境（与environment.query同结构）、camera（含缺省up/fov_y/near/far）、
-exposure、profile、time_seconds=0、quality（atmosphere_v1、unlit_v1或cloud_reference_v1）及shader_fingerprint。
-时间固定0，质量不可覆盖；atmosphere_v1固定LUT/采样和64×64×128空气透视网格，
-cloud_reference_v1固定逐区间256视线步、64云太阳步、64大气太阳步，无时域历史。
+exposure、profile、time_seconds、render_options、warmup_frames、sample_count及shader_fingerprint。
+quality反映实际路径：atmosphere_v1、unlit_v1、cloud_reference_v1或cloud_temporal_v1。
+atmosphere_v1固定LUT和64×64×128空气透视网格；cloud_reference_v1为256/64/64步，无历史；
+cloud_temporal_v1使用M15.4的96到256自适应主步、8云太阳步、保边重建及历史。零云仍返回原大气/unlit质量。
 提交时shader_fingerprint=null；成功结果为`fnv1a64:`加16位小写十六进制，覆盖本次shader源、共享传输文件和算法版本。
 它用于追踪源码变化，不是加密校验或跨驱动像素一致承诺；shader在执行中变化则Job失败，不发布。
 元数据留在提交/Job响应中，调用者应保存；PPM不嵌元数据，也不隐式创建sidecar。
 
 可运行的环境示例：[Python](../../examples/automation/environment_capture.py)、
 [Luau](../../examples/scripting/environment-capture.luau)，操作说明见[大气指南](../guides/atmosphere.md)。
+
+## render_options
+
+所有字段可省略；未知字段拒绝。不会保存到Scene，调用方负责在GUI/capture/sequence使用相同设置。
+
+| 字段 | 默认 | 含义 |
+| --- | --- | --- |
+| mode | reference | reference或temporal；每次capture/sequence都从空历史开始 |
+| cloud_shadows | true | 非零云且空气开启时自动绑定太阳云透射图，仅乘直射；空气关闭不施加地表云影 |
+| shadow_center_m | [0,0,0] | 固定世界覆盖中心，分量绝对值≤1e9m |
+| shadow_extent_m | 8192 | 太阳正交平面宽度，16–65536m |
+| shadow_resolution | 256 | 16–512的2次幂，固定256步/云柱 |
+
+云影接收几何须完全在云底以下、地表之上、图半像素安全边界之内；超界Job失败，不静默夹边。
+可显式关闭云影来渲染云内/云上几何；camera位置本身不受接收体云底限制。
+曝光前线性读回和性能目标边界见[云指南](../guides/clouds.md)。
+
+## render.sequence
+
+effect=external、undoable=false；需要活动场景和guard，不允许scene.transaction，不修改revision/dirty/历史、不隐式保存。
+与capture共用有界Jobs队列、取消和原子单文件发布契约。output须为工程相对`.json`；父目录须存在。
+参数沿用width/height/exposure/profile/validation/render_options/warmup_frames；不接受顶层camera或time_seconds。
+另需`samples`数组（1–128），每项`{camera,time_seconds,camera_cut?}`；camera字段/缺省与capture相同，时间必填有限[-1e9,1e9]，camera_cut默认false。
+连续样本保留稳定视图身份，true明确重置相机历史；回退/大时间跳跃沿M15.4重置。预热只重复首样本的相机/时间，不隐式推进风。
+
+每样本≤65536像素、全部样本合计≤262144像素；非零云reference仍≤4096像素。宽高/模式/时间/相机/序列预算先验证，非法请求不消耗frame或创建Job。
+每次调用使用独立Pipeline，先等待GPU，再推进下一帧。关闭/取消等待在途GPU回收。失败/取消result=null、保留既有JSON；成功表示完整报告已原子替换。
+
+返回与capture相同ticket；provenance中的camera/time为首样本、sample_count为样本数。成功Job result的kind为`render_sequence`，其他身份字段与ticket一致。
+frame表示作业请求身份，报告内各样本以index从0计数；samples完整列表和图像在文件中，Job摘要保持≤4096字节。
+
+输出JSON schema_version=1、kind=`decker.render_sequence`、status=`succeeded`，含document_id/scene_id/revision/frame/width/height、完整provenance、device(name/driver)、wall_ms/gpu_ms和frames：
+
+- 每帧记录index、完整camera、time_seconds、camera_cut、shadow_generation、history.available/source_sequence/candidate_sequence/reset。
+- rgba8为顶部第一行的RGBA/sRGB整数数组，长度width×height×4；linear_rgba为同顺序曝光前线性RGBA四元组数组，另有linear_summary.min/max/mean三个RGB向量。
+- wall_ms是端到端测量（包含等待/读取），gpu_ms=null表示未采集GPU时间；不能用于M15.7的GPU pass预算验收。
+
+JSON最大64MiB。报告是唯一提交文件；[Python用例工具](../guides/clouds.md#版本化用例与对比产物)在成功核对来源后提取PPM/小端RGBA32F和比较报告，失败/缺失不会伪造图像。
+
+```json
+{"jsonrpc":"2.0","id":2,"method":"render.sequence","params":{
+  "guard":{"document_id":"<当前 document_id>","revision":1},
+  "output":"cloud-sequence.json","width":32,"height":32,"validation":"required",
+  "render_options":{"mode":"temporal","cloud_shadows":true},"warmup_frames":32,
+  "samples":[
+    {"camera":{"eye":[0,10,-2],"target":[0,10,0],"near":1,"far":10000},"time_seconds":0},
+    {"camera":{"eye":[0,10,-2],"target":[0,10,0],"near":1,"far":10000},"time_seconds":0.0333333333}
+  ]
+}}
+```
+
+可运行[Python](../../examples/automation/cloud_sequence.py)和[Luau](../../examples/scripting/cloud-sequence.luau)示例修改夹具环境并输出序列，说明见[云指南](../guides/clouds.md)。

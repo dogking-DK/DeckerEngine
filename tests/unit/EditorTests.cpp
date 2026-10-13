@@ -256,3 +256,16 @@ TEST_CASE("environment camera uses compatible projection and matching pick rays"
     CHECK(camera.project(ray.origin+ray.direction*4,1.6)->isApprox(Vec2d{.3,.6},1e-10));
     camera.set_environment(false); CHECK(camera.near_plane()==.05);
 }
+
+TEST_CASE("workspace cloud preset is an unapplied draft with undo redo and reload parity") {
+    EditorFixture f; auto& m=*f.model; const auto original=m.environment_draft()->value;
+    const auto state=m.snapshot()->state;
+    REQUIRE(m.preset_environment("sparse")); CHECK(m.pending()); CHECK(m.snapshot()->state.document_id==state.document_id); CHECK(m.snapshot()->state.revision==state.revision); CHECK(m.snapshot()->state.dirty==state.dirty);
+    const auto preset=m.environment_draft()->value;
+    CHECK(preset["clouds"]["seed"]==1729); REQUIRE_FALSE(m.preset_environment("bad")); CHECK(m.environment_draft()->value==preset);
+    REQUIRE(m.apply_environment()); CHECK(m.history().undo_count==1); REQUIRE(m.undo()); CHECK(m.environment_draft()->value==original);
+    REQUIRE(m.redo()); CHECK(m.environment_draft()->value==preset); REQUIRE(m.save()); REQUIRE(m.open("project.json")); CHECK(m.environment_draft()->value==preset);
+    REQUIRE(m.preset_environment("overcast")); m.environment_draft()->guard.revision+=1;
+    CHECK(m.apply_environment().error().code==ErrorCode::conflict); CHECK(m.pending());
+    REQUIRE(m.revert_environment()); CHECK(m.environment_draft()->value==preset);
+}

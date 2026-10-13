@@ -10,7 +10,7 @@ constexpr std::array names={"initial","gui","external","draft","conflict","undo"
 void require(bool value,const char* message) {
     if (!value) throw std::runtime_error{std::string{"Consistency smoke: "}+message};
 }
-std::span<const char* const> actions(std::size_t stage,bool environment) {
+std::span<const char* const> actions(std::size_t stage,bool environment,bool clouds) {
     static constexpr std::array gui={"viewport","name",":all",":name","translation",":all",":translation","apply"};
     static constexpr std::array draft={"name",":all",":draft"};
     static constexpr std::array conflict={"apply","revert"};
@@ -20,8 +20,10 @@ std::span<const char* const> actions(std::size_t stage,bool environment) {
         static constexpr std::array env_draft={"environment_open","environment_enabled"};
         static constexpr std::array env_conflict={"environment_apply","environment_revert"};
         static constexpr std::array env_gizmo={"viewport","gizmo_0",":drag",":release"};
-        if(stage==9) return env_gizmo;
-        if(stage==1) return env_gui;
+        static constexpr std::array cloud_gizmo={"entity","camera_frame","gizmo_0",":drag",":release"};
+        if(stage==9) return clouds ? std::span<const char* const>{cloud_gizmo} : std::span<const char* const>{env_gizmo};
+        static constexpr std::array cloud_gui={"environment_open","cloud_preset_sparse","environment_apply"};
+        if(stage==1) return clouds ? std::span<const char* const>{cloud_gui} : std::span<const char* const>{env_gui};
         if(stage==3) return env_draft;
         if(stage==4) return env_conflict;
     }
@@ -50,7 +52,7 @@ Json camera(const Camera& value) {
     return {{"eye",vector(eye)},{"target",vector(target)},{"up",vector(up)},{"fov_y",65},{"near",value.near_plane()},{"far",value.far_plane()}};
 }
 }
-ConsistencyDriver::ConsistencyDriver(const std::filesystem::path& root,bool environment) : directory_(root/(environment ? ".dk-environment" : ".dk-consistency")),environment_(environment) {
+ConsistencyDriver::ConsistencyDriver(const std::filesystem::path& root,bool environment) : directory_(root/(environment ? ".dk-environment" : ".dk-consistency")),environment_(environment),clouds_(std::filesystem::is_regular_file(root/".dk-cloud-integration")) {
     require(std::filesystem::create_directory(directory_),"checkpoint directory must be fresh");
 }
 void ConsistencyDriver::input(WorkbenchUi& ui,const Workspace& model,const Viewport& viewport) {
@@ -66,10 +68,12 @@ void ConsistencyDriver::input(WorkbenchUi& ui,const Workspace& model,const Viewp
     }
     auto& io=ImGui::GetIO(); io.ConfigInputTrickleEventQueue=false;
     if (tick_++<12) return;
-    const auto sequence=actions(stage_,environment_);
+    const auto sequence=actions(stage_,environment_,clouds_);
     const auto elapsed=tick_-13,step=elapsed/8,phase=elapsed%8;
     if (step>=sequence.size()) { ready_=true; return; }
     const std::string_view action=sequence[step];
+    if(environment_ && stage_==9 && action=="gizmo_0" && phase==0 && viewport.error().empty() &&
+        (!viewport.current(model.snapshot()->state) || !viewport.camera_current(ui.input().camera()))) { --tick_; return; }
     if (phase==0) {
         io.AddFocusEvent(true);
         if (action==":all") { io.AddKeyEvent(ImGuiMod_Ctrl,true); io.AddKeyEvent(ImGuiKey_A,true); }
@@ -173,6 +177,14 @@ void ConsistencyDriver::presented(const Workspace& model,const WorkbenchUi& ui,c
         report["environment_draft"]=model.environment_draft()->value;
         report["viewport"]["image"]=".dk-environment/"+stage+".ppm";
         report["viewport"]["discarded"]=viewport.environment_discarded();
+        const auto& settings=viewport.environment_settings();
+        report["viewport"]["render_options"]={{"mode",settings.mode==render::CloudRenderMode::reference ? "reference" : "temporal"},
+            {"cloud_shadows",settings.cloud_shadows},{"shadow_center_m",vector(settings.shadow_center_m)},
+            {"shadow_extent_m",settings.shadow_extent_m},{"shadow_resolution",settings.shadow_resolution}};
+        report["viewport"]["time_seconds"]=settings.time_seconds;
+        report["viewport"]["warmup_frames"]=viewport.environment_warmup();
+        report["viewport"]["shadow_generation"]=viewport.environment_shadow();
+        report["viewport"]["history_reset"]=render::cloud_history_reset_name(viewport.environment_history().reset);
     }
     const auto text=report.dump(2);
     check(write_file_bytes_atomic(directory_/(stage+".json"),std::as_bytes(std::span{text.data(),text.size()})));

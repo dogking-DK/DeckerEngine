@@ -45,14 +45,18 @@ TEST_CASE("environment worker drops superseded resize cancels and closes active 
             const auto cloud_view=render::RenderView::create(cloudy,view.description()).value();
             const auto submitted=queue.stats().submitted;
             const auto rejected=pipeline.render_environment(queue,cloud_view,assets,settings);
+#ifdef DK_TEST_CLOUDS
+            REQUIRE(rejected); REQUIRE(rejected->wait(queue).value()); CHECK(rejected->cloud_shadow_generation()>0); CHECK(queue.stats().submitted>submitted);
+#else
             REQUIRE_FALSE(rejected); CHECK(rejected.error().code==ErrorCode::not_supported);
             CHECK(queue.stats().submitted==submitted);
+#endif
             model->environment_draft()->value["clouds"]["enabled"]=false; model->environment_draft()->modified=true;
             REQUIRE(model->apply_environment());
             REQUIRE(queue.close()); REQUIRE(foreign.close());
         }
         EnvironmentPreview worker{system,heap,options};
-        const auto request=[&](std::uint64_t seq,unsigned width,unsigned height) { worker.request({*model->snapshot(),camera,width,height,{},seq,1}); };
+        const auto request=[&](std::uint64_t seq,unsigned width,unsigned height) { worker.request({*model->snapshot(),camera,width,height,{},seq,1,{}}); };
         const auto wait=[&](auto predicate) {
             const auto end=std::chrono::steady_clock::now()+90s;
             while(!predicate() && std::chrono::steady_clock::now()<end) std::this_thread::sleep_for(1ms);

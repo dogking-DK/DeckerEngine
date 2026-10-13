@@ -117,6 +117,9 @@
 | 半尺寸云/跳跃/早停/低角度光照、时域反遮挡、多视图重置与失败寿命（required GPU） | dk_cloud_composition_probe | `^dk\.clouds\.(optimization\|optimization_switches\|optimization_boundaries\|temporal\|history)_gpu_composition$` |
 | 固定世界云影、独立云柱/地表数值、风/相机稳定、直射隔离、失败/预算/在途寿命（required GPU） | dk_cloud_composition_probe | `^dk\.clouds\.shadow_(numeric\|surface\|failures)_gpu_composition$`（同步validation，无跳过） |
 | 云截图冻结状态/时间、schema/quality、零云退化及失败保留文件（required GPU） | dk_run | `^dk\.clouds\.capture_gpu_composition$`（Windows/Python 3.11+） |
+| 云用例清单、提交/产物来源、线性比较和缺失证据（Python CPU） | dk_run、dk_ctl | `^dk\.clouds\.cases_unit$` |
+| 固定时间序列、时域重放、云影、失败/取消与Python/Luau示例（required GPU） | dk_run、dk_ctl | `^dk\.clouds\.sequence_gpu_validation$` |
+| 云预设、GUI/IPC/截图/重载与脚本一致性（required GPU） | dk_editor_app、dk_run、dk_ctl | `^dk\.editor\.cloud_consistency_gpu_validation$`（后台窗口、同步validation） |
 | 环境命令发现、CPU示例与v1/v2跨进程保存重载 | dk_run | `^dk\.environment\.process$` |
 | Scene 跨进程往返 | dk_scene_demo | `^dk\.scene_demo\.` |
 

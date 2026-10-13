@@ -16,7 +16,7 @@ private:
     std::filesystem::path directory_;
     std::size_t stage_ = 0;
     unsigned tick_ = 0;
-    bool environment_ = false;
+    bool environment_ = false,clouds_=false;
     bool ready_ = false,waiting_ = false,done_ = false;
     ImVec2 pointer_{};
     std::array<Json,10> checkpoints_;

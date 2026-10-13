@@ -1,7 +1,7 @@
 ---
 module: automation-python
 created_at: "2026-10-08T16:00:00+08:00"
-updated_at: "2026-10-09T11:55:00+08:00"
+updated_at: "2026-10-13T19:13:18+08:00"
 status: accepted
 ---
 
@@ -14,7 +14,7 @@ M9.3 在 `sdk/python/decker` 提供 Python 3.11+ 标准库客户端，通过已�
 不增加 Python/C++ 三方依赖、CMake 引擎 target 或协议分支；不嵌入 Python、不直连 ECS。
 接口复用 [客户端](automation-client.md)、[协议](automation-protocol.md) 与
 [截图](render-capture.md)。记录/重放扩展见 [对应设计](automation-replay.md)，复用此客户端而不修改其超时/重试语义。
-不提供远程网络、异步 Python API 或进程托管。
+Client不提供远程网络、异步 Python API 或进程托管；独立工具可显式管理自己的runner。
 
 ## 接口与数据
 
@@ -71,3 +71,15 @@ SDK 不缓存或重写 Scene guard；成功编辑的提交点仍在 Services，�
 [0072 M9.3 实现与验收](../development/0072-python-automation.md)。
 
 M10.4 的 [布片实验示例](../../examples/automation/cloth_experiment.py) 复用 Client.call：读取版本化配置、从暂停态分批执行精确 N、统一导出并 Stop；支持覆盖后端作 CPU/GPU 对照。失败保留活动运行供检查，不自动重试不确定结果。M9 Recorder v1 仍只用于原场景协议。
+
+## 固定时间渲染用例
+
+`decker.render_cases` 是独立版本化清单工具，复用 Client/guard/jobs，不扩展布料计划或 Recorder 格式。
+清单和提交预算、单文件原子序列及物理模式见[云设计](render-clouds.md#m156-上层配置预设与用例清单)。
+run_cases 接受已加载的 Client，不保存 Scene；CLI 显式启动隐藏runner、加载工程、串行执行并关闭。
+输出只写新目录；index.json 最后原子发布，提取文件不承诺跨文件事务或 resume。
+先校验规范化环境与请求、ticket/result、序列身份/完整像素/线性摘要，再提取 PPM/小端 RGBA32F。
+exposure 按引擎 float32 归一化，其余会话参数使用命令实际类型；不因合法小数舍入误报来源不一致。
+记录清单/输入/runner/产物 SHA256 和 shader 指纹，失败/取消/缺失保留错误和 null 未测量值。
+仅同物理输入、相机/时间、scene/revision、尺寸和阴影区域允许比较；报告线性 nRMSE/p99 与静态帧差。
+GPU 时间尚未采集，不能将 wall_ms 作为 GPU pass 时间；完整条件见[使用指南](../guides/clouds.md)。

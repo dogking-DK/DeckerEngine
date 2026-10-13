@@ -136,6 +136,11 @@ Result<void> Workspace::revert_environment() {
     environment_=EnvironmentDraft{{snapshot_->state.document_id,snapshot_->state.revision},query->at("environment"),false};
     return {};
 }
+Result<void> Workspace::preset_environment(std::string_view name) {
+    if(!environment_) return std::unexpected(Error{ErrorCode::invalid_state,"Open a scene before choosing an environment preset"});
+    auto preset=call("environment.preset",{{"name",name}}); if(!preset) return std::unexpected(preset.error());
+    environment_->value=preset->at("environment"); environment_->modified=true; return {};
+}
 Result<void> Workspace::apply_environment() {
     if(!environment_ || !environment_->modified) return {};
     if(draft_ && draft_->modified) return std::unexpected(pending_error());

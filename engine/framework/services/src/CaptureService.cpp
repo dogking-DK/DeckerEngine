@@ -6,6 +6,8 @@
 #include <nlohmann/json.hpp>
 #include <cmath>
 #include <numbers>
+#include <chrono>
+#include <algorithm>
 
 namespace dk {
 namespace {
@@ -77,15 +79,23 @@ nlohmann::json environment_json(const EnvironmentDescription& e) {
         {"irradiance", e.sun.irradiance},
         {"angular_radius_rad", e.sun.angular_radius_rad}}}};
 }
-std::string provenance(const CaptureRequest& r,const EnvironmentDescription& environment) {
+nlohmann::json camera_json(const CaptureCamera& c) {
     auto vector=[](const Vec3d& v) { return nlohmann::json::array({v.x(),v.y(),v.z()}); };
-    const auto& c=r.camera;
+    return {{"eye",vector(c.eye)},{"target",vector(c.target)},{"up",vector(c.up)},
+        {"fov_y",c.fov_y},{"near",c.near_plane},{"far",c.far_plane}};
+}
+nlohmann::json settings_json(const render::EnvironmentRenderSettings& s) {
+    return {{"mode",s.mode==render::CloudRenderMode::reference ? "reference" : "temporal"},
+        {"cloud_shadows",s.cloud_shadows},{"shadow_center_m",{s.shadow_center_m.x(),s.shadow_center_m.y(),s.shadow_center_m.z()}},
+        {"shadow_extent_m",s.shadow_extent_m},{"shadow_resolution",s.shadow_resolution}};
+}
+std::string provenance(const CaptureRequest& r,const EnvironmentDescription& environment) {
     const auto& clouds=environment.clouds;
     const bool cloudy=clouds.enabled && clouds.coverage>0 && clouds.density>0 && clouds.extinction_per_m>0;
-    return nlohmann::json{{"environment",environment_json(environment)},
-        {"camera",{{"eye",vector(c.eye)},{"target",vector(c.target)},{"up",vector(c.up)},
-            {"fov_y",c.fov_y},{"near",c.near_plane},{"far",c.far_plane}}},
-        {"exposure",r.exposure},{"time_seconds",0},{"quality",cloudy ? "cloud_reference_v1" : environment.enabled ? "atmosphere_v1" : "unlit_v1"},
+    return nlohmann::json{{"environment",environment_json(environment)},{"camera",camera_json(r.camera)},
+        {"exposure",r.exposure},{"time_seconds",r.environment.time_seconds},
+        {"quality",cloudy ? (r.environment.mode==render::CloudRenderMode::reference ? "cloud_reference_v1" : "cloud_temporal_v1") : environment.enabled ? "atmosphere_v1" : "unlit_v1"},
+        {"render_options",settings_json(r.environment)},{"warmup_frames",r.warmup_frames},{"sample_count",r.samples.empty() ? 1 : r.samples.size()},
         {"profile",r.profile==GltfImportProfile::strict ? "strict" : "unlit_preview"},{"shader_fingerprint",nullptr}}.dump();
 }
 struct Completion { std::filesystem::path output; ByteBuffer ppm; std::string summary; nlohmann::json provenance; };
@@ -108,31 +118,77 @@ Result<JobQueue::Payload> render_capture(memory::ResourceHandle resource,const S
             auto assets=take(source.upload(queue)); checkpoint(stop);
             const auto fingerprint=take(render::shader_fingerprint(shader_directory,input.scene.environment().enabled || input.scene.environment().clouds.enabled));
             auto pipeline=take(render::ScenePipeline::create(resource,queue,shader_directory)); checkpoint(stop);
-            auto settings=render::unlit_preview_settings(); settings.exposure=request.exposure;
-            auto frame=take(pipeline.render_environment(queue,take(render::RenderView::create(source.scene(),view)),assets,settings));
-            require(take(render::shader_fingerprint(shader_directory,input.scene.environment().enabled || input.scene.environment().clouds.enabled))==fingerprint,"Render shaders changed during capture",ErrorCode::conflict);
+            auto settings=render::unlit_preview_settings(); settings.exposure=request.exposure; settings.linear_readback=!request.samples.empty();
             completion->provenance=nlohmann::json::parse(info.provenance);
             completion->provenance["shader_fingerprint"]=fingerprint;
-            require(take(frame.wait(queue)),"Capture GPU wait did not complete",ErrorCode::invalid_state);
-            checkpoint(stop);
-            frame_info=frame.info();
-            ByteBuffer rgba(static_cast<std::size_t>(request.width)*request.height*4); check(frame.read_rgba8(rgba));
-            const std::string header="P6\n"+std::to_string(request.width)+" "+std::to_string(request.height)+"\n255\n";
-            const auto bytes=std::as_bytes(std::span{header.data(),header.size()});
-            completion->ppm.reserve(bytes.size()+rgba.size()/4*3);
-            completion->ppm.insert(completion->ppm.end(),bytes.begin(),bytes.end());
-            for (std::size_t i=0;i<rgba.size();i+=4) completion->ppm.insert(completion->ppm.end(),rgba.begin()+i,rgba.begin()+i+3);
+            nlohmann::json frames=nlohmann::json::array();
+            const auto count=request.samples.empty() ? 1 : request.samples.size();
+            auto environment=request.environment; environment.view_id=1; environment.camera_revision=0;
+            const auto started=std::chrono::steady_clock::now();
+            for(std::size_t i=0;i<count;++i) {
+                if(!request.samples.empty()) {
+                    CaptureRequest sample_request; sample_request.width=request.width; sample_request.height=request.height; sample_request.camera=request.samples[i].camera;
+                    view=view_description(sample_request); view.frame=info.frame.frame;
+                    environment.time_seconds=request.samples[i].time_seconds;
+                    if(request.samples[i].camera_cut) ++environment.camera_revision;
+                }
+                auto render_view=take(render::RenderView::create(source.scene(),view));
+                for(unsigned warm=0;warm<=(i==0 ? request.warmup_frames : 0);++warm) {
+                    checkpoint(stop);
+                    const auto frame_start=std::chrono::steady_clock::now();
+                    auto frame=take(pipeline.render_environment(queue,render_view,assets,settings,environment));
+                    require(take(frame.wait(queue)),"Capture GPU wait did not complete",ErrorCode::invalid_state);
+                    checkpoint(stop);
+                    if(i==0 && warm<request.warmup_frames) continue;
+                    frame_info=frame.info();
+                    ByteBuffer rgba(static_cast<std::size_t>(request.width)*request.height*4); check(frame.read_rgba8(rgba));
+                    if(request.samples.empty()) {
+                        const std::string header="P6\n"+std::to_string(request.width)+" "+std::to_string(request.height)+"\n255\n";
+                        const auto bytes=std::as_bytes(std::span{header.data(),header.size()});
+                        completion->ppm.reserve(bytes.size()+rgba.size()/4*3);
+                        completion->ppm.insert(completion->ppm.end(),bytes.begin(),bytes.end());
+                        for(std::size_t j=0;j<rgba.size();j+=4) completion->ppm.insert(completion->ppm.end(),rgba.begin()+j,rgba.begin()+j+3);
+                    } else {
+                        std::vector<std::array<float,4>> linear(std::size_t{request.width}*request.height); check(frame.read_linear_rgba32f(linear));
+                        std::array<double,3> low{INFINITY,INFINITY,INFINITY},high{-INFINITY,-INFINITY,-INFINITY},mean{};
+                        for(const auto& pixel:linear) for(unsigned c=0;c<4;++c) {
+                            require(std::isfinite(pixel[c]),"Nonfinite sequence HDR output",ErrorCode::internal_error);
+                            if(c<3) { low[c]=std::min(low[c],double(pixel[c])); high[c]=std::max(high[c],double(pixel[c])); mean[c]+=pixel[c]/double(linear.size()); }
+                        }
+                        std::vector<unsigned char> encoded; encoded.reserve(rgba.size()); for(auto b:rgba) encoded.push_back(std::to_integer<unsigned char>(b));
+                        const auto history=frame.cloud_optimization();
+                        const double wall=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-frame_start).count();
+                        frames.push_back({{"index",i},{"camera",camera_json(request.samples[i].camera)},{"time_seconds",environment.time_seconds},
+                            {"camera_cut",request.samples[i].camera_cut},{"rgba8",std::move(encoded)},{"linear_rgba",std::move(linear)},
+                            {"linear_summary",{{"min",low},{"max",high},{"mean",mean}}},{"wall_ms",wall},{"gpu_ms",nullptr},
+                            {"history",{{"available",history.history_available},{"source_sequence",history.source_sequence},{"candidate_sequence",history.candidate_sequence},
+                                {"reset",render::cloud_history_reset_name(history.reset)}}},{"shadow_generation",frame.cloud_shadow_generation()}});
+                    }
+                }
+            }
+            require(take(render::shader_fingerprint(shader_directory,input.scene.environment().enabled || input.scene.environment().clouds.enabled))==fingerprint,"Render shaders changed during capture",ErrorCode::conflict);
+            if(!request.samples.empty()) {
+                const auto& adapter=queue.device().adapter();
+                const auto report=nlohmann::json{{"schema_version",1},{"kind","decker.render_sequence"},{"status","succeeded"},
+                    {"document_id",info.document.to_string()},{"scene_id",frame_info.scene.to_string()},{"revision",frame_info.revision},{"frame",info.frame.frame},
+                    {"width",request.width},{"height",request.height},{"provenance",completion->provenance},
+                    {"device",{{"name",adapter.properties.deviceName.data()},{"driver",adapter.driver.driverInfo.data()}}},
+                    {"wall_ms",std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count()},
+                    {"gpu_ms",nullptr},{"frames",std::move(frames)}}.dump();
+                require(report.size()<=64U*1024U*1024U,"Sequence JSON exceeds 64 MiB");
+                const auto bytes=std::as_bytes(std::span{report.data(),report.size()}); completion->ppm.assign(bytes.begin(),bytes.end());
+            }
         }
         check(queue.close());
-        require(queue.device().validation_errors()==0,"Capture Vulkan validation failed",ErrorCode::internal_error);
+        require(queue.device().validation_errors()==0 && queue.device().validation_warnings()==0,"Capture Vulkan validation failed",ErrorCode::internal_error);
         checkpoint(stop);
-        completion->summary=nlohmann::json{{"kind","capture"},{"document_id",info.document.to_string()},
+        completion->summary=nlohmann::json{{"kind",request.samples.empty() ? "capture" : "render_sequence"},{"document_id",info.document.to_string()},
             {"scene_id",frame_info.scene.to_string()},{"revision",frame_info.revision},{"frame",frame_info.frame},
             {"width",frame_info.width},{"height",frame_info.height},{"output",info.output},
             {"draw_count",frame_info.draw_count},{"provenance",std::move(completion->provenance)}}.dump();
         require(completion->summary.size()<=4096,"Capture summary exceeds Job metadata limit");
         return completion;
-    } catch (Error& e) { return std::unexpected(e.with_context("render.capture")); }
+    } catch (Error& e) { return std::unexpected(e.with_context(request.samples.empty() ? "render.capture" : "render.sequence")); }
 }
 }
 struct CaptureService::Impl {
@@ -157,12 +213,26 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
     auto& s=*impl_; memory::ExecutionScope scope(s.context,s.render_heap);
     try {
         auto view=view_description(request);
+        check(render::validate_environment_render_settings(request.environment));
+        require(request.warmup_frames<=64 && (request.environment.mode==render::CloudRenderMode::temporal || !request.warmup_frames),"Warmup requires temporal mode and at most 64 frames");
+        require(request.samples.size()<=128,"Sequence allows at most 128 samples");
+        if(!request.samples.empty()) {
+            const auto pixels=std::size_t{request.width}*request.height;
+            require(pixels<=65536 && pixels*request.samples.size()<=262144,"Sequence pixel/readback budget exceeded");
+            for(const auto& sample:request.samples) {
+                auto sample_request=request; sample_request.camera=sample.camera; static_cast<void>(view_description(sample_request));
+                auto render=request.environment; render.time_seconds=sample.time_seconds; check(render::validate_environment_render_settings(render));
+            }
+        }
         require(std::isfinite(request.exposure) && request.exposure>=0 && request.exposure<=1000000,"Capture exposure must be finite in [0,1000000]");
         require(request.profile==GltfImportProfile::strict || request.profile==GltfImportProfile::unlit_preview,"Invalid capture profile");
         require(!request.output.empty() && request.output.size()<=1024,"Capture output must be 1..1024 UTF-8 bytes");
         auto relative=take(path_from_utf8(request.output));
-        require(relative.extension()==".ppm","Capture output must have .ppm extension");
+        require(relative.extension()==(request.samples.empty() ? ".ppm" : ".json"),"Capture output must be .ppm; sequence output must be .json");
         auto snapshot=take(scene.read_snapshot(guard));
+        const auto& clouds=snapshot.scene.environment().clouds;
+        if(!request.samples.empty() && request.environment.mode==render::CloudRenderMode::reference && clouds.enabled && clouds.coverage>0 && clouds.density>0 && clouds.extinction_per_m>0)
+            require(std::size_t{request.width}*request.height<=4096,"Reference cloud sequence allows at most 4096 pixels");
         const auto output=take(snapshot.project.paths().resolve(relative));
         std::error_code error;
         require(std::filesystem::is_directory(output.parent_path(),error) && !error,"Capture output parent must exist",ErrorCode::io_error);
@@ -173,7 +243,8 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
             (output.native().size()+s.shaders.native().size()+snapshot.project.paths().root().native().size())*sizeof(std::filesystem::path::value_type)+
             snapshot.project.description().name.size()+snapshot.project.description().scene.size()+request.output.size()+8192;
         for (const auto& asset : snapshot.project.description().assets) input_bytes+=sizeof(AssetRecord)+asset.path.size()+64;
-        input_bytes+=static_cast<std::size_t>(request.width)*request.height*7;
+        input_bytes+=request.samples.empty() ? static_cast<std::size_t>(request.width)*request.height*7 :
+            static_cast<std::size_t>(request.width)*request.height*request.samples.size()*256+request.samples.size()*sizeof(CaptureSample);
         require(s.next_frame!=UINT64_MAX,"Capture frame counter exhausted",ErrorCode::invalid_state);
         view.frame=s.next_frame;
         CaptureInfo info{snapshot.state.document_id,{snapshot.scene.id(),snapshot.scene.revision(),view.frame,request.width,request.height,0},output_name,provenance(request,snapshot.scene.environment())};

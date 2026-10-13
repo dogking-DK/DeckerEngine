@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-10-13T18:20:19+08:00"
+updated_at: "2026-10-13T18:54:48+08:00"
 status: accepted
 ---
 
@@ -210,3 +210,8 @@ render_sunlight/render_atmosphere/render_clouds/render_clouds_optimized接受可
 Frame保留快照，提交成功更新图的最后使用序号，使预算覆盖消费者在途寿命；失败不发布使用。
 该快照仅改变终端表面，M15.4历史保存介质量，换图无需因表面光照改变而重置介质历史。
 详细参数、误差与生命周期见[云影契约](render-clouds.md#云影与交互闭环)。
+
+## M15.6 共用环境渲染会话
+
+render_environment增加EnvironmentRenderSettings，按reference/temporal选择已验收云路径，并用相同time和密度模型准备可选固定世界云影。设置独立于Scene；默认reference/time=0，完整区域显式可覆盖，接收域仍遵循M15.5拒绝规则。
+候选Atmosphere/CloudEnvironment仍在成功返回Frame后保留；每个CloudEnvironment持有云场/纹理及ShadowRenderer，Frame持有真实快照。调用者负责等待后poll历史；共用入口进入temporal时先收集已完成候选。reference不发布或读取历史，切换回temporal必须重置原视图历史，避免跨模式续用。

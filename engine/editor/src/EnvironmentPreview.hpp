@@ -15,6 +15,7 @@ struct EnvironmentPreviewRequest {
     std::optional<TransformEdit> edit;
     std::uint64_t sequence;
     float exposure;
+    render::EnvironmentRenderSettings environment;
 };
 struct EnvironmentPreviewResult {
     std::uint64_t sequence=0;
@@ -23,6 +24,10 @@ struct EnvironmentPreviewResult {
     std::vector<PickMesh> meshes;
     std::vector<std::byte> pixels;
     std::string error;
+    render::EnvironmentRenderSettings environment;
+    render::CloudFrameInfo history;
+    std::uint64_t shadow_generation=0;
+    std::uint32_t warmup_frames=0;
 };
 // One active, one replaceable request, one replaceable completion. No GUI state on worker.
 class EnvironmentPreview final {

@@ -286,14 +286,14 @@ Json failure(const Error& error, const Json& task) {
 }
 bool allowed(std::string_view name, LuauAccess access) {
     constexpr std::array queries = {"commands.list", "commands.describe", "runtime.capabilities", "tasks.list",
-        "tasks.get", "scene.query", "environment.query", "jobs.get", "jobs.wait", "entity.get", "history.status", "simulation.query", "simulation.particles", "simulation.sample"};
+        "tasks.get", "scene.query", "environment.query", "environment.preset", "jobs.get", "jobs.wait", "entity.get", "history.status", "simulation.query", "simulation.particles", "simulation.sample"};
     if (std::find(queries.begin(), queries.end(), name) != queries.end()) return true;
     if (access == LuauAccess::query) return false;
-    if (access == LuauAccess::edit && (name == "scene.load" || name == "scene.save" || name == "project.save" || name == "simulation.export" || name == "render.capture" || name == "jobs.cancel"))
+    if (access == LuauAccess::edit && (name == "scene.load" || name == "scene.save" || name == "project.save" || name == "simulation.export" || name == "render.capture" || name == "render.sequence" || name == "jobs.cancel"))
         return false;
     constexpr std::array names = {
         "commands.list", "commands.describe", "runtime.capabilities", "tasks.list", "tasks.get",
-        "environment.set", "render.capture", "jobs.cancel",
+        "environment.set", "render.capture", "render.sequence", "jobs.cancel",
         "scene.new", "scene.load", "scene.query", "scene.save", "scene.transaction", "project.save",
         "entity.create", "entity.get", "entity.delete", "entity.set_name", "entity.set_transform",
         "entity.set_parent", "entity.set_assets", "history.status", "history.undo", "history.redo",

@@ -9,6 +9,11 @@ struct CaptureCamera {
     Vec3d eye{8,1.8,0}, target{-4,2,0}, up{0,1,0};
     double fov_y=65, near_plane=0.05, far_plane=100;
 };
+struct CaptureSample {
+    CaptureCamera camera;
+    double time_seconds=0;
+    bool camera_cut=false;
+};
 struct CaptureRequest {
     std::string output;
     std::uint32_t width=960, height=540;
@@ -16,6 +21,10 @@ struct CaptureRequest {
     GltfImportProfile profile=GltfImportProfile::unlit_preview;
     bool require_validation=false;
     float exposure=1;
+    render::EnvironmentRenderSettings environment;
+    std::uint32_t warmup_frames=0;
+    std::vector<CaptureSample> samples; // Empty: one PPM. Otherwise: atomic sequence JSON.
+
 };
 struct CaptureInfo {
     DocumentId document;

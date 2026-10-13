@@ -278,7 +278,7 @@ TEST_CASE("Luau environment capture and job commands follow access levels") {
 local q=dk.command("environment.query").value
 q.environment.enabled=true
 assert(dk.command("environment.set", {guard={document_id=q.state.document_id,revision=q.state.revision},environment=q.environment}).ok)
-for _, method in {"render.capture", "jobs.cancel"} do
+for _, method in {"render.capture", "render.sequence", "jobs.cancel"} do
     local r=dk.command(method)
     assert(not r.ok and r.error.name=="not_supported" and r.task_id==dk.null)
 end
@@ -287,7 +287,8 @@ end
     LuauOptions query; query.access=LuauAccess::query;
     REQUIRE(run_luau(*s.runtime,R"(
 assert(dk.command("environment.query").ok)
-for _, method in {"environment.set", "render.capture", "jobs.cancel"} do
+assert(dk.command("environment.preset", {name="sparse"}).value.environment.clouds.seed==1729)
+for _, method in {"environment.set", "render.capture", "render.sequence", "jobs.cancel"} do
     local r=dk.command(method)
     assert(not r.ok and r.error.name=="not_supported" and r.task_id==dk.null)
 end
@@ -297,7 +298,7 @@ for _, method in {"jobs.get", "jobs.wait"} do
 end
 )","environment-query.luau",query));
     s.run(R"(
-for _, method in {"render.capture", "jobs.cancel"} do
+for _, method in {"render.capture", "render.sequence", "jobs.cancel"} do
     local r=dk.command(method)
     assert(not r.ok and r.error.name~="not_supported")
 end

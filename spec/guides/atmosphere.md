@@ -128,7 +128,7 @@ render-disk示例将planet_center_m.y设置为-ground_radius_m-1000，使全部�
 
 大气准备在后台进行，画面准备好后才发布；状态改变时可能短暂保留旧帧并标为过期。
 修改请求会合并，旧结果不覆盖新参数。关闭/取消等待已提交GPU回收，不承诺硬中断驱动。
-Simulation布料视口仍使用自身渲染入口。当前固定静态时间0和atmosphere_v1质量，性能采样方式见[基准指南](atmosphere-benchmark.md)。
+Simulation布料视口仍使用自身渲染入口。大气使用atmosphere_v1；云的显式时间、模式和序列见[云指南](clouds.md)，性能采样方式见[基准指南](atmosphere-benchmark.md)。
 
 两个示例对render-disk夹具应用相同环境，使用128×96、eye=[0,0,4]/target=[0,0,0]、曝光1、时间0和同一质量：
 

@@ -43,6 +43,16 @@ Result<SunParameters> normalize_sun(SunParameters sun) {
     return sun;
 }
 }
+Result<EnvironmentDescription> environment_preset(std::string_view name) {
+    EnvironmentDescription e; e.enabled=true;
+    e.clouds.seed=1729; e.clouds.generator_version=1;
+    if(name=="clear") e.clouds.enabled=false;
+    else if(name=="sparse") { e.clouds.enabled=true; e.clouds.coverage=.35; e.clouds.density=.8; }
+    else if(name=="overcast") { e.clouds.enabled=true; e.clouds.coverage=.9; e.clouds.density=1.5; }
+    else if(name=="sunset") { e.clouds.enabled=true; e.clouds.coverage=.55; e.sun.direction={1,.08,0}; }
+    else return std::unexpected(Error{ErrorCode::invalid_argument,"Unknown environment preset"});
+    return normalize_environment(e);
+}
 Result<EnvironmentDescription> normalize_environment(EnvironmentDescription value) {
     auto atmosphere = validate_atmosphere(value.atmosphere);
     if (!atmosphere) return std::unexpected(atmosphere.error());
