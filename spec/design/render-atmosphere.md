@@ -1,7 +1,7 @@
 ---
 module: render-atmosphere
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-13T11:44:00+08:00"
+updated_at: "2026-10-13T12:24:00+08:00"
 status: accepted
 ---
 
@@ -9,7 +9,7 @@ status: accepted
 
 ## 目标与当前基线
 
-CPU环境模型、持久化与命令已接入；Graphics支持3D资源与深度采样，独立大气模块提供CPU参考、T/MS/Sky LUT和离屏天空。最小日光接收、视锥空气透视和天空/几何合成由 ScenePipeline 显式入口提供，场景视口集成仍规划。阶段、顺序与验收状态统一维护在
+CPU环境模型、持久化与命令已接入；Graphics支持3D资源与深度采样，独立大气模块提供CPU参考、T/MS/Sky LUT和离屏天空。最小日光接收、视锥空气透视和天空/几何合成由 ScenePipeline 提供，环境视口与capture使用共用入口。阶段、顺序与验收状态统一维护在
 [Roadmap](../roadmap.md)；各后续小阶段开工时再细化具体接口。
 
 默认面向Windows x64、Vulkan/Slang、地球尺度的地表至高空实时观察；支持昼间、日出/日落、
@@ -22,11 +22,11 @@ CPU环境模型、持久化与命令已接入；Graphics支持3D资源与深度�
 
 | 已核实的现状 | 本轮需要补齐的能力 |
 | --- | --- |
-| [ScenePipeline](../../engine/render/pipeline/include/dk/render/ScenePipeline.hpp)提供clear/exposure、默认unlit、显式Lambert及天空/空气透视合成 | 上层视口/capture装配，保持原unlit路径 |
+| [ScenePipeline](../../engine/render/pipeline/include/dk/render/ScenePipeline.hpp)提供clear/exposure、默认unlit、Lambert及天空/空气透视合成；视口/capture共用 | 保持原unlit路径及公开显式入口 |
 | [资源描述](../../engine/graphics/device/include/dk/graphics/Resources.hpp)在M14.2扩展原生3D image/view、RGBA16F和三轴传输 | 后续LUT选择实际设备支持的格式，不把array_layers当连续z坐标 |
 | [深度目标](../../engine/render/pipeline/src/ScenePipeline.cpp)在M14.2增加sampled usage和Graph屏障验收 | M14.5使用有限透视深度重建真实光程并合成 |
-| [RenderView](render-data.md)包含双精度相机/投影和环境快照 | 稳定视图身份与显式渲染时间约定 |
-| [截图](render-capture.md)每个作业独立worker/device、输出PPM | 环境版本快照、无历史参考模式及线性HDR测试读回 |
+| [RenderView](render-data.md)包含双精度相机/投影和环境快照，视口发布校验完整身份、静态时间0 | 云动画另行定义时间语义 |
+| [截图](render-capture.md)每个作业独立worker/device、输出PPM；冻结环境/相机/曝光/质量并记录shader摘要 | 云参考/历史模式后续定义 |
 | [M13实验格式](../../sdk/python/decker/experiments.py)绑定XPBD/cloth | 复用SDK调用及追溯原则，另设有版本的渲染用例清单；不直接塞入布料计划 |
 
 ## 技术路线与依据
@@ -54,7 +54,8 @@ Scene与render/data的CPU契约见M14.1；M14.3独立模块的公开入口为[At
 | 现有render/pipeline | depth/unlit或Lambert/tone，M14.4导入大气快照T/Sky；M14.5显式合成天空/空气透视，Render模块不调用裸Vulkan |
 | 现有render services / editor | 装配、截图任务及界面；通过统一命令改环境，不能持有可变GPU缓存作为场景状态 |
 
-DK_BUILD_RENDER_ATMOSPHERE隔离大气模块，默认OFF、windows-graphics开启；启用时明确检查target依赖。
+DK_BUILD_RENDER_ATMOSPHERE隔离GPU大气模块，默认OFF、windows-graphics开启；启用时明确检查target依赖。
+DK_BUILD_RENDER_ATMOSPHERE_REFERENCE默认OFF，可在CPU配置单独开启；GPU选项也构建该参考库。
 CPU-only仍能读取、保存和修改环境描述，渲染能力未编译/设备不支持时明确报告不可用。
 不新增三方依赖；若实际移植外部代码/素材，另行记录版本、许可和来源，不能将参考链接当作已引入依赖。
 
@@ -169,9 +170,39 @@ M14.3固定数值门槛：透射绝对误差≤2e-3；固定测试集的线性RG
 太阳盘/地平线单列最大误差与边界连续性，不从总图平均中隐藏。多次散射近似偏差与离散/插值误差分别记录。
 这些门槛在本次实现前冻结；不得以“看起来正确”替代量化或事后悄悄放宽。
 
-性能候选目标为1080p质量档下大气增量GPU p95≤1.5ms，含每帧Sky/AP更新及合成，
-不把仅物理参数变化时的LUT重建藏入稳态；冷编译/重建、CPU建图/提交、GPU区间、端到端和显存分别报告。
-以实际选定设备、驱动、构建、validation/profiling开关记录基线后冻结，当前没有性能实测或达标承诺。
+性能候选目标为1080p质量档下大气增量GPU p95≤1.5ms，含每帧Sky/AP更新及合成。
+质量门槛不随性能结果调整；候选目标未达到时明确记录差距，不将阶段基线交付等同于性能达标。
+
+### 质量与性能采集协议
+
+固定参考集复用AtmosphereProbe六个高度/太阳用例（单次与MS）、独立CPU闭合比较、
+地平线两侧显式射线、太阳盘与真空；AerialPerspectiveProbe五个高度/距离用例及分段合成。
+地平线另检查相邻采样的变化相对高采样参考的偏差≤8%，使用该射线集参考RGB最大值与1e-3的较大者归一化；
+允许真实行星遮挡边界，不要求跨遮挡颜色相等。
+CPU参考提供独立DK_BUILD_RENDER_ATMOSPHERE_REFERENCE选项，不要求Graphics或Slang；GPU选项隐含构建参考库。
+
+基准使用ScenePipeline、同一双面远近矩形场景及晴空/日落/高空三个固定预设，1920×1080、时间0、曝光8。
+每组先冷帧，再5帧预热和40帧稳态，分别测缓存命中、逐帧高度变化导致Sky更新、物理参数变化导致全部LUT重建；
+另测相同相机/几何的unlit帧。三轮独立进程，轮换预设和timestamp OFF/ON顺序，保存原始样本。
+分位数使用nearest-rank；逐帧增量为更新帧的Sky GPU加帧GPU减同索引unlit GPU（串行配对，非同时执行），
+另列AP/合成Pass，父Submission与子Pass不相加。报告每轮p50/p95，三轮取中位数并保留范围。
+
+冷设备、管线/Slang创建、首次lit/AP延迟编译、同步LUT准备、CPU录制提交、wait、CPU读回及API端到端分别计时。
+端到端包含LUT准备、建图/提交、等待和RGBA8读回；不冒充GUI呈现或IPC排队/文件写入延迟。
+冷指进程/renderer无缓存，不清理驱动或OS缓存。优化构建、validation关闭用于性能；required GPU同步validation单独验收。
+M11独立timestamp无需Tracy；未连接Tracy时不声称采集了Tracy轨迹。缺失/丢弃GPU时间、非有限值或失败运行拒绝汇总。
+
+AtmosphereSky::lut_profile返回该LUT代构建完成时的只读GpuProfile（仅CPU数据，不持有设备）。
+缓存命中保留同一profile；用generations判断此次是否重建，不能将旧代时间当本帧耗时。
+profile与已通过数值检查的候选表同时发布；失败保留旧表、代次和profile，关闭timestamp时状态为disabled。
+VMA分别记录device-local及host-visible的allocation/block字节安全点采样峰值、缓存驻留和清理后值；
+正式计时完成后另发一个不计时诊断帧，在wait/collect前采样以包含Graph的AP/HDR临时资源，避免只测到完成帧驻留。
+统一内存类型可重叠，不相加，不将VMA块等同于系统总显存/精确瞬时峰值。另列CPU heap backing峰值。
+记录设备/驱动、编译器/config、开关、shader摘要、可执行文件和源文件hash，以便复跑。
+
+本机固定基线见[质量/性能报告](../benchmarks/2026-10-13-atmosphere.md)，复现见[指南](../guides/atmosphere-benchmark.md)。
+质量门槛通过；RTX4070 Laptop/596.49的1080p动态Sky增量GPU p95三轮中位数为2.709/2.792/1.593ms，
+1.5ms候选目标仍未达到。质量/性能采集能力与优化达标分开维护，具体历史证据见[0100](../development/0100-atmosphere-baseline.md)。
 
 ## 相关文档
 
@@ -227,7 +258,7 @@ GPU：与高采样参考比较正午、低太阳、日落后、1m/10km/100km/顶
 单散射及完整天空归一化RMSE≤3%、p99≤8%（尺度=max参考RGB亮度p95,1e-3)；太阳盘和地平线边界另列，不纳入平均掩盖。
 MS用选定点同一闭合的高采样CPU参考比较，记录积分误差与近似模型限制。若候选分辨率未达门槛，先提高采样/分辨率并记录成本，不放宽门槛。
 缓存测试分别改变物理参数/散射/反照率/g/太阳/相机/尺寸，检查代次和旧输出；注入创建/submit/预算失败验证保留旧代。
-required GPU validation覆盖Graph与在途销毁。离屏样例输出正午/日落/高空PPM和线性数值测试证据；性能承诺留到M14.7。
+required GPU validation覆盖Graph与在途销毁。离屏样例输出正午/日落/高空PPM和线性数值测试证据；性能采集独立于质量验收。
 
 ## M14.4 几何光照边界
 
@@ -247,4 +278,4 @@ AtmosphereSky 只读公开 MS 开关，传输函数由天空与空气透视共�
 Edit视口通过独立有界worker冻结环境/相机并绑定ScenePipeline；Environment面板复用CPU命令和历史。
 Capture按冻结环境选择旧unlit或完整大气合成，结果含参数、静态时间、固定质量与shader来源。
 Python/Luau、真实GUI/IPC、保存重载和错误/取消/在途关闭已验收，详见[0099](../development/0099-environment-integration.md)、
-[编辑器设计](editor.md)、[截图设计](render-capture.md)与[指南](../guides/atmosphere.md)。M14.7性能/质量交付仍未开始。
+[编辑器设计](editor.md)、[截图设计](render-capture.md)与[指南](../guides/atmosphere.md)。性能采集入口见[基准指南](../guides/atmosphere-benchmark.md)。

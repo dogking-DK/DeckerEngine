@@ -18,6 +18,8 @@ public:
     [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
     [[nodiscard]] AtmosphereGenerations generations() const noexcept;
     [[nodiscard]] Result<AtmosphereLutView> lut(AtmosphereLut) const;
+    // CPU-only observation of this LUT generation's build, not the current frame.
+    [[nodiscard]] Result<graphics::GpuProfile> lut_profile(AtmosphereLut) const;
     [[nodiscard]] Result<EnvironmentDescription> environment() const;
     [[nodiscard]] Result<Vec3d> position_m() const;
     [[nodiscard]] Result<bool> multiple_scattering_enabled() const;

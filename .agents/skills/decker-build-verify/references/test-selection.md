@@ -100,7 +100,8 @@
 | 已完成图像跨队列交接、同设备限制、提交失败和源队列提前销毁 | dk_image_transfer_probe | `^dk\.graphics\.image_transfer_validation$`（required及同步validation） |
 | 大气双精度参考、解析透射、相函数与分段合成 | dk_atmosphere_tests | `^dk\.atmosphere\.[^_]+$` |
 | 大气正午/日落/高空离屏样例 | dk_atmosphere_demo | `^dk\.atmosphere\.demo_gpu_validation$`（真实GPU和同步validation必需） |
-| 大气 LUT/天空参考、缓存失效、失败与寿命 | dk_atmosphere_probe | `^dk\.atmosphere\.(reference\|multiple\|cache\|vacuum)_gpu_validation$`（真实GPU和同步validation必需，不允许跳过） |
+| 大气 LUT/天空参考、缓存失效、失败与寿命 | dk_atmosphere_probe | `^dk\.atmosphere\.(reference\|multiple\|cache\|vacuum\|continuity)_gpu_validation$`（真实GPU和同步validation必需，不允许跳过） |
+| 大气性能采集与证据汇总 | dk_atmosphere_benchmark | `^dk\.atmosphere\.benchmark_(gpu_validation\|aggregation)$`（GPU采集必须required validation；性能另用RelWithDebInfo关闭validation） |
 | 3D RGBA16F/32F存储、过滤、传输与深度采样/Graph屏障/失败寿命 | dk_volume_image_probe | `^dk\.graphics\.volume_validation$`（真实GPU和同步validation必需，不允许跳过） |
 | VMA 上传/读回、timeline、延迟释放与提交失败 | dk_graphics_resource_probe | `^dk\.graphics\.gpu_`（gpu label；77 为跳过） |
 | Slang 三阶段编译、反射、诊断与 Memory 寿命（无需 GPU） | dk_shader_tests | `^dk\.shaders\.` |

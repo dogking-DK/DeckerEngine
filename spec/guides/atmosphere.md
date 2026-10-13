@@ -1,7 +1,7 @@
 # 独立离屏大气天空
 
 本入口生成正午、日落和100km高空的960×540 PPM，使用球面对称大气、单太阳和T/MS/Sky View LUT。
-场景几何日光接收见下方独立样例；空气透视使用下方显式C++接口；Editor/capture集成见[Roadmap](../roadmap.md)后续阶段。
+场景几何日光接收、空气透视和Editor/capture集成见下方；固定质量集与1080p性能复现见[基准指南](atmosphere-benchmark.md)。
 
 ```powershell
 cmake --preset windows-graphics
@@ -31,7 +31,7 @@ render_sky接收该快照与SkyCamera，返回异步SkyFrame；wait成功后read
 ```powershell
 & ./scripts/verify.ps1 -BuildDir out/build/windows-graphics `
   -Target @('dk_atmosphere_tests','dk_atmosphere_probe','dk_atmosphere_demo') `
-  -TestRegex '^dk\.atmosphere\.' -Reason '验证大气参考、LUT和离屏天空'
+  -TestRegex '^dk\.atmosphere\.([^_]+|(reference|multiple|cache|vacuum|continuity|demo)_gpu_validation)$' -Reason '验证大气参考、LUT和离屏天空'
 ```
 
 数值门槛、缓存key和提交点见[模块设计](../design/render-atmosphere.md)；实现和验证证据见[0096](../development/0096-atmosphere-luts.md)。
@@ -128,7 +128,7 @@ render-disk示例将planet_center_m.y设置为-ground_radius_m-1000，使全部�
 
 大气准备在后台进行，画面准备好后才发布；状态改变时可能短暂保留旧帧并标为过期。
 修改请求会合并，旧结果不覆盖新参数。关闭/取消等待已提交GPU回收，不承诺硬中断驱动。
-Simulation布料视口仍使用自身渲染入口。当前固定静态时间0和atmosphere_v1质量，性能基线属于后续M14.7。
+Simulation布料视口仍使用自身渲染入口。当前固定静态时间0和atmosphere_v1质量，性能采样方式见[基准指南](atmosphere-benchmark.md)。
 
 两个示例对render-disk夹具应用相同环境，使用128×96、eye=[0,0,4]/target=[0,0,0]、曝光1、时间0和同一质量：
 

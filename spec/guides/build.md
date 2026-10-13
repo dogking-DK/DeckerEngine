@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-13T09:28:33+08:00"
+updated_at: "2026-10-13T12:08:00+08:00"
 ---
 
 # 构建与依赖配置
@@ -11,6 +11,10 @@ updated_at: "2026-10-13T09:28:33+08:00"
 独立配置和历史验收计数不构成每次修改的固定回归要求。
 
 ## Windows 快速验证
+
+大气双精度参考可单独启用`DK_BUILD_RENDER_ATMOSPHERE_REFERENCE=ON`，只要求Scene/Math，
+不引入Graphics或Slang。`DK_BUILD_RENDER_ATMOSPHERE=ON`仍构建参考及GPU实现。
+纯CPU与优化性能验证命令见[大气基准指南](atmosphere-benchmark.md)。
 
 仅需外部控制客户端时使用 `cmake --preset windows-client`，随后
 `cmake --build out/build/windows-client --config Debug --target dk_ctl`；该配置不启用 Runtime/Scene/Renderer。

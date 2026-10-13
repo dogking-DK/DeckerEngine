@@ -163,7 +163,30 @@ void multiple_comparison(AtmosphereRenderer& renderer,SubmissionQueue& queue) {
         require(relative<.15,"MS quadrature too far from independent high-sample closure");
     }
 }
+void continuity(AtmosphereRenderer& renderer,SubmissionQueue& queue) {
+    EnvironmentDescription e; e.enabled=true; e.sun.direction={1,.015,0};
+    SkyCamera camera; camera.width=camera.height=1; camera.sun_disk=false;
+    for(double h:{1.,10000.,100000.,150000.}) for(bool multiple:{false,true}) {
+        const auto sky=take(renderer.prepare(queue,e,Vec3d{0,h,0},multiple));
+        const double edge=-std::sqrt(h*(2*e.atmosphere.ground_radius_m+h))/(e.atmosphere.ground_radius_m+h);
+        std::vector<Pixel> fast,exact;
+        double scale=.001,point=0,step=0;
+        for(double offset:{-.0005,-.00025,-.000125,-.0000625,.0000625,.000125,.00025,.0005}) {
+            const double mu=edge+offset; camera.forward={std::sqrt(1-mu*mu),mu,0};
+            camera.reference=false; fast.push_back(pixels(renderer,queue,sky,camera)[0]);
+            camera.reference=true; exact.push_back(pixels(renderer,queue,sky,camera)[0]);
+            for(unsigned c=0;c<3;++c) scale=std::max(scale,double(exact.back()[c]));
+        }
+        for(std::size_t i=0;i<fast.size();++i) for(unsigned c=0;c<3;++c) {
+            point=std::max(point,std::abs(double(fast[i][c])-exact[i][c])/scale);
+            if(i) step=std::max(step,std::abs((double(fast[i][c])-fast[i-1][c])-(double(exact[i][c])-exact[i-1][c]))/scale);
+        }
+        std::printf("horizon continuity h=%.0f MS=%d scale=%.9g point=%.9g step residual=%.9g\n",h,multiple,scale,point,step);
+        require(point<=.08 && step<=.08,"horizon continuity differs from direct reference");
+    }
+}
 void cache_and_failures(memory::MemorySystem& system,memory::ResourceHandle heap,SubmissionQueue& queue,const DeviceOptions& options) {
+    check(queue.configure_gpu_profiling({true}));
     auto budget=take(system.create_heap({"atmosphere-budget",memory::DomainCategory::render,8*1024*1024}));
     auto renderer=take(AtmosphereRenderer::create(budget,queue,DK_ATMOSPHERE_SHADER_DIR));
     EnvironmentDescription e; e.enabled=true; Vec3d position{0,1,0};
@@ -175,7 +198,11 @@ void cache_and_failures(memory::MemorySystem& system,memory::ResourceHandle heap
         require(generations==AtmosphereGenerations{old.transmittance+t,old.multiple_scattering+m,old.sky_view+s},"cache rebuilt incorrect LUTs");
     };
     const auto original=sky;
+    const auto profile=take(original.lut_profile(AtmosphereLut::sky_view));
+    require(profile.status()==GpuProfileStatus::ready && !profile.timings().empty(),"LUT profile missing");
+    require(!AtmosphereSky{}.lut_profile(AtmosphereLut::sky_view) && !sky.lut_profile(AtmosphereLut{99}),"invalid LUT profile accepted");
     prepare(0,0,0);
+    require(take(sky.lut_profile(AtmosphereLut::sky_view)).submission_value()==profile.submission_value(),"cache hit replaced observation");
     e.sun.irradiance={2,3,4}; e.sun.angular_radius_rad*=1.5; prepare(0,0,0);
     const auto energy=pixels(renderer,queue,sky,camera);
     for(std::size_t i=0;i<energy.size();++i) for(unsigned c=0;c<3;++c)
@@ -204,6 +231,7 @@ void cache_and_failures(memory::MemorySystem& system,memory::ResourceHandle heap
         fail_after=failure; require(!renderer.prepare(queue,next,position),"submit failure ignored");
         require(renderer.generations()==generations && allocations(queue)==base,"partial prepare failure published or leaked");
     }
+    require(take(original.lut_profile(AtmosphereLut::sky_view)).submission_value()==profile.submission_value(),"failed rebuild changed old observation");
     std::vector<void*> blocks;
     while(auto block=budget.try_allocate(4096)) blocks.push_back(*block);
     require(!renderer.prepare(queue,next,position) && renderer.generations()==generations,"budget failure changed cache");
@@ -252,7 +280,7 @@ void vacuum_and_disk(AtmosphereRenderer& renderer,SubmissionQueue& queue) {
 }
 int main(int argc,char** argv) {
     const std::string_view mode=argc>1 ? argv[1] : "reference";
-    if(argc>2 || (mode!="reference" && mode!="multiple" && mode!="cache" && mode!="vacuum")) return 2;
+    if(argc>2 || (mode!="reference" && mode!="multiple" && mode!="cache" && mode!="vacuum" && mode!="continuity")) return 2;
     Diagnostics diagnostics;
     try {
         auto system=take(memory::MemorySystem::create()); auto heap=take(system.create_heap({"atmosphere",memory::DomainCategory::render}));
@@ -266,6 +294,7 @@ int main(int argc,char** argv) {
                 if(mode=="reference") comparisons(renderer,queue);
                 if(mode=="vacuum") vacuum_and_disk(renderer,queue);
                 if(mode=="multiple") multiple_comparison(renderer,queue);
+                if(mode=="continuity") continuity(renderer,queue);
             }
             if(mode=="cache") cache_and_failures(system,heap,queue,options);
             check(queue.close()); require(allocations(queue)==0,"atmosphere GPU resources leaked");

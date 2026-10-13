@@ -14,6 +14,7 @@ struct AtmosphereTable {
     explicit AtmosphereTable(memory::ResourceHandle heap) : pixels(0,memory::Allocator<Pixel>{heap}) {}
     Image image;
     Vector<Pixel> pixels;
+    GpuProfile profile;
 };
 struct SkyState {
     EnvironmentDescription environment;
@@ -147,6 +148,7 @@ std::shared_ptr<const detail::AtmosphereTable> build(detail::AtmosphereState& st
             throw Error{ErrorCode::not_supported,"atmosphere LUT has nonfinite, negative or out-of-range values"};
         if(index==1 && pixel[3]>=1) throw Error{ErrorCode::not_supported,"atmosphere multiple scattering closure does not converge"};
     }
+    table->profile=result.submission().gpu_profile();
     table->image=take(result.image(2))->share(); return table;
 }
 }
@@ -247,6 +249,10 @@ Result<Vec3d> AtmosphereSky::position_m() const {
 Result<const Image*> AtmosphereSky::image(AtmosphereLut index) const {
     if(!state_ || unsigned(index)>=3) return std::unexpected(Error{ErrorCode::invalid_argument,"invalid atmosphere LUT"});
     return &state_->tables[unsigned(index)]->image;
+}
+Result<GpuProfile> AtmosphereSky::lut_profile(AtmosphereLut index) const {
+    if(!state_ || unsigned(index)>=3) return std::unexpected(Error{ErrorCode::invalid_argument,"invalid atmosphere LUT"});
+    return state_->tables[unsigned(index)]->profile;
 }
 Result<bool> SkyFrame::wait(SubmissionQueue& queue,std::uint64_t timeout) const {
     if(!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty sky frame"});

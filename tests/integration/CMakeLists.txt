@@ -6,11 +6,19 @@ if(TARGET dk_render_atmosphere)
     target_compile_definitions(dk_atmosphere_probe PRIVATE DK_ATMOSPHERE_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/atmosphere/shaders")
     dk_target_defaults(dk_atmosphere_probe)
     dk_deploy_slang(dk_atmosphere_probe)
-    foreach(case IN ITEMS reference multiple cache vacuum)
+    foreach(case IN ITEMS reference multiple cache vacuum continuity)
         add_test(NAME dk.atmosphere.${case}_gpu_validation COMMAND dk_atmosphere_probe ${case})
         set_tests_properties(dk.atmosphere.${case}_gpu_validation PROPERTIES TIMEOUT 1200 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
     endforeach()
+endif()
+
+if(TARGET dk_render_atmosphere_reference)
+    find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME dk.atmosphere.benchmark_aggregation COMMAND "${CMAKE_COMMAND}" -E env "PYTHONDONTWRITEBYTECODE=1"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/AtmosphereBenchmarkTest.py")
+    endif()
 endif()
 
 if(TARGET dk_physics_xpbd)
@@ -87,6 +95,19 @@ if(DK_BUILD_RENDER_DISK AND DK_BUILD_RENDER_PIPELINE)
 endif()
 if(DK_BUILD_RENDER_PIPELINE)
     if(TARGET dk_render_atmosphere)
+        find_package(nlohmann_json CONFIG REQUIRED)
+        add_executable(dk_atmosphere_benchmark AtmosphereBenchmark.cpp)
+        set_target_properties(dk_atmosphere_benchmark PROPERTIES OUTPUT_NAME dk-atmosphere-benchmark)
+        target_link_libraries(dk_atmosphere_benchmark PRIVATE dk::render_pipeline dk::render_atmosphere dk::profiling nlohmann_json::nlohmann_json)
+        target_compile_definitions(dk_atmosphere_benchmark PRIVATE DK_RENDER_SHADER_DIR="${PROJECT_SOURCE_DIR}/shaders/render"
+            DK_ATMOSPHERE_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/atmosphere/shaders"
+            DK_BENCH_COMPILER="${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}" DK_BENCH_CONFIG="$<CONFIG>")
+        dk_target_defaults(dk_atmosphere_benchmark)
+        dk_deploy_slang(dk_atmosphere_benchmark)
+        add_test(NAME dk.atmosphere.benchmark_gpu_validation COMMAND dk_atmosphere_benchmark --smoke --validation --timestamps
+            --output "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/atmosphere-benchmark.json")
+        set_tests_properties(dk.atmosphere.benchmark_gpu_validation PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
         add_executable(dk_surface_sunlight_probe SurfaceSunlightProbe.cpp)
         set_target_properties(dk_surface_sunlight_probe PROPERTIES OUTPUT_NAME dk-surface-sunlight-probe)
         target_link_libraries(dk_surface_sunlight_probe PRIVATE dk::render_pipeline dk::render_atmosphere)

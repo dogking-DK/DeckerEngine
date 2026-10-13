@@ -1,7 +1,7 @@
 ---
 module: foundation-profiling
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-10-09T19:38:24+08:00"
+updated_at: "2026-10-13T12:24:00+08:00"
 status: accepted
 ---
 
@@ -232,6 +232,11 @@ GPU 时长按 timestampPeriod 和 timestampValidBits 换算；区间短于计数
 验收：真实 XPBD 与绘制，开关前后粒子/像素一致；有界查询复用、未完成/超时、放弃/提交失败、
 查询失败显式缺失、关闭排空；Tracy capture 实际读回 GPU 区间和 CPU 阶段；CPU-only 独立构建。
 多规模性能/采集开销及控制延迟采用下述协议。
+
+大气使用同一M11.1观测接口，LUT快照仅保留已完成代的CPU GpuProfile，缓存命中不重复计算旧代耗时。
+基准分别记录prepare同步wall、CPU建图/提交、Submission/Pass GPU、等待/读回及VMA安全点，
+不将父区间与子Pass相加；独立timestamp不要求Tracy。具体固定工作负载、失效判定与边界归属
+[大气采集协议](render-atmosphere.md#质量与性能采集协议)，结果见[大气基线](../benchmarks/2026-10-13-atmosphere.md)。
 
 ## M11.2 模拟基线协议
 
