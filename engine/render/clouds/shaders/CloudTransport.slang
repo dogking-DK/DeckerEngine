@@ -38,14 +38,15 @@ uint cloudShell(float h,float mu,out float4 segments,out bool ground) {
     if(end>b) { if(count==0) segments.xy=float2(b,end); else segments.zw=float2(b,end); ++count; }
     return count;
 }
-float cloudSunlightOptical(CloudRayData ray,float3 position,float h,float mu) {
+float cloudSunlightOptical(CloudRayData ray,float3 position,float h,float mu,uint minimumSteps=0) {
+    uint steps=max(cp.counts.y,minimumSteps);
     float4 segments; bool ground; uint count=cloudShell(h,mu,segments,ground);
     if(ground) return -1;
     if(cp.flags.z==0) return 0;
     float optical=0;
     [loop] for(uint k=0;k<count;++k) {
-        float a=segments[2*k],b=segments[2*k+1],ds=(b-a)/float(cp.counts.y);
-        [loop] for(uint j=0;j<cp.counts.y;++j) {
+        float a=segments[2*k],b=segments[2*k+1],ds=(b-a)/float(steps);
+        [loop] for(uint j=0;j<steps;++j) {
             float t=a+(float(j)+.5)*ds;
             optical+=cloudDensity(ray,position+cp.sun.xyz*t,cloudHeightAt(h,mu,t))*cp.cloud.z*ds;
         }

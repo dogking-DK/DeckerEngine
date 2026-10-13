@@ -8,6 +8,20 @@ namespace dk::render {
 class AtmosphereSky;
 class CloudTextures;
 struct CloudCompositionSettings;
+struct CloudOptimizedSettings;
+enum class CloudHistoryReset { none, new_view, disabled, resize, projection, camera, scene, content, quality, time, failure };
+struct CloudFrameInfo {
+    std::uint64_t view_id=0, source_sequence=0, candidate_sequence=0;
+    std::uint32_t width=0,height=0; // Integration extent, not output extent.
+    bool history_available=false;
+    CloudHistoryReset reset=CloudHistoryReset::none;
+};
+struct CloudHistoryStatus { std::uint64_t completed=0,pending=0; bool reusable=false; };
+struct CloudTraceStatistics {
+    std::uint32_t primary_steps=0,cloud_lighting_steps=0,empty_steps=0,terminated_steps=0;
+    std::uint32_t reconstructed_pixels=0,fallback_pixels=0,history_accepted=0,history_rejected=0;
+    std::uint64_t density_samples=0;
+};
 namespace detail { struct PipelineState; struct FrameState; }
 struct RenderSettings {
     Vec3f clear_rgb = Vec3f::Zero(); // Linear HDR color.
@@ -46,6 +60,8 @@ public:
     // or mixed T.rgb / extinction-weighted cloud distance in metres in alpha.
     [[nodiscard]] Result<void> read_cloud_rgba32f(std::span<std::array<float,4>> destination) const;
     [[nodiscard]] Result<void> read_medium_rgba32f(std::span<std::array<float,4>> destination) const;
+    [[nodiscard]] CloudFrameInfo cloud_optimization() const noexcept;
+    [[nodiscard]] Result<CloudTraceStatistics> read_cloud_statistics() const;
     [[nodiscard]] Result<const graphics::Image*> color() const;
     [[nodiscard]] std::string_view plan_text() const noexcept;
 private:
@@ -79,10 +95,17 @@ public:
     // must match the view's environment. Zero clouds use the original M14 path.
     [[nodiscard]] Result<RenderFrame> render_clouds(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
         const AtmosphereSky&, const CloudTextures&, const CloudCompositionSettings&, const RenderSettings& = {});
+    // Explicit half-resolution path, <=1920*1080 output pixels. Caller owns stable
+    // view_id/camera_revision. Poll publishes completed candidates; at most four views.
+    [[nodiscard]] Result<RenderFrame> render_clouds_optimized(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
+        const AtmosphereSky&, const CloudTextures&, const CloudOptimizedSettings&, const RenderSettings& = {});
+    [[nodiscard]] Result<void> poll_cloud_history(graphics::SubmissionQueue&);
+    [[nodiscard]] Result<CloudHistoryStatus> cloud_history(std::uint64_t view_id) const;
+    [[nodiscard]] Result<void> release_cloud_history(graphics::SubmissionQueue&, std::uint64_t view_id);
 private:
     [[nodiscard]] Result<RenderFrame> render_impl(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
         const RenderSettings&, const AtmosphereSky*, const AtmosphereSettings* = nullptr,
-        const CloudTextures* = nullptr, const CloudCompositionSettings* = nullptr);
+        const CloudTextures* = nullptr, const CloudCompositionSettings* = nullptr, const CloudOptimizedSettings* = nullptr);
     explicit ScenePipeline(std::shared_ptr<detail::PipelineState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::PipelineState> state_;
 };

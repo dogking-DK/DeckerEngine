@@ -21,6 +21,7 @@ struct CloudReferenceSettings {
     double homogeneous_density=1; // [0,1] times clouds.density; diagnostic shell, no noise/profile.
     std::uint64_t max_work=256*1024*1024;
     std::size_t max_bytes=4*1024*1024; // GPU batch input/output/readback logical payload.
+    bool operator==(const CloudReferenceSettings&) const = default;
 };
 struct CloudIntegral {
     Vec3d radiance=Vec3d::Zero();
@@ -31,6 +32,15 @@ struct CloudCompositionSettings {
     CloudReferenceSettings reference;
     bool surface_lighting=true, sun_disk=true, diagnostics=false;
     std::uint64_t max_work=1024ULL*1024*1024; // <=4096 pixels, at most five medium segments.
+    bool operator==(const CloudCompositionSettings&) const = default;
+};
+struct CloudOptimizedSettings {
+    CloudCompositionSettings composition=[] { CloudCompositionSettings s; s.reference.steps=96; s.reference.sun_steps=8; return s; }();
+    std::uint64_t view_id=1, camera_revision=0; // Stable view identity; change camera_revision on camera selection/cut.
+    bool temporal=true, empty_space_skipping=true;
+    float termination_transmittance=1e-4f, history_weight=.85f;
+    std::uint64_t max_work=64ULL*1024*1024*1024; // Half image plus worst-case full-resolution fallback.
+    bool operator==(const CloudOptimizedSettings&) const = default;
 };
 struct CloudMediumIntegral {
     Vec3d radiance=Vec3d::Zero(), transmittance=Vec3d::Ones(), cloud_radiance=Vec3d::Zero();
@@ -39,6 +49,8 @@ struct CloudMediumIntegral {
 };
 // Image reference bounds; validation does not allocate GPU resources.
 [[nodiscard]] Result<void> validate_cloud_composition(const EnvironmentDescription&, const CloudCompositionSettings&, std::size_t pixels);
+[[nodiscard]] Result<void> validate_cloud_optimization(const EnvironmentDescription&, const CloudOptimizedSettings&,
+    std::uint32_t width, std::uint32_t height);
 // Joint view-path integration; air uses single scattering, cloud uses the explicit
 // reference approximation. Terminal surface/solar radiance is added by the caller.
 [[nodiscard]] Result<CloudMediumIntegral> integrate_cloud_medium_reference(const EnvironmentDescription&, const CloudFieldData&,

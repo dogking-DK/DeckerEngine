@@ -161,3 +161,19 @@ TEST_CASE("composition air and cloud share attenuation without duplicating sourc
     const auto vacuum=integrate_cloud_medium_reference(e,*f,ray,s).value();
     CHECK((air.cloud_radiance.array()<vacuum.cloud_radiance.array()).all()); CHECK(air.radiance==air.cloud_radiance);
 }
+TEST_CASE("optimization validates output sampling work and stable view identity before allocation", "[clouds][optimization]") {
+    auto e=homogeneous(); CloudOptimizedSettings settings;
+    CHECK(validate_cloud_optimization(e,settings,1920,1080)); CHECK(validate_cloud_optimization(e,settings,31,33));
+    CHECK_FALSE(validate_cloud_optimization(e,settings,1921,1080)); CHECK_FALSE(validate_cloud_optimization(e,settings,0,1));
+    CHECK_FALSE(validate_cloud_optimization(e,settings,4097,1));
+    auto bad=settings; bad.view_id=0; CHECK_FALSE(validate_cloud_optimization(e,bad,32,32));
+    bad=settings; bad.max_work=1; CHECK_FALSE(validate_cloud_optimization(e,bad,32,32));
+    bad=settings; bad.max_work=UINT64_MAX; CHECK_FALSE(validate_cloud_optimization(e,bad,32,32));
+    bad=settings; bad.termination_transmittance=.001f; CHECK_FALSE(validate_cloud_optimization(e,bad,32,32));
+    bad=settings; bad.history_weight=1; CHECK_FALSE(validate_cloud_optimization(e,bad,32,32));
+    bad=settings; bad.composition.reference.steps=257; CHECK_FALSE(validate_cloud_optimization(e,bad,32,32));
+    bad=settings; bad.composition.reference.sun_steps=65; CHECK_FALSE(validate_cloud_optimization(e,bad,32,32));
+    bad=settings; bad.history_weight=std::numeric_limits<float>::quiet_NaN(); CHECK_FALSE(validate_cloud_optimization(e,bad,32,32));
+    settings.temporal=false; settings.empty_space_skipping=false; settings.termination_transmittance=0;
+    CHECK(validate_cloud_optimization(e,settings,1,1));
+}

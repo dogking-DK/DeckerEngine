@@ -23,6 +23,20 @@ using namespace graphics;
 namespace detail {
 #ifdef DK_RENDER_CLOUDS
 struct CloudEnvironment { CloudFieldCache fields; std::unique_ptr<CloudTextureCache> textures; };
+struct CloudHistoryGeneration {
+    CloudOptimizedSettings settings;
+    ViewDescription view;
+    SceneId scene;
+    std::uint64_t revision=0,sequence=0;
+    EnvironmentDescription environment;
+    std::array<Image,3> images;
+    Submission submission;
+};
+struct CloudHistorySlot {
+    std::uint64_t id=0,sequence=0;
+    std::shared_ptr<CloudHistoryGeneration> completed,pending;
+    bool failed=false;
+};
 #endif
 struct PipelineState {
     memory::ResourceHandle heap;
@@ -37,18 +51,22 @@ struct PipelineState {
     Sampler aerial_sampler;
     Buffer identity;
     Program cloud_program;
+    std::array<Program,3> cloud_optimized;
     std::filesystem::path directory;
 #ifdef DK_RENDER_SUNLIGHT
     std::optional<AtmosphereRenderer> atmosphere;
 #endif
 #ifdef DK_RENDER_CLOUDS
     std::unique_ptr<CloudEnvironment> clouds;
+    std::array<CloudHistorySlot,4> cloud_history;
 #endif
 };
 struct FrameState {
     FrameInfo info;
     std::size_t color = 0, linear_readback = 0;
     std::array<std::size_t,2> cloud_readback{};
+    std::size_t cloud_statistics=0;
+    CloudFrameInfo cloud_info;
     graph::Execution execution;
     graph::PlanReport report;
 };
@@ -189,9 +207,10 @@ Buffer prepare_aerial(detail::PipelineState& state,const RenderView& view,const 
 }
 #ifdef DK_RENDER_CLOUDS
 Buffer prepare_clouds(detail::PipelineState& state,const RenderView& view,const CloudTextures& textures,
-    const CloudCompositionSettings& settings,const RenderSettings& render) {
+    const CloudCompositionSettings& settings,const RenderSettings& render,const CloudOptimizedSettings* optimized=nullptr) {
     const auto& e=view.scene().environment(); const auto& c=e.clouds; const auto& a=e.atmosphere; const auto& s=settings.reference;
-    check(validate_cloud_composition(e,settings,std::size_t(view.description().width)*view.description().height));
+    if(optimized) check(validate_cloud_optimization(e,*optimized,view.description().width,view.description().height));
+    else check(validate_cloud_composition(e,settings,std::size_t(view.description().width)*view.description().height));
     if(textures.key()!=cloud_field_key(c) || !textures.bytes()) throw Error{ErrorCode::invalid_argument,"Cloud textures do not match scene"};
     using F=std::array<float,4>;
     struct Parameters { F geometry,cloud,scales,lighting,sun,irradiance,sky,rayleigh,mie,absorption,air;
@@ -208,7 +227,8 @@ Buffer prepare_clouds(detail::PipelineState& state,const RenderView& view,const 
     p.lighting={float(s.phase_g),float(s.single_scattering_albedo),float(s.multiple_scattering),float(c.top_fade_fraction)};
     p.sun=pack(e.sun.direction); p.irradiance=pack(e.sun.irradiance); p.sky=pack(s.sky_radiance);
     p.rayleigh=pack(a.rayleigh_scattering_per_m,a.rayleigh_scale_height_m); p.mie=pack(a.mie_extinction_per_m,a.mie_scale_height_m);
-    p.absorption=pack(a.absorption_extinction_per_m,a.absorption_center_height_m); p.air[0]=float(a.absorption_half_width_m);
+    p.absorption=pack(a.absorption_extinction_per_m,a.absorption_center_height_m);
+    p.air={float(a.absorption_half_width_m),float(c.weather_resolution),float(c.base_resolution),0};
     p.counts={s.steps,s.sun_steps,s.atmosphere_steps,0}; p.flags={1,e.enabled?1u:0u,s.self_shadow?1u:0u,s.homogeneous?1u:0u};
     p.origin_geometry={float(height),0,float(origin.normalized().dot(Vec3d{e.sun.direction.data()})),0};
     origin.x()-=c.wind_velocity_mps[0]*s.time_seconds; origin.z()-=c.wind_velocity_mps[1]*s.time_seconds;
@@ -218,12 +238,65 @@ Buffer prepare_clouds(detail::PipelineState& state,const RenderView& view,const 
     const Mat3d camera=view.description().camera_world.matrix().topLeftCorner<3,3>(); const auto& projection=view.description().projection;
     p.forward=pack((camera*Vec3d{projection(0,2)/projection(0,0),projection(1,2)/projection(1,1),-1}).eval());
     p.right=pack((camera.col(0)/projection(0,0)).eval()); p.up=pack((camera.col(1)/projection(1,1)).eval()); p.clear=pack(render.clear_rgb);
-    if(!state.cloud_program.pipeline) {
+    if(!optimized && !state.cloud_program.pipeline) {
         auto code=take(compile_shader({state.directory/"cloud-composition.slang","computeMain",ShaderStage::compute},state.heap));
         auto shader=take(state.factory.create_shader(code)); const std::array shaders{&shader}; detail::PipelineState::Program program;
         program.layout=take(state.factory.create_pipeline_layout(shaders)); program.pipeline=take(state.factory.create_compute_pipeline({&shader,&program.layout}));
         SamplerDesc desc; desc.address_u=desc.address_v=desc.address_w=vk::SamplerAddressMode::eClampToEdge;
         auto sampler=take(state.factory.create_sampler(desc)); state.cloud_program=std::move(program); state.aerial_sampler=std::move(sampler);
+    }
+    auto buffer=take(state.factory.create_buffer({sizeof(p),vk::BufferUsageFlagBits::eUniformBuffer,BufferMemory::upload}));
+    check(buffer.write(0,std::as_bytes(std::span{&p,1}))); return buffer;
+}
+CloudHistoryReset history_reset(const detail::CloudHistorySlot& slot,const RenderView& view,const CloudOptimizedSettings& settings) {
+    if(slot.failed) return CloudHistoryReset::failure;
+    if(!settings.temporal) return CloudHistoryReset::disabled;
+    if(!slot.completed) return CloudHistoryReset::new_view;
+    const auto& old=*slot.completed; const auto& now=view.description();
+    if(old.view.width!=now.width || old.view.height!=now.height) return CloudHistoryReset::resize;
+    if(old.view.projection!=now.projection) return CloudHistoryReset::projection;
+    if(old.scene!=view.scene().id()) return CloudHistoryReset::scene;
+    if(old.environment!=view.scene().environment()) return CloudHistoryReset::content;
+    if(old.revision!=view.scene().revision()) return CloudHistoryReset::scene;
+    auto a=old.settings,b=settings; a.composition.reference.time_seconds=b.composition.reference.time_seconds=0;
+    a.camera_revision=b.camera_revision=0; a.composition.diagnostics=b.composition.diagnostics=false;
+    if(a!=b) return CloudHistoryReset::quality;
+    const auto& previous=old.view.camera_world.matrix(); const auto& current=now.camera_world.matrix();
+    const double cosine=( (previous.topLeftCorner<3,3>().transpose()*current.topLeftCorner<3,3>()).trace()-1)*.5;
+    if(old.settings.camera_revision!=settings.camera_revision ||
+        (previous.topRightCorner<3,1>()-current.topRightCorner<3,1>()).norm()>500 || cosine<std::cos(std::numbers::pi/12)) return CloudHistoryReset::camera;
+    const double delta=settings.composition.reference.time_seconds-old.settings.composition.reference.time_seconds;
+    if(delta<0 || delta>1) return CloudHistoryReset::time;
+    return CloudHistoryReset::none;
+}
+Buffer prepare_reconstruction(detail::PipelineState& state,const RenderView& view,const CloudOptimizedSettings& settings,
+    const detail::CloudHistoryGeneration* previous) {
+    if(!state.cloud_optimized[0].pipeline) {
+        std::array<detail::PipelineState::Program,3> candidate;
+        for(unsigned i=0;i<3;++i) {
+            const auto stage=std::to_string(i); const std::array defines{ShaderDefine{"DK_CLOUD_STAGE",stage}};
+            auto code=take(compile_shader({state.directory/"cloud-reconstruction.slang","computeMain",ShaderStage::compute,{},defines},state.heap));
+            auto shader=take(state.factory.create_shader(code)); const std::array shaders{&shader};
+            candidate[i].layout=take(state.factory.create_pipeline_layout(shaders));
+            candidate[i].pipeline=take(state.factory.create_compute_pipeline({&shader,&candidate[i].layout}));
+        }
+        SamplerDesc desc; desc.address_u=desc.address_v=desc.address_w=vk::SamplerAddressMode::eClampToEdge;
+        auto sampler=take(state.factory.create_sampler(desc)); state.cloud_optimized=std::move(candidate); state.aerial_sampler=std::move(sampler);
+    }
+    struct Parameters { std::array<std::uint32_t,4> size; std::array<float,4> controls,previous_clip[4],camera_delta; };
+    static_assert(sizeof(Parameters)==112);
+    Parameters p{}; const auto& v=view.description();
+    p.size={(v.width+1)/2,(v.height+1)/2,previous ? 1u : 0u,settings.empty_space_skipping ? 1u : 0u};
+    p.controls={settings.termination_transmittance,settings.history_weight,0,0};
+    if(previous) {
+        const auto& old=previous->view; const auto& environment=view.scene().environment();
+        const Vec3d delta=v.camera_world.matrix().topRightCorner<3,1>()-old.camera_world.matrix().topRightCorner<3,1>();
+        const double dt=settings.composition.reference.time_seconds-previous->settings.composition.reference.time_seconds;
+        const Vec3d wind{environment.clouds.wind_velocity_mps[0]*dt,0,environment.clouds.wind_velocity_mps[1]*dt};
+        Mat4d relative=Mat4d::Identity(); relative.topLeftCorner<3,3>()=old.camera_world.matrix().topLeftCorner<3,3>().transpose();
+        relative.topRightCorner<3,1>()=relative.topLeftCorner<3,3>()*(delta-wind); const Mat4d clip=old.projection*relative;
+        for(unsigned row=0;row<4;++row) for(unsigned column=0;column<4;++column) p.previous_clip[row][column]=float(clip(row,column));
+        for(unsigned i=0;i<3;++i) p.camera_delta[i]=float(delta[i]);
     }
     auto buffer=take(state.factory.create_buffer({sizeof(p),vk::BufferUsageFlagBits::eUniformBuffer,BufferMemory::upload}));
     check(buffer.write(0,std::as_bytes(std::span{&p,1}))); return buffer;
@@ -324,6 +397,9 @@ struct Context {
     std::array<std::size_t,2> volumes{},cloud_images{},cloud_readback{};
     const CloudTextures* clouds=nullptr;
     std::size_t cloud_parameters=0;
+    bool optimized=false;
+    std::size_t reconstruction_parameters=0,statistics=0,statistics_readback=0;
+    std::array<std::size_t,3> raw_cloud{},filtered_cloud{},previous_cloud{};
 };
 Result<void> clear_pass(graph::PassContext& pass,void* pointer) {
     const auto& c = *static_cast<Context*>(pointer);
@@ -332,6 +408,7 @@ Result<void> clear_pass(graph::PassContext& pass,void* pointer) {
     check(pass.clear_depth(c.depth,1,depth_range));
     check(pass.clear(c.ldr,vk::ClearColorValue{std::array<float,4>{0,0,0,1}},color_range));
     check(pass.clear(c.white,vk::ClearColorValue{std::array<float,4>{1,1,1,1}},color_range));
+    if(c.optimized) check(pass.fill(c.statistics));
     return {};
 }
 Result<void> geometry_pass(graph::PassContext& pass,void* pointer) {
@@ -443,6 +520,33 @@ Result<void> cloud_pass(graph::PassContext& pass,void* pointer) {
     auto encoder=take(pass.compute()); check(encoder.bind_pipeline(program.pipeline)); const std::array sets{&bindings};
     check(encoder.bind_sets(sets)); return encoder.dispatch({(c.width+7)/8,(c.height+7)/8,1});
 }
+Result<void> reconstruction_pass(graph::PassContext& pass,void* pointer) {
+    auto& c=*static_cast<Context*>(pointer); const unsigned stage=unsigned(pass.pass_index()-3);
+    auto& program=c.pipeline.cloud_optimized[stage];
+    std::array<ImageView,14> views; unsigned view_count=0;
+    std::array<BindingWrite,23> writes; unsigned count=0;
+    auto buffer=[&](unsigned binding,std::size_t index) { writes[count++]={binding,0,BufferBinding{take(pass.buffer(index))}}; };
+    auto image=[&](unsigned binding,std::size_t index,bool output=false,bool depth=false) {
+        views[view_count]=take(c.pipeline.factory.create_view(*take(pass.image(index)),{vk::ImageViewType::e2D,depth ? depth_range : color_range}));
+        writes[count++]={binding,0,ImageBinding{&views[view_count++],output ? vk::ImageLayout::eGeneral : vk::ImageLayout::eShaderReadOnlyOptimal}};
+    };
+    buffer(0,c.parameters); buffer(10,c.cloud_parameters); buffer(15,c.statistics); buffer(16,c.reconstruction_parameters);
+    const auto outputs=stage==0 ? c.raw_cloud : stage==1 ? c.filtered_cloud : std::array{c.composed,c.cloud_images[0],c.cloud_images[1]};
+    image(1,outputs[0],true); image(6,outputs[1],true); image(7,outputs[2],true);
+    if(stage!=1) {
+        writes[count++]={2,0,SamplerBinding{&c.pipeline.aerial_sampler}};
+        image(3,c.atmosphere_luts[0]); image(4,c.atmosphere_luts[1]); image(8,c.depth,false,true);
+        for(unsigned i=0;i<3;++i) writes[count++]={11+i,0,ImageBinding{&c.clouds->view(static_cast<CloudField>(i))}};
+        writes[count++]={14,0,SamplerBinding{&c.clouds->sampler()}};
+    }
+    if(stage>0) for(unsigned i=0;i<3;++i) image(17+i,stage==1 ? c.raw_cloud[i] : c.filtered_cloud[i]);
+    if(stage==1) for(unsigned i=0;i<3;++i) image(20+i,c.previous_cloud[i]);
+    if(stage==2) image(9,c.hdr);
+    auto bindings=take(c.pipeline.factory.create_bindings(program.layout,0,std::span{writes}.first(count)));
+    auto encoder=take(pass.compute()); check(encoder.bind_pipeline(program.pipeline)); const std::array sets{&bindings}; check(encoder.bind_sets(sets));
+    const auto width=stage==2 ? c.width : (c.width+1)/2,height=stage==2 ? c.height : (c.height+1)/2;
+    return encoder.dispatch({(width+7)/8,(height+7)/8,1});
+}
 #endif
 template<auto Record> Result<void> record(graph::PassContext& pass,void* context) {
     try { return Record(pass,context); }
@@ -454,6 +558,7 @@ Result<void> copy_pass(graph::PassContext& pass,void* pointer) {
     if(c.linear_readback) check(pass.copy_to_buffer(c.composed ? c.composed : c.hdr,c.linear_readback,{0,0,0,0,c.width,c.height}));
     if(c.cloud_readback[0]) for(unsigned i=0;i<2;++i)
         check(pass.copy_to_buffer(c.cloud_images[i],c.cloud_readback[i],{0,0,0,0,c.width,c.height}));
+    if(c.statistics_readback) check(pass.copy_buffer(c.statistics,c.statistics_readback,sizeof(CloudTraceStatistics)));
     return {};
 }
 }
@@ -570,10 +675,65 @@ Result<RenderFrame> ScenePipeline::render_clouds(SubmissionQueue& queue,const Re
     return std::unexpected(Error{ErrorCode::not_supported,"cloud composition requires Clouds and Atmosphere"});
 #endif
 }
+Result<RenderFrame> ScenePipeline::render_clouds_optimized(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,
+    const AtmosphereSky& sky,const CloudTextures& textures,const CloudOptimizedSettings& optimized,const RenderSettings& settings) {
+#ifdef DK_RENDER_CLOUDS
+    if(auto valid=validate_cloud_optimization(view.scene().environment(),optimized,view.description().width,view.description().height); !valid)
+        return std::unexpected(valid.error());
+    if(!active_clouds(view.scene().environment())) {
+        if(auto ready=poll_cloud_history(queue); !ready) return std::unexpected(ready.error());
+        for(const auto& slot:state_->cloud_history) if(slot.id==optimized.view_id && slot.pending)
+            return std::unexpected(Error{ErrorCode::invalid_state,"Cloud view still has an in-flight candidate"});
+        auto frame=render_atmosphere(queue,view,assets,sky,settings,{optimized.composition.surface_lighting,optimized.composition.sun_disk,false});
+        if(frame) for(auto& slot:state_->cloud_history) if(slot.id==optimized.view_id) { slot.completed.reset(); slot.failed=false; }
+        return frame;
+    }
+    const AtmosphereSettings atmosphere{optimized.composition.surface_lighting && view.scene().environment().enabled,optimized.composition.sun_disk,false};
+    return render_impl(queue,view,assets,settings,&sky,&atmosphere,&textures,&optimized.composition,&optimized);
+#else
+    static_cast<void>(queue); static_cast<void>(view); static_cast<void>(assets); static_cast<void>(sky);
+    static_cast<void>(textures); static_cast<void>(optimized); static_cast<void>(settings);
+    return std::unexpected(Error{ErrorCode::not_supported,"Cloud optimization requires Clouds and Atmosphere"});
+#endif
+}
+Result<void> ScenePipeline::poll_cloud_history(SubmissionQueue& queue) {
+#ifdef DK_RENDER_CLOUDS
+    if(!state_ || state_->heap.state()!=memory::ResourceState::open) return std::unexpected(Error{ErrorCode::invalid_state,"Cloud history owner unavailable"});
+    try {
+        { auto guard=take(queue.begin()); check(guard.retain(state_->identity)); }
+        check(queue.poll()); const auto completed=queue.stats().completed;
+        for(auto& slot:state_->cloud_history) if(slot.pending && slot.pending->submission.value()<=completed) slot.completed=std::move(slot.pending);
+        return {};
+    } catch(const Error& error) { return std::unexpected(error); }
+#else
+    static_cast<void>(queue); return std::unexpected(Error{ErrorCode::not_supported,"Cloud history unavailable"});
+#endif
+}
+Result<CloudHistoryStatus> ScenePipeline::cloud_history(std::uint64_t view_id) const {
+#ifdef DK_RENDER_CLOUDS
+    if(state_) for(const auto& slot:state_->cloud_history) if(slot.id==view_id && view_id)
+        return CloudHistoryStatus{slot.completed ? slot.completed->sequence : 0,slot.pending ? slot.pending->sequence : 0,slot.completed && !slot.failed};
+#else
+    static_cast<void>(view_id);
+#endif
+    return std::unexpected(Error{ErrorCode::not_found,"Cloud history view not found"});
+}
+Result<void> ScenePipeline::release_cloud_history(SubmissionQueue& queue,std::uint64_t view_id) {
+    if(auto ready=poll_cloud_history(queue); !ready) return ready;
+#ifdef DK_RENDER_CLOUDS
+    for(auto& slot:state_->cloud_history) if(slot.id==view_id && view_id) {
+        if(slot.pending) return std::unexpected(Error{ErrorCode::invalid_state,"Cloud view still has an in-flight candidate"});
+        slot={}; return {};
+    }
+#else
+    static_cast<void>(view_id);
+#endif
+    return std::unexpected(Error{ErrorCode::not_found,"Cloud history view not found"});
+}
 Result<std::string> shader_fingerprint(const std::filesystem::path& directory,bool environment) {
     const std::array files{"scene.slang","tone.slang","sunlight.slang","aerial.slang",
         "../../engine/render/atmosphere/shaders/atmosphere.slang","../../engine/render/atmosphere/shaders/AtmosphereTransport.slang",
-        "cloud-composition.slang","../../engine/render/clouds/shaders/CloudTypes.slang","../../engine/render/clouds/shaders/CloudTransport.slang"};
+        "cloud-composition.slang","cloud-reconstruction.slang","../../engine/render/clouds/shaders/CloudTypes.slang","../../engine/render/clouds/shaders/CloudTransport.slang"};
     std::uint64_t hash=14695981039346656037ULL;
     auto append=[&](unsigned char c) { hash^=c; hash*=1099511628211ULL; };
     for(unsigned i=0;i<(environment ? files.size() : 2);++i) {
@@ -585,14 +745,14 @@ Result<std::string> shader_fingerprint(const std::filesystem::path& directory,bo
         append(0);
     }
     // CPU-side sampling/mapping version, including the fixed 64 x 64 x 128 AP grid.
-    for(const unsigned char c:std::string_view{"render-environment-v2:64x64x128:128:cloud-joint-v1:256x64x64"}) append(c);
+    for(const unsigned char c:std::string_view{"render-environment-v2:64x64x128:128:cloud-joint-v1:256x64x64:cloud-reconstruct-v1:96to256x8:half-fixed"}) append(c);
     std::ostringstream out; out<<"fnv1a64:"<<std::hex<<std::setfill('0')<<std::setw(16)<<hash; return out.str();
 }
 Result<RenderFrame> ScenePipeline::render_atmosphere(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings,const AtmosphereSettings& atmosphere) {
     const bool enabled=view.scene().environment().enabled;
     return render_impl(queue,view,assets,settings,enabled ? &sky : nullptr,enabled ? &atmosphere : nullptr);
 }
-Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings,const AtmosphereSky* sky,const AtmosphereSettings* atmosphere,const CloudTextures* clouds,const CloudCompositionSettings* cloud_settings) {
+Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings,const AtmosphereSky* sky,const AtmosphereSettings* atmosphere,const CloudTextures* clouds,const CloudCompositionSettings* cloud_settings,const CloudOptimizedSettings* optimized) {
     DK_PROFILE_ZONE("render.scene");
     if (!state_ || state_->heap.state()!=memory::ResourceState::open || queue.stats().closed || queue.stats().device_lost)
         return std::unexpected(Error{ErrorCode::invalid_state,"scene pipeline, memory or queue is unavailable"});
@@ -601,11 +761,45 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
     const auto& limits=queue.device().adapter().properties.limits;
     if (width>limits.maxFramebufferWidth || height>limits.maxFramebufferHeight || width>limits.maxViewportDimensions[0] || height>limits.maxViewportDimensions[1])
         return std::unexpected(Error{ErrorCode::not_supported,"render extent exceeds device limits"});
+#ifdef DK_RENDER_CLOUDS
+    detail::CloudHistorySlot* history_slot=nullptr;
+    auto invalidate=[&] { if(history_slot && history_slot->id) history_slot->failed=true; };
+#else
+    auto invalidate=[] {};
+#endif
     try {
         const auto heap=state_->heap;
         { auto guard=take(queue.begin()); check(guard.retain(state_->identity)); }
         Inputs inputs{heap}; resolve(inputs,view,assets);
-        Buffer aerial_uniform,cloud_uniform;
+        Buffer aerial_uniform,cloud_uniform,reconstruction_uniform;
+        CloudFrameInfo cloud_info;
+#ifdef DK_RENDER_CLOUDS
+        std::shared_ptr<detail::CloudHistoryGeneration> candidate,previous;
+        if(optimized) {
+            if(optimized->temporal) {
+                check(poll_cloud_history(queue));
+                auto slot=std::ranges::find(state_->cloud_history,optimized->view_id,&detail::CloudHistorySlot::id);
+                if(slot==state_->cloud_history.end()) slot=std::ranges::find(state_->cloud_history,0,&detail::CloudHistorySlot::id);
+                if(slot==state_->cloud_history.end()) throw Error{ErrorCode::invalid_state,"Cloud history view budget exceeded"};
+                if(slot->pending) throw Error{ErrorCode::invalid_state,"Cloud view still has an in-flight candidate"};
+                if(slot->sequence==UINT64_MAX) throw Error{ErrorCode::invalid_state,"Cloud history sequence exhausted"};
+                history_slot=&*slot;
+            }
+            cloud_info.view_id=optimized->view_id; cloud_info.width=(width+1)/2; cloud_info.height=(height+1)/2;
+            cloud_info.reset=history_slot ? history_reset(*history_slot,view,*optimized) : CloudHistoryReset::disabled;
+            if(cloud_info.reset==CloudHistoryReset::none) { previous=history_slot->completed; cloud_info.history_available=true; cloud_info.source_sequence=previous->sequence; }
+            cloud_info.candidate_sequence=history_slot ? history_slot->sequence+1 : 0;
+            std::uint64_t bytes=std::uint64_t{cloud_info.width}*cloud_info.height*48;
+            for(const auto& slot:state_->cloud_history) for(const auto& generation:{slot.completed,slot.pending}) if(generation)
+                bytes+=std::uint64_t{(generation->view.width+1)/2}*((generation->view.height+1)/2)*48;
+            if(bytes>256ULL*1024*1024) throw Error{ErrorCode::invalid_state,"Cloud history image budget exceeded"};
+            candidate=memory::make_shared_in<detail::CloudHistoryGeneration>(heap); candidate->settings=*optimized; candidate->view=view.description();
+            candidate->scene=view.scene().id(); candidate->revision=view.scene().revision(); candidate->environment=view.scene().environment(); candidate->sequence=cloud_info.candidate_sequence;
+            for(auto& image:candidate->images) image=take(state_->factory.create_image({cloud_info.width,cloud_info.height,vk::Format::eR32G32B32A32Sfloat,
+                vk::ImageUsageFlagBits::eStorage|vk::ImageUsageFlagBits::eSampled}));
+            reconstruction_uniform=prepare_reconstruction(*state_,view,*optimized,previous.get());
+        }
+#endif
         if(sky) {
 #ifdef DK_RENDER_SUNLIGHT
             if(atmosphere) aerial_uniform=prepare_aerial(*state_,view,*sky,*atmosphere,clouds!=nullptr);
@@ -618,11 +812,12 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
 #endif
         }
 #ifdef DK_RENDER_CLOUDS
-        if(clouds) cloud_uniform=prepare_clouds(*state_,view,*clouds,*cloud_settings,settings);
+        if(clouds) cloud_uniform=prepare_clouds(*state_,view,*clouds,*cloud_settings,settings,optimized);
 #else
         static_cast<void>(cloud_settings);
 #endif
         auto frame=memory::make_shared_in<detail::FrameState>(heap);
+        frame->cloud_info=cloud_info;
         frame->info={view.scene().id(),view.scene().revision(),view.description().frame,width,height,inputs.draws.size()};
         auto graph=take(graph::Graph::create(heap));
         const auto readback=take(graph.declare_buffer("RGBA8 readback",{vk::DeviceSize{width}*height*4,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
@@ -651,6 +846,8 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
         }
         graph::ResourceId cloud_constants{}; std::array<graph::ResourceId,2> diagnostic_readbacks{};
         std::size_t cloud_parameters=0;
+        graph::ResourceId reconstruction_constants{},statistics_id{},statistics_readback_id{};
+        std::size_t reconstruction_parameters=0,statistics_index=0;
 #ifdef DK_RENDER_CLOUDS
         if(clouds) {
             cloud_parameters=graph.counts().buffers;
@@ -660,6 +857,18 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
                 frame->cloud_readback[i]=graph.counts().buffers;
                 diagnostic_readbacks[i]=take(graph.declare_buffer("cloud diagnostic readback "+std::to_string(i),
                     {vk::DeviceSize{width}*height*16,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
+            }
+        }
+        if(optimized) {
+            reconstruction_parameters=graph.counts().buffers;
+            reconstruction_constants=take(graph.declare_buffer("cloud reconstruction parameters",reconstruction_uniform.description(),graph::Lifetime::external,true));
+            external.push_back({reconstruction_parameters,&reconstruction_uniform});
+            statistics_index=graph.counts().buffers;
+            statistics_id=take(graph.declare_buffer("cloud work statistics",{sizeof(CloudTraceStatistics),
+                vk::BufferUsageFlagBits::eStorageBuffer|vk::BufferUsageFlagBits::eTransferDst|vk::BufferUsageFlagBits::eTransferSrc}));
+            if(cloud_settings->diagnostics) {
+                frame->cloud_statistics=graph.counts().buffers;
+                statistics_readback_id=take(graph.declare_buffer("cloud statistics readback",{sizeof(CloudTraceStatistics),vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
             }
         }
 #endif
@@ -673,11 +882,15 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
         const auto white=take(graph.declare_image("default white",{1,1}));
         Context context{*state_,inputs,settings,width,height,image_base,image_base+1,image_base+2,image_base+3};
         context.clouds=clouds; context.cloud_parameters=cloud_parameters; context.cloud_readback=frame->cloud_readback;
+        context.optimized=optimized!=nullptr; context.reconstruction_parameters=reconstruction_parameters;
+        context.statistics=statistics_index; context.statistics_readback=frame->cloud_statistics;
         frame->color=context.ldr; context.linear_readback=frame->linear_readback; context.parameters=parameters_index;
-        const std::array clear_uses{use(hdr,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal,true),
+        Vector<graph::Use> clear_uses(0,memory::Allocator<graph::Use>{heap});
+        clear_uses={use(hdr,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal,true),
             use(depth,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal,true,true),
             use(ldr,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal,true),
             use(white,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal,true)};
+        if(optimized) clear_uses.push_back(use(statistics_id,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eUndefined,true));
         static_cast<void>(take(graph.add_pass({"clear targets",clear_uses})));
         geometry.push_back(use(depth,depth_stages,depth_access,vk::ImageLayout::eDepthStencilAttachmentOptimal,false,true));
         geometry.push_back(use(white,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal));
@@ -753,12 +966,54 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
                 uses.push_back(use(lut_ids[i],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal));
                 uses.push_back(use(cloud_outputs[i],compute,vk::AccessFlagBits2::eShaderStorageWrite,vk::ImageLayout::eGeneral,true));
             }
+            std::array<graph::ResourceId,3> fields;
             for(unsigned i=0;i<3;++i) {
                 const auto& field=clouds->image(static_cast<CloudField>(i)); const auto index=graph.counts().buffers+graph.counts().images;
                 const auto id=take(graph.declare_image("cloud field "+std::to_string(i),field.description(),graph::Lifetime::external,true));
-                external.push_back({index,nullptr,&field,{}}); uses.push_back(use(id,compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal));
+                fields[i]=id; external.push_back({index,nullptr,&field,{}}); uses.push_back(use(id,compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal));
             }
-            static_cast<void>(take(graph.add_pass({"joint cloud air geometry composition",uses})));
+            if(!optimized) static_cast<void>(take(graph.add_pass({"joint cloud air geometry composition",uses})));
+            else {
+                std::array<graph::ResourceId,3> raw,filtered,history;
+                ImageDesc half{(width+1)/2,(height+1)/2,vk::Format::eR32G32B32A32Sfloat,vk::ImageUsageFlagBits::eStorage|vk::ImageUsageFlagBits::eSampled};
+                for(unsigned i=0;i<3;++i) {
+                    context.raw_cloud[i]=graph.counts().buffers+graph.counts().images;
+                    raw[i]=take(graph.declare_image("current half cloud "+std::to_string(i),half));
+                    context.filtered_cloud[i]=graph.counts().buffers+graph.counts().images;
+                    filtered[i]=take(graph.declare_image("candidate cloud history "+std::to_string(i),half,graph::Lifetime::external));
+                    external.push_back({context.filtered_cloud[i],nullptr,&candidate->images[i],{}});
+                    if(previous) {
+                        context.previous_cloud[i]=graph.counts().buffers+graph.counts().images;
+                        history[i]=take(graph.declare_image("completed cloud history "+std::to_string(i),half,graph::Lifetime::external,true));
+                        external.push_back({context.previous_cloud[i],nullptr,&previous->images[i],{}});
+                    } else { history[i]=raw[i]; context.previous_cloud[i]=context.raw_cloud[i]; }
+                }
+                Vector<graph::Use> half_uses(0,memory::Allocator<graph::Use>{heap});
+                half_uses={use(constants,compute,vk::AccessFlagBits2::eUniformRead),use(cloud_constants,compute,vk::AccessFlagBits2::eUniformRead),
+                    use(reconstruction_constants,compute,vk::AccessFlagBits2::eUniformRead),
+                    use(statistics_id,compute,vk::AccessFlagBits2::eShaderStorageRead|vk::AccessFlagBits2::eShaderStorageWrite),
+                    use(depth,compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal,false,true)};
+                for(unsigned i=0;i<2;++i) half_uses.push_back(use(lut_ids[i],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal));
+                for(unsigned i=0;i<3;++i) {
+                    half_uses.push_back(use(fields[i],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal));
+                    half_uses.push_back(use(raw[i],compute,vk::AccessFlagBits2::eShaderStorageWrite,vk::ImageLayout::eGeneral,true));
+                }
+                static_cast<void>(take(graph.add_pass({"half resolution cloud transport",half_uses})));
+                Vector<graph::Use> temporal_uses(0,memory::Allocator<graph::Use>{heap});
+                temporal_uses={use(constants,compute,vk::AccessFlagBits2::eUniformRead),use(cloud_constants,compute,vk::AccessFlagBits2::eUniformRead),
+                    use(reconstruction_constants,compute,vk::AccessFlagBits2::eUniformRead),
+                    use(statistics_id,compute,vk::AccessFlagBits2::eShaderStorageRead|vk::AccessFlagBits2::eShaderStorageWrite)};
+                for(unsigned i=0;i<3;++i) {
+                    temporal_uses.push_back(use(raw[i],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal));
+                    if(previous) temporal_uses.push_back(use(history[i],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal));
+                    temporal_uses.push_back(use(filtered[i],compute,vk::AccessFlagBits2::eShaderStorageWrite,vk::ImageLayout::eGeneral,true));
+                }
+                static_cast<void>(take(graph.add_pass({"completed cloud history reprojection",temporal_uses})));
+                uses.push_back(use(reconstruction_constants,compute,vk::AccessFlagBits2::eUniformRead));
+                uses.push_back(use(statistics_id,compute,vk::AccessFlagBits2::eShaderStorageRead|vk::AccessFlagBits2::eShaderStorageWrite));
+                for(unsigned i=0;i<3;++i) uses.push_back(use(filtered[i],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal));
+                static_cast<void>(take(graph.add_pass({"depth preserving cloud reconstruction",uses})));
+            }
         }
 #endif
         const std::array tone_uses{use(final_hdr,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal),
@@ -778,6 +1033,11 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             read_uses.push_back(use(diagnostic_readbacks[i],vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eUndefined,true));
             check(graph.mark_output(diagnostic_readbacks[i]));
         }
+        if(context.statistics_readback) {
+            read_uses.push_back(use(statistics_id,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead));
+            read_uses.push_back(use(statistics_readback_id,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eUndefined,true));
+            check(graph.mark_output(statistics_readback_id));
+        }
 #endif
         static_cast<void>(take(graph.add_pass({"readback",read_uses})));
         check(graph.mark_output(readback)); check(graph.mark_output(ldr));
@@ -787,7 +1047,8 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
         callbacks={{0,record<clear_pass>,&context},{1,record<geometry_pass>,&context},{2,record<geometry_pass>,&context}};
         if(atmosphere && !clouds) { callbacks.push_back({3,record<aerial_pass>,&context}); callbacks.push_back({4,record<aerial_pass>,&context}); }
 #ifdef DK_RENDER_CLOUDS
-        if(clouds) callbacks.push_back({3,record<cloud_pass>,&context});
+        if(clouds && !optimized) callbacks.push_back({3,record<cloud_pass>,&context});
+        if(optimized) for(unsigned i=0;i<3;++i) callbacks.push_back({3+i,record<reconstruction_pass>,&context});
 #endif
         callbacks.push_back({callbacks.size(),record<tone_pass>,&context}); callbacks.push_back({callbacks.size(),record<copy_pass>,&context});
         Vector<graph::FinalAccess> finals(0,memory::Allocator<graph::FinalAccess>{heap});
@@ -796,12 +1057,26 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
         if(settings.linear_readback) finals.push_back({context.linear_readback,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}});
         if(context.cloud_readback[0]) for(unsigned i=0;i<2;++i)
             finals.push_back({context.cloud_readback[i],{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}});
+        if(context.statistics_readback) finals.push_back({context.statistics_readback,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}});
         frame->execution=take(graph::execute(plan,queue,{external,callbacks,finals}));
+#ifdef DK_RENDER_CLOUDS
+        if(history_slot) {
+            candidate->submission=frame->execution.submission(); history_slot->id=optimized->view_id;
+            history_slot->sequence=candidate->sequence; history_slot->pending=std::move(candidate); history_slot->failed=false;
+        }
+#endif
         return RenderFrame{std::move(frame)};
-    } catch (Error& error) { return std::unexpected(std::move(error)); }
-    catch (const std::bad_alloc&) { return std::unexpected(allocation_error()); }
+    } catch (Error& error) { invalidate(); return std::unexpected(std::move(error)); }
+    catch (const std::bad_alloc&) { invalidate(); return std::unexpected(allocation_error()); }
 }
 FrameInfo RenderFrame::info() const noexcept { return state_ ? state_->info : FrameInfo{}; }
+CloudFrameInfo RenderFrame::cloud_optimization() const noexcept { return state_ ? state_->cloud_info : CloudFrameInfo{}; }
+Result<CloudTraceStatistics> RenderFrame::read_cloud_statistics() const {
+    if(!state_ || !state_->cloud_statistics) return std::unexpected(Error{ErrorCode::invalid_state,"Cloud statistics were not requested"});
+    auto buffer=state_->execution.buffer(state_->cloud_statistics); if(!buffer) return std::unexpected(buffer.error());
+    CloudTraceStatistics value; static_assert(sizeof(value)==40);
+    auto read=(*buffer)->read(0,std::as_writable_bytes(std::span{&value,1})); if(!read) return std::unexpected(read.error()); return value;
+}
 Submission RenderFrame::submission() const noexcept { return state_ ? state_->execution.submission() : Submission{}; }
 Result<bool> RenderFrame::wait(SubmissionQueue& queue,std::uint64_t timeout) const {
     if (!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty render frame"});

@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-13T14:47:00+08:00"
+updated_at: "2026-10-13T16:08:18+08:00"
 ---
 
 # 构建与依赖配置
@@ -17,12 +17,14 @@ updated_at: "2026-10-13T14:47:00+08:00"
 `DK_BUILD_RENDER_CLOUDS=ON`同时构建CPU与GPU纹理和积分参考，windows-graphics及继承的editor预设已启用。
 GPU采样验证目标`dk_cloud_field_probe`，筛选`^dk\.clouds\.fields_gpu_validation$`，要求真实设备和validation。
 CPU积分参考可独立启用`DK_BUILD_RENDER_CLOUD_REFERENCE=ON`，自动包含fields和atmosphere_reference，
-不依赖Graphics/Slang。构建`dk_cloud_reference_tests`并筛选`^dk\.clouds\.(reference |composition )`。
+不依赖Graphics/Slang。构建`dk_cloud_reference_tests`并筛选`^dk\.clouds\.(reference |composition |optimization )`。
 GPU参考要求Graph/Shaders，验证目标`dk_cloud_reference_probe`，筛选`^dk\.clouds\.reference_gpu_validation$`。
 M15.3云/空气/几何合成另需Pipeline与Atmosphere，目标`dk_cloud_composition_probe`，
 筛选`^dk\.clouds\.(numeric|composition|failures)_gpu_composition$`；真实截图目标`dk_run`，
 筛选`^dk\.clouds\.capture_gpu_composition$`（Windows/Python 3.11+）。全部要求真实GPU及同步validation，无跳过。
-当前逐输出像素参考最多4096像素，无历史或实时性能承诺，详见[云参考契约](../design/render-clouds.md)。
+逐像素参考最多4096像素、无历史。显式优化入口支持最多1920×1080像素，使用半尺寸重建与每视图历史；
+同一`dk_cloud_composition_probe`的优化筛选为`^dk\.clouds\.(optimization|optimization_switches|optimization_boundaries|temporal|history)_gpu_composition$`。
+含32预热+120静态帧、相机/风/反遮挡、重置/失败寿命和1080p真实调度；不代表实时性能达标，详见[云优化契约](../design/render-clouds.md#m154-优化与时域实施契约)。
 
 大气双精度参考可单独启用`DK_BUILD_RENDER_ATMOSPHERE_REFERENCE=ON`，只要求Scene/Math，
 不引入Graphics或Slang。`DK_BUILD_RENDER_ATMOSPHERE=ON`仍构建参考及GPU实现。

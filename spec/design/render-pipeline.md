@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-10-13T14:47:00+08:00"
+updated_at: "2026-10-13T16:08:18+08:00"
 status: accepted
 ---
 
@@ -88,7 +88,7 @@ opaque 保留无 fragment 的 depth-only 管线。磁盘装配独立在 [render-
 [大气](render-atmosphere.md)与[体积云](render-clouds.md)提供冻结环境快照、显式C++参考时间与有界图像合成。
 M14.6通过共用环境入口接入视口/capture；M15.3在非零云时改用云/空气联合积分，表面HDR只在终端加入。
 旧场景默认关闭环境并保留unlit输出。云参考限4096像素，尚无实时大尺寸/时域历史。
-缓存只保存静态程序和不可变代次，保持旧RenderFrame的独立寿命，不复用跨帧Graph句柄；每视图历史待M15.4。
+缓存保存静态程序和不可变代次，保持旧RenderFrame的独立寿命，不复用跨帧Graph句柄；显式优化云入口另有下述有界每视图历史。
 实施每阶段时同步本设计与真实接口、诊断和测试；阶段顺序见[Roadmap](../roadmap.md)。
 
 ## 深度采样底座
@@ -181,3 +181,22 @@ read_cloud_rgba32f返回云散射RGB/独立Tc，read_medium_rgba32f返回混合R
 只有cloud_settings.diagnostics=true的非零云帧可读，未完成/未请求/尺寸错误不写目标。
 所有路径通过创建队列的身份资源拒绝跨队列；static program按完整候选发布，帧提交保活实际对象。
 共用入口的首个云owner也在整帧成功后保存，后续prepare失败不破坏旧帧或场景；time固定0。
+
+## M15.4 显式优化与历史入口
+
+render_clouds_optimized使用CloudOptimizedSettings，独立于原render_clouds和共用reference截图。
+三段Graph为half transport→completed-history reprojection→depth-preserving reconstruction；
+几何D32与表面颜色保持全尺寸。保守跳跃、早停、局部直接积分回退及误差门槛以
+[云优化契约](render-clouds.md#m154-优化与时域实施契约)为准。
+
+每Pipeline至多4个显式view_id，各保存半尺寸L/T/云源三张RGBA32F的已完成源与在途候选。
+候选图像在提交前分配，execute成功只发布pending；poll_cloud_history非阻塞确认完成后才能作为source。
+同视图在途候选未完成时有界拒绝，不隐式等待或覆盖；release_cloud_history要求该视图无在途候选。
+所有历史逻辑图像载荷合计≤256MiB；历史只保留三张介质图，不保留完整Frame/Graph/几何资源。
+旧Frame和队列提交独立保活资源。分配/录制/submit失败不推进completed序号，下一帧拒绝旧历史。
+
+cloud_history返回completed/pending序号与复用状态；Frame.cloud_optimization返回实际积分尺寸、
+source/candidate序号和重置原因。diagnostics开启时read_cloud_statistics返回GPU计数，
+包含实际主步/云光照次数、跳跃/早停省略、全尺寸回退/重建、历史接受/拒绝数量及64位主密度查询数。
+read_cloud/medium_rgba32f保持全尺寸语义，HDR仍在曝光前。统计未请求或GPU未完成则拒绝读回。
+显式关闭temporal不读取或发布历史；固定时间reference截图不接入这些视图槽。

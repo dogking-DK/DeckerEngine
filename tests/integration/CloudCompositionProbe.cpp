@@ -107,7 +107,7 @@ void save(const RenderFrame& f,const std::string& name) {
 Vec3d ray(const Fixture& f,unsigned x,unsigned y) {
     return f.rotation*Vec3d{(x+.5)/f.side*2-1+f.offset_x,-((y+.5)/f.side*2-1+f.offset_y),-1};
 }
-void compare(const std::vector<Pixel>& actual,const std::vector<Pixel>& expected,const char* name) {
+void compare(const std::vector<Pixel>& actual,const std::vector<Pixel>& expected,const char* name,double rms_limit=.03,double tail_limit=.08) {
     std::vector<double> luminance,errors; double squares=0,maximum=0,edge=0;
     for(const auto& pixel:expected) luminance.push_back(.2126*pixel[0]+.7152*pixel[1]+.0722*pixel[2]);
     std::ranges::sort(luminance); const double scale=std::max(.001,luminance[std::size_t(.95*(luminance.size()-1))]);
@@ -123,8 +123,8 @@ void compare(const std::vector<Pixel>& actual,const std::vector<Pixel>& expected
     }
     std::ranges::sort(errors); const double rmse=std::sqrt(squares/errors.size()),p99=errors[std::size_t(.99*(errors.size()-1))];
     std::printf("%s scale=%.6g nRMSE=%.6g p99=%.6g max=%.6g edge/horizon=%.6g\n",name,scale,rmse,p99,maximum,edge);
-    require(rmse<=.03 && p99<=.08,"linear radiance reference threshold");
-    require(edge<=.08,"edge/horizon reference threshold");
+    require(rmse<=rms_limit && p99<=tail_limit,"linear radiance reference threshold");
+    require(edge<=tail_limit,"edge/horizon reference threshold");
 }
 std::vector<Pixel> diagnostic_pixels(const RenderFrame& frame,bool medium) {
     std::vector<Pixel> out(std::size_t(frame.info().width)*frame.info().height);
@@ -301,6 +301,32 @@ void failures(Fixture& f,SubmissionQueue& q,const DeviceOptions& options,memory:
     require(take(last.wait(q)) && linear(last)==baseline && diagnostic_pixels(last,false)==diagnostic,"pending owners lost cloud resources");
     std::puts("cloud budgets, snapshot/queue/object/submit, diagnostic read and pending owner lifetime passed");
 }
+RenderFrame optimized_frame(Fixture& f,SubmissionQueue& q,const AtmosphereSky& sky,const CloudOptimizedSettings& settings) {
+    auto result=take(f.pipeline.render_clouds_optimized(q,f.view(),f.assets,sky,*f.texture,settings,f.settings));
+    require(take(result.wait(q)),"optimized frame wait"); return result;
+}
+void optimization(Fixture& f,SubmissionQueue& q) {
+    f.side=31; f.anchor={0,2200,0}; f.distance=3000; f.place(); auto e=cloudy();
+    CloudOptimizedSettings settings; settings.temporal=false; settings.composition.surface_lighting=false;
+    settings.composition.sun_disk=false; settings.composition.diagnostics=true;
+    settings.composition.reference.sky_radiance={.015,.02,.03}; settings.composition.reference.time_seconds=17.25;
+    f.clouds=settings.composition; f.clouds.reference.steps=512; f.clouds.reference.sun_steps=f.clouds.reference.atmosphere_steps=128;
+    const auto sky=f.prepare(q,e); const auto reference=f.render(q,sky); const auto result=optimized_frame(f,q,sky,settings);
+    compare(linear(result),linear(reference),"optimized versus 512 reference",.05,.12);
+    const auto stats=take(result.read_cloud_statistics());
+    std::printf("optimized steps=%u lighting=%u empty=%u early=%u reconstructed=%u fallback=%u\n",stats.primary_steps,stats.cloud_lighting_steps,
+        stats.empty_steps,stats.terminated_steps,stats.reconstructed_pixels,stats.fallback_pixels);
+    std::printf("primary density samples=%llu\n",stats.density_samples);
+    require(stats.density_samples>=stats.cloud_lighting_steps,"density statistics missing");
+    require(result.cloud_optimization().width==16 && result.cloud_optimization().height==16 && stats.reconstructed_pixels>0,"half resolution reconstruction missing");
+    const auto actual=diagnostic_pixels(result,false),expected=diagnostic_pixels(reference,false);
+    double trans=0; std::size_t worst=0;
+    for(std::size_t i=0;i<actual.size();++i) if(std::abs(double(actual[i][3])-expected[i][3])>trans) { trans=std::abs(double(actual[i][3])-expected[i][3]); worst=i; }
+    std::printf("optimized cloud T max=%.9g at %zu,%zu actual=%.9g expected=%.9g\n",trans,worst%f.side,worst/f.side,actual[worst][3],expected[worst][3]);
+    require(trans<=.02,"optimized cloud T reference threshold");
+    save(result,"cloud-optimized.ppm");
+}
+#include "CloudReconstructionCases.hpp"
 }
 int main(int argc,char** argv) {
     Diagnostics d;
@@ -314,7 +340,11 @@ int main(int argc,char** argv) {
             auto q=take(graphics::detail::SubmissionAccess::create(heap,std::move(device),3,{submit}));
             std::printf("GPU=%s\n",q.device().adapter().properties.deviceName.data());
             { Fixture f{heap,q}; if(mode=="numeric") numeric(f,q); else if(mode=="composition") composition(f,q);
-                else if(mode=="failures") failures(f,q,options,system); else throw std::runtime_error("unknown mode"); }
+                else if(mode=="failures") failures(f,q,options,system); else if(mode=="optimization") optimization(f,q);
+                else if(mode=="optimization_boundaries") optimization_boundaries(f,q);
+                else if(mode=="optimization_switches") optimization_switches(f,q); else if(mode=="temporal") temporal(f,q);
+                else if(mode=="history") history_lifecycle(f,q,options,system);
+                else throw std::runtime_error("unknown mode"); }
             require(!q.stats().pending_slots && !q.stats().recording_slots && allocations(q)==0,"cloud GPU resources leaked"); check(q.close());
         }
         std::printf("cloud composition errors=%u warnings=%u live=%zu\n",d.errors.load(),d.warnings.load(),heap.snapshot().live_allocations);

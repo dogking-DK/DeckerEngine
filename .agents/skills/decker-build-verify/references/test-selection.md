@@ -111,9 +111,10 @@
 | Foundation 进程示例 | dk_foundation_demo | `^dk\.foundation\.` |
 | 确定性云场、密度/风时间与旧代预算（CPU-only） | dk_cloud_field_tests | `^dk\.clouds\.cloud ` |
 | 云天气/3D纹理上传、GPU过滤采样、失败与代次寿命（required GPU） | dk_cloud_field_probe | `^dk\.clouds\.fields_gpu_validation$` |
-| 云球壳、解析解、光照/混合合成与收敛参考（CPU-only） | dk_cloud_reference_tests | `^dk\.clouds\.(reference \|composition )` |
+| 云球壳、解析解、光照/混合合成、收敛参考与优化预算（CPU-only） | dk_cloud_reference_tests | `^dk\.clouds\.(reference \|composition \|optimization )` |
 | 无历史云参考GPU解析解、CPU对照、收敛和失败保护（required GPU） | dk_cloud_reference_probe | `^dk\.clouds\.reference_gpu_validation$` |
 | 云/空气/几何合成、诊断、CPU对照、遮挡和失败寿命（required GPU） | dk_cloud_composition_probe | `^dk\.clouds\.(numeric\|composition\|failures)_gpu_composition$` |
+| 半尺寸云/跳跃/早停/低角度光照、时域反遮挡、多视图重置与失败寿命（required GPU） | dk_cloud_composition_probe | `^dk\.clouds\.(optimization\|optimization_switches\|optimization_boundaries\|temporal\|history)_gpu_composition$` |
 | 云截图冻结状态/时间、schema/quality、零云退化及失败保留文件（required GPU） | dk_run | `^dk\.clouds\.capture_gpu_composition$`（Windows/Python 3.11+） |
 | 环境命令发现、CPU示例与v1/v2跨进程保存重载 | dk_run | `^dk\.environment\.process$` |
 | Scene 跨进程往返 | dk_scene_demo | `^dk\.scene_demo\.` |
