@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-13T16:08:18+08:00"
+updated_at: "2026-10-13T18:20:19+08:00"
 ---
 
 # 构建与依赖配置
@@ -25,6 +25,9 @@ M15.3云/空气/几何合成另需Pipeline与Atmosphere，目标`dk_cloud_compos
 逐像素参考最多4096像素、无历史。显式优化入口支持最多1920×1080像素，使用半尺寸重建与每视图历史；
 同一`dk_cloud_composition_probe`的优化筛选为`^dk\.clouds\.(optimization|optimization_switches|optimization_boundaries|temporal|history)_gpu_composition$`。
 含32预热+120静态帧、相机/风/反遮挡、重置/失败寿命和1080p真实调度；不代表实时性能达标，详见[云优化契约](../design/render-clouds.md#m154-优化与时域实施契约)。
+云影CPU仍为`dk_cloud_reference_tests`、筛选`^dk\.clouds\.shadow `；GPU仍为`dk_cloud_composition_probe`、
+筛选`^dk\.clouds\.shadow_(numeric|surface|failures)_gpu_composition$`，验证光空间透射、直射接收和快照寿命。
+云影为显式C++快照入口，默认编辑器/capture尚不自动绑定，见[范围与调用契约](../design/render-clouds.md#云影与交互闭环)。
 
 大气双精度参考可单独启用`DK_BUILD_RENDER_ATMOSPHERE_REFERENCE=ON`，只要求Scene/Math，
 不引入Graphics或Slang。`DK_BUILD_RENDER_ATMOSPHERE=ON`仍构建参考及GPU实现。

@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-13T14:52:00+08:00"
+updated_at: "2026-10-13T18:20:19+08:00"
 status: accepted
 ---
 
@@ -666,7 +666,7 @@ M14.4日光接收、M14.5空气透视、M14.6环境编辑/截图闭环和M14.7�
 | M15.2 | 无历史高采样云参考：球壳区间、Beer–Lambert积分、太阳散射、自遮蔽和低阶多散射近似 | M15.1 | CPU/GPU解析解、三档收敛、云内/外/切线、有限能量及失败保护通过；模型近似与离散误差分开，17项定向用例含required GPU通过，[0102](development/0102-cloud-reference.md) | 已完成 |
 | M15.3 | 云/空气/几何统一合成、深度裁剪及诊断图 | M15.2、M14.5 | 零云逐位退化M14、前景/mask/太阳遮挡、远云空气透视、联合积分/曝光一次、固定时间与截图重现；21项定向用例通过，参考上限4096像素，[0103](development/0103-cloud-composition.md) | 已完成 |
 | M15.4 | 半分辨率、空区跳跃/早停、保边上采样、每视图时域重投影 | M15.3 | 相对收敛参考、静止/运动/风/反遮挡、太阳边界与零云退化通过；4视图完成后发布、重置与失败保护通过；21项定向验收，含1080p调度，性能未验收，[0104](development/0104-cloud-reconstruction.md) | 已完成 |
-| M15.5 | 云透射阴影图与日光接收链路 | M15.4、M14.4 | 云影与太阳/风方向一致，相机移动稳定；零云为单位透射；只影响太阳直射；图同步与在途寿命正确 | 未开始 |
+| M15.5 | 云透射阴影图与日光接收链路 | M15.4、M14.4 | 固定世界光空间云柱/地表数值、太阳/风方向与相机稳定、零云单位透射和仅直射作用通过；预算、失败及在途寿命正确；21项定向检查通过，[0105](development/0105-cloud-shadows.md) | 已完成 |
 | M15.6 | 云面板/预设、命令/脚本与固定时间截图序列，版本化渲染用例清单和对比产物 | M15.5、M14.6 | GUI/IPC/脚本/重载同输入；reference无历史与时域序列模式分明；身份/参数/seed/shader摘要完整，失败/缺失不填零 | 未开始 |
 | M15.7 | 体积云质量、动态稳定性、性能与大气联合交付 | M15.6、M11观测 | 固定静态/动态场景集、画质门槛及性能目标复核；三轮原始样本与CPU/GPU/显存报告；required GPU及失败/关闭回归 | 未开始 |
 
@@ -746,7 +746,7 @@ M12全部完成。M13.1已完成，见[0089](development/0089-experiment-plan-in
 M13.3已完成，见[0091](development/0091-experiment-recovery.md)：批处理强杀后接续、成功项核验跳过、
 原票据/run核实及显式重试保留历史通过。M13.4已完成，见[0092](development/0092-experiment-reports.md)：
 参数/seed扫描自动生成可追溯报告，CPU-only与GPU图像分别验收，300拍重跑和跨后端容差通过。
-**M0–M14已完成。M14环境模型、体积底座、天空/日光/空气透视、编辑器与截图闭环见[0094](development/0094-environment-model.md)至[0099](development/0099-environment-integration.md)；质量/性能基线与三预设交付见[0100](development/0100-atmosphere-baseline.md)。1.5ms性能候选目标未达，保留原质量门槛与实测差距。M15.1云CPU模型、environment v2迁移、确定性天气/3D噪声、风时间与有界GPU纹理见[0101](development/0101-cloud-fields.md)。M15.2无历史CPU/GPU积分、太阳光照及收敛参考已完成，见[0102](development/0102-cloud-reference.md)。M15.3云/空气/几何联合合成、诊断和有界截图参考已完成，见[0103](development/0103-cloud-composition.md)。M15.4半分辨率/跳跃/保边与有界每视图时域优化已完成，21项定向验收见[0104](development/0104-cloud-reconstruction.md)，性能目标仍待M15.7。下一项为M15.5太阳云透射阴影；云影尚未实现。**
+**M0–M14已完成。M14环境模型、体积底座、天空/日光/空气透视、编辑器与截图闭环见[0094](development/0094-environment-model.md)至[0099](development/0099-environment-integration.md)；质量/性能基线与三预设交付见[0100](development/0100-atmosphere-baseline.md)。1.5ms性能候选目标未达，保留原质量门槛与实测差距。M15.1云CPU模型、environment v2迁移、确定性天气/3D噪声、风时间与有界GPU纹理见[0101](development/0101-cloud-fields.md)。M15.2无历史CPU/GPU积分、太阳光照及收敛参考已完成，见[0102](development/0102-cloud-reference.md)。M15.3云/空气/几何联合合成、诊断和有界截图参考已完成，见[0103](development/0103-cloud-composition.md)。M15.4半分辨率/跳跃/保边与有界每视图时域优化已完成，21项定向验收见[0104](development/0104-cloud-reconstruction.md)，性能目标仍待M15.7。M15.5固定世界云透射阴影、直射接收及资源寿命已完成，21项定向验收见[0105](development/0105-cloud-shadows.md)。下一项为M15.6云面板/预设、脚本及固定时间序列闭环。**
 编辑器 Play 视口已在 M12 验收，批量实验在 M13 验收；检查点、其他平台与发布打包仍未纳入本轮扩展。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。

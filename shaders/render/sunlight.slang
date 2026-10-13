@@ -7,6 +7,7 @@ struct Lighting {
     float4 geometry; // R, H, anchor height, sky diffuse enabled
     float4 sun; // Local unit direction towards sun; w = determinant sign
     float4 energy; // RGB irradiance; w = double sided
+    float4 shadowU,shadowV; // Anchor-relative km to fixed light-space UV.
 };
 [[vk::binding(2,0)]] ConstantBuffer<Lighting> light;
 struct VertexOutput {
@@ -45,6 +46,7 @@ void depthMain(VertexOutput input,bool front:SV_IsFrontFace) { surface(input,fro
 [[vk::binding(3,0)]] Texture2D<float4> transmittanceLut;
 [[vk::binding(4,0)]] Texture2D<float4> skyLut;
 [[vk::binding(5,0)]] SamplerState linearClamp;
+[[vk::binding(6,0)]] Texture2D<float> cloudShadow;
 static const float PI=3.14159265358979323846;
 float2 roots(float h,float mu,float boundary) {
     float b=(light.geometry.x+h)*mu,c=(h-boundary)*(2*light.geometry.x+h+boundary),d=b*b-c;
@@ -92,7 +94,8 @@ float4 fragmentMain(VertexOutput input,bool front:SV_IsFrontFace):SV_Target0 {
     float delta=dot(input.relative,input.relative)+2*r*input.relative.y;
     float h=max(0,light.geometry.z+delta/(sqrt(max(0,r*r+delta))+r));
     float mu=clamp((dot(input.relative,light.sun.xyz)+r*light.sun.y)/(light.geometry.x+h),-1,1);
-    float3 irradiance=sunlight(h,mu)*max(0,dot(n,light.sun.xyz));
+    float2 shadowUV=float2(dot(light.shadowU,float4(input.relative,1)),dot(light.shadowV,float4(input.relative,1)));
+    float3 irradiance=sunlight(h,mu)*max(0,dot(n,light.sun.xyz))*cloudShadow.SampleLevel(linearClamp,shadowUV,0);
     if(light.geometry.w>0) {
         float3 diffuse=0;
         [loop] for(uint y=0;y<16;++y) {

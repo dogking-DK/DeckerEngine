@@ -11,6 +11,7 @@
 #ifdef DK_RENDER_CLOUDS
 #include <dk/render/CloudReference.hpp>
 #include <dk/render/CloudTextures.hpp>
+#include <dk/render/CloudShadowRenderer.hpp>
 #endif
 #include <new>
 #include <numbers>
@@ -67,6 +68,10 @@ struct FrameState {
     std::array<std::size_t,2> cloud_readback{};
     std::size_t cloud_statistics=0;
     CloudFrameInfo cloud_info;
+    std::uint64_t shadow_generation=0;
+#ifdef DK_RENDER_CLOUDS
+    CloudShadowMap shadow;
+#endif
     graph::Execution execution;
     graph::PlanReport report;
 };
@@ -104,6 +109,7 @@ struct Inputs {
     Vector<const Image*> textures;
     const Image* transmittance=nullptr;
     const Image* sky=nullptr;
+    const Image* shadow=nullptr;
 };
 void resolve(Inputs& result,const RenderView& view,const GpuAssets& assets) {
     for (std::size_t i=0;i<view.scene().entities().size();++i) {
@@ -333,7 +339,8 @@ void prepare_sunlight(detail::PipelineState& state) {
     state.sunlight_depth_layout=std::move(depth_layout); state.sunlight_layout=std::move(layout);
     state.sunlight_depth=std::move(depth_pipeline); state.sunlight=std::move(pipeline); state.sky_sampler=std::move(sampler);
 }
-void resolve_sunlight(Inputs& inputs,const RenderView& view,const AtmosphereSky& sky,const RenderSettings& settings,detail::PipelineState& state) {
+void resolve_sunlight(Inputs& inputs,const RenderView& view,const AtmosphereSky& sky,const RenderSettings& settings,detail::PipelineState& state,const CloudShadowMap* shadow) {
+    static_cast<void>(shadow); // Optional Clouds target; no resource dependency when disabled.
     const auto environment=take(sky.environment());
     if(environment!=view.scene().environment()) throw Error{ErrorCode::invalid_argument,"lighting snapshot does not match scene environment"};
     const auto& a=environment.atmosphere;
@@ -345,8 +352,14 @@ void resolve_sunlight(Inputs& inputs,const RenderView& view,const AtmosphereSky&
     Mat3d basis; basis.row(0)=x; basis.row(1)=up; basis.row(2)=x.cross(up);
     const Vec3d local_sun=basis*sun;
     inputs.transmittance=take(sky.image(AtmosphereLut::transmittance)); inputs.sky=take(sky.image(AtmosphereLut::sky_view));
-    struct Parameters { std::array<float,4> normal[3],relative[3],geometry,sun,energy; };
-    static_assert(sizeof(Parameters)==144);
+    struct Parameters { std::array<float,4> normal[3],relative[3],geometry,sun,energy,shadow_u,shadow_v; };
+    static_assert(sizeof(Parameters)==176);
+#ifdef DK_RENDER_CLOUDS
+    if(shadow) {
+        if(take(shadow->environment())!=environment) throw Error{ErrorCode::invalid_argument,"Cloud shadow environment mismatch"};
+        inputs.shadow=take(shadow->image());
+    }
+#endif
     for(auto& draw:inputs.draws) {
         const auto& world=draw.world.matrix();
         const Mat3d normal=basis*take(detail::normal_matrix(draw.world));
@@ -360,6 +373,9 @@ void resolve_sunlight(Inputs& inputs,const RenderView& view,const AtmosphereSky&
             const Vec3d p=take(draw.world.transform_point(v));
             if((p.array().abs()>1e9).any()) throw Error{ErrorCode::not_supported,"lighting receiver exceeds world position domain"};
             low=low.cwiseMin(p); high=high.cwiseMax(p);
+#ifdef DK_RENDER_CLOUDS
+            if(shadow) take(cloud_shadow_coordinates(environment,take(shadow->settings()),p));
+#endif
             if((p-center).stableNorm()-a.ground_radius_m>2*a.atmosphere_height_m)
                 throw Error{ErrorCode::not_supported,"lighting receiver exceeds atmosphere height domain"};
         }
@@ -376,6 +392,15 @@ void resolve_sunlight(Inputs& inputs,const RenderView& view,const AtmosphereSky&
         const Mat3d linear=world.topLeftCorner<3,3>()/world.topLeftCorner<3,3>().cwiseAbs().maxCoeff();
         p.sun={float(local_sun.x()),float(local_sun.y()),float(local_sun.z()),linear.determinant()<0 ? -1.f : 1.f};
         p.energy={float(environment.sun.irradiance[0]),float(environment.sun.irradiance[1]),float(environment.sun.irradiance[2]),draw.double_sided ? 1.f : 0.f};
+#ifdef DK_RENDER_CLOUDS
+        if(shadow) {
+            const auto projection=take(shadow->projection());
+            const Vec3d u=basis*projection.u*(1000/projection.extent_m),v=basis*projection.v*(1000/projection.extent_m);
+            for(unsigned i=0;i<3;++i) { p.shadow_u[i]=float(u[i]); p.shadow_v[i]=float(v[i]); }
+            p.shadow_u[3]=float(.5+(anchor-projection.center_m).dot(projection.u)/projection.extent_m);
+            p.shadow_v[3]=float(.5+(anchor-projection.center_m).dot(projection.v)/projection.extent_m);
+        }
+#endif
         draw.lighting=take(state.factory.create_buffer({sizeof(p),vk::BufferUsageFlagBits::eUniformBuffer,BufferMemory::upload}));
         check(draw.lighting.write(0,std::as_bytes(std::span{&p,1})));
     }
@@ -433,8 +458,8 @@ Result<void> geometry_pass(graph::PassContext& pass,void* pointer) {
         else {
             const auto& view = draw.texture ? draw.texture->view : white;
             const auto& sampler = draw.texture ? draw.texture->sampler : c.pipeline.white_sampler;
-            std::array<BindingWrite,6> writes{BindingWrite{0,0,ImageBinding{&view}},BindingWrite{1,0,SamplerBinding{&sampler}}};
-            std::size_t count=2; ImageView transmittance,sky;
+            std::array<BindingWrite,7> writes{BindingWrite{0,0,ImageBinding{&view}},BindingWrite{1,0,SamplerBinding{&sampler}}};
+            std::size_t count=2; ImageView transmittance,sky,shadow;
             if(lit) {
                 writes[count++]={2,0,BufferBinding{take(pass.buffer(draw.lighting_index))}};
                 if(!depth_only) {
@@ -443,6 +468,8 @@ Result<void> geometry_pass(graph::PassContext& pass,void* pointer) {
                     writes[count++]={3,0,ImageBinding{&transmittance}};
                     writes[count++]={4,0,ImageBinding{&sky}};
                     writes[count++]={5,0,SamplerBinding{&c.pipeline.sky_sampler}};
+                    if(c.inputs.shadow) shadow=take(c.pipeline.factory.create_view(*c.inputs.shadow));
+                    writes[count++]={6,0,ImageBinding{c.inputs.shadow ? &shadow : &white}};
                 }
             }
             const auto& layout=lit ? (depth_only ? c.pipeline.sunlight_depth_layout : c.pipeline.sunlight_layout) :
@@ -617,8 +644,8 @@ Result<ScenePipeline> ScenePipeline::create(memory::ResourceHandle heap,Submissi
 Result<RenderFrame> ScenePipeline::render(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings) {
     return render_impl(queue,view,assets,settings,nullptr);
 }
-Result<RenderFrame> ScenePipeline::render_sunlight(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings) {
-    return render_impl(queue,view,assets,settings,view.scene().environment().enabled ? &sky : nullptr);
+Result<RenderFrame> ScenePipeline::render_sunlight(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings,const CloudShadowMap* shadow) {
+    return render_impl(queue,view,assets,settings,view.scene().environment().enabled ? &sky : nullptr,nullptr,nullptr,nullptr,nullptr,shadow);
 }
 Result<RenderFrame> ScenePipeline::render_environment(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings) {
     const bool cloudy=active_clouds(view.scene().environment());
@@ -662,21 +689,21 @@ Result<RenderFrame> ScenePipeline::render_environment(SubmissionQueue& queue,con
 #endif
 }
 Result<RenderFrame> ScenePipeline::render_clouds(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,
-    const AtmosphereSky& sky,const CloudTextures& textures,const CloudCompositionSettings& clouds,const RenderSettings& settings) {
+    const AtmosphereSky& sky,const CloudTextures& textures,const CloudCompositionSettings& clouds,const RenderSettings& settings,const CloudShadowMap* shadow) {
 #ifdef DK_RENDER_CLOUDS
-    if(!active_clouds(view.scene().environment())) return render_atmosphere(queue,view,assets,sky,settings,{clouds.surface_lighting,clouds.sun_disk,false});
+    if(!active_clouds(view.scene().environment())) return render_atmosphere(queue,view,assets,sky,settings,{clouds.surface_lighting,clouds.sun_disk,false},shadow);
     if(auto valid=validate_cloud_composition(view.scene().environment(),clouds,std::size_t(view.description().width)*view.description().height); !valid)
         return std::unexpected(valid.error());
     const AtmosphereSettings atmosphere{clouds.surface_lighting && view.scene().environment().enabled,clouds.sun_disk,true};
-    return render_impl(queue,view,assets,settings,&sky,&atmosphere,&textures,&clouds);
+    return render_impl(queue,view,assets,settings,&sky,&atmosphere,&textures,&clouds,nullptr,shadow);
 #else
     static_cast<void>(queue); static_cast<void>(view); static_cast<void>(assets); static_cast<void>(sky);
-    static_cast<void>(textures); static_cast<void>(clouds); static_cast<void>(settings);
+    static_cast<void>(textures); static_cast<void>(clouds); static_cast<void>(settings); static_cast<void>(shadow);
     return std::unexpected(Error{ErrorCode::not_supported,"cloud composition requires Clouds and Atmosphere"});
 #endif
 }
 Result<RenderFrame> ScenePipeline::render_clouds_optimized(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,
-    const AtmosphereSky& sky,const CloudTextures& textures,const CloudOptimizedSettings& optimized,const RenderSettings& settings) {
+    const AtmosphereSky& sky,const CloudTextures& textures,const CloudOptimizedSettings& optimized,const RenderSettings& settings,const CloudShadowMap* shadow) {
 #ifdef DK_RENDER_CLOUDS
     if(auto valid=validate_cloud_optimization(view.scene().environment(),optimized,view.description().width,view.description().height); !valid)
         return std::unexpected(valid.error());
@@ -684,15 +711,15 @@ Result<RenderFrame> ScenePipeline::render_clouds_optimized(SubmissionQueue& queu
         if(auto ready=poll_cloud_history(queue); !ready) return std::unexpected(ready.error());
         for(const auto& slot:state_->cloud_history) if(slot.id==optimized.view_id && slot.pending)
             return std::unexpected(Error{ErrorCode::invalid_state,"Cloud view still has an in-flight candidate"});
-        auto frame=render_atmosphere(queue,view,assets,sky,settings,{optimized.composition.surface_lighting,optimized.composition.sun_disk,false});
+        auto frame=render_atmosphere(queue,view,assets,sky,settings,{optimized.composition.surface_lighting,optimized.composition.sun_disk,false},shadow);
         if(frame) for(auto& slot:state_->cloud_history) if(slot.id==optimized.view_id) { slot.completed.reset(); slot.failed=false; }
         return frame;
     }
     const AtmosphereSettings atmosphere{optimized.composition.surface_lighting && view.scene().environment().enabled,optimized.composition.sun_disk,false};
-    return render_impl(queue,view,assets,settings,&sky,&atmosphere,&textures,&optimized.composition,&optimized);
+    return render_impl(queue,view,assets,settings,&sky,&atmosphere,&textures,&optimized.composition,&optimized,shadow);
 #else
     static_cast<void>(queue); static_cast<void>(view); static_cast<void>(assets); static_cast<void>(sky);
-    static_cast<void>(textures); static_cast<void>(optimized); static_cast<void>(settings);
+    static_cast<void>(textures); static_cast<void>(optimized); static_cast<void>(settings); static_cast<void>(shadow);
     return std::unexpected(Error{ErrorCode::not_supported,"Cloud optimization requires Clouds and Atmosphere"});
 #endif
 }
@@ -733,7 +760,7 @@ Result<void> ScenePipeline::release_cloud_history(SubmissionQueue& queue,std::ui
 Result<std::string> shader_fingerprint(const std::filesystem::path& directory,bool environment) {
     const std::array files{"scene.slang","tone.slang","sunlight.slang","aerial.slang",
         "../../engine/render/atmosphere/shaders/atmosphere.slang","../../engine/render/atmosphere/shaders/AtmosphereTransport.slang",
-        "cloud-composition.slang","cloud-reconstruction.slang","../../engine/render/clouds/shaders/CloudTypes.slang","../../engine/render/clouds/shaders/CloudTransport.slang"};
+        "cloud-composition.slang","cloud-reconstruction.slang","../../engine/render/clouds/shaders/cloud-shadow.slang","../../engine/render/clouds/shaders/CloudTypes.slang","../../engine/render/clouds/shaders/CloudTransport.slang"};
     std::uint64_t hash=14695981039346656037ULL;
     auto append=[&](unsigned char c) { hash^=c; hash*=1099511628211ULL; };
     for(unsigned i=0;i<(environment ? files.size() : 2);++i) {
@@ -745,14 +772,14 @@ Result<std::string> shader_fingerprint(const std::filesystem::path& directory,bo
         append(0);
     }
     // CPU-side sampling/mapping version, including the fixed 64 x 64 x 128 AP grid.
-    for(const unsigned char c:std::string_view{"render-environment-v2:64x64x128:128:cloud-joint-v1:256x64x64:cloud-reconstruct-v1:96to256x8:half-fixed"}) append(c);
+    for(const unsigned char c:std::string_view{"render-environment-v2:64x64x128:128:cloud-joint-v1:256x64x64:cloud-reconstruct-v1:96to256x8:half-fixed:cloud-shadow-v1:sunward-inner-sphere"}) append(c);
     std::ostringstream out; out<<"fnv1a64:"<<std::hex<<std::setfill('0')<<std::setw(16)<<hash; return out.str();
 }
-Result<RenderFrame> ScenePipeline::render_atmosphere(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings,const AtmosphereSettings& atmosphere) {
+Result<RenderFrame> ScenePipeline::render_atmosphere(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings,const AtmosphereSettings& atmosphere,const CloudShadowMap* shadow) {
     const bool enabled=view.scene().environment().enabled;
-    return render_impl(queue,view,assets,settings,enabled ? &sky : nullptr,enabled ? &atmosphere : nullptr);
+    return render_impl(queue,view,assets,settings,enabled ? &sky : nullptr,enabled ? &atmosphere : nullptr,nullptr,nullptr,nullptr,shadow);
 }
-Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings,const AtmosphereSky* sky,const AtmosphereSettings* atmosphere,const CloudTextures* clouds,const CloudCompositionSettings* cloud_settings,const CloudOptimizedSettings* optimized) {
+Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings,const AtmosphereSky* sky,const AtmosphereSettings* atmosphere,const CloudTextures* clouds,const CloudCompositionSettings* cloud_settings,const CloudOptimizedSettings* optimized,const CloudShadowMap* shadow) {
     DK_PROFILE_ZONE("render.scene");
     if (!state_ || state_->heap.state()!=memory::ResourceState::open || queue.stats().closed || queue.stats().device_lost)
         return std::unexpected(Error{ErrorCode::invalid_state,"scene pipeline, memory or queue is unavailable"});
@@ -770,6 +797,21 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
     try {
         const auto heap=state_->heap;
         { auto guard=take(queue.begin()); check(guard.retain(state_->identity)); }
+        if(shadow && (!sky || (atmosphere && !atmosphere->surface_lighting))) throw Error{ErrorCode::invalid_argument,"Cloud shadow requires active surface sunlight"};
+#ifdef DK_RENDER_CLOUDS
+        if(shadow) {
+            if(take(shadow->environment())!=view.scene().environment()) throw Error{ErrorCode::invalid_argument,"Cloud shadow environment mismatch"};
+            { auto guard=take(queue.begin()); check(guard.retain(*take(shadow->image()))); }
+            if(cloud_settings) {
+                const auto shadow_settings=take(shadow->settings()); const auto& reference=cloud_settings->reference;
+                if(shadow_settings.time_seconds!=reference.time_seconds || shadow_settings.homogeneous!=reference.homogeneous ||
+                    shadow_settings.homogeneous_density!=reference.homogeneous_density)
+                    throw Error{ErrorCode::invalid_argument,"Cloud shadow time or density model mismatch"};
+            }
+        }
+#else
+        if(shadow) throw Error{ErrorCode::not_supported,"Cloud shadow requires Clouds"};
+#endif
         Inputs inputs{heap}; resolve(inputs,view,assets);
         Buffer aerial_uniform,cloud_uniform,reconstruction_uniform;
         CloudFrameInfo cloud_info;
@@ -804,7 +846,7 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
 #ifdef DK_RENDER_SUNLIGHT
             if(atmosphere) aerial_uniform=prepare_aerial(*state_,view,*sky,*atmosphere,clouds!=nullptr);
             if(!atmosphere || atmosphere->surface_lighting) {
-                resolve_sunlight(inputs,view,*sky,settings,*state_);
+                resolve_sunlight(inputs,view,*sky,settings,*state_,shadow);
                 prepare_sunlight(*state_);
             }
 #else
@@ -818,6 +860,9 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
 #endif
         auto frame=memory::make_shared_in<detail::FrameState>(heap);
         frame->cloud_info=cloud_info;
+#ifdef DK_RENDER_CLOUDS
+        if(shadow) { frame->shadow=*shadow; frame->shadow_generation=shadow->generation(); }
+#endif
         frame->info={view.scene().id(),view.scene().revision(),view.description().frame,width,height,inputs.draws.size()};
         auto graph=take(graph::Graph::create(heap));
         const auto readback=take(graph.declare_buffer("RGBA8 readback",{vk::DeviceSize{width}*height*4,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
@@ -916,6 +961,12 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             }
         }
 #endif
+        if(inputs.shadow) {
+            const auto index=graph.counts().buffers+graph.counts().images;
+            const auto id=take(graph.declare_image("surface sun cloud transmittance",inputs.shadow->description(),graph::Lifetime::external,true));
+            external.push_back({index,nullptr,inputs.shadow,{}});
+            geometry.push_back(use(id,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal));
+        }
         geometry.push_back(use(hdr,vk::PipelineStageFlagBits2::eColorAttachmentOutput,color_access,vk::ImageLayout::eColorAttachmentOptimal));
         static_cast<void>(take(graph.add_pass({"opaque",geometry})));
         auto final_hdr=hdr;
@@ -1060,6 +1111,7 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
         if(context.statistics_readback) finals.push_back({context.statistics_readback,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}});
         frame->execution=take(graph::execute(plan,queue,{external,callbacks,finals}));
 #ifdef DK_RENDER_CLOUDS
+        if(shadow) shadow->used_by(frame->execution.submission());
         if(history_slot) {
             candidate->submission=frame->execution.submission(); history_slot->id=optimized->view_id;
             history_slot->sequence=candidate->sequence; history_slot->pending=std::move(candidate); history_slot->failed=false;
@@ -1070,6 +1122,7 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
     catch (const std::bad_alloc&) { invalidate(); return std::unexpected(allocation_error()); }
 }
 FrameInfo RenderFrame::info() const noexcept { return state_ ? state_->info : FrameInfo{}; }
+std::uint64_t RenderFrame::cloud_shadow_generation() const noexcept { return state_ ? state_->shadow_generation : 0; }
 CloudFrameInfo RenderFrame::cloud_optimization() const noexcept { return state_ ? state_->cloud_info : CloudFrameInfo{}; }
 Result<CloudTraceStatistics> RenderFrame::read_cloud_statistics() const {
     if(!state_ || !state_->cloud_statistics) return std::unexpected(Error{ErrorCode::invalid_state,"Cloud statistics were not requested"});

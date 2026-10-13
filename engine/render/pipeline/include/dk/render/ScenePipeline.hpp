@@ -7,6 +7,7 @@
 namespace dk::render {
 class AtmosphereSky;
 class CloudTextures;
+class CloudShadowMap;
 struct CloudCompositionSettings;
 struct CloudOptimizedSettings;
 enum class CloudHistoryReset { none, new_view, disabled, resize, projection, camera, scene, content, quality, time, failure };
@@ -61,6 +62,7 @@ public:
     [[nodiscard]] Result<void> read_cloud_rgba32f(std::span<std::array<float,4>> destination) const;
     [[nodiscard]] Result<void> read_medium_rgba32f(std::span<std::array<float,4>> destination) const;
     [[nodiscard]] CloudFrameInfo cloud_optimization() const noexcept;
+    [[nodiscard]] std::uint64_t cloud_shadow_generation() const noexcept;
     [[nodiscard]] Result<CloudTraceStatistics> read_cloud_statistics() const;
     [[nodiscard]] Result<const graphics::Image*> color() const;
     [[nodiscard]] std::string_view plan_text() const noexcept;
@@ -84,28 +86,28 @@ public:
     // Explicit Lambert path. Snapshot environment must match the RenderScene exactly.
     // A disabled scene uses unlit; requires DK_BUILD_RENDER_ATMOSPHERE when enabled.
     [[nodiscard]] Result<RenderFrame> render_sunlight(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
-        const AtmosphereSky&, const RenderSettings& = {});
+        const AtmosphereSky&, const RenderSettings& = {}, const CloudShadowMap* = nullptr);
     // Synchronous LUT preparation followed by asynchronous frame submission; call from a worker.
     [[nodiscard]] Result<RenderFrame> render_environment(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
         const RenderSettings& = {});
     // Finite forward-Z perspective; the sky anchor must equal camera position.
     [[nodiscard]] Result<RenderFrame> render_atmosphere(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
-        const AtmosphereSky&, const RenderSettings& = {}, const AtmosphereSettings& = {});
+        const AtmosphereSky&, const RenderSettings& = {}, const AtmosphereSettings& = {}, const CloudShadowMap* = nullptr);
     // Explicit full-sample composition, <=4096 pixels, no history. Sky and textures
     // must match the view's environment. Zero clouds use the original M14 path.
     [[nodiscard]] Result<RenderFrame> render_clouds(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
-        const AtmosphereSky&, const CloudTextures&, const CloudCompositionSettings&, const RenderSettings& = {});
+        const AtmosphereSky&, const CloudTextures&, const CloudCompositionSettings&, const RenderSettings& = {}, const CloudShadowMap* = nullptr);
     // Explicit half-resolution path, <=1920*1080 output pixels. Caller owns stable
     // view_id/camera_revision. Poll publishes completed candidates; at most four views.
     [[nodiscard]] Result<RenderFrame> render_clouds_optimized(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
-        const AtmosphereSky&, const CloudTextures&, const CloudOptimizedSettings&, const RenderSettings& = {});
+        const AtmosphereSky&, const CloudTextures&, const CloudOptimizedSettings&, const RenderSettings& = {}, const CloudShadowMap* = nullptr);
     [[nodiscard]] Result<void> poll_cloud_history(graphics::SubmissionQueue&);
     [[nodiscard]] Result<CloudHistoryStatus> cloud_history(std::uint64_t view_id) const;
     [[nodiscard]] Result<void> release_cloud_history(graphics::SubmissionQueue&, std::uint64_t view_id);
 private:
     [[nodiscard]] Result<RenderFrame> render_impl(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
         const RenderSettings&, const AtmosphereSky*, const AtmosphereSettings* = nullptr,
-        const CloudTextures* = nullptr, const CloudCompositionSettings* = nullptr, const CloudOptimizedSettings* = nullptr);
+        const CloudTextures* = nullptr, const CloudCompositionSettings* = nullptr, const CloudOptimizedSettings* = nullptr, const CloudShadowMap* = nullptr);
     explicit ScenePipeline(std::shared_ptr<detail::PipelineState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::PipelineState> state_;
 };

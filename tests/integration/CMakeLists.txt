@@ -771,7 +771,7 @@ if(TARGET dk_render_clouds AND TARGET dk_render_pipeline AND TARGET dk_render_at
         DK_ATMOSPHERE_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/atmosphere/shaders")
     dk_target_defaults(dk_cloud_composition_probe)
     dk_deploy_slang(dk_cloud_composition_probe)
-    foreach(case IN ITEMS numeric composition failures optimization optimization_switches optimization_boundaries temporal history)
+    foreach(case IN ITEMS numeric composition failures optimization optimization_switches optimization_boundaries temporal history shadow_numeric shadow_surface shadow_failures)
         add_test(NAME dk.clouds.${case}_gpu_composition COMMAND dk_cloud_composition_probe ${case})
         set_tests_properties(dk.clouds.${case}_gpu_composition PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")

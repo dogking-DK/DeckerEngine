@@ -1,3 +1,5 @@
+#include <dk/render/CloudShadow.hpp>
+#include <catch2/catch_approx.hpp>
 #include "../fixtures/CloudReferenceCases.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <cstdio>
@@ -176,4 +178,35 @@ TEST_CASE("optimization validates output sampling work and stable view identity 
     bad=settings; bad.history_weight=std::numeric_limits<float>::quiet_NaN(); CHECK_FALSE(validate_cloud_optimization(e,bad,32,32));
     settings.temporal=false; settings.empty_space_skipping=false; settings.termination_transmittance=0;
     CHECK(validate_cloud_optimization(e,settings,1,1));
+}
+
+TEST_CASE("shadow projection preserves sun lines and samples the sunward cloud shell", "[clouds][shadow]") {
+    auto e=homogeneous(); e.sun.direction={0,1,0}; CloudShadowSettings s; s.extent_m=512; s.resolution=16;
+    const auto p=cloud_shadow_projection(e,s).value();
+    CHECK(p.u.dot(p.sun)==Catch::Approx(0)); CHECK(p.v.dot(p.sun)==Catch::Approx(0));
+    const Vec3d receiver{32,100,48}; const auto uv=cloud_shadow_coordinates(e,s,receiver).value();
+    CHECK((uv-cloud_shadow_coordinates(e,s,receiver+p.sun*100).value()).norm()<1e-12);
+    const auto ray=cloud_shadow_ray(e,s,8,8).value(); const Vec3d center{e.atmosphere.planet_center_m.data()};
+    CHECK((ray.origin_m-center).norm()==Catch::Approx(e.atmosphere.ground_radius_m+e.clouds.bottom_height_m));
+    CHECK((ray.origin_m+ray.direction*ray.max_distance_m-center).norm()==Catch::Approx(e.atmosphere.ground_radius_m+e.clouds.top_height_m));
+    CHECK(ray.direction==p.sun); CHECK(ray.max_distance_m>0);
+    CHECK_FALSE(cloud_shadow_coordinates(e,s,Vec3d{10000,100,0}));
+    CHECK_FALSE(cloud_shadow_coordinates(e,s,Vec3d{0,e.clouds.bottom_height_m+1,0}));
+    CHECK_FALSE(cloud_shadow_ray(e,s,16,0));
+}
+TEST_CASE("shadow settings bound sampling storage and world domain", "[clouds][shadow]") {
+    auto e=homogeneous(); CloudShadowSettings s; CHECK(cloud_shadow_projection(e,s));
+    auto bad=s; bad.resolution=17; CHECK_FALSE(cloud_shadow_projection(e,bad));
+    bad=s; bad.resolution=0; CHECK_FALSE(cloud_shadow_projection(e,bad));
+    bad=s; bad.resolution=1024; CHECK_FALSE(cloud_shadow_projection(e,bad));
+    bad=s; bad.steps=0; CHECK_FALSE(cloud_shadow_projection(e,bad));
+    bad=s; bad.steps=1025; CHECK_FALSE(cloud_shadow_projection(e,bad));
+    bad=s; bad.max_work=1; CHECK_FALSE(cloud_shadow_projection(e,bad));
+    bad=s; bad.max_bytes=cloud_shadow_bytes(s)-1; CHECK_FALSE(cloud_shadow_projection(e,bad));
+    bad=s; bad.time_seconds=std::numeric_limits<double>::infinity(); CHECK_FALSE(cloud_shadow_projection(e,bad));
+    bad=s; bad.center_m.x()=1e10; CHECK_FALSE(cloud_shadow_projection(e,bad));
+    bad=s; bad.extent_m=0; CHECK_FALSE(cloud_shadow_projection(e,bad));
+    bad=s; bad.homogeneous_density=-1; CHECK_FALSE(cloud_shadow_projection(e,bad));
+    s.resolution=512; s.steps=512; CHECK(cloud_shadow_projection(e,s));
+    s.steps=1024; CHECK_FALSE(cloud_shadow_projection(e,s));
 }

@@ -106,5 +106,6 @@
 | 0102 | [无历史云积分参考](0102-cloud-reference.md) | render-clouds、render-atmosphere | completed |
 | 0103 | [云、空气与几何统一合成](0103-cloud-composition.md) | render-clouds、render-pipeline、render-capture、architecture | completed |
 | 0104 | [半分辨率云重建与每视图历史](0104-cloud-reconstruction.md) | render-clouds、render-pipeline | completed |
+| 0105 | [太阳云透射阴影](0105-cloud-shadows.md) | render-clouds、render-pipeline | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

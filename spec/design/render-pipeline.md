@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-10-13T16:08:18+08:00"
+updated_at: "2026-10-13T18:20:19+08:00"
 status: accepted
 ---
 
@@ -200,3 +200,13 @@ source/candidate序号和重置原因。diagnostics开启时read_cloud_statistic
 包含实际主步/云光照次数、跳跃/早停省略、全尺寸回退/重建、历史接受/拒绝数量及64位主密度查询数。
 read_cloud/medium_rgba32f保持全尺寸语义，HDR仍在曝光前。统计未请求或GPU未完成则拒绝读回。
 显式关闭temporal不读取或发布历史；固定时间reference截图不接入这些视图槽。
+
+## M15.5 可选云透射阴影快照
+
+render_sunlight/render_atmosphere/render_clouds/render_clouds_optimized接受可选CloudShadowMap，
+默认无云影保持原行为。日光片段仅以阴影图乘直射项，再独立加入天空漫射和emissive；
+单位默认白纹理保持零快照路径。Graph显式导入图并声明opaque的fragment sampled read。
+快照必须匹配完整环境，接收体投影/云底范围、队列身份以及云合成time/诊断模型均预检。
+Frame保留快照，提交成功更新图的最后使用序号，使预算覆盖消费者在途寿命；失败不发布使用。
+该快照仅改变终端表面，M15.4历史保存介质量，换图无需因表面光照改变而重置介质历史。
+详细参数、误差与生命周期见[云影契约](render-clouds.md#云影与交互闭环)。

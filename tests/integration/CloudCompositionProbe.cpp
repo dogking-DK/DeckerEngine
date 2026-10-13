@@ -3,6 +3,7 @@
 #include <dk/render/Atmosphere.hpp>
 #include <dk/render/CloudReference.hpp>
 #include <dk/render/CloudTextures.hpp>
+#include <dk/render/CloudShadowRenderer.hpp>
 #include <dk/scene/SceneDocument.hpp>
 #include "SubmissionInternal.hpp"
 #include "ObjectInternal.hpp"
@@ -327,6 +328,7 @@ void optimization(Fixture& f,SubmissionQueue& q) {
     save(result,"cloud-optimized.ppm");
 }
 #include "CloudReconstructionCases.hpp"
+#include "CloudShadowCases.hpp"
 }
 int main(int argc,char** argv) {
     Diagnostics d;
@@ -344,6 +346,9 @@ int main(int argc,char** argv) {
                 else if(mode=="optimization_boundaries") optimization_boundaries(f,q);
                 else if(mode=="optimization_switches") optimization_switches(f,q); else if(mode=="temporal") temporal(f,q);
                 else if(mode=="history") history_lifecycle(f,q,options,system);
+                else if(mode=="shadow_numeric") shadow_numeric(f,q);
+                else if(mode=="shadow_surface") shadow_surface(f,q);
+                else if(mode=="shadow_failures") shadow_failures(f,q,options,system);
                 else throw std::runtime_error("unknown mode"); }
             require(!q.stats().pending_slots && !q.stats().recording_slots && allocations(q)==0,"cloud GPU resources leaked"); check(q.close());
         }
