@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-08T15:06:00+08:00"
-updated_at: "2026-10-09T10:43:38+08:00"
+updated_at: "2026-10-13T11:25:00+08:00"
 ---
 
 # Luau 场景脚本
@@ -58,12 +58,16 @@ error 包含原引擎 `code`、`name`、`message`、`context`；task_id 可用�
 | 功能 | 允许命令 |
 | --- | --- |
 | 场景/工程 | scene.new、scene.load、scene.query、scene.save、scene.transaction、project.save |
+| 环境 | environment.query、environment.set |
+| 截图/作业 | render.capture、jobs.get、jobs.wait、jobs.cancel |
 | 实体 | entity.create、entity.get、entity.delete、entity.set_name、entity.set_transform、entity.set_parent、entity.set_assets |
 | 模拟 | simulation.start、simulation.pause、simulation.resume、simulation.step、simulation.stop、simulation.query、simulation.particles |
 | 历史 | history.status、history.undo、history.redo |
 | 发现/状态 | commands.list、commands.describe、runtime.capabilities、tasks.list、tasks.get |
 
-未在集合中的命令返回 not_supported，包括 runtime.shutdown、assets/jobs/render 命令。
+未在集合中的命令返回 not_supported，包括 runtime.shutdown、assets命令及未列出的未来命令。
+environment.query与jobs.get/wait支持所有能力；environment.set需edit/project，render.capture和jobs.cancel仅project。
+未构建截图模块时render.capture返回not_found。脚本结束不撤销已提交作业，Runtime关闭会取消并join未完成作业。
 commands.list/describe 与 runtime.capabilities 描述宿主能力，不能作为脚本授权清单。
 命令参数仍执行原 schema、业务前置条件和 guard 校验；不会自动补 guard 或重试过期请求。
 
@@ -153,3 +157,6 @@ auto result = dk::run_luau(runtime, source, "example.luau", options);
 ```
 
 绑定验收见 [0070](../development/0070-luau-command-bindings.md)，预算、取消与退出验收见 [0071](../development/0071-luau-execution-limits.md)。外部批量操作与截图见 [Python 自动化指南](python.md)；阶段状态见 [Roadmap](../roadmap.md)。
+
+
+环境截图示例、固定相机/时间/质量和来源元数据见[大气指南](atmosphere.md#编辑器和脚本m146)。

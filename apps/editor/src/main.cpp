@@ -31,6 +31,7 @@ int main(int argc,char** argv) {
             else if (arg=="--smoke") options.smoke=true;
             else if (arg=="--interaction-smoke") { options.smoke=true; options.interaction_smoke=true; }
             else if (arg=="--simulation-smoke") { options.smoke=true; options.simulation_smoke=true; }
+            else if (arg=="--environment-consistency-smoke") options.environment_consistency_smoke=true;
             else if (arg=="--consistency-smoke") options.consistency_smoke=true;
             else if (arg=="--simulation-consistency-smoke") options.simulation_consistency_smoke=true;
             else if (arg=="--simulation-response-probe") options.simulation_response_probe=true;
@@ -47,6 +48,7 @@ int main(int argc,char** argv) {
                     "Window: --background shows/restores behind other windows without activation (Windows); default: normal foreground startup\n"
                     "Acceptance: --frames N --screenshot OUTPUT.ppm [--fixture-camera]\n"
                     "            --smoke/--interaction-smoke/--simulation-smoke --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
+                    "            --environment-consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --simulation-consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --simulation-response-probe --pipe NAME --root DISPOSABLE_PROJECT");
@@ -54,6 +56,8 @@ int main(int argc,char** argv) {
             } else throw std::runtime_error("Unknown dk-editor option");
         }
         if (options.validation && options.disable_validation) throw std::runtime_error("--validation and --no-validation are mutually exclusive");
+        if (options.environment_consistency_smoke && (options.smoke || options.consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe || options.frames || options.pipe.empty() || !options.fixture_camera || options.screenshot.empty()))
+            throw std::runtime_error("--environment-consistency-smoke requires --pipe, --fixture-camera and --screenshot; incompatible with other acceptance modes");
         if (options.simulation_smoke && (options.interaction_smoke || options.frames || options.screenshot.empty()))
             throw std::runtime_error("--simulation-smoke requires --screenshot and is incompatible with interaction/frames");
         if (!options.screenshot.empty() && options.screenshot.extension()!=".ppm")

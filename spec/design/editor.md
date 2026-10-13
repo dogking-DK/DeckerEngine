@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-10T15:51:00+08:00"
+updated_at: "2026-10-13T11:44:00+08:00"
 status: accepted
 ---
 
@@ -218,3 +218,25 @@ GUI设备required validation同时覆盖模拟队列；实例/设备创建属于
 若一次IPC pump只处理握手而未分派命令，Workspace使用先读取的RuntimeEvents sequence
 最多等待1ms以接收同连接的执行帧，再pump一次。普通命令和空闲循环不增加等待；
 客户端未继续发送时仍有界返回，不让每次两段握手都依赖下一帧的绘制/呈现。
+
+## M14.6 环境面板与异步大气视口
+
+Environment面板拥有EnvironmentDraft（完整CPU参数、读取时guard、modified），所有Apply使用environment.set，
+与IPC/Python/Luau共用同一Scene/历史；外部编辑保留有修改草稿和旧guard，Apply冲突，Revert取最新。
+Undo/Redo/切换文档前处理任一草稿；Save先提交草稿再保存；两个面板不同时编辑；API若出现两份已修改草稿，在提交任何一份前拒绝Save/Apply，要求先Revert其中一份。
+面板可编辑启用、太阳方向/线性RGB/角半径，以及球面、大气散射/消光/密度与地面反照率；曝光为视口会话参数，不写环境。
+未应用草稿不渲染。面板使用原子完整Apply，不每次拖动重建LUT。
+
+启用环境的Edit视口采用独立后台worker/Device/Queue，复用ScenePipeline的环境绑定入口和最近LUT。
+主线程只复制拥有型SceneReadSnapshot/相机/尺寸/曝光/preview身份；最多一个正在执行、一个合并待处理请求和一个完成结果。
+完成结果仅在document/revision/camera/size/exposure/preview序号匹配最新请求时发布；旧代丢弃，错误保留旧画面并标过期。
+关闭/取消清掉待处理，已提交GPU必须等待回收；worker join后释放队列。GUI不等待LUT冷编译/积分；完成RGBA8沿既有上传桥呈现。
+关闭环境保持旧同步unlit路径，并使旧大气请求失效；Simulation独立视口不接入。资产文件仍在执行时读取。
+同一Scene会话资产缓存复用；32MiB快照上限，现有1600×1200视口上限；无无界任务/结果积累。
+
+环境模式相机near=1m、far=10000m，以满足M14.5深度精度域；关闭时保持near=.05m/far=10000m。
+绘制、拾取、投影和检查点使用同一相机状态；UI明确显示裁剪面。不能通过静默改动capture参数匹配画面。
+真实GUI自动化使用--background，验证环境Apply、IPC/脚本交替修改、旧草稿冲突、Undo/Redo、Save/Reload与同设置截图逐字节一致。
+独立后台worker测试验证连续改参、resize、取消、失败恢复及在途关闭不发布旧结果；
+相机导航允许在旧帧上继续发送新请求，拾取/Gizmo启动仅在完整匹配当前帧时启用；已捕获手势按原guard继续接收输入并提交，
+不因自身异步预览尚未返回而取消，外部revision或尺寸变化仍取消。单独CPU模型验收草稿/历史保护；CPU-only不引入GPU依赖。

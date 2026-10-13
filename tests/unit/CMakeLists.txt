@@ -322,3 +322,15 @@ if(TARGET dk_editor_model)
     catch_discover_tests(dk_editor_tests TEST_PREFIX "dk.editor."
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 60)
 endif()
+
+if(TARGET dk_editor AND TARGET dk_render_atmosphere)
+    add_executable(dk_environment_preview_tests EnvironmentPreviewTests.cpp)
+    target_include_directories(dk_environment_preview_tests PRIVATE "${PROJECT_SOURCE_DIR}/engine/editor/src")
+    target_compile_definitions(dk_environment_preview_tests PRIVATE DK_EDITOR_FIXTURE_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk" DK_TEST_SHADER_DIR="${PROJECT_SOURCE_DIR}/shaders/render")
+    target_link_libraries(dk_environment_preview_tests PRIVATE dk::editor dk::editor_model dk::render_pipeline dk::render_disk Catch2::Catch2WithMain)
+    dk_target_defaults(dk_environment_preview_tests)
+    dk_deploy_slang(dk_environment_preview_tests)
+    add_test(NAME dk.editor.environment_worker_gpu_validation COMMAND dk_environment_preview_tests)
+    set_tests_properties(dk.editor.environment_worker_gpu_validation PROPERTIES TIMEOUT 180 RUN_SERIAL TRUE LABELS "gpu"
+        ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+endif()

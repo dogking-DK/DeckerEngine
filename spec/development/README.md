@@ -100,5 +100,6 @@
 | 0096 | [M14.3 大气积分、LUT与离屏天空](0096-atmosphere-luts.md) | render-atmosphere, architecture | completed |
 | 0097 | [M14.4 最小日光接收](0097-surface-sunlight.md) | render-pipeline, render-atmosphere, architecture | completed |
 | 0098 | [M14.5 视锥空气透视与HDR合成](0098-aerial-perspective.md) | render-pipeline, render-atmosphere, architecture | completed |
+| 0099 | [M14.6 环境面板、视口与截图闭环](0099-environment-integration.md) | editor, render-capture, render-pipeline, render-atmosphere, scripting-luau | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

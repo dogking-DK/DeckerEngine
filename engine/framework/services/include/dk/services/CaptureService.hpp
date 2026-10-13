@@ -15,11 +15,13 @@ struct CaptureRequest {
     CaptureCamera camera;
     GltfImportProfile profile=GltfImportProfile::unlit_preview;
     bool require_validation=false;
+    float exposure=1;
 };
 struct CaptureInfo {
     DocumentId document;
     render::FrameInfo frame;
     std::string output;
+    std::string provenance; // Frozen JSON; source fingerprint is completed by the worker.
 };
 struct CaptureTicket { JobId job; CaptureInfo info; };
 // Owner-thread facade; worker owns all GPU objects and never accesses the SceneService.

@@ -211,3 +211,47 @@ TEST_CASE("interaction local TRS respects rotated scaled parent without decompos
     CHECK_FALSE(edit.rotate(3,1)); CHECK_FALSE(edit.scale(0,0));
     p.scale.y()=0; edit.parent=Transformd::from_trs(p).value(); CHECK_FALSE(edit.translate(delta));
 }
+
+TEST_CASE("workspace environment draft uses guarded commands history and persistence") {
+    EditorFixture f; auto& model=*f.model;
+    REQUIRE(model.environment_draft());
+    const auto original=model.environment_draft()->value;
+    const auto revision=model.snapshot()->state.revision;
+    model.environment_draft()->modified=true;
+    REQUIRE(model.apply_environment()); // no-op does not create history
+    CHECK(model.history().undo_count==0); CHECK(model.snapshot()->state.revision==revision);
+    model.environment_draft()->value["enabled"]=true; model.environment_draft()->modified=true;
+    CHECK(model.pending()); CHECK_FALSE(model.snapshot()->scene.environment().enabled);
+    REQUIRE(model.apply_environment());
+    CHECK(model.snapshot()->scene.environment().enabled); CHECK(model.history().undo_count==1);
+    REQUIRE(model.undo()); CHECK(model.environment_draft()->value==original);
+    REQUIRE(model.redo()); CHECK(model.environment_draft()->value["enabled"]==true);
+    model.environment_draft()->value["sun"]["irradiance"]={2,3,4}; model.environment_draft()->modified=true;
+    REQUIRE(model.save()); CHECK_FALSE(model.dirty());
+    const auto saved=model.environment_draft()->value;
+    REQUIRE(model.open("project.json")); CHECK(model.environment_draft()->value==saved);
+    CHECK(model.history().undo_count==0);
+}
+TEST_CASE("workspace environment invalid and stale drafts retain input and reject partial save") {
+    EditorFixture f; auto& model=*f.model; f.select();
+    const auto original=model.environment_draft()->value;
+    model.environment_draft()->value["sun"]["direction"]={0,0,0}; model.environment_draft()->modified=true;
+    REQUIRE_FALSE(model.apply_environment()); CHECK(model.pending()); CHECK(model.history().undo_count==0);
+    REQUIRE(model.refresh()); CHECK(model.environment_draft()->value["sun"]["direction"]==Json::array({0,0,0}));
+    REQUIRE(model.revert_environment()); CHECK(model.environment_draft()->value==original);
+    model.environment_draft()->guard.revision+=1; model.environment_draft()->modified=true;
+    REQUIRE(model.apply_environment().error().code==ErrorCode::conflict); CHECK(model.pending());
+    REQUIRE(model.revert_environment());
+    model.environment_draft()->value["enabled"]=true; model.environment_draft()->modified=true;
+    model.draft()->entity.name="Conflicting local drafts"; model.draft()->modified=true;
+    REQUIRE_FALSE(model.save()); CHECK(model.history().undo_count==0); CHECK(model.pending());
+    CHECK_FALSE(model.snapshot()->scene.environment().enabled);
+    REQUIRE(model.revert()); REQUIRE(model.save()); CHECK(model.snapshot()->scene.environment().enabled);
+}
+TEST_CASE("environment camera uses compatible projection and matching pick rays") {
+    Camera camera{true}; const auto revision=camera.revision();
+    camera.set_environment(true); CHECK(camera.revision()==revision+1); CHECK(camera.near_plane()==1);
+    const auto ray=camera.ray({.3,.6},1.6).value();
+    CHECK(camera.project(ray.origin+ray.direction*4,1.6)->isApprox(Vec2d{.3,.6},1e-10));
+    camera.set_environment(false); CHECK(camera.near_plane()==.05);
+}

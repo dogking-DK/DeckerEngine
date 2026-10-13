@@ -1,7 +1,7 @@
 ---
 module: jobs-command-reference
 created_at: "2026-09-28T15:02:00+08:00"
-updated_at: "2026-10-03T21:44:26+08:00"
+updated_at: "2026-10-13T11:25:00+08:00"
 status: accepted
 ---
 
@@ -17,7 +17,7 @@ JobId 与同步命令 TaskId、JSON-RPC id 各自独立。提交命令返回的 
 | jobs.cancel | id | `{job,accepted}` | control |
 
 Job 为 `{id,state,cancel_requested,result,error}`，state 为 queued/running/succeeded/failed/cancelled。
-资产成功 result 为 `{root_id,key,cache_hit}`；截图成功 result 为 [CaptureResult](render.md)，带 kind="capture" 与 document_id/scene_id/revision/frame/尺寸/output/draw_count。
+资产成功 result 为 `{root_id,key,cache_hit}`；截图成功 result 为 [CaptureResult](render.md)，带 kind="capture" 与 document_id/scene_id/revision/frame/尺寸/output/draw_count，以及冻结环境/相机/曝光/质量/时间/shader指纹provenance。
 未成功 result 为 null；失败 error 为 `{code,message,context}`，其余为 null。
 启用截图时 result schema 使用两类结果的可选字段并集（当前 schema 子集无 oneOf）；服务保证返回完整的一种结果，调用者按 kind="capture" 区分。
 CPU-only 注册仍采用原资产结果的必填 schema。

@@ -152,3 +152,8 @@ VS2026 用户打开 `out/build/windows-editor/DeckerEngine.slnx`，选择 Debug/
 详细边界见 [工作台设计](../design/editor.md)、[交互设计](../design/editor-interaction.md)，
 验收证据见 [0065](../development/0065-editor-workbench.md)、[0066](../development/0066-editor-interaction.md)、
 [0067](../development/0067-ipc-client.md)、[0068](../development/0068-editor-consistency.md)。
+
+
+环境面板、后台大气视口、near/far与曝光约定、capture冻结信息和跨入口验收见
+[大气使用指南](atmosphere.md#编辑器和脚本m146)。它使用同一Scene环境和Undo/Redo历史；
+未应用草稿不改变视口，外部编辑导致旧guard冲突时先Revert再编辑。

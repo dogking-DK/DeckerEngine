@@ -6,15 +6,25 @@
 
 namespace dk::editor::detail {
 namespace {
-constexpr std::array names={"initial","gui","external","draft","conflict","undo","redo","saved","reloaded"};
+constexpr std::array names={"initial","gui","external","draft","conflict","undo","redo","saved","reloaded","gizmo"};
 void require(bool value,const char* message) {
     if (!value) throw std::runtime_error{std::string{"Consistency smoke: "}+message};
 }
-std::span<const char* const> actions(std::size_t stage) {
+std::span<const char* const> actions(std::size_t stage,bool environment) {
     static constexpr std::array gui={"viewport","name",":all",":name","translation",":all",":translation","apply"};
     static constexpr std::array draft={"name",":all",":draft"};
     static constexpr std::array conflict={"apply","revert"};
     static constexpr std::array undo={"undo"},redo={"redo"},save={"save"},reload={"reload"};
+    if(environment) {
+        static constexpr std::array env_gui={"environment_open","environment_enabled","environment_apply"};
+        static constexpr std::array env_draft={"environment_open","environment_enabled"};
+        static constexpr std::array env_conflict={"environment_apply","environment_revert"};
+        static constexpr std::array env_gizmo={"viewport","gizmo_0",":drag",":release"};
+        if(stage==9) return env_gizmo;
+        if(stage==1) return env_gui;
+        if(stage==3) return env_draft;
+        if(stage==4) return env_conflict;
+    }
     switch (stage) {
     case 1: return gui;
     case 3: return draft;
@@ -37,28 +47,34 @@ Json entity(const EntityData& value) {
 Json camera(const Camera& value) {
     const Mat4d world=value.world().matrix();
     const Vec3d eye=world.block<3,1>(0,3),target=eye-world.block<3,1>(0,2),up=world.block<3,1>(0,1);
-    return {{"eye",vector(eye)},{"target",vector(target)},{"up",vector(up)},{"fov_y",65},{"near",0.05},{"far",10000}};
+    return {{"eye",vector(eye)},{"target",vector(target)},{"up",vector(up)},{"fov_y",65},{"near",value.near_plane()},{"far",value.far_plane()}};
 }
 }
-ConsistencyDriver::ConsistencyDriver(const std::filesystem::path& root) : directory_(root/".dk-consistency") {
+ConsistencyDriver::ConsistencyDriver(const std::filesystem::path& root,bool environment) : directory_(root/(environment ? ".dk-environment" : ".dk-consistency")),environment_(environment) {
     require(std::filesystem::create_directory(directory_),"checkpoint directory must be fresh");
 }
-void ConsistencyDriver::input(WorkbenchUi& ui) {
+void ConsistencyDriver::input(WorkbenchUi& ui,const Workspace& model,const Viewport& viewport) {
     if (done_) return;
     if (waiting_) {
         if (!std::filesystem::is_regular_file(directory_/(std::string{names[stage_]}+".continue"))) return;
         waiting_=false; ready_=false; tick_=0;
-        if (++stage_==names.size()) { done_=true; return; }
+        if (++stage_==(environment_ ? names.size() : names.size()-1)) { done_=true; return; }
+    }
+    if(environment_ && stage_==9 && tick_==0) {
+        if(viewport.error().empty() && !viewport.current(model.snapshot()->state)) return;
+        gizmo_revision_=model.snapshot()->state.revision;
     }
     auto& io=ImGui::GetIO(); io.ConfigInputTrickleEventQueue=false;
     if (tick_++<12) return;
-    const auto sequence=actions(stage_);
+    const auto sequence=actions(stage_,environment_);
     const auto elapsed=tick_-13,step=elapsed/8,phase=elapsed%8;
     if (step>=sequence.size()) { ready_=true; return; }
     const std::string_view action=sequence[step];
     if (phase==0) {
         io.AddFocusEvent(true);
         if (action==":all") { io.AddKeyEvent(ImGuiMod_Ctrl,true); io.AddKeyEvent(ImGuiKey_A,true); }
+        else if (action==":drag") pointer_.x+=40;
+        else if (action==":release") io.AddMouseButtonEvent(0,false);
         else if (action==":name") io.AddInputCharactersUTF8("GUI consistency");
         else if (action==":translation") io.AddInputCharactersUTF8("0.25");
         else if (action==":draft") io.AddInputCharactersUTF8("Stale GUI draft");
@@ -71,10 +87,11 @@ void ConsistencyDriver::input(WorkbenchUi& ui) {
     io.AddMousePosEvent(pointer_.x,pointer_.y);
     if (phase==1) {
         if (action==":all") { io.AddKeyEvent(ImGuiKey_A,false); io.AddKeyEvent(ImGuiMod_Ctrl,false); }
-        else if (!action.starts_with(":")) io.AddMouseButtonEvent(0,false);
+        else if (!action.starts_with(":") && !(environment_ && stage_==9 && action=="gizmo_0")) io.AddMouseButtonEvent(0,false);
     }
 }
 void ConsistencyDriver::verify(const Workspace& model,const WorkbenchUi& ui,const Viewport& viewport) const {
+    if(environment_) { verify_environment(model,ui,viewport); return; }
     const auto* snapshot=model.snapshot();
     require(snapshot && !ui.closing() && viewport.texture() && viewport.error().empty(),"missing scene or valid viewport");
     require(!ui.input().active() && viewport.current(snapshot->state) && viewport.camera_current(ui.input().camera()),"viewport is stale or contains an uncommitted preview");
@@ -107,8 +124,30 @@ void ConsistencyDriver::verify(const Workspace& model,const WorkbenchUi& ui,cons
             pixels==prior_pixels(7),"Reload changed persisted content/image or retained old session"); break;
     }
 }
+void ConsistencyDriver::verify_environment(const Workspace& model,const WorkbenchUi& ui,const Viewport& viewport) const {
+    const auto* snapshot=model.snapshot();
+    require(snapshot && !ui.closing() && viewport.texture() && viewport.error().empty(),"missing environment viewport");
+    require(!ui.input().active() && viewport.current(snapshot->state) && viewport.camera_current(ui.input().camera()),"stale environment viewport");
+    require(ui.errors()==(stage_>=4 ? 1u : 0u),"unexpected environment command errors");
+    const auto revision=snapshot->state.revision,pixels=viewport.pixel_signature(); const auto history=model.history();
+    const auto rev=[&](std::size_t i) { return checkpoints_[i]["state"]["revision"].get<std::uint64_t>(); };
+    const auto sig=[&](std::size_t i) { return checkpoints_[i]["viewport"]["rgba_signature"].get<std::uint64_t>(); };
+    switch(stage_) {
+    case 0: require(!model.dirty() && !snapshot->scene.environment().enabled,"environment fixture must start saved/disabled"); break;
+    case 1: require(snapshot->scene.environment().enabled && !model.pending() && revision==rev(0)+1 && history.undo_count==1 && pixels!=sig(0),"GUI environment Apply failed"); break;
+    case 2: require(!model.pending() && revision==rev(1)+1 && history.undo_count==2 && pixels!=sig(1),"external environment not visible"); break;
+    case 3: require(model.pending() && !model.environment_draft()->value["enabled"].get<bool>() && revision==rev(2) && pixels==sig(2),"environment draft changed committed frame"); break;
+    case 4: require(!model.pending() && model.environment_draft()->value["enabled"].get<bool>() && revision==rev(3)+1 && history.undo_count==3 && pixels!=sig(3),"stale environment Apply or Revert failed"); break;
+    case 5: require(revision==rev(4)+1 && history.undo_count==2 && history.redo_count==1 && pixels==sig(2),"environment Undo failed"); break;
+    case 6: require(revision==rev(5)+1 && history.undo_count==3 && history.redo_count==0 && pixels==sig(4),"environment Redo failed"); break;
+    case 7: require(!model.dirty() && revision==rev(6) && pixels==sig(6),"environment Save failed"); break;
+    case 9: require(revision==gizmo_revision_+1 && !model.pending() && model.draft() && model.draft()->entity.local.translation.x()!=0,"asynchronous environment Gizmo did not commit"); break;
+    case 8: require(snapshot->state.document_id.to_string()!=checkpoints_[7]["state"]["document_id"].get<std::string>() && !model.dirty() && !model.pending() && history.undo_count==0 && revision==rev(7) && pixels==sig(7),"environment Reload failed"); break;
+    }
+}
 void ConsistencyDriver::presented(const Workspace& model,const WorkbenchUi& ui,const Viewport& viewport) {
     if (done_ || waiting_ || !ready_) return;
+    if(environment_ && viewport.error().empty() && (!viewport.current(model.snapshot()->state) || !viewport.camera_current(ui.input().camera()))) return;
     verify(model,ui,viewport);
     const auto& snapshot=*model.snapshot(); const auto& info=viewport.info();
     const auto rgba=viewport.retained_pixels();
@@ -130,6 +169,11 @@ void ConsistencyDriver::presented(const Workspace& model,const WorkbenchUi& ui,c
             {"revision",info.revision},{"frame",info.frame},{"width",info.width},{"height",info.height},{"draw_count",info.draw_count},
             {"camera",camera(viewport.published_camera())},{"rgba_signature",viewport.pixel_signature()},
             {"image",".dk-consistency/"+stage+".ppm"},{"preview",false}}}};
+    if(environment_) {
+        report["environment_draft"]=model.environment_draft()->value;
+        report["viewport"]["image"]=".dk-environment/"+stage+".ppm";
+        report["viewport"]["discarded"]=viewport.environment_discarded();
+    }
     const auto text=report.dump(2);
     check(write_file_bytes_atomic(directory_/(stage+".json"),std::as_bytes(std::span{text.data(),text.size()})));
     checkpoints_[stage_]=std::move(report); waiting_=true;

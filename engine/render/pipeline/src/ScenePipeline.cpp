@@ -10,6 +10,9 @@
 #endif
 #include <new>
 #include <numbers>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
 
 namespace dk::render {
 using namespace graphics;
@@ -26,6 +29,9 @@ struct PipelineState {
     std::array<Program,2> aerial;
     Sampler aerial_sampler;
     std::filesystem::path directory;
+#ifdef DK_RENDER_SUNLIGHT
+    std::optional<AtmosphereRenderer> atmosphere;
+#endif
 };
 struct FrameState {
     FrameInfo info;
@@ -421,6 +427,42 @@ Result<RenderFrame> ScenePipeline::render(SubmissionQueue& queue,const RenderVie
 }
 Result<RenderFrame> ScenePipeline::render_sunlight(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings) {
     return render_impl(queue,view,assets,settings,view.scene().environment().enabled ? &sky : nullptr);
+}
+Result<RenderFrame> ScenePipeline::render_environment(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings) {
+    if(!view.scene().environment().enabled) return render(queue,view,assets,settings);
+#ifdef DK_RENDER_SUNLIGHT
+    if(!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty scene pipeline"});
+    std::optional<AtmosphereRenderer> candidate;
+    if(!state_->atmosphere) {
+        auto renderer=AtmosphereRenderer::create(state_->heap,queue,state_->directory/"../../engine/render/atmosphere/shaders");
+        if(!renderer) return std::unexpected(renderer.error()); candidate=std::move(*renderer);
+    }
+    auto& renderer=state_->atmosphere ? *state_->atmosphere : *candidate;
+    auto sky=renderer.prepare(queue,view.scene().environment(),view.description().camera_world.matrix().topRightCorner<3,1>());
+    if(!sky) return std::unexpected(sky.error());
+    auto frame=render_atmosphere(queue,view,assets,*sky,settings);
+    if(frame && candidate) state_->atmosphere=std::move(candidate);
+    return frame;
+#else
+    return std::unexpected(Error{ErrorCode::not_supported,"environment rendering requires DK_BUILD_RENDER_ATMOSPHERE"});
+#endif
+}
+Result<std::string> shader_fingerprint(const std::filesystem::path& directory,bool environment) {
+    const std::array files{"scene.slang","tone.slang","sunlight.slang","aerial.slang",
+        "../../engine/render/atmosphere/shaders/atmosphere.slang","../../engine/render/atmosphere/shaders/AtmosphereTransport.slang"};
+    std::uint64_t hash=14695981039346656037ULL;
+    auto append=[&](unsigned char c) { hash^=c; hash*=1099511628211ULL; };
+    for(unsigned i=0;i<(environment ? files.size() : 2);++i) {
+        for(const unsigned char c:std::string_view(files[i])) append(c); append(0);
+        std::ifstream stream(directory/files[i],std::ios::binary);
+        if(!stream) return std::unexpected(Error{ErrorCode::io_error,"cannot read render shader fingerprint input"});
+        char c; while(stream.get(c)) append(static_cast<unsigned char>(c));
+        if(!stream.eof()) return std::unexpected(Error{ErrorCode::io_error,"cannot finish render shader fingerprint"});
+        append(0);
+    }
+    // CPU-side sampling/mapping version, including the fixed 64 x 64 x 128 AP grid.
+    for(const unsigned char c:std::string_view{"render-environment-v1:64x64x128:128"}) append(c);
+    std::ostringstream out; out<<"fnv1a64:"<<std::hex<<std::setfill('0')<<std::setw(16)<<hash; return out.str();
 }
 Result<RenderFrame> ScenePipeline::render_atmosphere(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings,const AtmosphereSettings& atmosphere) {
     const bool enabled=view.scene().environment().enabled;

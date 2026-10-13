@@ -51,8 +51,9 @@ void ViewportInput::image(Workspace& model,Viewport& preview,std::map<std::strin
     auto& io=ImGui::GetIO(); const Vec2d mouse=vector(io.MousePos),uv=(mouse-minimum).cwiseQuotient(size);
     controls["viewport"]=point(minimum+size/2); controls["viewport_empty"]=point(minimum+Vec2d{size.x()*0.03,size.y()*0.03});
     const bool modal=ImGui::IsPopupOpen(nullptr,ImGuiPopupFlags_AnyPopupId|ImGuiPopupFlags_AnyPopupLevel);
-    if (io.AppFocusLost || modal || !model.snapshot() || !preview.current(model.snapshot()->state) ||
+    if (io.AppFocusLost || modal || !model.snapshot() ||
         !preview.error().empty()) { cancel(); return; }
+    if (active() && (edit_->guard.document_id!=model.snapshot()->state.document_id || edit_->guard.revision!=model.snapshot()->state.revision)) { cancel(); return; }
     if (ImGui::IsKeyPressed(ImGuiKey_Escape,false)) { cancel(); return; }
     const bool hovered=ImGui::IsItemHovered();
     if (!active() && !io.WantTextInput) {
@@ -66,7 +67,7 @@ void ViewportInput::image(Workspace& model,Viewport& preview,std::map<std::strin
         if (hovered && ImGui::IsKeyPressed(ImGuiKey_F,false) && model.selection())
             camera_.frame(preview.bounds(*model.selection(),model.snapshot()->scene),aspect);
     }
-    if (!preview.camera_current(camera_) || navigation_>=0) return;
+    if ((!active() && !preview.current(model.snapshot()->state)) || !preview.camera_current(camera_) || navigation_>=0) return;
     auto* draw=ImGui::GetWindowDrawList();
     draw->PushClipRect(point(minimum),point(minimum+size),true);
     const auto project=[&](const Vec3d& p) -> std::optional<Vec2d> {

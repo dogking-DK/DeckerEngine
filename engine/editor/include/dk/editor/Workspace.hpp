@@ -12,6 +12,7 @@ struct InspectorDraft {
     EntityData entity;
     bool modified = false;
 };
+struct EnvironmentDraft { EditGuard guard; Json value; bool modified=false; };
 struct SimulationDraft {
     ClothConfig cloth;
     bool gpu = false;
@@ -33,6 +34,10 @@ public:
     [[nodiscard]] Result<void> select(std::optional<EntityId> id);
     [[nodiscard]] Result<void> apply();
     [[nodiscard]] Result<void> revert();
+    [[nodiscard]] Result<void> apply_environment();
+    [[nodiscard]] Result<void> revert_environment();
+    [[nodiscard]] EnvironmentDraft* environment_draft() { return environment_ ? &*environment_ : nullptr; }
+    [[nodiscard]] const EnvironmentDraft* environment_draft() const { return environment_ ? &*environment_ : nullptr; }
     [[nodiscard]] Result<void> save();
     [[nodiscard]] Result<void> undo();
     [[nodiscard]] Result<void> redo();
@@ -66,7 +71,7 @@ public:
     [[nodiscard]] const std::filesystem::path& manifest() const { return manifest_; }
     [[nodiscard]] InspectorDraft* draft() { return draft_ ? &*draft_ : nullptr; }
     [[nodiscard]] const InspectorDraft* draft() const { return draft_ ? &*draft_ : nullptr; }
-    [[nodiscard]] bool pending() const { return draft_ && draft_->modified; }
+    [[nodiscard]] bool pending() const { return (draft_ && draft_->modified) || (environment_ && environment_->modified); }
     [[nodiscard]] bool dirty() const { return pending() || (snapshot_ && snapshot_->state.dirty); }
     [[nodiscard]] std::optional<EntityId> selection() const { return selection_; }
     [[nodiscard]] HistoryStatus history() const { return history_; }
@@ -79,6 +84,7 @@ private:
     std::optional<SceneReadSnapshot> snapshot_;
     std::optional<EntityId> selection_;
     std::optional<InspectorDraft> draft_;
+    std::optional<EnvironmentDraft> environment_;
     std::filesystem::path manifest_;
     HistoryStatus history_{};
     SimulationDraft simulation_draft_;

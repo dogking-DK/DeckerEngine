@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-10-13T10:48:32+08:00"
+updated_at: "2026-10-13T11:44:00+08:00"
 status: accepted
 ---
 
@@ -153,3 +153,16 @@ Graph 显式声明深度附件到compute sampled、体积storage到sampled、合
 近远景、地平线/遮挡边缘独立检查；CPU有限段高采样参考与GPU reference、不同near/far/高度/视角、RGB吸收、
 alpha-mask、真空/零距离、曝光只执行一次、disabled完整图一致，以及创建/提交/预算/版本/队列/在途寿命。
 不达标时调整采样/映射并记录，不放宽阈值；性能和上层集成留给后续阶段。
+
+## M14.6 上层共用环境入口
+
+render_environment(queue,view,assets,settings)根据冻结RenderScene环境选择旧render或显式render_atmosphere。
+启用时惰性创建AtmosphereRenderer并同步prepare相机锚点，复用实例最近LUT；调用方必须放在允许等待的worker。
+不把这一入口当成无等待的render_atmosphere。CPU-only条件编译保持，未构建大气时明确拒绝enabled。
+shader_fingerprint(directory,environment)提供固定相关Slang源码集的诊断指纹，包含共享传输文件和算法标识；不承担密码学完整性。
+
+M14.6集成补充：投影矩阵反算near/far的两个上界允许1e-10相对舍入容差，
+以接纳数学上恰好far/near=10000的合法投影；不扩大实际支持域，超过上界1e-6的输入仍拒绝。
+
+共用入口首次prepare使用候选AtmosphereRenderer，整帧成功提交后才保留该实例；
+首次传错队列或视图失败不把调用者的错误队列固化进缓存，后续合法调用可恢复。已有实例仍遵循AtmosphereRenderer的队列校验。

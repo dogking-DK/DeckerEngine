@@ -41,7 +41,35 @@ render::ViewDescription view_description(const CaptureRequest& r) {
     require(v.projection.allFinite(),"Capture projection overflow");
     return v;
 }
-struct Completion { std::filesystem::path output; ByteBuffer ppm; std::string summary; };
+nlohmann::json environment_json(const EnvironmentDescription& e) {
+    return {{"version", 1}, {"enabled", e.enabled},
+        {"atmosphere", {{"planet_center_m", e.atmosphere.planet_center_m},
+        {"ground_radius_m", e.atmosphere.ground_radius_m},
+        {"atmosphere_height_m", e.atmosphere.atmosphere_height_m},
+        {"rayleigh_scattering_per_m", e.atmosphere.rayleigh_scattering_per_m},
+        {"rayleigh_scale_height_m", e.atmosphere.rayleigh_scale_height_m},
+        {"mie_scattering_per_m", e.atmosphere.mie_scattering_per_m},
+        {"mie_extinction_per_m", e.atmosphere.mie_extinction_per_m},
+        {"mie_scale_height_m", e.atmosphere.mie_scale_height_m},
+        {"mie_anisotropy", e.atmosphere.mie_anisotropy},
+        {"absorption_extinction_per_m", e.atmosphere.absorption_extinction_per_m},
+        {"absorption_center_height_m", e.atmosphere.absorption_center_height_m},
+        {"absorption_half_width_m", e.atmosphere.absorption_half_width_m},
+        {"ground_albedo", e.atmosphere.ground_albedo}}},
+        {"sun", {{"direction", e.sun.direction},
+        {"irradiance", e.sun.irradiance},
+        {"angular_radius_rad", e.sun.angular_radius_rad}}}};
+}
+std::string provenance(const CaptureRequest& r,const EnvironmentDescription& environment) {
+    auto vector=[](const Vec3d& v) { return nlohmann::json::array({v.x(),v.y(),v.z()}); };
+    const auto& c=r.camera;
+    return nlohmann::json{{"environment",environment_json(environment)},
+        {"camera",{{"eye",vector(c.eye)},{"target",vector(c.target)},{"up",vector(c.up)},
+            {"fov_y",c.fov_y},{"near",c.near_plane},{"far",c.far_plane}}},
+        {"exposure",r.exposure},{"time_seconds",0},{"quality",environment.enabled ? "atmosphere_v1" : "unlit_v1"},
+        {"profile",r.profile==GltfImportProfile::strict ? "strict" : "unlit_preview"},{"shader_fingerprint",nullptr}}.dump();
+}
+struct Completion { std::filesystem::path output; ByteBuffer ppm; std::string summary; nlohmann::json provenance; };
 Result<JobQueue::Payload> render_capture(memory::ResourceHandle resource,const SceneReadSnapshot& input,
     const CaptureRequest& request,const CaptureInfo& info,render::ViewDescription view,
     const std::filesystem::path& shader_directory,const std::filesystem::path& output,std::stop_token stop) {
@@ -59,8 +87,13 @@ Result<JobQueue::Payload> render_capture(memory::ResourceHandle resource,const S
         render::FrameInfo frame_info;
         {
             auto assets=take(source.upload(queue)); checkpoint(stop);
+            const auto fingerprint=take(render::shader_fingerprint(shader_directory,input.scene.environment().enabled));
             auto pipeline=take(render::ScenePipeline::create(resource,queue,shader_directory)); checkpoint(stop);
-            auto frame=take(pipeline.render(queue,take(render::RenderView::create(source.scene(),view)),assets,render::unlit_preview_settings()));
+            auto settings=render::unlit_preview_settings(); settings.exposure=request.exposure;
+            auto frame=take(pipeline.render_environment(queue,take(render::RenderView::create(source.scene(),view)),assets,settings));
+            require(take(render::shader_fingerprint(shader_directory,input.scene.environment().enabled))==fingerprint,"Render shaders changed during capture",ErrorCode::conflict);
+            completion->provenance=nlohmann::json::parse(info.provenance);
+            completion->provenance["shader_fingerprint"]=fingerprint;
             require(take(frame.wait(queue)),"Capture GPU wait did not complete",ErrorCode::invalid_state);
             checkpoint(stop);
             frame_info=frame.info();
@@ -77,7 +110,7 @@ Result<JobQueue::Payload> render_capture(memory::ResourceHandle resource,const S
         completion->summary=nlohmann::json{{"kind","capture"},{"document_id",info.document.to_string()},
             {"scene_id",frame_info.scene.to_string()},{"revision",frame_info.revision},{"frame",frame_info.frame},
             {"width",frame_info.width},{"height",frame_info.height},{"output",info.output},
-            {"draw_count",frame_info.draw_count}}.dump();
+            {"draw_count",frame_info.draw_count},{"provenance",std::move(completion->provenance)}}.dump();
         require(completion->summary.size()<=4096,"Capture summary exceeds Job metadata limit");
         return completion;
     } catch (Error& e) { return std::unexpected(e.with_context("render.capture")); }
@@ -105,6 +138,7 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
     auto& s=*impl_; memory::ExecutionScope scope(s.context,s.render_heap);
     try {
         auto view=view_description(request);
+        require(std::isfinite(request.exposure) && request.exposure>=0 && request.exposure<=1000000,"Capture exposure must be finite in [0,1000000]");
         require(request.profile==GltfImportProfile::strict || request.profile==GltfImportProfile::unlit_preview,"Invalid capture profile");
         require(!request.output.empty() && request.output.size()<=1024,"Capture output must be 1..1024 UTF-8 bytes");
         auto relative=take(path_from_utf8(request.output));
@@ -123,7 +157,7 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
         input_bytes+=static_cast<std::size_t>(request.width)*request.height*7;
         require(s.next_frame!=UINT64_MAX,"Capture frame counter exhausted",ErrorCode::invalid_state);
         view.frame=s.next_frame;
-        CaptureInfo info{snapshot.state.document_id,{snapshot.scene.id(),snapshot.scene.revision(),view.frame,request.width,request.height,0},output_name};
+        CaptureInfo info{snapshot.state.document_id,{snapshot.scene.id(),snapshot.scene.revision(),view.frame,request.width,request.height,0},output_name,provenance(request,snapshot.scene.environment())};
         auto job=s.queue.submit([input=std::move(snapshot),request,info,view,resource=s.render_heap,shaders=s.shaders,output](std::stop_token stop) {
             return render_capture(resource,input,request,info,view,shaders,output,stop);
         },input_bytes);

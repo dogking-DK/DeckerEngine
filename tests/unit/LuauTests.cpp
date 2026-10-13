@@ -255,7 +255,7 @@ assert(not r.ok and r.error.name == "conflict")
 TEST_CASE("Luau exposes only scene commands and isolates builtin tables") {
     Script s;
     s.run(R"(
-for _, method in {"runtime.shutdown", "jobs.wait", "assets.import", "render.capture", "future.command"} do
+for _, method in {"runtime.shutdown", "assets.import", "future.command"} do
     local result = dk.command(method)
     assert(not result.ok and result.error.name == "not_supported" and result.task_id == dk.null)
 end
@@ -269,4 +269,37 @@ assert(coroutine.resume(co))
 )");
     REQUIRE_FALSE(s.runtime->stopping());
     s.run("assert(type(dk.command) == 'function'); assert(dk.command('scene.query').ok)");
+}
+
+TEST_CASE("Luau environment capture and job commands follow access levels") {
+    Script s; s.call("scene.new");
+    LuauOptions edit; edit.access=LuauAccess::edit;
+    REQUIRE(run_luau(*s.runtime,R"(
+local q=dk.command("environment.query").value
+q.environment.enabled=true
+assert(dk.command("environment.set", {guard={document_id=q.state.document_id,revision=q.state.revision},environment=q.environment}).ok)
+for _, method in {"render.capture", "jobs.cancel"} do
+    local r=dk.command(method)
+    assert(not r.ok and r.error.name=="not_supported" and r.task_id==dk.null)
+end
+)","environment-edit.luau",edit));
+    CHECK(s.call("environment.query")["environment"]["enabled"]==true);
+    LuauOptions query; query.access=LuauAccess::query;
+    REQUIRE(run_luau(*s.runtime,R"(
+assert(dk.command("environment.query").ok)
+for _, method in {"environment.set", "render.capture", "jobs.cancel"} do
+    local r=dk.command(method)
+    assert(not r.ok and r.error.name=="not_supported" and r.task_id==dk.null)
+end
+for _, method in {"jobs.get", "jobs.wait"} do
+    local r=dk.command(method) -- Missing id: service schema rejects, not the access layer.
+    assert(not r.ok and r.error.name~="not_supported")
+end
+)","environment-query.luau",query));
+    s.run(R"(
+for _, method in {"render.capture", "jobs.cancel"} do
+    local r=dk.command(method)
+    assert(not r.ok and r.error.name~="not_supported")
+end
+)");
 }

@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-12T17:49:35+08:00"
+updated_at: "2026-10-13T11:44:00+08:00"
 status: accepted
 ---
 
@@ -647,7 +647,7 @@ M14.4已完成显式日光/天空漫射接收。后续空气透视和场景集�
 | M14.3 | 大气积分参考、Transmittance/Multiple Scattering/Sky View LUT、太阳盘与行星遮光，离屏天空样例 | M14.2 | 真空T=1/L=0、有限能量、正午/日落/高空/切线参考比较；参数与相机更新只使相关LUT失效；失败不替换旧代；定量参考/缓存/失败寿命与样例均通过，[0096](development/0096-atmosphere-luts.md) | 已完成 |
 | M14.4 | 最小日光接收：可选Lambert太阳直射和天空漫射，与大气透射共用太阳 | M14.3 | 法线/剪切/负缩放及太阳方向正确；大气衰减作用于直射；保留unlit和emissive语义，不宣称PBR/几何阴影；数值、镜像/剪切、失败与样例均通过，[0097](development/0097-surface-sunlight.md) | 已完成 |
 | M14.5 | 视锥空气透视、深度距离重建、天空/几何HDR合成及受限线性诊断读回 | M14.4 | 近远景/alpha-mask遮挡、不同near/far与高度、RGB透射和曝光一致；无重复散射；关闭环境与旧基线一致；HDR数值/遮挡/曝光、失败寿命与旧链路回归通过，[0098](development/0098-aerial-perspective.md) | 已完成 |
-| M14.6 | 编辑器环境面板、快照绑定、render.capture及Python/Luau用例 | M14.5、M8/M9 | GUI与命令改同一环境，撤销/保存重载一致；固定相机/时间/质量的截图可追溯；调参旧代丢弃、resize/取消/关闭安全 | 未开始 |
+| M14.6 | 编辑器环境面板、快照绑定、render.capture及Python/Luau用例 | M14.5、M8/M9 | GUI与命令改同一环境，撤销/保存重载一致；固定相机/时间/质量的截图可追溯；调参旧代丢弃、resize/取消/关闭安全；环境GUI/IPC、固定截图、Python/Luau、后台寿命和CPU-only验收通过，[0099](development/0099-environment-integration.md) | 已完成 |
 | M14.7 | 大气质量/性能基线与阶段交付 | M14.6、M11观测 | 固定参考集数值误差与地平线连续性通过；CPU-only与required GPU分别验收；冷/热LUT、CPU/GPU/端到端与显存报告完整 | 未开始 |
 
 **交付节点D：** M14全部完成后，提供晴空/日落/高空三个可复现预设，支持远景空气透视和环境编辑/截图闭环。
@@ -745,7 +745,7 @@ M12全部完成。M13.1已完成，见[0089](development/0089-experiment-plan-in
 M13.3已完成，见[0091](development/0091-experiment-recovery.md)：批处理强杀后接续、成功项核验跳过、
 原票据/run核实及显式重试保留历史通过。M13.4已完成，见[0092](development/0092-experiment-reports.md)：
 参数/seed扫描自动生成可追溯报告，CPU-only与GPU图像分别验收，300拍重跑和跨后端容差通过。
-**M0–M13已完成。M14.1环境CPU模型/单位/持久化与命令已完成，见[0094](development/0094-environment-model.md)；M14.2体积图像/深度采样底座已完成，见[0095](development/0095-volume-images.md)；M14.3积分参考、T/MS/Sky LUT与独立天空已完成，见[0096](development/0096-atmosphere-luts.md)；M14.4最小Lambert日光/天空漫射已完成，见[0097](development/0097-surface-sunlight.md)；M14.5视锥空气透视/深度重建/HDR合成与受限线性读回已完成，见[0098](development/0098-aerial-perspective.md)。下一项为M14.6，M14其余阶段和M15仍待实现。**
+**M0–M13已完成。M14.1环境CPU模型/单位/持久化与命令已完成，见[0094](development/0094-environment-model.md)；M14.2体积图像/深度采样底座已完成，见[0095](development/0095-volume-images.md)；M14.3积分参考、T/MS/Sky LUT与独立天空已完成，见[0096](development/0096-atmosphere-luts.md)；M14.4最小Lambert日光/天空漫射已完成，见[0097](development/0097-surface-sunlight.md)；M14.5视锥空气透视/深度重建/HDR合成与受限线性读回已完成，见[0098](development/0098-aerial-perspective.md)。M14.6环境面板/异步视口、可追溯capture及Python/Luau闭环已完成，见[0099](development/0099-environment-integration.md)。下一项为M14.7，M14质量/性能交付及M15仍待实现。**
 编辑器 Play 视口已在 M12 验收，批量实验在 M13 验收；检查点、其他平台与发布打包仍未纳入本轮扩展。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。

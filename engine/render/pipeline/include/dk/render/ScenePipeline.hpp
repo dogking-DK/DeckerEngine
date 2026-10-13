@@ -21,6 +21,8 @@ struct AtmosphereSettings {
 };
 // Shared by the editor viewport and Runtime capture for reproducible unlit previews.
 [[nodiscard]] inline RenderSettings unlit_preview_settings() { return {{0.04f,0.08f,0.16f},1,false}; }
+// Diagnostic source fingerprint; includes the shader include closure.
+[[nodiscard]] Result<std::string> shader_fingerprint(const std::filesystem::path&, bool environment);
 [[nodiscard]] Result<void> validate_render_settings(const RenderView&, const RenderSettings&);
 struct FrameInfo {
     SceneId scene;
@@ -61,6 +63,9 @@ public:
     // A disabled scene uses unlit; requires DK_BUILD_RENDER_ATMOSPHERE when enabled.
     [[nodiscard]] Result<RenderFrame> render_sunlight(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
         const AtmosphereSky&, const RenderSettings& = {});
+    // Synchronous LUT preparation followed by asynchronous frame submission; call from a worker.
+    [[nodiscard]] Result<RenderFrame> render_environment(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
+        const RenderSettings& = {});
     // Finite forward-Z perspective; the sky anchor must equal camera position.
     [[nodiscard]] Result<RenderFrame> render_atmosphere(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
         const AtmosphereSky&, const RenderSettings& = {}, const AtmosphereSettings& = {});

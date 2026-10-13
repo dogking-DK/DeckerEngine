@@ -81,6 +81,8 @@
 | Lambert 日光/天空漫射、法线/双面/alpha-mask、失败及在途寿命 | dk_surface_sunlight_probe | `^dk\.render\.sunlight_(normals\|direct\|diffuse\|failures)_gpu_validation$`（required GPU，同步 validation，无跳过） |
 | 视锥空气透视/透视深度/HDR读回、遮挡/曝光/失败寿命 | dk_aerial_perspective_probe | `^dk\.render\.aerial_(numeric\|composition\|failures)_gpu_validation$`（required GPU，同步 validation，无跳过） |
 | 日光接收正午/日落/暮光球体离屏样例 | dk_sunlight_demo | `^dk\.render\.sunlight_demo_gpu_validation$`（required GPU） |
+| 后台环境预览旧代/尺寸替换、取消、失败恢复与在途关闭 | dk_environment_preview_tests | `^dk\.editor\.environment_worker_gpu_validation$`（required GPU） |
+| 环境GUI/IPC、冻结截图与实际Python/Luau闭环 | dk_editor_app / dk_run / dk_ctl | `^dk\.editor\.environment_consistency_gpu_validation$`（required GPU；Luau开启） |
 | 磁盘 Scene/glTF/CPU 产物、身份/预算与只读失败保护 | dk_render_disk_tests | `^dk\.render\.disk\.` |
 | 磁盘到 GPU 图像、alpha mask、重载与上传部分失败 | dk_render_disk_probe | `^dk\.render\.disk_gpu_validation$`（gpu label；77 为跳过） |
 | 默认 Sponza 磁盘渲染示例 | dk_render_demo | `^dk\.render\.sponza_validation$`（gpu/local-assets；77 为跳过） |

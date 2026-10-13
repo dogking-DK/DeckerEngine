@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-08T16:10:00+08:00"
-updated_at: "2026-10-08T16:57:18+08:00"
+updated_at: "2026-10-13T11:25:00+08:00"
 ---
 
 # Python 自动化
@@ -151,3 +151,6 @@ CMake 找到 Python 3.11+ 时注册 Python CTest；未找到时明确提示。
 
 CPU-only 配置筛选 `^dk\.python\.(unit|cpu)$`。GPU 验收要求 Vulkan 验证层，
 环境不可用会失败，不会把跳过当通过。实际证据见 [0072](../development/0072-python-automation.md)。
+
+
+环境截图示例、固定相机/时间/质量和来源元数据见[大气指南](atmosphere.md#编辑器和脚本m146)。

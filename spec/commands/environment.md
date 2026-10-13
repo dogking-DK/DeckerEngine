@@ -1,14 +1,15 @@
 ---
 module: command-reference-environment
 created_at: "2026-10-12T15:10:00+08:00"
-updated_at: "2026-10-12T15:10:00+08:00"
+updated_at: "2026-10-13T11:25:00+08:00"
 status: accepted
 ---
 
 # 场景环境命令
 
 [返回命令目录](README.md)。环境为场景级CPU状态，默认disabled，保存、事务与历史均包含它。
-当前阶段只提供参数编辑/持久化与RenderScene提取；天空、日光、空气透视和GUI面板在后续阶段接入。
+启用环境后，已开启大气模块的Edit视口和render.capture显示天空、Lambert日光/天空漫射和空气透视。
+编辑器Environment面板复用这两条命令及同一撤销历史；参数/渲染支持域见[大气指南](../guides/atmosphere.md)。
 实现：[环境模型](../../engine/scene/include/dk/scene/Environment.hpp)、
 [Operations](../../engine/framework/operations/src/SceneOperations.cpp)。
 

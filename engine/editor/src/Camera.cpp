@@ -20,7 +20,7 @@ Transformd Camera::world() const {
     return Transformd::from_matrix(m).value();
 }
 Mat4d Camera::projection(double aspect) const {
-    constexpr double near=0.05,far=10000;
+    const double near=near_plane(),far=far_plane();
     Mat4d m=Mat4d::Zero(); m(0,0)=1/(tangent*aspect); m(1,1)=-1/tangent;
     m(2,2)=far/(near-far); m(2,3)=far*near/(near-far); m(3,2)=-1; return m;
 }
@@ -32,7 +32,7 @@ Result<geometry::Ray> Camera::ray(const Vec2d& uv,double aspect) const {
     const Vec3d local{(2*uv.x()-1)*tangent*aspect,-(2*uv.y()-1)*tangent,-1};
     const Vec3d direction=transform.transform_direction(local.normalized()).value();
     // Ray interval matches near/far clipping planes, not spherical distance shells.
-    return geometry::Ray{transform.matrix().block<3,1>(0,3),direction,0.05*local.norm(),10000*local.norm()};
+    return geometry::Ray{transform.matrix().block<3,1>(0,3),direction,near_plane()*local.norm(),far_plane()*local.norm()};
 }
 std::optional<Vec2d> Camera::project(const Vec3d& point,double aspect) const {
     const Vec4d h=clip(aspect)*Vec4d{point.x(),point.y(),point.z(),1};

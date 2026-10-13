@@ -25,7 +25,7 @@ TEST_CASE("capture discovery and invalid inputs do not start jobs or change scen
     CHECK_FALSE(c.call("render.capture",{{"output","a.ppm"}}));
     auto state=c.value("scene.new"); auto history=c.value("history.status");
     const Json guard={{"document_id",state["document_id"]},{"revision",state["revision"]}};
-    const Json bad=GENERATE(Json{{"width",0}},Json{{"height",2049}},Json{{"unknown",true}},
+    const Json bad=GENERATE(Json{{"width",0}},Json{{"height",2049}},Json{{"unknown",true}},Json{{"exposure",-1}},Json{{"exposure",1000001}},
         Json{{"output","../escape.ppm"}},Json{{"output","a.png"}},Json{{"output","missing/a.ppm"}},
         Json{{"camera",{{"eye",{0,0,0}},{"target",{0,0,0}}}}},
         Json{{"camera",{{"eye",{0,0,0}},{"target",{0,1,0}}}}},
@@ -45,6 +45,10 @@ TEST_CASE("capture import failure reaches Job terminal without GPU or file publi
     auto submission=c.runtime->dispatch("render.capture",{{"output","capture.ppm"}},true);
     REQUIRE(submission); REQUIRE(submission->result); const auto ticket=*submission->result;
     CHECK(ticket["revision"]==state["revision"]); CHECK(ticket["document_id"]==state["document_id"]);
+    CHECK(ticket["provenance"]["environment"]==c.value("environment.query")["environment"]);
+    CHECK(ticket["provenance"]["shader_fingerprint"].is_null());
+    CHECK(ticket["provenance"]["time_seconds"]==0); CHECK(ticket["provenance"]["exposure"]==1);
+    CHECK(ticket["provenance"]["quality"]=="unlit_v1");
     CHECK(ticket["frame"]==1); CHECK(ticket["job_id"]!=submission->task_id.to_string());
     auto deadline=JobQueue::Clock::now()+std::chrono::seconds(5);
     for (;;) {

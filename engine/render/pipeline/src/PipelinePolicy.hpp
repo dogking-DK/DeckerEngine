@@ -13,7 +13,8 @@ inline Result<PerspectiveDepth> perspective_depth(const ViewDescription& view) {
     const double near_m=p(2,3)/p(2,2),far_m=p(2,3)/(p(2,2)+1);
     if(!p.allFinite() || p!=expected || p(0,0)<=0 || p(1,1)==0 ||
         !std::isfinite(near_m) || !std::isfinite(far_m) || near_m<=0 || far_m<=near_m ||
-        far_m>1e6 || far_m/near_m>10000 ||
+        // p22 + 1 loses precision at the far/near boundary; admit double rounding only.
+        far_m>1e6*(1+1e-10) || far_m/near_m>10000*(1+1e-10) ||
         !(rotation.transpose()*rotation).isApprox(Mat3d::Identity(),1e-10) || std::abs(rotation.determinant()-1)>1e-10 ||
         (p.topLeftCorner<2,2>().diagonal().cwiseAbs().array()<.1).any() ||
         std::abs(p(0,2))>2 || std::abs(p(1,2))>2)

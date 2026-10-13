@@ -1,7 +1,7 @@
 ---
 module: scripting-luau
 created_at: "2026-10-08T14:52:00+08:00"
-updated_at: "2026-10-10T11:26:00+08:00"
+updated_at: "2026-10-13T11:44:00+08:00"
 status: accepted
 ---
 
@@ -48,7 +48,7 @@ vcpkg 实际导出名为 unofficial::luau::Luau.Compiler / unofficial::luau::Lua
 
 固定允许 scene.new/load/query/save/transaction、project.save、entity 的七条命令、
 history.status/undo/redo、commands.list/describe、runtime.capabilities、tasks.list/get；M10.1 增加文末所列模拟命令。
-精确名称白名单拒绝 shutdown、资产/作业/渲染和未来新增命令；发现返回宿主注册表，不能视为脚本授权清单。
+精确名称白名单拒绝 shutdown、资产和未显式允许的命令；M14.6增加文末所列环境/截图/作业入口；发现返回宿主注册表，不能视为脚本授权清单。
 无裸 ECS、Vulkan、文件系统、进程或模块加载能力；标准库用 Luau sandbox 冻结，移除 print/require/loadstring。
 脚本仍可通过已有 save/load 命令访问工程路径，其范围和原子性沿用 Services，不新增文件系统沙箱承诺。
 
@@ -148,3 +148,11 @@ run返回受理结果，脚本通过query的task状态判断完成，不能以�
 
 M12.3：所有访问模式允许 simulation.sample，在健康稳定边界显式采样数值并缓存带步数的结果。
 它不推进或写文件；仍受同步原生诊断的预算/不可硬抢占限制，参数与旧身份拒绝复用 Runtime。
+
+
+M14.6：environment.query、jobs.get/wait允许所有能力；environment.set允许edit/project；
+render.capture与jobs.cancel仅project。仍使用Runtime的schema、guard、Job有界队列和原子发布契约；
+未构建capture时由Runtime返回not_found，不引入CPU配置的GPU依赖。
+jobs.wait每次最多1000ms，可观察脚本预算/取消；脚本错误不自动撤销已提交Job，runner退出时Runtime取消并join。
+不添加裸文件系统、GPU或任意命令权限。可执行[环境截图示例](../../examples/scripting/environment-capture.luau)
+在成功Job中校验固定时间/质量/shader来源。权限回归同时覆盖query/edit拒绝写截图与取消作业。

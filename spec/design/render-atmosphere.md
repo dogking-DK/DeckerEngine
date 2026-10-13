@@ -1,7 +1,7 @@
 ---
 module: render-atmosphere
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-13T10:47:31+08:00"
+updated_at: "2026-10-13T11:44:00+08:00"
 status: accepted
 ---
 
@@ -233,10 +233,18 @@ required GPU validation覆盖Graph与在途销毁。离屏样例输出正午/日
 
 按[场景管线实施契约](render-pipeline.md#m144-最小日光接收实施契约)提供不可变快照的锚点与借用 LUT 图像。
 ScenePipeline 显式选择日光接收，共用快照太阳及 T/Sky 表，不修改大气缓存、不增加太阳盘漫射或空气透视。
-天空漫射在锚点近似，逐片段直射透射使用实际位置；不自动接入编辑器/capture，默认 unlit 保持。
+天空漫射在锚点近似，逐片段直射透射使用实际位置；显式入口保持默认unlit，M14.6上层根据环境开关自动选择共用入口。
 
 ## M14.5 场景空气透视边界
 
 按[管线契约](render-pipeline.md#m145-空气透视与线性合成实施契约)生成视锥 L/T 体积并合成。
 AtmosphereSky 只读公开 MS 开关，传输函数由天空与空气透视共用；快照仍不可变，缓存 key/提交点不变。
 每帧 AP 由 ScenePipeline 的 Graph 拥有，深度仅来自几何/alpha-mask；曝光前提供受限线性诊断读回。
+
+
+## M14.6 集成状态
+
+Edit视口通过独立有界worker冻结环境/相机并绑定ScenePipeline；Environment面板复用CPU命令和历史。
+Capture按冻结环境选择旧unlit或完整大气合成，结果含参数、静态时间、固定质量与shader来源。
+Python/Luau、真实GUI/IPC、保存重载和错误/取消/在途关闭已验收，详见[0099](../development/0099-environment-integration.md)、
+[编辑器设计](editor.md)、[截图设计](render-capture.md)与[指南](../guides/atmosphere.md)。M14.7性能/质量交付仍未开始。

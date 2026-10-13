@@ -7,6 +7,9 @@ class Camera final {
 public:
     explicit Camera(bool fixture=false) { reset(fixture); }
     void reset(bool fixture=false);
+    void set_environment(bool enabled) { if(environment_!=enabled) { environment_=enabled; ++revision_; } }
+    [[nodiscard]] double near_plane() const { return environment_ ? 1.0 : .05; }
+    [[nodiscard]] double far_plane() const { return 10000; }
     void orbit(double dx,double dy);
     void pan(double dx,double dy,double height);
     void dolly(double steps);
@@ -22,5 +25,6 @@ private:
     Vec3d target_=Vec3d::Zero();
     double yaw_=0,pitch_=0,distance_=2;
     std::uint64_t revision_=0;
+    bool environment_=false;
 };
 }

@@ -11,6 +11,7 @@ public:
     void toolbar(Workspace&,Viewport&,std::map<std::string,ImVec2>&);
     void image(Workspace&,Viewport&,std::map<std::string,ImVec2>&,const Report&);
     void cancel();
+    void environment(bool enabled) { camera_.set_environment(enabled); }
     [[nodiscard]] bool active() const { return bool(edit_); }
     [[nodiscard]] const Camera& camera() const { return camera_; }
     [[nodiscard]] const std::optional<TransformEdit>& edit() const { return edit_; }

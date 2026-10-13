@@ -703,3 +703,19 @@ if(TARGET dk_sunlight_demo)
     set_tests_properties(dk.render.sunlight_demo_gpu_validation PROPERTIES TIMEOUT 120 RUN_SERIAL TRUE LABELS "gpu"
         ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
 endif()
+
+if(TARGET dk_editor_app AND TARGET dk_render_atmosphere AND TARGET dk_scripting_luau AND TARGET dk_ctl AND TARGET dk_run AND WIN32)
+    find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME dk.editor.environment_consistency_gpu_validation
+            COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python" "PYTHONDONTWRITEBYTECODE=1"
+                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/EditorEnvironmentTest.py"
+                --editor "$<TARGET_FILE:dk_editor_app>" --client "$<TARGET_FILE:dk_ctl>" --runner "$<TARGET_FILE:dk_run>"
+                --fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+                --python-example "${PROJECT_SOURCE_DIR}/examples/automation/environment_capture.py"
+                --luau-example "${PROJECT_SOURCE_DIR}/examples/scripting/environment-capture.luau"
+                --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+        set_tests_properties(dk.editor.environment_consistency_gpu_validation PROPERTIES TIMEOUT 420 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+    endif()
+endif()

@@ -55,6 +55,8 @@ void WorkbenchUi::toolbar() {
     ImGui::SameLine();
     if (ImGui::Button("Reload")) { manifest_=take(path_to_utf8(model_.manifest())); request(PendingAction::open); } mark("reload");
     ImGui::Separator();
+    if(ImGui::Button("Environment")) ImGui::SetWindowFocus("Environment"); mark("environment_open");
+    ImGui::Separator();
     const auto history=model_.history();
     ImGui::BeginDisabled(model_.pending() || !history.undo_count);
     if (ImGui::Button("Undo")) report("Undo",model_.undo()); mark("undo");
@@ -72,7 +74,7 @@ void WorkbenchUi::hierarchy() {
     if (snapshot) {
         ImGui::Text("%zu entities",snapshot->state.entity_count);
         ImGui::Separator();
-        if (model_.pending()) ImGui::TextWrapped("Apply or Revert the Inspector draft before changing selection.");
+        if (model_.pending()) ImGui::TextWrapped("Apply or Revert the pending draft before changing selection.");
         using Row=std::pair<const EntityData*,unsigned>;
         std::unordered_map<EntityId,std::vector<const EntityData*>> children;
         for (const auto& e : snapshot->scene.entities()) children[e.parent.value_or(EntityId{})].push_back(&e);
@@ -109,7 +111,7 @@ void WorkbenchUi::inspector() {
     if (!draft) { ImGui::TextWrapped("Select an entity in Hierarchy to inspect or edit it."); ImGui::End(); return; }
     ImGui::TextUnformatted("ENTITY"); ImGui::TextWrapped("%s",draft->entity.id.to_string().c_str());
     ImGui::Separator();
-    ImGui::BeginDisabled(input_.active());
+    ImGui::BeginDisabled(input_.active() || (model_.environment_draft() && model_.environment_draft()->modified));
     bool modified=false;
     ImGui::SetNextItemWidth(-1);
     modified|=ImGui::InputText("##Name",&draft->entity.name); mark("name");
@@ -174,7 +176,7 @@ void WorkbenchUi::confirmation() {
     if (popup_) { ImGui::OpenPopup("Unsaved changes"); popup_=false; }
     ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(),ImGuiCond_Appearing,{0.5f,0.5f});
     if (ImGui::BeginPopupModal("Unsaved changes",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::TextUnformatted("The current scene or Inspector draft has unsaved changes.");
+        ImGui::TextUnformatted("The scene or an editing draft has unsaved changes.");
         ImGui::TextUnformatted("Save before continuing?");
         if (ImGui::Button("Save and continue") && report("Save",model_.save())) { perform(); ImGui::CloseCurrentPopup(); } mark("confirm_save");
         ImGui::SameLine();
@@ -203,16 +205,19 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
         const auto log=ImGui::DockBuilderSplitNode(bottom,ImGuiDir_Right,0.48f,nullptr,&bottom);
         ImGui::DockBuilderDockWindow("Hierarchy",left); ImGui::DockBuilderDockWindow("Inspector",right);
         ImGui::DockBuilderDockWindow("Simulation",simulation);
+        ImGui::DockBuilderDockWindow("Environment",right);
         ImGui::DockBuilderDockWindow("Viewport",center); ImGui::DockBuilderDockWindow("Assets",bottom);
         ImGui::DockBuilderDockWindow("Console",log); ImGui::DockBuilderFinish(dock);
+        ImGui::SetWindowFocus("Inspector");
         layout_=true;
     }
-    hierarchy(); inspector();
+    hierarchy(); inspector(); environment();
+    input_.environment(model_.snapshot() && model_.snapshot()->scene.environment().enabled);
     const bool visible=ImGui::Begin("Viewport",nullptr,ImGuiWindowFlags_NoScrollWithMouse|ImGuiWindowFlags_NoScrollbar);
     if (!visible) input_.cancel();
     if (!simulation_view(preview,visible)) {
     preview.show_edit();
-    ImGui::TextUnformatted("UNLIT PREVIEW"); ImGui::SameLine();
+    ImGui::TextUnformatted(model_.snapshot() && model_.snapshot()->scene.environment().enabled ? "ATMOSPHERE" : "UNLIT PREVIEW"); ImGui::SameLine();
     ImGui::BeginDisabled(input_.active());
     if (ImGui::SmallButton("Refresh")) preview.retry();
     ImGui::EndDisabled();
@@ -226,7 +231,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
         if (available.x>=32 && available.y>=32) {
             const auto width=static_cast<std::uint32_t>(std::clamp(available.x,32.0f,1600.0f));
             const auto height=static_cast<std::uint32_t>(std::clamp(available.y,32.0f,1200.0f));
-            preview.update(*s,width,height,srgb,input_.camera(),input_.edit(),input_.revision());
+            preview.update(*s,width,height,srgb,input_.camera(),input_.edit(),input_.revision(),exposure_);
             if (preview.texture()) {
                 const auto& info=preview.info();
                 const float scale=std::min(available.x/static_cast<float>(info.width),available.y/static_cast<float>(info.height));

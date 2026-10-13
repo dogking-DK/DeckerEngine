@@ -26,6 +26,7 @@ private:
     void hierarchy();
     void inspector();
     void assets();
+    void environment();
     void console();
     void simulation();
     void simulation_results(const SimulationRunState*);
@@ -53,5 +54,6 @@ private:
     PendingAction pending_ = PendingAction::none;
     bool popup_ = false,closing_ = false,layout_ = false,scroll_log_ = true;
     unsigned errors_ = 0;
+    float exposure_=1;
 };
 }

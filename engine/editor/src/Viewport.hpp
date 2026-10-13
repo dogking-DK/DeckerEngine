@@ -5,15 +5,16 @@
 #include <dk/render/ScenePipeline.hpp>
 #include <dk/graphics/CommandEncoder.hpp>
 #include <imgui.h>
+#include "EnvironmentPreview.hpp"
 
 namespace dk::editor::detail {
 class Viewport final {
 public:
-    Viewport(memory::ResourceHandle heap,graphics::SubmissionQueue& queue,bool retain_pixels=false);
+    Viewport(memory::MemorySystem&,memory::ResourceHandle heap,graphics::SubmissionQueue& queue,const graphics::DeviceOptions&,bool retain_pixels=false);
     ~Viewport();
     // Previous GUI submission must be complete. Backend must be initialized.
     void update(const SceneReadSnapshot&,std::uint32_t width,std::uint32_t height,bool srgb,const Camera&,
-        const std::optional<TransformEdit>&,std::uint64_t preview_revision);
+        const std::optional<TransformEdit>&,std::uint64_t preview_revision,float exposure=1);
     void update_simulation(Workspace&,const SimulationRunState&,std::uint32_t width,std::uint32_t height,const Camera&);
     void show_edit();
     void retry_simulation() { simulation_view_.reset(); }
@@ -27,6 +28,7 @@ public:
     [[nodiscard]] geometry::Bounds bounds(EntityId,const SceneSnapshot&) const;
     [[nodiscard]] bool camera_current(const Camera& camera) const { return !simulation_run_ && published_camera_==camera.revision(); }
     void retry() { attempted_.reset(); asset_session_.reset(); }
+    [[nodiscard]] std::uint64_t environment_discarded() const { return environment_.discarded(); }
     void release_texture();
     [[nodiscard]] ImTextureID texture() const { return reinterpret_cast<ImTextureID>(descriptor_); }
     [[nodiscard]] const graphics::Image& image() const { return image_; }
@@ -36,19 +38,23 @@ public:
     // Camera of the last Edit image, used for entity picking and Edit consistency checks only.
     [[nodiscard]] const Camera& published_camera() const { return camera_; }
     [[nodiscard]] std::span<const std::byte> retained_pixels() const { return pixels_; }
-    [[nodiscard]] bool current(const DocumentState& s) const { return published_session_==s.document_id && info_.revision==s.revision; }
+    [[nodiscard]] bool current(const DocumentState& s) const { return published_session_==s.document_id && info_.revision==s.revision && published_==attempted_; }
     [[nodiscard]] const std::string& error() const { return error_; }
 private:
     struct Key {
         DocumentId session; std::uint64_t revision; std::uint32_t width,height; bool srgb;
         std::uint64_t camera,preview;
+        float exposure;
         bool operator==(const Key&) const = default;
     };
+    void publish(std::vector<std::byte>,const render::FrameInfo&,render::RenderScene,const Camera&,const Key&);
     memory::ResourceHandle heap_;
     graphics::SubmissionQueue& queue_;
     render::ScenePipeline pipeline_;
+    EnvironmentPreview environment_;
+    std::uint64_t environment_sequence_=0;
     std::optional<DocumentId> asset_session_,published_session_;
-    std::optional<Key> attempted_;
+    std::optional<Key> attempted_,published_;
     std::optional<SimulationId> simulation_run_;
     std::optional<SimulationView> simulation_view_;
     std::uint64_t simulation_steps_=0,simulation_sequence_=0,simulation_published_=0;
@@ -64,7 +70,6 @@ private:
     std::vector<std::byte> pixels_;
     Camera camera_;
     render::RenderScene scene_;
-    struct PickMesh { AssetId id; geometry::MeshQuery query; };
     std::vector<PickMesh> meshes_;
 };
 }

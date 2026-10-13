@@ -104,7 +104,7 @@ air.surface_lighting=false 用原 unlit 表面参与空气透视；air.sun_disk=
 air.reference=true 限4096像素，以高采样直接积分作诊断（MS仍为同一闭合近似）。
 linear_readback 关闭时不会分配线性读回缓冲；开启后 wait 完成才能读，得到曝光前 HDR，RGBA8输出仍可照常读取。
 每帧两张64×64×128 RGBA32F L/T体积共16MiB，接近地表截断边界的像素直接积分以避免插值偏差；不跨帧缓存。
-disabled环境走原unlit，旧render/render_sunlight不自动添加天空或空气透视。Editor/capture装配属于M14.6。
+disabled环境走原unlit，旧render/render_sunlight不自动添加天空或空气透视。Editor/capture通过render_environment自动按环境开关绑定；C++调用者仍可用显式入口。
 
 ```powershell
 & ./scripts/verify.ps1 -BuildDir out/build/windows-graphics `
@@ -114,3 +114,47 @@ disabled环境走原unlit，旧render/render_sunlight不自动添加天空或空
 
 探针在构建目录 tests/integration 下输出近远/高空和mask的PPM，数值证据来自HDR而非tone后的图像。
 验收与实际限制见[0098](../development/0098-aerial-perspective.md)。
+
+
+## 编辑器和脚本（M14.6）
+
+编辑器顶部Environment按钮切换到环境面板。修改草稿后Apply environment创建一个撤销单元；
+Revert丢弃本地草稿并取当前环境。外部命令修改时保留草稿及原guard，过期Apply显示冲突，
+不会覆盖外部结果。Undo/Redo/Save/Reload与命令操作同一Scene；Save也会应用草稿。
+环境关闭时仍校验参数，但保持原unlit预览。曝光只属于视口会话，截图需显式传相同值。
+环境模式near=1m/far=10000m，关闭模式near=.05m；近于1m的几何会被裁剪。
+初始世界原点在球面地表，跨到地表以下的几何不在当前渲染支持域；
+render-disk示例将planet_center_m.y设置为-ground_radius_m-1000，使全部模型位于安全高度。
+
+大气准备在后台进行，画面准备好后才发布；状态改变时可能短暂保留旧帧并标为过期。
+修改请求会合并，旧结果不覆盖新参数。关闭/取消等待已提交GPU回收，不承诺硬中断驱动。
+Simulation布料视口仍使用自身渲染入口。当前固定静态时间0和atmosphere_v1质量，性能基线属于后续M14.7。
+
+两个示例对render-disk夹具应用相同环境，使用128×96、eye=[0,0,4]/target=[0,0,0]、曝光1、时间0和同一质量：
+
+```powershell
+cmake --preset windows-editor -DDK_BUILD_SCRIPTING_LUAU=ON
+cmake --build out/build/windows-editor --config Debug --target dk_editor_app dk_run dk_ctl
+# 先将 tests/fixtures/render-disk 复制到新的 out/environment-demo 目录。
+# 编辑器打开该副本，并以 --pipe dk-environment-demo 启用IPC。
+$env:PYTHONPATH = "$PWD/sdk/python"
+python examples/automation/environment_capture.py --pipe dk-environment-demo --ctl out/build/windows-editor/bin/Debug/dk-ctl.exe --project-root out/environment-demo
+# 关闭编辑器后，用独立runner操作同一夹具；该脚本自行scene.load。
+out/build/windows-editor/bin/Debug/dk-run.exe --project-root out/environment-demo --script examples/scripting/environment-capture.luau --script-timeout-ms 120000
+```
+
+Python输出包含Job来源元数据；脚本分别生成environment-python.ppm、environment-luau.ppm，覆盖同名文件，
+不隐式保存编辑后的环境。完整capture字段与原子发布/取消语义见[命令参考](../commands/render.md)。
+
+定向验收使用Debug、required GPU与同步validation，GUI自动加--background：
+
+```powershell
+& ./scripts/verify.ps1 -BuildDir out/build/windows-editor `
+  -Target @('dk_editor_app','dk_run','dk_ctl','dk_environment_preview_tests') `
+  -TestRegex '^dk\.editor\.environment_(worker|consistency)_gpu_validation$' -Reason 'M14.6环境集成'
+```
+
+真实GUI流程验证面板Apply、外部修改、草稿冲突、Undo/Redo、Save/Reload；
+冻结旧版本capture与GUI原图、重载capture与GUI新图逐字节比较，实际运行Python/Luau示例并比较图像。
+GUI另验证异步预览期间Gizmo提交与截图；后台测试单独验证错队列恢复、尺寸替换、旧代丢弃、取消、失败恢复和在途关闭。产物位于构建目录test-artifacts/Debug/environment-*。
+同设备/驱动的固定夹具验收不代表跨GPU像素恒等。证据见[0099](../development/0099-environment-integration.md)。

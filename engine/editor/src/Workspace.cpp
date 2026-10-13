@@ -4,7 +4,7 @@
 
 namespace dk::editor {
 namespace {
-Error pending_error() { return {ErrorCode::invalid_state,"Apply or Revert the Inspector draft first."}; }
+Error pending_error() { return {ErrorCode::invalid_state,"Apply or Revert the pending draft first."}; }
 Json guard_json(EditGuard guard) { return {{"document_id",guard.document_id.to_string()},{"revision",guard.revision}}; }
 }
 Result<std::unique_ptr<Workspace>> Workspace::create(const std::filesystem::path& root) {
@@ -66,7 +66,7 @@ Result<void> Workspace::open(const std::filesystem::path& manifest, bool discard
     auto result=call("scene.load",std::move(params));
     if (!result) return std::unexpected(result.error());
     manifest_=manifest;
-    selection_.reset(); draft_.reset();
+    selection_.reset(); draft_.reset(); environment_.reset();
     return refresh();
 }
 Result<void> Workspace::refresh() {
@@ -80,9 +80,12 @@ Result<void> Workspace::refresh() {
     auto history=call("history.status");
     if (!history) return std::unexpected(history.error());
     if (!snapshot_ || snapshot_->state.document_id!=candidate->state.document_id) {
-        selection_.reset(); draft_.reset();
+        selection_.reset(); draft_.reset(); environment_.reset();
     }
     snapshot_=std::move(*candidate);
+    if(!environment_ || !environment_->modified) {
+        auto env=revert_environment(); if(!env) return env;
+    }
     manifest_=snapshot_->manifest;
     history_={history->at("undo_count").get<std::size_t>(),history->at("redo_count").get<std::size_t>(),
         history->at("logical_bytes").get<std::size_t>()};
@@ -90,7 +93,7 @@ Result<void> Workspace::refresh() {
         const auto entities=snapshot_->scene.entities();
         if (std::ranges::none_of(entities,[&](const auto& e) { return e.id==selection_; })) {
             selection_.reset(); draft_.reset();
-        } else if (!pending()) return revert();
+        } else if (!draft_ || !draft_->modified) return revert();
     }
     return {};
 }
@@ -113,7 +116,8 @@ Result<void> Workspace::revert() {
     return {};
 }
 Result<void> Workspace::apply() {
-    if (!pending()) return {};
+    if (!draft_ || !draft_->modified) return {};
+    if(environment_ && environment_->modified) return std::unexpected(pending_error());
     const auto& e=draft_->entity; const auto& t=e.local;
     Json transform={{"translation",{t.translation.x(),t.translation.y(),t.translation.z()}},
         {"rotation",{t.rotation.x(),t.rotation.y(),t.rotation.z(),t.rotation.w()}},
@@ -126,8 +130,23 @@ Result<void> Workspace::apply() {
     draft_->modified=false;
     return refresh();
 }
+Result<void> Workspace::revert_environment() {
+    if(!snapshot_) { environment_.reset(); return {}; }
+    auto query=call("environment.query"); if(!query) return std::unexpected(query.error());
+    environment_=EnvironmentDraft{{snapshot_->state.document_id,snapshot_->state.revision},query->at("environment"),false};
+    return {};
+}
+Result<void> Workspace::apply_environment() {
+    if(!environment_ || !environment_->modified) return {};
+    if(draft_ && draft_->modified) return std::unexpected(pending_error());
+    auto result=call("environment.set",{{"guard",guard_json(environment_->guard)},{"environment",environment_->value}});
+    if(!result) return std::unexpected(result.error());
+    environment_->modified=false; return refresh();
+}
 Result<void> Workspace::save() {
     if (!snapshot_) return std::unexpected(Error{ErrorCode::invalid_state,"Open a project before saving."});
+    if(environment_ && environment_->modified && draft_ && draft_->modified) return std::unexpected(pending_error());
+    if (auto applied=apply_environment(); !applied) return applied;
     if (auto applied=apply(); !applied) return applied;
     auto result=call("scene.save",{{"guard",guard()}});
     if (!result) return std::unexpected(result.error());

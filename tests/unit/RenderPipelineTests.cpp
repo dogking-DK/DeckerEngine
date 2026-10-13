@@ -75,3 +75,13 @@ TEST_CASE("atmosphere perspective reconstructs physical distances and rejects am
     CHECK_FALSE(validate_render_settings(RenderView::create(fixture.scene,{257,256}).value(),settings));
     CHECK_FALSE(RenderFrame{}.read_linear_rgba32f({}));
 }
+
+TEST_CASE("atmosphere perspective accepts inclusive boundaries with reconstruction rounding") {
+    for(const auto limits : {std::pair{1.,10000.},std::pair{100.,1000000.}}) {
+        ViewDescription v{32,32}; v.projection=Mat4d::Zero();
+        auto& p=v.projection; p(0,0)=1.2; p(1,1)=-1.5; p(3,2)=-1;
+        const auto set=[&](double n,double f) { p(2,2)=f/(n-f); p(2,3)=n*f/(n-f); };
+        set(limits.first,limits.second); REQUIRE(dk::render::detail::perspective_depth(v));
+        set(limits.first,limits.second*1.000001); CHECK_FALSE(dk::render::detail::perspective_depth(v));
+    }
+}
