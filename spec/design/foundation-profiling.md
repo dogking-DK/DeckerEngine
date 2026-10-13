@@ -1,7 +1,7 @@
 ---
 module: foundation-profiling
 created_at: "2026-09-23T11:41:34+08:00"
-updated_at: "2026-10-13T12:24:00+08:00"
+updated_at: "2026-10-13T20:13:08+08:00"
 status: accepted
 ---
 
@@ -237,6 +237,10 @@ GPU 时长按 timestampPeriod 和 timestampValidBits 换算；区间短于计数
 基准分别记录prepare同步wall、CPU建图/提交、Submission/Pass GPU、等待/读回及VMA安全点，
 不将父区间与子Pass相加；独立timestamp不要求Tracy。具体固定工作负载、失效判定与边界归属
 [大气采集协议](render-atmosphere.md#质量与性能采集协议)，结果见[大气基线](../benchmarks/2026-10-13-atmosphere.md)。
+
+云沿相同观测接口额外计入当帧云影 Submission，使用相同相机/时间的 air 与 unlit 基线分别估计云增量和联合增量。
+质量与性能进程分开；三轮 timestamp OFF/ON、旧 Frame 与在途候选显存诊断、完整性拒绝规则见
+[云采集协议](render-clouds.md#m157-质量与性能采集协议)，结果见[云联合报告](../benchmarks/2026-10-13-clouds.md)。
 
 ## M11.2 模拟基线协议
 

@@ -764,6 +764,31 @@ if(TARGET dk_render_clouds)
         ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
 endif()
 if(TARGET dk_render_clouds AND TARGET dk_render_pipeline AND TARGET dk_render_atmosphere)
+    add_executable(dk_cloud_benchmark CloudBenchmark.cpp)
+    set_target_properties(dk_cloud_benchmark PROPERTIES OUTPUT_NAME dk-cloud-benchmark)
+    target_link_libraries(dk_cloud_benchmark PRIVATE dk::render_pipeline dk::render_clouds dk::render_atmosphere dk::profiling nlohmann_json::nlohmann_json)
+    target_compile_definitions(dk_cloud_benchmark PRIVATE DK_RENDER_SHADER_DIR="${PROJECT_SOURCE_DIR}/shaders/render"
+        DK_ATMOSPHERE_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/atmosphere/shaders"
+        DK_CLOUD_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/clouds/shaders"
+        DK_BENCH_COMPILER="${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}" DK_BENCH_CONFIG="$<CONFIG>")
+    dk_target_defaults(dk_cloud_benchmark)
+    dk_deploy_slang(dk_cloud_benchmark)
+    find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME dk.clouds.benchmark_aggregation COMMAND "${CMAKE_COMMAND}" -E env "PYTHONDONTWRITEBYTECODE=1"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/CloudBenchmarkTest.py")
+        set_tests_properties(dk.clouds.benchmark_aggregation PROPERTIES TIMEOUT 30)
+    endif()
+    add_test(NAME dk.clouds.benchmark_gpu_validation COMMAND dk_cloud_benchmark --smoke --validation --timestamps
+        --output "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/cloud-benchmark.json")
+    set_tests_properties(dk.clouds.benchmark_gpu_validation PROPERTIES TIMEOUT 480 RUN_SERIAL TRUE LABELS "gpu"
+        ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+    foreach(preset IN ITEMS clear sparse overcast sunset)
+        add_test(NAME dk.clouds.quality_${preset}_gpu_validation COMMAND dk_cloud_benchmark --quality --validation --preset ${preset}
+            --output "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/cloud-quality-${preset}.json")
+        set_tests_properties(dk.clouds.quality_${preset}_gpu_validation PROPERTIES TIMEOUT 1200 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+    endforeach()
     add_executable(dk_cloud_composition_probe CloudCompositionProbe.cpp)
     target_link_libraries(dk_cloud_composition_probe PRIVATE dk::render_pipeline dk::render_clouds dk::render_atmosphere)
     target_include_directories(dk_cloud_composition_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")

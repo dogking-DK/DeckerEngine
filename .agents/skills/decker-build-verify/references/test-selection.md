@@ -117,6 +117,8 @@
 | 半尺寸云/跳跃/早停/低角度光照、时域反遮挡、多视图重置与失败寿命（required GPU） | dk_cloud_composition_probe | `^dk\.clouds\.(optimization\|optimization_switches\|optimization_boundaries\|temporal\|history)_gpu_composition$` |
 | 固定世界云影、独立云柱/地表数值、风/相机稳定、直射隔离、失败/预算/在途寿命（required GPU） | dk_cloud_composition_probe | `^dk\.clouds\.shadow_(numeric\|surface\|failures)_gpu_composition$`（同步validation，无跳过） |
 | 云截图冻结状态/时间、schema/quality、零云退化及失败保留文件（required GPU） | dk_run | `^dk\.clouds\.capture_gpu_composition$`（Windows/Python 3.11+） |
+| 四预设收敛参考、静态/动态/云内外质量与GPU观测生命周期（required GPU） | dk_cloud_benchmark | `^dk\.clouds\.(quality_.*\|benchmark)_gpu_validation$` |
+| 云性能报告完整性、匹配基线、云影/LUT区间与计时缺失拒绝（Python CPU） | dk_cloud_benchmark | `^dk\.clouds\.benchmark_aggregation$` |
 | 云用例清单、提交/产物来源、线性比较和缺失证据（Python CPU） | dk_run、dk_ctl | `^dk\.clouds\.cases_unit$` |
 | 固定时间序列、时域重放、云影、失败/取消与Python/Luau示例（required GPU） | dk_run、dk_ctl | `^dk\.clouds\.sequence_gpu_validation$` |
 | 云预设、GUI/IPC/截图/重载与脚本一致性（required GPU） | dk_editor_app、dk_run、dk_ctl | `^dk\.editor\.cloud_consistency_gpu_validation$`（后台窗口、同步validation） |

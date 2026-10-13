@@ -39,6 +39,7 @@ cmake --build --preset windows-debug --target dk_run
 | 云预设、固定时间截图序列和线性对比报告 | [云使用指南](spec/guides/clouds.md)、[用例清单](examples/automation/cloud-cases.json) |
 | 登记、改名、导入、缓存、异步加载与作业 | [资产指南](spec/guides/assets.md) |
 | GPU timestamp、Tracy 区间、CPU/GPU阶段关联 | [GPU 性能观测](spec/guides/gpu-profiling.md) |
+| 云静态/动态质量、1080p 联合性能与显存 | [云基准复现](spec/guides/cloud-benchmark.md)、[联合实测报告](spec/benchmarks/2026-10-13-clouds.md) |
 | CPU/GPU模拟多规模性能、采集开销与控制延迟 | [可复现基准](spec/guides/simulation-benchmark.md)、[实测报告](spec/benchmarks/2026-10-09-simulation.md) |
 | heap、拥有型容器、scratch、pool、线程上下文、Tracy | [Memory 指南](spec/guides/memory.md) |
 | Vulkan 使用层、上传/读回、绘制/计算与 GPU 探针 | [Graphics 指南](spec/guides/graphics.md) |

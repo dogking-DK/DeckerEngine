@@ -139,7 +139,7 @@ Medium trace(uint2 pixel) {
                 sigma*=cp.cloud.z/samples; densitySamples+=samples;
             }
             if(sigma>0) {
-                ++lighting; float tau=cloudSunlightOptical(ray,ray.direction.xyz*t,h,sunMu,abs(sunMu)<.2 ? 16u : 0u);
+                ++lighting; float tau=cloudSunlightOptical(ray,ray.direction.xyz*t,h,sunMu,abs(sunMu)<.2 ? 32u : 0u);
                 float3 source=cp.sky.xyz;
                 if(tau>=0) {
                     float phase=(1-cp.lighting.z)*phases.x*exp(-tau)+cp.lighting.z*(2.0/3*phases.y*exp(-tau*.5)+1.0/3*phases.z*exp(-tau*.25));

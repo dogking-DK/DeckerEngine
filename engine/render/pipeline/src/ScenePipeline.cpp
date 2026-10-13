@@ -807,7 +807,7 @@ Result<std::string> shader_fingerprint(const std::filesystem::path& directory,bo
         append(0);
     }
     // CPU-side sampling/mapping version, including the fixed 64 x 64 x 128 AP grid.
-    for(const unsigned char c:std::string_view{"render-environment-v2:64x64x128:128:cloud-joint-v1:256x64x64:cloud-reconstruct-v1:96to256x8:half-fixed:cloud-shadow-v1:sunward-inner-sphere:environment-session-v1"}) append(c);
+    for(const unsigned char c:std::string_view{"render-environment-v2:64x64x128:128:cloud-joint-v1:256x64x64:cloud-reconstruct-v1:96to256x8:half-fixed:cloud-shadow-v1:sunward-inner-sphere:environment-session-v1:low-sun-32"}) append(c);
     std::ostringstream out; out<<"fnv1a64:"<<std::hex<<std::setfill('0')<<std::setw(16)<<hash; return out.str();
 }
 Result<RenderFrame> ScenePipeline::render_atmosphere(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings,const AtmosphereSettings& atmosphere,const CloudShadowMap* shadow) {

@@ -1,7 +1,7 @@
 ---
 module: render-clouds
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-13T18:54:48+08:00"
+updated_at: "2026-10-13T20:13:08+08:00"
 status: accepted
 ---
 
@@ -216,10 +216,10 @@ Graph声明depth/opaque→mixed compute→tone/readback；不执行M14整段AP�
 长云区间按200m目标步长增加到最多256步，避免地平线长路径欠采样；工作预算按最坏256步预检。
 超过100m的步段用4个等距中点平均密度，再积分该段消光；昂贵太阳光照仍每主步一次。
 最坏采样预算包括这4次密度查询，GPU另用64位计数记录实际主密度查询数量。
-低角度太阳（局部|cos天顶角|<.2）将自遮蔽提升至至少16步，其他方向保持请求的8步默认值。
+低角度太阳（局部|cos天顶角|<.2）将自遮蔽提升至至少32步，其他方向保持请求的8步默认值。
 空气太阳透射查已有T LUT，云和空气MS模型不变。输出最多1920×1080像素，单轴≤4096；
-工作预算按最坏全像素回退加半尺寸积分计量：`(full+half)*256*(5+2*(2*max(sun_steps,16)+4))`，
-分别覆盖至多5个空气区间、2个云区间及每次至多2段太阳射线；至多64Gi采样工作，主步数≤256、请求太阳步数≤64。
+工作预算按最坏全像素回退加半尺寸积分计量：`(full+half)*256*(5+2*(2*max(sun_steps,32)+4))`，
+分别覆盖至多5个空气区间、2个云区间及每次至多2段太阳射线；至多128Gi采样工作，主步数≤256、请求太阳步数≤64。
 1080p是支持范围，不是实时性能达标声明。参考图仍使用M15.3三档收敛结果。
 
 保守空区跳跃在天气/base双线性/三线性当前格子取角点最大值：
@@ -332,3 +332,33 @@ render.capture增加显式时间/模式/云影设置；reference单帧不预热�
 Python独立版本化render-case清单显式记录工程、环境或预设、尺寸、曝光、采样模式、预热、固定相机/时间列表和云影区域。使用现有Client/guard/jobs调用；每例记录scene/document/revision、seed/generator、规范化输入SHA256、runner和shader摘要、PPM/线性数据摘要与比较结果。必须核对成功result/序列报告来源，失败/取消/缺失保留错误，不生成伪造图像或零耗时。比较只接受相同冻结物理输入、相机、时间、曝光与尺寸，reference和temporal质量模式可不同；报告线性RGB nRMSE/p99和静态帧差，不以sRGB截图代替数值。耗时标注端到端wall，不称GPU pass耗时；M15.7另验收正式性能。
 
 冻结验收：CPU预设/参数/预算/guard与旧文件保护；真实后台GUI preset/apply/undo/redo/IPC冲突/保存重载和相同参数capture像素一致；真实Python/Luau调用；reference及temporal序列可重放、空历史/预热来源明确、云影实际接入；清单摘要和失败/缺失/不兼容比较拒绝。GPU要求required同步validation，不允许跳过。
+
+## M15.7 质量与性能采集协议
+
+在采集前冻结如下协议。新增独立CloudBenchmark探针和Python矩阵驱动，复用公开ScenePipeline、AtmosphereRenderer、CloudShadowRenderer和GpuProfile；保持命令和预设物理参数，生产质量采用本节记录的低角度自遮蔽修正。
+采用environment.preset v1四个完整预设（clear/sparse/overcast/sunset），seed=1729、默认128/128/32噪声、256²/256步固定云影；Balanced对应cloud_temporal_v1默认96–256主步/8太阳步、半尺寸、默认跳跃/早停/历史，空气MS开启。
+固定曝光8、FOV=1.15rad、near/far=1/10000m，地表以上两个双面矩形（其中一个alpha-mask）及同一世界阴影区域；完整输入写入JSON，源码/二进制/图像摘要由驱动归档。
+
+质量与性能分离。质量使用required GPU与同步validation，31²线性图，静态32预热+120帧；四预设以及非零云的云内/云上视点，12帧连续相机平移/转动和显式1/30秒风时间。
+512/128/128和1024/256/256参考比较nRMSE≤.02、p99≤.04确认离散收敛；高档按裁剪投影分块保持原像素中心并遵守1Gi参考工作预算，不提高单提交预算。
+默认优化对高采样参考继续使用nRMSE≤.05、p99≤.12、边缘/反遮挡最大≤.12、云Tc绝对差≤.02；静态相邻帧差nRMS≤.01。
+太阳盘按既有M14/M15独立透射门槛单列：由视线/太阳角半径确定掩码，RGB误差除以太阳盘辐亮度≤.002；非太阳像素继续使用上述p95亮度归一门槛，未掩码全图数值仍保留。避免把约7000亮度太阳盘的float误差除以约.06的天空亮度当作云边缘误差。
+分块参考额外对照未分块同档图非太阳像素nRMSE≤.001、p99≤.002；31²使用≤16²四象限，保持既有离轴投影域。
+逐帧保留线性图/来源和度量，动态相同输入的无历史参考单列，不能以平均掩盖边缘。沿既有探针验证独立CPU/解析解、太阳/地平线、投影/反遮挡、时间回退/切换、失败/取消/关闭与在途寿命。
+质量不把低阶MS近似当路径追踪真值，不从31²推断1080p每像素误差。
+
+性能使用RelWithDebInfo、validation OFF、Tracy编译OFF；1080p，3轮×4预设×GPU timestamp OFF/ON独立进程，轮换预设与ON/OFF顺序。
+每进程分别运行combined-static、combined-motion、air-static、air-motion、unlit-static、unlit-motion六段；每段冷帧1，combined预热32、baseline预热5，稳态20帧。
+对应motion段使用完全相同的相机路径/时间；云影每次time变化重建，相机改变触发Sky重建。每段从已完成状态释放历史开始，固定输入静态段不借用其他段历史。
+CPU分别记录extract、prepare（同步LUT/云影准备，含等待）、record_submit、wait、readback和API端到端；首次设备/程序/CPU场/纹理上传单列，OS/驱动缓存不清空。
+GPU总量逐样本相加不重叠的LUT更新、云影提交和整帧Submission区间；Pass子区间仅分项，不与父区间相加。
+云增量=combined总量−匹配air总量，联合增量=combined−匹配unlit；先逐轮nearest-rank p50/p95，再报告轮间范围，负差保留不夹零。
+20样本给出的p95是有限样本估计，不宣传硬实时上限。候选云4ms、联合5.5ms不事后调整；未达如实交付差距，不伪装质量或基线采集失败。
+
+每段另做不计时显存诊断：已完成历史和外部旧Frame仍保活时提交下一帧，在wait/collect前观察VMA，再释放/完成/poll记录稳态缓存与历史。
+环境资源增量扣除仅几何/基础管线基线；device-local与host-visible可能重叠不相加，allocation需求和block保留块分列。
+稳态128MiB、含在途旧代峰值192MiB为候选；采样峰值不是驱动私有/系统总显存或精确瞬时峰值。CPU heap峰值和关闭零存活单列。
+探针结束验证VMA回到device-only、CPU活分配为0；无效参数/缺计时/丢失区间/缺失帧/输入变化/失败运行不得进入成功汇总。未采集字段用null，不填零。
+JSON先标failed，只有完整采集/验证/关闭后标passed；驱动只写新目录，保留失败日志和manifest，不自动重试或丢弃轮次。
+
+M15.7日落四预设验收发现非太阳像素最大误差超过.12；低角度自遮蔽细化至32步，预算同步按最坏工作上调并如实计入性能，不降低质量阈值。修正证据见[0107](../development/0107-cloud-delivery.md)，复现见[指南](../guides/cloud-benchmark.md)，本机结果见[联合报告](../benchmarks/2026-10-13-clouds.md)。

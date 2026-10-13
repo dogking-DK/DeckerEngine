@@ -39,7 +39,7 @@ struct CloudOptimizedSettings {
     std::uint64_t view_id=1, camera_revision=0; // Stable view identity; change camera_revision on camera selection/cut.
     bool temporal=true, empty_space_skipping=true;
     float termination_transmittance=1e-4f, history_weight=.85f;
-    std::uint64_t max_work=64ULL*1024*1024*1024; // Half image plus worst-case full-resolution fallback.
+    std::uint64_t max_work=128ULL*1024*1024*1024; // Half image plus worst-case full-resolution fallback.
     bool operator==(const CloudOptimizedSettings&) const = default;
 };
 struct CloudMediumIntegral {

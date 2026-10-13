@@ -74,7 +74,7 @@ samples 每项显式提供 camera、time_seconds、camera_cut。相机 up/fov_y/
 缺失/失败/取消项保留具体错误，不生成替代图像，未测耗时为 null；依赖失败项的比较为 failed、metrics=null。
 序列 JSON 单文件原子发布；Python 提取文件与 index 不承诺跨文件事务，输出目录不支持覆盖或 resume。
 wall_ms 是注明范围的墙钟耗时（帧渲染/等待/读回，序列含预热，用例还含命令与产物处理）；gpu_ms 固定 null，尚未测量 GPU pass 时间。
-完整动态质量、1080p 性能与显存交付见 Roadmap M15.7，不能从此小夹具推断。
+完整动态质量、1080p 性能与显存使用独立[复现流程](cloud-benchmark.md)，实测见[联合交付报告](../benchmarks/2026-10-13-clouds.md)，不能从此小夹具推断。
 
 ## 定向验证
 

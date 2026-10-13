@@ -170,6 +170,9 @@ TEST_CASE("optimization validates output sampling work and stable view identity 
     CHECK_FALSE(validate_cloud_optimization(e,settings,4097,1));
     auto bad=settings; bad.view_id=0; CHECK_FALSE(validate_cloud_optimization(e,bad,32,32));
     bad=settings; bad.max_work=1; CHECK_FALSE(validate_cloud_optimization(e,bad,32,32));
+    // Low-sun refinement must not silently exceed a caller's earlier work budget.
+    bad=settings; bad.max_work=64ULL*1024*1024*1024; CHECK_FALSE(validate_cloud_optimization(e,bad,1920,1080));
+    CHECK(validate_cloud_optimization(e,bad,960,540));
     bad=settings; bad.max_work=UINT64_MAX; CHECK_FALSE(validate_cloud_optimization(e,bad,32,32));
     bad=settings; bad.termination_transmittance=.001f; CHECK_FALSE(validate_cloud_optimization(e,bad,32,32));
     bad=settings; bad.history_weight=1; CHECK_FALSE(validate_cloud_optimization(e,bad,32,32));

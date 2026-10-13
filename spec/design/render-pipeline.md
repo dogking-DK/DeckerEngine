@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-10-13T18:54:48+08:00"
+updated_at: "2026-10-13T20:13:08+08:00"
 status: accepted
 ---
 
@@ -188,6 +188,8 @@ render_clouds_optimized使用CloudOptimizedSettings，独立于原render_clouds�
 三段Graph为half transport→completed-history reprojection→depth-preserving reconstruction；
 几何D32与表面颜色保持全尺寸。保守跳跃、早停、局部直接积分回退及误差门槛以
 [云优化契约](render-clouds.md#m154-优化与时域实施契约)为准。
+低角度重建的太阳自遮蔽最低32步；最坏工作预算同步按32步核算，上限128Gi逻辑工作量（不是显存字节）。
+shader指纹包含low-sun-32算法标记，避免将旧采样结果与本版本混用；质量与性能证据见[联合报告](../benchmarks/2026-10-13-clouds.md)。
 
 每Pipeline至多4个显式view_id，各保存半尺寸L/T/云源三张RGBA32F的已完成源与在途候选。
 候选图像在提交前分配，execute成功只发布pending；poll_cloud_history非阻塞确认完成后才能作为source。
