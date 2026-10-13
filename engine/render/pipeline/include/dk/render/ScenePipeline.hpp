@@ -2,6 +2,7 @@
 #include <dk/render/RenderScene.hpp>
 #include <dk/render/GpuAssets.hpp>
 #include <filesystem>
+#include <array>
 
 namespace dk::render {
 class AtmosphereSky;
@@ -10,7 +11,13 @@ struct RenderSettings {
     Vec3f clear_rgb = Vec3f::Zero(); // Linear HDR color.
     float exposure = 1;
     bool capture_plan = false;
-    bool sky_diffuse = true; // Only used by render_sunlight; anchor-local sky irradiance.
+    bool sky_diffuse = true; // Used by lit paths; anchor-local sky irradiance.
+    bool linear_readback = false; // Diagnostic: <= 65536 pixels, before exposure.
+};
+struct AtmosphereSettings {
+    bool surface_lighting = true;
+    bool sun_disk = true;
+    bool reference = false; // Expensive direct integration; <= 4096 pixels.
 };
 // Shared by the editor viewport and Runtime capture for reproducible unlit previews.
 [[nodiscard]] inline RenderSettings unlit_preview_settings() { return {{0.04f,0.08f,0.16f},1,false}; }
@@ -30,6 +37,7 @@ public:
     [[nodiscard]] graphics::Submission submission() const noexcept;
     [[nodiscard]] Result<bool> wait(graphics::SubmissionQueue&, std::uint64_t timeout_ns = std::numeric_limits<std::uint64_t>::max()) const;
     [[nodiscard]] Result<void> read_rgba8(std::span<std::byte> destination) const;
+    [[nodiscard]] Result<void> read_linear_rgba32f(std::span<std::array<float,4>> destination) const;
     [[nodiscard]] Result<const graphics::Image*> color() const;
     [[nodiscard]] std::string_view plan_text() const noexcept;
 private:
@@ -53,9 +61,12 @@ public:
     // A disabled scene uses unlit; requires DK_BUILD_RENDER_ATMOSPHERE when enabled.
     [[nodiscard]] Result<RenderFrame> render_sunlight(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
         const AtmosphereSky&, const RenderSettings& = {});
+    // Finite forward-Z perspective; the sky anchor must equal camera position.
+    [[nodiscard]] Result<RenderFrame> render_atmosphere(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
+        const AtmosphereSky&, const RenderSettings& = {}, const AtmosphereSettings& = {});
 private:
     [[nodiscard]] Result<RenderFrame> render_impl(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
-        const RenderSettings&, const AtmosphereSky*);
+        const RenderSettings&, const AtmosphereSky*, const AtmosphereSettings* = nullptr);
     explicit ScenePipeline(std::shared_ptr<detail::PipelineState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::PipelineState> state_;
 };

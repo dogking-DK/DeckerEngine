@@ -9,6 +9,7 @@
 #include <dk/render/Atmosphere.hpp>
 #endif
 #include <new>
+#include <numbers>
 
 namespace dk::render {
 using namespace graphics;
@@ -21,11 +22,14 @@ struct PipelineState {
     Sampler white_sampler, sky_sampler;
     PipelineLayout sunlight_depth_layout, sunlight_layout;
     GraphicsPipeline sunlight_depth, sunlight;
+    struct Program { PipelineLayout layout; ComputePipeline pipeline; };
+    std::array<Program,2> aerial;
+    Sampler aerial_sampler;
     std::filesystem::path directory;
 };
 struct FrameState {
     FrameInfo info;
-    std::size_t color = 0;
+    std::size_t color = 0, linear_readback = 0;
     graph::Execution execution;
     graph::PlanReport report;
 };
@@ -33,6 +37,7 @@ struct FrameState {
 namespace {
 template<class T> T take(Result<T> result) { if (!result) throw std::move(result.error()); return std::move(*result); }
 void check(Result<void> result) { if (!result) throw std::move(result.error()); }
+constexpr unsigned aerial_side=64,aerial_depth=128;
 constexpr auto color_range = vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor,0,1,0,1};
 constexpr auto depth_range = vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eDepth,0,1,0,1};
 constexpr auto depth_stages = vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests;
@@ -103,6 +108,63 @@ void resolve(Inputs& result,const RenderView& view,const GpuAssets& assets) {
     }
 }
 #ifdef DK_RENDER_SUNLIGHT
+struct AerialParameters {
+    std::array<float,4> geometry,rayleigh,mie,extinction,absorption,ground,sun,forward,right,up,sun_direction;
+    std::array<std::uint32_t,4> frame;
+    std::array<float,4> depth;
+};
+static_assert(sizeof(AerialParameters)==208);
+Buffer prepare_aerial(detail::PipelineState& state,const RenderView& view,const AtmosphereSky& sky,const AtmosphereSettings& settings) {
+    const auto projection=take(detail::perspective_depth(view.description()));
+    const auto environment=take(sky.environment());
+    const Vec3d anchor=take(sky.position_m());
+    if(environment!=view.scene().environment() || anchor!=view.description().camera_world.matrix().topRightCorner<3,1>())
+        throw Error{ErrorCode::invalid_argument,"atmosphere snapshot must match scene environment and camera position"};
+    if(settings.reference && std::uint64_t(view.description().width)*view.description().height>4096)
+        throw Error{ErrorCode::invalid_argument,"atmosphere reference is limited to 4096 pixels"};
+    const auto& a=environment.atmosphere; const auto& sun=environment.sun;
+    const Vec3d center{a.planet_center_m[0],a.planet_center_m[1],a.planet_center_m[2]},up=(anchor-center).normalized();
+    const Vec3d direction{sun.direction[0],sun.direction[1],sun.direction[2]};
+    Vec3d x=direction-up*direction.dot(up); if(x.norm()<1e-8) x=up.unitOrthogonal(); else x.normalize();
+    Mat3d basis; basis.row(0)=x; basis.row(1)=up; basis.row(2)=x.cross(up);
+    const Mat3d camera=basis*view.description().camera_world.matrix().topLeftCorner<3,3>();
+    const auto& projection_matrix=view.description().projection;
+    auto pack=[](const auto& v,double w,double scale=1) { return std::array<float,4>{float(v[0]*scale),float(v[1]*scale),float(v[2]*scale),float(w)}; };
+    AerialParameters p{};
+    const double height=take(atmosphere_height_m(a,{anchor.x(),anchor.y(),anchor.z()}));
+    p.geometry={float(a.ground_radius_m*.001),float(a.atmosphere_height_m*.001),float(height*.001),float(up.dot(direction))};
+    p.rayleigh=pack(a.rayleigh_scattering_per_m,a.rayleigh_scale_height_m*.001,1000);
+    p.mie=pack(a.mie_scattering_per_m,a.mie_scale_height_m*.001,1000);
+    p.extinction=pack(a.mie_extinction_per_m,a.mie_anisotropy,1000);
+    p.absorption=pack(a.absorption_extinction_per_m,a.absorption_center_height_m*.001,1000);
+    p.ground=pack(a.ground_albedo,a.absorption_half_width_m*.001);
+    const double sine=std::sin(sun.angular_radius_rad),half_sine=std::sin(sun.angular_radius_rad*.5);
+    p.sun=pack(sun.irradiance,1/(std::numbers::pi*sine*sine));
+    p.sun_direction=pack((basis*direction).eval(),4*half_sine*half_sine);
+    p.forward=pack((camera*Vec3d{projection_matrix(0,2)/projection_matrix(0,0),projection_matrix(1,2)/projection_matrix(1,1),-1}).eval(),0);
+    p.right=pack((camera.col(0)/projection_matrix(0,0)).eval(),0);
+    p.up=pack((camera.col(1)/projection_matrix(1,1)).eval(),take(sky.multiple_scattering_enabled()) ? 1 : 0);
+    p.frame={view.description().width,view.description().height,settings.reference ? 1u : 0u,settings.sun_disk ? 1u : 0u};
+    p.depth={float(projection_matrix(2,2)),float(projection_matrix(2,3)*.001),float(projection.far_m*.001),0};
+    auto uniform=take(state.factory.create_buffer({sizeof(p),vk::BufferUsageFlagBits::eUniformBuffer,BufferMemory::upload}));
+    check(uniform.write(0,std::as_bytes(std::span{&p,1})));
+    if(!state.aerial[0].pipeline) {
+        std::array<detail::PipelineState::Program,2> programs;
+        for(unsigned i=0;i<2;++i) {
+            const auto side=std::to_string(aerial_side),depth=std::to_string(aerial_depth);
+            const std::array defines{ShaderDefine{"DK_AIR_SIDE",side},ShaderDefine{"DK_AIR_DEPTH",depth},ShaderDefine{"DK_VOLUME","1"}};
+            auto code=take(compile_shader({state.directory/"aerial.slang","computeMain",ShaderStage::compute,{},
+                std::span<const ShaderDefine>{defines}.first(i==0 ? 3 : 2)},state.heap));
+            auto shader=take(state.factory.create_shader(code)); const std::array shaders{&shader};
+            programs[i].layout=take(state.factory.create_pipeline_layout(shaders));
+            programs[i].pipeline=take(state.factory.create_compute_pipeline({&shader,&programs[i].layout}));
+        }
+        SamplerDesc desc; desc.address_u=desc.address_v=desc.address_w=vk::SamplerAddressMode::eClampToEdge;
+        auto sampler=take(state.factory.create_sampler(desc));
+        state.aerial=std::move(programs); state.aerial_sampler=std::move(sampler);
+    }
+    return uniform;
+}
 void prepare_sunlight(detail::PipelineState& state) {
     if(state.sunlight) return;
     auto compile=[&](const char* entry,ShaderStage stage,std::string_view define={}) {
@@ -193,6 +255,9 @@ struct Context {
     const RenderSettings& settings;
     std::uint32_t width, height;
     std::size_t hdr, depth, ldr, white;
+    std::size_t composed=0,linear_readback=0,parameters=0;
+    std::array<std::size_t,3> atmosphere_luts{};
+    std::array<std::size_t,2> volumes{};
 };
 Result<void> clear_pass(graph::PassContext& pass,void* pointer) {
     const auto& c = *static_cast<Context*>(pointer);
@@ -249,7 +314,7 @@ Result<void> geometry_pass(graph::PassContext& pass,void* pointer) {
 }
 Result<void> tone_pass(graph::PassContext& pass,void* pointer) {
     auto& c = *static_cast<Context*>(pointer);
-    auto input = take(c.pipeline.factory.create_view(*take(pass.image(c.hdr))));
+    auto input = take(c.pipeline.factory.create_view(*take(pass.image(c.composed ? c.composed : c.hdr))));
     auto output = take(c.pipeline.factory.create_view(*take(pass.image(c.ldr))));
     const std::array writes{BindingWrite{0,0,ImageBinding{&input}}};
     auto bindings = take(c.pipeline.factory.create_bindings(c.pipeline.tone_layout,0,writes));
@@ -260,19 +325,51 @@ Result<void> tone_pass(graph::PassContext& pass,void* pointer) {
     check(encoder.push_constants(vk::ShaderStageFlagBits::eFragment,0,std::as_bytes(std::span{parameters})));
     check(encoder.draw(3)); return encoder.end();
 }
+Result<void> aerial_pass(graph::PassContext& pass,void* pointer) {
+    auto& c=*static_cast<Context*>(pointer);
+    const bool volume=pass.pass_index()==3;
+    auto& program=c.pipeline.aerial[volume ? 0 : 1];
+    std::array<ImageView,8> views;
+    std::array<BindingWrite,10> writes{BindingWrite{0,0,BufferBinding{take(pass.buffer(c.parameters))}},
+        BindingWrite{2,0,SamplerBinding{&c.pipeline.aerial_sampler}}};
+    std::size_t count=2;
+    for(unsigned i=0;i<(volume ? 2u : 3u);++i) {
+        views[i]=take(c.pipeline.factory.create_view(*take(pass.image(c.atmosphere_luts[i]))));
+        writes[count++]={3+i,0,ImageBinding{&views[i]}};
+    }
+    for(unsigned i=0;i<2;++i) {
+        views[3+i]=take(c.pipeline.factory.create_view(*take(pass.image(c.volumes[i])),{vk::ImageViewType::e3D,color_range}));
+        writes[count++]={6+i,0,ImageBinding{&views[3+i],volume ? vk::ImageLayout::eGeneral : vk::ImageLayout::eShaderReadOnlyOptimal}};
+    }
+    if(!volume) {
+        views[5]=take(c.pipeline.factory.create_view(*take(pass.image(c.composed))));
+        views[6]=take(c.pipeline.factory.create_view(*take(pass.image(c.depth)),{vk::ImageViewType::e2D,depth_range}));
+        views[7]=take(c.pipeline.factory.create_view(*take(pass.image(c.hdr))));
+        writes[count++]={1,0,ImageBinding{&views[5],vk::ImageLayout::eGeneral}};
+        writes[count++]={8,0,ImageBinding{&views[6],vk::ImageLayout::eShaderReadOnlyOptimal}};
+        writes[count++]={9,0,ImageBinding{&views[7]}};
+    }
+    auto bindings=take(c.pipeline.factory.create_bindings(program.layout,0,std::span{writes}.first(count)));
+    auto encoder=take(pass.compute()); check(encoder.bind_pipeline(program.pipeline));
+    const std::array sets{&bindings}; check(encoder.bind_sets(sets));
+    return encoder.dispatch({volume ? (aerial_side+7)/8 : (c.width+7)/8,volume ? (aerial_side+7)/8 : (c.height+7)/8,volume ? aerial_depth : 1u});
+}
 template<auto Record> Result<void> record(graph::PassContext& pass,void* context) {
     try { return Record(pass,context); }
     catch (Error& error) { return std::unexpected(std::move(error)); }
 }
 Result<void> copy_pass(graph::PassContext& pass,void* pointer) {
     const auto& c = *static_cast<Context*>(pointer);
-    return pass.copy_to_buffer(c.ldr,0,{0,0,0,0,c.width,c.height});
+    check(pass.copy_to_buffer(c.ldr,0,{0,0,0,0,c.width,c.height}));
+    if(c.linear_readback) check(pass.copy_to_buffer(c.composed ? c.composed : c.hdr,c.linear_readback,{0,0,0,0,c.width,c.height}));
+    return {};
 }
 }
 Result<void> validate_render_settings(const RenderView& view,const RenderSettings& settings) {
     const auto& desc = view.description();
     if (!view.scene() || !desc.width || !desc.height ||
         std::uint64_t{desc.width}*desc.height > std::numeric_limits<std::size_t>::max()/4 ||
+        (settings.linear_readback && std::uint64_t{desc.width}*desc.height>65536) ||
         !std::isfinite(settings.exposure) || settings.exposure < 0 || !settings.clear_rgb.allFinite() || (settings.clear_rgb.array()<0).any())
         return std::unexpected(Error{ErrorCode::invalid_argument,"render requires a scene, addressable extent and finite nonnegative color/exposure"});
     return {};
@@ -325,7 +422,11 @@ Result<RenderFrame> ScenePipeline::render(SubmissionQueue& queue,const RenderVie
 Result<RenderFrame> ScenePipeline::render_sunlight(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings) {
     return render_impl(queue,view,assets,settings,view.scene().environment().enabled ? &sky : nullptr);
 }
-Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings,const AtmosphereSky* sky) {
+Result<RenderFrame> ScenePipeline::render_atmosphere(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings,const AtmosphereSettings& atmosphere) {
+    const bool enabled=view.scene().environment().enabled;
+    return render_impl(queue,view,assets,settings,enabled ? &sky : nullptr,enabled ? &atmosphere : nullptr);
+}
+Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings,const AtmosphereSky* sky,const AtmosphereSettings* atmosphere) {
     DK_PROFILE_ZONE("render.scene");
     if (!state_ || state_->heap.state()!=memory::ResourceState::open || queue.stats().closed || queue.stats().device_lost)
         return std::unexpected(Error{ErrorCode::invalid_state,"scene pipeline, memory or queue is unavailable"});
@@ -337,12 +438,16 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
     try {
         const auto heap=state_->heap;
         Inputs inputs{heap}; resolve(inputs,view,assets);
+        Buffer aerial_uniform;
         if(sky) {
 #ifdef DK_RENDER_SUNLIGHT
-            resolve_sunlight(inputs,view,*sky,settings,*state_);
-            prepare_sunlight(*state_);
+            if(atmosphere) aerial_uniform=prepare_aerial(*state_,view,*sky,*atmosphere);
+            if(!atmosphere || atmosphere->surface_lighting) {
+                resolve_sunlight(inputs,view,*sky,settings,*state_);
+                prepare_sunlight(*state_);
+            }
 #else
-            return std::unexpected(Error{ErrorCode::not_supported,"Lambert rendering requires DK_BUILD_RENDER_ATMOSPHERE"});
+            return std::unexpected(Error{ErrorCode::not_supported,"environment rendering requires DK_BUILD_RENDER_ATMOSPHERE"});
 #endif
         }
         auto frame=memory::make_shared_in<detail::FrameState>(heap);
@@ -361,16 +466,27 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
                 uniform ? vk::AccessFlagBits2::eUniformRead : (vertex ? vk::AccessFlagBits2::eVertexAttributeRead : vk::AccessFlagBits2::eIndexRead)));
             external.push_back({i+1,buffer,nullptr,{}});
         }
+        graph::ResourceId constants{},linear_readback{};
+        std::size_t parameters_index=0;
+        if(atmosphere) {
+            parameters_index=graph.counts().buffers;
+            constants=take(graph.declare_buffer("aerial parameters",aerial_uniform.description(),graph::Lifetime::external,true));
+            external.push_back({parameters_index,&aerial_uniform});
+        }
+        if(settings.linear_readback) {
+            frame->linear_readback=graph.counts().buffers;
+            linear_readback=take(graph.declare_buffer("linear RGBA32F readback",{vk::DeviceSize{width}*height*16,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
+        }
         const auto image_base=graph.counts().buffers;
         const auto hdr=take(graph.declare_image("linear HDR",{width,height,vk::Format::eR32G32B32A32Sfloat,
-            vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst}));
+            vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc}));
         const auto depth=take(graph.declare_image("scene depth",{width,height,vk::Format::eD32Sfloat,
             vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled}));
         const auto ldr=take(graph.declare_image("sRGB RGBA8",{width,height,vk::Format::eR8G8B8A8Unorm,
             vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled}));
         const auto white=take(graph.declare_image("default white",{1,1}));
         Context context{*state_,inputs,settings,width,height,image_base,image_base+1,image_base+2,image_base+3};
-        frame->color=context.ldr;
+        frame->color=context.ldr; context.linear_readback=frame->linear_readback; context.parameters=parameters_index;
         const std::array clear_uses{use(hdr,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal,true),
             use(depth,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal,true,true),
             use(ldr,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal,true),
@@ -385,30 +501,74 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             geometry.push_back(use(id,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal));
         }
         static_cast<void>(take(graph.add_pass({"depth prepass",geometry})));
+        std::array<graph::ResourceId,3> lut_ids{};
+#ifdef DK_RENDER_SUNLIGHT
         if(sky) {
-            for(const auto* image : {inputs.transmittance,inputs.sky}) {
-                const auto index=graph.counts().buffers+graph.counts().images;
-                const auto id=take(graph.declare_image(image==inputs.sky ? "lighting sky LUT" : "lighting transmittance LUT",
-                    image->description(),graph::Lifetime::external,true));
-                external.push_back({index,nullptr,image,{}});
-                geometry.push_back(use(id,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal));
+            const std::array luts{AtmosphereLut::transmittance,AtmosphereLut::multiple_scattering,AtmosphereLut::sky_view};
+            for(unsigned i=0;i<3;++i) {
+                if(!atmosphere && i==1) continue;
+                const auto* image=take(sky->image(luts[i]));
+                context.atmosphere_luts[i]=graph.counts().buffers+graph.counts().images;
+                lut_ids[i]=take(graph.declare_image("atmosphere LUT "+std::to_string(i),image->description(),graph::Lifetime::external,true));
+                external.push_back({context.atmosphere_luts[i],nullptr,image,{}});
+                if(inputs.sky && i!=1) geometry.push_back(use(lut_ids[i],vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal));
             }
         }
+#endif
         geometry.push_back(use(hdr,vk::PipelineStageFlagBits2::eColorAttachmentOutput,color_access,vk::ImageLayout::eColorAttachmentOptimal));
         static_cast<void>(take(graph.add_pass({"opaque",geometry})));
-        const std::array tone_uses{use(hdr,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal),
+        auto final_hdr=hdr;
+        if(atmosphere) {
+            constexpr auto compute=vk::PipelineStageFlagBits2::eComputeShader;
+            constexpr auto sampled=vk::AccessFlagBits2::eShaderSampledRead;
+            std::array<graph::ResourceId,2> volumes;
+            ImageDesc volume{aerial_side,aerial_side,vk::Format::eR32G32B32A32Sfloat,vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled};
+            volume.type=vk::ImageType::e3D; volume.depth=aerial_depth; volume.require_linear_filter=true;
+            for(unsigned i=0;i<2;++i) {
+                context.volumes[i]=graph.counts().buffers+graph.counts().images;
+                volumes[i]=take(graph.declare_image(i==0 ? "air radiance 3D" : "air transmittance 3D",volume));
+            }
+            const std::array volume_uses{use(constants,compute,vk::AccessFlagBits2::eUniformRead),
+                use(lut_ids[0],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal),
+                use(lut_ids[1],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal),
+                use(volumes[0],compute,vk::AccessFlagBits2::eShaderStorageWrite,vk::ImageLayout::eGeneral,true),
+                use(volumes[1],compute,vk::AccessFlagBits2::eShaderStorageWrite,vk::ImageLayout::eGeneral,true)};
+            static_cast<void>(take(graph.add_pass({"aerial perspective volume",volume_uses})));
+            context.composed=graph.counts().buffers+graph.counts().images;
+            final_hdr=take(graph.declare_image("composed linear HDR",{width,height,vk::Format::eR32G32B32A32Sfloat,
+                vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc}));
+            const std::array composite_uses{use(constants,compute,vk::AccessFlagBits2::eUniformRead),
+                use(lut_ids[0],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal),use(lut_ids[1],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal),
+                use(lut_ids[2],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal),
+                use(volumes[0],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal),use(volumes[1],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal),
+                use(hdr,compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal),
+                use(depth,compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal,false,true),
+                use(final_hdr,compute,vk::AccessFlagBits2::eShaderStorageWrite,vk::ImageLayout::eGeneral,true)};
+            static_cast<void>(take(graph.add_pass({"sky and geometry composition",composite_uses})));
+        }
+        const std::array tone_uses{use(final_hdr,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal),
             use(ldr,vk::PipelineStageFlagBits2::eColorAttachmentOutput,color_access,vk::ImageLayout::eColorAttachmentOptimal)};
         static_cast<void>(take(graph.add_pass({"tone mapping",tone_uses})));
-        const std::array read_uses{use(ldr,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead,vk::ImageLayout::eTransferSrcOptimal),
+        Vector<graph::Use> read_uses(0,memory::Allocator<graph::Use>{heap});
+        read_uses={use(ldr,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead,vk::ImageLayout::eTransferSrcOptimal),
             use(readback,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eUndefined,true)};
+        if(settings.linear_readback) {
+            read_uses.push_back(use(final_hdr,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead,vk::ImageLayout::eTransferSrcOptimal));
+            read_uses.push_back(use(linear_readback,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eUndefined,true));
+            check(graph.mark_output(linear_readback));
+        }
         static_cast<void>(take(graph.add_pass({"readback",read_uses})));
         check(graph.mark_output(readback)); check(graph.mark_output(ldr));
         auto plan=take(graph.compile());
         if (settings.capture_plan) frame->report=take(graph::format_plan(plan));
-        const std::array callbacks{graph::PassCallback{0,record<clear_pass>,&context},graph::PassCallback{1,record<geometry_pass>,&context},
-            graph::PassCallback{2,record<geometry_pass>,&context},graph::PassCallback{3,record<tone_pass>,&context},graph::PassCallback{4,copy_pass,&context}};
-        const std::array finals{graph::FinalAccess{0,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}},
-            graph::FinalAccess{context.ldr,{{vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal}}}};
+        Vector<graph::PassCallback> callbacks(0,memory::Allocator<graph::PassCallback>{heap});
+        callbacks={{0,record<clear_pass>,&context},{1,record<geometry_pass>,&context},{2,record<geometry_pass>,&context}};
+        if(atmosphere) { callbacks.push_back({3,record<aerial_pass>,&context}); callbacks.push_back({4,record<aerial_pass>,&context}); }
+        callbacks.push_back({callbacks.size(),record<tone_pass>,&context}); callbacks.push_back({callbacks.size(),record<copy_pass>,&context});
+        Vector<graph::FinalAccess> finals(0,memory::Allocator<graph::FinalAccess>{heap});
+        finals={{0,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}},
+            {context.ldr,{{vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal}}}};
+        if(settings.linear_readback) finals.push_back({context.linear_readback,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}});
         frame->execution=take(graph::execute(plan,queue,{external,callbacks,finals}));
         return RenderFrame{std::move(frame)};
     } catch (Error& error) { return std::unexpected(std::move(error)); }
@@ -426,6 +586,13 @@ Result<void> RenderFrame::read_rgba8(std::span<std::byte> destination) const {
         return std::unexpected(Error{ErrorCode::invalid_argument,"frame readback byte count differs"});
     auto buffer=state_->execution.buffer(0); if (!buffer) return std::unexpected(buffer.error());
     return (*buffer)->read(0,destination);
+}
+Result<void> RenderFrame::read_linear_rgba32f(std::span<std::array<float,4>> destination) const {
+    if(!state_ || !state_->linear_readback) return std::unexpected(Error{ErrorCode::invalid_state,"linear readback was not enabled"});
+    if(destination.size()!=std::uint64_t{state_->info.width}*state_->info.height)
+        return std::unexpected(Error{ErrorCode::invalid_argument,"linear readback pixel count differs"});
+    auto buffer=state_->execution.buffer(state_->linear_readback); if(!buffer) return std::unexpected(buffer.error());
+    return (*buffer)->read(0,std::as_writable_bytes(destination));
 }
 Result<const Image*> RenderFrame::color() const {
     if (!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty render frame"});

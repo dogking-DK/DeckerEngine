@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-10-13T09:28:33+08:00"
+updated_at: "2026-10-13T10:48:32+08:00"
 status: accepted
 ---
 
@@ -13,7 +13,7 @@ M7.2 连接 RenderView、GpuAssets 和 Graph，渲染程序化场景，输出可
 engine/render/pipeline 提供 dk_render_pipeline / dk::render_pipeline；PUBLIC 依赖 render_data、
 render_resources，PRIVATE 依赖 graphics_graph、graphics_shaders、profiling；构建大气模块时额外 PRIVATE 链接 render_atmosphere。
 DK_BUILD_RENDER_PIPELINE 默认 OFF，windows-graphics 启用。无新增依赖/feature。
-最小核心不负责磁盘/Runtime/窗口装配；M14.4 增加显式 Lambert 入口。不支持完整 PBR、alpha blend、几何阴影或多队列。
+最小核心不负责磁盘/Runtime/窗口装配；M14.4 增加显式 Lambert 入口，M14.5 增加天空/空气透视合成。不支持完整 PBR、alpha blend、几何阴影或多队列。
 
 ## 公开入口
 
@@ -81,7 +81,7 @@ opaque 保留无 fragment 的 depth-only 管线。磁盘装配独立在 [render-
 ## 环境集成与后续边界
 
 [大气](render-atmosphere.md)与[体积云](render-clouds.md)草案拟扩展环境快照、ViewId、显式时间和质量输入，
-3D资源和可采样深度底座已接入；M14.4 显式 render_sunlight 提供太阳漫反射，尚不自动接入视口/capture；tone 前的天空/介质合成留到 M14.5。
+3D资源和可采样深度底座已接入；M14.4 显式 render_sunlight 提供太阳漫反射，尚不自动接入视口/capture；M14.5 的 render_atmosphere 在 tone 前完成天空/空气透视合成。
 旧场景默认关闭环境并保留unlit输出；云接入时统一组合空气/云区间，避免重复应用空气透视。
 物理缓存和每视图历史按完成状态发布，保持旧RenderFrame的独立寿命；不复用跨帧Graph句柄。
 实施每阶段时同步本设计与真实接口、诊断和测试；阶段顺序见[Roadmap](../roadmap.md)。
@@ -89,7 +89,7 @@ opaque 保留无 fragment 的 depth-only 管线。磁盘装配独立在 [render-
 ## 深度采样底座
 
 场景D32目标增加Sampled usage，创建时核对附件/clear/sampled组合能力。现有unlit图顺序和输出保持原契约；
-深度写后采样屏障由Graphics Graph体积探针独立验证，世界射线重建和大气合成属于M14.5。
+深度写后采样屏障由Graphics Graph体积探针独立验证，M14.5 使用它重建世界射线并完成大气合成。
 
 ## M14.4 最小日光接收实施契约
 
@@ -97,7 +97,7 @@ opaque 保留无 fragment 的 depth-only 管线。磁盘装配独立在 [render-
 启用且环境完全匹配的 AtmosphereSky 提供太阳、T 与不含太阳盘的 Sky View；disabled 环境回到原 unlit。
 未构建大气时此入口返回 not_supported；pipeline 仅在该 target 存在时 PRIVATE 链接大气。
 不自动准备或刷新 LUT，不增加 render 内部等待；调用方先 prepare，再绑定同版本 Scene 环境。
-天空背景和空气透视留到 M14.5；曝光仍只在 tone 一次执行。
+该入口仅接收日光；M14.5 的 render_atmosphere 负责天空背景和空气透视。曝光仍只在 tone 一次执行。
 
 几何输出为 base_color * linear_texture / pi * (E_sun * T_sun(position) * max(N dot sun_direction,0)
 + E_sky(N)) + emissive。直射在每片段真实世界位置查 T 并检查行星遮挡；GPU 使用相对快照锚点的 km
@@ -120,3 +120,36 @@ AtmosphereSky 增加只读锚点和借用 LUT Image 查询。Graph 显式导入�
 真实大气直射对 CPU 高采样透射，天空漫射对高密度角积分，量化前固定 RGB tone 后容差 2 byte；
 太阳能量线性与曝光一致、disabled/显式 unlit 完整图一致；版本错配/对象/提交/预算/跨队列失败和在途寿命。
 局部 CPU 矩阵测试与原 pipeline GPU 图像回归，required GPU 探针输出可复现 PPM。
+
+## M14.5 空气透视与线性合成实施契约
+
+显式 render_atmosphere(queue, view, assets, sky, settings, atmosphere_settings) 绑定同环境、同相机位置的不可变快照。
+AtmosphereSettings 包含 surface_lighting、sun_disk、reference；前者默认启用 M14.4 日光，可关闭以诊断 unlit 表面。
+disabled 环境直接走旧 render；不自动接入 Editor/capture（M14.6）。不修改 Scene、资产、大气缓存代次或旧帧。
+
+首版限定有限 forward-Z Vulkan 透视（z=[0,1]、相机朝 -Z，允许非对称投影与 Y 翻转），相机必须为刚体。
+near>0、far<=1000000m、far/near<=10000，|p00|/|p11|各自>=0.1、|p02|/|p12|各自<=2；拒绝 reverse-Z、正交、无限远及缩放/剪切相机。
+D32 重建轴向距离 z=p23/(depth+p22)，再乘未归一化射线长度得到真实米制光程；积分从相机开始。
+投影系数先以 double 校验，再上传 km；与大气共用局部球面坐标，避免地球半径 float 相减。
+
+每帧生成两张 RGBA32F 64×64×128 视锥 3D 表，分别存单位太阳能量的 RGB L 与 RGB T；
+XY 覆盖 NDC 端点，Z 为 far*(slice/127)^2 的轴向距离。128段积分并查 T/MS；零距离切片为 L=0/T=1。
+接近行星边界时截断光程的导数不连续，不能对跨边界体素盲目插值：
+以视锥单元的保守世界空间跨度检测终点高度，落入该边界带的几何像素直接执行128段有限积分（仍查T/MS），
+避免地表附近T因插值截断路径而偏高。其余像素三线性查表；诊断reference始终走512段直接太阳积分。
+需要设备支持 3D storage/sampled/linear-filter，无隐式格式降级。图内资源不跨帧缓存，没有历史重投影。
+深度为1的背景查 Sky View 并独立加入太阳盘；几何仅计算 L_air*E_sun + T_air*L_surface 一次，
+实际射线被行星遮挡时截断且不透出行星后的几何。背景不再应用 AP，太阳盘不进入漫射。
+合成写独立 RGBA32F，再统一曝光/Reinhard/sRGB，alpha恒1。depth/mask规则来自同一几何 prepass。
+reference诊断最多4096像素，逐像素512视线×512太阳积分，MS沿用同一闭合表，用于区分离散误差和模型近似。
+
+RenderSettings.linear_readback 默认关闭，启用时最多65536像素；RenderFrame.read_linear_rgba32f 只读最终合成、曝光前的紧密RGBA。
+适用于 unlit/sunlight/atmosphere，不暴露可修改 HDR/G-buffer。未启用、尺寸不符、未完成拒绝且不改写目标。
+Graph 显式声明深度附件到compute sampled、体积storage到sampled、合成storage到tone/transfer以及host-read同步。
+参数、临时资源、计划、返回容器均在提交前准备；成功execute后只移动拥有者。
+首次调用完整创建两条compute管线后发布为静态缓存，后续绘制失败不撤销该缓存（与M14.4一致）。失败保留旧帧/场景/代次，pending保活。
+
+验收在实现前固定：T绝对误差<=2e-3；HDR归一化RMSE<=3%、p99<=8%，尺度=max(参考RGB亮度p95,1e-3)。
+近远景、地平线/遮挡边缘独立检查；CPU有限段高采样参考与GPU reference、不同near/far/高度/视角、RGB吸收、
+alpha-mask、真空/零距离、曝光只执行一次、disabled完整图一致，以及创建/提交/预算/版本/队列/在途寿命。
+不达标时调整采样/映射并记录，不放宽阈值；性能和上层集成留给后续阶段。

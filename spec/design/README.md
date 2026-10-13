@@ -2,7 +2,7 @@
 
 | 模块 | 文档 | 状态 | 范围 | 源码入口 | 测试入口 |
 | --- | --- | --- | --- | --- | --- |
-| render-atmosphere | [大气渲染](render-atmosphere.md) | accepted | CPU环境/积分参考、T/MS/Sky LUT、缓存、离屏天空及显式Lambert日光接收；空气透视仍规划 | [Scene](../../engine/scene)、[Render](../../engine/render)、[Graphics](../../engine/graphics) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
+| render-atmosphere | [大气渲染](render-atmosphere.md) | accepted | CPU环境/积分参考、T/MS/Sky LUT、缓存、离屏天空及显式Lambert日光、视锥空气透视与HDR合成 | [Scene](../../engine/scene)、[Render](../../engine/render)、[Graphics](../../engine/graphics) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | render-clouds | [体积云规划](render-clouds.md) | draft | 拟议程序化云场、介质合成、时域历史与云影；尚未实现 | 拟新增模块，现有接入：[Render](../../engine/render) | 待新增用例：[单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | experiment-management | [实验管理](experiment-management.md) | accepted | 参数展开/预算、恢复/重试、产物核验与数值对比报告 | [SDK](../../sdk/python) | [集成](../../tests/integration/CMakeLists.txt) |
 | physics-xpbd-gpu | [GPU XPBD](physics-xpbd-gpu.md) | accepted | 分色求解、候选状态、异步输出与命令接入 | [Physics](../../engine/physics) | [集成](../../tests/integration/CMakeLists.txt) |
@@ -19,7 +19,7 @@
 | architecture | [整体架构](architecture.md) | accepted | 长期模块边界和依赖方向 | [模块目录](../../engine) | [流程/检查](../README.md) |
 | editor | [编辑器工作台](editor.md) | accepted | 面板、命令编辑、窗口预览与 GUI/IPC/截图一致性 | [editor](../../engine/editor) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | render-disk | [磁盘场景与资产集成](render-disk.md) | accepted | M2 场景、M4 导入/产物与 GPU 资源加载 | [disk](../../engine/render/disk) | [集成](../../tests/integration/CMakeLists.txt) |
-| render-pipeline | [最小场景渲染管线](render-pipeline.md) | accepted | depth/opaque/tone Graph 管线、可选Lambert日光/天空漫射与帧结果 | [pipeline](../../engine/render/pipeline) | [集成](../../tests/integration/CMakeLists.txt) |
+| render-pipeline | [最小场景渲染管线](render-pipeline.md) | accepted | depth/opaque/tone Graph 管线、可选Lambert日光/天空漫射、空气透视/HDR合成与帧结果 | [pipeline](../../engine/render/pipeline) | [集成](../../tests/integration/CMakeLists.txt) |
 | render-data | [场景与视图提取](render-data.md) | accepted | 不可变场景、世界变换和视图 | [data](../../engine/render/data) | [单元](../../tests/unit/CMakeLists.txt) |
 | render-resources | [GPU 资产资源](render-resources.md) | accepted | Graph 上传、缓存发布与卸载寿命 | [resources](../../engine/render/resources) | [集成](../../tests/integration/CMakeLists.txt) |
 | graphics-graph | [GPU Graph](graphics-graph.md) | accepted | 图声明/编译、裁剪、同步执行、导入导出与诊断 | [graph](../../engine/graphics/graph) | [单元](../../tests/unit/CMakeLists.txt) |

@@ -4,6 +4,22 @@
 #include <cmath>
 
 namespace dk::render::detail {
+struct PerspectiveDepth { double near_m,far_m; };
+inline Result<PerspectiveDepth> perspective_depth(const ViewDescription& view) {
+    const auto& p=view.projection; const Mat3d rotation=view.camera_world.matrix().topLeftCorner<3,3>();
+    Mat4d expected=Mat4d::Zero();
+    expected(0,0)=p(0,0); expected(1,1)=p(1,1); expected(0,2)=p(0,2); expected(1,2)=p(1,2);
+    expected(2,2)=p(2,2); expected(2,3)=p(2,3); expected(3,2)=-1;
+    const double near_m=p(2,3)/p(2,2),far_m=p(2,3)/(p(2,2)+1);
+    if(!p.allFinite() || p!=expected || p(0,0)<=0 || p(1,1)==0 ||
+        !std::isfinite(near_m) || !std::isfinite(far_m) || near_m<=0 || far_m<=near_m ||
+        far_m>1e6 || far_m/near_m>10000 ||
+        !(rotation.transpose()*rotation).isApprox(Mat3d::Identity(),1e-10) || std::abs(rotation.determinant()-1)>1e-10 ||
+        (p.topLeftCorner<2,2>().diagonal().cwiseAbs().array()<.1).any() ||
+        std::abs(p(0,2))>2 || std::abs(p(1,2))>2)
+        return std::unexpected(Error{ErrorCode::not_supported,"atmosphere requires a rigid camera and finite forward-Z perspective (far <= 1e6 m, far/near <= 10000, bounded field of view)"});
+    return PerspectiveDepth{near_m,far_m};
+}
 inline Result<Mat3d> normal_matrix(const Transformd& world) {
     auto inverse=world.inverse();
     if(!inverse) return std::unexpected(inverse.error().with_context("Lambert normal transform"));

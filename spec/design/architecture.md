@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-13T09:28:33+08:00"
+updated_at: "2026-10-13T10:47:31+08:00"
 status: accepted
 ---
 
@@ -73,7 +73,7 @@ automation/server 装配 Runtime 适配、stdio 和 IPC owner 队列，runner/ed
 
 ## 大气与体积云扩展规划
 
-[大气](render-atmosphere.md)提供CPU环境模型、场景v2迁移和命令，以及独立的双精度积分参考、GPU T/MS/Sky LUT和离屏天空。DK_BUILD_RENDER_ATMOSPHERE默认OFF，在windows-graphics开启；[体积云](render-clouds.md)仍属规划。
+[大气](render-atmosphere.md)提供CPU环境模型、场景v2迁移和命令，以及独立的双精度积分参考、GPU T/MS/Sky LUT和离屏天空；ScenePipeline 显式导入快照，提供 Lambert、视锥空气透视和曝光前天空/几何合成。DK_BUILD_RENDER_ATMOSPHERE默认OFF，在windows-graphics开启；[体积云](render-clouds.md)仍属规划。
 Scene保存纯CPU环境描述，Services/Operations负责校验、事务与持久化；render/data从不可变快照提取。
 render/atmosphere独立调用Graph并发布不可变LUT快照；render/pipeline可显式导入T/Sky实现Lambert太阳与天空漫射。
 后续新增render/clouds负责云场，并由render/pipeline组合天空/介质与tone。依赖方向保持Render→Scene/Graphics，不能反向依赖Framework。

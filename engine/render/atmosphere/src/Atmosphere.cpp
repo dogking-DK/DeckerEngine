@@ -236,6 +236,10 @@ Result<EnvironmentDescription> AtmosphereSky::environment() const {
     return state_->environment;
 }
 Submission SkyFrame::submission() const noexcept { return state_ ? state_->execution.submission() : Submission{}; }
+Result<bool> AtmosphereSky::multiple_scattering_enabled() const {
+    if(!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty atmosphere snapshot"});
+    return state_->multiple;
+}
 Result<Vec3d> AtmosphereSky::position_m() const {
     if(!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty atmosphere sky"});
     return state_->position;

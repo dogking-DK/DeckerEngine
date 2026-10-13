@@ -1,7 +1,7 @@
 # 独立离屏大气天空
 
 本入口生成正午、日落和100km高空的960×540 PPM，使用球面对称大气、单太阳和T/MS/Sky View LUT。
-场景几何日光接收见下方独立样例；空气透视及Editor/capture集成见[Roadmap](../roadmap.md)后续阶段。
+场景几何日光接收见下方独立样例；空气透视使用下方显式C++接口；Editor/capture集成见[Roadmap](../roadmap.md)后续阶段。
 
 ```powershell
 cmake --preset windows-graphics
@@ -46,7 +46,7 @@ cmake --build out/build/windows-graphics --config Debug --target dk_sunlight_dem
 
 样例生成 noon/sunset/twilight × unlit/direct/sky 共九张 960×360 PPM：
 三个白色物体依次为球体、非均匀缩放椭球和负缩放椭球。direct 只接太阳直射；sky 再加天空漫射。
-三个预设都固定曝光5，背景为固定clear色，便于比较；天空背景和空气透视尚未接入。
+三个预设都固定曝光5，背景为固定clear色，便于比较；此样例只调用render_sunlight。
 每文件原子发布；整体九文件不承诺事务。程序要求真实GPU及Khronos validation，失败返回非零。
 
 调用方创建 AtmosphereRenderer 与 ScenePipeline、上传 GpuAssets；用 view.scene().environment()
@@ -73,3 +73,44 @@ auto frame = pipeline.render_sunlight(queue, view, assets, *sky, settings);
 ```
 
 接口、法线/数值边界见[管线设计](../design/render-pipeline.md)，验收证据见[0097](../development/0097-surface-sunlight.md)。
+
+## 天空、几何与空气透视合成
+
+ScenePipeline 的 render_atmosphere 将几何深度转换为相机至表面的真实光程。
+背景取 Sky View/太阳盘，表面按 RGB `L_air + T_air * L_surface` 合成，最后统一曝光和tone。
+prepare 必须使用当前相机的精确世界位置，快照环境必须与 RenderView 的场景一致。
+
+```cpp
+const Vec3d camera_m = view.description().camera_world.matrix().topRightCorner<3,1>();
+auto sky = atmosphere.prepare(queue, view.scene().environment(), camera_m);
+if (!sky) return std::unexpected(sky.error());
+render::RenderSettings settings;
+settings.linear_readback = true; // Only enable for diagnostics: <= 65536 pixels.
+render::AtmosphereSettings air;  // Lambert surface, solar disk; normal LUT path.
+auto frame = pipeline.render_atmosphere(queue, view, assets, *sky, settings, air);
+if (!frame) return std::unexpected(frame.error());
+auto ready = frame->wait(queue);
+if (!ready) return std::unexpected(ready.error());
+if (!*ready) return std::unexpected(Error{ErrorCode::invalid_state, "frame is pending"});
+std::vector<std::array<float,4>> pixels(std::size_t(view.description().width) * view.description().height);
+auto read = frame->read_linear_rgba32f(pixels);
+if (!read) return std::unexpected(read.error());
+```
+
+shader目录沿用工程源码布局；aerial.slang相对包含大气模块的共享传输文件，部署时需一起保留该布局。
+相机支持刚体、有限 forward-Z Vulkan 透视和非对称偏移/Y翻转，far<=1000000m、far/near<=10000；
+完整系数范围见[管线设计](../design/render-pipeline.md#m145-空气透视与线性合成实施契约)。不支持正交、reverse-Z、无限远或缩放相机。
+air.surface_lighting=false 用原 unlit 表面参与空气透视；air.sun_disk=false 去掉背景太阳盘。
+air.reference=true 限4096像素，以高采样直接积分作诊断（MS仍为同一闭合近似）。
+linear_readback 关闭时不会分配线性读回缓冲；开启后 wait 完成才能读，得到曝光前 HDR，RGBA8输出仍可照常读取。
+每帧两张64×64×128 RGBA32F L/T体积共16MiB，接近地表截断边界的像素直接积分以避免插值偏差；不跨帧缓存。
+disabled环境走原unlit，旧render/render_sunlight不自动添加天空或空气透视。Editor/capture装配属于M14.6。
+
+```powershell
+& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics `
+  -Target dk_aerial_perspective_probe `
+  -TestRegex '^dk\.render\.aerial_.*_gpu_validation$' -Reason '验证M14.5空气透视/深度/HDR合成'
+```
+
+探针在构建目录 tests/integration 下输出近远/高空和mask的PPM，数值证据来自HDR而非tone后的图像。
+验收与实际限制见[0098](../development/0098-aerial-perspective.md)。

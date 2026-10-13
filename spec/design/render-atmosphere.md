@@ -1,7 +1,7 @@
 ---
 module: render-atmosphere
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-13T09:28:33+08:00"
+updated_at: "2026-10-13T10:47:31+08:00"
 status: accepted
 ---
 
@@ -9,7 +9,7 @@ status: accepted
 
 ## 目标与当前基线
 
-CPU环境模型、持久化与命令已接入；Graphics支持3D资源与深度采样，独立大气模块提供CPU参考、T/MS/Sky LUT和离屏天空。最小日光接收由 ScenePipeline 显式入口提供，空气透视与场景视口集成仍规划。阶段、顺序与验收状态统一维护在
+CPU环境模型、持久化与命令已接入；Graphics支持3D资源与深度采样，独立大气模块提供CPU参考、T/MS/Sky LUT和离屏天空。最小日光接收、视锥空气透视和天空/几何合成由 ScenePipeline 显式入口提供，场景视口集成仍规划。阶段、顺序与验收状态统一维护在
 [Roadmap](../roadmap.md)；各后续小阶段开工时再细化具体接口。
 
 默认面向Windows x64、Vulkan/Slang、地球尺度的地表至高空实时观察；支持昼间、日出/日落、
@@ -22,9 +22,9 @@ CPU环境模型、持久化与命令已接入；Graphics支持3D资源与深度�
 
 | 已核实的现状 | 本轮需要补齐的能力 |
 | --- | --- |
-| [ScenePipeline](../../engine/render/pipeline/include/dk/render/ScenePipeline.hpp)提供clear/exposure、默认unlit及显式Lambert日光入口 | 天空/空气透视合成和上层装配，保持原unlit路径 |
+| [ScenePipeline](../../engine/render/pipeline/include/dk/render/ScenePipeline.hpp)提供clear/exposure、默认unlit、显式Lambert及天空/空气透视合成 | 上层视口/capture装配，保持原unlit路径 |
 | [资源描述](../../engine/graphics/device/include/dk/graphics/Resources.hpp)在M14.2扩展原生3D image/view、RGBA16F和三轴传输 | 后续LUT选择实际设备支持的格式，不把array_layers当连续z坐标 |
-| [深度目标](../../engine/render/pipeline/src/ScenePipeline.cpp)在M14.2增加sampled usage和Graph屏障验收 | M14.5实现线性距离/世界射线重建和合成 |
+| [深度目标](../../engine/render/pipeline/src/ScenePipeline.cpp)在M14.2增加sampled usage和Graph屏障验收 | M14.5使用有限透视深度重建真实光程并合成 |
 | [RenderView](render-data.md)包含双精度相机/投影和环境快照 | 稳定视图身份与显式渲染时间约定 |
 | [截图](render-capture.md)每个作业独立worker/device、输出PPM | 环境版本快照、无历史参考模式及线性HDR测试读回 |
 | [M13实验格式](../../sdk/python/decker/experiments.py)绑定XPBD/cloth | 复用SDK调用及追溯原则，另设有版本的渲染用例清单；不直接塞入布料计划 |
@@ -50,8 +50,8 @@ Scene与render/data的CPU契约见M14.1；M14.3独立模块的公开入口为[At
 | --- | --- |
 | 现有Scene/Services/Operations | CPU环境值类型、校验、持久化、guard/事务/撤销；不依赖Render或Vulkan |
 | 现有render/data | 从SceneSnapshot提取只读环境；相机、尺寸、ViewId和显式时间为逐帧输入 |
-| engine/render/atmosphere，dk_render_atmosphere / dk::render_atmosphere | 参数到T/MS/Sky LUT和离屏天空；PUBLIC reference/Graph，PRIVATE Shaders/Profiling；reference仅依赖Scene/Math，不依赖Framework/Editor；区间散射留到M14.5 |
-| 现有render/pipeline | depth/unlit或Lambert/tone，M14.4导入大气快照T/Sky；M14.5再合成天空/空气透视，Render模块不调用裸Vulkan |
+| engine/render/atmosphere，dk_render_atmosphere / dk::render_atmosphere | 参数到T/MS/Sky LUT和离屏天空；PUBLIC reference/Graph，PRIVATE Shaders/Profiling；reference仅依赖Scene/Math，不依赖Framework/Editor；共用有限区间传输函数支持M14.5 |
+| 现有render/pipeline | depth/unlit或Lambert/tone，M14.4导入大气快照T/Sky；M14.5显式合成天空/空气透视，Render模块不调用裸Vulkan |
 | 现有render services / editor | 装配、截图任务及界面；通过统一命令改环境，不能持有可变GPU缓存作为场景状态 |
 
 DK_BUILD_RENDER_ATMOSPHERE隔离大气模块，默认OFF、windows-graphics开启；启用时明确检查target依赖。
@@ -120,14 +120,14 @@ DeckerScene写version=2并要求environment={version:1,enabled,atmosphere,sun}�
 
 ## LUT、管线与最小光照
 
-M14.3固定RGBA32F以建立数值基线，后续AP仍为候选；尺寸/精度变更须重新验证误差和能力：
+M14.3与M14.5固定RGBA32F以建立数值基线；尺寸/精度变更须重新验证误差和能力：
 
 | 资源 | 当前实现或后续候选 | 失效输入 |
 | --- | --- | --- |
 | Transmittance | 256×64，RGB透射，RGBA32F | 大气物理参数、行星半径/高度、算法/精度版本 |
 | Multiple Scattering | 32×32，RGBA32F | 前项、Mie散射、地面反照率；单位太阳能量响应 |
 | Sky View | 192×108，RGBA32F | MS内容、Mie g、观测高度、太阳局部天顶余弦、MS开关 |
-| Aerial Perspective | 32×32×32，两张候选RGBA16F保存RGB L与RGB T | 前项、相机/投影、积分距离、质量档 |
+| Aerial Perspective | 64×64×128，两张RGBA32F保存RGB L与RGB T，地表边界直接积分 | 每帧由前项、相机/投影、积分距离生成；无跨帧历史 |
 
 不能把RGB透射无说明压成alpha单值。设备不支持所需storage/sampling/filter格式时明确拒绝，
 或选择提前声明且独立验证的RGBA32F/手动插值路径；不偷偷降级。3D资源的mip、copy footprint、
@@ -202,7 +202,7 @@ M14.1更宽的持久参数范围保持不变，不支持的渲染范围明确拒
 固定算法版本1/质量档：RGBA32F，Transmittance 256×64（512段），MS 32×32（1024方向×64段），
 Sky View 192×108（128段）。T使用球面距离/径向光程参数映射；MS使用太阳天顶余弦和平方高度映射；
 Sky使用相对太阳方位角、地平线上下分区的平方仰角映射，分区之间不插值。所有LUT保存单位太阳RGB辐照度响应。
-Sky View内不含太阳盘，不含地表可见表面反射；向地面的射线只积分到地面，场景表面留到M14.4/M14.5。
+Sky View内不含太阳盘，不含地表可见表面反射；向地面的射线只积分到地面，场景表面由M14.4/M14.5合成。
 MS在天空积分中作为各向同性源sigma_scattering*Psi。参考模式使用512视线段和512太阳光程段直接积分，
 不依赖T/Sky低分辨率插值；MS近似误差通过独立CPU闭合参考单列，不把它当作全阶物理真值。
 
@@ -234,3 +234,9 @@ required GPU validation覆盖Graph与在途销毁。离屏样例输出正午/日
 按[场景管线实施契约](render-pipeline.md#m144-最小日光接收实施契约)提供不可变快照的锚点与借用 LUT 图像。
 ScenePipeline 显式选择日光接收，共用快照太阳及 T/Sky 表，不修改大气缓存、不增加太阳盘漫射或空气透视。
 天空漫射在锚点近似，逐片段直射透射使用实际位置；不自动接入编辑器/capture，默认 unlit 保持。
+
+## M14.5 场景空气透视边界
+
+按[管线契约](render-pipeline.md#m145-空气透视与线性合成实施契约)生成视锥 L/T 体积并合成。
+AtmosphereSky 只读公开 MS 开关，传输函数由天空与空气透视共用；快照仍不可变，缓存 key/提交点不变。
+每帧 AP 由 ScenePipeline 的 Graph 拥有，深度仅来自几何/alpha-mask；曝光前提供受限线性诊断读回。

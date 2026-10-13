@@ -51,3 +51,27 @@ TEST_CASE("Lambert normal matrix preserves tangent orthogonality under shear and
     auto tiny=dk::render::detail::normal_matrix(Transformd::from_matrix(m).value());
     REQUIRE(tiny); CHECK(tiny->allFinite()); CHECK((*tiny- Mat3d::Identity()).norm()<1e-12);
 }
+
+TEST_CASE("atmosphere perspective reconstructs physical distances and rejects ambiguous projections") {
+    ViewDescription v{32,32}; v.projection=Mat4d::Zero();
+    const double n=10,f=50000; auto& p=v.projection;
+    p(0,0)=1.2; p(1,1)=-1.5; p(0,2)=.2; p(1,2)=-.1; p(2,2)=f/(n-f); p(2,3)=n*f/(n-f); p(3,2)=-1;
+    auto result=dk::render::detail::perspective_depth(v); REQUIRE(result);
+    CHECK(std::abs(result->near_m-n)<1e-9); CHECK(std::abs(result->far_m-f)<1e-5);
+    for(double distance : {10.,100.,12000.,50000.}) {
+        Vec4d point{distance*.3,distance*.2,-distance,1}; Vec4d clip=p*point;
+        const double depth=clip.z()/clip.w(),restored=p(2,3)/(depth+p(2,2));
+        CHECK(std::abs(restored-distance)<1e-5);
+        Vec3d ray{(clip.x()/clip.w()+p(0,2))/p(0,0),(clip.y()/clip.w()+p(1,2))/p(1,1),-1};
+        CHECK(std::abs(restored*ray.norm()-point.head<3>().norm())<1e-5);
+    }
+    auto bad=v; bad.projection=Mat4d::Identity(); CHECK_FALSE(dk::render::detail::perspective_depth(bad));
+    bad=v; bad.projection(2,2)=-1; CHECK_FALSE(dk::render::detail::perspective_depth(bad));
+    bad=v; bad.projection(2,2)=n/(f-n); bad.projection(2,3)=n*f/(f-n); CHECK_FALSE(dk::render::detail::perspective_depth(bad));
+    bad=v; bad.projection(0,1)=.1; CHECK_FALSE(dk::render::detail::perspective_depth(bad));
+    bad=v; Trsd scale; scale.scale.x()=2; bad.camera_world=Transformd::from_trs(scale).value(); CHECK_FALSE(dk::render::detail::perspective_depth(bad));
+    Fixture fixture; RenderSettings settings; settings.linear_readback=true;
+    CHECK(validate_render_settings(fixture.view,settings));
+    CHECK_FALSE(validate_render_settings(RenderView::create(fixture.scene,{257,256}).value(),settings));
+    CHECK_FALSE(RenderFrame{}.read_linear_rgba32f({}));
+}

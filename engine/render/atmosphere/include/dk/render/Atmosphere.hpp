@@ -20,6 +20,7 @@ public:
     [[nodiscard]] Result<AtmosphereLutView> lut(AtmosphereLut) const;
     [[nodiscard]] Result<EnvironmentDescription> environment() const;
     [[nodiscard]] Result<Vec3d> position_m() const;
+    [[nodiscard]] Result<bool> multiple_scattering_enabled() const;
     // Borrowed immutable GPU LUT; retain this snapshot until recording has completed.
     [[nodiscard]] Result<const graphics::Image*> image(AtmosphereLut) const;
 private:
