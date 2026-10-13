@@ -6,6 +6,8 @@
 
 namespace dk::render {
 class AtmosphereSky;
+class CloudTextures;
+struct CloudCompositionSettings;
 namespace detail { struct PipelineState; struct FrameState; }
 struct RenderSettings {
     Vec3f clear_rgb = Vec3f::Zero(); // Linear HDR color.
@@ -40,6 +42,10 @@ public:
     [[nodiscard]] Result<bool> wait(graphics::SubmissionQueue&, std::uint64_t timeout_ns = std::numeric_limits<std::uint64_t>::max()) const;
     [[nodiscard]] Result<void> read_rgba8(std::span<std::byte> destination) const;
     [[nodiscard]] Result<void> read_linear_rgba32f(std::span<std::array<float,4>> destination) const;
+    // Only nonzero cloud frames with diagnostics enabled: cloud L.rgb / Tc.a,
+    // or mixed T.rgb / extinction-weighted cloud distance in metres in alpha.
+    [[nodiscard]] Result<void> read_cloud_rgba32f(std::span<std::array<float,4>> destination) const;
+    [[nodiscard]] Result<void> read_medium_rgba32f(std::span<std::array<float,4>> destination) const;
     [[nodiscard]] Result<const graphics::Image*> color() const;
     [[nodiscard]] std::string_view plan_text() const noexcept;
 private:
@@ -69,9 +75,14 @@ public:
     // Finite forward-Z perspective; the sky anchor must equal camera position.
     [[nodiscard]] Result<RenderFrame> render_atmosphere(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
         const AtmosphereSky&, const RenderSettings& = {}, const AtmosphereSettings& = {});
+    // Explicit full-sample composition, <=4096 pixels, no history. Sky and textures
+    // must match the view's environment. Zero clouds use the original M14 path.
+    [[nodiscard]] Result<RenderFrame> render_clouds(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
+        const AtmosphereSky&, const CloudTextures&, const CloudCompositionSettings&, const RenderSettings& = {});
 private:
     [[nodiscard]] Result<RenderFrame> render_impl(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
-        const RenderSettings&, const AtmosphereSky*, const AtmosphereSettings* = nullptr);
+        const RenderSettings&, const AtmosphereSky*, const AtmosphereSettings* = nullptr,
+        const CloudTextures* = nullptr, const CloudCompositionSettings* = nullptr);
     explicit ScenePipeline(std::shared_ptr<detail::PipelineState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::PipelineState> state_;
 };

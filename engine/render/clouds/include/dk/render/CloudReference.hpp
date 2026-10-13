@@ -27,6 +27,22 @@ struct CloudIntegral {
     double transmittance=1, distance_m=0, mean_distance_m=0;
     std::uint32_t samples=0;
 };
+struct CloudCompositionSettings {
+    CloudReferenceSettings reference;
+    bool surface_lighting=true, sun_disk=true, diagnostics=false;
+    std::uint64_t max_work=1024ULL*1024*1024; // <=4096 pixels, at most five medium segments.
+};
+struct CloudMediumIntegral {
+    Vec3d radiance=Vec3d::Zero(), transmittance=Vec3d::Ones(), cloud_radiance=Vec3d::Zero();
+    double cloud_transmittance=1, mean_cloud_distance_m=0;
+    bool ground=false;
+};
+// Image reference bounds; validation does not allocate GPU resources.
+[[nodiscard]] Result<void> validate_cloud_composition(const EnvironmentDescription&, const CloudCompositionSettings&, std::size_t pixels);
+// Joint view-path integration; air uses single scattering, cloud uses the explicit
+// reference approximation. Terminal surface/solar radiance is added by the caller.
+[[nodiscard]] Result<CloudMediumIntegral> integrate_cloud_medium_reference(const EnvironmentDescription&, const CloudFieldData&,
+    const CloudRay&, const CloudReferenceSettings& = {});
 // Ordered positive shell segments, clipped at ground and the finite ray limit.
 [[nodiscard]] Result<CloudIntervals> cloud_shell_intervals(const EnvironmentDescription&, const CloudRay&);
 // Pure double-precision SI reference. No cache mutation or implicit time/history.

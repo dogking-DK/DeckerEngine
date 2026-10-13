@@ -13,7 +13,7 @@ Json provenance_schema() {
         {"camera",schema::object({{"eye",vec},{"target",vec},{"up",vec},{"fov_y",schema::number()},
             {"near",schema::number()},{"far",schema::number()}},{"eye","target","up","fov_y","near","far"})},
         {"exposure",schema::number()},{"time_seconds",schema::number()},
-        {"quality",{{"type","string"},{"enum",{"atmosphere_v1","unlit_v1"}}}},
+        {"quality",{{"type","string"},{"enum",{"atmosphere_v1","unlit_v1","cloud_reference_v1"}}}},
         {"profile",{{"type","string"},{"enum",{"strict","unlit_preview"}}}},
         {"shader_fingerprint",{{"type",{"string","null"}}}}},
         {"environment","camera","exposure","time_seconds","quality","profile","shader_fingerprint"});

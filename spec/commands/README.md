@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-10-13T13:12:00+08:00"
+updated_at: "2026-10-13T14:52:00+08:00"
 status: accepted
 ---
 
@@ -28,7 +28,7 @@ Luau 调用同一套场景/实体/历史服务，入口、值转换与允许命�
 | [历史](history.md) | `history.status`、`history.undo`、`history.redo` | 内存撤销与重做 |
 | [运行时与任务](runtime.md) | `runtime.capabilities`、`runtime.shutdown`、`tasks.list`、`tasks.get` | 能力、同步任务和关闭 |
 | [CPU 资产](assets.md) | `assets.open`、`assets.catalog`、`assets.import`、`assets.register`、`assets.rename`、`assets.load`、`assets.status`、`assets.unload` | 目录会话、持久身份和 CPU Ready |
-| [截图](render.md) | `render.capture` | 冻结场景/环境与相机曝光，后台渲染、来源元数据和原子图像输出 |
+| [截图](render.md) | `render.capture` | 冻结场景/环境与相机曝光，支持有界云参考、来源元数据和原子图像输出 |
 | [模拟](simulation.md) | `simulation.start`、`simulation.run`、`simulation.cancel`、`simulation.pause`、`simulation.resume`、`simulation.step`、`simulation.stop`、`simulation.query`、`simulation.sample`、`simulation.particles`、`simulation.export` | 独立 PlayWorld、固定步长、有限任务控制、CPU/GPU XPBD、显式数值/批次性能和实验导出 |
 | [后台作业](jobs.md) | `jobs.get`、`jobs.wait`、`jobs.cancel` | JobId 状态、等待和协作取消 |
 

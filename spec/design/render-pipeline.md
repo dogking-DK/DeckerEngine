@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-10-13T13:12:00+08:00"
+updated_at: "2026-10-13T14:47:00+08:00"
 status: accepted
 ---
 
@@ -11,12 +11,14 @@ status: accepted
 
 M7.2 连接 RenderView、GpuAssets 和 Graph，渲染程序化场景，输出可等待的离屏 RGBA8。
 engine/render/pipeline 提供 dk_render_pipeline / dk::render_pipeline；PUBLIC 依赖 render_data、
-render_resources，PRIVATE 依赖 graphics_graph、graphics_shaders、profiling；构建大气模块时额外 PRIVATE 链接 render_atmosphere。
+render_resources，PRIVATE 依赖 graphics_graph、graphics_shaders、profiling；构建大气模块时额外 PRIVATE 链接 render_atmosphere，
+大气与云模块均存在时再 PRIVATE 链接 render_clouds，公开头仅前置声明云类型。
 DK_BUILD_RENDER_PIPELINE 默认 OFF，windows-graphics 启用。无新增依赖/feature。
 最小核心不负责磁盘/Runtime/窗口装配；M14.4 增加显式 Lambert 入口，M14.5 增加天空/空气透视合成。不支持完整 PBR、alpha blend、几何阴影或多队列。
 
-环境完整入口render_environment在clouds.enabled时返回not_supported；云场资源尚无光照/合成，
-不能静默产出缺云截图。显式unlit/atmosphere诊断入口保持各自语义。
+M15.3提供显式render_clouds(queue,view,assets,sky,textures,cloud_settings,settings)，
+环境完整入口render_environment在实际非零云时走独立混合介质合成，接口、预算与失败边界见
+[云合成实施契约](render-clouds.md#m153-混合介质与图像合成实施契约)。零云走原M14；显式unlit/atmosphere诊断入口保持各自语义。
 
 ## 公开入口
 
@@ -83,10 +85,10 @@ opaque 保留无 fragment 的 depth-only 管线。磁盘装配独立在 [render-
 
 ## 环境集成与后续边界
 
-[大气](render-atmosphere.md)与[体积云](render-clouds.md)草案拟扩展环境快照、ViewId、显式时间和质量输入，
-3D资源和可采样深度底座已接入；M14.4 显式 render_sunlight 提供太阳漫反射，尚不自动接入视口/capture；M14.5 的 render_atmosphere 在 tone 前完成天空/空气透视合成。
-旧场景默认关闭环境并保留unlit输出；云接入时统一组合空气/云区间，避免重复应用空气透视。
-物理缓存和每视图历史按完成状态发布，保持旧RenderFrame的独立寿命；不复用跨帧Graph句柄。
+[大气](render-atmosphere.md)与[体积云](render-clouds.md)提供冻结环境快照、显式C++参考时间与有界图像合成。
+M14.6通过共用环境入口接入视口/capture；M15.3在非零云时改用云/空气联合积分，表面HDR只在终端加入。
+旧场景默认关闭环境并保留unlit输出。云参考限4096像素，尚无实时大尺寸/时域历史。
+缓存只保存静态程序和不可变代次，保持旧RenderFrame的独立寿命，不复用跨帧Graph句柄；每视图历史待M15.4。
 实施每阶段时同步本设计与真实接口、诊断和测试；阶段顺序见[Roadmap](../roadmap.md)。
 
 ## 深度采样底座
@@ -147,7 +149,7 @@ XY 覆盖 NDC 端点，Z 为 far*(slice/127)^2 的轴向距离。128段积分并
 reference诊断最多4096像素，逐像素512视线×512太阳积分，MS沿用同一闭合表，用于区分离散误差和模型近似。
 
 RenderSettings.linear_readback 默认关闭，启用时最多65536像素；RenderFrame.read_linear_rgba32f 只读最终合成、曝光前的紧密RGBA。
-适用于 unlit/sunlight/atmosphere，不暴露可修改 HDR/G-buffer。未启用、尺寸不符、未完成拒绝且不改写目标。
+适用于 unlit/sunlight/atmosphere/clouds，不暴露可修改 HDR/G-buffer。未启用、尺寸不符、未完成拒绝且不改写目标。
 Graph 显式声明深度附件到compute sampled、体积storage到sampled、合成storage到tone/transfer以及host-read同步。
 参数、临时资源、计划、返回容器均在提交前准备；成功execute后只移动拥有者。
 首次调用完整创建两条compute管线后发布为静态缓存，后续绘制失败不撤销该缓存（与M14.4一致）。失败保留旧帧/场景/代次，pending保活。
@@ -159,7 +161,7 @@ alpha-mask、真空/零距离、曝光只执行一次、disabled完整图一致�
 
 ## M14.6 上层共用环境入口
 
-render_environment(queue,view,assets,settings)根据冻结RenderScene环境选择旧render或显式render_atmosphere。
+render_environment(queue,view,assets,settings)根据冻结RenderScene环境选择旧render、render_atmosphere或M15.3的render_clouds。
 启用时惰性创建AtmosphereRenderer并同步prepare相机锚点，复用实例最近LUT；调用方必须放在允许等待的worker。
 不把这一入口当成无等待的render_atmosphere。CPU-only条件编译保持，未构建大气时明确拒绝enabled。
 shader_fingerprint(directory,environment)提供固定相关Slang源码集的诊断指纹，包含共享传输文件和算法标识；不承担密码学完整性。
@@ -169,3 +171,13 @@ M14.6集成补充：投影矩阵反算near/far的两个上界允许1e-10相对�
 
 共用入口首次prepare使用候选AtmosphereRenderer，整帧成功提交后才保留该实例；
 首次传错队列或视图失败不把调用者的错误队列固化进缓存，后续合法调用可恢复。已有实例仍遵循AtmosphereRenderer的队列校验。
+
+## M15.3 云合成与诊断
+
+非零云准备不可变场/纹理，使用独立mixed compute替代整段AP，随后执行既有tone/readback。
+云有界参考、空气开关/多散射、深度/太阳裁剪与零云退化遵循[云设计](render-clouds.md#m153-混合介质与图像合成实施契约)。
+Graph只导入实际消费的LUT（unlit云表面不导入Sky），depth、HDR、云场、T/MS和诊断均声明真实读写。
+read_cloud_rgba32f返回云散射RGB/独立Tc，read_medium_rgba32f返回混合RGB透射/云代表距离米；
+只有cloud_settings.diagnostics=true的非零云帧可读，未完成/未请求/尺寸错误不写目标。
+所有路径通过创建队列的身份资源拒绝跨队列；static program按完整候选发布，帧提交保活实际对象。
+共用入口的首个云owner也在整帧成功后保存，后续prepare失败不破坏旧帧或场景；time固定0。

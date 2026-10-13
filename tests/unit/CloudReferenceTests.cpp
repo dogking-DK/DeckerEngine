@@ -123,3 +123,41 @@ TEST_CASE("reference sunlight accepts thin atmosphere independent of default clo
     REQUIRE(trans); CHECK((trans->array()>0).all()); CHECK((trans->array()<1).all());
     e.atmosphere.rayleigh_scale_height_m=4000; CHECK_FALSE(atmosphere_transmittance_reference(e.atmosphere,1000,1,64));
 }
+TEST_CASE("composition mixed absorption follows analytic optical depth and terminal clipping", "[clouds][composition]") {
+    auto e=homogeneous(); e.enabled=true; e.sun.irradiance={0,0,0};
+    e.atmosphere.rayleigh_scattering_per_m={}; e.atmosphere.mie_scattering_per_m={}; e.atmosphere.mie_extinction_per_m={};
+    e.atmosphere.absorption_center_height_m=0; e.atmosphere.absorption_half_width_m=10000;
+    e.atmosphere.absorption_extinction_per_m={1e-4,2e-4,3e-4}; e.clouds.extinction_per_m=.0003;
+    auto s=constant(); s.sky_radiance.setZero(); s.single_scattering_albedo=0;
+    CloudFieldCache cache; const auto f=cache.prepare(e.clouds).value();
+    for(double limit:{0.,1000.,2000.,6000.}) {
+        auto value=integrate_cloud_medium_reference(e,*f,{{0,0,0},{0,1,0},limit},s); REQUIRE(value);
+        const double cloud_distance=std::max(0.,std::min(4000.,limit)-1500.);
+        const double air_length=limit-limit*limit/20000;
+        for(unsigned c=0;c<3;++c) CHECK(std::abs(value->transmittance[c]-std::exp(-air_length*e.atmosphere.absorption_extinction_per_m[c]-cloud_distance*.0003))<1e-10);
+        CHECK(std::abs(value->cloud_transmittance-std::exp(-cloud_distance*.0003))<1e-10); CHECK(value->radiance.isZero(0));
+        CHECK_FALSE(value->ground);
+    }
+    auto ground=integrate_cloud_medium_reference(e,*f,{{0,2000,0},{0,-1,0},5000},s); REQUIRE(ground); CHECK(ground->ground);
+    CloudCompositionSettings image; CHECK(validate_cloud_composition(e,image,4096)); CHECK_FALSE(validate_cloud_composition(e,image,4097));
+    image.max_work=1; CHECK_FALSE(validate_cloud_composition(e,image,1));
+    s.max_work=std::uint64_t{2}*s.steps*(2*s.sun_steps+s.atmosphere_steps+1);
+    CHECK_FALSE(integrate_cloud_medium_reference(e,*f,{},s));
+}
+TEST_CASE("composition air and cloud share attenuation without duplicating sources", "[clouds][composition]") {
+    auto e=homogeneous(); const auto s=constant(); CloudFieldCache cache; const auto f=cache.prepare(e.clouds).value();
+    const CloudRay ray{{0,100,0},{0,1,0},6000};
+    const auto cloud=integrate_cloud_reference(e,*f,ray,s).value();
+    const auto mixed=integrate_cloud_medium_reference(e,*f,ray,s).value();
+    CHECK((mixed.radiance-cloud.radiance).norm()<1e-12); CHECK((mixed.cloud_radiance-cloud.radiance).norm()<1e-12);
+    CHECK((mixed.transmittance.array()-cloud.transmittance).abs().maxCoeff()<1e-12);
+    e.enabled=true; e.clouds.extinction_per_m=0; auto high=s; high.steps=512; high.atmosphere_steps=256;
+    const auto only_air=integrate_cloud_medium_reference(e,*f,ray,high).value();
+    const auto expected=integrate_atmosphere_reference(e,ray.origin_m,ray.direction,{1024,256,ray.max_distance_m,false}).value();
+    CHECK((only_air.radiance-expected.radiance).cwiseAbs().maxCoeff()<1e-5);
+    CHECK((only_air.transmittance-expected.transmittance).cwiseAbs().maxCoeff()<1e-5); CHECK(only_air.cloud_radiance.isZero(0));
+    e.clouds.extinction_per_m=.001; e.sun.irradiance={0,0,0};
+    const auto air=integrate_cloud_medium_reference(e,*f,ray,s).value(); e.enabled=false;
+    const auto vacuum=integrate_cloud_medium_reference(e,*f,ray,s).value();
+    CHECK((air.cloud_radiance.array()<vacuum.cloud_radiance.array()).all()); CHECK(air.radiance==air.cloud_radiance);
+}

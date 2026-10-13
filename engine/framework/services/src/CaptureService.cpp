@@ -80,10 +80,12 @@ nlohmann::json environment_json(const EnvironmentDescription& e) {
 std::string provenance(const CaptureRequest& r,const EnvironmentDescription& environment) {
     auto vector=[](const Vec3d& v) { return nlohmann::json::array({v.x(),v.y(),v.z()}); };
     const auto& c=r.camera;
+    const auto& clouds=environment.clouds;
+    const bool cloudy=clouds.enabled && clouds.coverage>0 && clouds.density>0 && clouds.extinction_per_m>0;
     return nlohmann::json{{"environment",environment_json(environment)},
         {"camera",{{"eye",vector(c.eye)},{"target",vector(c.target)},{"up",vector(c.up)},
             {"fov_y",c.fov_y},{"near",c.near_plane},{"far",c.far_plane}}},
-        {"exposure",r.exposure},{"time_seconds",0},{"quality",environment.enabled ? "atmosphere_v1" : "unlit_v1"},
+        {"exposure",r.exposure},{"time_seconds",0},{"quality",cloudy ? "cloud_reference_v1" : environment.enabled ? "atmosphere_v1" : "unlit_v1"},
         {"profile",r.profile==GltfImportProfile::strict ? "strict" : "unlit_preview"},{"shader_fingerprint",nullptr}}.dump();
 }
 struct Completion { std::filesystem::path output; ByteBuffer ppm; std::string summary; nlohmann::json provenance; };
@@ -104,11 +106,11 @@ Result<JobQueue::Payload> render_capture(memory::ResourceHandle resource,const S
         render::FrameInfo frame_info;
         {
             auto assets=take(source.upload(queue)); checkpoint(stop);
-            const auto fingerprint=take(render::shader_fingerprint(shader_directory,input.scene.environment().enabled));
+            const auto fingerprint=take(render::shader_fingerprint(shader_directory,input.scene.environment().enabled || input.scene.environment().clouds.enabled));
             auto pipeline=take(render::ScenePipeline::create(resource,queue,shader_directory)); checkpoint(stop);
             auto settings=render::unlit_preview_settings(); settings.exposure=request.exposure;
             auto frame=take(pipeline.render_environment(queue,take(render::RenderView::create(source.scene(),view)),assets,settings));
-            require(take(render::shader_fingerprint(shader_directory,input.scene.environment().enabled))==fingerprint,"Render shaders changed during capture",ErrorCode::conflict);
+            require(take(render::shader_fingerprint(shader_directory,input.scene.environment().enabled || input.scene.environment().clouds.enabled))==fingerprint,"Render shaders changed during capture",ErrorCode::conflict);
             completion->provenance=nlohmann::json::parse(info.provenance);
             completion->provenance["shader_fingerprint"]=fingerprint;
             require(take(frame.wait(queue)),"Capture GPU wait did not complete",ErrorCode::invalid_state);

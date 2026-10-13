@@ -1,7 +1,7 @@
 ---
 module: render-capture
 created_at: "2026-10-03T21:21:47+08:00"
-updated_at: "2026-10-13T11:44:00+08:00"
+updated_at: "2026-10-13T14:47:00+08:00"
 status: accepted
 ---
 
@@ -67,13 +67,17 @@ GPU 进程验收覆盖版本绑定、编辑后图像变化、无输入自动发�
 
 ## M14.6 环境绑定与可追溯截图
 
-render.capture按接受时SceneSnapshot.environment.enabled选择环境合成或原unlit，profile仍仅为资产导入策略。
+M15.3补充：非零云由共用环境入口选择混合介质参考，quality为`cloud_reference_v1`，固定time=0与256/64/64步，
+最多4096像素，超限在worker失败且保留旧输出。云与空气独立开关；零云仍用原atmosphere_v1/unlit_v1。
+指纹覆盖云/空气共享传输与合成shader，ticket/result schema增加该quality值，命令参数/effect/guard/发布流程不变。
+
+render.capture按接受时SceneSnapshot的空气/云开关和非零云参数选择环境合成或原unlit，profile仍仅为资产导入策略。
 新增有限非负exposure（默认1）；相机仍完整显式输入，环境启用时遵循M14.5透视域，不自动改near/far。
 worker创建ScenePipeline后调用共用render_environment：冷准备与GPU等待在worker，原取消/原子单文件发布契约保持。
 未构建大气时enabled请求明确失败；disabled保持旧unlit；CPU-only不装配CaptureService，环境命令仍不初始化GPU。
 
-提交ticket和成功result新增provenance：完整冻结environment、camera、exposure、profile、quality（固定unlit_v1/atmosphere_v1）、
-time_seconds=0（静态大气，没有时钟推进）、shader_fingerprint（ticket为null，成功时记录源码集FNV-1a64诊断指纹）。
+提交ticket和成功result新增provenance：完整冻结environment、camera、exposure、profile、quality（unlit_v1/atmosphere_v1/cloud_reference_v1）、
+time_seconds=0（固定时刻，没有时钟推进）、shader_fingerprint（ticket为null，成功时记录源码集FNV-1a64诊断指纹）。
 指纹不是安全校验；执行期间源码集必须稳定，编译前后摘要变化则失败，保留旧文件。输出仍只有PPM，不增加多文件原子事务。
 后续编辑/保存/撤销不改变冻结版本；GPU/IO/取消均不改旧文件。result保持<=4096字节Jobs元数据上限。
 命令发现/schema及文档同步；Python与Luau例子实际修改环境并使用同一capture命令，GUI/IPC验收保存重载，验收固定参数图像与元数据。

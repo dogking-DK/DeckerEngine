@@ -1,7 +1,7 @@
 ---
 module: command-reference-environment
 created_at: "2026-10-12T15:10:00+08:00"
-updated_at: "2026-10-13T13:12:00+08:00"
+updated_at: "2026-10-13T14:47:00+08:00"
 status: accepted
 ---
 
@@ -72,7 +72,7 @@ RGB使用线性sRGB/D65通道，irradiance不是lux或原始W/m²；正入射Lam
 
 | clouds字段 | 默认值 | 单位/支持范围 |
 | --- | --- | --- |
-| enabled | false | bool；云参数可CPU编辑，当前云渲染未实现，true时环境截图/预览返回not_supported |
+| enabled | false | bool；非零云通过有界混合参考渲染，需云/大气GPU模块，总像素≤4096；超限失败，普通编辑器大尺寸云预览待优化阶段 |
 | seed | 1 | uint32整数[0,4294967295]；固定seed重建一致 |
 | generator_version | 1 | 整数，仅支持1 |
 | weather_resolution | 128 | 2D方形边长，2的幂[8,256] |
@@ -81,13 +81,13 @@ RGB使用线性sRGB/D65通道，irradiance不是lux或原始W/m²；正入射Lam
 | bottom_height_m / top_height_m | 1500 / 4000 | 球面高度，米；0≤bottom<top<atmosphere_height_m |
 | coverage | 0.5 | [0,1]；0精确无云 |
 | density | 1 | 无量纲[0,10]；0精确无云 |
-| extinction_per_m | 0.001 | m^-1，[0,1]；供后续积分使用 |
+| extinction_per_m | 0.001 | m^-1，[0,1]；0精确无云 |
 | weather_scale_m / shape_scale_m / detail_scale_m | 100000 / 10000 / 1000 | 周期长度，米；各[1,1e7] |
 | bottom_fade_fraction / top_fade_fraction | 0.1 / 0.2 | 垂直渐变相对壳厚，各[.001,.5] |
 | wind_velocity_mps | [10,0] | 世界X/Z平移速度，m/s；各[-1000,1000] |
 
 云字段也全部必填。生成器key只有seed、generator_version和分辨率；调coverage/密度/风不会重建纹理。
-时间是采样请求的显式秒数，不写入场景，也不由帧率累计；当前命令未提供云积分或序列截图。
+时间是采样请求的显式秒数，不写入场景，也不由帧率累计；当前[截图](render.md)固定time=0，未提供时间参数或序列截图。
 旧environment v1迁移时，top=min(4000,大气厚度/2)，bottom=min(1500,top/2)，保持旧小尺度大气可读。
 
 完整set调用示例（替换guard为query取得的最新state）：

@@ -8,6 +8,10 @@
 #ifdef DK_RENDER_SUNLIGHT
 #include <dk/render/Atmosphere.hpp>
 #endif
+#ifdef DK_RENDER_CLOUDS
+#include <dk/render/CloudReference.hpp>
+#include <dk/render/CloudTextures.hpp>
+#endif
 #include <new>
 #include <numbers>
 #include <fstream>
@@ -17,6 +21,9 @@
 namespace dk::render {
 using namespace graphics;
 namespace detail {
+#ifdef DK_RENDER_CLOUDS
+struct CloudEnvironment { CloudFieldCache fields; std::unique_ptr<CloudTextureCache> textures; };
+#endif
 struct PipelineState {
     memory::ResourceHandle heap;
     ResourceFactory factory;
@@ -28,14 +35,20 @@ struct PipelineState {
     struct Program { PipelineLayout layout; ComputePipeline pipeline; };
     std::array<Program,2> aerial;
     Sampler aerial_sampler;
+    Buffer identity;
+    Program cloud_program;
     std::filesystem::path directory;
 #ifdef DK_RENDER_SUNLIGHT
     std::optional<AtmosphereRenderer> atmosphere;
+#endif
+#ifdef DK_RENDER_CLOUDS
+    std::unique_ptr<CloudEnvironment> clouds;
 #endif
 };
 struct FrameState {
     FrameInfo info;
     std::size_t color = 0, linear_readback = 0;
+    std::array<std::size_t,2> cloud_readback{};
     graph::Execution execution;
     graph::PlanReport report;
 };
@@ -50,6 +63,9 @@ constexpr auto depth_stages = vk::PipelineStageFlagBits2::eEarlyFragmentTests | 
 constexpr auto depth_access = vk::AccessFlagBits2::eDepthStencilAttachmentRead | vk::AccessFlagBits2::eDepthStencilAttachmentWrite;
 constexpr auto color_access = vk::AccessFlagBits2::eColorAttachmentRead | vk::AccessFlagBits2::eColorAttachmentWrite;
 Error allocation_error() { return {ErrorCode::internal_error,"scene pipeline allocation failed; no frame submitted"}; }
+bool active_clouds(const EnvironmentDescription& e) {
+    return e.clouds.enabled && e.clouds.coverage>0 && e.clouds.density>0 && e.clouds.extinction_per_m>0;
+}
 struct Draw {
     GpuAsset owner;
     const GpuPrimitive* primitive = nullptr;
@@ -120,7 +136,7 @@ struct AerialParameters {
     std::array<float,4> depth;
 };
 static_assert(sizeof(AerialParameters)==208);
-Buffer prepare_aerial(detail::PipelineState& state,const RenderView& view,const AtmosphereSky& sky,const AtmosphereSettings& settings) {
+Buffer prepare_aerial(detail::PipelineState& state,const RenderView& view,const AtmosphereSky& sky,const AtmosphereSettings& settings,bool clouds=false) {
     const auto projection=take(detail::perspective_depth(view.description()));
     const auto environment=take(sky.environment());
     const Vec3d anchor=take(sky.position_m());
@@ -154,7 +170,7 @@ Buffer prepare_aerial(detail::PipelineState& state,const RenderView& view,const 
     p.depth={float(projection_matrix(2,2)),float(projection_matrix(2,3)*.001),float(projection.far_m*.001),0};
     auto uniform=take(state.factory.create_buffer({sizeof(p),vk::BufferUsageFlagBits::eUniformBuffer,BufferMemory::upload}));
     check(uniform.write(0,std::as_bytes(std::span{&p,1})));
-    if(!state.aerial[0].pipeline) {
+    if(!clouds && !state.aerial[0].pipeline) {
         std::array<detail::PipelineState::Program,2> programs;
         for(unsigned i=0;i<2;++i) {
             const auto side=std::to_string(aerial_side),depth=std::to_string(aerial_depth);
@@ -171,6 +187,48 @@ Buffer prepare_aerial(detail::PipelineState& state,const RenderView& view,const 
     }
     return uniform;
 }
+#ifdef DK_RENDER_CLOUDS
+Buffer prepare_clouds(detail::PipelineState& state,const RenderView& view,const CloudTextures& textures,
+    const CloudCompositionSettings& settings,const RenderSettings& render) {
+    const auto& e=view.scene().environment(); const auto& c=e.clouds; const auto& a=e.atmosphere; const auto& s=settings.reference;
+    check(validate_cloud_composition(e,settings,std::size_t(view.description().width)*view.description().height));
+    if(textures.key()!=cloud_field_key(c) || !textures.bytes()) throw Error{ErrorCode::invalid_argument,"Cloud textures do not match scene"};
+    using F=std::array<float,4>;
+    struct Parameters { F geometry,cloud,scales,lighting,sun,irradiance,sky,rayleigh,mie,absorption,air;
+        std::array<std::uint32_t,4> counts,flags; F origin_geometry,origin_direction,weather,base,detail,segments,forward,right,up,clear; };
+    static_assert(sizeof(Parameters)==368);
+    auto pack=[](const auto& v,double w=0) { return F{float(v[0]),float(v[1]),float(v[2]),float(w)}; };
+    const Vec3d anchor=view.description().camera_world.matrix().topRightCorner<3,1>();
+    Vec3d origin=anchor-Vec3d{a.planet_center_m.data()};
+    const double height=take(atmosphere_height_m(a,{anchor.x(),anchor.y(),anchor.z()}));
+    if(height<0 || (anchor.array().abs()>1e9).any()) throw Error{ErrorCode::invalid_argument,"Cloud camera below ground or outside scene bounds"};
+    Parameters p{}; p.geometry={float(a.ground_radius_m),float(a.atmosphere_height_m),float(c.bottom_height_m),float(c.top_height_m)};
+    p.cloud={float(c.coverage),float(c.density),float(c.extinction_per_m),float(s.homogeneous_density)};
+    p.scales={float(c.weather_scale_m),float(c.shape_scale_m),float(c.detail_scale_m),float(c.bottom_fade_fraction)};
+    p.lighting={float(s.phase_g),float(s.single_scattering_albedo),float(s.multiple_scattering),float(c.top_fade_fraction)};
+    p.sun=pack(e.sun.direction); p.irradiance=pack(e.sun.irradiance); p.sky=pack(s.sky_radiance);
+    p.rayleigh=pack(a.rayleigh_scattering_per_m,a.rayleigh_scale_height_m); p.mie=pack(a.mie_extinction_per_m,a.mie_scale_height_m);
+    p.absorption=pack(a.absorption_extinction_per_m,a.absorption_center_height_m); p.air[0]=float(a.absorption_half_width_m);
+    p.counts={s.steps,s.sun_steps,s.atmosphere_steps,0}; p.flags={1,e.enabled?1u:0u,s.self_shadow?1u:0u,s.homogeneous?1u:0u};
+    p.origin_geometry={float(height),0,float(origin.normalized().dot(Vec3d{e.sun.direction.data()})),0};
+    origin.x()-=c.wind_velocity_mps[0]*s.time_seconds; origin.z()-=c.wind_velocity_mps[1]*s.time_seconds;
+    auto coordinate=[](double value,double scale) { const double x=value/scale; return float(x-std::floor(x)); };
+    p.weather={coordinate(origin.x(),c.weather_scale_m),coordinate(origin.z(),c.weather_scale_m),0,0};
+    for(unsigned i=0;i<3;++i) { p.base[i]=coordinate(origin[i],c.shape_scale_m); p.detail[i]=coordinate(origin[i],c.detail_scale_m); }
+    const Mat3d camera=view.description().camera_world.matrix().topLeftCorner<3,3>(); const auto& projection=view.description().projection;
+    p.forward=pack((camera*Vec3d{projection(0,2)/projection(0,0),projection(1,2)/projection(1,1),-1}).eval());
+    p.right=pack((camera.col(0)/projection(0,0)).eval()); p.up=pack((camera.col(1)/projection(1,1)).eval()); p.clear=pack(render.clear_rgb);
+    if(!state.cloud_program.pipeline) {
+        auto code=take(compile_shader({state.directory/"cloud-composition.slang","computeMain",ShaderStage::compute},state.heap));
+        auto shader=take(state.factory.create_shader(code)); const std::array shaders{&shader}; detail::PipelineState::Program program;
+        program.layout=take(state.factory.create_pipeline_layout(shaders)); program.pipeline=take(state.factory.create_compute_pipeline({&shader,&program.layout}));
+        SamplerDesc desc; desc.address_u=desc.address_v=desc.address_w=vk::SamplerAddressMode::eClampToEdge;
+        auto sampler=take(state.factory.create_sampler(desc)); state.cloud_program=std::move(program); state.aerial_sampler=std::move(sampler);
+    }
+    auto buffer=take(state.factory.create_buffer({sizeof(p),vk::BufferUsageFlagBits::eUniformBuffer,BufferMemory::upload}));
+    check(buffer.write(0,std::as_bytes(std::span{&p,1}))); return buffer;
+}
+#endif
 void prepare_sunlight(detail::PipelineState& state) {
     if(state.sunlight) return;
     auto compile=[&](const char* entry,ShaderStage stage,std::string_view define={}) {
@@ -263,7 +321,9 @@ struct Context {
     std::size_t hdr, depth, ldr, white;
     std::size_t composed=0,linear_readback=0,parameters=0;
     std::array<std::size_t,3> atmosphere_luts{};
-    std::array<std::size_t,2> volumes{};
+    std::array<std::size_t,2> volumes{},cloud_images{},cloud_readback{};
+    const CloudTextures* clouds=nullptr;
+    std::size_t cloud_parameters=0;
 };
 Result<void> clear_pass(graph::PassContext& pass,void* pointer) {
     const auto& c = *static_cast<Context*>(pointer);
@@ -360,6 +420,30 @@ Result<void> aerial_pass(graph::PassContext& pass,void* pointer) {
     const std::array sets{&bindings}; check(encoder.bind_sets(sets));
     return encoder.dispatch({volume ? (aerial_side+7)/8 : (c.width+7)/8,volume ? (aerial_side+7)/8 : (c.height+7)/8,volume ? aerial_depth : 1u});
 }
+#ifdef DK_RENDER_CLOUDS
+Result<void> cloud_pass(graph::PassContext& pass,void* pointer) {
+    auto& c=*static_cast<Context*>(pointer); auto& program=c.pipeline.cloud_program;
+    std::array<ImageView,7> views;
+    views[0]=take(c.pipeline.factory.create_view(*take(pass.image(c.composed))));
+    for(unsigned i=0;i<2;++i) {
+        views[1+i]=take(c.pipeline.factory.create_view(*take(pass.image(c.atmosphere_luts[i]))));
+        views[3+i]=take(c.pipeline.factory.create_view(*take(pass.image(c.cloud_images[i]))));
+    }
+    views[5]=take(c.pipeline.factory.create_view(*take(pass.image(c.depth)),{vk::ImageViewType::e2D,depth_range}));
+    views[6]=take(c.pipeline.factory.create_view(*take(pass.image(c.hdr))));
+    const std::array writes{BindingWrite{0,0,BufferBinding{take(pass.buffer(c.parameters))}},
+        BindingWrite{1,0,ImageBinding{&views[0],vk::ImageLayout::eGeneral}},BindingWrite{2,0,SamplerBinding{&c.pipeline.aerial_sampler}},
+        BindingWrite{3,0,ImageBinding{&views[1]}},BindingWrite{4,0,ImageBinding{&views[2]}},
+        BindingWrite{6,0,ImageBinding{&views[3],vk::ImageLayout::eGeneral}},BindingWrite{7,0,ImageBinding{&views[4],vk::ImageLayout::eGeneral}},
+        BindingWrite{8,0,ImageBinding{&views[5]}},BindingWrite{9,0,ImageBinding{&views[6]}},
+        BindingWrite{10,0,BufferBinding{take(pass.buffer(c.cloud_parameters))}},
+        BindingWrite{11,0,ImageBinding{&c.clouds->view(CloudField::weather)}},BindingWrite{12,0,ImageBinding{&c.clouds->view(CloudField::base)}},
+        BindingWrite{13,0,ImageBinding{&c.clouds->view(CloudField::detail)}},BindingWrite{14,0,SamplerBinding{&c.clouds->sampler()}}};
+    auto bindings=take(c.pipeline.factory.create_bindings(program.layout,0,writes));
+    auto encoder=take(pass.compute()); check(encoder.bind_pipeline(program.pipeline)); const std::array sets{&bindings};
+    check(encoder.bind_sets(sets)); return encoder.dispatch({(c.width+7)/8,(c.height+7)/8,1});
+}
+#endif
 template<auto Record> Result<void> record(graph::PassContext& pass,void* context) {
     try { return Record(pass,context); }
     catch (Error& error) { return std::unexpected(std::move(error)); }
@@ -368,6 +452,8 @@ Result<void> copy_pass(graph::PassContext& pass,void* pointer) {
     const auto& c = *static_cast<Context*>(pointer);
     check(pass.copy_to_buffer(c.ldr,0,{0,0,0,0,c.width,c.height}));
     if(c.linear_readback) check(pass.copy_to_buffer(c.composed ? c.composed : c.hdr,c.linear_readback,{0,0,0,0,c.width,c.height}));
+    if(c.cloud_readback[0]) for(unsigned i=0;i<2;++i)
+        check(pass.copy_to_buffer(c.cloud_images[i],c.cloud_readback[i],{0,0,0,0,c.width,c.height}));
     return {};
 }
 }
@@ -385,6 +471,7 @@ Result<ScenePipeline> ScenePipeline::create(memory::ResourceHandle heap,Submissi
         return std::unexpected(Error{ErrorCode::invalid_state,"scene pipeline requires open memory and queue"});
     try {
         auto state = memory::make_shared_in<detail::PipelineState>(heap); state->heap = heap; state->factory = queue.resources(); state->directory=directory;
+        state->identity=take(state->factory.create_buffer({4}));
         auto compile = [&](const char* file,const char* entry,ShaderStage stage,std::string_view define={}) {
             const std::array definitions{ShaderDefine{define,"1"}};
             auto shader = take(compile_shader({directory/file,entry,stage,{},define.empty() ? std::span<const ShaderDefine>{} : std::span<const ShaderDefine>{definitions}},heap));
@@ -429,29 +516,64 @@ Result<RenderFrame> ScenePipeline::render_sunlight(SubmissionQueue& queue,const 
     return render_impl(queue,view,assets,settings,view.scene().environment().enabled ? &sky : nullptr);
 }
 Result<RenderFrame> ScenePipeline::render_environment(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings) {
-    if(view.scene().environment().clouds.enabled)
-        return std::unexpected(Error{ErrorCode::not_supported,"cloud field resources are available; cloud rendering is not implemented"});
-    if(!view.scene().environment().enabled) return render(queue,view,assets,settings);
+    const bool cloudy=active_clouds(view.scene().environment());
+    if(!cloudy && !view.scene().environment().enabled) return render(queue,view,assets,settings);
 #ifdef DK_RENDER_SUNLIGHT
-    if(!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty scene pipeline"});
-    std::optional<AtmosphereRenderer> candidate;
-    if(!state_->atmosphere) {
-        auto renderer=AtmosphereRenderer::create(state_->heap,queue,state_->directory/"../../engine/render/atmosphere/shaders");
-        if(!renderer) return std::unexpected(renderer.error()); candidate=std::move(*renderer);
-    }
-    auto& renderer=state_->atmosphere ? *state_->atmosphere : *candidate;
-    auto sky=renderer.prepare(queue,view.scene().environment(),view.description().camera_world.matrix().topRightCorner<3,1>());
-    if(!sky) return std::unexpected(sky.error());
-    auto frame=render_atmosphere(queue,view,assets,*sky,settings);
-    if(frame && candidate) state_->atmosphere=std::move(candidate);
-    return frame;
+    if(!state_ || state_->heap.state()!=memory::ResourceState::open) return std::unexpected(Error{ErrorCode::invalid_state,"empty or closed scene pipeline"});
+    try {
+        check(validate_render_settings(view,settings)); take(detail::perspective_depth(view.description()));
+        { auto guard=take(queue.begin()); check(guard.retain(state_->identity)); }
+#ifdef DK_RENDER_CLOUDS
+        CloudCompositionSettings composition;
+        if(cloudy) check(validate_cloud_composition(view.scene().environment(),composition,std::size_t(view.description().width)*view.description().height));
+#else
+        if(cloudy) throw Error{ErrorCode::not_supported,"cloud composition requires DK_BUILD_RENDER_CLOUDS"};
+#endif
+        std::optional<AtmosphereRenderer> candidate;
+        if(!state_->atmosphere) candidate=take(AtmosphereRenderer::create(state_->heap,queue,state_->directory/"../../engine/render/atmosphere/shaders"));
+        auto& renderer=state_->atmosphere ? *state_->atmosphere : *candidate;
+        auto sky=take(renderer.prepare(queue,view.scene().environment(),view.description().camera_world.matrix().topRightCorner<3,1>()));
+        Result<RenderFrame> frame;
+#ifdef DK_RENDER_CLOUDS
+        std::unique_ptr<detail::CloudEnvironment> cloud_candidate;
+        if(cloudy) {
+            if(!state_->clouds) { cloud_candidate=std::make_unique<detail::CloudEnvironment>(); cloud_candidate->textures=take(CloudTextureCache::create(queue)); }
+            auto& owner=state_->clouds ? *state_->clouds : *cloud_candidate;
+            const auto data=take(owner.fields.prepare(view.scene().environment().clouds));
+            const auto textures=take(owner.textures->prepare(queue,*data));
+            frame=render_clouds(queue,view,assets,sky,*textures,composition,settings);
+        } else
+#endif
+        frame=render_atmosphere(queue,view,assets,sky,settings);
+        if(frame && candidate) state_->atmosphere=std::move(candidate);
+#ifdef DK_RENDER_CLOUDS
+        if(frame && cloud_candidate) state_->clouds=std::move(cloud_candidate);
+#endif
+        return frame;
+    } catch(const Error& error) { return std::unexpected(error); }
+    catch(const std::bad_alloc&) { return std::unexpected(allocation_error()); }
 #else
     return std::unexpected(Error{ErrorCode::not_supported,"environment rendering requires DK_BUILD_RENDER_ATMOSPHERE"});
 #endif
 }
+Result<RenderFrame> ScenePipeline::render_clouds(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,
+    const AtmosphereSky& sky,const CloudTextures& textures,const CloudCompositionSettings& clouds,const RenderSettings& settings) {
+#ifdef DK_RENDER_CLOUDS
+    if(!active_clouds(view.scene().environment())) return render_atmosphere(queue,view,assets,sky,settings,{clouds.surface_lighting,clouds.sun_disk,false});
+    if(auto valid=validate_cloud_composition(view.scene().environment(),clouds,std::size_t(view.description().width)*view.description().height); !valid)
+        return std::unexpected(valid.error());
+    const AtmosphereSettings atmosphere{clouds.surface_lighting && view.scene().environment().enabled,clouds.sun_disk,true};
+    return render_impl(queue,view,assets,settings,&sky,&atmosphere,&textures,&clouds);
+#else
+    static_cast<void>(queue); static_cast<void>(view); static_cast<void>(assets); static_cast<void>(sky);
+    static_cast<void>(textures); static_cast<void>(clouds); static_cast<void>(settings);
+    return std::unexpected(Error{ErrorCode::not_supported,"cloud composition requires Clouds and Atmosphere"});
+#endif
+}
 Result<std::string> shader_fingerprint(const std::filesystem::path& directory,bool environment) {
     const std::array files{"scene.slang","tone.slang","sunlight.slang","aerial.slang",
-        "../../engine/render/atmosphere/shaders/atmosphere.slang","../../engine/render/atmosphere/shaders/AtmosphereTransport.slang"};
+        "../../engine/render/atmosphere/shaders/atmosphere.slang","../../engine/render/atmosphere/shaders/AtmosphereTransport.slang",
+        "cloud-composition.slang","../../engine/render/clouds/shaders/CloudTypes.slang","../../engine/render/clouds/shaders/CloudTransport.slang"};
     std::uint64_t hash=14695981039346656037ULL;
     auto append=[&](unsigned char c) { hash^=c; hash*=1099511628211ULL; };
     for(unsigned i=0;i<(environment ? files.size() : 2);++i) {
@@ -463,14 +585,14 @@ Result<std::string> shader_fingerprint(const std::filesystem::path& directory,bo
         append(0);
     }
     // CPU-side sampling/mapping version, including the fixed 64 x 64 x 128 AP grid.
-    for(const unsigned char c:std::string_view{"render-environment-v1:64x64x128:128"}) append(c);
+    for(const unsigned char c:std::string_view{"render-environment-v2:64x64x128:128:cloud-joint-v1:256x64x64"}) append(c);
     std::ostringstream out; out<<"fnv1a64:"<<std::hex<<std::setfill('0')<<std::setw(16)<<hash; return out.str();
 }
 Result<RenderFrame> ScenePipeline::render_atmosphere(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings,const AtmosphereSettings& atmosphere) {
     const bool enabled=view.scene().environment().enabled;
     return render_impl(queue,view,assets,settings,enabled ? &sky : nullptr,enabled ? &atmosphere : nullptr);
 }
-Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings,const AtmosphereSky* sky,const AtmosphereSettings* atmosphere) {
+Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings,const AtmosphereSky* sky,const AtmosphereSettings* atmosphere,const CloudTextures* clouds,const CloudCompositionSettings* cloud_settings) {
     DK_PROFILE_ZONE("render.scene");
     if (!state_ || state_->heap.state()!=memory::ResourceState::open || queue.stats().closed || queue.stats().device_lost)
         return std::unexpected(Error{ErrorCode::invalid_state,"scene pipeline, memory or queue is unavailable"});
@@ -481,11 +603,12 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
         return std::unexpected(Error{ErrorCode::not_supported,"render extent exceeds device limits"});
     try {
         const auto heap=state_->heap;
+        { auto guard=take(queue.begin()); check(guard.retain(state_->identity)); }
         Inputs inputs{heap}; resolve(inputs,view,assets);
-        Buffer aerial_uniform;
+        Buffer aerial_uniform,cloud_uniform;
         if(sky) {
 #ifdef DK_RENDER_SUNLIGHT
-            if(atmosphere) aerial_uniform=prepare_aerial(*state_,view,*sky,*atmosphere);
+            if(atmosphere) aerial_uniform=prepare_aerial(*state_,view,*sky,*atmosphere,clouds!=nullptr);
             if(!atmosphere || atmosphere->surface_lighting) {
                 resolve_sunlight(inputs,view,*sky,settings,*state_);
                 prepare_sunlight(*state_);
@@ -494,6 +617,11 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             return std::unexpected(Error{ErrorCode::not_supported,"environment rendering requires DK_BUILD_RENDER_ATMOSPHERE"});
 #endif
         }
+#ifdef DK_RENDER_CLOUDS
+        if(clouds) cloud_uniform=prepare_clouds(*state_,view,*clouds,*cloud_settings,settings);
+#else
+        static_cast<void>(cloud_settings);
+#endif
         auto frame=memory::make_shared_in<detail::FrameState>(heap);
         frame->info={view.scene().id(),view.scene().revision(),view.description().frame,width,height,inputs.draws.size()};
         auto graph=take(graph::Graph::create(heap));
@@ -521,6 +649,20 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             frame->linear_readback=graph.counts().buffers;
             linear_readback=take(graph.declare_buffer("linear RGBA32F readback",{vk::DeviceSize{width}*height*16,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
         }
+        graph::ResourceId cloud_constants{}; std::array<graph::ResourceId,2> diagnostic_readbacks{};
+        std::size_t cloud_parameters=0;
+#ifdef DK_RENDER_CLOUDS
+        if(clouds) {
+            cloud_parameters=graph.counts().buffers;
+            cloud_constants=take(graph.declare_buffer("cloud parameters",cloud_uniform.description(),graph::Lifetime::external,true));
+            external.push_back({cloud_parameters,&cloud_uniform});
+            if(cloud_settings->diagnostics) for(unsigned i=0;i<2;++i) {
+                frame->cloud_readback[i]=graph.counts().buffers;
+                diagnostic_readbacks[i]=take(graph.declare_buffer("cloud diagnostic readback "+std::to_string(i),
+                    {vk::DeviceSize{width}*height*16,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
+            }
+        }
+#endif
         const auto image_base=graph.counts().buffers;
         const auto hdr=take(graph.declare_image("linear HDR",{width,height,vk::Format::eR32G32B32A32Sfloat,
             vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc}));
@@ -530,6 +672,7 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled}));
         const auto white=take(graph.declare_image("default white",{1,1}));
         Context context{*state_,inputs,settings,width,height,image_base,image_base+1,image_base+2,image_base+3};
+        context.clouds=clouds; context.cloud_parameters=cloud_parameters; context.cloud_readback=frame->cloud_readback;
         frame->color=context.ldr; context.linear_readback=frame->linear_readback; context.parameters=parameters_index;
         const std::array clear_uses{use(hdr,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal,true),
             use(depth,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal,true,true),
@@ -551,6 +694,7 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             const std::array luts{AtmosphereLut::transmittance,AtmosphereLut::multiple_scattering,AtmosphereLut::sky_view};
             for(unsigned i=0;i<3;++i) {
                 if(!atmosphere && i==1) continue;
+                if(clouds && i==2 && !inputs.sky) continue;
                 const auto* image=take(sky->image(luts[i]));
                 context.atmosphere_luts[i]=graph.counts().buffers+graph.counts().images;
                 lut_ids[i]=take(graph.declare_image("atmosphere LUT "+std::to_string(i),image->description(),graph::Lifetime::external,true));
@@ -562,7 +706,7 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
         geometry.push_back(use(hdr,vk::PipelineStageFlagBits2::eColorAttachmentOutput,color_access,vk::ImageLayout::eColorAttachmentOptimal));
         static_cast<void>(take(graph.add_pass({"opaque",geometry})));
         auto final_hdr=hdr;
-        if(atmosphere) {
+        if(atmosphere && !clouds) {
             constexpr auto compute=vk::PipelineStageFlagBits2::eComputeShader;
             constexpr auto sampled=vk::AccessFlagBits2::eShaderSampledRead;
             std::array<graph::ResourceId,2> volumes;
@@ -590,6 +734,33 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
                 use(final_hdr,compute,vk::AccessFlagBits2::eShaderStorageWrite,vk::ImageLayout::eGeneral,true)};
             static_cast<void>(take(graph.add_pass({"sky and geometry composition",composite_uses})));
         }
+#ifdef DK_RENDER_CLOUDS
+        std::array<graph::ResourceId,2> cloud_outputs{};
+        if(clouds) {
+            constexpr auto compute=vk::PipelineStageFlagBits2::eComputeShader; constexpr auto sampled=vk::AccessFlagBits2::eShaderSampledRead;
+            context.composed=graph.counts().buffers+graph.counts().images;
+            ImageDesc image{width,height,vk::Format::eR32G32B32A32Sfloat,vk::ImageUsageFlagBits::eStorage|vk::ImageUsageFlagBits::eSampled|vk::ImageUsageFlagBits::eTransferSrc};
+            final_hdr=take(graph.declare_image("cloud air surface HDR",image));
+            for(unsigned i=0;i<2;++i) {
+                context.cloud_images[i]=graph.counts().buffers+graph.counts().images;
+                cloud_outputs[i]=take(graph.declare_image(i==0 ? "cloud L and T" : "medium T and cloud distance",image));
+            }
+            Vector<graph::Use> uses(0,memory::Allocator<graph::Use>{heap});
+            uses={use(constants,compute,vk::AccessFlagBits2::eUniformRead),use(cloud_constants,compute,vk::AccessFlagBits2::eUniformRead),
+                use(hdr,compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal),use(depth,compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal,false,true),
+                use(final_hdr,compute,vk::AccessFlagBits2::eShaderStorageWrite,vk::ImageLayout::eGeneral,true)};
+            for(unsigned i=0;i<2;++i) {
+                uses.push_back(use(lut_ids[i],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal));
+                uses.push_back(use(cloud_outputs[i],compute,vk::AccessFlagBits2::eShaderStorageWrite,vk::ImageLayout::eGeneral,true));
+            }
+            for(unsigned i=0;i<3;++i) {
+                const auto& field=clouds->image(static_cast<CloudField>(i)); const auto index=graph.counts().buffers+graph.counts().images;
+                const auto id=take(graph.declare_image("cloud field "+std::to_string(i),field.description(),graph::Lifetime::external,true));
+                external.push_back({index,nullptr,&field,{}}); uses.push_back(use(id,compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal));
+            }
+            static_cast<void>(take(graph.add_pass({"joint cloud air geometry composition",uses})));
+        }
+#endif
         const std::array tone_uses{use(final_hdr,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal),
             use(ldr,vk::PipelineStageFlagBits2::eColorAttachmentOutput,color_access,vk::ImageLayout::eColorAttachmentOptimal)};
         static_cast<void>(take(graph.add_pass({"tone mapping",tone_uses})));
@@ -601,18 +772,30 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             read_uses.push_back(use(linear_readback,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eUndefined,true));
             check(graph.mark_output(linear_readback));
         }
+#ifdef DK_RENDER_CLOUDS
+        if(context.cloud_readback[0]) for(unsigned i=0;i<2;++i) {
+            read_uses.push_back(use(cloud_outputs[i],vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead,vk::ImageLayout::eTransferSrcOptimal));
+            read_uses.push_back(use(diagnostic_readbacks[i],vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eUndefined,true));
+            check(graph.mark_output(diagnostic_readbacks[i]));
+        }
+#endif
         static_cast<void>(take(graph.add_pass({"readback",read_uses})));
         check(graph.mark_output(readback)); check(graph.mark_output(ldr));
         auto plan=take(graph.compile());
         if (settings.capture_plan) frame->report=take(graph::format_plan(plan));
         Vector<graph::PassCallback> callbacks(0,memory::Allocator<graph::PassCallback>{heap});
         callbacks={{0,record<clear_pass>,&context},{1,record<geometry_pass>,&context},{2,record<geometry_pass>,&context}};
-        if(atmosphere) { callbacks.push_back({3,record<aerial_pass>,&context}); callbacks.push_back({4,record<aerial_pass>,&context}); }
+        if(atmosphere && !clouds) { callbacks.push_back({3,record<aerial_pass>,&context}); callbacks.push_back({4,record<aerial_pass>,&context}); }
+#ifdef DK_RENDER_CLOUDS
+        if(clouds) callbacks.push_back({3,record<cloud_pass>,&context});
+#endif
         callbacks.push_back({callbacks.size(),record<tone_pass>,&context}); callbacks.push_back({callbacks.size(),record<copy_pass>,&context});
         Vector<graph::FinalAccess> finals(0,memory::Allocator<graph::FinalAccess>{heap});
         finals={{0,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}},
             {context.ldr,{{vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal}}}};
         if(settings.linear_readback) finals.push_back({context.linear_readback,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}});
+        if(context.cloud_readback[0]) for(unsigned i=0;i<2;++i)
+            finals.push_back({context.cloud_readback[i],{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}});
         frame->execution=take(graph::execute(plan,queue,{external,callbacks,finals}));
         return RenderFrame{std::move(frame)};
     } catch (Error& error) { return std::unexpected(std::move(error)); }
@@ -636,6 +819,20 @@ Result<void> RenderFrame::read_linear_rgba32f(std::span<std::array<float,4>> des
     if(destination.size()!=std::uint64_t{state_->info.width}*state_->info.height)
         return std::unexpected(Error{ErrorCode::invalid_argument,"linear readback pixel count differs"});
     auto buffer=state_->execution.buffer(state_->linear_readback); if(!buffer) return std::unexpected(buffer.error());
+    return (*buffer)->read(0,std::as_writable_bytes(destination));
+}
+Result<void> RenderFrame::read_cloud_rgba32f(std::span<std::array<float,4>> destination) const {
+    if(!state_ || !state_->cloud_readback[0]) return std::unexpected(Error{ErrorCode::invalid_state,"Cloud diagnostics were not generated"});
+    if(destination.size()!=std::uint64_t{state_->info.width}*state_->info.height)
+        return std::unexpected(Error{ErrorCode::invalid_argument,"Cloud diagnostic pixel count differs"});
+    auto buffer=state_->execution.buffer(state_->cloud_readback[0]); if(!buffer) return std::unexpected(buffer.error());
+    return (*buffer)->read(0,std::as_writable_bytes(destination));
+}
+Result<void> RenderFrame::read_medium_rgba32f(std::span<std::array<float,4>> destination) const {
+    if(!state_ || !state_->cloud_readback[1]) return std::unexpected(Error{ErrorCode::invalid_state,"Cloud diagnostics were not generated"});
+    if(destination.size()!=std::uint64_t{state_->info.width}*state_->info.height)
+        return std::unexpected(Error{ErrorCode::invalid_argument,"Cloud diagnostic pixel count differs"});
+    auto buffer=state_->execution.buffer(state_->cloud_readback[1]); if(!buffer) return std::unexpected(buffer.error());
     return (*buffer)->read(0,std::as_writable_bytes(destination));
 }
 Result<const Image*> RenderFrame::color() const {

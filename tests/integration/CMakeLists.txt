@@ -763,3 +763,28 @@ if(TARGET dk_render_clouds)
     set_tests_properties(dk.clouds.reference_gpu_validation PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE LABELS "gpu"
         ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
 endif()
+if(TARGET dk_render_clouds AND TARGET dk_render_pipeline AND TARGET dk_render_atmosphere)
+    add_executable(dk_cloud_composition_probe CloudCompositionProbe.cpp)
+    target_link_libraries(dk_cloud_composition_probe PRIVATE dk::render_pipeline dk::render_clouds dk::render_atmosphere)
+    target_include_directories(dk_cloud_composition_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
+    target_compile_definitions(dk_cloud_composition_probe PRIVATE DK_RENDER_SHADER_DIR="${PROJECT_SOURCE_DIR}/shaders/render"
+        DK_ATMOSPHERE_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/atmosphere/shaders")
+    dk_target_defaults(dk_cloud_composition_probe)
+    dk_deploy_slang(dk_cloud_composition_probe)
+    foreach(case IN ITEMS numeric composition failures)
+        add_test(NAME dk.clouds.${case}_gpu_composition COMMAND dk_cloud_composition_probe ${case})
+        set_tests_properties(dk.clouds.${case}_gpu_composition PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+    endforeach()
+endif()
+if(TARGET dk_render_clouds AND TARGET dk_render_services AND TARGET dk_run AND WIN32)
+    find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME dk.clouds.capture_gpu_composition
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/CloudCaptureTest.py"
+                --runner "$<TARGET_FILE:dk_run>" --fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+                --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+        set_tests_properties(dk.clouds.capture_gpu_composition PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+    endif()
+endif()

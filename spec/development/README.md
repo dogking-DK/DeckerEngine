@@ -104,5 +104,6 @@
 | 0100 | [M14.7 大气质量、性能基线与阶段交付](0100-atmosphere-baseline.md) | render-atmosphere, foundation-profiling | completed |
 | 0101 | [确定性云场与版本化参数](0101-cloud-fields.md) | render-clouds、scene、application-services、graphics-resources、graphics-vulkan、render-pipeline | completed |
 | 0102 | [无历史云积分参考](0102-cloud-reference.md) | render-clouds、render-atmosphere | completed |
+| 0103 | [云、空气与几何统一合成](0103-cloud-composition.md) | render-clouds、render-pipeline、render-capture、architecture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

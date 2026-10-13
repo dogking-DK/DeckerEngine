@@ -1,7 +1,7 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-10-13T11:25:00+08:00"
+updated_at: "2026-10-13T14:37:00+08:00"
 status: accepted
 ---
 
@@ -31,6 +31,9 @@ camera 可选 up=[0,1,0]、fov_y=65（度，1&lt;值&lt;179）、near=0.05、far
 
 关闭环境时与编辑器共用线性背景色 (0.04,0.08,0.16)；启用时按冻结环境执行天空、Lambert日光/天空漫射和空气透视。
 需要 DK_BUILD_RENDER_ATMOSPHERE，否则启用环境的 Job 返回 not_supported。
+非零云使用无历史混合介质参考，另需 DK_BUILD_RENDER_CLOUDS，当前总像素≤4096；
+超过上限的 Job 失败且保留原输出。可使用64×64或更小截图，云大分辨率优化尚未接入。
+云可在空气关闭时单独渲染；零coverage/density/extinction或关闭云退化为原大气/无环境路径。
 要重现 GUI 当前已提交画面，须显式匹配视口的尺寸、相机和 `profile=unlit_preview`；
 编辑器使用 far=10000，启用环境时 near=1，关闭时 near=.05；截图默认 near=.05/far=100。
 启用环境要求 far/near<=10000，刚体相机与其他支持域见[大气指南](../guides/atmosphere.md)。guard 只关联场景版本，不传递相机或未提交草稿。
@@ -72,8 +75,9 @@ succeeded 的 result 为 `{kind:"capture",document_id,scene_id,revision,frame,wi
 命令尚不支持 PNG、PBR、透明混合、HDR 环境贴图采样或天空盒。
 
 `provenance`包含完整环境（与environment.query同结构）、camera（含缺省up/fov_y/near/far）、
-exposure、profile、time_seconds=0、quality（atmosphere_v1或unlit_v1）及shader_fingerprint。
-当前环境为静态，时间固定0，质量不可覆盖；atmosphere_v1固定LUT/采样和64×64×128空气透视网格。
+exposure、profile、time_seconds=0、quality（atmosphere_v1、unlit_v1或cloud_reference_v1）及shader_fingerprint。
+时间固定0，质量不可覆盖；atmosphere_v1固定LUT/采样和64×64×128空气透视网格，
+cloud_reference_v1固定逐区间256视线步、64云太阳步、64大气太阳步，无时域历史。
 提交时shader_fingerprint=null；成功结果为`fnv1a64:`加16位小写十六进制，覆盖本次shader源、共享传输文件和算法版本。
 它用于追踪源码变化，不是加密校验或跨驱动像素一致承诺；shader在执行中变化则Job失败，不发布。
 元数据留在提交/Job响应中，调用者应保存；PPM不嵌元数据，也不隐式创建sidecar。
