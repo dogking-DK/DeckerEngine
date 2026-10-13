@@ -8,3 +8,7 @@ target_sources(dk_render_pipeline PRIVATE src/ScenePipeline.cpp src/PipelinePoli
 target_link_libraries(dk_render_pipeline PUBLIC dk::render_data dk::render_resources
     PRIVATE dk::graphics_graph dk::graphics_shaders dk::profiling)
 dk_target_defaults(dk_render_pipeline)
+if(TARGET dk::render_atmosphere)
+    target_link_libraries(dk_render_pipeline PRIVATE dk::render_atmosphere)
+    target_compile_definitions(dk_render_pipeline PRIVATE DK_RENDER_SUNLIGHT=1)
+endif()

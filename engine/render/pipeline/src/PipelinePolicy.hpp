@@ -4,6 +4,14 @@
 #include <cmath>
 
 namespace dk::render::detail {
+inline Result<Mat3d> normal_matrix(const Transformd& world) {
+    auto inverse=world.inverse();
+    if(!inverse) return std::unexpected(inverse.error().with_context("Lambert normal transform"));
+    Mat3d normal=inverse->matrix().topLeftCorner<3,3>().transpose();
+    normal/=normal.cwiseAbs().maxCoeff(); // Positive common scale preserves direction and avoids float overflow.
+    if(!normal.allFinite()) return std::unexpected(Error{ErrorCode::invalid_argument,"nonfinite normal matrix"});
+    return normal;
+}
 inline Result<std::array<float,16>> clip_rows(const RenderView& view, const Transformd& world) {
     const Mat4d matrix = view.world_to_clip() * world.matrix();
     std::array<float,16> result{};

@@ -98,5 +98,6 @@
 | 0094 | [M14.1 CPU环境模型与持久化](0094-environment-model.md) | render-atmosphere、scene、application-services、render-data | completed |
 | 0095 | [M14.2 体积图像与深度采样底座](0095-volume-images.md) | graphics-resources, graphics-vulkan, graphics-shaders, graphics-graph, render-pipeline, render-atmosphere | completed |
 | 0096 | [M14.3 大气积分、LUT与离屏天空](0096-atmosphere-luts.md) | render-atmosphere, architecture | completed |
+| 0097 | [M14.4 最小日光接收](0097-surface-sunlight.md) | render-pipeline, render-atmosphere, architecture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

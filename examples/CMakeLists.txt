@@ -21,4 +21,7 @@ endif()
 
 if(TARGET dk_render_atmosphere)
     add_subdirectory(atmosphere)
+    if(TARGET dk_render_pipeline)
+        add_subdirectory(sunlight)
+    endif()
 endif()

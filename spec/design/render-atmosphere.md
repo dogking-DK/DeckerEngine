@@ -1,7 +1,7 @@
 ---
 module: render-atmosphere
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-12T17:49:35+08:00"
+updated_at: "2026-10-13T09:28:33+08:00"
 status: accepted
 ---
 
@@ -9,7 +9,7 @@ status: accepted
 
 ## 目标与当前基线
 
-CPU环境模型、持久化与命令已接入；Graphics支持3D资源与深度采样，独立大气模块提供CPU参考、T/MS/Sky LUT和离屏天空。日光接收、空气透视与场景视口集成仍规划。阶段、顺序与验收状态统一维护在
+CPU环境模型、持久化与命令已接入；Graphics支持3D资源与深度采样，独立大气模块提供CPU参考、T/MS/Sky LUT和离屏天空。最小日光接收由 ScenePipeline 显式入口提供，空气透视与场景视口集成仍规划。阶段、顺序与验收状态统一维护在
 [Roadmap](../roadmap.md)；各后续小阶段开工时再细化具体接口。
 
 默认面向Windows x64、Vulkan/Slang、地球尺度的地表至高空实时观察；支持昼间、日出/日落、
@@ -22,7 +22,7 @@ CPU环境模型、持久化与命令已接入；Graphics支持3D资源与深度�
 
 | 已核实的现状 | 本轮需要补齐的能力 |
 | --- | --- |
-| [ScenePipeline](../../engine/render/pipeline/include/dk/render/ScenePipeline.hpp)只提供clear/exposure，depth→unlit opaque→tone→readback | 环境输入、太阳漫反射、天空/空气透视合成，保持原unlit路径 |
+| [ScenePipeline](../../engine/render/pipeline/include/dk/render/ScenePipeline.hpp)提供clear/exposure、默认unlit及显式Lambert日光入口 | 天空/空气透视合成和上层装配，保持原unlit路径 |
 | [资源描述](../../engine/graphics/device/include/dk/graphics/Resources.hpp)在M14.2扩展原生3D image/view、RGBA16F和三轴传输 | 后续LUT选择实际设备支持的格式，不把array_layers当连续z坐标 |
 | [深度目标](../../engine/render/pipeline/src/ScenePipeline.cpp)在M14.2增加sampled usage和Graph屏障验收 | M14.5实现线性距离/世界射线重建和合成 |
 | [RenderView](render-data.md)包含双精度相机/投影和环境快照 | 稳定视图身份与显式渲染时间约定 |
@@ -51,7 +51,7 @@ Scene与render/data的CPU契约见M14.1；M14.3独立模块的公开入口为[At
 | 现有Scene/Services/Operations | CPU环境值类型、校验、持久化、guard/事务/撤销；不依赖Render或Vulkan |
 | 现有render/data | 从SceneSnapshot提取只读环境；相机、尺寸、ViewId和显式时间为逐帧输入 |
 | engine/render/atmosphere，dk_render_atmosphere / dk::render_atmosphere | 参数到T/MS/Sky LUT和离屏天空；PUBLIC reference/Graph，PRIVATE Shaders/Profiling；reference仅依赖Scene/Math，不依赖Framework/Editor；区间散射留到M14.5 |
-| 现有render/pipeline | 当前depth/unlit/tone；M14.4/M14.5再编排大气与几何，同图传递资源，Render模块不调用裸Vulkan |
+| 现有render/pipeline | depth/unlit或Lambert/tone，M14.4导入大气快照T/Sky；M14.5再合成天空/空气透视，Render模块不调用裸Vulkan |
 | 现有render services / editor | 装配、截图任务及界面；通过统一命令改环境，不能持有可变GPU缓存作为场景状态 |
 
 DK_BUILD_RENDER_ATMOSPHERE隔离大气模块，默认OFF、windows-graphics开启；启用时明确检查target依赖。
@@ -84,7 +84,7 @@ CPU-only仍能读取、保存和修改环境描述，渲染能力未编译/设�
 默认disabled，所有标量及RGB/方向/位置均为double。Scene与Services不引入GPU依赖。
 `SceneDocument::set_environment`先校验并规范化完整候选，精确相等不修改revision/dirty；
 有效变化一次提交。环境进入snapshot、same_content、logical_bytes、stage、apply_snapshot及历史，
-保存来源令牌保持原约定。RenderScene提取环境副本；本阶段管线尚不消费它。
+保存来源令牌保持原约定。RenderScene提取环境副本；默认unlit管线不消费它；显式render_sunlight要求它与大气快照完全匹配。
 
 坐标为右手Y-up局部米制；默认半径6360000m、中心(0,-6360000,0)，原点处为地面。
 高度以double的`hypot(position-center)-ground_radius_m`计算，返回带符号高度，不钳制地下/大气顶外。
@@ -103,7 +103,7 @@ Rayleigh散射即消光；Mie散射与消光RGB分别保存，逐通道0≤scatt
 角半径在[1e-6,0.1]rad；RGB irradiance在[0,1e6]，是线性sRGB/D65通道中的场景归一化法向辐照度，
 不是lux或未经光谱转换的W/m²。白色默认E=(1,1,1)，Lambert正入射输出为albedo*E/pi，
 均匀太阳盘radiance=E/(pi*sin(angular_radius_rad)^2)，与材质emissive共享曝光前线性辐亮度标度。
-曝光不持久化到环境。M14.1以解析测试冻结换算，M14.3实现积分和太阳盘；Lambert绘制留到M14.4。
+曝光不持久化到环境。M14.1以解析测试冻结换算，M14.3实现积分和太阳盘；M14.4以同一E/pi标度实现Lambert绘制。
 
 DeckerScene写version=2并要求environment={version:1,enabled,atmosphere,sun}；所有子字段必填，
 未知字段/版本、重复键、非法参数拒绝。读v1严格维持旧字段集合并补默认disabled；Project仍v1。
@@ -137,7 +137,7 @@ descriptor反射、usage/范围和Graph导入导出先在M14.2验证；初版不
 depth=1背景按天空射线处理，几何按重建的实际距离应用`L_out = L_air + T_air * L_surface`。
 云接入后由[统一区间合成](render-clouds.md)负责介质顺序，不能在同一路径重复应用整段空气透视。
 
-为了让大气日光和后续云影真正作用到物体，M14.4新增可选最小Lambert太阳直射及天空漫反射项，
+为了让大气日光和后续云影真正作用到物体，M14.4提供可选最小Lambert太阳直射及天空漫反射项，
 验证法线逆转置、剪切/负缩放、双面约定和无效法线。保持unlit材质/旧预览可选且回归图像不变。
 这不是完整PBR：不含镜面IBL、多灯、几何阴影映射、GI或透明物体体积接收。
 
@@ -228,3 +228,9 @@ GPU：与高采样参考比较正午、低太阳、日落后、1m/10km/100km/顶
 MS用选定点同一闭合的高采样CPU参考比较，记录积分误差与近似模型限制。若候选分辨率未达门槛，先提高采样/分辨率并记录成本，不放宽门槛。
 缓存测试分别改变物理参数/散射/反照率/g/太阳/相机/尺寸，检查代次和旧输出；注入创建/submit/预算失败验证保留旧代。
 required GPU validation覆盖Graph与在途销毁。离屏样例输出正午/日落/高空PPM和线性数值测试证据；性能承诺留到M14.7。
+
+## M14.4 几何光照边界
+
+按[场景管线实施契约](render-pipeline.md#m144-最小日光接收实施契约)提供不可变快照的锚点与借用 LUT 图像。
+ScenePipeline 显式选择日光接收，共用快照太阳及 T/Sky 表，不修改大气缓存、不增加太阳盘漫射或空气透视。
+天空漫射在锚点近似，逐片段直射透射使用实际位置；不自动接入编辑器/capture，默认 unlit 保持。

@@ -19,6 +19,9 @@ public:
     [[nodiscard]] AtmosphereGenerations generations() const noexcept;
     [[nodiscard]] Result<AtmosphereLutView> lut(AtmosphereLut) const;
     [[nodiscard]] Result<EnvironmentDescription> environment() const;
+    [[nodiscard]] Result<Vec3d> position_m() const;
+    // Borrowed immutable GPU LUT; retain this snapshot until recording has completed.
+    [[nodiscard]] Result<const graphics::Image*> image(AtmosphereLut) const;
 private:
     friend class AtmosphereRenderer;
     explicit AtmosphereSky(std::shared_ptr<const detail::SkyState> state) : state_(std::move(state)) {}

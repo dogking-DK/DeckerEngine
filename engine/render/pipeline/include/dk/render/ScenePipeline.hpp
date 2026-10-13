@@ -4,11 +4,13 @@
 #include <filesystem>
 
 namespace dk::render {
+class AtmosphereSky;
 namespace detail { struct PipelineState; struct FrameState; }
 struct RenderSettings {
     Vec3f clear_rgb = Vec3f::Zero(); // Linear HDR color.
     float exposure = 1;
     bool capture_plan = false;
+    bool sky_diffuse = true; // Only used by render_sunlight; anchor-local sky irradiance.
 };
 // Shared by the editor viewport and Runtime capture for reproducible unlit previews.
 [[nodiscard]] inline RenderSettings unlit_preview_settings() { return {{0.04f,0.08f,0.16f},1,false}; }
@@ -47,7 +49,13 @@ public:
         const std::filesystem::path& shader_directory);
     [[nodiscard]] Result<RenderFrame> render(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
         const RenderSettings& = {});
+    // Explicit Lambert path. Snapshot environment must match the RenderScene exactly.
+    // A disabled scene uses unlit; requires DK_BUILD_RENDER_ATMOSPHERE when enabled.
+    [[nodiscard]] Result<RenderFrame> render_sunlight(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
+        const AtmosphereSky&, const RenderSettings& = {});
 private:
+    [[nodiscard]] Result<RenderFrame> render_impl(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
+        const RenderSettings&, const AtmosphereSky*);
     explicit ScenePipeline(std::shared_ptr<detail::PipelineState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::PipelineState> state_;
 };

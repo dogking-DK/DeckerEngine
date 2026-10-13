@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-10T15:51:00+08:00"
+updated_at: "2026-10-13T09:28:33+08:00"
 ---
 
 # 构建与依赖配置
@@ -72,7 +72,7 @@ ctest --preset windows-debug
 `windows-graphics` 继承 windows-dev，显式启用 DK_BUILD_GRAPHICS_DEVICE、DK_BUILD_GRAPHICS_SHADERS、DK_BUILD_GRAPHICS_OFFSCREEN、DK_BUILD_GRAPHICS_GRAPH、DK_BUILD_RENDER_DATA、DK_BUILD_RENDER_RESOURCES、DK_BUILD_RENDER_PIPELINE、DK_BUILD_RENDER_DISK、DK_BUILD_RENDER_CAPTURE、DK_BUILD_PHYSICS_GPU、DK_BUILD_RENDER_SIMULATION、DK_BUILD_RENDER_ATMOSPHERE；
 Offscreen 要求 Device、Shaders、Graph，复用已有 feature。设备/资源和离屏探针见 [Graphics 指南](graphics.md)、[离屏指南](offscreen.md)。
 Render Data 要求 Scene/Memory，Render Resources 要求 Math/Memory/Device/Graph，仅使用 asset_data 不要求 importer；
-Render Pipeline 要求 Render Data/Resources、Graph 和 Shaders。Render Disk 要求 Render Data/Resources、Asset Importers/Runtime。Render Capture 要求 Framework/Scene、Jobs、Render Disk/Pipeline，通过独立服务/操作接入 Runtime。五个选项默认 OFF，不增加三方库 feature。用法见 [Render 指南](render.md)。
+Render Pipeline 要求 Render Data/Resources、Graph 和 Shaders；与 Render Atmosphere 同时启用时提供显式 Lambert 日光入口与 dk-sunlight-demo，默认 unlit 不变。Render Disk 要求 Render Data/Resources、Asset Importers/Runtime。Render Capture 要求 Framework/Scene、Jobs、Render Disk/Pipeline，通过独立服务/操作接入 Runtime。五个选项默认 OFF，不增加三方库 feature。用法见 [Render 指南](render.md)。
 GPU Physics 要求 Graph/Shaders；Render Simulation 要求 GPU Physics，两者默认 OFF，不增加依赖版本或 feature。示例见 [模拟指南](simulation.md)。
 Graph 要求 device；声明/校验/编译不初始化 GPU，无额外依赖 feature，见 [Graph 指南](graph.md)。
 `windows-shaders` 单独构建无需 Vulkan 的

@@ -46,7 +46,7 @@ cmake --build --preset windows-debug --target dk_run
 | GPU Graph 声明、编译与单队列执行 | [Graph 指南](spec/guides/graph.md) |
 | 编辑器工作台、面板与保存加载 | [编辑器指南](spec/guides/editor.md) |
 | 环境CPU参数、太阳方向、场景迁移与撤销 | [环境命令](spec/commands/environment.md)、[可执行示例](examples/automation/environment.jsonl) |
-| 独立大气积分参考、LUT和离屏天空 | [大气指南](spec/guides/atmosphere.md) |
+| 大气积分/LUT、离屏天空与Lambert日光样例 | [大气指南](spec/guides/atmosphere.md) |
 | 场景/视图、GPU 资产、磁盘场景渲染与读回 | [Render 指南](spec/guides/render.md) |
 | SDL3 窗口三角形、缩放/最小化与交换链恢复 | [呈现指南](spec/guides/presentation.md) |
 | Core、数学、IO、Scene 与 CPU 示例 | [Foundation/Scene 指南](spec/guides/foundation.md) |
@@ -83,7 +83,7 @@ pwsh -NoProfile -File scripts/check-spec.ps1
 | engine/automation | JSON-RPC、JSON Lines/stdio、Windows Named Pipe 与轻量客户端 |
 | sdk/python | 基于 dk-ctl 的标准库 Python 自动化客户端与记录/重放 |
 | engine/graphics/device、shader-types、shaders、offscreen、presentation、graph | Vulkan 1.4 使用层、独立 shader 产物、Slang 编译、离屏执行、窗口呈现与 Graph 单队列执行 |
-| engine/render/data、resources、pipeline、disk、atmosphere | 不可变场景/视图、GPU 资产缓存、磁盘输入、Graph 场景渲染、独立大气天空与帧读回 |
+| engine/render/data、resources、pipeline、disk、atmosphere | 不可变场景/视图、GPU 资产缓存、磁盘输入、Graph 场景渲染、独立大气天空、可选Lambert日光与帧读回 |
 | engine/editor、apps/editor | CPU 工作台模型、ImGui 面板与 dk-editor |
 | engine/platform | SDL3 窗口、事件与像素尺寸；不进入 CPU runner/离屏依赖 |
 | apps/runner、tools/assetc | CPU 命令进程、离线资产工具 |

@@ -78,6 +78,8 @@
 | GpuMesh/纹理 Graph 上传、字节读回、缓存与在途卸载 | dk_render_resources_probe | `^dk\.render\.gpu_`（gpu label；77 为跳过） |
 | Render 管线参数、矩阵 float 转换与空帧（无需 GPU） | dk_render_pipeline_tests | `^dk\.render\.pipeline\.` |
 | 场景 depth/opaque/tone 图像、HDR 传输与帧失败/寿命 | dk_render_pipeline_probe | `^dk\.render\.pipeline_gpu_validation$`（gpu label；77 为跳过） |
+| Lambert 日光/天空漫射、法线/双面/alpha-mask、失败及在途寿命 | dk_surface_sunlight_probe | `^dk\.render\.sunlight_(normals\|direct\|diffuse\|failures)_gpu_validation$`（required GPU，同步 validation，无跳过） |
+| 日光接收正午/日落/暮光球体离屏样例 | dk_sunlight_demo | `^dk\.render\.sunlight_demo_gpu_validation$`（required GPU） |
 | 磁盘 Scene/glTF/CPU 产物、身份/预算与只读失败保护 | dk_render_disk_tests | `^dk\.render\.disk\.` |
 | 磁盘到 GPU 图像、alpha mask、重载与上传部分失败 | dk_render_disk_probe | `^dk\.render\.disk_gpu_validation$`（gpu label；77 为跳过） |
 | 默认 Sponza 磁盘渲染示例 | dk_render_demo | `^dk\.render\.sponza_validation$`（gpu/local-assets；77 为跳过） |

@@ -39,3 +39,15 @@ TEST_CASE("empty render frame exposes no owners or pixels") {
     RenderFrame frame; CHECK_FALSE(frame); CHECK(frame.info().scene.is_nil()); CHECK(frame.info().draw_count==0);
     CHECK(frame.plan_text().empty()); CHECK_FALSE(frame.color()); CHECK_FALSE(frame.read_rgba8({}));
 }
+TEST_CASE("Lambert normal matrix preserves tangent orthogonality under shear and reflection") {
+    Mat4d m=Mat4d::Identity(); m.topLeftCorner<3,3>() << -2,1,.3, 0,3,.5, 0,0,.7;
+    const auto transform=Transformd::from_matrix(m).value();
+    const auto normal=dk::render::detail::normal_matrix(transform).value();
+    const Vec3d tangent{1,2,3},n=Vec3d{-2,1,0}.normalized();
+    CHECK(std::abs((normal*n).dot(m.topLeftCorner<3,3>()*tangent))<1e-12);
+    CHECK((normal*Vec3d::UnitX()).x()<0);
+    m(2,2)=0; CHECK_FALSE(dk::render::detail::normal_matrix(Transformd::from_matrix(m).value()));
+    m=Mat4d::Identity(); m.topLeftCorner<3,3>()*=1e-100;
+    auto tiny=dk::render::detail::normal_matrix(Transformd::from_matrix(m).value());
+    REQUIRE(tiny); CHECK(tiny->allFinite()); CHECK((*tiny- Mat3d::Identity()).norm()<1e-12);
+}

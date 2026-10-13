@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-03T15:28:09+08:00"
-updated_at: "2026-10-03T21:44:26+08:00"
+updated_at: "2026-10-13T09:28:33+08:00"
 ---
 
 # 场景数据、GPU 资源与离屏渲染
@@ -168,3 +168,10 @@ EOF 会取消未发布任务，因此自动化客户端应先等待 succeeded �
 进程测试使用仓库内小夹具，校验原图/冻结快照完全相同、新变换图像不同、空闲发布、
 导入与原子替换失败保护、取消、EOF/shutdown；不需要本地 Sponza 文件。
 完整字段见 [截图命令](../commands/render.md)，状态和限制见 [设计](../design/render-capture.md)。
+
+
+## 显式日光接收
+
+同时启用 DK_BUILD_RENDER_ATMOSPHERE 时，ScenePipeline::render_sunlight 可绑定与 RenderView 场景环境一致的大气快照，
+启用 Lambert 太阳直射和局部天空漫射。原 render、编辑器和 capture 的默认 unlit 设置保持不变。
+样例、参数限制和定向验证见[大气与日光指南](atmosphere.md#lambert-日光接收)。

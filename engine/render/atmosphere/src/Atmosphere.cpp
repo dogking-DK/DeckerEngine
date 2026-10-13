@@ -236,6 +236,14 @@ Result<EnvironmentDescription> AtmosphereSky::environment() const {
     return state_->environment;
 }
 Submission SkyFrame::submission() const noexcept { return state_ ? state_->execution.submission() : Submission{}; }
+Result<Vec3d> AtmosphereSky::position_m() const {
+    if(!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty atmosphere sky"});
+    return state_->position;
+}
+Result<const Image*> AtmosphereSky::image(AtmosphereLut index) const {
+    if(!state_ || unsigned(index)>=3) return std::unexpected(Error{ErrorCode::invalid_argument,"invalid atmosphere LUT"});
+    return &state_->tables[unsigned(index)]->image;
+}
 Result<bool> SkyFrame::wait(SubmissionQueue& queue,std::uint64_t timeout) const {
     if(!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty sky frame"});
     return queue.wait(submission(),timeout);

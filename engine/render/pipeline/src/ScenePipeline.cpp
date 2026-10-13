@@ -5,6 +5,9 @@
 #include <dk/memory/SmartPtr.hpp>
 #include <dk/profiling/Profiler.hpp>
 #include <algorithm>
+#ifdef DK_RENDER_SUNLIGHT
+#include <dk/render/Atmosphere.hpp>
+#endif
 #include <new>
 
 namespace dk::render {
@@ -15,7 +18,10 @@ struct PipelineState {
     ResourceFactory factory;
     PipelineLayout depth_layout, mask_layout, opaque_layout, tone_layout;
     GraphicsPipeline depth, mask, opaque, tone;
-    Sampler white_sampler;
+    Sampler white_sampler, sky_sampler;
+    PipelineLayout sunlight_depth_layout, sunlight_layout;
+    GraphicsPipeline sunlight_depth, sunlight;
+    std::filesystem::path directory;
 };
 struct FrameState {
     FrameInfo info;
@@ -39,7 +45,10 @@ struct Draw {
     const GpuTexture* texture = nullptr;
     bool masked = false;
     std::array<float,24> push{};
-    std::size_t vertices = 0, indices = 0;
+    std::size_t vertices = 0, indices = 0, lighting_index = 0;
+    Buffer lighting;
+    Transformd world;
+    bool double_sided=false;
 };
 struct Inputs {
     explicit Inputs(memory::ResourceHandle heap)
@@ -48,6 +57,8 @@ struct Inputs {
     Vector<Draw> draws;
     Vector<const Buffer*> buffers;
     Vector<const Image*> textures;
+    const Image* transmittance=nullptr;
+    const Image* sky=nullptr;
 };
 void resolve(Inputs& result,const RenderView& view,const GpuAssets& assets) {
     for (std::size_t i=0;i<view.scene().entities().size();++i) {
@@ -59,12 +70,14 @@ void resolve(Inputs& result,const RenderView& view,const GpuAssets& assets) {
             const auto rows = take(detail::clip_rows(view,entity.world));
             for (const auto& primitive : found->mesh().primitives) {
                 Draw draw; draw.owner = *found; draw.primitive = &primitive;
+                draw.world=entity.world;
                 std::copy(rows.begin(),rows.end(),draw.push.begin());
                 const MaterialData* material = nullptr;
                 if (primitive.material) {
                     auto m = std::ranges::find(found->materials(),*primitive.material,&MaterialData::id);
                     if (m == found->materials().end()) throw Error{ErrorCode::invalid_state,"GPU material reference missing"};
                     material = &*m;
+                    draw.double_sided=material->double_sided;
                     if (material->alpha_mode == AlphaMode::blend)
                         throw Error{ErrorCode::not_supported,"scene pipeline supports opaque and alpha mask materials only"};
                     if (material->base_color_texture) {
@@ -89,6 +102,87 @@ void resolve(Inputs& result,const RenderView& view,const GpuAssets& assets) {
         }
     }
 }
+#ifdef DK_RENDER_SUNLIGHT
+void prepare_sunlight(detail::PipelineState& state) {
+    if(state.sunlight) return;
+    auto compile=[&](const char* entry,ShaderStage stage,std::string_view define={}) {
+        const std::array definitions{ShaderDefine{define,"1"}};
+        auto code=take(compile_shader({state.directory/"sunlight.slang",entry,stage,{},define.empty() ?
+            std::span<const ShaderDefine>{} : std::span<const ShaderDefine>{definitions}},state.heap));
+        return take(state.factory.create_shader(code));
+    };
+    auto vs=compile("vertexMain",ShaderStage::vertex,"DK_VERTEX");
+    auto fs=compile("fragmentMain",ShaderStage::fragment);
+    auto ds=compile("depthMain",ShaderStage::fragment,"DK_DEPTH");
+    const std::array shaders{&vs,&fs},depth_shaders{&vs,&ds};
+    auto layout=take(state.factory.create_pipeline_layout(shaders));
+    auto depth_layout=take(state.factory.create_pipeline_layout(depth_shaders));
+    const std::array vb{vk::VertexInputBindingDescription{0,sizeof(GpuVertex),vk::VertexInputRate::eVertex}};
+    const std::array va{vk::VertexInputAttributeDescription{0,0,vk::Format::eR32G32B32Sfloat,offsetof(GpuVertex,position)},
+        vk::VertexInputAttributeDescription{1,0,vk::Format::eR32G32Sfloat,offsetof(GpuVertex,uv)},
+        vk::VertexInputAttributeDescription{2,0,vk::Format::eR32G32B32Sfloat,offsetof(GpuVertex,normal)}};
+    GraphicsPipelineDesc depth{&vs,&ds,&depth_layout,vb,va};
+    depth.color_format=vk::Format::eUndefined; depth.depth_format=vk::Format::eD32Sfloat;
+    depth.depth_test=depth.depth_write=true;
+    auto depth_pipeline=take(state.factory.create_graphics_pipeline(depth));
+    GraphicsPipelineDesc color{&vs,&fs,&layout,vb,va};
+    color.color_format=vk::Format::eR32G32B32A32Sfloat; color.depth_format=vk::Format::eD32Sfloat;
+    color.depth_test=true; color.depth_compare=vk::CompareOp::eEqual;
+    auto pipeline=take(state.factory.create_graphics_pipeline(color));
+    SamplerDesc desc; desc.address_u=desc.address_v=desc.address_w=vk::SamplerAddressMode::eClampToEdge;
+    auto sampler=take(state.factory.create_sampler(desc));
+    state.sunlight_depth_layout=std::move(depth_layout); state.sunlight_layout=std::move(layout);
+    state.sunlight_depth=std::move(depth_pipeline); state.sunlight=std::move(pipeline); state.sky_sampler=std::move(sampler);
+}
+void resolve_sunlight(Inputs& inputs,const RenderView& view,const AtmosphereSky& sky,const RenderSettings& settings,detail::PipelineState& state) {
+    const auto environment=take(sky.environment());
+    if(environment!=view.scene().environment()) throw Error{ErrorCode::invalid_argument,"lighting snapshot does not match scene environment"};
+    const auto& a=environment.atmosphere;
+    const Vec3d center{a.planet_center_m[0],a.planet_center_m[1],a.planet_center_m[2]};
+    const Vec3d anchor=take(sky.position_m()),up=(anchor-center).normalized();
+    const Vec3d sun{environment.sun.direction[0],environment.sun.direction[1],environment.sun.direction[2]};
+    const double height=take(atmosphere_height_m(a,{anchor.x(),anchor.y(),anchor.z()}));
+    Vec3d x=sun-up*sun.dot(up); if(x.norm()<1e-8) x=up.unitOrthogonal(); else x.normalize();
+    Mat3d basis; basis.row(0)=x; basis.row(1)=up; basis.row(2)=x.cross(up);
+    const Vec3d local_sun=basis*sun;
+    inputs.transmittance=take(sky.image(AtmosphereLut::transmittance)); inputs.sky=take(sky.image(AtmosphereLut::sky_view));
+    struct Parameters { std::array<float,4> normal[3],relative[3],geometry,sun,energy; };
+    static_assert(sizeof(Parameters)==144);
+    for(auto& draw:inputs.draws) {
+        const auto& world=draw.world.matrix();
+        const Mat3d normal=basis*take(detail::normal_matrix(draw.world));
+        Mat4d relative=world; relative.topRightCorner<3,1>()-=anchor;
+        relative.topRows<3>()=(basis*relative.topRows<3>()*.001).eval();
+        if(!relative.allFinite() || (relative.array().abs()>double(std::numeric_limits<float>::max())).any())
+            throw Error{ErrorCode::invalid_argument,"lighting relative transform cannot be represented"};
+        Vec3d low=Vec3d::Constant(std::numeric_limits<double>::infinity()),high=-low;
+        for(unsigned corner=0;corner<8;++corner) {
+            Vec3d v; for(unsigned c=0;c<3;++c) v[c]=(corner&(1u<<c)) ? draw.primitive->bounds_max[c] : draw.primitive->bounds_min[c];
+            const Vec3d p=take(draw.world.transform_point(v));
+            if((p.array().abs()>1e9).any()) throw Error{ErrorCode::not_supported,"lighting receiver exceeds world position domain"};
+            low=low.cwiseMin(p); high=high.cwiseMax(p);
+            if((p-center).stableNorm()-a.ground_radius_m>2*a.atmosphere_height_m)
+                throw Error{ErrorCode::not_supported,"lighting receiver exceeds atmosphere height domain"};
+        }
+        const Vec3d nearest=center.cwiseMax(low).cwiseMin(high);
+        if((nearest-center).stableNorm()<a.ground_radius_m)
+            throw Error{ErrorCode::not_supported,"lighting receiver bounds intersect the planet"};
+        Parameters p{};
+        for(unsigned r=0;r<3;++r) {
+            for(unsigned c=0;c<3;++c) p.normal[r][c]=float(normal(r,c));
+            for(unsigned c=0;c<4;++c) p.relative[r][c]=float(relative(r,c));
+        }
+        p.normal[0][3]=draw.primitive->has_normals ? 1.f : 0.f;
+        p.geometry={float(a.ground_radius_m*.001),float(a.atmosphere_height_m*.001),float(height*.001),settings.sky_diffuse ? 1.f : 0.f};
+        const Mat3d linear=world.topLeftCorner<3,3>()/world.topLeftCorner<3,3>().cwiseAbs().maxCoeff();
+        p.sun={float(local_sun.x()),float(local_sun.y()),float(local_sun.z()),linear.determinant()<0 ? -1.f : 1.f};
+        p.energy={float(environment.sun.irradiance[0]),float(environment.sun.irradiance[1]),float(environment.sun.irradiance[2]),draw.double_sided ? 1.f : 0.f};
+        draw.lighting=take(state.factory.create_buffer({sizeof(p),vk::BufferUsageFlagBits::eUniformBuffer,BufferMemory::upload}));
+        check(draw.lighting.write(0,std::as_bytes(std::span{&p,1})));
+    }
+    for(auto& draw:inputs.draws) { inputs.buffers.push_back(&draw.lighting); draw.lighting_index=inputs.buffers.size(); }
+}
+#endif
 graph::Use use(graph::ResourceId id,vk::PipelineStageFlags2 stages,vk::AccessFlags2 access,
     vk::ImageLayout layout=vk::ImageLayout::eUndefined,bool overwrite=false,bool depth=false) {
     return {id,{{stages,access,layout},0,VK_WHOLE_SIZE,depth ? depth_range : color_range,overwrite}};
@@ -112,6 +206,7 @@ Result<void> clear_pass(graph::PassContext& pass,void* pointer) {
 Result<void> geometry_pass(graph::PassContext& pass,void* pointer) {
     auto& c = *static_cast<Context*>(pointer);
     const bool depth_only = pass.pass_index() == 1;
+    const bool lit=c.inputs.sky!=nullptr;
     auto dv = take(c.pipeline.factory.create_view(*take(pass.image(c.depth)),{vk::ImageViewType::e2D,depth_range}));
     ImageView cv,white;
     RenderingDesc desc{}; desc.depth.view = &dv; desc.depth.load = vk::AttachmentLoadOp::eLoad;
@@ -122,15 +217,29 @@ Result<void> geometry_pass(graph::PassContext& pass,void* pointer) {
     white = take(c.pipeline.factory.create_view(*take(pass.image(c.white))));
     auto encoder = take(pass.begin_rendering(desc));
     for (const auto& draw : c.inputs.draws) {
-        check(encoder.bind_pipeline(depth_only ? (draw.masked ? c.pipeline.mask : c.pipeline.depth) : c.pipeline.opaque));
+        check(encoder.bind_pipeline(lit ? (depth_only ? c.pipeline.sunlight_depth : c.pipeline.sunlight) :
+            (depth_only ? (draw.masked ? c.pipeline.mask : c.pipeline.depth) : c.pipeline.opaque)));
         check(encoder.vertex_buffer(0,*take(pass.buffer(draw.vertices))));
         check(encoder.index_buffer(*take(pass.buffer(draw.indices)),vk::IndexType::eUint32));
-        if (depth_only && !draw.masked) check(encoder.push_constants(vk::ShaderStageFlagBits::eVertex,0,std::as_bytes(std::span{draw.push})));
+        if (depth_only && !draw.masked && !lit) check(encoder.push_constants(vk::ShaderStageFlagBits::eVertex,0,std::as_bytes(std::span{draw.push})));
         else {
             const auto& view = draw.texture ? draw.texture->view : white;
             const auto& sampler = draw.texture ? draw.texture->sampler : c.pipeline.white_sampler;
-            const std::array writes{BindingWrite{0,0,ImageBinding{&view}},BindingWrite{1,0,SamplerBinding{&sampler}}};
-            auto bindings = take(c.pipeline.factory.create_bindings(depth_only ? c.pipeline.mask_layout : c.pipeline.opaque_layout,0,writes));
+            std::array<BindingWrite,6> writes{BindingWrite{0,0,ImageBinding{&view}},BindingWrite{1,0,SamplerBinding{&sampler}}};
+            std::size_t count=2; ImageView transmittance,sky;
+            if(lit) {
+                writes[count++]={2,0,BufferBinding{take(pass.buffer(draw.lighting_index))}};
+                if(!depth_only) {
+                    transmittance=take(c.pipeline.factory.create_view(*c.inputs.transmittance));
+                    sky=take(c.pipeline.factory.create_view(*c.inputs.sky));
+                    writes[count++]={3,0,ImageBinding{&transmittance}};
+                    writes[count++]={4,0,ImageBinding{&sky}};
+                    writes[count++]={5,0,SamplerBinding{&c.pipeline.sky_sampler}};
+                }
+            }
+            const auto& layout=lit ? (depth_only ? c.pipeline.sunlight_depth_layout : c.pipeline.sunlight_layout) :
+                (depth_only ? c.pipeline.mask_layout : c.pipeline.opaque_layout);
+            auto bindings = take(c.pipeline.factory.create_bindings(layout,0,std::span{writes}.first(count)));
             const std::array sets{&bindings}; check(encoder.bind_sets(sets));
             check(encoder.push_constants(vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,0,std::as_bytes(std::span{draw.push})));
         }
@@ -172,7 +281,7 @@ Result<ScenePipeline> ScenePipeline::create(memory::ResourceHandle heap,Submissi
     if (!heap || heap.state()!=memory::ResourceState::open || queue.stats().closed || queue.stats().device_lost)
         return std::unexpected(Error{ErrorCode::invalid_state,"scene pipeline requires open memory and queue"});
     try {
-        auto state = memory::make_shared_in<detail::PipelineState>(heap); state->heap = heap; state->factory = queue.resources();
+        auto state = memory::make_shared_in<detail::PipelineState>(heap); state->heap = heap; state->factory = queue.resources(); state->directory=directory;
         auto compile = [&](const char* file,const char* entry,ShaderStage stage,std::string_view define={}) {
             const std::array definitions{ShaderDefine{define,"1"}};
             auto shader = take(compile_shader({directory/file,entry,stage,{},define.empty() ? std::span<const ShaderDefine>{} : std::span<const ShaderDefine>{definitions}},heap));
@@ -211,6 +320,12 @@ Result<ScenePipeline> ScenePipeline::create(memory::ResourceHandle heap,Submissi
     catch (const std::bad_alloc&) { return std::unexpected(allocation_error()); }
 }
 Result<RenderFrame> ScenePipeline::render(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings) {
+    return render_impl(queue,view,assets,settings,nullptr);
+}
+Result<RenderFrame> ScenePipeline::render_sunlight(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings) {
+    return render_impl(queue,view,assets,settings,view.scene().environment().enabled ? &sky : nullptr);
+}
+Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings,const AtmosphereSky* sky) {
     DK_PROFILE_ZONE("render.scene");
     if (!state_ || state_->heap.state()!=memory::ResourceState::open || queue.stats().closed || queue.stats().device_lost)
         return std::unexpected(Error{ErrorCode::invalid_state,"scene pipeline, memory or queue is unavailable"});
@@ -222,6 +337,14 @@ Result<RenderFrame> ScenePipeline::render(SubmissionQueue& queue,const RenderVie
     try {
         const auto heap=state_->heap;
         Inputs inputs{heap}; resolve(inputs,view,assets);
+        if(sky) {
+#ifdef DK_RENDER_SUNLIGHT
+            resolve_sunlight(inputs,view,*sky,settings,*state_);
+            prepare_sunlight(*state_);
+#else
+            return std::unexpected(Error{ErrorCode::not_supported,"Lambert rendering requires DK_BUILD_RENDER_ATMOSPHERE"});
+#endif
+        }
         auto frame=memory::make_shared_in<detail::FrameState>(heap);
         frame->info={view.scene().id(),view.scene().revision(),view.description().frame,width,height,inputs.draws.size()};
         auto graph=take(graph::Graph::create(heap));
@@ -232,8 +355,10 @@ Result<RenderFrame> ScenePipeline::render(SubmissionQueue& queue,const RenderVie
             const auto* buffer=inputs.buffers[i];
             const auto id=take(graph.declare_buffer("mesh-buffer-"+std::to_string(i),buffer->description(),graph::Lifetime::external,true));
             const bool vertex=bool(buffer->description().usage & vk::BufferUsageFlagBits::eVertexBuffer);
-            geometry.push_back(use(id,vertex ? vk::PipelineStageFlagBits2::eVertexAttributeInput : vk::PipelineStageFlagBits2::eIndexInput,
-                vertex ? vk::AccessFlagBits2::eVertexAttributeRead : vk::AccessFlagBits2::eIndexRead));
+            const bool uniform=bool(buffer->description().usage & vk::BufferUsageFlagBits::eUniformBuffer);
+            geometry.push_back(use(id,uniform ? (vk::PipelineStageFlagBits2::eVertexShader | vk::PipelineStageFlagBits2::eFragmentShader) :
+                (vertex ? vk::PipelineStageFlagBits2::eVertexAttributeInput : vk::PipelineStageFlagBits2::eIndexInput),
+                uniform ? vk::AccessFlagBits2::eUniformRead : (vertex ? vk::AccessFlagBits2::eVertexAttributeRead : vk::AccessFlagBits2::eIndexRead)));
             external.push_back({i+1,buffer,nullptr,{}});
         }
         const auto image_base=graph.counts().buffers;
@@ -260,6 +385,15 @@ Result<RenderFrame> ScenePipeline::render(SubmissionQueue& queue,const RenderVie
             geometry.push_back(use(id,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal));
         }
         static_cast<void>(take(graph.add_pass({"depth prepass",geometry})));
+        if(sky) {
+            for(const auto* image : {inputs.transmittance,inputs.sky}) {
+                const auto index=graph.counts().buffers+graph.counts().images;
+                const auto id=take(graph.declare_image(image==inputs.sky ? "lighting sky LUT" : "lighting transmittance LUT",
+                    image->description(),graph::Lifetime::external,true));
+                external.push_back({index,nullptr,image,{}});
+                geometry.push_back(use(id,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal));
+            }
+        }
         geometry.push_back(use(hdr,vk::PipelineStageFlagBits2::eColorAttachmentOutput,color_access,vk::ImageLayout::eColorAttachmentOptimal));
         static_cast<void>(take(graph.add_pass({"opaque",geometry})));
         const std::array tone_uses{use(hdr,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal),
