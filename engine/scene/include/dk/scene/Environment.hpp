@@ -1,6 +1,7 @@
 #pragma once
 #include <dk/core/Result.hpp>
 #include <array>
+#include <cstdint>
 
 namespace dk {
 using EnvironmentVector = std::array<double, 3>;
@@ -28,14 +29,28 @@ struct SunParameters {
     double angular_radius_rad = 0.004675;
     bool operator==(const SunParameters&) const = default;
 };
+struct CloudParameters {
+    bool enabled = false;
+    std::uint32_t seed = 1;
+    std::uint32_t generator_version = 1;
+    std::uint32_t weather_resolution = 128, base_resolution = 128, detail_resolution = 32;
+    double bottom_height_m = 1500, top_height_m = 4000;
+    double coverage = 0.5, density = 1, extinction_per_m = 0.001;
+    double weather_scale_m = 100000, shape_scale_m = 10000, detail_scale_m = 1000;
+    double bottom_fade_fraction = 0.1, top_fade_fraction = 0.2;
+    std::array<double, 2> wind_velocity_mps{10, 0}; // World X/Z, evaluated at explicit time.
+    bool operator==(const CloudParameters&) const = default;
+};
 struct EnvironmentDescription {
     bool enabled = false;
     AtmosphereParameters atmosphere;
     SunParameters sun;
+    CloudParameters clouds;
     bool operator==(const EnvironmentDescription&) const = default;
 };
 // Validates all fields even when disabled; preserves already-unit directions.
 [[nodiscard]] Result<EnvironmentDescription> normalize_environment(EnvironmentDescription);
+[[nodiscard]] Result<void> validate_clouds(const CloudParameters&, double atmosphere_height_m);
 // Signed spherical height, including below ground and above atmosphere top.
 [[nodiscard]] Result<double> atmosphere_height_m(const AtmosphereParameters&, const EnvironmentVector& position_m);
 // Uniform disk L = E / (pi sin(alpha)^2), in the same scene-linear units as emissive.

@@ -61,6 +61,28 @@ def main():
     assert loaded[6]["result"]["value"] == restored
     assert loaded[7]["result"]["value"]["undo_count"] == 0
     assert scene_path.read_bytes() == persisted_bytes
+    # Cloud content is authored and reloaded on the pure CPU runner in distinct processes.
+    cloud_env = json.loads(json.dumps(initial["environment"]))
+    assert cloud_env["version"] == 2
+    cloud_env["clouds"].update(enabled=True, seed=4294967295, coverage=0.8,
+                                bottom_height_m=1000, top_height_m=6000,
+                                wind_velocity_mps=[-11, 23])
+    edited = batch("cloud-edit", [("scene.load", {"manifest": "project.json"}),
+                                 ("environment.set", {"environment": cloud_env}),
+                                 ("scene.save", {}), ("environment.query", {})])
+    assert edited[-1]["result"]["value"]["environment"] == cloud_env
+    cloud_reload = batch("cloud-reload", [("scene.load", {"manifest": "project.json"}),
+                                          ("environment.query", {})])
+    assert cloud_reload[-1]["result"]["value"]["environment"] == cloud_env
+    assert not cloud_reload[-1]["result"]["value"]["state"]["dirty"]
+    # A Scene v2 / environment v1 is migrated only on disk reads.
+    persisted["environment"]["version"] = 1
+    del persisted["environment"]["clouds"]
+    scene_path.write_text(json.dumps(persisted), encoding="utf-8")
+    atmo = batch("atmosphere-migration", [("scene.load", {"manifest": "project.json"}),
+                                         ("environment.query", {}), ("scene.save", {})])
+    assert atmo[1]["result"]["value"]["environment"]["clouds"]["enabled"] is False
+    assert json.loads(scene_path.read_bytes())["environment"]["version"] == 2
     # Separate legacy input: exact v1 shape, same identity/revision, migration is explicit on save.
     persisted["version"] = 1
     del persisted["environment"]
@@ -71,7 +93,7 @@ def main():
     assert state["environment"]["enabled"] is False
     assert state["state"]["revision"] == initial["state"]["revision"]
     assert json.loads(scene_path.read_bytes())["version"] == 2
-    print(f"Environment CPU example, discovery, v2 roundtrip and v1 migration passed: {root}")
+    print(f"Environment CPU example, discovery, cloud v2 cross-process roundtrip and Scene/environment v1 migrations passed: {root}")
 
 
 if __name__ == "__main__":

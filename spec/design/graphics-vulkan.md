@@ -1,7 +1,7 @@
 ---
 module: graphics-vulkan
 created_at: "2026-09-30T10:18:48+08:00"
-updated_at: "2026-10-12T16:40:00+08:00"
+updated_at: "2026-10-13T13:12:00+08:00"
 status: accepted
 ---
 
@@ -100,7 +100,7 @@ M5.5.2 首版上限为 64 页、每页 32 个同类 descriptor 数量的 set、�
 
 ImageDesc 支持 2D/2D array/3D、三轴extent、mip_levels、array_layers、format、usage，sample=1。
 ImageViewDesc 表达 aspect、mip/layer 范围与 2D/array/3D 视图；3D不支持附件或二维切片视图。
-保留原五种 color 格式，M5.6 补充 BGRA8 sRGB，M7.2 补充 RGBA32F，M14.2 补充 RGBA16F；另有 `D32_SFLOAT` 深度 attachment 路径；每种组合先查询 format/usage 能力，
+保留原五种 color 格式，M5.6 补充 BGRA8 sRGB，M7.2 补充 RGBA32F，M14.2 补充 RGBA16F，云场支持R8/RG8 UNORM（1/2字节）；另有 `D32_SFLOAT` 深度 attachment 路径；每种组合先查询 format/usage 能力，
 不因为枚举合法就假定硬件支持。color 传输按每个 mip 的 extent 和数据步长检查；深度读回另列为暂缓。
 
 SamplerDesc 明确 filter、address mode、LOD 范围，默认关闭 anisotropy/compare；

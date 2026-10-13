@@ -1,7 +1,7 @@
 ---
 module: application-services
 created_at: "2026-09-22T13:28:00+08:00"
-updated_at: "2026-10-12T15:00:00+08:00"
+updated_at: "2026-10-13T13:12:00+08:00"
 status: accepted
 ---
 
@@ -14,7 +14,8 @@ PUBLIC 依赖 commands 和 services。framework 与 Scene 同时开启时构建�
 
 ## M14.1 环境编辑
 
-新增environment.query/set，完整环境对象和参数校验见[环境契约](render-atmosphere.md)。
+environment.query/set当前使用包含clouds的严格v2完整对象；命令不接受旧v1替换，
+磁盘迁移见[云场契约](render-clouds.md)。完整大气对象和参数校验见[环境契约](render-atmosphere.md)。
 SetEnvironment加入SceneEdit，与实体编辑共用暂存、guard、事务/历史预算和一次提交；
 无变化及失败保留redo和dirty。query通过只读文档取值，不创建GPU资源。
 

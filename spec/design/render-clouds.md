@@ -1,15 +1,15 @@
 ---
 module: render-clouds
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-12T14:38:00+08:00"
-status: draft
+updated_at: "2026-10-13T13:12:00+08:00"
+status: accepted
 ---
 
-# 体积云设计草案
+# 体积云设计
 
 ## 目标与边界
 
-本设计是M15开发计划，尚未实现；阶段顺序/状态见[Roadmap](../roadmap.md)。依赖
+本设计包含已采用的云场契约及后续渲染计划；阶段顺序/状态见[Roadmap](../roadmap.md)。依赖
 [大气M14](render-atmosphere.md)的太阳与透射接口、3D资源、深度采样、HDR合成和环境编辑链路。
 首版提供单层球壳状积云/层积云、固定seed天气分布、风平移、云内/云下/云上观察、
 太阳散射/自遮蔽、空气透视、时域稳定和地表云影；编辑器及无窗口截图使用相同内容输入。
@@ -32,13 +32,62 @@ status: draft
 
 ## 模块与数据所有权
 
-拟新增`engine/render/clouds`、`dk_render_clouds` / `dk::render_clouds`及默认OFF的
-`DK_BUILD_RENDER_CLOUDS`，依赖render_atmosphere、render_data、graphics_graph/shaders及Memory/Profiling。
-模块提供云密度/光照与中间图像，pipeline编排太阳云影、几何、介质合成和tone；不反向依赖Editor/Framework。
-Scene/Services持有纯CPU CloudParameters，renderer拥有天气/噪声GPU资源及每视图历史。
-public/private target依赖由真实公开类型决定，禁止因方便增加全局include/link。
+`engine/render/clouds`提供两个默认OFF的构建选项：`DK_BUILD_RENDER_CLOUD_FIELDS`构建
+纯CPU `dk_render_cloud_fields` / `dk::render_cloud_fields`（PUBLIC Scene），
+`DK_BUILD_RENDER_CLOUDS`同时构建GPU `dk_render_clouds` / `dk::render_clouds`（PUBLIC fields、graphics_device）。
+当前只提供场数据和纹理资源；后续积分/合成才按真实用途引入大气、Graph、Shaders、Profiling。
+Scene/Services持有纯CPU CloudParameters；CloudFieldCache拥有不可变CPU天气/噪声代次，
+CloudTextureCache拥有GPU纹理代次。模块不反向依赖Editor/Framework，不新增三方库。
 
-| 输入/输出 | 拟议约定 |
+### 参数、持久化与显式时间
+
+EnvironmentDescription增加固定大小clouds；DeckerScene仍写v2，嵌套environment升级v2，
+强制包含clouds。旧Scene v1或environment v1加载disabled云；environment v1迁移使用
+top=min(4000,H/2)、bottom=min(1500,top/2)，兼容较薄大气。新写出统一environment v2。
+命令query/set使用严格v2完整对象，旧v1 set拒绝，避免旧调用者无意覆盖云；迁移仅发生于磁盘读取。
+clouds包括enabled、uint32 seed、generator_version=1、weather/base/detail_resolution，
+bottom/top_height_m、coverage、density、extinction_per_m、weather/shape/detail_scale_m、
+bottom/top_fade_fraction及水平wind_velocity_mps[2]（世界X/Z，每秒米）。
+所有值即使disabled也校验：0≤bottom<top<大气顶，coverage[0,1]、density[0,10]、消光[0,1]，
+尺度[1,1e7]米、两个fade各[.001,.5]、风各[-1000,1000]。
+分辨率必须2的幂：weather[8,256]、base[8,128]、detail[4,64]，默认128/128/32。
+生成器版本不支持时拒绝；相函数/光照参数由积分阶段定义，不添加未消费的占位字段。
+
+sample_cloud_density输入完整环境、不可变场、世界位置及显式time_seconds（[-1e9,1e9]）。
+密度为无量纲[0,density]，相对行星的球面高度约束垂直剖面；天气平面使用世界X/Z，
+3D场使用行星相对坐标，随水平风按p-wind*time平移，无帧累积和隐式时钟。
+底/顶边界及壳外为0，coverage=0、density=0、disabled精确为0；消光系数供后续积分使用。
+同一时刻重复/乱序调用产生相同结果，负时间有效。采样先检查有限输入及场key匹配。
+
+### 确定性纹理与发布
+
+生成器v1为周期整数格点value-noise的多频加权组合，固定uint32 hash和Q16平滑插值；
+天气RG8保存coverage/type，base/detail为R8，线性过滤、repeat、单mip。
+所有输出字节由整数计算确定，不依赖标准随机库、平台浮点舍入或线程调度。
+字节FNV-1a摘要仅作内容诊断（非密码学）；身份key包含生成器版本、seed及三个分辨率。
+密度/高度/coverage/风/时间变化不重建纹理。CPU bilinear/trilinear按GPU texel-center约定采样，
+天气coverage阈值、type调节剖面顶端、base形状与detail侵蚀后夹取，具体公式由实现和锁定测试冻结。
+
+两个cache均单线程所有者、不可复制，返回shared_ptr<const generation>保活旧代；
+GPU cache额外持有退休代次，只在poll确认队列无在途提交、无其他录制批次且没有外部快照时回收，
+防止提交仅保活Image而外部释放generation时漏计预算。借用image/view不延长父代次寿命。
+同key返回当前代，不生成/分配纹理或提交GPU工作（仍校验队列身份）。不同key先校验预算、生成/分配，GPU上传提交并等待完成后才交换current。
+失败（参数、预算、资源创建、记录/提交/等待）保留旧current及generation编号；异常分配由RAII保护，不承诺进程终止恢复。
+默认至多2个活代（含current、外部保活旧代、待建候选）；第三代在生成前有界拒绝，释放旧代可重试。
+CPU预算默认8MiB，统计活代纹理字节+候选；GPU预算默认16MiB，统计活代纹理字节+候选纹理+候选upload载荷。
+预算是逻辑载荷而非分配器/显存硬上限；驱动对齐和scratch另由队列资源统计核验。
+cache不暴露底层可变容器；纹理view按2D/3D类型创建，最终处于shader-read布局，队列提交保活资源。
+队列必须属于创建cache绑定的设备/所有者；跨队列使用不支持。无后台任务、无历史、无云光照/合成；
+ScenePipeline::render_environment遇到enabled云返回not_supported，防止把仅参数支持误当作有云截图。
+
+验证覆盖固定seed独立重建字节/摘要、不同seed、范围/周期/插值、球壳/coverage/density边界、
+显式时间暂停/跳跃/反向、预算和旧代保活、失效key、CPU-only编辑/事务/撤销/迁移/独立进程重载。
+GPU要求真实设备、validation与sync validation，逐字节readback及shader过滤采样对照，
+提交失败注入/代次额度/释放和关闭检查，不用skip替代通过。
+
+后续积分/视图接口规划（云场当前接口以上文为准）：
+
+| 输入/输出 | 后续约定 |
 | --- | --- |
 | CloudParameters | enabled、seed、球壳底/顶高度、coverage、density/extinction、形状/细节尺度、垂直剖面、风方向/速度、相函数及光照近似参数 |
 | Weather map | 首版由固定版本生成器+seed生成2D coverage/type字段，CPU数据/摘要可追溯；暂不扩资产导入器支持外部气象数据 |

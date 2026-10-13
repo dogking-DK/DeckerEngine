@@ -1,7 +1,7 @@
 ---
 module: command-reference-environment
 created_at: "2026-10-12T15:10:00+08:00"
-updated_at: "2026-10-13T11:25:00+08:00"
+updated_at: "2026-10-13T13:12:00+08:00"
 status: accepted
 ---
 
@@ -35,8 +35,9 @@ status: accepted
 invalid_argument；revision耗尽或历史单元超预算为invalid_state。失败保留内容、dirty及undo/redo。
 disabled仍须通过全部参数校验，避免之后启用时出现无效状态。
 
-环境JSON顶层恰含`version:1`（整数）、`enabled:boolean`、`atmosphere:object`和`sun:object`，
-均必填、无隐含缺省字段；下面的默认值仅用于新建场景和v1场景迁移。向量/RGB均为3个有限数值。
+环境JSON顶层恰含`version:2`（整数）、`enabled:boolean`、`atmosphere:object`、`sun:object`和`clouds:object`，
+均必填、无隐含缺省字段；命令拒绝旧v1对象，请先query再修改。下面默认值用于新场景；
+旧磁盘environment v1会迁移disabled云。大气/太阳向量为3个有限数值，风为2个。
 
 | atmosphere字段 | 默认值 | 单位/支持范围 |
 | --- | --- | --- |
@@ -67,7 +68,27 @@ Rayleigh/Mie采用指数密度`exp(-height/scale_height)`；吸收采用峰值�
 `length(position-planet_center_m)-ground_radius_m`，与现有平面网格不是同一种地形。
 RGB使用线性sRGB/D65通道，irradiance不是lux或原始W/m²；正入射Lambert输出为`albedo*E/pi`，
 均匀太阳盘radiance为`E/(pi*sin(angular_radius_rad)^2)`，与材质emissive共享曝光前标度。
-曝光属于渲染请求，不进入环境；本阶段不执行这些着色计算。
+曝光属于渲染请求，不进入环境。
+
+| clouds字段 | 默认值 | 单位/支持范围 |
+| --- | --- | --- |
+| enabled | false | bool；云参数可CPU编辑，当前云渲染未实现，true时环境截图/预览返回not_supported |
+| seed | 1 | uint32整数[0,4294967295]；固定seed重建一致 |
+| generator_version | 1 | 整数，仅支持1 |
+| weather_resolution | 128 | 2D方形边长，2的幂[8,256] |
+| base_resolution | 128 | 基础3D体边长，2的幂[8,128] |
+| detail_resolution | 32 | 细节3D体边长，2的幂[4,64] |
+| bottom_height_m / top_height_m | 1500 / 4000 | 球面高度，米；0≤bottom<top<atmosphere_height_m |
+| coverage | 0.5 | [0,1]；0精确无云 |
+| density | 1 | 无量纲[0,10]；0精确无云 |
+| extinction_per_m | 0.001 | m^-1，[0,1]；供后续积分使用 |
+| weather_scale_m / shape_scale_m / detail_scale_m | 100000 / 10000 / 1000 | 周期长度，米；各[1,1e7] |
+| bottom_fade_fraction / top_fade_fraction | 0.1 / 0.2 | 垂直渐变相对壳厚，各[.001,.5] |
+| wind_velocity_mps | [10,0] | 世界X/Z平移速度，m/s；各[-1000,1000] |
+
+云字段也全部必填。生成器key只有seed、generator_version和分辨率；调coverage/密度/风不会重建纹理。
+时间是采样请求的显式秒数，不写入场景，也不由帧率累计；当前命令未提供云积分或序列截图。
+旧environment v1迁移时，top=min(4000,大气厚度/2)，bottom=min(1500,top/2)，保持旧小尺度大气可读。
 
 完整set调用示例（替换guard为query取得的最新state）：
 
@@ -75,7 +96,14 @@ RGB使用线性sRGB/D65通道，irradiance不是lux或原始W/m²；正入射Lam
 {"jsonrpc":"2.0","id":2,"method":"environment.set","params":{
   "guard":{"document_id":"<document_id>","revision":0},
   "environment":{
-    "version":1,"enabled":true,
+    "version":2,"enabled":true,
+    "clouds":{
+      "enabled":false,"seed":1,"generator_version":1,
+      "weather_resolution":128,"base_resolution":128,"detail_resolution":32,
+      "bottom_height_m":1500,"top_height_m":4000,"coverage":0.5,"density":1,"extinction_per_m":0.001,
+      "weather_scale_m":100000,"shape_scale_m":10000,"detail_scale_m":1000,
+      "bottom_fade_fraction":0.1,"top_fade_fraction":0.2,"wind_velocity_mps":[10,0]
+    },
     "atmosphere":{
       "planet_center_m":[0,-6360000,0],"ground_radius_m":6360000,"atmosphere_height_m":100000,
       "rayleigh_scattering_per_m":[5.802e-6,13.558e-6,33.1e-6],"rayleigh_scale_height_m":8000,
@@ -91,6 +119,7 @@ RGB使用线性sRGB/D65通道，irradiance不是lux或原始W/m²；正入射Lam
 
 可直接执行[CPU环境示例](../../examples/automation/environment.jsonl)，包含创建、完整设置、查询、
 undo/redo及保存；重启后load保留规范化环境。DeckerScene保存为v2，读取v1自动补disabled默认环境，
+嵌套environment写v2（clouds完整对象），environment v1读取后补disabled云。
 Project清单仍为v1；未知场景/环境版本和未知字段拒绝。
 
 ```powershell

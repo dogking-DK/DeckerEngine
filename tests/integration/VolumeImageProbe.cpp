@@ -289,6 +289,7 @@ int main() {
             native_submit=reinterpret_cast<PFN_vkQueueSubmit2>(device.device_proc("vkQueueSubmit2"));
             auto queue=take(graphics::detail::SubmissionAccess::create(heap,std::move(device),3,{submit}));
             failures_and_limits(queue);
+            for(auto format:{vk::Format::eR8Unorm,vk::Format::eR8G8Unorm}) copy_roundtrip(queue,format);
             for(auto format:{vk::Format::eR16G16B16A16Sfloat,vk::Format::eR32G32B32A32Sfloat}) { copy_roundtrip(queue,format); volume_graph(heap,queue,format); }
             depth_graph(heap,queue); graph_copy_ranges(heap,queue);
             require(!queue.stats().pending_slots && !queue.stats().recording_slots && allocations(queue)==0,"volume resources leaked");

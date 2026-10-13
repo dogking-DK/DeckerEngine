@@ -101,7 +101,7 @@ TEST_CASE("render extraction budget failure unwinds candidate and preserves prio
 TEST_CASE("render environment extraction is immutable across scene edits and owner shutdown") {
     Fixture f; auto source = SceneDocument::create().value();
     auto old = RenderScene::extract(f.heap, source->snapshot().value()).value();
-    EnvironmentDescription e; e.enabled = true; e.sun.irradiance = {2,3,4};
+    EnvironmentDescription e; e.enabled = true; e.sun.irradiance = {2,3,4}; e.clouds.enabled=true; e.clouds.seed=42;
     REQUIRE(source->set_environment(e));
     const auto entity = source->create_entity().value();
     auto snapshot = source->snapshot().value();

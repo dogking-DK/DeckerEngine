@@ -429,6 +429,8 @@ Result<RenderFrame> ScenePipeline::render_sunlight(SubmissionQueue& queue,const 
     return render_impl(queue,view,assets,settings,view.scene().environment().enabled ? &sky : nullptr);
 }
 Result<RenderFrame> ScenePipeline::render_environment(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings) {
+    if(view.scene().environment().clouds.enabled)
+        return std::unexpected(Error{ErrorCode::not_supported,"cloud field resources are available; cloud rendering is not implemented"});
     if(!view.scene().environment().enabled) return render(queue,view,assets,settings);
 #ifdef DK_RENDER_SUNLIGHT
     if(!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty scene pipeline"});

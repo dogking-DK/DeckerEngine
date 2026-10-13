@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-12T16:40:00+08:00"
+updated_at: "2026-10-13T13:12:00+08:00"
 status: accepted
 ---
 
@@ -56,7 +56,7 @@ map/范围/角色失败不写用户数据；read 的 invalidate 失败不修改�
 host 内存可能已写入，不保证字节回滚，也不会因此自动提交 GPU 工作。
 ImageDesc 提供 sample=1 的 2D/2D array 和原生 3D image。追加 type（默认2D）、depth（默认1）和
 require_linear_filter（默认false），保持原聚合初始化含义。2D必须depth=1，3D必须array_layers=1且仅允许color sampled/storage/transfer；
-3D view只能对应3D image，不能用数组层代替z。color支持RGBA8/BGRA8 UNORM/SRGB、R32_UINT/R32_SFLOAT（4字节）、
+3D view只能对应3D image，不能用数组层代替z。color支持R8/RG8 UNORM（1/2字节，云场线性采样）、RGBA8/BGRA8 UNORM/SRGB、R32_UINT/R32_SFLOAT（4字节）、
 RGBA16F（8字节）和RGBA32F（16字节）；
 D32_SFLOAT 支持 depth attachment/sampling 和 TransferDst clear，拒绝 byte copy。
 检查 extent、mip/layer、字节数溢出、usage 和设备 format 能力；Image::state(mip,layer) 替代单值 layout 查询，Buffer::state() 返回整对象的已提交状态。

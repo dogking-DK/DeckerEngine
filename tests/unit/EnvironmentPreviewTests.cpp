@@ -39,6 +39,16 @@ TEST_CASE("environment worker drops superseded resize cancels and closes active 
             auto frame=pipeline.render_environment(queue,view,assets,settings); REQUIRE(frame); REQUIRE(frame->wait(queue).value());
             REQUIRE_FALSE(pipeline.render_environment(foreign,view,assets,settings));
             auto again=pipeline.render_environment(queue,view,assets,settings); REQUIRE(again); REQUIRE(again->wait(queue).value());
+            model->environment_draft()->value["clouds"]["enabled"]=true; model->environment_draft()->modified=true;
+            REQUIRE(model->apply_environment());
+            auto cloudy=render::RenderScene::extract(heap,model->snapshot()->scene).value();
+            const auto cloud_view=render::RenderView::create(cloudy,view.description()).value();
+            const auto submitted=queue.stats().submitted;
+            const auto rejected=pipeline.render_environment(queue,cloud_view,assets,settings);
+            REQUIRE_FALSE(rejected); CHECK(rejected.error().code==ErrorCode::not_supported);
+            CHECK(queue.stats().submitted==submitted);
+            model->environment_draft()->value["clouds"]["enabled"]=false; model->environment_draft()->modified=true;
+            REQUIRE(model->apply_environment());
             REQUIRE(queue.close()); REQUIRE(foreign.close());
         }
         EnvironmentPreview worker{system,heap,options};

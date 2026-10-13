@@ -1,7 +1,7 @@
 ---
 module: render-atmosphere
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-13T12:24:00+08:00"
+updated_at: "2026-10-13T13:12:00+08:00"
 status: accepted
 ---
 
@@ -106,7 +106,8 @@ Rayleigh散射即消光；Mie散射与消光RGB分别保存，逐通道0≤scatt
 均匀太阳盘radiance=E/(pi*sin(angular_radius_rad)^2)，与材质emissive共享曝光前线性辐亮度标度。
 曝光不持久化到环境。M14.1以解析测试冻结换算，M14.3实现积分和太阳盘；M14.4以同一E/pi标度实现Lambert绘制。
 
-DeckerScene写version=2并要求environment={version:1,enabled,atmosphere,sun}；所有子字段必填，
+DeckerScene写version=2，environment当前为{version:2,enabled,atmosphere,sun,clouds}；
+[云字段与environment v1迁移](render-clouds.md)由云场契约定义。所有子字段必填，
 未知字段/版本、重复键、非法参数拒绝。读v1严格维持旧字段集合并补默认disabled；Project仍v1。
 迁移保留scene_id/revision，parse为dirty、load为clean，之后保存写v2，失败加载保留旧文档。
 

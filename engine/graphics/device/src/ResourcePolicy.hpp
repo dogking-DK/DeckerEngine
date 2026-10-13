@@ -19,6 +19,8 @@ inline Result<void> validate_buffer(const BufferDesc& desc)
 inline std::uint32_t color_texel_bytes(vk::Format format) noexcept
 {
     switch (format) {
+    case vk::Format::eR8Unorm: return 1;
+    case vk::Format::eR8G8Unorm: return 2;
     case vk::Format::eR8G8B8A8Unorm: case vk::Format::eR8G8B8A8Srgb: case vk::Format::eB8G8R8A8Unorm: case vk::Format::eB8G8R8A8Srgb:
     case vk::Format::eR32Uint: case vk::Format::eR32Sfloat: return 4;
     case vk::Format::eR16G16B16A16Sfloat: return 8;

@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-10-13T11:25:00+08:00"
+updated_at: "2026-10-13T13:12:00+08:00"
 status: accepted
 ---
 
@@ -23,7 +23,7 @@ Luau 调用同一套场景/实体/历史服务，入口、值转换与允许命�
 | --- | --- | --- |
 | [发现](discovery.md) | `commands.list`、`commands.describe` | 列出命令、查询参数和结果 schema |
 | [场景与工程](scene.md) | `scene.new`、`scene.load`、`scene.query`、`scene.save`、`project.save`、`scene.transaction` | 文档会话、查询、保存和事务 |
-| [环境](environment.md) | `environment.query`、`environment.set` | 大气/单太阳参数、面板共用命令、事务/撤销与场景持久化 |
+| [环境](environment.md) | `environment.query`、`environment.set` | 大气/单太阳/云CPU参数、environment v2、事务/撤销与场景持久化 |
 | [实体](entity.md) | `entity.create`、`entity.get`、`entity.delete`、`entity.set_name`、`entity.set_transform`、`entity.set_parent`、`entity.set_assets` | 实体编辑和查询 |
 | [历史](history.md) | `history.status`、`history.undo`、`history.redo` | 内存撤销与重做 |
 | [运行时与任务](runtime.md) | `runtime.capabilities`、`runtime.shutdown`、`tasks.list`、`tasks.get` | 能力、同步任务和关闭 |

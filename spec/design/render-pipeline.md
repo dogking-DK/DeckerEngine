@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-10-13T11:44:00+08:00"
+updated_at: "2026-10-13T13:12:00+08:00"
 status: accepted
 ---
 
@@ -14,6 +14,9 @@ engine/render/pipeline 提供 dk_render_pipeline / dk::render_pipeline；PUBLIC 
 render_resources，PRIVATE 依赖 graphics_graph、graphics_shaders、profiling；构建大气模块时额外 PRIVATE 链接 render_atmosphere。
 DK_BUILD_RENDER_PIPELINE 默认 OFF，windows-graphics 启用。无新增依赖/feature。
 最小核心不负责磁盘/Runtime/窗口装配；M14.4 增加显式 Lambert 入口，M14.5 增加天空/空气透视合成。不支持完整 PBR、alpha blend、几何阴影或多队列。
+
+环境完整入口render_environment在clouds.enabled时返回not_supported；云场资源尚无光照/合成，
+不能静默产出缺云截图。显式unlit/atmosphere诊断入口保持各自语义。
 
 ## 公开入口
 

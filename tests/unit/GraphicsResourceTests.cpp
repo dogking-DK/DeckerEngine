@@ -223,3 +223,17 @@ TEST_CASE("volume descriptions and copies cover depth pitch mip and overflow") {
     volume.depth=1; volume.mip_levels=1; REQUIRE(validate_image_description(volume));
     CHECK(image_copy_bytes(volume,{0,0,0,0,1,1})); // A depth-one volume is still 3D.
 }
+TEST_CASE("cloud UNORM footprints use one and two byte texels across padded slices") {
+    for(auto format:{vk::Format::eR8Unorm,vk::Format::eR8G8Unorm}) {
+        const unsigned stride=format==vk::Format::eR8Unorm ? 1u : 2u;
+        CHECK(color_texel_bytes(format)==stride);
+        ImageDesc image{3,5,format}; image.depth=7; image.type=vk::ImageType::e3D; image.require_linear_filter=true;
+        REQUIRE(validate_image_description(image)); CHECK(*policy::image_bytes(image)==105*stride);
+        CHECK(*image_copy_bytes(image,{0,0,0,0,3,5,0,0,0,0,7})==105*stride);
+        auto padded=policy::copy_footprint(image,{0,0,0,0,3,5,4,6,8,0,7});
+        REQUIRE(padded); CHECK(padded->bytes==(6*48+4*6+3)*stride);
+        if(stride==2) CHECK_FALSE(image_copy_bytes(image,{0,0,0,0,3,5,1}));
+        CHECK_FALSE(image_copy_bytes(image,{0,0,0,0,3,5,0,2}));
+        image.width=image.height=image.depth=UINT32_MAX; CHECK_FALSE(policy::image_bytes(image));
+    }
+}

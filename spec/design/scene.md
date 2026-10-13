@@ -1,7 +1,7 @@
 ---
 module: scene
 created_at: "2026-09-22T12:05:49+08:00"
-updated_at: "2026-10-12T15:10:00+08:00"
+updated_at: "2026-10-13T13:12:00+08:00"
 status: accepted
 ---
 
@@ -11,7 +11,8 @@ status: accepted
 
 环境值/单位/约束详见[大气CPU契约](render-atmosphere.md#m141-cpu环境契约)。
 SceneDocument保存环境并提供受校验完整替换；快照内容比较、逻辑字节、暂存与恢复包含该值。
-DeckerScene当前写v2（新增version=1的environment），读v1补默认disabled；未知版本/字段拒绝。
+DeckerScene写v2，environment当前写v2并包含[云参数](render-clouds.md)；读Scene v1补默认环境，
+读environment v1补默认disabled云；未知版本/字段拒绝。固定大小云值纳入快照和历史。
 来源令牌、revision/dirty和原子保存保持下文约定；下文v1结构描述作为迁移输入。
 
 ## M3.3 内存内容提交

@@ -27,6 +27,12 @@ EnvironmentDescription example() {
     e.sun.direction = {0.13, -0.7, 0.3};
     e.sun.irradiance = {2, 3, 4};
     e.sun.angular_radius_rad = 0.008;
+    e.clouds.enabled=true; e.clouds.seed=4294967295u; e.clouds.weather_resolution=64;
+    e.clouds.base_resolution=32; e.clouds.detail_resolution=16;
+    e.clouds.bottom_height_m=1200; e.clouds.top_height_m=5000; e.clouds.coverage=.67;
+    e.clouds.density=2.4; e.clouds.extinction_per_m=.0004;
+    e.clouds.weather_scale_m=83000; e.clouds.shape_scale_m=8400; e.clouds.detail_scale_m=720;
+    e.clouds.bottom_fade_fraction=.14; e.clouds.top_fade_fraction=.31; e.clouds.wind_velocity_mps={-7,19};
     return e;
 }
 }
@@ -72,6 +78,24 @@ TEST_CASE("environment rejects invalid disabled parameters without changing the 
     auto doc = SceneDocument::create().value();
     const auto before = doc->snapshot().value();
     const std::vector<std::function<void(EnvironmentDescription&)>> invalid{
+        [](auto& e) { e.clouds.generator_version=0; },
+        [](auto& e) { e.clouds.weather_resolution=7; },
+        [](auto& e) { e.clouds.base_resolution=256; },
+        [](auto& e) { e.clouds.detail_resolution=6; },
+        [](auto& e) { e.clouds.bottom_height_m=-1; },
+        [](auto& e) { e.clouds.bottom_height_m=e.clouds.top_height_m; },
+        [](auto& e) { e.clouds.top_height_m=e.atmosphere.atmosphere_height_m; },
+        [](auto& e) { e.clouds.coverage=-.1; },
+        [](auto& e) { e.clouds.coverage=1.1; },
+        [](auto& e) { e.clouds.density=-1; },
+        [](auto& e) { e.clouds.extinction_per_m=-.1; },
+        [](auto& e) { e.clouds.weather_scale_m=0; },
+        [](auto& e) { e.clouds.shape_scale_m=0; },
+        [](auto& e) { e.clouds.detail_scale_m=0; },
+        [](auto& e) { e.clouds.bottom_fade_fraction=0; },
+        [](auto& e) { e.clouds.top_fade_fraction=.6; },
+        [](auto& e) { e.clouds.wind_velocity_mps[0]=1001; },
+        [](auto& e) { e.clouds.wind_velocity_mps[1]=std::numeric_limits<double>::quiet_NaN(); },
         [](auto& e) { e.atmosphere.planet_center_m[0] = 1e10; },
         [](auto& e) { e.atmosphere.ground_radius_m = 0; },
         [](auto& e) { e.atmosphere.atmosphere_height_m = -1; },
@@ -144,14 +168,21 @@ TEST_CASE("environment migrates v1 and failed reload preserves the current docum
     REQUIRE(save_scene(*loaded, project));
     const auto current = nlohmann::json::parse(serialize_scene(*loaded->snapshot(), project).value());
     CHECK(current["version"] == 2);
+    auto atmosphere_only=current; atmosphere_only["environment"]["version"]=1;
+    atmosphere_only["environment"].erase("clouds");
+    CHECK(parse_scene(atmosphere_only.dump(),project).value()->environment().clouds==CloudParameters{});
     std::vector<nlohmann::json> invalid;
     auto add = [&](auto mutate) { auto j = current; mutate(j); invalid.push_back(std::move(j)); };
     add([](auto& j) { j["version"] = 3; });
     add([](auto& j) { j["version"] = 2.0; });
     add([](auto& j) { j["version"] = 1; }); // v1 cannot smuggle environment.
     add([](auto& j) { j.erase("environment"); });
-    add([](auto& j) { j["environment"]["version"] = 2; });
+    add([](auto& j) { j["environment"]["version"] = 3; });
     add([](auto& j) { j["environment"]["clouds"] = {}; });
+    add([](auto& j) { j["environment"]["clouds"]["seed"] = -1; });
+    add([](auto& j) { j["environment"]["clouds"]["seed"] = 4294967296ULL; });
+    add([](auto& j) { j["environment"]["clouds"]["seed"] = 1.0; });
+    add([](auto& j) { j["environment"]["clouds"]["wind_velocity_mps"] = {1}; });
     add([](auto& j) { j["environment"]["sun"]["direction"] = {0, 0, 0}; });
     add([](auto& j) { j["environment"]["sun"]["extra"] = 0; });
     add([](auto& j) { j["environment"]["sun"]["irradiance"] = {1, 2}; });

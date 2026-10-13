@@ -293,7 +293,7 @@ TEST_CASE("environment commands share guard atomic history no-op and persistence
     REQUIRE_FALSE(s.commands.execute("environment.query"));
     s.call("scene.new");
     const auto base = s.call("environment.query")["environment"];
-    auto e = base; e["enabled"] = true; e["sun"]["direction"] = {0, 2, 0};
+    auto e = base; e["clouds"]["enabled"]=true; e["clouds"]["seed"]=4294967295ULL; e["clouds"]["coverage"]=.73; e["clouds"]["wind_velocity_mps"]={-13,7}; e["enabled"] = true; e["sun"]["direction"] = {0, 2, 0};
     const auto stale = s.guard();
     const auto changed = s.edit("environment.set", {{"environment", e}});
     CHECK(changed["created_id"].is_null()); CHECK(changed["state"]["revision"] == 1);
@@ -342,12 +342,16 @@ TEST_CASE("environment discovery schemas and history budget reject changes befor
     CHECK(descriptor["effect"] == "memory_edit"); CHECK(descriptor["undoable"] == true);
     CHECK(s.call("commands.describe", {{"name", "environment.query"}})["effect"] == "query");
     const auto before = s.call("environment.query");
-    for (const auto* scope : {"sun", "atmosphere"}) {
+    for (const auto* scope : {"sun", "atmosphere", "clouds"}) {
         auto bad = e; bad[scope]["unknown"] = 1;
         CHECK_FALSE(s.commands.execute("environment.set", {{"guard", s.guard()}, {"environment", bad}}));
     }
-    for (const auto version : {Json(2), Json(1.0), Json("1")}) {
+    for (const auto version : {Json(1), Json(3), Json(2.0), Json("2")}) {
         auto bad = e; bad["version"] = version;
+        CHECK_FALSE(s.commands.execute("environment.set", {{"guard", s.guard()}, {"environment", bad}}));
+    }
+    for (const auto seed : {Json(-1), Json(4294967296ULL), Json(1.0)}) {
+        auto bad=e; bad["clouds"]["seed"]=seed;
         CHECK_FALSE(s.commands.execute("environment.set", {{"guard", s.guard()}, {"environment", bad}}));
     }
     auto missing = e; missing["sun"].erase("irradiance");

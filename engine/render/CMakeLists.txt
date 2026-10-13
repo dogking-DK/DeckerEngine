@@ -18,3 +18,7 @@ endif()
 if(DK_BUILD_RENDER_SIMULATION)
     add_subdirectory(simulation)
 endif()
+
+if(DK_BUILD_RENDER_CLOUD_FIELDS OR DK_BUILD_RENDER_CLOUDS)
+    add_subdirectory(clouds)
+endif()

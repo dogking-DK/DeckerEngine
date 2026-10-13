@@ -109,6 +109,8 @@
 | 离屏 draw/dispatch 参数、SPIR-V/布局和设备限制（无需 GPU） | dk_offscreen_tests | `^dk\.offscreen\.unit\.` |
 | Graph 完整管线、离屏绘制/计算读回、M5 基线与同步寿命 | dk_offscreen_probe | `^dk\.offscreen\.gpu_`（gpu label；77 为跳过） |
 | Foundation 进程示例 | dk_foundation_demo | `^dk\.foundation\.` |
+| 确定性云场、密度/风时间与旧代预算（CPU-only） | dk_cloud_field_tests | `^dk\.clouds\.cloud ` |
+| 云天气/3D纹理上传、GPU过滤采样、失败与代次寿命（required GPU） | dk_cloud_field_probe | `^dk\.clouds\.fields_gpu_validation$` |
 | 环境命令发现、CPU示例与v1/v2跨进程保存重载 | dk_run | `^dk\.environment\.process$` |
 | Scene 跨进程往返 | dk_scene_demo | `^dk\.scene_demo\.` |
 

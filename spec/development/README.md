@@ -102,5 +102,6 @@
 | 0098 | [M14.5 视锥空气透视与HDR合成](0098-aerial-perspective.md) | render-pipeline, render-atmosphere, architecture | completed |
 | 0099 | [M14.6 环境面板、视口与截图闭环](0099-environment-integration.md) | editor, render-capture, render-pipeline, render-atmosphere, scripting-luau | completed |
 | 0100 | [M14.7 大气质量、性能基线与阶段交付](0100-atmosphere-baseline.md) | render-atmosphere, foundation-profiling | completed |
+| 0101 | [确定性云场与版本化参数](0101-cloud-fields.md) | render-clouds、scene、application-services、graphics-resources、graphics-vulkan、render-pipeline | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

@@ -334,3 +334,11 @@ if(TARGET dk_editor AND TARGET dk_render_atmosphere)
     set_tests_properties(dk.editor.environment_worker_gpu_validation PROPERTIES TIMEOUT 180 RUN_SERIAL TRUE LABELS "gpu"
         ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
 endif()
+
+if(TARGET dk_render_cloud_fields)
+    add_executable(dk_cloud_field_tests CloudFieldTests.cpp)
+    target_link_libraries(dk_cloud_field_tests PRIVATE dk::render_cloud_fields Catch2::Catch2WithMain)
+    dk_target_defaults(dk_cloud_field_tests)
+    catch_discover_tests(dk_cloud_field_tests TEST_PREFIX "dk.clouds."
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 120 LABELS "cpu")
+endif()

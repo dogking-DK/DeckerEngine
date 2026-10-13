@@ -226,6 +226,7 @@ TEST_CASE("workspace environment draft uses guarded commands history and persist
     CHECK(model.snapshot()->scene.environment().enabled); CHECK(model.history().undo_count==1);
     REQUIRE(model.undo()); CHECK(model.environment_draft()->value==original);
     REQUIRE(model.redo()); CHECK(model.environment_draft()->value["enabled"]==true);
+    model.environment_draft()->value["clouds"]["seed"]=42;
     model.environment_draft()->value["sun"]["irradiance"]={2,3,4}; model.environment_draft()->modified=true;
     REQUIRE(model.save()); CHECK_FALSE(model.dirty());
     const auto saved=model.environment_draft()->value;

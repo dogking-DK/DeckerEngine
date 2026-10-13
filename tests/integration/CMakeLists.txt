@@ -740,3 +740,15 @@ if(TARGET dk_editor_app AND TARGET dk_render_atmosphere AND TARGET dk_scripting_
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
     endif()
 endif()
+
+if(TARGET dk_render_clouds AND TARGET dk_graphics_shaders)
+    add_executable(dk_cloud_field_probe CloudFieldProbe.cpp)
+    target_link_libraries(dk_cloud_field_probe PRIVATE dk::render_clouds dk::graphics_shaders)
+    target_include_directories(dk_cloud_field_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
+    target_compile_definitions(dk_cloud_field_probe PRIVATE DK_CLOUD_SHADER_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures/shaders")
+    dk_target_defaults(dk_cloud_field_probe)
+    dk_deploy_slang(dk_cloud_field_probe)
+    add_test(NAME dk.clouds.fields_gpu_validation COMMAND dk_cloud_field_probe)
+    set_tests_properties(dk.clouds.fields_gpu_validation PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE LABELS "gpu"
+        ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+endif()

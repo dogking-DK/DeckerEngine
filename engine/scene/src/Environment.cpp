@@ -46,10 +46,28 @@ Result<SunParameters> normalize_sun(SunParameters sun) {
 Result<EnvironmentDescription> normalize_environment(EnvironmentDescription value) {
     auto atmosphere = validate_atmosphere(value.atmosphere);
     if (!atmosphere) return std::unexpected(atmosphere.error());
+    auto clouds = validate_clouds(value.clouds, value.atmosphere.atmosphere_height_m);
+    if (!clouds) return std::unexpected(clouds.error());
     auto sun = normalize_sun(value.sun);
     if (!sun) return std::unexpected(sun.error());
     value.sun = *sun;
     return value;
+}
+Result<void> validate_clouds(const CloudParameters& c, double atmosphere_height) {
+    const auto resolution = [](std::uint32_t n, std::uint32_t low, std::uint32_t high) {
+        return n >= low && n <= high && (n & (n - 1)) == 0;
+    };
+    if (c.generator_version != 1 || !resolution(c.weather_resolution, 8, 256) ||
+        !resolution(c.base_resolution, 8, 128) || !resolution(c.detail_resolution, 4, 64) ||
+        !range(atmosphere_height, 1, 1e7) || !range(c.bottom_height_m, 0, atmosphere_height) ||
+        !range(c.top_height_m, 0, atmosphere_height) || c.bottom_height_m >= c.top_height_m ||
+        c.top_height_m >= atmosphere_height || !range(c.coverage, 0, 1) || !range(c.density, 0, 10) ||
+        !range(c.extinction_per_m, 0, 1) || !range(c.weather_scale_m, 1, 1e7) ||
+        !range(c.shape_scale_m, 1, 1e7) || !range(c.detail_scale_m, 1, 1e7) ||
+        !range(c.bottom_fade_fraction, .001, .5) || !range(c.top_fade_fraction, .001, .5) ||
+        !range(c.wind_velocity_mps[0], -1000, 1000) || !range(c.wind_velocity_mps[1], -1000, 1000))
+        return std::unexpected(Error{ErrorCode::invalid_argument, "Cloud parameter outside supported finite range or generator version"});
+    return {};
 }
 Result<double> atmosphere_height_m(const AtmosphereParameters& a, const EnvironmentVector& position) {
     auto valid = validate_atmosphere(a);

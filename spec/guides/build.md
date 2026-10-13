@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-13T12:08:00+08:00"
+updated_at: "2026-10-13T13:12:00+08:00"
 ---
 
 # 构建与依赖配置
@@ -11,6 +11,12 @@ updated_at: "2026-10-13T12:08:00+08:00"
 独立配置和历史验收计数不构成每次修改的固定回归要求。
 
 ## Windows 快速验证
+
+云场可独立纯CPU构建：`cmake --preset windows-scripting -DDK_BUILD_RENDER_CLOUD_FIELDS=ON`，
+随后用verify构建`dk_cloud_field_tests`并筛选`^dk\.clouds\.cloud `。
+`DK_BUILD_RENDER_CLOUDS=ON`同时构建CPU与GPU纹理资源，windows-graphics及继承的editor预设已启用。
+GPU采样验证目标`dk_cloud_field_probe`，筛选`^dk\.clouds\.fields_gpu_validation$`，要求真实设备和validation。
+当前仅参数/场/纹理，尚无云光照与画面合成，详见[云场契约](../design/render-clouds.md)。
 
 大气双精度参考可单独启用`DK_BUILD_RENDER_ATMOSPHERE_REFERENCE=ON`，只要求Scene/Math，
 不引入Graphics或Slang。`DK_BUILD_RENDER_ATMOSPHERE=ON`仍构建参考及GPU实现。
