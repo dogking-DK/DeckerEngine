@@ -52,6 +52,18 @@ bool access_writes(vk::AccessFlags2 access) noexcept { return bool(access & writ
 Result<AccessDescription> validate_buffer_access(const BufferDesc& desc, const AccessDescription& input)
 {
     if (auto valid = validate_buffer_description(desc); !valid) return std::unexpected(valid.error());
+    // Dedicated build-input use. Scratch/AS storage are never ordinary buffer content accesses.
+    if (input.state.stages == vk::PipelineStageFlagBits2::eAccelerationStructureBuildKHR) {
+        auto use=input;
+        if (input.state.access!=vk::AccessFlagBits2::eShaderRead || input.state.layout!=vk::ImageLayout::eUndefined || input.full_overwrite ||
+            !(desc.usage & vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR) || input.offset>desc.size)
+            return std::unexpected(Error{ErrorCode::invalid_argument,"invalid AS build-input use"});
+        use.size=input.size==VK_WHOLE_SIZE ? desc.size-input.offset : input.size;
+        if (!use.size || !valid_range(desc.size,use.offset,use.size)) return std::unexpected(Error{ErrorCode::invalid_argument,"AS build-input range invalid"});
+        return use;
+    }
+    if (input.state.access & (vk::AccessFlagBits2::eAccelerationStructureReadKHR | vk::AccessFlagBits2::eAccelerationStructureWriteKHR))
+        return std::unexpected(Error{ErrorCode::invalid_argument,"AS access requires an AS resource"});
     if (auto valid = validate_access(input); !valid) return std::unexpected(valid.error());
     const auto& state = input.state;
     auto use = input;
@@ -77,6 +89,8 @@ Result<AccessDescription> validate_buffer_access(const BufferDesc& desc, const A
 }
 Result<AccessDescription> validate_image_access(const ImageDesc& desc, const AccessDescription& input)
 {
+    if (input.state.access & (vk::AccessFlagBits2::eAccelerationStructureReadKHR | vk::AccessFlagBits2::eAccelerationStructureWriteKHR))
+        return std::unexpected(Error{ErrorCode::invalid_argument,"AS access requires an AS resource"});
     if (auto valid = validate_image_description(desc); !valid) return std::unexpected(valid.error());
     if (auto valid = validate_access(input); !valid) return std::unexpected(valid.error());
     const auto& state = input.state;

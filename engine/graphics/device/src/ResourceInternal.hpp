@@ -13,6 +13,8 @@ struct AccelerationUse {
     std::shared_ptr<AccelerationState> resource;
     AccessState access;
     bool built = false;
+    bool prepared_build = false, prepared_trace = false;
+    vk::DeviceAddress scratch_address = 0; // Dedicated scratch retained in BatchState::uses; no business contents.
 };
 void release_acceleration_uses(Vector<AccelerationUse>& uses, bool recording, bool completed = false) noexcept;
 void commit_acceleration_uses(Vector<AccelerationUse>& uses, std::uint64_t submission) noexcept;

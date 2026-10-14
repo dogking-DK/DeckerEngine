@@ -1,7 +1,7 @@
 ---
 module: graphics-graph
 created_at: "2026-10-02T23:00:00+08:00"
-updated_at: "2026-10-12T16:40:00+08:00"
+updated_at: "2026-10-14T13:58:31+08:00"
 status: accepted
 ---
 
@@ -12,9 +12,34 @@ status: accepted
 M6 用同一图组织上传、计算、绘制和读回。M6.1 提供 CPU 声明与结构校验：
 transient/external buffer/image、Pass 访问与副作用、输出和显式依赖。
 M6.2 发布独立 CPU 编译计划（依赖、排序、裁剪与逻辑生命周期）。
-M6.3 接入状态导入/导出及单队列执行；M6.4 迁移样例并提供计划/同步诊断。阶段状态见 [Roadmap](../roadmap.md)。
+M6.3 接入状态导入/导出及单队列执行；M6.4 迁移样例并提供计划/同步诊断。
+M16.5 增加外部 AS/SBT、构建/trace 依赖和类型化回调。阶段状态见 [Roadmap](../roadmap.md)。
 
 ## 模块边界和依赖方向
+
+### M16.5 AS 与 SBT 实施契约
+
+增加AccelerationId/ShaderTableId与external声明；AS声明包含kind和依赖ID快照：未构建BLAS依赖外部输入buffer，
+TLAS依赖BLAS；已初始化BLAS声明不携带旧构建输入。SBT是已初始化、只读外部资源，不接受transient AS/SBT。
+Pass显式声明build-write、build-read、trace-read、SBT-read及build-input用途；BUILD是唯一完整初始化写，
+禁止对已初始化AS或同图同AS重复BUILD。TLAS build/trace分别要求完整BLAS读闭包，BLAS build要求完整输入读。
+执行时核对声明依赖与实际AS owner的输入/子AS身份，防止借声明无关资源绕过图依赖；所有AS构建输入为整buffer保守读取。
+AS/SBT逻辑上为一个不可分割单元，复用RAW/WAR/WAW、内容闭包、输出、裁剪和快照规则。
+计划资源顺序为buffer、image、AS、SBT；新增字段置末尾保持既有聚合调用兼容。
+
+Device将prepare_build与build_prepared拆开，旧build保留便利包装；Graph在Pass前准备构建输入、AS读写和SBT，
+PassContext::build仅录制已准备BUILD，PassContext::trace只执行当前声明SBT的管线；回调不增加barrier或submit入口。
+AS准备标记随finish_pass清除，未消费的BUILD写拒绝结束Pass，防止跨Pass沿用AS准备状态。
+scratch为每次prepare_build独占的内部临时buffer，使用专用prepared-build状态保活及AS read/write同步；
+不声明业务initialized，不允许回调读取，不提供可导入/别名/复用的scratch资源，因此无需虚构图内旧内容依赖。
+TLAS内部不可变实例buffer和SBT内部上传buffer分别归AS/SBT所有者；它们不是调用者可写的图资源。
+
+外部绑定增加AS/SBT owner，AS可断言访问状态和BUILD generation；拒绝类型/kind、物理别名、外来队列和依赖身份不符。
+AS输出可share，导出access/generation不可变快照；final access仅允许AS只读，SBT仅trace-read。
+所有校验、候选分配、回调、导出快照先于唯一submit提交点；失败不发布资源账本或Execution。
+成功submit后仅无分配地填充首次BUILD generation及转移owner，timeout/pending/close沿用Device寿命。
+required GPU验收upload→BLAS→TLAS→trace→readback、无消费者构建裁剪、导入/导出/陈旧状态、跨图/队列、
+未初始化/缺闭包/未消费BUILD、回调/submit失败和pending保活；同时回归原buffer/image Graph执行。
 
 `engine/graphics/graph` 提供 `dk::graphics_graph`，公开入口 `dk/graphics/Graph.hpp`、`dk/graphics/GraphExecution.hpp`、`dk/graphics/GraphDiagnostics.hpp`，
 命名空间 `dk::graphics::graph`。可选 `DK_BUILD_GRAPHICS_GRAPH` 默认 OFF，要求 device；
@@ -32,14 +57,16 @@ Graph 只消费 ResourceFactory、encoder、barrier、SubmissionQueue，不重�
   `Lifetime::transient/external` 是逻辑声明；external 在执行时绑定已有 Buffer/Image owner。
   external 的 `initialized` 表示导入时整个资源内容有效，transient 必须为 false。
   精细初始/最终状态及实际外部 owner 的绑定见执行契约。
-- `BufferId/ImageId/PassId` 是不同类型，携带弱图身份与索引，不能手工伪造；默认、跨图、
+- `declare_acceleration` 复制 kind、初始化声明及不可变依赖 ID；`declare_shader_table` 声明只读 SBT。
+  二者仅支持 external，依赖规则见 M16.5 契约。
+- `BufferId/ImageId/AccelerationId/ShaderTableId/PassId` 是不同类型，携带弱图身份与索引，不能手工伪造；默认、跨图、
   reset 前和已销毁图的引用都拒绝。move 转移身份，目标原有句柄失效。
 - `Use` 携带类型化资源 ID 与 `AccessDescription`（stage/access/layout、buffer 字节范围、
-  image aspect/mip/layer、full_overwrite）。`VK_WHOLE_SIZE` 归一为精确字节范围；image 要求显式范围。
+  image aspect/mip/layer、full_overwrite）。`VK_WHOLE_SIZE` 归一为精确范围；image 要求显式范围，AS/SBT 固定一个逻辑单元。
   Pass 状态的 initialized 必须 false，内容有效性由图推导。
 - `PassDesc` 包含名字、访问 span 和 side_effect。单队列首版不区分队列/Pass 类别，访问阶段表达用途。
   span/string_view 仅借用到调用返回，图复制所有持久字段。
-  同一 Pass 的同 buffer 访问必须合并；image 不允许重叠子资源声明，非重叠允许。
+  同一 Pass 的同 buffer/AS/SBT 访问必须合并；image 不允许重叠子资源声明，非重叠允许。
   不支持 Pass 内隐藏 barrier；需拆成 Pass。Host 访问由上传/读回外围负责，不进入 GPU Pass。
 - `add_dependency(before, after)` 表达执行先后；相同边幂等，自环立即拒绝。
   允许先加入多条边，再由 validate 检查组合循环；`remove_dependency` 支持修正，缺边为无变化。
@@ -80,11 +107,11 @@ Graph 只消费 ResourceFactory、encoder、barrier、SubmissionQueue，不重�
 
 - `CompiledGraph::passes()` 保留全部 Pass 的名字、副作用、归一化访问、retained 和可选 order_index；
   `order()` 只含保留 Pass 的声明索引；`dependencies()` 只含两端均保留的边。
-- `resources()` 顺序固定为 buffer 声明序列后接 image 声明序列；`PlannedUse::resource` 和依赖/分配条目
+- `resources()` 顺序固定为 buffer、image、AS、SBT 各自的声明序列；`PlannedUse::resource` 和依赖/分配条目
   使用此快照内的连续索引，不能作为另一计划或 Graph 的 ID。
   资源条目复制名称、类型化描述、原同类型声明索引、lifetime/initialized/output、retained、
-  可选 first_use/last_use（均为 order 的位置）及 allocation_index。
-- retained 资源为保留 Pass 使用的资源或标记输出。external 只登记，不列入 transient 分配；
+  可选 first_use/last_use（均为 order 的位置）、allocation_index，以及 AS 的不可变依赖资源索引。
+- retained 资源为保留 Pass 使用的资源、标记输出及其 AS 依赖闭包。external 只登记，不列入 transient 分配；
   未使用的 initialized external 输出 retained=true、无 first/last_use，也不制造空 Pass。
 - 每个活跃 transient 资源有独立 `TransientAllocation`，不做 aliasing 或物理块复用。
   create_before 为首次使用位置；普通资源 release_after 为末次使用位置。
@@ -108,22 +135,23 @@ Graph 只消费 ResourceFactory、encoder、barrier、SubmissionQueue，不重�
 - `GraphExecution.hpp` 的 `execute(plan, queue, desc)` 每次创建独立资源实例、录制一个 batch 并提交一次。
   绑定和回调使用当前计划索引。每个 retained external 必须有唯一绑定，每个 retained Pass 必须有唯一回调；
   裁剪 Pass 不调用，裁剪资源不分配。绑定拒绝错类型/描述、空 owner、重复物理资源、跨设备、正在其他 batch
-  录制或未在当前 batch 获取的 WSI image；本阶段只支持同队列自有 buffer/image。
+  录制或未在当前 batch 获取的 WSI image；只支持同队列自有 buffer/image/AS/SBT。
 - external 通过显式 `share()` 共享已有 owner，无原生重复所有权。描述精确匹配。
   默认从 owner 的上次成功提交状态导入，可提供 expected initial states（buffer 一项；image layer-major/mip-minor）
-  作全量陈旧状态断言；不允许伪造状态覆盖账本。声明 initialized=true 要求所有导入子资源已初始化。
+  作全量陈旧状态断言；AS/SBT 各一项，AS 另可提供 expected_generation；不允许伪造状态覆盖账本。
+  AS kind、构建输入/子 AS 身份精确匹配，声明 initialized=true 要求所有导入子资源已初始化。
   绑定引用及回调 user_data 只借用到 execute 返回；回调外部 CPU 副作用不保证回滚。
-- `PassContext` 提供当前 Pass 声明资源的借用查询，以及 typed copy/fill/clear、compute/render encoder。
+- `PassContext` 提供当前 Pass 声明资源的借用查询，以及 typed copy/fill/clear、compute/render encoder、build/trace 方法。
   不暴露可移动/提交/重新 prepare 的 CommandBatch。调用者必须遵守声明的范围、绑定和 full_overwrite 承诺；
   不保存上下文、资源引用或 encoder 到回调之外。回调返回 Result；异常转为执行错误。
-  每 Pass 前用 `CommandBatch::prepare` 生成 synchronization2 barrier；buffer 整体追踪，image 按 mip/layer。
+  每 Pass 前用 `CommandBatch::prepare` 及 AS 专用准备接口生成 synchronization2 barrier；buffer/AS/SBT 整体追踪，image 按 mip/layer。
   每 Pass 后 `finish_pass` 要求没有活动 rendering 或尚未执行的声明写入，并清除准备状态、使 encoder 失效。
   不推断 shader 内的实际访问与完整覆盖，额外未声明的资源访问仍属于调用者违约。
 - transient 在 create_before 通过队列工厂创建；非输出在 release_after 释放执行层引用，
   batch/pending slot 仍保活实际 GPU owner。输出由 `Execution` 持有，可在完成后读取，或作为下次图的外部绑定。
-  `Execution` 只读导出 external/输出的最终状态快照；后续提交不修改旧快照。
+  `Execution` 只读导出 external/输出的最终状态快照，AS 同时导出 BUILD generation；后续提交不修改旧快照。
 - 可对 retained external/输出声明 final access（不得 full_overwrite 或伪造 initialized），
-  在所有 Pass 后统一 prepare。允许不重叠 image 子资源项，同 buffer 最多一项。
+  在所有 Pass 后统一 prepare。允许不重叠 image 子资源项，同 buffer/AS/SBT 最多一项；AS/SBT 仅允许只读退出访问。
   final access 只建立下一使用者所需同步/layout，不初始化内容。
   buffer initialized 沿用整资源保守账本；部分范围写入不应将整个 buffer 标为已初始化，
   即使多个范围累计覆盖全体也可保持 false。图内部的内容依赖仍按精确字节范围证明。
@@ -172,7 +200,7 @@ DFS/调度只遍历对应 before 区间；裁剪使用仅含 contents/显式边�
 ## 相关记录
 
 [架构](architecture.md)、[资源](graphics-resources.md)、[Vulkan 使用层](graphics-vulkan.md)、
-[0057 声明记录](../development/0057-graph-declarations.md)、[0058 编译记录](../development/0058-graph-compilation.md)、[0059 执行记录](../development/0059-graph-execution.md)、[0060 集成记录](../development/0060-graph-integration.md)。
+[0057 声明记录](../development/0057-graph-declarations.md)、[0058 编译记录](../development/0058-graph-compilation.md)、[0059 执行记录](../development/0059-graph-execution.md)、[0060 集成记录](../development/0060-graph-integration.md)、[0113 AS/trace 记录](../development/0113-graph-raytracing.md)。
 
 ## 样例与诊断（M6.4）
 
@@ -185,9 +213,10 @@ Offscreen 的 draw/dispatch 改为 Graph 客户端，GPU 上传、计算、绘�
 资源类型/寿命/首末使用/分配，以及拓扑顺序和依赖原因；名字转义换行与引号，文本稳定、无地址或设备句柄。
 格式为人类诊断，不承诺持久化协议；默认/关闭的计划域拒绝生成，已返回文本仍独立有效。
 
-`ExecutionDesc::capture_synchronization` 默认 false；启用后 Execution::synchronization() 返回实际录制的
-每个资源 barrier 输入（Pass 索引或 final、资源索引、mip/layer、before 和目标 state）。
-buffer 为整对象，image 逐子资源；目标 state 的 initialized 沿用 before（barrier 不创造内容），
+`ExecutionDesc::capture_synchronization` 默认 false；启用后 Execution::synchronization() 返回 Graph 逻辑资源的
+同步准备输入（Pass 索引或 final、资源索引、mip/layer、before 和目标 state）。
+buffer/AS/SBT 为整对象，image 逐子资源；AS 内部实例和 scratch 准备不独立列出，也不重复列出 Device build 的输入准备，
+因此该列表不是逐条原生 barrier 转储。目标 state 的 initialized 沿用 before（barrier 不创造内容），
 read/read 时目标访问是本次请求，可能与账本累计的访问不同。顺序与 prepare 的发出顺序一致。
 计划诊断只在执行候选中分配，失败仍不发布/提交半个结果；该文本不含运行计时，GPU 观测见 M11.1。
 错误补充执行阶段、Pass 名字/索引或资源名字/索引上下文，保留原 Error code/message/context。

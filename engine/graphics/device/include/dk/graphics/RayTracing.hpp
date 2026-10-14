@@ -38,6 +38,8 @@ public:
     ShaderBindingTable(const ShaderBindingTable&) = delete;
     ShaderBindingTable& operator=(const ShaderBindingTable&) = delete;
     [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
+    [[nodiscard]] ShaderBindingTable share() const noexcept { return ShaderBindingTable{state_}; }
+    [[nodiscard]] Result<AccessState> state() const;
     [[nodiscard]] ShaderBindingTableRegions regions() const noexcept; // Borrowed, immutable SBT addresses.
 private:
     friend class ResourceFactory;

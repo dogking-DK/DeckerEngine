@@ -16,11 +16,12 @@ struct HandleAccess {
 };
 template<class Desc> struct Resource {
     Resource(memory::ResourceHandle heap, std::string_view label, const Desc& desc, Lifetime life, bool contents)
-        : name(label, memory::Allocator<char>{heap}), description(desc), lifetime(life), initialized(contents) {}
+        : name(label, memory::Allocator<char>{heap}), description(desc), lifetime(life), initialized(contents), dependencies(0,memory::Allocator<ResourceId>{heap}) {}
     String name;
     Desc description;
     Lifetime lifetime;
     bool initialized;
+    Vector<ResourceId> dependencies;
 };
 struct Pass {
     Pass(memory::ResourceHandle heap, const PassDesc& desc)
@@ -37,11 +38,15 @@ struct GraphState {
     explicit GraphState(memory::ResourceHandle heap)
         : resource(heap), buffers(0, memory::Allocator<memory::UniquePtr<Resource<BufferDesc>>>{heap}),
           images(0, memory::Allocator<memory::UniquePtr<Resource<ImageDesc>>>{heap}),
+          accelerations(0, memory::Allocator<memory::UniquePtr<Resource<AccelerationDesc>>>{heap}),
+          shader_tables(0, memory::Allocator<memory::UniquePtr<Resource<ShaderTableDesc>>>{heap}),
           passes(0, memory::Allocator<memory::UniquePtr<Pass>>{heap}),
           dependencies(0, memory::Allocator<Edge>{heap}), outputs(0, memory::Allocator<ResourceId>{heap}) {}
     memory::ResourceHandle resource;
     Vector<memory::UniquePtr<Resource<BufferDesc>>> buffers;
     Vector<memory::UniquePtr<Resource<ImageDesc>>> images;
+    Vector<memory::UniquePtr<Resource<AccelerationDesc>>> accelerations;
+    Vector<memory::UniquePtr<Resource<ShaderTableDesc>>> shader_tables;
     Vector<memory::UniquePtr<Pass>> passes;
     Vector<Edge> dependencies;
     Vector<ResourceId> outputs;

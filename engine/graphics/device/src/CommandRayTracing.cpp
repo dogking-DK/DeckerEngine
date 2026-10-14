@@ -15,7 +15,7 @@ Result<void> readable_as(BatchState& batch,const std::shared_ptr<AccelerationSta
     const auto* local=find_as(batch,resource);
     if (resource->reserved && !local) return std::unexpected(Error{ErrorCode::conflict,"trace AS is reserved by another batch"});
     const auto access=local ? local->access : resource->state.access;
-    if (!access.initialized || (prepared && (!local || !stage_covers(access.stages,vk::PipelineStageFlagBits2::eRayTracingShaderKHR) ||
+    if (!access.initialized || (prepared && (!local || !local->prepared_trace || !stage_covers(access.stages,vk::PipelineStageFlagBits2::eRayTracingShaderKHR) ||
         !(access.access & vk::AccessFlagBits2::eAccelerationStructureReadKHR))))
         return std::unexpected(bad_state("trace AS requires built content and explicit trace preparation"));
     return {};
@@ -59,9 +59,27 @@ Result<void> CommandBatch::prepare_trace(const ShaderBindingTable& table,std::sp
     if (auto valid=prepare_resolved(batch,std::span{&input,1}); !valid) return valid;
     memory_barrier.setDstStageMask(vk::PipelineStageFlagBits2::eRayTracingShaderKHR).setDstAccessMask(vk::AccessFlagBits2::eAccelerationStructureReadKHR);
     if (!resources.empty()) { vk::DependencyInfo dependency{}; dependency.setMemoryBarriers(memory_barrier); batch.command().pipelineBarrier2(dependency); }
-    for (const auto& resource : resources) find_as(batch,resource)->access={vk::PipelineStageFlagBits2::eRayTracingShaderKHR,vk::AccessFlagBits2::eAccelerationStructureReadKHR,vk::ImageLayout::eUndefined,true};
+    for (const auto& resource : resources) {
+        auto& local=*find_as(batch,resource);
+        local.access={vk::PipelineStageFlagBits2::eRayTracingShaderKHR,vk::AccessFlagBits2::eAccelerationStructureReadKHR,vk::ImageLayout::eUndefined,true};
+        local.prepared_trace=true;
+    }
     rollback.committed=accelerations.done=true;
     return {};
+}
+Result<void> CommandBatch::retain(const ShaderBindingTable& table) {
+    if (!state_) return std::unexpected(bad_state("empty batch"));
+    const auto& sbt=detail::ObjectAccess::state(table);
+    if (!sbt || sbt->owner!=state_->queue->owner) return std::unexpected(invalid("SBT is empty or foreign"));
+    detail::RetainRollback rollback{*state_};
+    if (auto valid=detail::retain_object(*state_,sbt); !valid) return valid;
+    if (auto valid=state_->retain(detail::ObjectAccess::state(sbt->storage)); !valid) return valid;
+    rollback.committed=true; return {};
+}
+Result<AccessState> CommandBatch::state(const ShaderBindingTable& table) const {
+    const auto& sbt=detail::ObjectAccess::state(table);
+    if (!sbt) return std::unexpected(invalid("empty SBT"));
+    return state(sbt->storage);
 }
 Result<RayTracingEncoder> CommandBatch::ray_tracing()
 {

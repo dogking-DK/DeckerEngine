@@ -144,6 +144,13 @@ public:
     [[nodiscard]] Result<void> retain(const BindingSet& bindings);
     // One immutable candidate BUILD. Handles input/scratch/BLAS dependencies and retention.
     [[nodiscard]] Result<void> build(const AccelerationStructure& candidate);
+    [[nodiscard]] Result<void> prepare_build(const AccelerationStructure& candidate);
+    [[nodiscard]] Result<void> build_prepared(const AccelerationStructure& candidate);
+    [[nodiscard]] Result<void> retain(const AccelerationStructure& structure);
+    [[nodiscard]] Result<void> retain(const ShaderBindingTable& table);
+    [[nodiscard]] Result<AccessState> state(const AccelerationStructure& structure) const;
+    [[nodiscard]] Result<AccessState> state(const ShaderBindingTable& table) const;
+    [[nodiscard]] Result<void> prepare_acceleration_read(const AccelerationStructure& structure, bool trace);
     [[nodiscard]] Result<void> prepare_trace(const ShaderBindingTable& table, std::span<const AccelerationStructure* const> structures);
     [[nodiscard]] Result<RayTracingEncoder> ray_tracing();
     [[nodiscard]] Result<void> copy(const Buffer& source, const Buffer& destination,

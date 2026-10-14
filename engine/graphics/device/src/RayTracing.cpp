@@ -69,6 +69,10 @@ Result<void> ray_payload_compatible(const ShaderRayInterface& caller, const Shad
 namespace dk::graphics {
 vk::Pipeline RayTracingPipeline::handle() const noexcept { return state_ ? *state_->pipeline : vk::Pipeline{}; }
 ShaderBindingTableRegions ShaderBindingTable::regions() const noexcept { return state_ ? state_->regions : ShaderBindingTableRegions{}; }
+Result<AccessState> ShaderBindingTable::state() const {
+    if (!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty SBT"});
+    return state_->storage.state();
+}
 Result<RayTracingPipeline> ResourceFactory::create_ray_tracing_pipeline(const RayTracingPipelineDesc& desc) const
 {
     auto checked=detail::factory_queue(queue_); if (!checked) return std::unexpected(checked.error());

@@ -82,7 +82,7 @@ if(DK_BUILD_RENDER_RESOURCES)
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 30 LABELS "cpu")
 endif()
 if(DK_BUILD_GRAPHICS_GRAPH)
-    add_executable(dk_graph_tests GraphTests.cpp GraphCompileTests.cpp GraphDiagnosticsTests.cpp)
+    add_executable(dk_graph_tests GraphTests.cpp GraphCompileTests.cpp GraphDiagnosticsTests.cpp GraphRayTracingTests.cpp)
     target_link_libraries(dk_graph_tests PRIVATE dk::graphics_graph Catch2::Catch2WithMain)
     dk_target_defaults(dk_graph_tests)
     catch_discover_tests(dk_graph_tests TEST_PREFIX "dk.graph."

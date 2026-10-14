@@ -330,6 +330,8 @@ Result<Submission> SubmissionQueue::submit_impl(CommandBatch&& batch, vk::Semaph
         return std::unexpected(Error{ErrorCode::invalid_argument, "submission requires an active batch from this queue"});
     if (batch.state_->invalid || batch.state_->rendering)
         return std::unexpected(Error{ErrorCode::invalid_state, "cannot submit invalid or open-rendering batch"});
+    for (const auto& use : batch.state_->accelerations) if (use.prepared_build)
+        return std::unexpected(Error{ErrorCode::invalid_state,"cannot submit an unconsumed AS BUILD preparation"});
     if (batch.state_->profile && batch.state_->profile->pass_open)
         return std::unexpected(Error{ErrorCode::invalid_state, "cannot submit with an open GPU zone"});
     if (state_->submitted == std::numeric_limits<std::uint64_t>::max())

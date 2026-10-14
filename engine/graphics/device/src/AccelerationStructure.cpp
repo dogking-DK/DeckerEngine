@@ -110,6 +110,56 @@ Result<AccelerationStructureState> AccelerationStructure::state() const
     if (state_->owner->lost) { result.status = AccelerationStructureStatus::device_lost; result.access.initialized = false; }
     return result;
 }
+Result<void> AccelerationStructure::validate_dependencies(std::span<const Buffer* const> inputs,
+    std::span<const AccelerationStructure* const> children) const
+{
+    if (!state_) return std::unexpected(Error{ErrorCode::invalid_argument,"empty AS dependencies"});
+    const auto invalid=[] { return std::unexpected(Error{ErrorCode::invalid_argument,"AS dependency identities do not match declared inputs/children"}); };
+    if (state_->kind==AccelerationStructureKind::bottom_level) {
+        if (!children.empty()) return invalid();
+        if (state_->state.access.initialized) { if (!inputs.empty()) return invalid(); return {}; }
+        for (const auto* input : inputs) if (!input || !*input || std::none_of(state_->inputs.begin(),state_->inputs.end(),
+            [&](const auto& actual) { return detail::ObjectAccess::state(actual)==detail::ObjectAccess::state(*input); })) return invalid();
+        for (const auto& actual : state_->inputs) if (std::none_of(inputs.begin(),inputs.end(),
+            [&](const auto* input) { return input && detail::ObjectAccess::state(actual)==detail::ObjectAccess::state(*input); })) return invalid();
+    } else {
+        if (!inputs.empty()) return invalid();
+        for (const auto* child : children) if (!child || !*child || std::find(state_->children.begin(),state_->children.end(),child->state_)==state_->children.end()) return invalid();
+        for (const auto& actual : state_->children) if (std::none_of(children.begin(),children.end(),[&](const auto* child) { return child && child->state_==actual; })) return invalid();
+    }
+    return {};
+}
+Result<void> CommandBatch::retain(const AccelerationStructure& structure) {
+    if (!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty batch"});
+    if (auto valid=state_->valid(); !valid) return valid;
+    const auto& target=structure.state_;
+    if (auto valid=detail::check_acceleration(*state_,target); !valid) return valid;
+    if (!detail::find_acceleration(*state_,target)) {
+        state_->accelerations.push_back({target,target->state.access,false}); target->reserved=true;
+    }
+    return {};
+}
+Result<AccessState> CommandBatch::state(const AccelerationStructure& structure) const {
+    if (!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty batch"});
+    if (auto valid=state_->valid(); !valid) return std::unexpected(valid.error());
+    const auto& target=structure.state_;
+    if (auto valid=detail::check_acceleration(*state_,target); !valid) return std::unexpected(valid.error());
+    const auto* local=detail::find_acceleration(*state_,target);
+    return local ? local->access : target->state.access;
+}
+Result<void> CommandBatch::prepare_acceleration_read(const AccelerationStructure& structure,bool trace) {
+    if (!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty batch"});
+    if (auto valid=detail::outside_rendering(*state_); !valid) return valid;
+    auto before=state(structure); if (!before) return std::unexpected(before.error());
+    if (!before->initialized) return std::unexpected(Error{ErrorCode::invalid_state,"AS read requires initialized contents"});
+    if (auto valid=retain(structure); !valid) return valid;
+    const auto stage=trace ? vk::PipelineStageFlagBits2::eRayTracingShaderKHR : vk::PipelineStageFlagBits2::eAccelerationStructureBuildKHR;
+    const vk::MemoryBarrier2 barrier{before->stages,before->access,stage,vk::AccessFlagBits2::eAccelerationStructureReadKHR};
+    vk::DependencyInfo dependency{}; dependency.setMemoryBarriers(barrier); state_->command().pipelineBarrier2(dependency);
+    auto& local=*detail::find_acceleration(*state_,structure.state_);
+    local.access={stage,vk::AccessFlagBits2::eAccelerationStructureReadKHR,vk::ImageLayout::eUndefined,true}; local.prepared_trace=trace;
+    return {};
+}
 Result<AccelerationStructure> ResourceFactory::create_blas(std::span<const TriangleGeometry> geometries) const
 {
     auto checked = detail::factory_queue(queue_);
@@ -206,14 +256,15 @@ Result<AccelerationStructure> ResourceFactory::create_tlas(std::span<const Accel
     if (auto result = detail::allocate_acceleration(queue, *this, *state); !result) return std::unexpected(result.error());
     return AccelerationStructure{std::move(state)};
 }
-Result<void> CommandBatch::build(const AccelerationStructure& candidate)
+Result<void> CommandBatch::prepare_build(const AccelerationStructure& candidate)
 {
     if (!state_) return std::unexpected(Error{ErrorCode::invalid_state, "empty batch"});
     auto& batch = *state_;
     if (auto valid = detail::outside_rendering(batch); !valid) return valid;
     const auto& target = candidate.state_;
     if (auto valid = detail::check_acceleration(batch, target); !valid) return valid;
-    if (target->state.status != AccelerationStructureStatus::candidate || detail::find_acceleration(batch, target))
+    const auto* prior_build=detail::find_acceleration(batch,target);
+    if (target->state.status != AccelerationStructureStatus::candidate || (prior_build && (prior_build->built || prior_build->prepared_build)))
         return std::unexpected(Error{ErrorCode::invalid_state, "AS BUILD requires an unbuilt candidate"});
     for (const auto& child : target->children) {
         if (auto valid = detail::check_acceleration(batch, child); !valid) return valid;
@@ -270,8 +321,28 @@ Result<void> CommandBatch::build(const AccelerationStructure& candidate)
     vk::DependencyInfo barriers{};
     barriers.setMemoryBarriers(dependency);
     batch.command().pipelineBarrier2(barriers);
+    for (const auto& child : target->children)
+        detail::find_acceleration(batch, child)->access = {build_stage, vk::AccessFlagBits2::eAccelerationStructureReadKHR, vk::ImageLayout::eUndefined, true};
+    auto& prepared=*detail::find_acceleration(batch,target);
+    prepared.access={build_stage,vk::AccessFlagBits2::eAccelerationStructureWriteKHR};
+    prepared.prepared_build=true; prepared.scratch_address=scratch_data;
+    buffers.committed = accelerations.committed = true;
+    return {};
+}
+Result<void> CommandBatch::build_prepared(const AccelerationStructure& candidate) {
+    if (!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty batch"});
+    auto& batch=*state_;
+    if (auto valid=detail::outside_rendering(batch); !valid) return valid;
+    const auto& target=candidate.state_;
+    if (auto valid=detail::check_acceleration(batch,target); !valid) return valid;
+    auto* prepared=detail::find_acceleration(batch,target);
+    if (!prepared || !prepared->prepared_build || prepared->built)
+        return std::unexpected(Error{ErrorCode::invalid_state,"AS BUILD was not prepared for this pass"});
+    constexpr auto build_stage=vk::PipelineStageFlagBits2::eAccelerationStructureBuildKHR;
+    for (const auto& input : target->inputs)
+        if (auto valid=detail::require_use(batch,detail::ObjectAccess::state(input),build_stage,vk::AccessFlagBits2::eShaderRead); !valid) return valid;
     auto info = target->build_info();
-    info.setDstAccelerationStructure(*target->acceleration).setScratchData(vk::DeviceOrHostAddressKHR{scratch_data});
+    info.setDstAccelerationStructure(*target->acceleration).setScratchData(vk::DeviceOrHostAddressKHR{prepared->scratch_address});
     const auto* ranges = reinterpret_cast<const VkAccelerationStructureBuildRangeInfoKHR*>(target->ranges.data());
     batch.command().getDispatcher()->vkCmdBuildAccelerationStructuresKHR(static_cast<VkCommandBuffer>(*batch.command()), 1,
         reinterpret_cast<const VkAccelerationStructureBuildGeometryInfoKHR*>(&info), &ranges);
@@ -280,7 +351,11 @@ Result<void> CommandBatch::build(const AccelerationStructure& candidate)
     auto& built = *detail::find_acceleration(batch, target);
     built.access = {build_stage, vk::AccessFlagBits2::eAccelerationStructureWriteKHR, vk::ImageLayout::eUndefined, true};
     built.built = true;
-    buffers.committed = accelerations.committed = true;
+    built.prepared_build=false;
     return {};
+}
+Result<void> CommandBatch::build(const AccelerationStructure& candidate) {
+    if (auto prepared=prepare_build(candidate); !prepared) return prepared;
+    return build_prepared(candidate);
 }
 } // namespace dk::graphics

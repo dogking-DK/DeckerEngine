@@ -16,6 +16,7 @@ void snapshot(const GraphState& graph, PlanState& plan) {
         for (std::size_t i = 0; i < declarations.size(); ++i) {
             const auto& source = *declarations[i];
             auto owner = memory::make_unique_in<detail::PlanResourceOwner>(plan.resource, plan.resource, std::string_view{source.name});
+            for (const auto& dependency : source.dependencies) owner->dependencies.push_back(detail::resource_number(dependency,graph));
             plan.resource_owners.push_back(std::move(owner));
             PlannedResource resource;
             resource.name = plan.resource_owners.back()->name;
@@ -23,11 +24,14 @@ void snapshot(const GraphState& graph, PlanState& plan) {
             resource.declaration_index = i;
             resource.lifetime = source.lifetime;
             resource.initialized = source.initialized;
+            resource.dependencies=plan.resource_owners.back()->dependencies;
             plan.resources.push_back(resource);
         }
     };
     copy_resources(graph.buffers);
     copy_resources(graph.images);
+    copy_resources(graph.accelerations);
+    copy_resources(graph.shader_tables);
     for (const auto& source : graph.passes) {
         auto owner = memory::make_unique_in<detail::PlanPassOwner>(plan.resource, plan.resource, std::string_view{source->name});
         owner->uses.reserve(source->uses.size());
@@ -44,7 +48,7 @@ template<class F> void latest_writers(const GraphState& graph, const Use& use, s
     struct Interval { vk::DeviceSize begin, end; };
     Vector<Interval> pending(0, memory::Allocator<Interval>{graph.resource});
     Vector<Interval> remainder(0, memory::Allocator<Interval>{graph.resource});
-    const bool buffer = std::holds_alternative<BufferId>(use.resource);
+    const bool buffer = !std::holds_alternative<ImageId>(use.resource); // AS/SBT use a single logical unit.
     const auto& range = use.access.range;
     const auto first_mip = buffer ? 0u : range.baseMipLevel;
     const auto end_mip = buffer ? 1u : range.baseMipLevel + range.levelCount;
@@ -149,6 +153,9 @@ Result<void> lifetimes(PlanState& plan) {
             resource.last_use = position;
         }
     }
+    // External AS outputs retain their immutable dependency identities even without a consuming Pass.
+    for (std::size_t i=plan.resources.size(); i>0; --i) if (plan.resources[i-1].retained)
+        for (const auto dependency : plan.resources[i-1].dependencies) plan.resources[dependency].retained=true;
     for (std::size_t i = 0; i < plan.resources.size(); ++i) {
         auto& resource = plan.resources[i];
         if (!resource.retained || resource.lifetime == Lifetime::external) continue;

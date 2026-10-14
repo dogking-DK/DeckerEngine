@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-14T12:15:10+08:00"
+updated_at: "2026-10-14T13:58:31+08:00"
 status: accepted
 ---
 
@@ -67,7 +67,18 @@ collect/close确认后完成AS并释放构建输入，TLAS始终保留所引用B
 M16.4的prepare_trace显式准备SBT host-write→shader-read和TLAS/BLAS build-write→RT AS-read，
 复用同一AS账本与提交槽；trace不改变BUILD generation。BindingSet接受拥有型TLAS，拒绝BLAS和外来队列对象。
 AS完成后仍保留geometry count和实例SBT offset用于trace范围验证。SBT保留pipeline/layout和自身buffer，
-录制/提交保活完整依赖，timeout不释放；Graph类型化AS访问留待M16.5。
+录制/提交保活完整依赖，timeout不释放。
+
+M16.5把build拆为prepare_build/build_prepared，便利build顺序调用二者。prepare只分配独占scratch、
+保留依赖并录制输入/AS同步；build_prepared只录制已准备的首次BUILD并更新批次局部内容状态。
+finish_pass和submit拒绝尚未消费的BUILD；finish_pass还清除AS trace准备标记，防止跨Pass沿用声明。
+prepare_acceleration_read显式准备AS build-read或trace-read；AS/SBT增加retain/state以支持Graph导入和快照。
+AccelerationStructure::validate_dependencies核对候选BLAS的输入owner与TLAS的子AS owner；已构建BLAS不再声明输入。
+SBT提供share与只读state，内部buffer不开放给Graph调用方。
+AS build输入使用独立的AS-build/ShaderRead校验路径，必须具备build-input usage；
+普通buffer/image仍拒绝AS read/write，不允许用full_overwrite伪造scratch业务初始化。
+Graph消费上述公开接口，详见[Graph AS契约](graphics-graph.md#m165-as-与-sbt-实施契约)与[0113](../development/0113-graph-raytracing.md)。
+
 ImageDesc 提供 sample=1 的 2D/2D array 和原生 3D image。追加 type（默认2D）、depth（默认1）和
 require_linear_filter（默认false），保持原聚合初始化含义。2D必须depth=1，3D必须array_layers=1且仅允许color sampled/storage/transfer；
 3D view只能对应3D image，不能用数组层代替z。color支持R8/RG8 UNORM（1/2字节，云场线性采样）、RGBA8/BGRA8 UNORM/SRGB、R32_UINT/R32_SFLOAT（4字节）、

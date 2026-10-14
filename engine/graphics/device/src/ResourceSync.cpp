@@ -36,7 +36,7 @@ Result<ResolvedUse> resolve_use(BatchState& batch, const ResourceUse& input)
     if (bool(input.buffer) == bool(input.image)) return std::unexpected(Error{ErrorCode::invalid_argument, "use requires exactly one buffer or image"});
     auto resource = input.buffer ? ObjectAccess::state(*input.buffer) : ObjectAccess::state(*input.image);
     if (auto valid = batch.check(resource); !valid) return std::unexpected(valid.error());
-    if ((input.state.stages & vk::PipelineStageFlagBits2::eRayTracingShaderKHR) && !batch.queue->owner->device.ray_tracing_enabled())
+    if ((input.state.stages & (vk::PipelineStageFlagBits2::eRayTracingShaderKHR | vk::PipelineStageFlagBits2::eAccelerationStructureBuildKHR)) && !batch.queue->owner->device.ray_tracing_enabled())
         return std::unexpected(Error{ErrorCode::not_supported, "RT resource stage requires enabled ray tracing"});
     const AccessDescription description{input.state, input.offset, input.size, input.range, input.full_overwrite};
     auto valid = input.buffer ? validate_buffer_access(resource->buffer_desc, description)
@@ -175,10 +175,13 @@ Result<void> CommandBatch::finish_pass()
 {
     if (!state_) return std::unexpected(Error{ErrorCode::invalid_state, "empty batch"});
     if (auto valid = detail::outside_rendering(*state_); !valid) return valid;
+    for (const auto& use : state_->accelerations) if (use.prepared_build)
+        return std::unexpected(Error{ErrorCode::invalid_state, "pass has an unconsumed AS BUILD"});
     for (const auto& use : state_->uses) for (std::size_t i = 0; i < use.states.size(); ++i)
         if ((use.prepared[i] & 1u) && (use.states[i].access & detail::write_access))
             return std::unexpected(Error{ErrorCode::invalid_state, "pass has an unconsumed declared write"});
     for (auto& use : state_->uses) std::fill(use.prepared.begin(), use.prepared.end(), std::uint8_t{0});
+    for (auto& use : state_->accelerations) use.prepared_trace=false;
     detail::invalidate_encoder(*state_);
     return {};
 }

@@ -1,6 +1,7 @@
 #pragma once
 #include <dk/graphics/Graph.hpp>
 #include <dk/graphics/CommandEncoder.hpp>
+#include <dk/graphics/RayTracing.hpp>
 
 namespace dk::graphics::graph {
 namespace detail { struct ExecutionState; }
@@ -10,6 +11,9 @@ struct ExternalBinding {
     const Image* image = nullptr;
     // Empty imports the live ledger; otherwise exact expected states, layer-major/mip-minor.
     std::span<const AccessState> expected_states;
+    const AccelerationStructure* acceleration = nullptr;
+    const ShaderBindingTable* shader_table = nullptr;
+    std::optional<std::uint64_t> expected_generation; // AS BUILD generation; never overrides live state.
 };
 struct FinalAccess {
     std::size_t resource;
@@ -19,12 +23,13 @@ struct ExportedState {
     std::size_t resource;
     std::uint32_t mip = 0, layer = 0;
     AccessState state;
+    std::uint64_t generation = 0; // AS only; zero for buffer/image/SBT.
 };
 struct Synchronization {
     std::optional<std::size_t> pass; // Empty for final access; otherwise declaration index.
     std::size_t resource;
     std::uint32_t mip = 0, layer = 0;
-    AccessState before, target; // Actual barrier scopes; initialized is preserved.
+    AccessState before, target; // Graph resource synchronization scopes; initialized is preserved.
 };
 // Borrowed for one callback only. Declare every accessed binding/range in the Pass.
 // Encoders must end within the callback; no submission or manual barriers are exposed.
@@ -36,6 +41,10 @@ public:
     [[nodiscard]] const PlannedPass& description() const noexcept;
     [[nodiscard]] Result<const Buffer*> buffer(std::size_t resource) const;
     [[nodiscard]] Result<const Image*> image(std::size_t resource) const;
+    [[nodiscard]] Result<const AccelerationStructure*> acceleration(std::size_t resource) const;
+    [[nodiscard]] Result<void> build(std::size_t resource);
+    [[nodiscard]] Result<void> trace(const RayTracingPipeline&, std::size_t shader_table,
+        std::span<const BindingSet* const> sets, std::span<const std::byte> constants, std::array<std::uint32_t,3> dimensions);
     [[nodiscard]] Result<void> copy_buffer(std::size_t source, std::size_t destination, vk::DeviceSize size,
         vk::DeviceSize source_offset = 0, vk::DeviceSize destination_offset = 0);
     [[nodiscard]] Result<void> copy_to_image(std::size_t source, std::size_t destination, const ImageCopyRegion& region);
@@ -83,6 +92,8 @@ public:
     // Output owners only. Borrowed until this result is replaced/destroyed; share() keeps an owner.
     [[nodiscard]] Result<const Buffer*> buffer(std::size_t resource) const;
     [[nodiscard]] Result<const Image*> image(std::size_t resource) const;
+    [[nodiscard]] Result<const AccelerationStructure*> acceleration(std::size_t resource) const;
+    [[nodiscard]] Result<const ShaderBindingTable*> shader_table(std::size_t resource) const;
 private:
     friend struct detail::ExecutionAccess;
     explicit Execution(std::shared_ptr<detail::ExecutionState> state) : state_(std::move(state)) {}

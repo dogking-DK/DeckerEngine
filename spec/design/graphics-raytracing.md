@@ -1,7 +1,7 @@
 ---
 module: graphics-raytracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-14T12:15:10+08:00"
+updated_at: "2026-10-14T13:58:31+08:00"
 status: accepted
 ---
 
@@ -10,7 +10,7 @@ status: accepted
 ## 目标与当前边界
 
 为[渐进式路径追踪](render-pathtracing.md)提供硬件三角形求交、加速结构、光追管线和 Graph 调度。
-M16.2能力与M16.3 AS实施契约见下节；管线/Graph接口仍为拟议契约，阶段状态和任务顺序由[Roadmap](../roadmap.md)维护。
+M16.2–5已提供能力、AS、管线/SBT与Graph构建/trace；实施契约见下文，阶段状态和任务顺序由[Roadmap](../roadmap.md)维护。
 沿用 Windows x64、Vulkan 1.4、Slang、Vulkan-Hpp RAII、VMA 和单提交队列，不新增跨 API RHI。
 
 核对当前代码后的缺口：
@@ -18,9 +18,9 @@ M16.2能力与M16.3 AS实施契约见下节；管线/Graph接口仍为拟议契�
 | 当前入口 | 已有能力 | 本轮需要补充 |
 | --- | --- | --- |
 | [Device.hpp](../../engine/graphics/device/include/dk/graphics/Device.hpp) | Vulkan 1.4、确定性选卡、同族共享设备；RT三态请求、支持/启用/缺项与limits | 后续按材质需要扩展独立非一致索引能力组 |
-| [ShaderArtifact.hpp](../../engine/graphics/shader-types/include/dk/graphics/ShaderArtifact.hpp) | vertex/fragment/compute、五种 descriptor | raygen/miss/closest-hit/any-hit、AS descriptor、能力需求 |
-| [Device](../../engine/graphics/device) | Buffer/Image、graphics/compute、提交保活；BDA/VMA、拥有型BLAS/TLAS与候选BUILD | SBT、RT pipeline/encoder |
-| [Graph](../../engine/graphics/graph) | buffer/image 声明、同步和导入导出 | AS 内容依赖、build/trace 访问和类型化回调 |
+| [ShaderArtifact.hpp](../../engine/graphics/shader-types/include/dk/graphics/ShaderArtifact.hpp) | graphics/compute、四种RT阶段、AS descriptor与payload/SBT需求 | 后续按材质需求扩展能力组 |
+| [Device](../../engine/graphics/device) | Buffer/Image、graphics/compute、提交保活；BDA/VMA、拥有型BLAS/TLAS、SBT与RT pipeline/encoder | 后续按Render需求扩展受支持子集 |
+| [Graph](../../engine/graphics/graph) | buffer/image/AS/SBT声明、构建/trace内容依赖、同步、导入导出与类型化回调 | GPU路径积分作为Graph客户端接入 |
 | [GpuAssets.cpp](../../engine/render/resources/src/GpuAssets.cpp) | vertex/index/transfer usage | RT 专用构建输入和着色数据；旧 buffer 不能事后追加 usage |
 
 Vulkan 版本满足不代表光追 feature 已启用。现有 CPU 几何 BVH 和云 ray marching 均不构成本页的硬件光追实现。
@@ -49,7 +49,7 @@ BufferDesc允许ShaderDeviceAddress usage；创建在VMA分配前要求Device已
 `Buffer::device_address()`拒绝空buffer、lost device和未声明usage；成功返回当前buffer的非零地址。
 查询不修改资源访问/初始化状态、不提交GPU工作，普通buffer不能事后追加usage。
 地址只是借用数值，Buffer及Device寿命仍靠已有owner/share/提交保活；禁止把地址当所有权。
-AS storage/build input usage在M16.3接入；SBT和trace仍留待后续阶段。
+AS storage/build input usage在M16.3接入；SBT和trace在M16.4接入。
 
 验证分层：纯策略遍历六项缺失及required/if_available/disabled、显式选卡与WSI组合；
 fake dispatch验证查询结构、启用链、VMA flags、缺入口/创建失败/取消逆序回收与共享寿命；
@@ -82,7 +82,7 @@ timeout保留pending引用，device lost状态覆盖普通状态。队列关闭/
 类型化build内部完成输入到AS-build shader-read屏障、BLAS build-write到TLAS build-read屏障；
 scratch为专用临时工作区，不读取旧内容也不将其记为业务初始化。输入要求账本已有完整初始化，
 可由本批upload或host write建立；只读重复输入合并。AS访问不伪装成普通storage-buffer访问。
-尚不开放Graph AS声明/trace；后续复用此拥有关系和提交账本。
+M16.5 Graph AS声明/trace复用此拥有关系和提交账本，拆分prepare_build与build_prepared以把同步放在Pass外。
 
 验证：纯策略覆盖计数/格式/跨度/地址溢出、scratch对齐、变换和字段边界；required RT GPU probe执行
 多几何BLAS、多个BLAS的多实例TLAS、同批和跨批依赖，检查代/地址、失败保持旧代、放弃重试、
@@ -131,7 +131,7 @@ CPU-only 模块和 RT 关闭设备不得调用这些入口；共享 Device view 
 
 ## 资源、构建与所有权
 
-已提供拥有型 `AccelerationStructure`和构建尺寸/描述；`ShaderBindingTable`与`RayTracingPipeline`留待后续阶段。
+已提供拥有型 `AccelerationStructure`和构建尺寸/描述，以及`ShaderBindingTable`与`RayTracingPipeline`。
 AS 区分 bottom/top level，并具有提交域身份、内容有效性、最后访问与构建代次。
 AS owner 保留 storage buffer 和 Device，析构先释放 AS 句柄再释放 VMA buffer；禁止双重拥有同一 Vulkan buffer。
 公开地址仅供内部描述组装，不能把整数地址作为寿命凭据。
@@ -209,10 +209,10 @@ AS 是一等类型化逻辑资源，不能只声明 storage buffer 或把 build 
 增加带图身份的 AS ID、build-read/build-write/trace-read 与有效性规则；首次完整 BUILD 是初始化写。
 TLAS 构建显式依赖引用的 BLAS，trace 显式读取 TLAS 及其 BLAS 集合；无消费者的候选 build 可裁剪。
 编译计划复制映射/依赖，执行验证绑定身份、同设备/队列及预期状态，跨图 ID、重复物理绑定均拒绝。
-Scratch 在 AS build 阶段需要 AS read/write 同步，但其旧字节不是算法输入；
-用专用 build-scratch 用途表达此区别，仅供类型化 build encoder 使用，不伪造普通 buffer 已初始化。
-该用途参与资源保活和 WAR/WAW，禁止 shader 将未定义 scratch 内容当作业务输出读取；
-新建、连续构建和误用 scratch 的图编译/同步案例分别验收。
+Scratch 在 AS build 阶段需要 AS read/write 同步，但其旧字节不是算法输入。
+M16.5采用每次prepare_build独占scratch，不提供图内共享/复用scratch，因此无共享范围的WAR/WAW；
+专用prepared-build状态保活内部临时用途，禁止shader读取未定义scratch内容，
+不把scratch变成可初始化/导出的业务buffer。具体声明、依赖身份和准备/录制拆分见[Graph实施契约](graphics-graph.md#m165-as-与-sbt-实施契约)。
 
 | 依赖 | stage/access 语义 |
 | --- | --- |
@@ -220,14 +220,14 @@ Scratch 在 AS build 阶段需要 AS read/write 同步，但其旧字节不是�
 | AS build scratch | AS build / AS read 与 AS write；新 scratch 无旧内容依赖 |
 | BLAS build → TLAS build | AS build/write → AS build/read |
 | TLAS/BLAS build → trace | AS build/write → ray tracing shader / AS read |
-| SBT 上传 → trace | transfer write → ray tracing shader / shader read（基础扩展路径） |
+| SBT 上传 → trace | 当前host write → ray tracing shader / shader read（基础扩展路径） |
 | 材质/几何上传 → hit shader | transfer write → ray tracing shader / storage 或 sampled read |
 | trace 输出 → 累积/tone/readback | ray tracing shader / storage write → 实际 compute/fragment/transfer read |
 
 统一扩展 ResourceValidation、CommandBatch ledger、Graph 编译和导出；AS barrier 由执行层生成，
 Pass 内不藏 prepare/barrier。SBT 专用 access bit 只有额外启用对应 maintenance 扩展时才能用，
 基础方案按 Khronos [RT 同步指南](https://docs.vulkan.org/guide/latest/extensions/ray_tracing.html)使用兼容的 shader read。
-`PassContext` 拟增加受限 build/trace encoder，不暴露 submit，也不能保留回调借用到函数外。
+`PassContext::build/trace`提供受限类型化录制，不暴露submit/prepare，也不能保留回调借用到函数外。
 每次 trace 的完整依赖闭包包含 pipeline/layout、SBT、绑定、TLAS/BLAS、着色数据与输出。
 
 队列成功 submit 为资源状态提交点。CPU 分配、校验、录制和 submit 失败不发布账本；
@@ -236,7 +236,7 @@ device_lost 使队列失效，不承诺旧 GPU 画面仍可用。跨队列仅使
 
 ## 验证与实施边界
 
-按 Roadmap 逐阶段落实本草案，先纯 CPU 再 required GPU，每次只回归受影响链路：
+按 Roadmap 逐阶段验收，先纯 CPU 再 required GPU，每次只回归受影响链路：
 
 - 能力策略：缺单个扩展/feature、显式选卡、disabled 不访问 RT、纹理能力不足、limit/溢出拒绝。
 - 资源/编译：BDA usage、AS 尺寸/对齐、独立对象寿命、shader 阶段/AS 反射/布局冲突、SBT 索引与对齐。
@@ -247,7 +247,8 @@ device_lost 使队列失效，不承诺旧 GPU 画面仍可用。跨队列仅使
 
 设备能力/BDA已提供CPU策略与required RT探针，入口和实测见[0110](../development/0110-raytracing-device.md)。
 AS构建实测见[0111](../development/0111-acceleration-structures.md)，四阶段编译、RT pipeline/SBT、
-真实命中与visibility及失败寿命见[0112](../development/0112-raytracing-pipeline.md)。Graph AS和路径积分待后续阶段。
+真实命中与visibility及失败寿命见[0112](../development/0112-raytracing-pipeline.md)。Graph AS构建/trace、导入导出、
+失败和pending寿命见[0113](../development/0113-graph-raytracing.md)；GPU路径积分待M16.6。
 
 ## 相关设计与记录
 

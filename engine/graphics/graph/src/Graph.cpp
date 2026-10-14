@@ -21,7 +21,7 @@ template<class Items> bool has_name(const Items& items, std::string_view name) {
 }
 Result<void> resource_name(const GraphState& state, std::string_view name, Lifetime lifetime, bool initialized) {
     if (!valid_name(name)) return std::unexpected(invalid("resource requires a nonempty name without NUL"));
-    if (has_name(state.buffers, name) || has_name(state.images, name))
+    if (has_name(state.buffers, name) || has_name(state.images, name) || has_name(state.accelerations,name) || has_name(state.shader_tables,name))
         return std::unexpected(Error{ErrorCode::conflict, "duplicate resource name: " + std::string{name}});
     if ((lifetime != Lifetime::external && lifetime != Lifetime::transient) || (lifetime == Lifetime::transient && initialized))
         return std::unexpected(invalid("invalid lifetime or initialized transient resource: " + std::string{name}));
@@ -34,14 +34,18 @@ template<class Tag> Result<std::size_t> index_of(const Id<Tag>& id, const std::s
 }
 Result<std::size_t> resource_index(const ResourceId& id, const std::shared_ptr<GraphState>& state) {
     if (const auto* buffer = std::get_if<BufferId>(&id)) return index_of(*buffer, state, state->buffers.size());
-    return index_of(std::get<ImageId>(id), state, state->images.size());
+    if (const auto* image = std::get_if<ImageId>(&id)) return index_of(*image,state,state->images.size());
+    if (const auto* acceleration = std::get_if<AccelerationId>(&id)) return index_of(*acceleration,state,state->accelerations.size());
+    return index_of(std::get<ShaderTableId>(id),state,state->shader_tables.size());
 }
 std::string resource_context(const ResourceId& id, const GraphState& state) {
     return std::visit([&](const auto& value) {
         const auto i = HandleAccess::index(value);
         if constexpr (std::is_same_v<std::decay_t<decltype(value)>, BufferId>)
             return "buffer[" + std::to_string(i) + "] '" + std::string{state.buffers[i]->name} + "'";
-        else return "image[" + std::to_string(i) + "] '" + std::string{state.images[i]->name} + "'";
+        else if constexpr (std::is_same_v<std::decay_t<decltype(value)>, ImageId>) return "image[" + std::to_string(i) + "] '" + std::string{state.images[i]->name} + "'";
+        else if constexpr (std::is_same_v<std::decay_t<decltype(value)>, AccelerationId>) return "AS["+std::to_string(i)+"] '"+std::string{state.accelerations[i]->name}+"'";
+        else return "SBT["+std::to_string(i)+"] '"+std::string{state.shader_tables[i]->name}+"'";
     }, id);
 }
 std::string pass_context(const GraphState& state, std::size_t index) {
@@ -53,7 +57,7 @@ bool intersects(const vk::ImageSubresourceRange& a, const vk::ImageSubresourceRa
         a.baseArrayLayer < b.baseArrayLayer + b.layerCount && b.baseArrayLayer < a.baseArrayLayer + a.layerCount;
 }
 bool overlaps(const Use& a, const Use& b) {
-    return a.resource == b.resource && (std::holds_alternative<BufferId>(a.resource) || intersects(a.access.range, b.access.range));
+    return a.resource == b.resource && (!std::holds_alternative<ImageId>(a.resource) || intersects(a.access.range, b.access.range));
 }
 Result<Use> normalize_use(const Use& input, const std::shared_ptr<GraphState>& state) {
     const auto i = resource_index(input.resource, state);
@@ -64,6 +68,18 @@ Result<Use> normalize_use(const Use& input, const std::shared_ptr<GraphState>& s
         return std::unexpected(invalid("GPU Pass cannot declare host access or set tracked initialized state"));
     if (access.full_overwrite && access_reads(access.state.access))
         return std::unexpected(invalid("full overwrite cannot also read prior contents"));
+    if (std::holds_alternative<AccelerationId>(input.resource) || std::holds_alternative<ShaderTableId>(input.resource)) {
+        const bool as=std::holds_alternative<AccelerationId>(input.resource);
+        const bool build=as && access.state.stages==vk::PipelineStageFlagBits2::eAccelerationStructureBuildKHR;
+        const bool trace=access.state.stages==vk::PipelineStageFlagBits2::eRayTracingShaderKHR;
+        const bool write=access.state.access==vk::AccessFlagBits2::eAccelerationStructureWriteKHR;
+        if ((!build && !trace) || access.state.layout!=vk::ImageLayout::eUndefined || access.offset ||
+            (access.size!=1 && access.size!=VK_WHOLE_SIZE) || access.range!=vk::ImageSubresourceRange{} ||
+            (as ? !(access.state.access==vk::AccessFlagBits2::eAccelerationStructureReadKHR || (build && write)) :
+                access.state.access!=vk::AccessFlagBits2::eShaderRead) || access.full_overwrite!=(as && build && write))
+            return std::unexpected(invalid("invalid AS/SBT logical access"));
+        auto normalized=access; normalized.size=1; return Use{input.resource,normalized};
+    }
     auto checked = std::holds_alternative<BufferId>(input.resource)
         ? validate_buffer_access(state->buffers[*i]->description, access)
         : validate_image_access(state->images[*i]->description, access);
@@ -73,9 +89,12 @@ Result<Use> normalize_use(const Use& input, const std::shared_ptr<GraphState>& s
 // Coverage uses interval unions, never a byte/pixel/layer-sized allocation.
 // For images, each mip (at most 32) is a separate interval of array layers.
 bool initialized(const Use& requested, std::span<const Use* const> writes, const GraphState& state) {
-    const bool buffer = std::holds_alternative<BufferId>(requested.resource);
+    const bool buffer = !std::holds_alternative<ImageId>(requested.resource);
     const auto index = std::visit([](const auto& id) { return HandleAccess::index(id); }, requested.resource);
-    if (buffer ? state.buffers[index]->initialized : state.images[index]->initialized) return true;
+    const bool contents=std::holds_alternative<BufferId>(requested.resource) ? state.buffers[index]->initialized :
+        std::holds_alternative<ImageId>(requested.resource) ? state.images[index]->initialized :
+        std::holds_alternative<AccelerationId>(requested.resource) ? state.accelerations[index]->initialized : true;
+    if (contents) return true;
     const auto& range = requested.access.range;
     const std::uint32_t first_mip = buffer ? 0 : range.baseMipLevel;
     const std::uint32_t end_mip = buffer ? 1 : range.baseMipLevel + range.levelCount;
@@ -102,11 +121,11 @@ Use whole_resource(const ResourceId& resource, const GraphState& state) {
     Use use{resource, {}};
     const auto index = std::visit([](const auto& id) { return HandleAccess::index(id); }, resource);
     if (std::holds_alternative<BufferId>(resource)) use.access.size = state.buffers[index]->description.size;
-    else {
+    else if (std::holds_alternative<ImageId>(resource)) {
         const auto& desc = state.images[index]->description;
         use.access.range = vk::ImageSubresourceRange{desc.format == vk::Format::eD32Sfloat ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor,
             0, desc.mip_levels, 0, desc.array_layers};
-    }
+    } else use.access.size=1;
     return use;
 }
 Result<void> acyclic(const GraphState& state, std::span<const Dependency> edges) {
@@ -162,6 +181,41 @@ Result<ImageId> Graph::declare_image(std::string_view name, const ImageDesc& des
     return HandleAccess::make<ImageTag>(state_, state_->images.size() - 1);
 } catch (const std::bad_alloc&) { return std::unexpected(allocation_failure()); }
 
+Use build_input(BufferId id) { return {id,{{vk::PipelineStageFlagBits2::eAccelerationStructureBuildKHR,vk::AccessFlagBits2::eShaderRead}}}; }
+Use acceleration_build(AccelerationId id) { return {id,{{vk::PipelineStageFlagBits2::eAccelerationStructureBuildKHR,vk::AccessFlagBits2::eAccelerationStructureWriteKHR},0,1,{},true}}; }
+Use acceleration_read(AccelerationId id,bool trace) { return {id,{{trace ? vk::PipelineStageFlagBits2::eRayTracingShaderKHR : vk::PipelineStageFlagBits2::eAccelerationStructureBuildKHR,vk::AccessFlagBits2::eAccelerationStructureReadKHR},0,1,{}}}; }
+Use shader_table_read(ShaderTableId id) { return {id,{{vk::PipelineStageFlagBits2::eRayTracingShaderKHR,vk::AccessFlagBits2::eShaderRead},0,1,{}}}; }
+Result<AccelerationId> Graph::declare_acceleration(std::string_view name,AccelerationStructureKind kind,
+    std::span<const ResourceId> dependencies,bool contents) try {
+    if (auto valid=ready(state_); !valid) return std::unexpected(valid.error());
+    if (auto valid=resource_name(*state_,name,Lifetime::external,contents); !valid) return std::unexpected(valid.error());
+    if ((kind!=AccelerationStructureKind::bottom_level && kind!=AccelerationStructureKind::top_level) ||
+        (dependencies.empty() && (kind==AccelerationStructureKind::top_level || !contents)) ||
+        (kind==AccelerationStructureKind::bottom_level && contents && !dependencies.empty()))
+        return std::unexpected(invalid("AS kind/dependencies do not match immutable BUILD declaration"));
+    auto candidate=memory::make_unique_in<detail::Resource<AccelerationDesc>>(state_->resource,state_->resource,name,AccelerationDesc{kind},Lifetime::external,contents);
+    for (const auto& dependency : dependencies) {
+        auto index=resource_index(dependency,state_); if (!index) return std::unexpected(index.error());
+        if (std::ranges::find(candidate->dependencies,dependency)!=candidate->dependencies.end()) return std::unexpected(invalid("duplicate AS dependency"));
+        if (kind==AccelerationStructureKind::bottom_level) {
+            if (!std::holds_alternative<BufferId>(dependency) || state_->buffers[*index]->lifetime!=Lifetime::external ||
+                !(state_->buffers[*index]->description.usage & vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR))
+                return std::unexpected(invalid("BLAS requires external AS build-input buffers"));
+        } else if (!std::holds_alternative<AccelerationId>(dependency) || state_->accelerations[*index]->description.kind!=AccelerationStructureKind::bottom_level)
+            return std::unexpected(invalid("TLAS requires BLAS dependencies"));
+        candidate->dependencies.push_back(dependency);
+    }
+    state_->accelerations.push_back(std::move(candidate));
+    return HandleAccess::make<AccelerationTag>(state_,state_->accelerations.size()-1);
+} catch (const std::bad_alloc&) { return std::unexpected(allocation_failure()); }
+Result<ShaderTableId> Graph::declare_shader_table(std::string_view name) try {
+    if (auto valid=ready(state_); !valid) return std::unexpected(valid.error());
+    if (auto valid=resource_name(*state_,name,Lifetime::external,true); !valid) return std::unexpected(valid.error());
+    auto candidate=memory::make_unique_in<detail::Resource<ShaderTableDesc>>(state_->resource,state_->resource,name,ShaderTableDesc{},Lifetime::external,true);
+    state_->shader_tables.push_back(std::move(candidate));
+    return HandleAccess::make<ShaderTableTag>(state_,state_->shader_tables.size()-1);
+} catch (const std::bad_alloc&) { return std::unexpected(allocation_failure()); }
+
 Result<PassId> Graph::add_pass(const PassDesc& desc) try {
     if (auto valid = ready(state_); !valid) return std::unexpected(valid.error());
     if (!valid_name(desc.name)) return std::unexpected(invalid("Pass requires a nonempty name without NUL"));
@@ -174,6 +228,19 @@ Result<PassId> Graph::add_pass(const PassDesc& desc) try {
         if (std::ranges::any_of(candidate->uses, [&](const auto& prior) { return overlaps(prior, *normalized); }))
             return std::unexpected(invalid("Pass '" + std::string{desc.name} + "' has overlapping uses; merge the access declaration"));
         candidate->uses.push_back(std::move(*normalized));
+    }
+    for (const auto& use : candidate->uses) if (const auto* id=std::get_if<AccelerationId>(&use.resource)) {
+        const auto& resource=*state_->accelerations[HandleAccess::index(*id)];
+        const bool build=use.access.full_overwrite;
+        if (build && resource.initialized) return std::unexpected(invalid("cannot BUILD an initialized AS"));
+        if (!build && resource.description.kind==AccelerationStructureKind::bottom_level) continue;
+        for (const auto& dependency : resource.dependencies) {
+            const auto found=std::ranges::find(candidate->uses,dependency,&Use::resource);
+            const auto expected=resource.description.kind==AccelerationStructureKind::bottom_level ? vk::AccessFlagBits2::eShaderRead : vk::AccessFlagBits2::eAccelerationStructureReadKHR;
+            if (found==candidate->uses.end() || found->access.state.stages!=use.access.state.stages || found->access.state.access!=expected ||
+                (std::holds_alternative<BufferId>(dependency) && (found->access.offset || found->access.size!=state_->buffers[HandleAccess::index(std::get<BufferId>(dependency))]->description.size)))
+                return std::unexpected(invalid("AS pass lacks complete build-input/BLAS read dependencies"));
+        }
     }
     state_->passes.push_back(std::move(candidate));
     return HandleAccess::make<PassTag>(state_, state_->passes.size() - 1);
@@ -228,7 +295,7 @@ Result<PassDesc> Graph::pass(PassId id) const {
 }
 Counts Graph::counts() const noexcept {
     if (!state_) return {};
-    return {state_->buffers.size(), state_->images.size(), state_->passes.size(), state_->dependencies.size(), state_->outputs.size()};
+    return {state_->buffers.size(), state_->images.size(), state_->passes.size(), state_->dependencies.size(), state_->outputs.size(),state_->accelerations.size(),state_->shader_tables.size()};
 }
 Result<void> Graph::reset() {
     if (auto valid = ready(state_); !valid) return valid;
@@ -244,6 +311,9 @@ Result<void> detail::analyze(const std::shared_ptr<GraphState>& state, Vector<De
         if (stop.stop_requested()) return std::unexpected(compilation_cancelled());
         const auto& pass = *state->passes[i];
         for (const auto& use : pass.uses) {
+            if (std::holds_alternative<AccelerationId>(use.resource) && use.access.full_overwrite &&
+                std::ranges::any_of(writes,[&](const auto* prior) { return prior->resource==use.resource; }))
+                return std::unexpected(invalid("AS supports only one BUILD per graph").with_context(pass_context(*state,i)));
             if (!use.access.full_overwrite && !initialized(use, writes, *state))
                 return std::unexpected(invalid("read or preserved write requires initialized contents")
                     .with_context(resource_context(use.resource, *state)).with_context(pass_context(*state, i)));
@@ -292,7 +362,9 @@ void detail::normalize_dependencies(Vector<Dependency>& dependencies, std::stop_
 }
 std::size_t detail::resource_number(const ResourceId& id, const GraphState& state) {
     if (const auto* buffer = std::get_if<BufferId>(&id)) return HandleAccess::index(*buffer);
-    return state.buffers.size() + HandleAccess::index(std::get<ImageId>(id));
+    if (const auto* image = std::get_if<ImageId>(&id)) return state.buffers.size()+HandleAccess::index(*image);
+    if (const auto* as = std::get_if<AccelerationId>(&id)) return state.buffers.size()+state.images.size()+HandleAccess::index(*as);
+    return state.buffers.size()+state.images.size()+state.accelerations.size()+HandleAccess::index(std::get<ShaderTableId>(id));
 }
 Use detail::complete_use(const ResourceId& id, const GraphState& state) { return whole_resource(id, state); }
 Result<void> Graph::validate() const try {

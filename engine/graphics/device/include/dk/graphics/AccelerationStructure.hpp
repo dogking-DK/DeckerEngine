@@ -32,6 +32,9 @@ public:
     // Candidate addresses are valid for forming instances, not proof of built content.
     [[nodiscard]] Result<vk::DeviceAddress> device_address() const;
     [[nodiscard]] Result<AccelerationStructureState> state() const;
+    // Exact unique dependency identities for Graph imports. Built BLAS no longer needs build inputs.
+    [[nodiscard]] Result<void> validate_dependencies(std::span<const Buffer* const> inputs,
+        std::span<const AccelerationStructure* const> children) const;
 private:
     friend class ResourceFactory;
     friend class CommandBatch;

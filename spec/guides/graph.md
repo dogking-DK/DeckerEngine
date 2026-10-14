@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-02T23:20:00+08:00"
-updated_at: "2026-10-03T14:45:24+08:00"
+updated_at: "2026-10-14T13:58:31+08:00"
 ---
 
 # GPU Graph 声明、编译与执行
@@ -56,7 +56,7 @@ cmake --preset windows-graphics
 | `passes()` | 全部声明的名称/访问；retained 表示是否保留，order_index 为实际排序位置 |
 | `order()` | 保留 Pass 的声明索引，按拓扑顺序排列，同一就绪集合优先较早声明者 |
 | `dependencies()` | 保留 Pass 间的显式、RAW/WAR/WAW、layout 和 contents 依赖及资源索引 |
-| `resources()` | 先 buffer 后 image 的完整声明快照、output/retained、first_use/last_use 与 allocation_index |
+| `resources()` | 按 buffer、image、AS、SBT 顺序的完整声明快照、output/retained、first_use/last_use、allocation_index 与 AS 依赖索引 |
 | `allocations()` | 每个活跃 transient 的独立分配条目：resource、create_before、release_after |
 
 `first_use/last_use/create_before/release_after` 都是 `order()` 中的位置，不是 Pass 声明索引。
@@ -86,7 +86,7 @@ move 保留转入图的身份。reset 成功后所有旧 ID 失效；失败则�
 
 ## 单队列执行
 
-1. `ExternalBinding` 用计划 resources() 索引绑定同队列的现有 Buffer/Image，描述必须完全相同。
+1. `ExternalBinding` 用计划 resources() 索引绑定同队列的现有 Buffer/Image/AS/SBT，类型和描述必须匹配。
    每个 retained external 必须绑定，不能把同一物理资源绑定为多个逻辑资源；transient 由图创建。
    expected_states 留空时读取当前账本，提供时做精确校验；image 按 layer-major/mip-minor 排列。
 2. `PassCallback` 用 passes() 声明索引绑定函数指针和 user_data。每个 retained Pass 都需回调；
@@ -99,7 +99,7 @@ move 保留转入图的身份。reset 成功后所有旧 ID 失效；失败则�
    同一 image 可给不重叠的 mip/layer 范围；退出访问只建立同步，不初始化内容。
 5. `execute(plan, queue, desc)` 完成 CPU 录制并提交，返回 Execution。
    `queue.wait(execution.submission())` 或 poll 确认完成；状态发布不表示 GPU 已完成，未完成时不能 CPU 读取。
-6. Execution::buffer/image 只返回标记输出的 owner；需要跨结果保存时调用 share()。
+6. Execution::buffer/image/acceleration/shader_table 只返回标记输出的 owner；需要跨结果保存时调用 share()。
    导入的输出同样持有显式共享 owner。states() 保存 external/输出的最终状态快照，后续执行不会改写。
    非输出 transient 在逻辑末次使用后释放执行器引用，实际 GPU 生命周期由 pending slot 保证。
 
@@ -154,6 +154,8 @@ Pass 前及最终访问的逐资源 barrier 输入。每项有 Pass 索引（fin
 before 与 target；buffer 同步仍为整对象。barrier 不改变 initialized，target 不是 shader 执行后的内容状态。
 连续只读时 before 可能包含累计访问，target 是本次请求；最终账本快照用 states() 查询。
 默认不捕获，同步诊断没有 GPU 计时或性能含义。诊断分配失败仍放弃候选执行，不发布 GPU 状态。
+AS/SBT 以一个逻辑资源记录；AS 内部实例/scratch 和 Device build 的重复输入准备不独立列出，
+该列表不是逐条原生 barrier 转储。计划报告另外显示 BLAS/TLAS/SBT 类型与不可变依赖索引。
 
 执行错误保留原 Error code/message/context，再加 Pass 名字/索引、资源名字/索引或提交阶段。
 打印错误时应同时输出 context，按最内层到最外层阅读。
@@ -178,3 +180,57 @@ CTest 在 `out/build/windows-graphics/tests/integration/graph-pipeline-validatio
 无验证层版本测试输出 graph-pipeline.txt。同一 probe 继续验证 12 次 Offscreen draw、12 次 dispatch、
 原有低层绑定/深度校验及超时、失败、drain、析构行为；具体环境与证据见
 [0060](../development/0060-graph-integration.md)。进程级 AMD 层兼容设置按前述 Graphics 指南处理。
+
+## AS 构建与 trace（M16.5）
+
+RT 设备、候选 BLAS/TLAS、管线/绑定/SBT 由现有 Device/Shader API 创建，Graph 不链接 Slang。
+AS/SBT 只支持 external；先声明构建输入 buffer，再声明 BLAS，最后声明引用它们的 TLAS。
+候选 BLAS 的依赖列表必须等于实际顶点/索引 buffer 集合，TLAS 的依赖必须等于实际 BLAS 集合。
+构建输入须为 external、具有 AS build-input/BDA usage，build Pass 整 buffer 读取。
+输入可由前序 upload Pass 初始化；内部实例 buffer 和每次构建独占的 scratch 由 Device 保留。
+
+以下片段延续上文的 `graph`，假定 `vertices` 是已声明的外部构建输入 ID，上传 Pass 已加入。
+
+```cpp
+const std::array<ResourceId, 1> inputs{vertices};
+const auto blas = graph.declare_acceleration("BLAS",
+    AccelerationStructureKind::bottom_level, inputs).value();
+const std::array<ResourceId, 1> children{blas};
+const auto tlas = graph.declare_acceleration("TLAS",
+    AccelerationStructureKind::top_level, children).value();
+const auto sbt = graph.declare_shader_table("SBT").value();
+const std::array blas_uses{build_input(vertices), acceleration_build(blas)};
+graph.add_pass({"build BLAS", blas_uses}).value();
+const std::array tlas_uses{acceleration_read(blas, false), acceleration_build(tlas)};
+graph.add_pass({"build TLAS", tlas_uses}).value();
+// trace Pass 还需加入所有 shader buffer/image 的实际读写访问。
+const std::array trace_as_uses{
+    acceleration_read(blas), acceleration_read(tlas), shader_table_read(sbt)};
+```
+
+`acceleration_read(id, false)` 表示 build-read，默认参数表示 trace-read。
+所有被 TLAS 引用的 BLAS 必须在同一 build/trace Pass 中显式读取，缺少闭包在 add_pass 时拒绝。
+BUILD 为唯一初始化写，已构建 AS 和同图重复 BUILD 均拒绝；无消费者的构建可裁剪。
+SBT 已初始化且只读，不能将 AS storage/scratch 当作普通 buffer 写入来伪造 AS 内容有效性。
+
+执行时 `ExternalBinding::acceleration/shader_table` 绑定实际 owner；每项只能设置一种 owner。
+`expected_states` 对 AS/SBT 为一项，可选 `expected_generation` 仅用于 AS BUILD 代的陈旧断言。
+构建回调调用 `pass.build(as_plan_index)`；trace 回调调用
+`pass.trace(pipeline, sbt_plan_index, sets, constants, dimensions)`。这些索引属于当前编译计划，不能直接使用图 ID。
+每个 Pass 前执行器统一准备同步，回调不能 prepare/submit；未消费 BUILD 或跨 Pass 沿用 AS 准备会失败。
+导出的 `states()` 包含 AS generation；AS/SBT 的 final access 只允许只读用途。
+下次图导入已构建 BLAS 时以 `initialized=true` 和空依赖声明；TLAS 仍须声明完整 BLAS 集合。
+成功 submit 后才发布状态与代次，timeout 保留在途引用；跨队列 AS/SBT 和同物理资源重复绑定拒绝。
+
+完整 upload→BLAS→TLAS→trace→readback、已构建资源导入及失败/关闭示例见
+[GraphRayTracingProbe.cpp](../../tests/integration/GraphRayTracingProbe.cpp)，CPU 用例见
+[GraphRayTracingTests.cpp](../../tests/unit/GraphRayTracingTests.cpp)。GPU 测试要求 RT、validation 和同步验证，缺失即失败，不以77跳过。
+
+```powershell
+& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Configuration RelWithDebInfo `
+  -Target dk_graph_tests,dk_graph_raytracing_probe `
+  -TestRegex '^dk\.graph\.(graph RT |rt_required_validation$)' `
+  -Reason 'Graph AS内容依赖、类型化构建/trace与required RT同步'
+```
+
+实测和进程级隐式层兼容处理见[0113](../development/0113-graph-raytracing.md)。GPU路径积分从M16.6接入。

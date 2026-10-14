@@ -5,8 +5,9 @@ namespace dk::graphics::graph {
 namespace detail {
 struct PlanAccess { static const auto& state(const CompiledGraph& plan) { return plan.state_; } };
 struct PlanResourceOwner {
-    PlanResourceOwner(memory::ResourceHandle heap, std::string_view label) : name(label, memory::Allocator<char>{heap}) {}
+    PlanResourceOwner(memory::ResourceHandle heap, std::string_view label) : name(label, memory::Allocator<char>{heap}), dependencies(0,memory::Allocator<std::size_t>{heap}) {}
     String name;
+    Vector<std::size_t> dependencies;
 };
 struct PlanPassOwner {
     PlanPassOwner(memory::ResourceHandle heap, std::string_view label)

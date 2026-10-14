@@ -1,6 +1,7 @@
 #pragma once
 #include <stop_token>
 #include <dk/graphics/ResourceValidation.hpp>
+#include <dk/graphics/AccelerationStructure.hpp>
 #include <variant>
 #include <optional>
 
@@ -22,12 +23,20 @@ private:
 using BufferId = Id<struct BufferTag>;
 using ImageId = Id<struct ImageTag>;
 using PassId = Id<struct PassTag>;
-using ResourceId = std::variant<BufferId, ImageId>;
+using AccelerationId = Id<struct AccelerationTag>;
+using ShaderTableId = Id<struct ShaderTableTag>;
+using ResourceId = std::variant<BufferId, ImageId, AccelerationId, ShaderTableId>;
+struct AccelerationDesc { AccelerationStructureKind kind = AccelerationStructureKind::bottom_level; };
+struct ShaderTableDesc {};
 enum class Lifetime { transient, external };
 struct Use {
     ResourceId resource;
     AccessDescription access;
 };
+[[nodiscard]] Use build_input(BufferId);
+[[nodiscard]] Use acceleration_build(AccelerationId);
+[[nodiscard]] Use acceleration_read(AccelerationId, bool trace = true);
+[[nodiscard]] Use shader_table_read(ShaderTableId);
 struct PassDesc {
     std::string_view name;
     std::span<const Use> uses;
@@ -47,6 +56,7 @@ struct ImageInfo {
 };
 struct Counts {
     std::size_t buffers = 0, images = 0, passes = 0, dependencies = 0, outputs = 0;
+    std::size_t accelerations = 0, shader_tables = 0;
     bool operator==(const Counts&) const = default;
 };
 // Indices below belong to one compiled snapshot, never to another Graph or plan.
@@ -62,11 +72,12 @@ struct PlannedPass {
 };
 struct PlannedResource {
     std::string_view name;
-    std::variant<BufferDesc, ImageDesc> description;
-    std::size_t declaration_index = 0; // Index within the source buffer or image declarations.
+    std::variant<BufferDesc, ImageDesc, AccelerationDesc, ShaderTableDesc> description;
+    std::size_t declaration_index = 0; // Index within the source declarations of this resource type.
     Lifetime lifetime = Lifetime::transient;
     bool initialized = false, output = false, retained = false;
     std::optional<std::size_t> first_use, last_use, allocation_index;
+    std::span<const std::size_t> dependencies; // BLAS build-input buffers or TLAS children, in this snapshot.
 };
 enum class DependencyKind { explicit_order, read_after_write, write_after_read, write_after_write, layout_transition, contents };
 struct Dependency {
@@ -117,6 +128,9 @@ public:
         Lifetime lifetime = Lifetime::transient, bool initialized = false);
     [[nodiscard]] Result<ImageId> declare_image(std::string_view name, const ImageDesc&,
         Lifetime lifetime = Lifetime::transient, bool initialized = false);
+    [[nodiscard]] Result<AccelerationId> declare_acceleration(std::string_view name, AccelerationStructureKind kind,
+        std::span<const ResourceId> dependencies, bool initialized = false);
+    [[nodiscard]] Result<ShaderTableId> declare_shader_table(std::string_view name);
     [[nodiscard]] Result<PassId> add_pass(const PassDesc&);
     [[nodiscard]] Result<void> add_dependency(PassId before, PassId after);
     [[nodiscard]] Result<void> remove_dependency(PassId before, PassId after);
