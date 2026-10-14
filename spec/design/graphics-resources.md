@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-13T13:12:00+08:00"
+updated_at: "2026-10-14T11:03:02+08:00"
 status: accepted
 ---
 
@@ -54,6 +54,13 @@ BufferDesc 指定大小、Vulkan usage、device/upload/readback 内存用途；C
 通过 VMA map、flush/invalidate、unmap 配对处理，设备用途不能直接访问。
 map/范围/角色失败不写用户数据；read 的 invalidate 失败不修改输出；write 的 flush 失败时
 host 内存可能已写入，不保证字节回滚，也不会因此自动提交 GPU 工作。
+
+M16.2允许BufferDesc显式声明ShaderDeviceAddress usage；工厂在任何候选/VMA分配前要求
+Device::ray_tracing_enabled()（当前BDA随RT整组启用）。Buffer::device_address()只查询当前绑定buffer的
+非零地址，空对象、lost device、缺usage或未启用拒绝；不改变初始化/访问状态，也不隐式提交/等待。
+move/share和队列关闭不改变地址，已有Buffer owner继续保留Device/VMA；最后owner释放后地址失效。
+整数地址不代表所有权，录制者仍须沿原提交闭包保留Buffer。AS storage/build-input/SBT usage及其
+同步访问在后续阶段接入；BDA本身不是完成AS或shader寻址业务的证据。
 ImageDesc 提供 sample=1 的 2D/2D array 和原生 3D image。追加 type（默认2D）、depth（默认1）和
 require_linear_filter（默认false），保持原聚合初始化含义。2D必须depth=1，3D必须array_layers=1且仅允许color sampled/storage/transfer；
 3D view只能对应3D image，不能用数组层代替z。color支持R8/RG8 UNORM（1/2字节，云场线性采样）、RGBA8/BGRA8 UNORM/SRGB、R32_UINT/R32_SFLOAT（4字节）、

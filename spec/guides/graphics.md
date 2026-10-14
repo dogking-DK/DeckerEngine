@@ -1,13 +1,13 @@
 ---
 created_at: "2026-09-28T16:49:00+08:00"
-updated_at: "2026-10-02T22:38:00+08:00"
+updated_at: "2026-10-14T11:03:02+08:00"
 ---
 
 # Vulkan 使用层：资源、管线、录制与提交
 
 [返回项目入口](../../README.md)。当前提供资源工厂、管线/绑定、类型化录制、显式同步、单队列提交与异步读回；
 离线 shader 编译见 [Shader 指南](shaders.md)，真实 draw/dispatch/readback 见[离屏指南](offscreen.md)。
-窗口呈现尚未实现。接口与生命周期见 [设备设计](../design/graphics-device.md) 和[资源设计](../design/graphics-resources.md)。
+窗口呈现见[呈现指南](presentation.md)。接口与生命周期见[设备设计](../design/graphics-device.md)和[资源设计](../design/graphics-resources.md)。
 
 ## 配置和运行
 
@@ -20,8 +20,8 @@ vcpkg 提供编译头文件和 loader 包，不安装显卡驱动或验证层。
 
 ```powershell
 cmake --preset windows-graphics
-& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Target @('dk_device_tests', 'dk_device_probe') -TestRegex '^dk\.device\.' -Reason '验证 Vulkan 设备与诊断'
-& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Target @('dk_graphics_resource_tests', 'dk_graphics_resource_probe') -TestRegex '^dk\.graphics\.' -Reason '验证资源、提交和数据往返'
+& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Target @('dk_device_tests', 'dk_device_probe') -TestRegex '^dk\.device\.(unit\.|gpu_)' -Reason '验证 Vulkan 设备与诊断'
+& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Target @('dk_graphics_resource_tests', 'dk_graphics_resource_probe') -TestRegex '^dk\.graphics\.(unit\.|gpu_resources)' -Reason '验证资源、提交和数据往返'
 ```
 
 windows-graphics 继承 CPU 开发预设，额外开启 DK_BUILD_GRAPHICS_DEVICE、DK_BUILD_GRAPHICS_SHADERS 和 DK_BUILD_GRAPHICS_OFFSCREEN；默认 windows-dev 保持 CPU-only。
@@ -59,6 +59,47 @@ try {
 
 该开关是本机驱动 manifest 的约定；其他机器先核对自身环境。这里不修改系统注册表、持久环境变量、SDK 或驱动。
 Loader 通用的 `VK_LOADER_LAYERS_DISABLE` 在本机还会产生 forced-disabled warning，因此没有用它作为零诊断验收环境。
+
+## 可选RT设备与BDA
+
+M16.2提供RT能力协商与地址buffer；AS构建、SBT、光追shader和路径追踪GPU积分仍待后续阶段。
+无需新CMake开关：在DeviceOptions中显式请求，默认disabled保留原光栅/compute设备行为。
+
+```cpp
+dk::graphics::DeviceOptions options;
+options.ray_tracing = dk::graphics::RayTracingMode::required;
+options.validation = dk::graphics::ValidationMode::required;
+auto device = dk::graphics::Device::create(heap, options); // heap为已打开的Memory resource
+if (!device) return 1; // error.context逐项说明被拒绝的adapter/能力
+const auto& support = device->adapter().ray_tracing;
+const bool enabled = device->ray_tracing_enabled();
+// supported()只表示硬件支持；missing()数组的非空项给出缺失扩展/feature。
+// acceleration_structure_limits / pipeline_limits为拥有值快照，pNext为空。
+(void)support; (void)enabled;
+```
+
+required将RT六项需求加入选卡，显式adapter_index不满足就失败；if_available沿原排序选卡，
+仅在选中的卡支持完整组时启用。它不会因RT偏好换卡，也不会在vkCreateDevice/VMA失败后重试非RT。
+share_queue沿用原Device的enabled/limits，不能动态补开feature。纹理非一致索引不在本能力组中。
+
+通过SubmissionQueue或ResourceFactory创建的BufferDesc可加`vk::BufferUsageFlagBits::eShaderDeviceAddress`，
+要求RT/BDA已启用；VMA自动使用设备地址分配标志。`buffer.device_address()`返回Result中的非零地址，
+缺usage的普通buffer拒绝查询。地址查询不初始化buffer、不提交工作；提交仍要保留Buffer owner，
+最后owner释放后不能再使用这个整数地址。AS/SBT专用usage尚未开放。
+
+真实RT验收入口（当前实测配置RelWithDebInfo）：
+
+```powershell
+& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Configuration RelWithDebInfo -Target @(
+  'dk_device_tests', 'dk_raytracing_device_probe'
+) -TestRegex '^dk\.device\.(unit\.|rt_required_validation$)' -Reason 'RT能力协商与BDA/VMA验收'
+```
+
+探针依次验证required、disabled、if_available、共享queue能力、三种buffer内存角色的稳定地址、
+普通/未启用拒绝与旧owner保活；所有GPU allocation及Memory owner释放后要求零warning/error。
+缺RT硬件、必需feature或验证层返回失败，不返回77。已有普通Device探针仍保留其环境跳过策略。
+旧AMD隐式层的本机隔离方法见上节；不关闭Khronos显式层或同步验证。
+能力/设备实测与限制见[0110](../development/0110-raytracing-device.md)。
 
 ## 嵌入模块
 

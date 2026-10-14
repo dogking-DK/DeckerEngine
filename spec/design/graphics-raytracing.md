@@ -1,8 +1,8 @@
 ---
 module: graphics-raytracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-14T08:22:56+08:00"
-status: draft
+updated_at: "2026-10-14T11:03:02+08:00"
+status: accepted
 ---
 
 # Vulkan 光线追踪底座设计
@@ -10,22 +10,51 @@ status: draft
 ## 目标与当前边界
 
 为[渐进式路径追踪](render-pathtracing.md)提供硬件三角形求交、加速结构、光追管线和 Graph 调度。
-本页为 M16 的设计草案，接口名是拟议契约；实现状态和任务顺序仅由[Roadmap](../roadmap.md)维护。
+M16.2能力契约见下节；AS/管线/Graph接口仍为拟议契约，阶段状态和任务顺序由[Roadmap](../roadmap.md)维护。
 沿用 Windows x64、Vulkan 1.4、Slang、Vulkan-Hpp RAII、VMA 和单提交队列，不新增跨 API RHI。
 
 核对当前代码后的缺口：
 
 | 当前入口 | 已有能力 | 本轮需要补充 |
 | --- | --- | --- |
-| [Device.hpp](../../engine/graphics/device/include/dk/graphics/Device.hpp) | Vulkan 1.4、基本 feature、确定性选卡、同族共享设备 | 可选 RT feature/扩展协商、limits、拒绝原因 |
+| [Device.hpp](../../engine/graphics/device/include/dk/graphics/Device.hpp) | Vulkan 1.4、确定性选卡、同族共享设备；RT三态请求、支持/启用/缺项与limits | 后续按材质需要扩展独立非一致索引能力组 |
 | [ShaderArtifact.hpp](../../engine/graphics/shader-types/include/dk/graphics/ShaderArtifact.hpp) | vertex/fragment/compute、五种 descriptor | raygen/miss/closest-hit/any-hit、AS descriptor、能力需求 |
-| [Device](../../engine/graphics/device) | Buffer/Image、graphics/compute、提交保活 | BDA、BLAS/TLAS、SBT、RT pipeline/encoder |
+| [Device](../../engine/graphics/device) | Buffer/Image、graphics/compute、提交保活；BDA buffer与VMA配置 | BLAS/TLAS、SBT、RT pipeline/encoder |
 | [Graph](../../engine/graphics/graph) | buffer/image 声明、同步和导入导出 | AS 内容依赖、build/trace 访问和类型化回调 |
 | [GpuAssets.cpp](../../engine/render/resources/src/GpuAssets.cpp) | vertex/index/transfer usage | RT 专用构建输入和着色数据；旧 buffer 不能事后追加 usage |
 
 Vulkan 版本满足不代表光追 feature 已启用。现有 CPU 几何 BVH 和云 ray marching 均不构成本页的硬件光追实现。
 首版只做设备端 BUILD 和三角形实例，不含 UPDATE/refit、压缩、序列化、程序化 AABB、motion blur、
 pipeline library、indirect trace、ray query、SER、异步 compute 或多 GPU。
+
+## M16.2设备能力与BDA实施契约
+
+`DeviceOptions::ray_tracing`使用RayTracingMode，默认disabled；required参与select_adapter筛选，
+显式索引不满足就拒绝。if_available沿既有排序选卡，在该卡完整启用或保持非RT，不能为RT偏好换卡。
+无效枚举在创建loader前拒绝。能力查询对disabled同样执行，但不启用可选feature/扩展/VMA BDA标志。
+
+`AdapterInfo::ray_tracing`保存三个扩展与三个feature的独立支持位；supported()要求六项全满足，
+missing()返回固定六项字符串数组，满足项为空。属性快照分别保存AS/RT pipeline原生limits，pNext清空；
+不支持的扩展不查询对应结构且limits为零。Vulkan 1.4基线和队列要求仍由普通选卡契约校验。
+`Device::ray_tracing_enabled()`只表示实际启用的整组；BDA在本阶段随RT整组启用，不提供单独BDA请求。
+纹理非一致索引能力组仍留待M16.7.1，M16.2不顺带启用无关shader/descriptor feature。
+
+逻辑设备仅增加AS、RT pipeline、deferred host operations三个扩展及bufferDeviceAddress、
+accelerationStructure、rayTracingPipeline三个feature。WSI扩展/feature链与RT合并，
+不重复请求已由Vulkan 1.4覆盖的旧扩展名。共享queue view沿用同一启用状态与limits。
+创建后检查本Device的BDA和后续设备端BUILD/trace所需入口；缺项为初始化错误，释放候选，
+if_available不在驱动创建失败后静默重试普通设备。VMA仅在BDA启用时设置BUFFER_DEVICE_ADDRESS标志。
+
+BufferDesc允许ShaderDeviceAddress usage；创建在VMA分配前要求Device已启用BDA。
+`Buffer::device_address()`拒绝空buffer、lost device和未声明usage；成功返回当前buffer的非零地址。
+查询不修改资源访问/初始化状态、不提交GPU工作，普通buffer不能事后追加usage。
+地址只是借用数值，Buffer及Device寿命仍靠已有owner/share/提交保活；禁止把地址当所有权。
+AS storage/build input/SBT usage和同步访问在相应后续阶段接入，本阶段不宣称可构建AS或trace。
+
+验证分层：纯策略遍历六项缺失及required/if_available/disabled、显式选卡与WSI组合；
+fake dispatch验证查询结构、启用链、VMA flags、缺入口/创建失败/取消逆序回收与共享寿命；
+真实required RT+validation probe核对limits、创建BDA buffer、非零稳定地址、普通buffer拒绝与关闭回收。
+required probe缺设备/feature/validation一律失败，不以77跳过计为通过。普通Device/资源回归和CPU-only命令独立验证。
 
 ## 模块与依赖
 
@@ -41,7 +70,7 @@ Render 持有资产/场景到光追资源的映射，通过 Graph 录制，不�
 
 ## 能力协商
 
-拟扩展 `DeviceOptions` 为 disabled / if_available / required 的 RT 请求，默认 disabled。
+`DeviceOptions::ray_tracing`提供disabled / if_available / required请求，默认disabled。
 能力快照分别报告 supported、enabled、未满足项和 limits；查询不得伪装成已经启用。
 required 参与选卡筛选；显式 adapter 不满足则失败，不静默换卡。if_available 保留现有选卡顺序，
 在选中卡上完整启用适用能力组，缺失时保持普通设备并提供原因；不改变用户选定 GPU。
@@ -153,7 +182,8 @@ device_lost 使队列失效，不承诺旧 GPU 画面仍可用。跨队列仅使
 - 失败：候选分配/编译/录制/提交失败保留旧资源；pending 卸载、取消、超时和关闭后无资源泄漏。
 - required GPU 必须启用 validation 和同步验证；设备或层缺失不能记为通过。非 RT 光栅回归与 CPU-only 隔离分别验收。
 
-测试程序和 CMake/选择表在实现对应任务时才创建。本次未探测本机 RT 能力，也没有 GPU 验收结果。
+设备能力/BDA已提供CPU策略与required RT探针，入口和实测见[0110](../development/0110-raytracing-device.md)。
+AS构建、真实求交、SBT与Graph等后续验收仍待对应实现；能力probe成功不表示完成trace管线。
 
 ## 相关设计与记录
 

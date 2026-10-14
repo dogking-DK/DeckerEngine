@@ -15,8 +15,25 @@ Result<bool> select_validation(ValidationMode mode, bool layer, bool debug)
     return std::unexpected(Error{ErrorCode::invalid_argument, "invalid validation mode"});
 }
 
-Result<AdapterSelection> select_adapter(std::span<const AdapterInfo> adapters, std::optional<std::uint32_t> requested, bool presentation)
+bool RayTracingSupport::supported() const noexcept
 {
+    return acceleration_structure_extension && ray_tracing_pipeline_extension && deferred_host_operations &&
+        buffer_device_address && acceleration_structure && ray_tracing_pipeline;
+}
+std::array<std::string_view, 6> RayTracingSupport::missing() const noexcept
+{
+    return {acceleration_structure_extension ? "" : VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+        ray_tracing_pipeline_extension ? "" : VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+        deferred_host_operations ? "" : VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+        buffer_device_address ? "" : "bufferDeviceAddress",
+        acceleration_structure ? "" : "accelerationStructure", ray_tracing_pipeline ? "" : "rayTracingPipeline"};
+}
+
+Result<AdapterSelection> select_adapter(std::span<const AdapterInfo> adapters, std::optional<std::uint32_t> requested,
+    bool presentation, RayTracingMode ray_tracing)
+{
+    if (ray_tracing != RayTracingMode::disabled && ray_tracing != RayTracingMode::if_available && ray_tracing != RayTracingMode::required)
+        return std::unexpected(Error{ErrorCode::invalid_argument, "invalid ray tracing mode"});
     if (requested && *requested >= adapters.size())
         return std::unexpected(Error{ErrorCode::not_found, "requested Vulkan adapter index is unavailable"});
     if (adapters.empty()) return std::unexpected(Error{ErrorCode::not_found, "no Vulkan physical devices found"});
@@ -33,6 +50,8 @@ Result<AdapterSelection> select_adapter(std::span<const AdapterInfo> adapters, s
         require(adapter.synchronization2, "synchronization2");
         require(adapter.dynamic_rendering, "dynamicRendering");
         require(adapter.maintenance4, "maintenance4");
+        if (ray_tracing == RayTracingMode::required)
+            for (const auto reason : adapter.ray_tracing.missing()) if (!reason.empty()) { missing += reason; missing += "; "; }
         if (presentation) {
             require(adapter.swapchain, "VK_KHR_swapchain");
             require(adapter.swapchain_maintenance1, "VK_EXT_swapchain_maintenance1 / swapchainMaintenance1");

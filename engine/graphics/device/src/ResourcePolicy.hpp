@@ -9,7 +9,8 @@ inline Result<void> validate_buffer(const BufferDesc& desc)
     constexpr auto allowed = vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst |
         vk::BufferUsageFlagBits::eUniformTexelBuffer | vk::BufferUsageFlagBits::eStorageTexelBuffer |
         vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eStorageBuffer |
-        vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eIndirectBuffer;
+        vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eIndirectBuffer |
+        vk::BufferUsageFlagBits::eShaderDeviceAddress;
     if (!desc.size || !desc.usage || (static_cast<VkBufferUsageFlags>(desc.usage) & ~static_cast<VkBufferUsageFlags>(allowed)))
         return std::unexpected(Error{ErrorCode::invalid_argument, "buffer requires nonzero size and supported usage"});
     if (desc.memory != BufferMemory::device && desc.memory != BufferMemory::upload && desc.memory != BufferMemory::readback)

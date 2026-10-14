@@ -65,11 +65,44 @@ struct Fake {
     std::string destroyed;
     VkDebugUtilsMessengerCreateInfoEXT callback_info{};
     bool feature_contract = false;
+    RayTracingSupport rt;
+    std::string missing_rt_proc;
+    bool rt_contract = false, bda_enabled = false;
+    unsigned rt_feature_queries = 0;
+    VmaAllocatorCreateFlags allocator_flags = 0;
+    VkResult device_extension_result = VK_SUCCESS;
+    bool present = false, present_contract = false;
     static VKAPI_ATTR VkResult VKAPI_CALL version(std::uint32_t* value) { *value = active->loader_version; return VK_SUCCESS; }
     static VKAPI_ATTR VkResult VKAPI_CALL layers(std::uint32_t* count, VkLayerProperties* data)
     { *count = active->layer ? 1u : 0u; if (data && active->layer) copy_name(data[0].layerName, "VK_LAYER_KHRONOS_validation"); return VK_SUCCESS; }
     static VKAPI_ATTR VkResult VKAPI_CALL extensions(const char*, std::uint32_t* count, VkExtensionProperties* data)
-    { *count = active->debug ? 1u : 0u; if (data && active->debug) copy_name(data[0].extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME); return VK_SUCCESS; }
+    {
+        const std::array names{active->debug ? VK_EXT_DEBUG_UTILS_EXTENSION_NAME : "",
+            active->present ? VK_KHR_SURFACE_EXTENSION_NAME : "",
+            active->present ? VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME : "",
+            active->present ? VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME : ""};
+        *count=0;
+        for (const auto* name:names) if (*name) {
+            if (data) std::memcpy(data[*count].extensionName,name,std::strlen(name)+1);
+            ++*count;
+        }
+        return VK_SUCCESS;
+    }
+    static VKAPI_ATTR VkResult VKAPI_CALL device_extensions(VkPhysicalDevice, const char*, std::uint32_t* count, VkExtensionProperties* data)
+    {
+        const auto& rt = active->rt;
+        const std::array names{rt.acceleration_structure_extension ? VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME : "",
+            rt.ray_tracing_pipeline_extension ? VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME : "",
+            rt.deferred_host_operations ? VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME : "",
+            active->present ? VK_KHR_SWAPCHAIN_EXTENSION_NAME : "",
+            active->present ? VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME : ""};
+        *count = 0;
+        for (const auto* name : names) if (*name) {
+            if (data) std::memcpy(data[*count].extensionName, name, std::strlen(name)+1);
+            ++*count;
+        }
+        return active->device_extension_result;
+    }
     static VKAPI_ATTR VkResult VKAPI_CALL instance(const VkInstanceCreateInfo* info, const VkAllocationCallbacks*, VkInstance* value)
     {
         ++active->creates;
@@ -91,6 +124,9 @@ struct Fake {
     }
     static VKAPI_ATTR void VKAPI_CALL destroy_device(VkDevice, const VkAllocationCallbacks*) { active->destroyed += 'D'; }
     static VKAPI_ATTR void VKAPI_CALL destroy_messenger(VkInstance, VkDebugUtilsMessengerEXT, const VkAllocationCallbacks*) { active->destroyed += 'M'; }
+    static VKAPI_ATTR void VKAPI_CALL destroy_surface(VkInstance, VkSurfaceKHR, const VkAllocationCallbacks*) { active->destroyed += 'S'; }
+    static VKAPI_ATTR VkResult VKAPI_CALL surface_support(VkPhysicalDevice,std::uint32_t,VkSurfaceKHR,VkBool32* support)
+    { *support=active->present; return VK_SUCCESS; }
     static VKAPI_ATTR VkResult VKAPI_CALL messenger(VkInstance, const VkDebugUtilsMessengerCreateInfoEXT* info, const VkAllocationCallbacks*, VkDebugUtilsMessengerEXT* value)
     {
         active->callback_info = *info;
@@ -111,16 +147,46 @@ struct Fake {
     {
         value->properties.apiVersion = active->physical_version;
         copy_name(value->properties.deviceName, "fake GPU");
+        for (auto* next = static_cast<VkBaseOutStructure*>(value->pNext); next; next = next->pNext) {
+            if (next->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR) {
+                REQUIRE(active->rt.acceleration_structure_extension);
+                auto* p = reinterpret_cast<VkPhysicalDeviceAccelerationStructurePropertiesKHR*>(next);
+                p->maxGeometryCount = 1234; p->maxPrimitiveCount = 5678; p->minAccelerationStructureScratchOffsetAlignment = 256;
+            }
+            if (next->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR) {
+                REQUIRE(active->rt.ray_tracing_pipeline_extension);
+                auto* p = reinterpret_cast<VkPhysicalDeviceRayTracingPipelinePropertiesKHR*>(next);
+                p->shaderGroupHandleSize = 32; p->shaderGroupHandleAlignment = 32; p->shaderGroupBaseAlignment = 64;
+                p->maxRayRecursionDepth = 2; p->maxRayDispatchInvocationCount = 65536;
+            }
+        }
         if (active->close_resource) active->close_resource.begin_close();
     }
     static VKAPI_ATTR void VKAPI_CALL features(VkPhysicalDevice, VkPhysicalDeviceFeatures2* value)
     {
         ++active->feature_queries;
-        auto* f12 = static_cast<VkPhysicalDeviceVulkan12Features*>(value->pNext);
-        auto* f13 = static_cast<VkPhysicalDeviceVulkan13Features*>(f12->pNext);
-        f12->timelineSemaphore = VK_TRUE;
-        f13->synchronization2 = f13->dynamicRendering = VK_TRUE;
-        f13->maintenance4 = active->maintenance4 ? VK_TRUE : VK_FALSE;
+        for (auto* next = static_cast<VkBaseOutStructure*>(value->pNext); next; next = next->pNext) {
+            switch (next->sType) {
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES: {
+                auto* f = reinterpret_cast<VkPhysicalDeviceVulkan12Features*>(next);
+                f->timelineSemaphore = VK_TRUE; f->bufferDeviceAddress = active->rt.buffer_device_address; break;
+            }
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES: {
+                auto* f = reinterpret_cast<VkPhysicalDeviceVulkan13Features*>(next);
+                f->synchronization2 = f->dynamicRendering = VK_TRUE; f->maintenance4 = active->maintenance4; break;
+            }
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR:
+                REQUIRE(active->rt.acceleration_structure_extension); ++active->rt_feature_queries;
+                reinterpret_cast<VkPhysicalDeviceAccelerationStructureFeaturesKHR*>(next)->accelerationStructure = active->rt.acceleration_structure; break;
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR:
+                REQUIRE(active->rt.ray_tracing_pipeline_extension); ++active->rt_feature_queries;
+                reinterpret_cast<VkPhysicalDeviceRayTracingPipelineFeaturesKHR*>(next)->rayTracingPipeline = active->rt.ray_tracing_pipeline; break;
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT:
+                REQUIRE(active->present);
+                reinterpret_cast<VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT*>(next)->swapchainMaintenance1=VK_TRUE; break;
+            default: FAIL("Unexpected feature query structure");
+            }
+        }
     }
     static VKAPI_ATTR void VKAPI_CALL queues(VkPhysicalDevice, std::uint32_t* count, VkQueueFamilyProperties* data)
     { *count = 1; if (data) data[0] = {VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, active->available_queues, 64, {1, 1, 1}}; }
@@ -130,6 +196,31 @@ struct Fake {
         active->requested_queues=info->pQueueCreateInfos->queueCount;
         const auto* f12 = static_cast<const VkPhysicalDeviceVulkan12Features*>(info->pNext);
         const auto* f13 = static_cast<const VkPhysicalDeviceVulkan13Features*>(f12->pNext);
+        const void* tail=f13->pNext;
+        active->bda_enabled = f12->bufferDeviceAddress == VK_TRUE;
+        if (active->bda_enabled) {
+            const auto* as = static_cast<const VkPhysicalDeviceAccelerationStructureFeaturesKHR*>(f13->pNext);
+            REQUIRE(as); REQUIRE(as->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR);
+            const auto* rt = static_cast<const VkPhysicalDeviceRayTracingPipelineFeaturesKHR*>(as->pNext);
+            REQUIRE(rt); REQUIRE(rt->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR);
+            active->rt_contract = as->accelerationStructure && rt->rayTracingPipeline && !as->accelerationStructureHostCommands &&
+                !as->accelerationStructureIndirectBuild && !as->accelerationStructureCaptureReplay &&
+                !as->descriptorBindingAccelerationStructureUpdateAfterBind && !rt->rayTracingPipelineTraceRaysIndirect &&
+                !rt->rayTracingPipelineShaderGroupHandleCaptureReplay && !rt->rayTracingPipelineShaderGroupHandleCaptureReplayMixed &&
+                !rt->rayTraversalPrimitiveCulling && !f12->bufferDeviceAddressCaptureReplay && !f12->bufferDeviceAddressMultiDevice &&
+                !f12->shaderSampledImageArrayNonUniformIndexing && !f12->runtimeDescriptorArray && !info->pEnabledFeatures &&
+                info->enabledExtensionCount == (active->present ? 5u : 3u);
+            tail=rt->pNext;
+            const std::array expected{VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME};
+            for (std::size_t i=0;i<expected.size();++i) CHECK(std::strcmp(info->ppEnabledExtensionNames[i+(active->present ? 2u : 0u)],expected[i])==0);
+        }
+        if (active->present) {
+            const auto* maintenance=static_cast<const VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT*>(tail);
+            REQUIRE(maintenance); REQUIRE(maintenance->sType==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT);
+            active->present_contract=maintenance->swapchainMaintenance1 && !maintenance->pNext &&
+                std::strcmp(info->ppEnabledExtensionNames[0],VK_KHR_SWAPCHAIN_EXTENSION_NAME)==0 &&
+                std::strcmp(info->ppEnabledExtensionNames[1],VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME)==0;
+        } else { CHECK(tail==nullptr); }
         active->feature_contract = f12->timelineSemaphore && f13->synchronization2 && f13->dynamicRendering &&
             !f12->bufferDeviceAddress && f13->maintenance4 && info->enabledExtensionCount == 0 &&
             info->queueCreateInfoCount == 1 && info->pQueueCreateInfos->queueCount == 1 &&
@@ -155,6 +246,7 @@ struct Fake {
         REQUIRE(info->vulkanApiVersion == VK_API_VERSION_1_4);
         REQUIRE(info->pVulkanFunctions->vkGetDeviceBufferMemoryRequirements == buffer_memory_requirements);
         REQUIRE(info->pVulkanFunctions->vkGetDeviceImageMemoryRequirements == image_memory_requirements);
+        active->allocator_flags = info->flags;
         if (active->allocator_result == VK_SUCCESS) *output = handle<VmaAllocator>(6);
         return active->allocator_result;
     }
@@ -168,6 +260,12 @@ struct Fake {
     }
     static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL resolve(VkInstance, const char* name)
     {
+        if (active->missing_rt_proc == name) return nullptr;
+        constexpr std::array rt_procs{"vkGetBufferDeviceAddress", "vkCreateAccelerationStructureKHR", "vkDestroyAccelerationStructureKHR",
+            "vkGetAccelerationStructureBuildSizesKHR", "vkGetAccelerationStructureDeviceAddressKHR", "vkCmdBuildAccelerationStructuresKHR",
+            "vkCreateRayTracingPipelinesKHR", "vkGetRayTracingShaderGroupHandlesKHR", "vkCmdTraceRaysKHR"};
+        for (const auto* proc : rt_procs) if (std::strcmp(name, proc) == 0)
+            return reinterpret_cast<PFN_vkVoidFunction>(unused_rt_entry);
         if (std::strcmp(name, "vkGetDeviceBufferMemoryRequirements") == 0)
             return active->buffer_requirements ? reinterpret_cast<PFN_vkVoidFunction>(buffer_memory_requirements) : nullptr;
         if (std::strcmp(name, "vkGetDeviceImageMemoryRequirements") == 0)
@@ -183,9 +281,12 @@ struct Fake {
         DK_FAKE_PROC(vkCreateDebugUtilsMessengerEXT, messenger);
         DK_FAKE_PROC(vkDestroyDebugUtilsMessengerEXT, destroy_messenger);
         DK_FAKE_PROC(vkEnumeratePhysicalDevices, physicals);
+        DK_FAKE_PROC(vkEnumerateDeviceExtensionProperties, device_extensions);
         DK_FAKE_PROC(vkGetPhysicalDeviceProperties2, properties);
         DK_FAKE_PROC(vkGetPhysicalDeviceFeatures2, features);
         DK_FAKE_PROC(vkGetPhysicalDeviceQueueFamilyProperties, queues);
+        DK_FAKE_PROC(vkGetPhysicalDeviceSurfaceSupportKHR, surface_support);
+        DK_FAKE_PROC(vkDestroySurfaceKHR, destroy_surface);
         DK_FAKE_PROC(vkCreateDevice, device);
         DK_FAKE_PROC(vkDestroyDevice, destroy_device);
         DK_FAKE_PROC(vkGetDeviceQueue, queue);
@@ -193,6 +294,7 @@ struct Fake {
 #undef DK_FAKE_PROC
         return nullptr;
     }
+    static VKAPI_ATTR void VKAPI_CALL unused_rt_entry() { FAIL("Device capability probe must not execute RT commands"); }
     Result<Device> create(memory::ResourceHandle resource, DeviceOptions options = {}, PFN_vkGetInstanceProcAddr resolver = resolve)
     {
         const graphics::detail::DeviceAccess::AllocatorApi api{create_allocator, destroy_allocator};
@@ -247,6 +349,106 @@ TEST_CASE("adapter rejection explains every missing requirement")
     const auto& reasons = result.error().context[0];
     for (const auto* expected : {"Vulkan 1.4", "timelineSemaphore", "synchronization2", "dynamicRendering", "maintenance4", "graphics+compute queue"})
         REQUIRE(reasons.find(expected) != std::string::npos);
+}
+
+TEST_CASE("RT policies distinguish support enablement missing requirements and explicit adapters")
+{
+    Memory memory;
+    const RayTracingSupport complete{true,true,true,true,true,true};
+    std::array adapters{suitable(memory.resource), suitable(memory.resource, vk::PhysicalDeviceType::eIntegratedGpu)};
+    adapters[1].ray_tracing = complete;
+    CHECK(select_adapter(adapters,{},false,RayTracingMode::disabled)->adapter_index == 0);
+    CHECK(select_adapter(adapters,{},false,RayTracingMode::if_available)->adapter_index == 0);
+    CHECK(select_adapter(adapters,{},false,RayTracingMode::required)->adapter_index == 1);
+    CHECK_FALSE(select_adapter(adapters,0,false,RayTracingMode::required));
+    CHECK(select_adapter(adapters,1,false,RayTracingMode::required));
+    adapters[1].swapchain = adapters[1].swapchain_maintenance1 = true; adapters[1].present_queues = {1};
+    CHECK(select_adapter(adapters,{},true,RayTracingMode::required)->adapter_index == 1);
+    adapters[1].present_queues = {0}; CHECK_FALSE(select_adapter(adapters,{},true,RayTracingMode::required));
+    CHECK_FALSE(select_adapter(adapters,{},false,static_cast<RayTracingMode>(42)));
+    constexpr std::array fields{&RayTracingSupport::acceleration_structure_extension, &RayTracingSupport::ray_tracing_pipeline_extension,
+        &RayTracingSupport::deferred_host_operations, &RayTracingSupport::buffer_device_address,
+        &RayTracingSupport::acceleration_structure, &RayTracingSupport::ray_tracing_pipeline};
+    for (std::size_t i=0;i<fields.size();++i) {
+        auto& rt = adapters[1].ray_tracing; rt=complete; rt.*fields[i]=false;
+        CHECK_FALSE(rt.supported());
+        auto result=select_adapter(adapters,1,false,RayTracingMode::required); REQUIRE_FALSE(result);
+        CHECK(result.error().context[0].find(rt.missing()[i]) != std::string::npos);
+    }
+}
+
+TEST_CASE("RT creation enables only the complete requested group and matching VMA flags")
+{
+    constexpr std::array fields{&RayTracingSupport::acceleration_structure_extension, &RayTracingSupport::ray_tracing_pipeline_extension,
+        &RayTracingSupport::deferred_host_operations, &RayTracingSupport::buffer_device_address,
+        &RayTracingSupport::acceleration_structure, &RayTracingSupport::ray_tracing_pipeline};
+    for (const auto mode : {RayTracingMode::disabled,RayTracingMode::if_available,RayTracingMode::required}) for (std::size_t missing=0;missing<=fields.size();++missing) {
+        Memory memory; Fake fake; fake.rt={true,true,true,true,true,true};
+        if (missing<fields.size()) fake.rt.*fields[missing]=false;
+        const bool available=missing==fields.size(), enabled=available && mode!=RayTracingMode::disabled;
+        {
+            auto result=fake.create(memory.resource,{.ray_tracing=mode});
+            if (mode==RayTracingMode::required && !available) {
+                REQUIRE_FALSE(result); CHECK(result.error().code==ErrorCode::not_supported); CHECK(fake.device_creates==0); continue;
+            }
+            REQUIRE(result); CHECK(result->adapter().ray_tracing.supported()==available);
+            CHECK(result->ray_tracing_enabled()==enabled); CHECK(fake.bda_enabled==enabled);
+            CHECK(fake.allocator_flags==(enabled ? VmaAllocatorCreateFlags{VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT} : 0u));
+            CHECK((enabled ? fake.rt_contract : fake.feature_contract));
+            CHECK(fake.rt_feature_queries==unsigned(fake.rt.acceleration_structure_extension)+unsigned(fake.rt.ray_tracing_pipeline_extension));
+            const auto& rt=result->adapter().ray_tracing;
+            CHECK(rt.acceleration_structure_limits.pNext==nullptr); CHECK(rt.pipeline_limits.pNext==nullptr);
+            CHECK(rt.acceleration_structure_limits.maxGeometryCount==(fake.rt.acceleration_structure_extension ? 1234u : 0u));
+            CHECK(rt.pipeline_limits.shaderGroupHandleSize==(fake.rt.ray_tracing_pipeline_extension ? 32u : 0u));
+            auto shared=result->share_queue(0); REQUIRE(shared);
+            CHECK(shared->ray_tracing_enabled()==enabled); CHECK(&shared->adapter()==&result->adapter());
+        }
+        CHECK(fake.destroyed=="ADMI"); CHECK(memory.resource.snapshot().live_allocations==0);
+    }
+}
+
+TEST_CASE("RT missing dispatch creation errors and cancellation unwind without fallback")
+{
+    constexpr std::array procs{"vkGetBufferDeviceAddress", "vkCreateAccelerationStructureKHR", "vkDestroyAccelerationStructureKHR",
+        "vkGetAccelerationStructureBuildSizesKHR", "vkGetAccelerationStructureDeviceAddressKHR", "vkCmdBuildAccelerationStructuresKHR",
+        "vkCreateRayTracingPipelinesKHR", "vkGetRayTracingShaderGroupHandlesKHR", "vkCmdTraceRaysKHR"};
+    for (const auto* proc:procs) {
+        Memory memory; Fake fake; fake.rt={true,true,true,true,true,true}; fake.missing_rt_proc=proc;
+        auto result=fake.create(memory.resource,{.ray_tracing=RayTracingMode::if_available}); REQUIRE_FALSE(result);
+        CHECK(result.error().code==ErrorCode::internal_error); CHECK(result.error().message.find(proc)!=std::string::npos);
+        CHECK(fake.device_creates==1); CHECK(fake.destroyed=="DMI"); CHECK(memory.resource.snapshot().live_allocations==0);
+    }
+    for (int phase=0;phase<4;++phase) {
+        Memory memory; Fake fake; fake.rt={true,true,true,true,true,true}; std::stop_source stop;
+        if (phase==0) fake.device_extension_result=VK_ERROR_OUT_OF_HOST_MEMORY;
+        if (phase==1) fake.device_result=VK_ERROR_INITIALIZATION_FAILED;
+        if (phase==2) fake.allocator_result=VK_ERROR_OUT_OF_DEVICE_MEMORY;
+        if (phase==3) { fake.cancel=&stop; fake.cancel_at_device=true; }
+        auto result=fake.create(memory.resource,{.cancel=stop.get_token(),.ray_tracing=RayTracingMode::if_available}); REQUIRE_FALSE(result);
+        CHECK(fake.device_creates==(phase==0 ? 0 : 1)); CHECK(fake.destroyed==(phase<2 ? "MI" : "DMI"));
+        CHECK(memory.resource.snapshot().live_allocations==0);
+    }
+    Memory memory; Fake fake; CHECK_FALSE(fake.create(memory.resource,{.ray_tracing=static_cast<RayTracingMode>(42)})); CHECK(fake.creates==0);
+}
+
+TEST_CASE("RT and presentation feature chains coexist and shared views retain surface ownership")
+{
+    for (const auto mode:{RayTracingMode::disabled,RayTracingMode::required}) {
+        Memory memory; Fake fake; fake.present=true; fake.rt={true,true,true,true,true,true};
+        const std::array extensions{VK_KHR_SURFACE_EXTENSION_NAME};
+        DeviceOptions options; options.ray_tracing=mode; options.surface.instance_extensions=extensions;
+        auto owner=std::make_shared<int>(1); std::weak_ptr<int> weak=owner; options.surface.owner=owner;
+        options.surface.create=[](VkInstance,void*) -> Result<VkSurfaceKHR> { return handle<VkSurfaceKHR>(7); };
+        {
+            auto device=fake.create(memory.resource,options); REQUIRE(device); CHECK(fake.present_contract);
+            CHECK(device->ray_tracing_enabled()==(mode==RayTracingMode::required));
+            if (mode==RayTracingMode::required) CHECK(fake.rt_contract);
+            owner.reset(); options.surface.owner.reset(); CHECK_FALSE(weak.expired());
+            auto view=device->share_queue(0); REQUIRE(view); device=std::unexpected(Error{ErrorCode::internal_error,"release owner"});
+            CHECK_FALSE(weak.expired()); CHECK(view->surface()); CHECK(fake.destroyed.empty());
+        }
+        CHECK(weak.expired()); CHECK(fake.destroyed=="ADSMI"); CHECK(memory.resource.snapshot().live_allocations==0);
+    }
 }
 
 TEST_CASE("queue selection requires one graphics compute family and allows implicit transfer")

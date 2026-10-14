@@ -154,6 +154,7 @@ struct Device::Impl {
     std::uint32_t family = 0;
     AdapterInfo info;
     bool validation = false;
+    bool ray_tracing = false;
     DiagnosticSink sink = nullptr;
     void* sink_data = nullptr;
     std::atomic<std::uint64_t> errors = 0, warnings = 0;
@@ -209,6 +210,9 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
         return std::unexpected(Error{ErrorCode::invalid_argument, "loader_path must be absolute"});
     if (auto policy = select_validation(options.validation, true, true); !policy)
         return std::unexpected(policy.error());
+    if (options.ray_tracing != RayTracingMode::disabled && options.ray_tracing != RayTracingMode::if_available &&
+        options.ray_tracing != RayTracingMode::required)
+        return std::unexpected(Error{ErrorCode::invalid_argument, "invalid ray tracing mode"});
     const bool presentation = options.surface.create != nullptr;
     if (presentation && (!options.surface.owner || options.surface.instance_extensions.empty()))
         return std::unexpected(Error{ErrorCode::invalid_argument, "surface requires a lifetime owner and instance extensions"});
@@ -317,7 +321,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     const auto queues_fn = impl->instance_table.vkGetPhysicalDeviceQueueFamilyProperties;
     const auto create_device = impl->instance_table.vkCreateDevice;
     if (!destroy_device || !impl->get_device_proc || !physical_fn ||
-        !properties_fn || !features_fn || !queues_fn || !create_device)
+        !properties_fn || !features_fn || !queues_fn || !create_device || !impl->instance_table.vkEnumerateDeviceExtensionProperties)
         return std::unexpected(Error{ErrorCode::internal_error, "Vulkan instance is missing required API 1.4 entry points"});
     auto physicals = enumerate<VkPhysicalDevice>(resource, "vkEnumeratePhysicalDevices",
         [&](std::uint32_t* count, VkPhysicalDevice* data) { return physical_fn(native_instance, count, data); });
@@ -330,6 +334,21 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
         const vk::raii::PhysicalDevice physical_device{impl->instance, physical};
         auto properties = physical_device.getProperties2();
         info.properties = properties.properties;
+        auto device_extensions = enumerate<VkExtensionProperties>(resource, "vkEnumerateDeviceExtensionProperties",
+            [&](std::uint32_t* size, VkExtensionProperties* data) {
+                return impl->instance_table.vkEnumerateDeviceExtensionProperties(physical, nullptr, size, data);
+            });
+        if (!device_extensions) return std::unexpected(device_extensions.error());
+        bool maintenance = false;
+        auto& rt = info.ray_tracing;
+        for (const auto& extension : *device_extensions) {
+            const std::string_view name{extension.extensionName};
+            if (name == VK_KHR_SWAPCHAIN_EXTENSION_NAME) info.swapchain = true;
+            if (name == VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME) maintenance = true;
+            if (name == VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) rt.acceleration_structure_extension = true;
+            if (name == VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) rt.ray_tracing_pipeline_extension = true;
+            if (name == VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME) rt.deferred_host_operations = true;
+        }
         // Old physical devices are still reported/rejected, but must not receive
         // feature/property structures introduced after their advertised API.
         if (VK_API_VERSION_VARIANT(info.properties.apiVersion) == 0 && info.properties.apiVersion >= device_api_version) {
@@ -344,6 +363,21 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
             info.synchronization2 = features13.synchronization2 == VK_TRUE;
             info.dynamic_rendering = features13.dynamicRendering == VK_TRUE;
             info.maintenance4 = features13.maintenance4 == VK_TRUE;
+            rt.buffer_device_address = features12.bufferDeviceAddress == VK_TRUE;
+            if (rt.acceleration_structure_extension) {
+                rt.acceleration_structure = physical_device.getFeatures2<vk::PhysicalDeviceFeatures2,
+                    vk::PhysicalDeviceAccelerationStructureFeaturesKHR>().get<vk::PhysicalDeviceAccelerationStructureFeaturesKHR>().accelerationStructure == VK_TRUE;
+                rt.acceleration_structure_limits = physical_device.getProperties2<vk::PhysicalDeviceProperties2,
+                    vk::PhysicalDeviceAccelerationStructurePropertiesKHR>().get<vk::PhysicalDeviceAccelerationStructurePropertiesKHR>();
+                rt.acceleration_structure_limits.pNext = nullptr;
+            }
+            if (rt.ray_tracing_pipeline_extension) {
+                rt.ray_tracing_pipeline = physical_device.getFeatures2<vk::PhysicalDeviceFeatures2,
+                    vk::PhysicalDeviceRayTracingPipelineFeaturesKHR>().get<vk::PhysicalDeviceRayTracingPipelineFeaturesKHR>().rayTracingPipeline == VK_TRUE;
+                rt.pipeline_limits = physical_device.getProperties2<vk::PhysicalDeviceProperties2,
+                    vk::PhysicalDeviceRayTracingPipelinePropertiesKHR>().get<vk::PhysicalDeviceRayTracingPipelinePropertiesKHR>();
+                rt.pipeline_limits.pNext = nullptr;
+            }
         }
         std::uint32_t count = 0;
         queues_fn(physical, &count, nullptr);
@@ -353,16 +387,6 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
             info.queues.resize(count);
         }
         if (presentation) {
-            auto device_extensions = enumerate<VkExtensionProperties>(resource, "vkEnumerateDeviceExtensionProperties",
-                [&](std::uint32_t* size, VkExtensionProperties* data) {
-                    return impl->instance_table.vkEnumerateDeviceExtensionProperties(physical, nullptr, size, data);
-                });
-            if (!device_extensions) return std::unexpected(device_extensions.error());
-            bool maintenance = false;
-            for (const auto& extension : *device_extensions) {
-                if (std::strcmp(extension.extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0) info.swapchain = true;
-                if (std::strcmp(extension.extensionName, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME) == 0) maintenance = true;
-            }
             if (maintenance) {
                 VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT feature{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT};
                 VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &feature};
@@ -379,12 +403,13 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
         }
         adapters.push_back(std::move(info));
     }
-    auto selection = select_adapter(adapters, options.adapter_index, presentation);
+    auto selection = select_adapter(adapters, options.adapter_index, presentation, options.ray_tracing);
     if (!selection) return std::unexpected(selection.error());
     const auto native_physical = (*physicals)[selection->adapter_index];
     impl->physical = vk::raii::PhysicalDevice{impl->instance, native_physical};
     impl->family = selection->queue_family;
     impl->info = std::move(adapters[selection->adapter_index]);
+    impl->ray_tracing = options.ray_tracing != RayTracingMode::disabled && impl->info.ray_tracing.supported();
     const float priorities[]{1.0f,1.0f};
     impl->queue_count=options.secondary_queue && impl->info.queues[impl->family].queueCount>1 ? 2u : 1u;
     vk::DeviceQueueCreateInfo queue_info{};
@@ -401,12 +426,33 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     vk::PhysicalDeviceVulkan12Features features12{};
     features12.timelineSemaphore = VK_TRUE;
     features12.pNext = &features13;
+    vk::PhysicalDeviceAccelerationStructureFeaturesKHR acceleration{};
+    vk::PhysicalDeviceRayTracingPipelineFeaturesKHR tracing{};
+    if (impl->ray_tracing) {
+        features12.bufferDeviceAddress = VK_TRUE;
+        acceleration.accelerationStructure = VK_TRUE;
+        tracing.rayTracingPipeline = VK_TRUE;
+        tracing.pNext = features13.pNext;
+        acceleration.pNext = &tracing;
+        features13.pNext = &acceleration;
+    }
     vk::DeviceCreateInfo device_info{};
     device_info.pNext = &features12;
     device_info.queueCreateInfoCount = 1;
     device_info.pQueueCreateInfos = &queue_info;
-    const std::array<const char*, 2> device_extensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME};
-    if (presentation) device_info.setPEnabledExtensionNames(device_extensions);
+    std::array<const char*, 5> device_extensions{};
+    std::uint32_t extension_count = 0;
+    if (presentation) {
+        device_extensions[extension_count++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+        device_extensions[extension_count++] = VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME;
+    }
+    if (impl->ray_tracing) {
+        device_extensions[extension_count++] = VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME;
+        device_extensions[extension_count++] = VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME;
+        device_extensions[extension_count++] = VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME;
+    }
+    device_info.enabledExtensionCount = extension_count;
+    device_info.ppEnabledExtensionNames = extension_count ? device_extensions.data() : nullptr;
     PendingDevice pending_device{VK_NULL_HANDLE, destroy_device};
     if (options.cancel.stop_requested()) return cancelled();
     auto result = create_device(native_physical, reinterpret_cast<const VkDeviceCreateInfo*>(&device_info), nullptr, &pending_device.handle);
@@ -417,6 +463,19 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
         return std::unexpected(Error{ErrorCode::internal_error, "Vulkan device is missing required entry points"});
     if (!impl->device_table.vkGetDeviceBufferMemoryRequirements || !impl->device_table.vkGetDeviceImageMemoryRequirements)
         return std::unexpected(Error{ErrorCode::internal_error, "Vulkan 1.4 device is missing maintenance4 memory requirement entry points"});
+    if (impl->ray_tracing) {
+#define DK_REQUIRE_RT(name) if (!impl->device_table.name) return std::unexpected(Error{ErrorCode::internal_error, "RT device is missing " #name})
+        DK_REQUIRE_RT(vkGetBufferDeviceAddress);
+        DK_REQUIRE_RT(vkCreateAccelerationStructureKHR);
+        DK_REQUIRE_RT(vkDestroyAccelerationStructureKHR);
+        DK_REQUIRE_RT(vkGetAccelerationStructureBuildSizesKHR);
+        DK_REQUIRE_RT(vkGetAccelerationStructureDeviceAddressKHR);
+        DK_REQUIRE_RT(vkCmdBuildAccelerationStructuresKHR);
+        DK_REQUIRE_RT(vkCreateRayTracingPipelinesKHR);
+        DK_REQUIRE_RT(vkGetRayTracingShaderGroupHandlesKHR);
+        DK_REQUIRE_RT(vkCmdTraceRaysKHR);
+#undef DK_REQUIRE_RT
+    }
     impl->device = vk::raii::Device{impl->physical, pending_device.handle};
     pending_device.handle = VK_NULL_HANDLE;
     impl->queue = impl->device.getQueue(impl->family, 0);
@@ -431,6 +490,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     allocator_info.physicalDevice = native_physical;
     allocator_info.device = static_cast<VkDevice>(*impl->device);
     allocator_info.vulkanApiVersion = device_api_version;
+    if (impl->ray_tracing) allocator_info.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
     allocator_info.pVulkanFunctions = &functions;
     result = impl->allocator.api.create(&allocator_info, &impl->allocator.handle);
     if (result != VK_SUCCESS) { impl->allocator.handle = VK_NULL_HANDLE; return std::unexpected(vk_error("vmaCreateAllocator", result)); }
@@ -456,6 +516,7 @@ VmaAllocator Device::allocator() const noexcept { return impl_->allocator.handle
 std::uint32_t Device::queue_family() const noexcept { return impl_->family; }
 vk::SurfaceKHR Device::surface() const noexcept { return *impl_->surface; }
 const AdapterInfo& Device::adapter() const noexcept { return impl_->info; }
+bool Device::ray_tracing_enabled() const noexcept { return impl_->ray_tracing; }
 bool Device::validation_enabled() const noexcept { return impl_->validation; }
 std::uint64_t Device::validation_errors() const noexcept { return impl_->errors.load(std::memory_order_relaxed); }
 std::uint64_t Device::validation_warnings() const noexcept { return impl_->warnings.load(std::memory_order_relaxed); }

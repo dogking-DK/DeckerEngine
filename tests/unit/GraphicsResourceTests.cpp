@@ -23,7 +23,10 @@ TEST_CASE("buffer descriptions reject unsupported features and invalid roles")
     BufferDesc desc{64};
     REQUIRE(policy::validate_buffer(desc));
     desc.usage = vk::BufferUsageFlagBits::eShaderDeviceAddress;
-    REQUIRE_FALSE(policy::validate_buffer(desc));
+    REQUIRE(policy::validate_buffer(desc)); // Device enablement checked by the factory.
+    REQUIRE_FALSE(Buffer{}.device_address());
+    desc.usage = vk::BufferUsageFlagBits::eAccelerationStructureStorageKHR;
+    REQUIRE_FALSE(policy::validate_buffer(desc)); // M16.3 owns AS resource usage.
     desc.usage = vk::BufferUsageFlags{0x80000000u};
     REQUIRE_FALSE(policy::validate_buffer(desc));
     desc.usage = vk::BufferUsageFlagBits::eTransferSrc;

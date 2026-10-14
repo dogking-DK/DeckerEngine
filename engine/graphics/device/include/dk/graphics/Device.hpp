@@ -7,6 +7,7 @@
 #include <vk_mem_alloc.h>
 
 #include <filesystem>
+#include <array>
 #include <optional>
 #include <span>
 #include <stop_token>
@@ -16,6 +17,19 @@ namespace dk::graphics {
 // Runtime API baseline, not the Vulkan header/SDK patch version.
 inline constexpr std::uint32_t device_api_version = VK_API_VERSION_1_4;
 enum class ValidationMode { disabled, if_available, required };
+enum class RayTracingMode { disabled, if_available, required };
+
+// Hardware support, independent of logical-device enablement. No borrowed pNext.
+struct RayTracingSupport {
+    bool acceleration_structure_extension = false, ray_tracing_pipeline_extension = false;
+    bool deferred_host_operations = false, buffer_device_address = false;
+    bool acceleration_structure = false, ray_tracing_pipeline = false;
+    vk::PhysicalDeviceAccelerationStructurePropertiesKHR acceleration_structure_limits{};
+    vk::PhysicalDeviceRayTracingPipelinePropertiesKHR pipeline_limits{};
+    [[nodiscard]] bool supported() const noexcept;
+    // Fixed requirement order; satisfied requirements have empty string views.
+    [[nodiscard]] std::array<std::string_view, 6> missing() const noexcept;
+};
 
 struct Diagnostic {
     VkDebugUtilsMessageSeverityFlagBitsEXT severity;
@@ -45,6 +59,7 @@ struct DeviceOptions {
     SurfaceSource surface;
     std::stop_token cancel; // Cooperative checkpoints; never interrupts a driver call.
     bool secondary_queue = false; // Request a second same-family queue when available.
+    RayTracingMode ray_tracing = RayTracingMode::disabled;
 };
 
 struct AdapterInfo {
@@ -59,11 +74,13 @@ struct AdapterInfo {
     Vector<vk::QueueFamilyProperties> queues;
     Vector<std::uint8_t> present_queues;
     bool swapchain = false, swapchain_maintenance1 = false;
+    RayTracingSupport ray_tracing;
 };
 struct AdapterSelection { std::uint32_t adapter_index; std::uint32_t queue_family; };
 // Pure policy functions; no loader, instance, or GPU is needed.
 [[nodiscard]] Result<AdapterSelection> select_adapter(std::span<const AdapterInfo> adapters,
-    std::optional<std::uint32_t> requested = {}, bool presentation = false);
+    std::optional<std::uint32_t> requested = {}, bool presentation = false,
+    RayTracingMode ray_tracing = RayTracingMode::disabled);
 [[nodiscard]] Result<bool> select_validation(ValidationMode mode, bool layer_available, bool debug_utils_available);
 [[nodiscard]] std::string_view vulkan_result_name(VkResult result) noexcept;
 
@@ -97,6 +114,8 @@ public:
     [[nodiscard]] Result<Device> share_queue(std::uint32_t index) const;
     [[nodiscard]] vk::SurfaceKHR surface() const noexcept;
     [[nodiscard]] const AdapterInfo& adapter() const noexcept;
+    // AS + RT pipeline + BDA are enabled together; queue views share this state.
+    [[nodiscard]] bool ray_tracing_enabled() const noexcept;
     [[nodiscard]] bool validation_enabled() const noexcept;
     [[nodiscard]] std::uint64_t validation_errors() const noexcept;
     [[nodiscard]] std::uint64_t validation_warnings() const noexcept;

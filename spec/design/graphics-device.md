@@ -1,7 +1,7 @@
 ---
 module: graphics-device
 created_at: "2026-09-28T16:38:00+08:00"
-updated_at: "2026-10-09T19:38:24+08:00"
+updated_at: "2026-10-14T11:03:02+08:00"
 status: accepted
 ---
 
@@ -52,6 +52,14 @@ select_adapter 是无 GPU 副作用的确定性选择函数：显式索引必须
 拒绝时 Error.context 列出每张候选的名字和缺少能力；空列表与不适用设备分别报告。
 枚举索引仅在当次创建中有效，不是持久 GPU 身份。
 
+DeviceOptions.ray_tracing默认disabled，可选if_available/required；required参与选卡筛选，
+if_available在既有策略选中的设备上完整启用或保持普通设备，显式索引不换卡。
+AdapterInfo.ray_tracing查询三个扩展/三个feature、AS/RT pipeline limits，supported()/missing()
+与Device::ray_tracing_enabled()区分硬件支持和本逻辑设备启用；missing固定数组中的空项表示已满足。
+disabled也提供支持快照，但不增加RT feature、扩展或VMA BDA标志。非一致纹理索引仍未启用。
+具体组与入口校验见[M16.2契约](graphics-raytracing.md#m162设备能力与bda实施契约)。
+RT请求在原生创建之后失败不会自动重试非RT；VMA/queue全部成功才发布，所有共享view沿用同一能力。
+
 ValidationMode 为 disabled / if_available / required，默认 if_available。
 只有 Khronos layer 与 EXT_debug_utils 均存在才启用；required 缺失就失败，
 if_available 明确记录未启用状态并通过诊断 sink 报告原因。
@@ -86,8 +94,10 @@ vk-bootstrap 的对象不暴露到公开接口，不调用其依赖缓存 instan
 Vulkan-Hpp dispatcher、vk-bootstrap/VMA 的内部 CPU 元数据以及驱动/验证层 host allocation 使用各库默认 allocator，
 不声称归入 Memory 域。VMA 在单个私有翻译单元编译，关闭静态/动态函数自动装载，
 显式从当前 volk table 填入 Vulkan 函数；不依赖 Vulkan 导入库或全局 vk* 符号。
-VMA 配置与设备一致的 API 1.4，显式传入 vkGetDeviceBufferMemoryRequirements / vkGetDeviceImageMemoryRequirements，
-先检查并启用 maintenance4，再交付 allocator；缺少这两个核心入口时失败并按 RAII 逆序回收。
+VMA配置与设备一致的API 1.4，显式传入vkGetDeviceBufferMemoryRequirements / vkGetDeviceImageMemoryRequirements；
+先检查并启用maintenance4，再交付allocator，缺少这两个核心入口时失败并按RAII逆序回收。
+仅RT整组启用bufferDeviceAddress时设置VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT；
+带ShaderDeviceAddress usage的buffer由VMA提供相应内存分配标志，普通设备不得创建地址buffer。
 三方 implementation 独立为 dk_graphics_vma 编译，不把其警告开关施加到引擎代码。
 Device::allocator() 借用 VmaAllocator，所有 allocation 必须先于 Device 销毁；
 Device 层只提供 allocator 接入；M5.2 的 SubmissionQueue 消费 Device 并将设备寿命延长到所有资源释放，

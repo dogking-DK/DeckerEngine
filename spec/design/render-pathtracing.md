@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-14T10:26:00+08:00"
+updated_at: "2026-10-14T11:05:29+08:00"
 status: accepted
 ---
 
@@ -284,7 +284,7 @@ nRMSE 定义为 `sqrt(sum((I-R)^2) / max(sum(R^2), pixel_count*3*1e-12))`，在�
 
 选择 KHR RT pipeline + SBT，便于直接覆盖用户所需底座并明确命中阶段；首版不同时维护 ray-query 后端。
 先完整 BUILD、无历史重投影/去噪，以有限小场景建立可复现积分基准，再根据实际热点立项优化。
-主要风险为本机 RT/非一致纹理索引能力未知、Slang payload/反射适配、Graph AS 内容依赖、
+主要风险为设备间RT/非一致纹理索引能力差异、Slang payload/反射适配、Graph AS 内容依赖、
 浮点自相交/材质能量和长驱动调用；每项已有对应前置任务/验收，不用假定库 feature 已实现来跳过。
 CPU参考的输入/采样/积分模型与解析验收已冻结；后续任务顺序以[Roadmap](../roadmap.md)为准。
 

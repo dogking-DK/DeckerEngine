@@ -91,6 +91,7 @@
 | GPU Graph 声明、编译裁剪、生命周期与诊断（无需 GPU） | dk_graph_tests | `^dk\.graph\.graph ` |
 | GPU Graph 同步、执行、导入导出、诊断与失败保护 | dk_graph_probe | `^dk\.graph\.gpu_`（gpu label；77 为跳过） |
 | Vulkan 设备策略、缺失环境和失败清理（无需 GPU） | dk_device_tests | `^dk\.device\.unit\.` |
+| RT三态请求、必需能力/limits、BDA/VMA与共享寿命 | dk_raytracing_device_probe | `^dk\.device\.rt_required_validation$`（required RT GPU/validation，同步验证；缺环境失败，非77跳过） |
 | SDL3 窗口事件、尺寸与寿命（需桌面） | dk_platform_probe | `^dk\.platform\.windows$` |
 | Vulkan Surface、呈现选卡与窗口保活 | dk_present_device_probe | `^dk\.presentation\.device_validation$` |
 | 交换链 capability 策略与错误分类（无需 GPU） | dk_presentation_tests | `^dk\.presentation\.unit\.` |

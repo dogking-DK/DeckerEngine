@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-14T10:26:00+08:00"
+updated_at: "2026-10-14T11:05:29+08:00"
 status: accepted
 ---
 
@@ -75,7 +75,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M13 实验管理与参数扫描 | 批量实验、产物索引、失败恢复与对比报告 | M9、M12 | 已完成，见0089–0092 |
 | M14 大气渲染 | 物理天空、太阳漫反射、空气透视及编辑器/截图一致性 | M7、M8/M9、M11 | 已完成，见0094–0100；保留性能目标实测差距 |
 | M15 体积云 | 可复现云场、光照/合成、时域重建、云影及质量性能验收 | M14；自动化复用M9/M13原则 | 已完成质量/性能基线；非零云GPU与在途峰值候选未达 |
-| M16 渐进式路径追踪 | CPU参考、Vulkan RT表面积分、每视图累积、编辑器与固定spp截图 | M5/M6/M7；集成需M8/M9，观测复用M11 | 进行中；M16.1 CPU参考完成，见[0109](development/0109-pathtracing-reference.md) |
+| M16 渐进式路径追踪 | CPU参考、Vulkan RT表面积分、每视图累积、编辑器与固定spp截图 | M5/M6/M7；集成需M8/M9，观测复用M11 | 进行中；M16.1 CPU参考、M16.2 RT能力/BDA完成，见[0109](development/0109-pathtracing-reference.md)、[0110](development/0110-raytracing-device.md) |
 
 默认执行表中顺序。M5 在 Foundation 补充完成后具备独立探索条件，
 M9 的 Luau 命令绑定在 M3 后可提前做；若调整次序，仍需满足对应集成验收依赖。
@@ -699,12 +699,12 @@ M14.4日光接收、M14.5空气透视、M14.6环境编辑/截图闭环和M14.7�
 **目标：** 先建立可验证的 CPU/无历史 GPU 参考，再交付静态三角形场景的渐进式表面路径追踪视口与固定样本截图。
 用户已选择该方向；底层采用 Vulkan KHR RT pipeline，沿用现有 Device/Shader/Graph 和单队列提交契约。
 设计入口：[光追底座](design/graphics-raytracing.md)、[路径追踪管线](design/render-pathtracing.md)。
-全部为待实现任务，0108 的 completed 只表示规划完成，不代表以下任一验收通过。
+逐项状态以下表为准；0108的completed只表示规划完成，实现验收引用各阶段开发记录。
 
 | 子阶段 | 范围与交付物 | 前置 | 独立验收条件 | 状态 |
 | --- | --- | --- | --- | --- |
 | M16.1 | CPU输入/采样/积分契约、程序化Lambert小场景参考，固定相机与灯光/误差/预算协议 | M7数据、M8.2 Geometry（独立测试对照） | 无GPU依赖运行；解析黑场/常量环境/白炉、暴力求交校核；方向光/面积灯及混合光源、MIS/RR及收敛成立；连续样本编号/预算拒绝/旧输入不变 | 完成，见[0109](development/0109-pathtracing-reference.md) |
-| M16.2 | RT设备能力组、扩展/feature/limits、BDA及VMA配置 | M16.1、M5 | disabled/if_available/required、显式选卡与缺项可核验；required RT probe成功；非RT路径和CPU-only保持，缺硬件不记通过 | 未开始 |
+| M16.2 | RT设备能力组、扩展/feature/limits、BDA及VMA配置 | M16.1、M5 | disabled/if_available/required、显式选卡与缺项可核验；required RT probe成功；非RT路径和CPU-only保持，缺硬件不记通过 | 完成，见[0110](development/0110-raytracing-device.md) |
 | M16.3 | 拥有型BLAS/TLAS、构建输入/scratch、尺寸/对齐与候选构建 | M16.2 | 三角/多实例构建、地址和上限拒绝；失败保留旧代；pending卸载/关闭保活；validation/sync validation通过 | 未开始 |
 | M16.4 | Slang raygen/miss/closest-hit/any-hit、AS反射、RT pipeline/SBT/trace encoder | M16.3、M5 shader/使用层 | 阶段与payload/布局错误拒绝；SBT handle/stride/alignment/index核验；真实已知射线命中/重心/距离/visibility正确，shaderc参考同步 | 未开始 |
 | M16.5 | Graph AS类型、构建/trace依赖与同步、类型化Pass回调 | M16.4、M6 | upload→BLAS→TLAS→trace→readback；裁剪/初始化/导入导出/跨图与队列拒绝；失败不提交状态；required GPU同步验证及原buffer/image回归 | 未开始 |
@@ -717,7 +717,7 @@ M14.4日光接收、M14.5空气透视、M14.6环境编辑/截图闭环和M14.7�
 | M16.11 | 固定质量/多seed收敛、动态重置、三轮性能/显存基线和交付 | M16.9、M16.10、M11观测 | 程序化与受支持磁盘场景、CPU参考及required RT GPU通过；冷/热/达到固定质量的耗时、取消/回收及显存峰值留原始证据；性能缺口不伪装成达标 | 未开始 |
 
 M16.7 为材质任务组，只有 M16.7.1/2 全部验收才完成；每行独立开发记录与本地提交。
-默认按表串行推进，M16.2 是下一项；过大行在开工前继续拆 Mx.y.z。M16.10核心可独立于GUI准备，
+默认按表串行推进，M16.3 是下一项；过大行在开工前继续拆 Mx.y.z。M16.10核心可独立于GUI准备，
 最终一致性必须在M16.9后验证。没有人员/日历预算，不虚构工期。
 
 **交付节点F（计划）：** 用户可选路径追踪视口，静止逐步收敛，改场景/相机后重置，
@@ -783,8 +783,8 @@ M13.3已完成，见[0091](development/0091-experiment-recovery.md)：批处理�
 原票据/run核实及显式重试保留历史通过。M13.4已完成，见[0092](development/0092-experiment-reports.md)：
 参数/seed扫描自动生成可追溯报告，CPU-only与GPU图像分别验收，300拍重跑和跨后端容差通过。
 **M0–M15质量与基线交付已完成。M14环境模型、体积底座、天空/日光/空气透视、编辑器与截图闭环见[0094](development/0094-environment-model.md)至[0099](development/0099-environment-integration.md)；质量/性能基线与三预设交付见[0100](development/0100-atmosphere-baseline.md)。1.5ms性能候选目标未达，保留原质量门槛与实测差距。M15.1云CPU模型、environment v2迁移、确定性天气/3D噪声、风时间与有界GPU纹理见[0101](development/0101-cloud-fields.md)。M15.2无历史CPU/GPU积分、太阳光照及收敛参考已完成，见[0102](development/0102-cloud-reference.md)。M15.3云/空气/几何联合合成、诊断和有界截图参考已完成，见[0103](development/0103-cloud-composition.md)。M15.4半分辨率/跳跃/保边与有界每视图时域优化已完成，21项定向验收见[0104](development/0104-cloud-reconstruction.md)，性能候选结果见M15.7。M15.5固定世界云透射阴影、直射接收及资源寿命已完成，21项定向验收见[0105](development/0105-cloud-shadows.md)。M15.6云预设/面板、固定时间序列、Python/Luau和版本化用例报告已完成，见[0106](development/0106-cloud-integration.md)。M15.7四预设固定质量、动态/失败回归与三轮性能/显存交付见[0107](development/0107-cloud-delivery.md)。云增量4ms、联合5.5ms和在途峰值192MiB候选未达；后续优化需另行规划，并维持已冻结质量门槛。**
-M16渐进式路径追踪已完成CPU小场景参考，设计与实测见[0109](development/0109-pathtracing-reference.md)。
-**下一项为M16.2：RT设备能力组、扩展/feature/limits、BDA及VMA配置。** 以冻结的CPU解析与收敛标准继续推进RT底座和GPU积分。
+M16渐进式路径追踪已完成CPU小场景参考和RT设备能力/BDA，设计与实测见[0109](development/0109-pathtracing-reference.md)、[0110](development/0110-raytracing-device.md)。
+**下一项为M16.3：拥有型BLAS/TLAS、构建输入/scratch、尺寸/对齐与候选构建。** 以冻结的CPU解析与收敛标准继续推进RT底座和GPU积分。
 编辑器 Play 视口已在 M12 验收，批量实验在 M13 验收；检查点、其他平台与发布打包仍未纳入本轮扩展。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。

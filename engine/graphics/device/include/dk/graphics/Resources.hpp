@@ -60,6 +60,8 @@ public:
     [[nodiscard]] vk::Buffer handle() const noexcept;
     [[nodiscard]] vk::DeviceSize size() const noexcept;
     [[nodiscard]] BufferDesc description() const noexcept;
+    // Borrowed address; keep the Buffer owner alive through every GPU use.
+    [[nodiscard]] Result<vk::DeviceAddress> device_address() const;
     [[nodiscard]] Buffer share() const noexcept { return Buffer{state_}; }
     [[nodiscard]] Result<AccessState> state() const;
     [[nodiscard]] Result<void> write(vk::DeviceSize offset, std::span<const std::byte> bytes);

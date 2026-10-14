@@ -51,6 +51,19 @@ Result<void> host_access(const std::shared_ptr<detail::ResourceState>& state, vk
 vk::Buffer Buffer::handle() const noexcept { return state_ ? vk::Buffer{state_->buffer} : vk::Buffer{}; }
 vk::DeviceSize Buffer::size() const noexcept { return state_ ? state_->buffer_desc.size : 0; }
 BufferDesc Buffer::description() const noexcept { return state_ ? state_->buffer_desc : BufferDesc{}; }
+Result<vk::DeviceAddress> Buffer::device_address() const
+{
+    if (!state_ || state_->owner->lost)
+        return std::unexpected(Error{ErrorCode::invalid_state, "buffer is empty or device is lost"});
+    if (!(state_->buffer_desc.usage & vk::BufferUsageFlagBits::eShaderDeviceAddress))
+        return std::unexpected(Error{ErrorCode::invalid_argument, "buffer lacks shader device address usage"});
+    const auto& device = state_->owner->device;
+    if (!device.ray_tracing_enabled())
+        return std::unexpected(Error{ErrorCode::not_supported, "bufferDeviceAddress is not enabled"});
+    const auto address = device.logical_device().getBufferAddress(vk::BufferDeviceAddressInfo{handle()});
+    if (!address) return std::unexpected(Error{ErrorCode::internal_error, "vkGetBufferDeviceAddress returned zero"});
+    return address;
+}
 Result<AccessState> Buffer::state() const
 { return state_ ? Result<AccessState>{state_->states.front()} : std::unexpected(Error{ErrorCode::invalid_state,"buffer is empty"}); }
 Result<void> Buffer::write(vk::DeviceSize offset, std::span<const std::byte> bytes) { return host_access(state_, offset, {}, bytes, true); }
@@ -230,6 +243,8 @@ Result<Buffer> SubmissionQueue::create_buffer(const BufferDesc& description)
     DK_PROFILE_ZONE("graphics.buffer.create");
     if (auto result = state_->accepting(); !result) return std::unexpected(result.error());
     if (auto result = detail::validate_buffer(description); !result) return std::unexpected(result.error());
+    if ((description.usage & vk::BufferUsageFlagBits::eShaderDeviceAddress) && !device().ray_tracing_enabled())
+        return std::unexpected(Error{ErrorCode::not_supported, "bufferDeviceAddress is not enabled"});
     auto resource = memory::make_shared_in<detail::ResourceState>(state_->resource, state_->owner, state_->resource);
     resource->states.resize(1);
     resource->buffer_desc = description;
