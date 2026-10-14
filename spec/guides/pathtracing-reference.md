@@ -1,12 +1,12 @@
 ---
 created_at: "2026-10-14T10:18:00+08:00"
-updated_at: "2026-10-14T10:18:00+08:00"
+updated_at: "2026-10-14T14:37:00+08:00"
 ---
 
 # CPU路径追踪参考
 
 [M16.1设计](../design/render-pathtracing.md#m161-cpu参考实施契约)提供小场景双精度Lambert参考，
-用于后续GPU管线正确性对照。当前尚无硬件RT、渐进式编辑器或路径追踪capture命令。
+用于[GPU无历史管线](pathtracing-gpu.md)正确性对照。渐进式编辑器和路径追踪capture命令尚未接入。
 
 ## 构建与定向验证
 

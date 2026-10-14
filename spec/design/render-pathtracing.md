@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-14T11:05:29+08:00"
+updated_at: "2026-10-14T14:37:00+08:00"
 status: accepted
 ---
 
@@ -11,7 +11,42 @@ status: accepted
 
 用户选择先建立正确性参考，再接入编辑器和截图。M16 交付静态三角形场景的渐进式表面路径追踪：
 CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、确定性样本编号、每视图累积、
-后台交互预览和固定 spp 截图。M16.1实施契约见下节；其余拟议接口/额度仍是规划，阶段状态见[Roadmap](../roadmap.md)。
+后台交互预览和固定 spp 截图。M16.1与M16.6实施契约见下文；其余拟议接口/额度仍是规划，阶段状态见[Roadmap](../roadmap.md)。
+
+## M16.6 GPU无历史Lambert实施契约
+
+独立默认OFF的DK_BUILD_RENDER_PATHTRACING启用dk::render_pathtracing，同时提供纯CPU reference；
+PUBLIC依赖reference和graphics_device，PRIVATE依赖graphics_graph/graphics_shaders，不接入Runtime或编辑器。
+PathTraceRenderer::create编译固定shader目录的RT与空场景compute程序，失败不发布半套管线。
+prepare_scene复制已冻结PathTraceScene的世界三角形/材质/光源CDF，构建单BLAS与恒等TLAS，
+保留稳定三角形到Entity/Asset/primitive/triangle的映射。完整仿射效果在CPU冻结时已应用；
+本阶段不做按资产BLAS复用或实例变换优化。float转换造成的退化/非有限几何、无法表示的正面积/光源权重、
+超出float范围的相机参数明确拒绝，不能静默丢失三角形或提交含Inf的输入。
+所有GPU数据不可变，Graph提交upload→BLAS→TLAS；空场景不创建非法空AS。
+
+submit_view与submit_rays分别接受已冻结RenderView和固定世界射线集合，返回拥有型PathTraceFrame及Submission，
+均不等待GPU。调用者串行使用同一队列；frame.read仅查询完成状态并在完成后发布独立CPU HDR结果，
+未完成/错误/取消不发布部分结果，旧scene/frame/image可继续持有。Graph/pending保留资源，提前丢弃frame不取消GPU。
+frame不持有裸queue地址；读取时通过票据核对提交域，显式wait/close沿用Device契约。
+取消在CPU准备、编译和submit前检查，已提交工作不可抢占；读取前的取消拒绝发布。
+
+GPU复用CPU v1模型、样本维度/连续编号、深度、NEE三类等概率选光、面积×亮度CDF、power MIS与RR。
+raygen循环散射；两种静态SBT射线类型分别用于最近命中和visibility，hit仅返回距离/重心/三角形索引，
+any-hit按冻结的单/双面标志拒绝背面，不引入纹理/alpha材质。geometry normal、world area和发光保持一致，
+GPU使用float误差尺度偏移并逐分量向外取下一可表示值，有限面光源阴影同时偏移两端；无firefly clamp。
+计数hash保持uint32，GPU输出24位样本的float近似并保持开区间，不承诺CPU/GPU逐位相同。
+空场景由compute写常量环境和诊断，仍使用Graph写入/读回与提交契约。
+
+首版沿用≤64×64图像/≤4096条固定射线、4096三角形、1..65536样本、1..32反弹和CPU冻结工作预检，
+先建立数值参考；M16.8再扩展分块、交互批次与显存额度。GPU几何、表、输出均在这些上限内有界，
+不将CPU triangle_tests计数冒充硬件遍历统计。结果包含线性RGB、二阶矩、实际trace射线数、
+首个样本的主射线命中距离/重心/法线/来源，以及scene/revision/fingerprint、camera/settings/sample区间。
+输出按像素使用补偿求和；NaN/Inf/负辐亮度及非法诊断在读回时拒绝整帧。
+
+验收使用required RT+validation/sync：黑场/常量环境/发光、太阳遮挡、单/双面和缩放/剪切、
+面积灯独立积分、8 seed CPU/GPU线性nRMSE≤2%、N/4N均值差≤0.5%、64/256/1024集合误差下降、
+MIS对BSDF-only及RR起点比较、多反弹颜色、连续样本区间、失败保留旧帧、timeout/pending/关闭回收。
+确定性量与非边界几何沿用1e-4门槛；小图高样本参考先证明收敛，不能用未收敛参考放宽阈值。
 
 ## M16.1 CPU参考实施契约
 
@@ -87,13 +122,14 @@ M16 不复用其 screen-space 合成到路径追踪结果，也不把太阳、�
 | 模块/入口 | 依赖和职责 |
 | --- | --- |
 | `engine/render/pathtracing` 的 `dk_render_pathtracing_reference` / `dk::render_pathtracing_reference` | 已实现纯 CPU：PUBLIC render_data、asset_data，通过其传递依赖Math/Memory；独立求交、输入转换、采样、Lambert、参考积分，不链接Geometry实现/Vulkan/Slang |
-| 同目录 `dk_render_pathtracing` / `dk::render_pathtracing`（规划） | PUBLIC render_data、graphics_device 及必要纯数据类型；PRIVATE graphics_graph、graphics_shaders 和参考公共模型；AS 场景、GPU 积分与累积 |
+| 同目录 `dk_render_pathtracing` / `dk::render_pathtracing` | PUBLIC render_pathtracing_reference、graphics_device；PRIVATE graphics_graph、graphics_shaders；不可变GPU场景、无历史Lambert积分、异步帧与HDR诊断 |
 | RenderDisk / CaptureService / Editor 装配（规划） | 读取/冻结资产并调用 renderer；Render 不反向依赖 Framework/Editor；公开路径不暴露其类型 |
 
 reference开关默认OFF，已支持无GPU依赖构建与测试，使用见[CPU参考指南](../guides/pathtracing-reference.md)。
-GPU开关仍规划为独立默认OFF，启用时检查Device/Shader/Graph；正式target和测试入口在对应阶段创建。
-GpuAssets 不统一加 RT usage；首版路径追踪从冻结 CpuAsset 建立自己的合并顶点/索引/材质表和 BLAS，
-纹理可在相同队列/描述契约满足时复用，否则独立上传。重复 GPU 载荷计入预算，不宣称零拷贝。
+GPU开关DK_BUILD_RENDER_PATHTRACING独立默认OFF，启用时检查Device/Shader/Graph并构建reference；
+用法与required探针见[GPU指南](../guides/pathtracing-gpu.md)。GpuAssets 不统一加 RT usage；
+M16.6从冻结PathTraceScene建立自己的世界顶点、材质/光源表及单BLAS/TLAS，尚不复用资产BLAS。
+后续纹理可在相同队列/描述契约满足时复用，否则独立上传。重复GPU载荷计入额度，不宣称零拷贝。
 
 ## 数据与拟议接口
 
@@ -117,7 +153,8 @@ environment_mode/constant_rgb/sun_mode、material_mode、可选诊断；曝光/t
 | `reset` / `release_view` | reset 使旧代不再可发布，release 停止新工作；已提交资源仍待完成回收 |
 | `read_linear` / 显示输出 | 只读取已完成、尺寸匹配的帧；未完成/失败不得部分覆盖调用者输出 |
 
-这些是职责约定，不冻结 C++ 签名。正式接口在对应阶段更新本页；与现有 Frame/Job 语义一致。
+此表描述后续渐进式会话职责，不是已实现C++签名。M16.6正式入口为PathTraceRenderer的
+prepare_scene/submit_view/submit_rays及PathTraceFrame::read，当前无历史与视图槽；细节见上文实施契约。
 
 ## 参考积分、几何和材质
 
@@ -290,4 +327,4 @@ CPU参考的输入/采样/积分模型与解析验收已冻结；后续任务顺
 
 [架构](architecture.md)、[光追底座](graphics-raytracing.md)、[渲染资源](render-resources.md)、
 [截图](render-capture.md)、[编辑器](editor.md)、[0108规划记录](../development/0108-pathtracing-plan.md)、
-[0109 CPU参考实现与验证](../development/0109-pathtracing-reference.md)。
+[0109 CPU参考实现与验证](../development/0109-pathtracing-reference.md)、[0114 GPU积分与验收](../development/0114-gpu-pathtracing.md)。

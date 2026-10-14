@@ -1,7 +1,7 @@
 ---
 module: graphics-raytracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-14T13:58:31+08:00"
+updated_at: "2026-10-14T14:39:28+08:00"
 status: accepted
 ---
 
@@ -248,7 +248,7 @@ device_lost 使队列失效，不承诺旧 GPU 画面仍可用。跨队列仅使
 设备能力/BDA已提供CPU策略与required RT探针，入口和实测见[0110](../development/0110-raytracing-device.md)。
 AS构建实测见[0111](../development/0111-acceleration-structures.md)，四阶段编译、RT pipeline/SBT、
 真实命中与visibility及失败寿命见[0112](../development/0112-raytracing-pipeline.md)。Graph AS构建/trace、导入导出、
-失败和pending寿命见[0113](../development/0113-graph-raytracing.md)；GPU路径积分待M16.6。
+失败和pending寿命见[0113](../development/0113-graph-raytracing.md)；GPU无历史Lambert积分见[0114](../development/0114-gpu-pathtracing.md)。
 
 ## 相关设计与记录
 

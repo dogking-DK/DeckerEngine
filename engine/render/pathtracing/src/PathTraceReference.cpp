@@ -185,6 +185,13 @@ bool same_source(const RenderScene& a,const RenderScene& b) {
     return true;
 }
 }
+Result<void> detail::validate_path_work(const PathSceneState& scene,std::uint64_t pixels,const PathTraceSettings& settings,PathTraceSamples samples) {
+    return work_valid(scene,pixels,settings,samples);
+}
+Result<void> detail::validate_path_view(const PathSceneState& scene,const RenderView& view) {
+    if (!same_source(scene.source,view.scene())) return std::unexpected(path_invalid("Path scene/view snapshot mismatch"));
+    auto camera=camera_for(view); if (!camera) return std::unexpected(camera.error()); return {};
+}
 double path_trace_sample(std::uint64_t seed,std::uint32_t pixel,std::uint32_t sample,std::uint32_t bounce,std::uint32_t dimension) noexcept {
     auto h=mix(static_cast<std::uint32_t>(seed)^0xa511e9b3u);
     h=mix(h^static_cast<std::uint32_t>(seed>>32)); h=mix(h^pixel); h=mix(h^sample); h=mix(h^bounce); h=mix(h^dimension);

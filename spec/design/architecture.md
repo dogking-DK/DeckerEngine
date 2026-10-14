@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-14T13:58:31+08:00"
+updated_at: "2026-10-14T16:20:00+08:00"
 status: accepted
 ---
 
@@ -91,14 +91,15 @@ render/clouds负责云场与单/混合介质参考，render/pipeline组合天空
 及其Scene/Math/Memory依赖，默认OFF；[示例指南](../guides/pathtracing-reference.md)提供无窗口数值与PPM输出。
 [Vulkan光追底座](graphics-raytracing.md)已在现有Device提供三态RT请求、支持/启用/缺项和limits，
 以及BDA/VMA、拥有型BLAS/TLAS、RT pipeline/SBT与Graph构建/trace；
-后续补齐GPU积分、每视图累积、编辑器与固定spp截图。
+`dk::render_pathtracing`已通过Graph提供GPU无历史Lambert积分、异步提交与HDR/命中诊断，
+PUBLIC依赖reference/graphics_device，PRIVATE依赖Graph/Shader。后续补齐材质、每视图累积、编辑器与固定spp截图。
 Device/Shader/Graph 扩展既有模块的能力与资源类型，Render 负责资产/场景映射、BSDF、光照和累积；
 不新建平行的设备所有权或提交系统，不让 CPU-only Runtime 依赖 GPU。
-参考和 GPU renderer 为独立可选 target，GPU接口、开关和测试在对应阶段实现时登记。
+参考和GPU renderer为独立默认OFF的可选target；GPU开关同时提供reference，纯CPU开关不拉入Graphics/Slang。
 CPU参考使用常量环境、方向太阳和发光三角形，opaque、无纹理、metallic=0的Lambert材质；后续扩展受限metallic-roughness材质。
 大气/云多重散射、模拟布片、去噪和实时性能目标另行规划。
 ScenePipeline 的默认光栅行为保持；新后端明确选择和报告能力，不能静默替换输出。
-AS/SBT、路径追踪shader和可调用命令仍是规划；状态见[Roadmap](../roadmap.md)。
+AS/SBT与无历史Lambert路径追踪shader已实现；渐进累积、材质扩展和可调用命令仍是规划，状态见[Roadmap](../roadmap.md)。
 
 ## 关键约束
 

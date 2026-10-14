@@ -7,3 +7,15 @@ target_sources(dk_render_pathtracing_reference PUBLIC FILE_SET HEADERS BASE_DIRS
     FILES include/dk/render/PathTraceReference.hpp)
 target_link_libraries(dk_render_pathtracing_reference PUBLIC dk::render_data dk::asset_data)
 dk_target_defaults(dk_render_pathtracing_reference)
+if(DK_BUILD_RENDER_PATHTRACING)
+    if(NOT TARGET dk::graphics_device OR NOT TARGET dk::graphics_graph OR NOT TARGET dk::graphics_shaders)
+        message(FATAL_ERROR "GPU path tracing requires Graphics Device, Graph and Shaders")
+    endif()
+    add_library(dk_render_pathtracing STATIC src/PathTraceRenderer.cpp)
+    add_library(dk::render_pathtracing ALIAS dk_render_pathtracing)
+    target_sources(dk_render_pathtracing PUBLIC FILE_SET HEADERS BASE_DIRS include
+        FILES include/dk/render/PathTraceRenderer.hpp)
+    target_link_libraries(dk_render_pathtracing PUBLIC dk::render_pathtracing_reference dk::graphics_device
+        PRIVATE dk::graphics_graph dk::graphics_shaders)
+    dk_target_defaults(dk_render_pathtracing)
+endif()
