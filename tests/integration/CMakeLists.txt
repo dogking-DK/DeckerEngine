@@ -1,3 +1,12 @@
+if(TARGET dk_pathtracing_reference_demo)
+    find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME dk.pathtracing.demo_cpu COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/PathTraceReferenceDemoTest.py" "$<TARGET_FILE:dk_pathtracing_reference_demo>"
+            "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/pathtracing-reference")
+        set_tests_properties(dk.pathtracing.demo_cpu PROPERTIES TIMEOUT 240 LABELS "cpu")
+    endif()
+endif()
 if(TARGET dk_render_atmosphere)
     add_executable(dk_atmosphere_probe AtmosphereProbe.cpp)
     set_target_properties(dk_atmosphere_probe PROPERTIES OUTPUT_NAME dk-atmosphere-probe)

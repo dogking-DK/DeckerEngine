@@ -1,8 +1,8 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-14T08:22:56+08:00"
-status: draft
+updated_at: "2026-10-14T10:26:00+08:00"
+status: accepted
 ---
 
 # 渐进式路径追踪管线设计
@@ -11,7 +11,59 @@ status: draft
 
 用户选择先建立正确性参考，再接入编辑器和截图。M16 交付静态三角形场景的渐进式表面路径追踪：
 CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、确定性样本编号、每视图累积、
-后台交互预览和固定 spp 截图。本文为草案，拟议接口/额度不是现有能力；阶段状态见[Roadmap](../roadmap.md)。
+后台交互预览和固定 spp 截图。M16.1实施契约见下节；其余拟议接口/额度仍是规划，阶段状态见[Roadmap](../roadmap.md)。
+
+## M16.1 CPU参考实施契约
+
+本阶段仅实现 `dk::render_pathtracing_reference`，开关 `DK_BUILD_RENDER_PATHTRACING_REFERENCE` 默认OFF，
+要求RenderData/Scene/Math/Memory，自动提供asset_data头接口，不依赖导入器、Geometry实现、Vulkan或Slang。
+Geometry BVH只在测试中作为独立求交对照；CPU参考独立双精度暴力遍历，避免让同一求交实现同时充当被测方和oracle。
+
+`PathTraceScene::create(heap, RenderScene, assets, limits)`从借用的CpuAsset指针span复制被引用的世界三角形/材质，
+返回不可变共享快照；不保留输入地址或读取磁盘。按RenderScene实体/引用、primitive和triangle顺序稳定编号，
+保留EntityId/AssetId/primitive/triangle来源。重复实例允许、重复资产包ID/缺失mesh/material拒绝。
+非mesh实体引用沿RenderData约定忽略，不能猜成材质覆盖。资产unit_scale已由导入器应用，不二次缩放。
+只消费opaque、metallic=0、无baseColor纹理的线性baseColor/emissive；roughness保留但不参与Lambert。
+缺材质沿CpuData默认metallic=1，因此拒绝而不是静默变成漫反射。几何法线来自世界顶点绕序，
+明确不使用顶点法线/UV；双面可翻转法线，单面背面被剔除，负缩放翻转绕序。退化三角形跳过并报告计数。
+场景指纹为稳定字节序FNV-1a64诊断摘要，覆盖消费的世界几何、材质、来源和冻结太阳，不作安全验证/缓存相等证明。
+
+限制固定为最多4096个输入资产/实例primitive引用及4096个展开前计数的三角形（退化也占额度），
+单primitive最多12288个顶点，位置绝对值≤1e6米；非法矩阵/不可逆实例/非有限数在候选内拒绝。
+调用者可下调额度，不能放大硬上限。创建/图像输出使用调用者Memory，预算失败不发布候选；
+旧快照和已完成图像可在输入销毁/Memory closing后读取，新建仍要求open heap。
+
+`PathTraceSettings`固定model/sampler版本1，seed为uint64，max_bounces=8、范围1..32；
+反弹数指最多多少次BSDF散射，末次散射后的射线仍评估emission/miss但不继续NEE/散射。
+rr_start=3，0表示诊断用关闭RR，其余须≤max_bounces；存活率clamp(max(throughput),0.05,0.95)，
+在指定散射次数后执行并除以存活率。模式为MIS或bsdf_only；后者仍单独估计delta太阳，避免漏掉不可由BSDF命中的光。
+环境默认常量黑色，太阳默认none，可显式选冻结Scene太阳；空气/云开启时须显式surface_only=true确认表面参考范围。
+不可用的模式/枚举/版本、负值、辐亮度/辐照度>1e6均拒绝。曝光不进入积分设置。
+
+计数随机映射使用固定32位无符号混合，输入为seed高低32位、pixel/sample/bounce/dimension；
+输出24位开区间样本，CPU/GPU可重现。维度0/1为主射线亚像素，2为选光类、3为选发光三角形、
+4/5为光源坐标、6/7为余弦半球BSDF、8为RR；路径长短不改变其他样本。黄金序列固定在测试。
+有效样本区间[first_sample, first_sample+sample_count)位于[0,65536)，允许分批后加权合并，不提供持久历史。
+光源在非零环境/太阳/面光源三类间等概率选类；面光源内部按世界面积×发光亮度选三角形。
+环境均匀球面、三角形均匀面积，PDF含完整离散概率/面积到立体角雅可比；power heuristic指数2。
+无光源分布合法，delta太阳用权重1；相机直见发光/背景用权重1，BSDF命中用互补MIS权重。
+
+`estimate_path_reference`对固定归一化世界射线返回RGB均值、二阶矩与实际射线/相交计数；
+`render_path_reference`按RenderView透视针孔生成≤64×64图像，返回拥有型线性RGB和完整设置/样本区间/输入摘要。
+相机须刚体、右手朝-Z、Vulkan深度0..1、有限near/far的透视矩阵（允许离轴和Y翻转）；正交/逆Z在本阶段拒绝。
+主射线按near/far平面计算距离，次级射线不继承far。原点沿几何法线按世界坐标/顶点误差尺度偏移并nextafter外扩，
+面光源阴影同时偏移两个端点；不使用固定世界epsilon。极近退化/共享边测试单列，不宣称任意病态几何鲁棒。
+
+每请求上界`pixels*samples*(2*max_bounces+1)`条射线，硬上限2^24；
+再乘max(1,triangle_count)的候选求交工作硬上限2^29，均可下调且在分配/计算前检查溢出。
+每样本/反弹检查stop_token，取消返回独立context，不发布部分图像/均值；超额不自动降质。
+NaN/Inf结果视为错误，禁用firefly clamp。此处是CPU参考额度，GPU批次/显存额度仍待M16.8落实。
+
+冻结验收：解析量绝对误差≤1e-4；8个独立seed均值误差≤2%且落在5倍标准误差加1e-4内；
+面积灯独立二维数值积分收敛≤0.1%，高样本参考N/4N集合均值差≤0.5%。
+64/256/1024样本只要求seed集合均方误差下降，不要求单像素/单seed单调。
+覆盖黑场/常量环境/太阳解析遮挡/白炉/面积灯及间接颜色传播、MIS对BSDF-only、RR开关、几何仿射/尺度、
+样本分区/输入旧代/取消/额度/Memory失败/CPU-only链接。可执行CPU示例输出PPM和线性数值报告，不增加命令服务。
 
 首轮光源为常量 RGB 环境、显式方向太阳和发光三角形；参考先使用 opaque Lambert 与无纹理发光面。
 随后扩展当前资产已有的 baseColor 纹理、metallic/roughness 标量、emissive、opaque/mask、单/双面。
@@ -32,14 +84,14 @@ M16 不复用其 screen-space 合成到路径追踪结果，也不把太阳、�
 当前 GPU 网格没有 RT usage；[CPU BVH](geometry-query.md)只做双面最近命中，不包含 alpha/材质遍历。
 现有 [ScenePipeline](render-pipeline.md)是 depth/opaque/tone 管线，不改写其光栅默认行为。
 
-| 拟议模块/入口 | 依赖和职责 |
+| 模块/入口 | 依赖和职责 |
 | --- | --- |
-| `engine/render/pathtracing` 的 `dk_render_pathtracing_reference` / `dk::render_pathtracing_reference` | 纯 CPU：PUBLIC render_data、asset_data；PRIVATE geometry、Math/Memory 所需 target；输入转换、采样、BSDF、参考积分，不链接 Vulkan/Slang |
-| 同目录 `dk_render_pathtracing` / `dk::render_pathtracing` | PUBLIC render_data、graphics_device 及必要纯数据类型；PRIVATE graphics_graph、graphics_shaders 和参考公共模型；AS 场景、GPU 积分与累积 |
-| RenderDisk / CaptureService / Editor 装配 | 读取/冻结资产并调用 renderer；Render 不反向依赖 Framework/Editor；公开路径不暴露其类型 |
+| `engine/render/pathtracing` 的 `dk_render_pathtracing_reference` / `dk::render_pathtracing_reference` | 已实现纯 CPU：PUBLIC render_data、asset_data，通过其传递依赖Math/Memory；独立求交、输入转换、采样、Lambert、参考积分，不链接Geometry实现/Vulkan/Slang |
+| 同目录 `dk_render_pathtracing` / `dk::render_pathtracing`（规划） | PUBLIC render_data、graphics_device 及必要纯数据类型；PRIVATE graphics_graph、graphics_shaders 和参考公共模型；AS 场景、GPU 积分与累积 |
+| RenderDisk / CaptureService / Editor 装配（规划） | 读取/冻结资产并调用 renderer；Render 不反向依赖 Framework/Editor；公开路径不暴露其类型 |
 
-拟设置独立默认 OFF 的 reference/GPU 构建开关，启用 GPU 时检查已构建的 Device/Shader/Graph；
-reference 可以在无 GPU/无 Vulkan loader 环境构建测试。正式 target 和测试入口在实施时创建。
+reference开关默认OFF，已支持无GPU依赖构建与测试，使用见[CPU参考指南](../guides/pathtracing-reference.md)。
+GPU开关仍规划为独立默认OFF，启用时检查Device/Shader/Graph；正式target和测试入口在对应阶段创建。
 GpuAssets 不统一加 RT usage；首版路径追踪从冻结 CpuAsset 建立自己的合并顶点/索引/材质表和 BLAS，
 纹理可在相同队列/描述契约满足时复用，否则独立上传。重复 GPU 载荷计入预算，不宣称零拷贝。
 
@@ -234,7 +286,8 @@ nRMSE 定义为 `sqrt(sum((I-R)^2) / max(sum(R^2), pixel_count*3*1e-12))`，在�
 先完整 BUILD、无历史重投影/去噪，以有限小场景建立可复现积分基准，再根据实际热点立项优化。
 主要风险为本机 RT/非一致纹理索引能力未知、Slang payload/反射适配、Graph AS 内容依赖、
 浮点自相交/材质能量和长驱动调用；每项已有对应前置任务/验收，不用假定库 feature 已实现来跳过。
-下一项为 M16.1：冻结输入/采样/积分模型及解析验收，建立小场景 CPU 参考；后续任务顺序以 Roadmap 为准。
+CPU参考的输入/采样/积分模型与解析验收已冻结；后续任务顺序以[Roadmap](../roadmap.md)为准。
 
 [架构](architecture.md)、[光追底座](graphics-raytracing.md)、[渲染资源](render-resources.md)、
-[截图](render-capture.md)、[编辑器](editor.md)、[0108 规划记录](../development/0108-pathtracing-plan.md)。
+[截图](render-capture.md)、[编辑器](editor.md)、[0108规划记录](../development/0108-pathtracing-plan.md)、
+[0109 CPU参考实现与验证](../development/0109-pathtracing-reference.md)。

@@ -1,0 +1,5 @@
+find_package(nlohmann_json CONFIG REQUIRED)
+add_executable(dk_pathtracing_reference_demo src/main.cpp)
+set_target_properties(dk_pathtracing_reference_demo PROPERTIES OUTPUT_NAME dk-pathtracing-reference-demo)
+target_link_libraries(dk_pathtracing_reference_demo PRIVATE dk::render_pathtracing_reference dk::io nlohmann_json::nlohmann_json)
+dk_target_defaults(dk_pathtracing_reference_demo)

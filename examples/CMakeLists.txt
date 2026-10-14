@@ -1,4 +1,7 @@
 set(CMAKE_FOLDER "Examples")
+if(TARGET dk_render_pathtracing_reference AND TARGET dk_io)
+    add_subdirectory(pathtracing)
+endif()
 
 if(TARGET dk_render_simulation)
     add_subdirectory(simulation)

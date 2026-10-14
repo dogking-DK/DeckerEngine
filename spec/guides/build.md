@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-13T18:54:48+08:00"
+updated_at: "2026-10-14T10:26:00+08:00"
 ---
 
 # 构建与依赖配置
@@ -11,6 +11,10 @@ updated_at: "2026-10-13T18:54:48+08:00"
 独立配置和历史验收计数不构成每次修改的固定回归要求。
 
 ## Windows 快速验证
+
+M16.1纯CPU路径追踪参考可用`cmake --preset windows-dev -DDK_BUILD_RENDER_PATHTRACING_REFERENCE=ON`，
+target为`dk_pathtracing_reference_tests`/`dk_pathtracing_reference_demo`，筛选`^dk\.pathtracing\.`；
+不启用Graphics/Slang，固定场景与线性输出用法见[CPU参考指南](pathtracing-reference.md)。
 
 云场可独立纯CPU构建：`cmake --preset windows-scripting -DDK_BUILD_RENDER_CLOUD_FIELDS=ON`，
 随后用verify构建`dk_cloud_field_tests`并筛选`^dk\.clouds\.cloud `。
