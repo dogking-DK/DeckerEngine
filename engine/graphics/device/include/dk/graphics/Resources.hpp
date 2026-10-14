@@ -28,6 +28,21 @@ struct AccessState {
     bool operator==(const AccessState&) const = default;
 };
 namespace detail { struct ResourceState; struct QueueState; struct BatchState; struct SubmissionAccess; struct ObjectAccess; struct PresentationAccess; struct ImageTransferState; }
+struct AllocationBudgetStats {
+    std::uint64_t limit = 0, current = 0, peak = 0;
+    std::uint64_t host_visible = 0, device_local = 0, allocations = 0;
+};
+// Externally serialized, shared by factories and actual allocation owners.
+class AllocationBudget final {
+public:
+    explicit AllocationBudget(std::uint64_t limit) { stats_.limit=limit; }
+    AllocationBudget(const AllocationBudget&) = delete;
+    AllocationBudget& operator=(const AllocationBudget&) = delete;
+    [[nodiscard]] AllocationBudgetStats stats() const noexcept { return stats_; }
+private:
+    friend struct detail::ResourceState;
+    AllocationBudgetStats stats_;
+};
 class CommandBatch;
 class SubmissionQueue;
 class ResourceFactory;
@@ -235,6 +250,8 @@ private:
     [[nodiscard]] Result<Submission> submit_impl(CommandBatch&& batch, vk::Semaphore wait, vk::Semaphore signal);
     friend struct detail::SubmissionAccess;
     friend class ResourceFactory;
+    [[nodiscard]] Result<Buffer> create_buffer(const BufferDesc&, const std::shared_ptr<AllocationBudget>&);
+    [[nodiscard]] Result<Image> create_image(const ImageDesc&, const std::shared_ptr<AllocationBudget>&);
     explicit SubmissionQueue(std::shared_ptr<detail::QueueState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::QueueState> state_;
 };

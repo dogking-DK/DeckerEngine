@@ -78,6 +78,9 @@ private:
 class ResourceFactory final {
 public:
     ResourceFactory() = default;
+    [[nodiscard]] ResourceFactory with_budget(std::shared_ptr<AllocationBudget> budget) const {
+        auto copy=*this; copy.budget_=std::move(budget); return copy;
+    }
     [[nodiscard]] Result<Buffer> create_buffer(const BufferDesc& description) const;
     [[nodiscard]] Result<Image> create_image(const ImageDesc& description) const;
     // Copy descriptions and retain input/BLAS owners. No commands are recorded or submitted here.
@@ -98,5 +101,6 @@ private:
     friend struct detail::ObjectAccess;
     explicit ResourceFactory(const std::shared_ptr<detail::QueueState>& queue) : queue_(queue) {}
     std::weak_ptr<detail::QueueState> queue_;
+    std::shared_ptr<AllocationBudget> budget_;
 };
 } // namespace dk::graphics

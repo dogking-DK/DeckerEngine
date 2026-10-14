@@ -30,11 +30,12 @@ void diagnostic(void* p,const Diagnostic& d) noexcept {
     if (d.severity>=VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) std::fprintf(stderr,"%.*s: %.*s\n",int(d.name.size()),d.name.data(),int(d.message.size()),d.message.data());
 }
 PFN_vkQueueSubmit2 native_submit=nullptr; PFN_vkWaitSemaphores native_wait=nullptr;
-bool fail_submit=false,timeout_once=false;
+bool fail_submit=false,timeout_once=false,lose_wait=false;
 VKAPI_ATTR VkResult VKAPI_CALL submit_override(VkQueue q,std::uint32_t n,const VkSubmitInfo2* s,VkFence f) {
     if (std::exchange(fail_submit,false)) return VK_ERROR_OUT_OF_HOST_MEMORY; return native_submit(q,n,s,f);
 }
 VKAPI_ATTR VkResult VKAPI_CALL wait_override(VkDevice d,const VkSemaphoreWaitInfo* i,std::uint64_t t) {
+    if (std::exchange(lose_wait,false)) return VK_ERROR_DEVICE_LOST;
     if (std::exchange(timeout_once,false)) return VK_TIMEOUT; return native_wait(d,i,t);
 }
 struct Fixture {
@@ -284,6 +285,7 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
 }
 #include "PathTextureCases.hpp"
 #include "PathGgxCases.hpp"
+#include "PathProgressiveCases.hpp"
 int main(int argc,char** argv) {
     try {
         require(argc==2,"expected analytic/statistics/images/lifetime case");
@@ -301,7 +303,12 @@ int main(int argc,char** argv) {
             auto queue=take(graphics::detail::SubmissionAccess::create(memory.heap,std::move(device),3,{submit_override,nullptr,wait_override}));
             { auto renderer=take(PathTraceRenderer::create(memory.heap,queue,DK_PATH_SHADER_DIR));
               const std::string_view mode=argv[1];
-              if(mode=="analytic") analytic(memory.heap,renderer,queue);
+              if(mode=="progressive_images") progressive_images(memory.heap,renderer,queue);
+              else if(mode=="progressive_state") progressive_state(memory.heap,renderer,queue);
+              else if(mode=="progressive_failure") progressive_failure(memory.heap,renderer,queue);
+              else if(mode=="progressive_lost") progressive_lost(memory.heap,view);
+              else if(mode=="progressive_budget") progressive_budget(memory.heap,renderer,queue);
+              else if(mode=="analytic") analytic(memory.heap,renderer,queue);
               else if(mode=="statistics") statistics(memory.heap,renderer,queue);
               else if(mode=="images") images(memory.heap,renderer,queue);
               else if(mode=="lifetime") lifetime(memory.heap,renderer,queue,view);

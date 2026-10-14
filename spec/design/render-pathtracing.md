@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-14T17:37:19+08:00"
+updated_at: "2026-10-14T18:27:05+08:00"
 status: accepted
 ---
 
@@ -11,7 +11,40 @@ status: accepted
 
 用户选择先建立正确性参考，再接入编辑器和截图。M16 交付静态三角形场景的渐进式表面路径追踪：
 CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、确定性样本编号、每视图累积、
-后台交互预览和固定 spp 截图。M16.1、M16.6与M16.7.1/2实施契约见下文；其余拟议接口/额度仍是规划，阶段状态见[Roadmap](../roadmap.md)。
+后台交互预览和固定 spp 截图。M16.1、M16.6、M16.7.1/2和M16.8实施契约见下文；编辑器与capture集成仍是规划，阶段状态见[Roadmap](../roadmap.md)。
+
+## M16.8 渐进会话实施契约
+
+PathTraceRenderer增加configure_view/submit_batch/poll/reset/release_view/status/completed_frame，
+队列及会话由单一外部串行所有者访问。两个稳定uint64 view_id槽，整个renderer最多一个逻辑在途批次；
+批次由多个矩形tile串行提交，poll只收集当前tile，下一次submit_batch推进下一tile，不隐式等待。
+只有最后tile完成且诊断有效、generation匹配才交换completed并推进completed_spp。
+批次首个及当前tile的stop_token均保留至收集；poll不申请命令槽，满队列时仍可回收。
+取消、重置、释放或任意tile失败均丢弃整个candidate，下一批从旧completed_spp重新开始。
+同输入configure不重置；相机/尺寸、冻结GPU场景身份（重新prepare也保守重置，含资产版本）、积分设置、session/gesture generation变更重置。
+frame序号、批量/目标、暂停和曝光（有限且绝对值≤32）属于调度/显示设置，不进入积分键；曝光仅在消费者显示阶段应用。
+配置校验及必要分配在配置提交前完成，submit失败保留旧完成帧，迟到票据只回收。
+
+GPU完整历史每像素128字节：线性mean/second moment/首样本命中及法线，加sum/correction/moment sum/correction；
+整数count存于sum.w位模式。每像素唯一写者逐sample继续Kahan求和，不平均批次均值。
+shader以全局xy/pixel及连续sample采样，tile仅改变调度，不改变相机射线或计数式随机维度。
+completed_frame返回拥有型只读GPU缓冲，显示无需读回；显式read_linear才提交全帧读回。
+poll仅读4字节tile错误标志，非有限/负辐射或历史样本计数不一致均拒绝发布。
+
+冻结尺寸1..2048、batch 1..16、target 1..65536，tile边长1..64（默认64）；
+按max_rays及保守visibility上界自动缩小tile，每次提交不超过2^24射线；
+整个目标的保守工作量不超过2^32，超限拒绝，无静默降低spp/反弹/尺寸。
+CPU参考仍限制64²，GPU不以CPU暴力三角测试额度限制硬件遍历。
+renderer自有VMA分配默认上限1GiB，可在create时收紧，至少1MiB；
+资源工厂共享额度按驱动memory requirements先预留、分配失败回滚，实际owner销毁后释放；
+几何、纹理、AS storage/scratch、SBT、候选/历史、读回、在途及外部旧帧全部计入。
+统计报告额度当前/峰值及host-visible/device-local分配字节；VMA全设备block/allocation统计单列，
+共享池block无法归属单个renderer，driver管线/descriptor隐藏分配不纳入可观测额度。
+最大尺寸不是保证任意场景/双视图/外部保留帧均能同时装入额度；准入失败保留已完成结果。
+
+验证：不等批次/非整除tile与一次GPU及CPU参考比较、双视图/重置矩阵、重复/降目标/曝光、
+迟到/取消/后续tile提交故障、错误配置保留、工作额度及实际资源owner寿命与预算回收，required RT/sync validation。
+Editor、tone显示集成和文件capture分别属于M16.9/M16.10。
 
 ## M16.7.2 metallic-roughness GGX实施契约
 
@@ -52,7 +85,7 @@ min_filter及mip模式保留来源但在本阶段不参与采样。nearest取flo
 双线性插值，RGB每个texel先按IEC sRGB解码，alpha不解码；repeat/clamp/mirrored_repeat按各轴独立处理。
 GPU上传前解码为RGBA32F线性纹理，再用硬件过滤；这与sRGB先解码再过滤的数学语义一致。
 实测本机RGBA8-sRGB硬件解码误差超过冻结nearest门槛，故保留门槛并采用显式标准解码，
-不将近似误差吞入容差。GPU图像与上传各最多256MiB，CPU冻结仍为64MiB RGBA8；M16.8再统一显存准入。
+不将近似误差吞入容差。GPU图像与上传各最多256MiB，CPU冻结仍为64MiB RGBA8；M16.8已统一显存准入。
 UV准入绝对值不超过1e6，避免整数转换溢出；CPU使用double作为数值参考，GPU使用float。
 alpha乘factor后以float比较，严格小于cutoff才剔除，等于保留；opaque忽略alpha。
 radiance和visibility使用同一mask/背面规则。mask发光面light PDF为0，BSDF命中权重1，
@@ -100,7 +133,7 @@ GPU使用float误差尺度偏移并逐分量向外取下一可表示值，有限
 空场景由compute写常量环境和诊断，仍使用Graph写入/读回与提交契约。
 
 首版沿用≤64×64图像/≤4096条固定射线、4096三角形、1..65536样本、1..32反弹和CPU冻结工作预检，
-先建立数值参考；M16.8再扩展分块、交互批次与显存额度。GPU几何、表、输出均在这些上限内有界，
+这些无历史接口继续用于数值参考；M16.8的渐进接口扩展分块、交互批次与显存额度。GPU几何、表、输出均在这些上限内有界，
 不将CPU triangle_tests计数冒充硬件遍历统计。结果包含线性RGB、二阶矩、实际trace射线数、
 首个样本的主射线命中距离/重心/法线/来源，以及scene/revision/fingerprint、camera/settings/sample区间。
 路径shader显式启用precise_floating_point编译，保护补偿求和不被浮点重结合消除；输出按像素使用补偿求和；NaN/Inf/负辐亮度及非法诊断在读回时拒绝整帧。
@@ -154,7 +187,7 @@ rr_start=3，0表示诊断用关闭RR，其余须≤max_bounces；存活率clamp
 每请求上界`pixels*samples*(2*max_bounces+1)`条射线，硬上限2^24；
 再乘max(1,triangle_count)的候选求交工作硬上限2^29，均可下调且在分配/计算前检查溢出。
 每样本/反弹检查stop_token，取消返回独立context，不发布部分图像/均值；超额不自动降质。
-NaN/Inf结果视为错误，禁用firefly clamp。此处是CPU参考额度，GPU批次/显存额度仍待M16.8落实。
+NaN/Inf结果视为错误，禁用firefly clamp。此处是CPU参考额度，GPU渐进批次/显存额度见M16.8实施契约。
 
 冻结验收：解析量绝对误差≤1e-4；8个独立seed均值误差≤2%且落在5倍标准误差加1e-4内；
 面积灯独立二维数值积分收敛≤0.1%，高样本参考N/4N集合均值差≤0.5%。
@@ -184,7 +217,7 @@ M16 不复用其 screen-space 合成到路径追踪结果，也不把太阳、�
 | 模块/入口 | 依赖和职责 |
 | --- | --- |
 | `engine/render/pathtracing` 的 `dk_render_pathtracing_reference` / `dk::render_pathtracing_reference` | 已实现纯 CPU：PUBLIC render_data、asset_data，通过其传递依赖Math/Memory；独立求交、输入转换、采样、Lambert/GGX、参考积分，不链接Geometry实现/Vulkan/Slang |
-| 同目录 `dk_render_pathtracing` / `dk::render_pathtracing` | PUBLIC render_pathtracing_reference、graphics_device；PRIVATE graphics_graph、graphics_shaders；不可变GPU场景、无历史Lambert/GGX积分、异步帧与HDR诊断 |
+| 同目录 `dk_render_pathtracing` / `dk::render_pathtracing` | PUBLIC render_pathtracing_reference、graphics_device；PRIVATE graphics_graph、graphics_shaders；不可变GPU场景、Lambert/GGX积分、双视图渐进会话、异步帧与HDR诊断 |
 | RenderDisk / CaptureService / Editor 装配（规划） | 读取/冻结资产并调用 renderer；Render 不反向依赖 Framework/Editor；公开路径不暴露其类型 |
 
 reference开关默认OFF，已支持无GPU依赖构建与测试，使用见[CPU参考指南](../guides/pathtracing-reference.md)。
@@ -193,7 +226,7 @@ GPU开关DK_BUILD_RENDER_PATHTRACING独立默认OFF，启用时检查Device/Shad
 M16.6从冻结PathTraceScene建立自己的世界顶点、材质/光源表及单BLAS/TLAS，尚不复用资产BLAS。
 M16.7.1纹理独立上传为线性RGBA32F，来源保留CPU资产身份/采样器/内容；重复GPU载荷计入额度，不宣称零拷贝。
 
-## 数据与拟议接口
+## 数据与接口
 
 `PathTraceScene` 是场景 revision、CPU 资产内容摘要、稳定实体/primitive 映射及灯光表的不可变版本；
 从已拥有输入构造，不在积分器中读可变 Scene 或重新访问磁盘。实例保留完整世界仿射矩阵，不重新分解 TRS。
@@ -201,13 +234,13 @@ M16.7.1纹理独立上传为线性RGBA32F，来源保留CPU资产身份/采样�
 RT 场景键须含资产内容/缓存身份与代次，不能只用 Scene revision 或 AssetId；浮点矩阵需验证有限和可逆。
 
 `PathTraceSettings` 为会话/请求设置，首轮不写进 Scene，不增加 Scene 格式版本或 Undo 操作。
-包含 integrator/model/sampler 版本、seed、max_bounces、rr_start、目标 spp、每批 spp、预算、
-environment_mode/constant_rgb/sun_mode、material_mode、可选诊断；曝光/tone 是独立显示设置。
-默认值候选：max_bounces=8、rr_start=3、交互每批 1 spp、capture 目标 256 spp；
-允许范围候选为 max_bounces 1..32、目标 spp 1..65536，rr_start 不超过 max_bounces。
+PathTraceSettings包含 model/sampler 版本、seed、max_bounces、rr_start、预算、
+constant_rgb/sun_mode；material_mode随scene冻结，目标/批次/tile/session/gesture/暂停/曝光属于PathTraceSchedule。
+当前默认max_bounces=8、rr_start=3、每批1 spp、目标256 spp；capture服务尚未接入。
+允许范围为 max_bounces 1..32、目标 spp 1..65536，rr_start 不超过 max_bounces。
 工作预算不能仅看这些单项上限；所有乘积预检，总路径段/候选 GPU 内存超额则入队/提交前拒绝。
 
-| 拟议操作 | 成功与失败语义 |
+| 操作 | 成功与失败语义 |
 | --- | --- |
 | `prepare_scene` | CPU 先解析/验证/预算，GPU 构建候选；返回拥有型版本与提交票据，失败保留旧版本 |
 | `submit_batch(view_id, view, scene, settings)` | 从该视图已完成样本数分配连续区间，返回 pending 帧；不等待、不推进 completed_spp |
@@ -215,8 +248,8 @@ environment_mode/constant_rgb/sun_mode、material_mode、可选诊断；曝光/t
 | `reset` / `release_view` | reset 使旧代不再可发布，release 停止新工作；已提交资源仍待完成回收 |
 | `read_linear` / 显示输出 | 只读取已完成、尺寸匹配的帧；未完成/失败不得部分覆盖调用者输出 |
 
-此表描述后续渐进式会话职责，不是已实现C++签名。M16.6正式入口为PathTraceRenderer的
-prepare_scene/submit_view/submit_rays及PathTraceFrame::read，当前无历史与视图槽；细节见上文实施契约。
+此表概括当前职责，完整C++签名见[PathTraceRenderer.hpp](../../engine/render/pathtracing/include/dk/render/PathTraceRenderer.hpp)。
+configure_view先接受配置，submit_batch/poll由调用者串行驱动；无历史submit_view/submit_rays与PathTraceFrame::read继续可用。
 
 ## 参考积分、几何和材质
 
@@ -298,7 +331,7 @@ integrator/material/sampler/shader 版本、seed、灯光/环境参数、max_bou
 | 同输入重复请求 | 不重复提交同一区间；返回当前 completed/pending 状态 |
 | 失败/取消/退出 | 不推进样本数、不发布候选；停止新提交，按 GPU 票据安全回收 |
 
-每视图最多一个 pending 批次，renderer 同时最多一份执行中的 GPU 批次；首轮最多两个视图历史槽，
+每视图最多一个 pending 批次，renderer同时最多一份执行中的渐进GPU批次；首轮最多两个视图历史槽，
 另限制上一完成显示帧和当前候选，完成通知采用有界槽，不能让快速拖动积累无限任务。
 CPU 接受新配置只发布新 generation；GPU 完成后 owner 复核 generation/key/取消再交换 completed。
 该交换和截图文件提交是不同提交点，均须在所需分配完成后发生；无变化配置不重建。
@@ -306,16 +339,17 @@ CPU 接受新配置只发布新 generation；GPU 完成后 owner 复核 generati
 
 ## 预算、取消与交互
 
-初始候选限制：GPU 图像≤2048²，CPU 参考≤64²；每批 1..16 spp，但默认 1；
+M16.8冻结限制：GPU渐进图像≤2048²，CPU 参考≤64²；每批 1..16 spp，但默认 1；
 单提交路径段上界按像素数×batch_spp×max_bounces，并保守增加每次表面的一条 visibility ray。
-默认单提交候选上限 2^24 条射线，总 capture 上界候选 2^32；超限先分 tile/批次或拒绝，
+默认单提交上限2^24条射线，整个目标上限2^32；超限先分 tile/批次或拒绝，
 不自动降低 spp、反弹数或尺寸。单条 trace 的实际耗时仍与几何/any-hit 数有关，不能将计数预算视为毫秒硬上限。
-固定 descriptor 数组候选容量 64，受实际设备 limits 限制，超出资产须明确拒绝，不截断纹理。
+固定descriptor数组容量64，受实际设备 limits 限制，超出资产须明确拒绝，不截断纹理。
 
-首轮 renderer 自有 GPU 分配预算候选 1 GiB，含几何复制、AS、scratch、纹理、累积/候选/显示和在途旧代；
-同时记录 VMA allocation/block、host-visible/device-local，CPU 输入单独沿用现有资产/任务额度。
-Driver 隐藏开销另列不可观测范围。预算是准入上限，不是已测占用或性能达标；M16.1 冻结工作额度，
-M16.8 在实际分配估算后冻结显存额度，有必要调整时保留原候选与理由。
+renderer自有GPU分配预算冻结为1GiB，包含几何复制、AS、scratch、纹理、历史/候选/读回及在途旧代。
+每像素历史128字节，单张2048²为512MiB；新旧两张已占1GiB，故此尺寸续批需明确报告额度不足，
+不能保证所有维度、场景和外部持有组合均可用。显示集成尚无独立资源，后续必须沿同一额度。
+记录owned allocation当前/峰值及host-visible/device-local（可重叠）；全设备VMA allocation/block单列。
+CPU输入沿资产/Memory额度；driver隐藏pipeline/descriptor开销不可观测。额度是准入上限，未证明交互性能。
 
 预览复用 Editor 既有 worker/owner 交接模式：owner 不做长编译/AS build/等待；worker 串行拥有队列。
 编辑器设备创建可请求 RT if_available，后台使用同逻辑设备的已启用能力；切模式前检查 enabled，

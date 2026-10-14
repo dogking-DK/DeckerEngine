@@ -1,11 +1,19 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-14T13:58:31+08:00"
+updated_at: "2026-10-14T18:13:17+08:00"
 status: accepted
 ---
 
 # Vulkan 资源与提交生命周期
+
+## 共享分配额度
+
+ResourceFactory::with_budget绑定一个AllocationBudget；默认工厂无额外限制。Buffer/Image创建根据
+驱动memory requirements在VMA分配前预留字节，失败回滚，ResourceState最终销毁归还；
+复制工厂、AS storage/instances、SBT和AS build scratch继承同一额度。外部所有者和pending保活均继续计费。
+额度不包含driver隐藏的pipeline/descriptor开销；池block是全设备统计，不能视作单个工厂独占。
+队列和额度沿既有外部串行约定。无额度工厂行为保持原样。
 
 ## M12.2 已完成图像交接
 

@@ -50,7 +50,7 @@ cmake --build --preset windows-debug --target dk_run
 | 环境CPU参数、太阳方向、场景迁移与撤销 | [环境命令](spec/commands/environment.md)、[可执行示例](examples/automation/environment.jsonl) |
 | 大气积分/LUT、离屏天空与Lambert日光样例 | [大气指南](spec/guides/atmosphere.md) |
 | CPU路径追踪参考、Lambert/GGX/MIS/RR与线性数值报告 | [CPU路径追踪指南](spec/guides/pathtracing-reference.md) |
-| Vulkan RT无历史Lambert/GGX、异步帧与HDR/命中诊断 | [GPU路径追踪指南](spec/guides/pathtracing-gpu.md) |
+| Vulkan RT Lambert/GGX、每视图渐进累积、异步帧与额度 | [GPU路径追踪指南](spec/guides/pathtracing-gpu.md) |
 | 场景/视图、GPU 资产、磁盘场景渲染与读回 | [Render 指南](spec/guides/render.md) |
 | SDL3 窗口三角形、缩放/最小化与交换链恢复 | [呈现指南](spec/guides/presentation.md) |
 | Core、数学、IO、Scene 与 CPU 示例 | [Foundation/Scene 指南](spec/guides/foundation.md) |

@@ -139,24 +139,19 @@ float3 tracePath(RayDesc ray,uint pixel,uint sample,inout uint rays,out float4 f
     }
     return radiance;
 }
-void accumulate(inout float3 sum,inout float3 correction,float3 value) {
-    precise float3 adjusted=value-correction;
-    precise float3 next=sum+adjusted;
-    correction=(next-sum)-adjusted; sum=next;
-}
+#include "path-accumulate.slang"
 [shader("raygeneration")]
 void pathMain() {
-    uint2 coordinate=DispatchRaysIndex().xy; uint4 image=asuint(parameters[0]); uint pixel=coordinate.y*image.x+coordinate.x;
-    float3 sum=0,moment=0,correction=0,momentCorrection=0; uint rays=0; float invalid=0;
-    float4 diagnostic=float4(-1,0,0,0),normal=0;
+    uint2 coordinate=DispatchRaysIndex().xy; uint4 image=asuint(parameters[0]),tile=asuint(parameters[11]);
+    uint localPixel=coordinate.y*image.x+coordinate.x;
+    if(tile.w!=0) coordinate+=tile.xy;
+    uint pixel=tile.w!=0 ? coordinate.y*tile.z+coordinate.x : localPixel;
+    Accumulation a=beginAccumulation(pixel);
     for(uint sample=image.z;sample<image.z+image.w;++sample) {
-        float4 hit,n; float3 value=tracePath(primaryRay(coordinate,pixel,sample),pixel+asuint(parameters[10]).x,sample,rays,hit,n);
-        if(!all(isfinite(value)) || any(value<0)) invalid=1;
-        accumulate(sum,correction,value); accumulate(moment,momentCorrection,value*value);
-        if(sample==image.z) { diagnostic=hit; normal=n; }
+        float4 hit,n; float3 value=tracePath(primaryRay(coordinate,pixel,sample),pixel+asuint(parameters[10]).x,sample,a.rays,hit,n);
+        addSample(a,value,sample,hit,n);
     }
-    output[pixel*4]=float4(sum/image.w,float(rays)); output[pixel*4+1]=float4(moment/image.w,invalid);
-    output[pixel*4+2]=diagnostic; output[pixel*4+3]=normal;
+    finishAccumulation(a,pixel,localPixel);
 }
 [shader("miss")]
 void pathMiss(inout PathPayload payload) { payload.found=0; }

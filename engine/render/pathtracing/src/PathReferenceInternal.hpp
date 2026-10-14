@@ -51,7 +51,8 @@ inline Error path_cancelled() { return {ErrorCode::invalid_state, "CPU path trac
 inline double luminance(const Vec3d& c) { return c.dot(Vec3d{.2126,.7152,.0722}); }
 [[nodiscard]] Result<void> validate_path_ray(const PathTraceRay&);
 [[nodiscard]] Result<void> validate_path_work(const PathSceneState&, std::uint64_t pixels, const PathTraceSettings&, PathTraceSamples);
-[[nodiscard]] Result<void> validate_path_view(const PathSceneState&, const RenderView&);
+[[nodiscard]] Result<void> validate_path_view(const PathSceneState&, const RenderView&, std::uint32_t maximum_extent = 64);
+[[nodiscard]] Result<PathTraceRay> gpu_path_camera_ray(const RenderView&, std::uint32_t, std::uint32_t, const Vec2d&);
 [[nodiscard]] std::optional<PathTraceHit> nearest_path(const PathSceneState&, const PathTraceRay&, PathTraceStatistics&);
 [[nodiscard]] Vec3d offset_path_origin(const PathTriangle&, const Vec3d& position, const Vec3d& direction);
 [[nodiscard]] Vec4d path_base_color(const PathSceneState&,const PathTriangle&,const Vec3d& barycentric);

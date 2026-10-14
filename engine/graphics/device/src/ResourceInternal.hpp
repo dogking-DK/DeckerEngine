@@ -27,6 +27,23 @@ struct ResourceState {
     ResourceState(std::shared_ptr<DeviceLifetime> value, memory::ResourceHandle resource)
         : owner(std::move(value)), states(memory::Allocator<AccessState>{resource}) {}
     std::shared_ptr<DeviceLifetime> owner;
+    std::shared_ptr<AllocationBudget> budget;
+    std::uint64_t charge = 0;
+    VkMemoryPropertyFlags memory_flags = 0;
+    Result<void> reserve(const std::shared_ptr<AllocationBudget>& value, std::uint64_t bytes) {
+        if (!value) return {};
+        auto& stats=value->stats_;
+        if (bytes>stats.limit-stats.current)
+            return std::unexpected(Error{ErrorCode::invalid_argument,"GPU allocation budget exceeded"});
+        budget=value; charge=bytes; stats.current+=bytes; ++stats.allocations;
+        stats.peak=std::max(stats.peak,stats.current); return {};
+    }
+    void allocated() {
+        if (!budget) return;
+        vmaGetAllocationMemoryProperties(owner->device.allocator(),allocation,&memory_flags);
+        if (memory_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) budget->stats_.host_visible+=charge;
+        if (memory_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) budget->stats_.device_local+=charge;
+    }
     VkBuffer buffer = VK_NULL_HANDLE;
     VkImage image = VK_NULL_HANDLE;
     VmaAllocation allocation = VK_NULL_HANDLE;
@@ -43,6 +60,11 @@ struct ResourceState {
     {
         if (buffer) vmaDestroyBuffer(owner->device.allocator(), buffer, allocation);
         if (image && !external_owner && !imported) vmaDestroyImage(owner->device.allocator(), image, allocation);
+        if (budget) {
+            budget->stats_.current-=charge; --budget->stats_.allocations;
+            if (memory_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) budget->stats_.host_visible-=charge;
+            if (memory_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) budget->stats_.device_local-=charge;
+        }
     }
 };
 struct ImageTransferState {

@@ -14,13 +14,13 @@ Result<Buffer> ResourceFactory::create_buffer(const BufferDesc& description) con
 {
     auto queue = detail::factory_queue(queue_);
     if (!queue) return std::unexpected(queue.error());
-    return SubmissionQueue{*queue}.create_buffer(description);
+    return SubmissionQueue{*queue}.create_buffer(description,budget_);
 }
 Result<Image> ResourceFactory::create_image(const ImageDesc& description) const
 {
     auto queue = detail::factory_queue(queue_);
     if (!queue) return std::unexpected(queue.error());
-    return SubmissionQueue{*queue}.create_image(description);
+    return SubmissionQueue{*queue}.create_image(description,budget_);
 }
 Result<ImageView> ResourceFactory::create_view(const Image& image, const ImageViewDesc& description) const
 {

@@ -238,7 +238,8 @@ Result<Image> SubmissionQueue::import_image(ImageTransfer&& transfer) {
     alias->image = source->image;
     return Image{std::move(alias)};
 }
-Result<Buffer> SubmissionQueue::create_buffer(const BufferDesc& description)
+Result<Buffer> SubmissionQueue::create_buffer(const BufferDesc& description) { return create_buffer(description,{}); }
+Result<Buffer> SubmissionQueue::create_buffer(const BufferDesc& description,const std::shared_ptr<AllocationBudget>& budget)
 {
     DK_PROFILE_ZONE("graphics.buffer.create");
     if (auto result = state_->accepting(); !result) return std::unexpected(result.error());
@@ -254,15 +255,23 @@ Result<Buffer> SubmissionQueue::create_buffer(const BufferDesc& description)
     allocation.usage = description.memory == BufferMemory::device ? VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE : VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
     if (description.memory == BufferMemory::upload) allocation.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     if (description.memory == BufferMemory::readback) allocation.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+    if (budget) {
+        const VkDeviceBufferMemoryRequirements request{VK_STRUCTURE_TYPE_DEVICE_BUFFER_MEMORY_REQUIREMENTS,nullptr,reinterpret_cast<const VkBufferCreateInfo*>(&info)};
+        VkMemoryRequirements2 required{VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
+        device().logical_device().getDispatcher()->vkGetDeviceBufferMemoryRequirements(device().native_device(),&request,&required);
+        if(auto reserved=resource->reserve(budget,required.memoryRequirements.size);!reserved) return std::unexpected(reserved.error());
+    }
     const auto result = vmaCreateBuffer(device().allocator(), reinterpret_cast<const VkBufferCreateInfo*>(&info), &allocation,
         &resource->buffer, &resource->allocation, nullptr);
     if (result != VK_SUCCESS) {
         resource->buffer = VK_NULL_HANDLE;
         return std::unexpected(state_->failure("vmaCreateBuffer", result));
     }
+    resource->allocated();
     return Buffer{std::move(resource)};
 }
-Result<Image> SubmissionQueue::create_image(const ImageDesc& description)
+Result<Image> SubmissionQueue::create_image(const ImageDesc& description) { return create_image(description,{}); }
+Result<Image> SubmissionQueue::create_image(const ImageDesc& description,const std::shared_ptr<AllocationBudget>& budget)
 {
     DK_PROFILE_ZONE("graphics.image.create");
     if (auto result = state_->accepting(); !result) return std::unexpected(result.error());
@@ -286,12 +295,19 @@ Result<Image> SubmissionQueue::create_image(const ImageDesc& description)
         description.mip_levels, description.array_layers, vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal, description.usage, vk::SharingMode::eExclusive};
     VmaAllocationCreateInfo allocation{};
     allocation.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    if (budget) {
+        const VkDeviceImageMemoryRequirements request{VK_STRUCTURE_TYPE_DEVICE_IMAGE_MEMORY_REQUIREMENTS,nullptr,reinterpret_cast<const VkImageCreateInfo*>(&info),VK_IMAGE_ASPECT_NONE};
+        VkMemoryRequirements2 required{VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
+        device().logical_device().getDispatcher()->vkGetDeviceImageMemoryRequirements(device().native_device(),&request,&required);
+        if(auto reserved=resource->reserve(budget,required.memoryRequirements.size);!reserved) return std::unexpected(reserved.error());
+    }
     const auto result = vmaCreateImage(device().allocator(), reinterpret_cast<const VkImageCreateInfo*>(&info), &allocation,
         &resource->image, &resource->allocation, nullptr);
     if (result != VK_SUCCESS) {
         resource->image = VK_NULL_HANDLE;
         return std::unexpected(state_->failure("vmaCreateImage", result));
     }
+    resource->allocated();
     return Image{std::move(resource)};
 }
 Result<CommandBatch> SubmissionQueue::begin()

@@ -158,15 +158,15 @@ struct Camera {
         return {origin,direction,(near_world-origin).dot(direction),(far_world-origin).dot(direction)};
     }
 };
-Result<Camera> camera_for(const RenderView& view) {
+Result<Camera> camera_for(const RenderView& view,std::uint32_t maximum_extent=64) {
     const auto& d=view.description(); const Mat4d& p=d.projection;
     const Mat3d rotation=d.camera_world.matrix().block<3,3>(0,0);
-    if (!d.width || !d.height || d.width>64 || d.height>64 ||
+    if (!d.width || !d.height || d.width>maximum_extent || d.height>maximum_extent ||
         !(rotation.transpose()*rotation).isApprox(Mat3d::Identity(),1e-10) || std::abs(rotation.determinant()-1)>1e-10 ||
         p(3,0)!=0 || p(3,1)!=0 || p(3,2)!=-1 || p(3,3)!=0 || p(0,0)<=0 || p(1,1)==0 ||
         p(0,1)!=0 || p(0,3)!=0 || p(1,0)!=0 || p(1,3)!=0 || p(2,0)!=0 || p(2,1)!=0 ||
         p(2,2)>=-1 || p(2,3)>=0)
-        return std::unexpected(path_invalid("Reference requires <=64x64 rigid finite forward-Z-depth perspective camera"));
+        return std::unexpected(path_invalid("Path camera extent or rigid finite forward-Z-depth perspective is invalid"));
     Camera camera{p.inverse(),d.camera_world.matrix(),d.width,d.height};
     for (const Vec2d corner: {Vec2d{0,0},Vec2d{1,1}}) {
         auto ray=camera.ray(corner.x()==0 ? 0 : d.width-1,corner.y()==0 ? 0 : d.height-1,corner);
@@ -187,9 +187,9 @@ bool same_source(const RenderScene& a,const RenderScene& b) {
 Result<void> detail::validate_path_work(const PathSceneState& scene,std::uint64_t pixels,const PathTraceSettings& settings,PathTraceSamples samples) {
     return work_valid(scene,pixels,settings,samples);
 }
-Result<void> detail::validate_path_view(const PathSceneState& scene,const RenderView& view) {
+Result<void> detail::validate_path_view(const PathSceneState& scene,const RenderView& view,std::uint32_t maximum_extent) {
     if (!same_source(scene.source,view.scene())) return std::unexpected(path_invalid("Path scene/view snapshot mismatch"));
-    auto camera=camera_for(view); if (!camera) return std::unexpected(camera.error()); return {};
+    auto camera=camera_for(view,maximum_extent); if (!camera) return std::unexpected(camera.error()); return {};
 }
 double path_trace_sample(std::uint64_t seed,std::uint32_t pixel,std::uint32_t sample,std::uint32_t bounce,std::uint32_t dimension) noexcept {
     auto h=mix(static_cast<std::uint32_t>(seed)^0xa511e9b3u);
@@ -202,6 +202,11 @@ Result<PathTraceRay> path_trace_camera_ray(const RenderView& view,std::uint32_t 
         return std::unexpected(path_invalid("Invalid reference camera pixel/sample"));
     const auto ray=camera->ray(x,y,subpixel);
     if (auto valid=validate_path_ray(ray);!valid) return std::unexpected(valid.error());
+    return ray;
+}
+Result<PathTraceRay> detail::gpu_path_camera_ray(const RenderView& view,std::uint32_t x,std::uint32_t y,const Vec2d& subpixel) {
+    auto camera=camera_for(view,2048); if(!camera) return std::unexpected(camera.error());
+    auto ray=camera->ray(x,y,subpixel); if(auto valid=validate_path_ray(ray);!valid) return std::unexpected(valid.error());
     return ray;
 }
 Result<PathTraceEstimate> estimate_path_reference(const PathTraceScene& scene,const PathTraceRay& ray,const PathTraceSettings& s,

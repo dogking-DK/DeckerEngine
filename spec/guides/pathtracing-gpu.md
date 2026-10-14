@@ -1,13 +1,13 @@
 ---
 created_at: "2026-10-14T14:37:00+08:00"
-updated_at: "2026-10-14T17:37:19+08:00"
+updated_at: "2026-10-14T18:27:05+08:00"
 ---
 
-# GPU无历史Lambert/GGX路径追踪
+# GPU Lambert/GGX与渐进路径追踪
 
 [返回项目入口](../../README.md)。[M16.6设计](../design/render-pathtracing.md#m166-gpu无历史lambert实施契约)
 提供硬件三角形求交、NEE/MIS/RR和拥有型HDR结果，使用与[CPU参考](pathtracing-reference.md)一致的冻结输入与采样模型。
-当前为≤64×64正确性参考，支持Lambert/GGX、baseColor纹理/alpha-mask；历史累积、编辑器和capture命令按Roadmap后续阶段接入。
+提供≤64×64无历史参考和≤2048×2048渐进接口，支持Lambert/GGX、baseColor纹理/alpha-mask；编辑器和capture命令按Roadmap后续阶段接入。
 
 ## 构建与验证
 
@@ -66,8 +66,46 @@ if (queue.wait(frame.submission()).value()) {
 
 固定射线数值对照使用`submit_rays(queue, scene, rays, settings, samples, first_pixel)`。
 射线归一化、坐标和距离单位米，最多4096条；first_pixel指定计数采样的起始像素编号，不能溢出。
-所有请求显式给出连续样本区间，不跨调用积累历史或维护completed_spp。失败/取消由调用者保留上一成功scene/image。
+无历史接口的请求显式给出连续样本区间；渐进接口由renderer维护completed_spp。失败/取消由调用者保留上一成功scene/image。
 stop_token只在CPU阶段、提交前及读取发布前检查，已提交GPU不可硬抢占。
+
+## 每视图渐进会话
+
+先用configure_view提交完整输入，随后由串行worker事件循环驱动submit_batch和poll。
+poll只读取当前tile的4字节状态，不等待、不提交下一tile；返回true表示整个批次成功发布。
+没有新输入时不必重复configure，同输入重复配置也不会重置。两个view_id各自累积，renderer最多一个渐进批次。
+
+```cpp
+dk::render::PathTraceSchedule schedule;
+schedule.target_spp = 64;
+schedule.batch_spp = 4;
+schedule.tile_edge = 32;
+renderer.configure_view(queue, 1, scene, view, settings, schedule).value();
+// 每次worker调度调用；false可能表示仍在途、暂停或已经达到目标。
+renderer.poll(queue).value();
+renderer.submit_batch(queue, 1).value();
+auto progress = renderer.status(1).value();
+auto completed = renderer.completed_frame(1);
+if (completed) {
+    // 只读GPU缓冲，8个float4/像素；曝光在消费者显示阶段应用。
+    const auto* linear = completed.linear_buffer();
+    // 仅需要CPU数值时调用completed.read_linear(queue)，返回异步PathTraceFrame。
+}
+```
+
+target为1..65536，batch为1..16，tile边长1..64；max_rays使tile进一步缩小，目标总工作量≤2^32。
+已完成样本可能大于降低后的目标，此时暂停新提交并报告实际计数。暂停不取消当前tile，恢复后继续当前批次。
+曝光/批量/tile/目标/帧序号不重置；场景版本、相机/投影/尺寸、积分参数、session/gesture变化重置。
+资产或手势更新应先冻结并prepare新场景，再配置匹配的RenderView，不能复用旧资产快照。
+reset清空当前完成历史；cancel丢弃在途批次但保留已完成历史；release_view释放槽。
+这些操作不硬抢占GPU，调用者仍须poll回收迟到票据；不能将旧代结果发布到重用的view_id。
+提交或tile诊断失败保留已完成图像；重试从原completed_spp开始。device_lost终止会话，不自动重试。
+
+create末参数memory_limit默认1GiB，可收紧到至少1MiB；memory_stats报告自有分配和全设备VMA池统计。
+预算跟随GPU资源owner，在途工作、外部保留的completed及显式读回也占额度；丢弃不用的帧后可重试。
+历史128字节/像素，2048²单张为512MiB，两张加场景超过默认额度，因此尺寸上限不保证所有组合可运行。
+驱动隐藏分配不计入额度；host-visible与device-local可能重叠，VMA block是全设备共享池。
+本阶段没有tone显示或Editor集成，GPU缓冲入口供后续消费者直接读取，不要求每批全帧CPU读回。
 
 ## 线性结果与诊断
 
@@ -78,9 +116,9 @@ stop_token只在CPU阶段、提交前及读取发布前检查，已提交GPU不�
   空场景compute的硬件射线数为0；硬件三角遍历计数不可得，triangle_tests为0而非测得0次遍历。
 - NaN/Inf、负辐亮度和非法诊断拒绝整帧。指纹仅作稳定诊断摘要，不是安全校验或缓存相等证明。
 
-图像≤64×64、场景≤4096三角形、样本区间位于[0,65536)、反弹1..32，沿用CPU工作上界预检，超额不自动降质。
+无历史接口图像≤64×64、场景≤4096三角形、样本区间位于[0,65536)、反弹1..32，沿用CPU工作上界预检，超额不自动降质。
 太阳可显式选择冻结Scene太阳，环境为常量RGB；空气/云启用时必须显式surface_only，未实现介质积分。
-BLAS从世界顶点合并构建，尚无资产BLAS复用、UPDATE/refit、跨队列AS或渐进会话；GPU浮点与CPU双精度不承诺逐位相同。
+BLAS从世界顶点合并构建，尚无资产BLAS复用、UPDATE/refit、跨队列AS；GPU浮点与CPU双精度不承诺逐位相同。
 
 ## 可执行验收与报告
 
@@ -90,6 +128,8 @@ CPU oracle使用独立双精度暴力求交，面积灯再用独立二维积分�
 新增texture_numeric/mask/lifetime/disabled/allocations，以及启用Assets时的texture_assets组；
 覆盖64张发散访问、过滤/UV/wrap、双面/mask发光、能力拒绝、失败寿命，以及glTF导入/产物重载到GPU。
 ggx_numeric/statistics/indirect/lifetime验证材质端点、白炉/面积灯、多次反弹、MIS/RR及纹理组合与在途寿命。
+progressive_images/state/failure/budget/lost验证分块/65536spp一致性、重置矩阵、迟到/失败/取消、额度与终端device loss。
+会话实施与实测见[0117](../development/0117-pathtracing-progressive.md)。
 材质实施与实测记录见[0115](../development/0115-pathtracing-textures.md)和[0116](../development/0116-pathtracing-ggx.md)。
 
 images用例在构建目录`tests/integration/pathtrace-hdr.json`写入4×4、seed=42、256spp线性数据。

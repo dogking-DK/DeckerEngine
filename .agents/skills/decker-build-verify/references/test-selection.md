@@ -91,6 +91,7 @@
 | GPU Graph 声明、编译裁剪、生命周期与诊断（无需 GPU） | dk_graph_tests | `^dk\.graph\.graph ` |
 | GPU Graph 同步、执行、导入导出、诊断与失败保护 | dk_graph_probe | `^dk\.graph\.gpu_`（gpu label；77 为跳过） |
 | Graph AS/SBT、upload→build→trace→readback、身份/状态/失败与寿命 | dk_graph_raytracing_probe | `^dk\.graph\.rt_required_validation$`（required RT GPU/validation/sync；缺环境失败） |
+| GPU每视图渐进累积、tile/reset/poll、取消/迟到/设备丢失与工作/资源额度 | dk_pathtracing_probe | `^dk\.pathtracing\.progressive_.*_gpu_required$`（required RT/validation/sync） |
 | GPU Lambert路径追踪、CPU/解析/统计/HDR对照、失败与寿命 | dk_pathtracing_probe | `^dk\.pathtracing\.(analytic\|statistics\|images\|lifetime\|allocations)_gpu_required$`（required RT/validation/sync；缺环境失败） |
 | GPU纹理sRGB/过滤/wrap、64槽发散、alpha-mask/双面、能力拒绝、失败寿命及glTF产物 | dk_pathtracing_probe | `^dk\.pathtracing\.texture_.*_gpu_required$`（required RT/validation/sync；assets组需Assets Runtime/Importers） |
 | GGX端点/白炉/面积灯/MIS/RR、多次反弹与纹理寿命 | dk_pathtracing_reference_tests、dk_pathtracing_probe、dk_shader_tests | `^dk\.pathtracing\.GGX CPU`、`^dk\.pathtracing\.ggx_.*_gpu_required$`；精确浮点产物用`^dk\.shaders\.precise floating` |

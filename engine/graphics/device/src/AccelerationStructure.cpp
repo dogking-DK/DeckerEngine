@@ -288,7 +288,7 @@ Result<void> CommandBatch::prepare_build(const AccelerationStructure& candidate)
     if (target->sizes.scratch) {
         auto capacity = detail::scratch_capacity(target->sizes.scratch, target->sizes.scratch_alignment);
         if (!capacity) return std::unexpected(capacity.error());
-        auto buffer = detail::ObjectAccess::factory(batch).create_buffer({*capacity, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress});
+        auto buffer = detail::ObjectAccess::factory(batch).with_budget(detail::ObjectAccess::state(target->storage)->budget).create_buffer({*capacity, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress});
         if (!buffer) return std::unexpected(buffer.error());
         scratch = std::move(*buffer);
         auto base = scratch.device_address();

@@ -4,7 +4,7 @@
 #include <filesystem>
 
 namespace dk::render {
-namespace detail { struct PathGpuState; struct PathGpuScene; struct PathGpuFrame; struct PathGpuImage; }
+namespace detail { struct PathGpuState; struct PathGpuScene; struct PathGpuFrame; struct PathGpuImage; struct PathGpuCompleted; }
 // Immutable queue-domain scene; CPU source owns provenance and complete world geometry.
 class PathTraceGpuScene final {
 public:
@@ -45,20 +45,66 @@ public:
     [[nodiscard]] Result<std::optional<PathTraceGpuImage>> read(graphics::SubmissionQueue&, std::stop_token = {}) const;
 private:
     friend class PathTraceRenderer;
+    friend class PathTraceCompletedFrame;
     explicit PathTraceFrame(std::shared_ptr<const detail::PathGpuFrame> state) : state_(std::move(state)) {}
     std::shared_ptr<const detail::PathGpuFrame> state_;
 };
-// One queue, externally serialized. No history, implicit waits or mutable completed-frame slot.
+struct PathTraceSchedule {
+    std::uint32_t target_spp = 256, batch_spp = 1, tile_edge = 64;
+    std::uint64_t session = 0, gesture = 0;
+    bool paused = false;
+    double exposure = 0; // Display-only metadata; linear history is unchanged.
+};
+struct PathTraceProgress {
+    std::uint64_t view_id = 0, generation = 0;
+    std::uint32_t completed_spp = 0, submitted_spp = 0, target_spp = 0;
+    std::uint32_t completed_tiles = 0, total_tiles = 0;
+    bool pending = false, paused = false, device_lost = false;
+    double exposure = 0;
+};
+// Immutable completed GPU history. External holders remain charged to the renderer's budget.
+class PathTraceCompletedFrame final {
+public:
+    PathTraceCompletedFrame() = default;
+    [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
+    [[nodiscard]] const PathTraceGpuImageInfo& info() const noexcept;
+    // Eight float4 per pixel: mean, moment, hit, normal, sum/count, correction, moment sum/correction.
+    [[nodiscard]] const graphics::Buffer* linear_buffer() const noexcept;
+    [[nodiscard]] Result<PathTraceFrame> read_linear(graphics::SubmissionQueue&, std::stop_token = {}) const;
+private:
+    friend class PathTraceRenderer;
+    explicit PathTraceCompletedFrame(std::shared_ptr<const detail::PathGpuCompleted> s) : state_(std::move(s)) {}
+    std::shared_ptr<const detail::PathGpuCompleted> state_;
+};
+struct PathTraceMemoryStats {
+    graphics::AllocationBudgetStats owned;
+    std::uint64_t device_allocation_bytes = 0, device_block_bytes = 0;
+};
+// One queue, externally serialized. Two view slots, one progressive batch; no implicit waits.
 class PathTraceRenderer final {
 public:
     PathTraceRenderer() = default;
     [[nodiscard]] static Result<PathTraceRenderer> create(memory::ResourceHandle, graphics::SubmissionQueue&,
-        const std::filesystem::path& shader_directory, std::stop_token = {});
+        const std::filesystem::path& shader_directory, std::stop_token = {},
+        std::uint64_t memory_limit = std::uint64_t{1} << 30);
     [[nodiscard]] Result<PathTraceGpuScene> prepare_scene(graphics::SubmissionQueue&, const PathTraceScene&, std::stop_token = {}) const;
     [[nodiscard]] Result<PathTraceFrame> submit_view(graphics::SubmissionQueue&, const PathTraceGpuScene&, const RenderView&,
         const PathTraceSettings& = {}, PathTraceSamples = {}, std::stop_token = {}) const;
     [[nodiscard]] Result<PathTraceFrame> submit_rays(graphics::SubmissionQueue&, const PathTraceGpuScene&, std::span<const PathTraceRay>,
         const PathTraceSettings& = {}, PathTraceSamples = {}, std::uint32_t first_pixel = 0, std::stop_token = {}) const;
+    [[nodiscard]] Result<void> configure_view(graphics::SubmissionQueue&, std::uint64_t view_id,
+        const PathTraceGpuScene&, const RenderView&, const PathTraceSettings& = {}, const PathTraceSchedule& = {});
+    // Returns true only when a tile was submitted; repeated calls while pending are no-ops.
+    [[nodiscard]] Result<bool> submit_batch(graphics::SubmissionQueue&, std::uint64_t view_id, std::stop_token = {});
+    // Collects one tile without submitting more work. True only when a whole batch is published.
+    [[nodiscard]] Result<bool> poll(graphics::SubmissionQueue&, std::stop_token = {});
+    [[nodiscard]] Result<void> reset(std::uint64_t view_id);
+    [[nodiscard]] Result<void> cancel(std::uint64_t view_id); // Retains completed history, discards current batch.
+    [[nodiscard]] Result<void> release_view(std::uint64_t view_id);
+    [[nodiscard]] Result<PathTraceProgress> status(std::uint64_t view_id) const;
+    [[nodiscard]] PathTraceCompletedFrame completed_frame(std::uint64_t view_id) const noexcept;
+    [[nodiscard]] PathTraceMemoryStats memory_stats(const graphics::SubmissionQueue&) const noexcept;
+
 private:
     explicit PathTraceRenderer(std::shared_ptr<detail::PathGpuState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::PathGpuState> state_;
