@@ -1,7 +1,7 @@
 ---
 module: graphics-shaders
 created_at: "2026-09-28T19:00:00+08:00"
-updated_at: "2026-10-12T16:23:00+08:00"
+updated_at: "2026-10-14T12:15:10+08:00"
 status: accepted
 ---
 
@@ -13,7 +13,7 @@ M5.3 提供 `dk::graphics_shaders` 和 `dk-shaderc`：单次编译一个 `.slang
 vertex、fragment 或 compute 入口，产出 SPIR-V 1.5、布局反射及诊断。模块只依赖 Core、Memory、
 IO、Profiling、Slang 和 JSON，不依赖 Device、Vulkan loader、窗口或 GPU。
 管线创建、shader module、执行/读回由 [M5.4 离屏模块](graphics-offscreen.md) 消费本模块产物；
-热重载、缓存、特化、ray tracing、自动管线布局合并不在此阶段。
+热重载、缓存、特化不在此模块；自动管线布局合并归Device。M16.4追加四个RT阶段，契约见下节。
 
 [M5.5 使用层设计](graphics-vulkan.md) 的第一节已将 CompiledShader/最小反射数据提取为
 独立 `dk::graphics_shader_types`（[源码](../../engine/graphics/shader-types)），公开 ShaderArtifact.hpp，
@@ -81,6 +81,21 @@ compile_shaders接受一组请求，在本次调用内复用一个IGlobalSession
 
 ShaderBinding追加ShaderImageShape：none、image_2d、image_2d_array、image_3d。
 编译器从Slang资源shape提取维度，descriptor数组与纹理数组维度分别记录；非图像为none。
-1D/cube/MSAA等当前设备层无法表达的形状明确拒绝。反射JSON schema_version升为2，每条binding包含image_shape；
+1D/cube/MSAA等当前设备层无法表达的形状明确拒绝。反射JSON从schema v2起每条binding包含image_shape；
 旧离线调用需重新编译产物。ShaderModule、布局合并/覆盖/兼容性与BindingSet保留该信息，拒绝维度冲突和错误view。
 这仍是结构校验，不证明用户手工修改的反射与完整SPIR-V一致。storage view只允许一个mip。
+
+## M16.4 光追产物
+
+增加raygeneration、miss、closesthit、anyhit和acceleration_structure descriptor；编译仍无需GPU。
+RT入口允许payload/hit attribute参数，全局AS使用普通set/binding与固定数组规则。
+schema_version=3新增requires_ray_tracing、source_fingerprint、ray_payloads和ray_traces，基线入口输出false及空RT接口。
+source_fingerprint为FNV-1a 64-bit来源标记，包含编译器build tag、固定profile/matrix、入口/阶段、宏与依赖路径及内容；
+它不是安全散列，不承诺跨路径/机器一致。JSON不直接输出依赖路径清单。
+RayInterface.cpp从SPIR-V提取结构签名、逻辑字节数、payload location和TraceRay静态offset/stride/miss选择器；
+支持32-bit scalar/vector/struct/fixed array，三角属性为float2。IncomingRayPayload不要求Location，按调用payload类型匹配。
+动态SBT选择、callee TraceRay、callable及未支持的payload类型明确拒绝。
+产物校验重新解析RT接口并核对元数据；RT阶段必须含RayTracingKHR和SPV_KHR_ray_tracing，
+基线Shader/Matrix之外只为RT开放RayTracingKHR，不放开Int64等其他可选能力。
+Device在native module/layout创建前检查RT启用；pipeline级payload/布局/选择器校验见
+[RT实施契约](graphics-raytracing.md#m164实施契约)。完整SPIR-V语义仍由Vulkan validation验证。

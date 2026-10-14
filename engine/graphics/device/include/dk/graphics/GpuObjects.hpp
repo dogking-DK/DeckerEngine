@@ -12,6 +12,7 @@ struct ComputePipelineDesc;
 struct BindingWrite;
 struct TriangleGeometry;
 struct AccelerationStructureInstance;
+struct RayTracingPipelineDesc;
 namespace detail { struct ViewState; struct SamplerState; struct ShaderState; struct ObjectAccess; }
 struct ImageViewDesc {
     vk::ImageViewType type = vk::ImageViewType::e2D;
@@ -82,6 +83,8 @@ public:
     // Copy descriptions and retain input/BLAS owners. No commands are recorded or submitted here.
     [[nodiscard]] Result<AccelerationStructure> create_blas(std::span<const TriangleGeometry> geometries) const;
     [[nodiscard]] Result<AccelerationStructure> create_tlas(std::span<const AccelerationStructureInstance> instances) const;
+    [[nodiscard]] Result<RayTracingPipeline> create_ray_tracing_pipeline(const RayTracingPipelineDesc& description) const;
+    [[nodiscard]] Result<ShaderBindingTable> create_shader_binding_table(const RayTracingPipeline& pipeline) const;
     [[nodiscard]] Result<ImageView> create_view(const Image& image, const ImageViewDesc& description = {}) const;
     [[nodiscard]] Result<Sampler> create_sampler(const SamplerDesc& description = {}) const;
     [[nodiscard]] Result<ShaderModule> create_shader(const CompiledShader& shader) const;

@@ -1,13 +1,14 @@
 ---
 created_at: "2026-09-28T19:03:00+08:00"
-updated_at: "2026-10-12T16:40:00+08:00"
+updated_at: "2026-10-14T12:15:10+08:00"
 ---
 
 # Slang 离线编译
 
 [返回项目入口](../../README.md)。M5.3 提供 `dk::graphics_shaders` 和 `dk-shaderc`，
-编译 vertex、fragment、compute 到 SPIR-V 1.5，并返回最小布局反射。
-反射JSON现为schema_version=2，image_shape区分2D/2D array/3D；升级消费者并重新编译旧产物，字段见[工具参考](../commands/shaderc.md)。
+编译 vertex、fragment、compute 与 raygeneration、miss、closesthit、anyhit 到 SPIR-V 1.5。
+反射JSON现为schema_version=3，保留image_shape并增加RT需求、来源指纹和payload/TraceRay接口；
+升级消费者并重新编译旧产物，字段见[工具参考](../commands/shaderc.md)。
 工具无需 Vulkan loader、驱动、GPU 或窗口；执行产物的管线与读回见 [M5.4 离屏指南](offscreen.md)。
 
 ## 构建和验证
@@ -41,6 +42,21 @@ SV_VulkanVertexID 直接使用 Vulkan VertexIndex，避免 SV_VertexID 引入 Ba
 映射见 [Slang SPIR-V 文档](https://docs.shader-slang.org/en/latest/external/slang/docs/user-guide/a2-01-spirv-target-specific.html)。
 M5.3 负责编译、SPIR-V 和反射；示例的实际 GPU 执行与读回已由 [M5.4](../development/0047-offscreen-execution.md) 验证。
 JSON 重定向文件与 SPIR-V 没有共同原子提交，自动化脚本必须检查 `$LASTEXITCODE`。
+
+## 光追入口
+
+离线编译RT验收夹具的四个入口（沿用上文的`$shaderc`与输出目录）：
+
+```powershell
+& $shaderc compile --source tests/fixtures/shaders/raytracing.slang --entry rayMain --stage raygeneration --output out/shaders/raygen.spv
+& $shaderc compile --source tests/fixtures/shaders/raytracing.slang --entry missMain --stage miss --output out/shaders/miss.spv
+& $shaderc compile --source tests/fixtures/shaders/raytracing.slang --entry hitMain --stage closesthit --output out/shaders/hit.spv
+& $shaderc compile --source tests/fixtures/shaders/raytracing.slang --entry anyMain --stage anyhit --output out/shaders/anyhit.spv
+```
+
+完整fixture还含visibilityMiss、hitGeometry与hitAlternate。执行示例见[RayTracingProbe.cpp](../../tests/integration/RayTracingProbe.cpp)，
+需要RT设备、布局/管线/SBT与AS对象；这些输出本身不构成完整路径追踪器。
+可用`dk_raytracing_probe`与CTest `^dk\.raytracing\.required_validation$`执行required validation/sync验收。
 
 ## C++ 调用
 

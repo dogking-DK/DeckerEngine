@@ -1,7 +1,7 @@
 ---
 module: graphics-raytracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-14T11:28:52+08:00"
+updated_at: "2026-10-14T12:15:10+08:00"
 status: accepted
 ---
 
@@ -157,6 +157,32 @@ opaque/mask 或单/双面影响构建/instance flags 时，按实际 key 失效�
 
 ## Shader、管线与 SBT
 
+### M16.4实施契约
+
+ShaderStage增加raygeneration/miss/closesthit/anyhit，descriptor增加acceleration_structure。
+SPIR-V 1.5能力白名单按RT阶段允许RayTracingKHR；Device在native shader/layout创建前检查实际RT启用。
+Slang入口允许对应payload/hit-attribute参数类别，拒绝其他入口资源/uniform；全局AS绑定继续使用固定数组和set/binding。
+产物schema v3记录RT需求、profile、源/依赖内容指纹，以及从SPIR-V提取的payload结构和静态TraceRay SBT选择参数。
+payload首版限32-bit标量/向量、固定数组和结构体；按结构类型匹配，不能仅比较总字节数；三角hit attribute为float2。
+不支持的接口和动态SBT选择明确拒绝，不通过手填元数据绕过原生SPIR-V检查。
+
+ResourceFactory创建RayTracingPipeline和与其一一绑定的ShaderBindingTable。管线含一个raygen、每射线类型一个miss、
+以ray-type交错排列的triangle hit groups（closest-hit必选、any-hit可选），允许同阶段多个入口；禁止混入graphics/compute。
+首版TraceRay只由raygen发出，native递归深度1，路径反弹在raygen循环实现；callable/intersection/local SBT参数暂不支持。
+首版ray_type_count为1..15、hit groups最多120、布局入口最多256；push constant最多一个共享范围。
+pipeline创建前核对每个TraceRay的offset/stride/miss index及payload与对应miss/hit组；布局必须覆盖所有资源/阶段/push范围。
+TLAS保留实例SBT offset和BLAS geometry count，trace验证offset+(geometryCount-1)*rayTypeCount+rayType在hit区域内。
+
+SBT使用当前pipeline返回的handles，每区起点按base alignment、record stride按handle alignment，raygen size=stride。
+分配前校验乘加/地址溢出、stride与dispatch设备上限；host upload buffer只由SBT owner暴露借用region，不允许写裸地址SBT。
+SBT保留pipeline/layout，BindingSet保留TLAS/BLAS，成功提交保留整个依赖闭包；创建/录制/submit失败不发布半套对象或资源状态。
+沿M16.3 AS账本扩展trace-read，显式CommandBatch::prepare_trace准备SBT及TLAS/BLAS同步；普通buffer/image仍由prepare声明。
+RayTracingEncoder是带generation的批次借用，trace不隐式prepare；拒绝过期encoder、未准备/未构建AS、外来对象及不匹配SBT。
+
+验收包括四阶段编译/反射、CLI v3与失败保留旧输出、payload/布局/阶段/SBT范围拒绝，及required RT validation/sync真实射线：
+命中/未命中、primitive/instance custom index、重心/距离、mask、any-hit忽略与visibility两类射线；覆盖提交失败和pending释放。
+不在本阶段实现Graph AS资源声明、路径积分或编辑器功能。
+
 扩展阶段为 raygeneration、miss、closesthit、anyhit；intersection/callable 留待实际需求。
 增加 AS descriptor 的类型化反射/绑定，跨阶段合并仍拒绝 binding/type/count 冲突。
 编译产物保存 feature/profile/源依赖指纹，离线 JSON schema 在实施时版本化；同步 shaderc 参考和发现接口。
@@ -220,7 +246,8 @@ device_lost 使队列失效，不承诺旧 GPU 画面仍可用。跨队列仅使
 - required GPU 必须启用 validation 和同步验证；设备或层缺失不能记为通过。非 RT 光栅回归与 CPU-only 隔离分别验收。
 
 设备能力/BDA已提供CPU策略与required RT探针，入口和实测见[0110](../development/0110-raytracing-device.md)。
-AS构建、真实求交、SBT与Graph等后续验收仍待对应实现；能力probe成功不表示完成trace管线。
+AS构建实测见[0111](../development/0111-acceleration-structures.md)，四阶段编译、RT pipeline/SBT、
+真实命中与visibility及失败寿命见[0112](../development/0112-raytracing-pipeline.md)。Graph AS和路径积分待后续阶段。
 
 ## 相关设计与记录
 

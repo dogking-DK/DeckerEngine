@@ -1,7 +1,7 @@
 ---
 module: graphics-resources
 created_at: "2026-09-28T18:19:00+08:00"
-updated_at: "2026-10-14T11:28:52+08:00"
+updated_at: "2026-10-14T12:15:10+08:00"
 status: accepted
 ---
 
@@ -60,10 +60,14 @@ Device::ray_tracing_enabled()（当前BDA随RT整组启用）。Buffer::device_a
 非零地址，空对象、lost device、缺usage或未启用拒绝；不改变初始化/访问状态，也不隐式提交/等待。
 move/share和队列关闭不改变地址，已有Buffer owner继续保留Device/VMA；最后owner释放后地址失效。
 整数地址不代表所有权，录制者仍须沿原提交闭包保留Buffer。
-M16.3增加AS storage/build-input usage，同样在分配前检查RT启用；SBT usage仍拒绝。
+M16.3增加AS storage/build-input usage，M16.4增加SBT usage，同样在分配前检查RT启用。
 [AS契约](graphics-raytracing.md#m163-blastlas实施契约)定义独立AS账本与类型化CommandBatch::build，
 不将AS读写暴露为普通buffer prepare。提交槽保留AS、构建输入和临时scratch；提交失败不发布状态，
 collect/close确认后完成AS并释放构建输入，TLAS始终保留所引用BLAS；generation为首次成功BUILD的队列timeline值。
+M16.4的prepare_trace显式准备SBT host-write→shader-read和TLAS/BLAS build-write→RT AS-read，
+复用同一AS账本与提交槽；trace不改变BUILD generation。BindingSet接受拥有型TLAS，拒绝BLAS和外来队列对象。
+AS完成后仍保留geometry count和实例SBT offset用于trace范围验证。SBT保留pipeline/layout和自身buffer，
+录制/提交保活完整依赖，timeout不释放；Graph类型化AS访问留待M16.5。
 ImageDesc 提供 sample=1 的 2D/2D array 和原生 3D image。追加 type（默认2D）、depth（默认1）和
 require_linear_filter（默认false），保持原聚合初始化含义。2D必须depth=1，3D必须array_layers=1且仅允许color sampled/storage/transfer；
 3D view只能对应3D image，不能用数组层代替z。color支持R8/RG8 UNORM（1/2字节，云场线性采样）、RGBA8/BGRA8 UNORM/SRGB、R32_UINT/R32_SFLOAT（4字节）、

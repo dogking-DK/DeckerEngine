@@ -61,6 +61,42 @@ TEST_CASE("graphics entry points emit named SPIR-V", "[shaders]")
     }
 }
 
+TEST_CASE("ray tracing stages reflect AS descriptors payloads and static selectors", "[shaders]")
+{
+    Fixture fixture;
+    for (const auto stage : {ShaderStage::raygeneration,ShaderStage::miss,ShaderStage::closesthit,ShaderStage::anyhit}) {
+        const auto entry=stage==ShaderStage::raygeneration ? "rayMain" : stage==ShaderStage::miss ? "missMain" : stage==ShaderStage::closesthit ? "hitMain" : "anyMain";
+        INFO(entry);
+        auto shader=fixture.compile("raytracing.slang",entry,stage); require_success(shader);
+        auto valid=validate_shader_artifact(*shader); INFO((valid ? "valid" : valid.error().message)); REQUIRE(valid);
+        REQUIRE(shader->requires_ray_tracing); REQUIRE(shader->source_fingerprint!=0);
+        if (stage==ShaderStage::raygeneration) {
+            REQUIRE(shader->bindings[0].type==ShaderDescriptorType::acceleration_structure);
+            REQUIRE(shader->ray_interface.traces.size()==2);
+            CHECK(shader->ray_interface.traces[1].offset==1);
+            CHECK(shader->ray_interface.traces[1].stride==2);
+            CHECK(shader->ray_interface.traces[1].miss==1);
+        }
+        CHECK(nlohmann::json::parse(shader_reflection_json(*shader)).at("requires_ray_tracing")==true);
+    }
+}
+
+TEST_CASE("ray artifacts reject forged metadata unsupported capabilities and dynamic selectors", "[shaders]")
+{
+    Fixture fixture;
+    auto shader=fixture.compile("raytracing.slang","rayMain",ShaderStage::raygeneration); require_success(shader);
+    shader->requires_ray_tracing=false; CHECK_FALSE(validate_shader_artifact(*shader)); shader->requires_ray_tracing=true;
+    shader->stage=ShaderStage::miss; CHECK_FALSE(validate_shader_artifact(*shader)); shader->stage=ShaderStage::raygeneration;
+    ++shader->ray_interface.traces[0].stride; CHECK_FALSE(validate_shader_artifact(*shader)); --shader->ray_interface.traces[0].stride;
+    shader->ray_interface.payloads[0].signature += "forged"; CHECK_FALSE(validate_shader_artifact(*shader));
+    shader->ray_interface=reflect_ray_interface(*shader).value(); REQUIRE(validate_shader_artifact(*shader));
+    shader->spirv.insert(shader->spirv.begin()+5,{(2u<<16)|17u,11u}); // Int64 is outside enabled features.
+    CHECK_FALSE(validate_shader_artifact(*shader));
+    const std::array defines{ShaderDefine{"DK_DYNAMIC_SELECTOR","1"}};
+    auto dynamic=compile_shader({std::filesystem::path{DK_TEST_SHADER_DIR}/"raytracing.slang","rayMain",ShaderStage::raygeneration,{},defines},fixture.heap);
+    REQUIRE_FALSE(dynamic); CHECK(dynamic.error().message.find("static")!=std::string::npos);
+}
+
 TEST_CASE("compute reflects storage bindings and push constants", "[shaders]")
 {
     Fixture fixture;
@@ -81,7 +117,7 @@ TEST_CASE("compute reflects storage bindings and push constants", "[shaders]")
         CHECK(shader->thread_group_size == std::array<std::uint32_t, 3>{64, 1, 1});
         CHECK(shader->spirv.get_allocator().resource() == fixture.heap);
         auto json = nlohmann::json::parse(shader_reflection_json(*shader));
-        CHECK(json.at("schema_version") == 2);
+        CHECK(json.at("schema_version") == 3);
         CHECK(json.at("entry") == "computeMain");
         CHECK(json.at("push_constants")[0].at("size") == 16);
         CHECK(fixture.heap.snapshot().live_allocations > 0);
@@ -187,6 +223,7 @@ TEST_CASE("same process observes include edits and retains successful warnings",
     auto second = compile_shader({source, "computeMain"}, fixture.heap);
     require_success(second);
     CHECK(second->spirv != original);
+    CHECK(second->source_fingerprint != first->source_fingerprint);
     CHECK(second->diagnostics.empty());
     CHECK(first->spirv == original); // Later compiles cannot invalidate an earlier owned artifact.
 }

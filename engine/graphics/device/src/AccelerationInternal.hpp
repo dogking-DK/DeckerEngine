@@ -7,7 +7,7 @@ struct AccelerationState : ObjectState {
         : ObjectState(std::move(device)), kind(value), inputs(memory::Allocator<Buffer>{resource}),
           children(memory::Allocator<std::shared_ptr<AccelerationState>>{resource}),
           geometries(memory::Allocator<vk::AccelerationStructureGeometryKHR>{resource}),
-          ranges(memory::Allocator<vk::AccelerationStructureBuildRangeInfoKHR>{resource}) {}
+          ranges(memory::Allocator<vk::AccelerationStructureBuildRangeInfoKHR>{resource}), hit_ranges(memory::Allocator<std::array<std::uint32_t,2>>{resource}) {}
     AccelerationStructureKind kind;
     AccelerationStructureSizes sizes;
     AccelerationStructureState state;
@@ -17,6 +17,8 @@ struct AccelerationState : ObjectState {
     Vector<std::shared_ptr<AccelerationState>> children; // TLAS keeps every referenced BLAS alive.
     Vector<vk::AccelerationStructureGeometryKHR> geometries;
     Vector<vk::AccelerationStructureBuildRangeInfoKHR> ranges;
+    std::uint32_t geometry_count = 0;
+    Vector<std::array<std::uint32_t,2>> hit_ranges; // Instance SBT offset, referenced BLAS geometry count.
     vk::DeviceAddress address = 0;
     // Declared last: destroyed before storage, children and Device.
     vk::raii::AccelerationStructureKHR acceleration{nullptr};

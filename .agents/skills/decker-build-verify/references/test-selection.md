@@ -94,6 +94,8 @@
 | RT三态请求、必需能力/limits、BDA/VMA与共享寿命 | dk_raytracing_device_probe | `^dk\.device\.rt_required_validation$`（required RT GPU/validation，同步验证；缺环境失败，非77跳过） |
 | BLAS/TLAS输入、地址/尺寸、scratch与实例纯策略 | dk_acceleration_structure_tests | `^dk\.acceleration\.unit\.` |
 | 拥有型AS构建、候选失败、pending/关闭寿命 | dk_acceleration_structure_probe | `^dk\.acceleration\.required_validation$`（required RT GPU/validation/sync；缺环境失败） |
+| SBT 对齐、ray type/实例索引、payload 与 AS descriptor limits | dk_raytracing_tests | `^dk\.raytracing\.unit\.` |
+| RT pipeline/SBT、命中与遮挡数值、AS descriptor、失败与在途关闭 | dk_raytracing_probe | `^dk\.raytracing\.required_validation$`（required RT GPU/validation/sync；缺环境失败） |
 | SDL3 窗口事件、尺寸与寿命（需桌面） | dk_platform_probe | `^dk\.platform\.windows$` |
 | Vulkan Surface、呈现选卡与窗口保活 | dk_present_device_probe | `^dk\.presentation\.device_validation$` |
 | 交换链 capability 策略与错误分类（无需 GPU） | dk_presentation_tests | `^dk\.presentation\.unit\.` |
@@ -109,7 +111,7 @@
 | 大气性能采集与证据汇总 | dk_atmosphere_benchmark | `^dk\.atmosphere\.benchmark_(gpu_validation\|aggregation)$`（GPU采集必须required validation；性能另用RelWithDebInfo关闭validation） |
 | 3D RGBA16F/32F存储、过滤、传输与深度采样/Graph屏障/失败寿命 | dk_volume_image_probe | `^dk\.graphics\.volume_validation$`（真实GPU和同步validation必需，不允许跳过） |
 | VMA 上传/读回、timeline、延迟释放与提交失败 | dk_graphics_resource_probe | `^dk\.graphics\.gpu_`（gpu label；77 为跳过） |
-| Slang 三阶段编译、反射、诊断与 Memory 寿命（无需 GPU） | dk_shader_tests | `^dk\.shaders\.` |
+| Slang 基线/RT 阶段编译、反射、诊断与 Memory 寿命（无需 GPU） | dk_shader_tests | `^dk\.shaders\.` |
 | shaderc Unicode/include/import/宏、原子输出与隔离部署 | dk_shaderc | `^dk\.shaderc\.` |
 | 离屏 draw/dispatch 参数、SPIR-V/布局和设备限制（无需 GPU） | dk_offscreen_tests | `^dk\.offscreen\.unit\.` |
 | Graph 完整管线、离屏绘制/计算读回、M5 基线与同步寿命 | dk_offscreen_probe | `^dk\.offscreen\.gpu_`（gpu label；77 为跳过） |

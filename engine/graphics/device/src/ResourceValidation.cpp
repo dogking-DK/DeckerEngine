@@ -14,7 +14,7 @@ Result<void> validate_access(const AccessDescription& input)
         vk::PipelineStageFlagBits2::eVertexInput | vk::PipelineStageFlagBits2::eIndexInput | vk::PipelineStageFlagBits2::eVertexAttributeInput |
         vk::PipelineStageFlagBits2::eVertexShader | vk::PipelineStageFlagBits2::eFragmentShader | vk::PipelineStageFlagBits2::eComputeShader |
         vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests |
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput | vk::PipelineStageFlagBits2::eHost;
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput | vk::PipelineStageFlagBits2::eHost | vk::PipelineStageFlagBits2::eRayTracingShaderKHR;
     if (!state.stages || !state.access || (static_cast<VkPipelineStageFlags2>(state.stages) & ~static_cast<VkPipelineStageFlags2>(allowed_stages)) ||
         (static_cast<VkAccessFlags2>(state.access) & ~static_cast<VkAccessFlags2>(read_access | write_access)) ||
         (input.full_overwrite && !(state.access & write_access)))
@@ -32,7 +32,7 @@ Result<void> validate_access(const AccessDescription& input)
         return std::unexpected(Error{ErrorCode::invalid_argument, "transfer access requires transfer stages"});
     if ((state.access & (vk::AccessFlagBits2::eShaderRead | vk::AccessFlagBits2::eShaderWrite | vk::AccessFlagBits2::eShaderSampledRead |
         vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite | vk::AccessFlagBits2::eUniformRead)) &&
-        !has_stage(vk::PipelineStageFlagBits2::eVertexShader | vk::PipelineStageFlagBits2::eFragmentShader | vk::PipelineStageFlagBits2::eComputeShader))
+        !has_stage(vk::PipelineStageFlagBits2::eVertexShader | vk::PipelineStageFlagBits2::eFragmentShader | vk::PipelineStageFlagBits2::eComputeShader | vk::PipelineStageFlagBits2::eRayTracingShaderKHR))
         return std::unexpected(Error{ErrorCode::invalid_argument, "shader access requires shader stages"});
     const auto stage_matches = [&](vk::AccessFlags2 access, vk::PipelineStageFlags2 stages) { return !(state.access & access) || has_stage(stages); };
     if (((state.access & (vk::AccessFlagBits2::eHostRead | vk::AccessFlagBits2::eHostWrite)) && !(state.stages & vk::PipelineStageFlagBits2::eHost)) ||

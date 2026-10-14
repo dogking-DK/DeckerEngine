@@ -3,6 +3,7 @@
 #include <dk/graphics/GpuObjects.hpp>
 #include <dk/graphics/Bindings.hpp>
 #include <dk/graphics/AccelerationStructure.hpp>
+#include <dk/graphics/RayTracing.hpp>
 
 namespace dk::graphics::detail {
 struct ObjectState {
@@ -29,12 +30,13 @@ struct ReflectedBinding {
 struct ShaderState : ObjectState {
     ShaderState(std::shared_ptr<DeviceLifetime> device, memory::ResourceHandle resource)
         : ObjectState(std::move(device)), entry(memory::Allocator<char>{resource}),
-          bindings(memory::Allocator<ReflectedBinding>{resource}), push(memory::Allocator<ShaderPushConstant>{resource}) {}
+          bindings(memory::Allocator<ReflectedBinding>{resource}), push(memory::Allocator<ShaderPushConstant>{resource}), ray_interface(resource) {}
     String entry;
     ShaderStage stage = ShaderStage::compute;
     std::array<std::uint32_t, 3> group{};
     Vector<ReflectedBinding> bindings;
     Vector<ShaderPushConstant> push;
+    ShaderRayInterface ray_interface;
     vk::raii::ShaderModule shader{nullptr};
 };
 struct ObjectAccess {
@@ -50,6 +52,8 @@ struct ObjectAccess {
     static const auto& state(const Image& value) { return value.state_; }
     static const auto& state(const CommandBatch& value) { return value.state_; }
     static const auto& state(const AccelerationStructure& value) { return value.state_; }
+    static const auto& state(const RayTracingPipeline& value) { return value.state_; }
+    static const auto& state(const ShaderBindingTable& value) { return value.state_; }
     static void fail_creation(const ResourceFactory& factory, VkResult result) {
         if (auto queue = factory.queue_.lock()) queue->object_creation_failure = result;
     }
@@ -80,7 +84,7 @@ struct PipelineState : ObjectState {
 struct PoolPage : ObjectState {
     using ObjectState::ObjectState;
     std::uint32_t allocations = 0;
-    std::array<std::uint32_t, 5> counts{};
+    std::array<std::uint32_t, 6> counts{};
     vk::raii::DescriptorPool pool{nullptr};
 };
 struct BoundResource {
@@ -89,6 +93,7 @@ struct BoundResource {
     std::shared_ptr<ResourceState> buffer;
     std::shared_ptr<ViewState> view;
     std::shared_ptr<SamplerState> sampler;
+    std::shared_ptr<AccelerationState> acceleration;
     vk::DeviceSize offset = 0, size = 0;
     vk::ImageLayout image_layout = vk::ImageLayout::eUndefined;
 };

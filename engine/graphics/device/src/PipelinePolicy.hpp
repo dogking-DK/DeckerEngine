@@ -14,6 +14,7 @@ struct LayoutDescription {
     Vector<vk::PushConstantRange> push;
 };
 Result<LayoutDescription> merge_interfaces(memory::ResourceHandle resource, std::span<const ShaderLayoutView> shaders,
-                                          const vk::PhysicalDeviceLimits& limits);
+                                          const vk::PhysicalDeviceLimits& limits, const vk::PhysicalDeviceAccelerationStructurePropertiesKHR& acceleration_limits = {});
+Result<void> check_pipeline_stage(const QueueState& queue, const ShaderModule* shader, const PipelineLayout* layout, ShaderStage expected);
 std::uint32_t vertex_format_size(vk::Format format) noexcept;
 } // namespace dk::graphics::detail

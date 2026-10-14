@@ -36,6 +36,8 @@ Result<ResolvedUse> resolve_use(BatchState& batch, const ResourceUse& input)
     if (bool(input.buffer) == bool(input.image)) return std::unexpected(Error{ErrorCode::invalid_argument, "use requires exactly one buffer or image"});
     auto resource = input.buffer ? ObjectAccess::state(*input.buffer) : ObjectAccess::state(*input.image);
     if (auto valid = batch.check(resource); !valid) return std::unexpected(valid.error());
+    if ((input.state.stages & vk::PipelineStageFlagBits2::eRayTracingShaderKHR) && !batch.queue->owner->device.ray_tracing_enabled())
+        return std::unexpected(Error{ErrorCode::not_supported, "RT resource stage requires enabled ray tracing"});
     const AccessDescription description{input.state, input.offset, input.size, input.range, input.full_overwrite};
     auto valid = input.buffer ? validate_buffer_access(resource->buffer_desc, description)
                               : validate_image_access(resource->image_desc, description);

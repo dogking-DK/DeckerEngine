@@ -189,6 +189,17 @@ if(DK_BUILD_GRAPHICS_GRAPH)
     set_tests_properties(dk.graph.gpu_execution dk.graph.gpu_validation PROPERTIES TIMEOUT 120 SKIP_RETURN_CODE 77 LABELS "gpu")
     set_tests_properties(dk.graph.gpu_validation PROPERTIES ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
 endif()
+if(DK_BUILD_GRAPHICS_DEVICE AND DK_BUILD_GRAPHICS_SHADERS)
+    add_executable(dk_raytracing_probe RayTracingProbe.cpp)
+    target_include_directories(dk_raytracing_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
+    target_compile_definitions(dk_raytracing_probe PRIVATE DK_RT_SHADER="${PROJECT_SOURCE_DIR}/tests/fixtures/shaders/raytracing.slang")
+    target_link_libraries(dk_raytracing_probe PRIVATE dk::graphics_device dk::graphics_shaders)
+    dk_target_defaults(dk_raytracing_probe)
+    dk_deploy_slang(dk_raytracing_probe)
+    add_test(NAME dk.raytracing.required_validation COMMAND dk_raytracing_probe)
+    set_tests_properties(dk.raytracing.required_validation PROPERTIES TIMEOUT 120 RUN_SERIAL TRUE LABELS "gpu"
+        ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+endif()
 if(TARGET dk_shaderc)
     add_test(NAME dk.shaderc.process COMMAND "${CMAKE_COMMAND}"
         "-DSHADERC=$<TARGET_FILE:dk_shaderc>"

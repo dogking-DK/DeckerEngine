@@ -2,12 +2,18 @@
 #include <cstring>
 
 namespace dk::graphics {
+bool is_ray_tracing_stage(ShaderStage stage) noexcept
+{ return stage == ShaderStage::raygeneration || stage == ShaderStage::miss || stage == ShaderStage::closesthit || stage == ShaderStage::anyhit; }
 std::string_view shader_stage_name(ShaderStage stage) noexcept
 {
     switch (stage) {
     case ShaderStage::vertex: return "vertex";
     case ShaderStage::fragment: return "fragment";
     case ShaderStage::compute: return "compute";
+    case ShaderStage::raygeneration: return "raygeneration";
+    case ShaderStage::miss: return "miss";
+    case ShaderStage::closesthit: return "closesthit";
+    case ShaderStage::anyhit: return "anyhit";
     }
     return "unknown";
 }
@@ -19,6 +25,7 @@ std::string_view shader_descriptor_name(ShaderDescriptorType type) noexcept
     case ShaderDescriptorType::sampled_image: return "sampled_image";
     case ShaderDescriptorType::storage_image: return "storage_image";
     case ShaderDescriptorType::sampler: return "sampler";
+    case ShaderDescriptorType::acceleration_structure: return "acceleration_structure";
     }
     return "unknown";
 }
@@ -36,32 +43,45 @@ CompiledShader::CompiledShader(memory::ResourceHandle resource)
     : spirv(memory::Allocator<std::uint32_t>{resource}), entry(memory::Allocator<char>{resource}),
       compiler(memory::Allocator<char>{resource}), diagnostics(memory::Allocator<char>{resource}),
       bindings(memory::Allocator<ShaderBinding>{resource}), push_constants(memory::Allocator<ShaderPushConstant>{resource}),
-      dependencies(memory::Allocator<String>{resource}) {}
+      dependencies(memory::Allocator<String>{resource}), ray_interface(resource) {}
 
 namespace { Error invalid(std::string message) { return {ErrorCode::invalid_argument, std::move(message)}; } Error unsupported(std::string message) { return {ErrorCode::not_supported, std::move(message)}; } }
 Result<void> validate_shader_artifact(const CompiledShader& shader)
 {
     for (const auto& binding : shader.bindings) {
+        if (shader_descriptor_name(binding.type)=="unknown" ||
+            (binding.type==ShaderDescriptorType::acceleration_structure && !is_ray_tracing_stage(shader.stage)))
+            return std::unexpected(invalid("shader descriptor requires a supported stage/type"));
         const bool image = binding.type == ShaderDescriptorType::sampled_image || binding.type == ShaderDescriptorType::storage_image;
         if (shader_image_shape_name(binding.image_shape) == "unknown" || image == (binding.image_shape == ShaderImageShape::none))
             return std::unexpected(invalid("shader descriptor image shape mismatch"));
     }
     const auto stage = shader.stage;
-    if ((stage != ShaderStage::vertex && stage != ShaderStage::fragment && stage != ShaderStage::compute) || shader.entry.empty() || shader.entry.find('\0') != String::npos)
+    const bool rt = is_ray_tracing_stage(stage);
+    if (shader_stage_name(stage) == "unknown" || shader.entry.empty() || shader.entry.find('\0') != String::npos || shader.requires_ray_tracing != rt)
         return std::unexpected(invalid("shader entry/stage does not match the operation"));
     const auto& words = shader.spirv;
     if (words.size() < 5 || words[0] != 0x07230203U || words[1] != 0x00010500U || !words[3] || words[4])
         return std::unexpected(invalid("expected a Slang SPIR-V 1.5 artifact"));
-    const std::uint32_t model = stage == ShaderStage::vertex ? 0U : stage == ShaderStage::fragment ? 4U : 5U;
+    const std::uint32_t model = stage == ShaderStage::vertex ? 0U : stage == ShaderStage::fragment ? 4U : stage == ShaderStage::compute ? 5U :
+        stage == ShaderStage::raygeneration ? 5313U : stage == ShaderStage::anyhit ? 5315U : stage == ShaderStage::closesthit ? 5316U : 5317U;
     unsigned entries = 0;
+    bool ray_capability = false, ray_extension = false;
     for (std::size_t i = 5; i < words.size();) {
         const auto count = words[i] >> 16;
         const auto opcode = words[i] & 0xFFFFU;
         if (!count || count > words.size() - i) return std::unexpected(invalid("malformed SPIR-V instruction length"));
-        if (opcode == 17) { // OpCapability: no optional features enabled on the device.
+        if (opcode == 17) { // Explicit baseline and opt-in ray tracing capability allowlist.
             if (count != 2) return std::unexpected(invalid("malformed SPIR-V capability"));
-            if (words[i + 1] != 0 && words[i + 1] != 1)
-                return std::unexpected(unsupported("shader requires a capability outside the baseline Shader/Matrix features"));
+            ray_capability |= words[i+1] == 4479;
+            if (words[i + 1] != 0 && words[i + 1] != 1 && !(rt && words[i+1] == 4479))
+                return std::unexpected(unsupported("shader requires a capability outside Shader/Matrix and enabled RayTracingKHR"));
+        }
+        if (opcode == 10) { // OpExtension.
+            const auto* name = reinterpret_cast<const char*>(&words[i+1]);
+            const auto* end = static_cast<const char*>(std::memchr(name, 0, (count-1)*sizeof(std::uint32_t)));
+            if (!end) return std::unexpected(invalid("malformed SPIR-V extension"));
+            ray_extension |= std::string_view{name, static_cast<std::size_t>(end-name)} == "SPV_KHR_ray_tracing";
         }
         if (opcode == 15) { // OpEntryPoint.
             if (count < 4 || words[i + 1] != model) return std::unexpected(invalid("SPIR-V entry execution model mismatch"));
@@ -74,6 +94,11 @@ Result<void> validate_shader_artifact(const CompiledShader& shader)
         i += count;
     }
     if (entries != 1) return std::unexpected(invalid("exactly one SPIR-V entry point is required"));
+    if (rt && (!ray_capability || !ray_extension)) return std::unexpected(invalid("RT artifact requires RayTracingKHR and SPV_KHR_ray_tracing"));
+    if (!rt && (ray_capability || ray_extension)) return std::unexpected(unsupported("ray tracing requires a ray tracing entry point"));
+    auto interface = reflect_ray_interface(shader);
+    if (!interface) return std::unexpected(interface.error());
+    if (*interface != shader.ray_interface) return std::unexpected(invalid("ray interface metadata disagrees with SPIR-V"));
     return {};
 }
 } // namespace dk::graphics

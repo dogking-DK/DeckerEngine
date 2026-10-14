@@ -133,6 +133,7 @@ Result<AccelerationStructure> ResourceFactory::create_blas(std::span<const Trian
         vk::FormatFeatureFlagBits::eAccelerationStructureVertexBufferKHR))
         return std::unexpected(Error{ErrorCode::not_supported, "device does not support AS float3 vertex format"});
     auto state = memory::make_shared_in<detail::AccelerationState>(queue.resource, queue.owner, queue.resource, AccelerationStructureKind::bottom_level);
+    state->geometry_count = static_cast<std::uint32_t>(geometries.size());
     for (const auto& input : geometries) {
         auto base = input.vertices->device_address();
         if (!base) return std::unexpected(base.error());
@@ -185,6 +186,7 @@ Result<AccelerationStructure> ResourceFactory::create_tlas(std::span<const Accel
         value.flags = static_cast<VkGeometryInstanceFlagsKHR>(instance.flags);
         value.accelerationStructureReference = instance.blas->state_->address;
         native.push_back(value);
+        state->hit_ranges.push_back({instance.sbt_record_offset, instance.blas->state_->geometry_count});
         if (std::find(state->children.begin(), state->children.end(), instance.blas->state_) == state->children.end())
             state->children.push_back(instance.blas->state_);
     }

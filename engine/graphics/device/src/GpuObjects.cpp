@@ -79,10 +79,13 @@ Result<ShaderModule> ResourceFactory::create_shader(const CompiledShader& shader
     if (!checked) return std::unexpected(checked.error());
     if (auto valid = validate_shader_artifact(shader); !valid) return std::unexpected(valid.error());
     auto& queue = **checked;
+    if (shader.requires_ray_tracing && !queue.owner->device.ray_tracing_enabled())
+        return std::unexpected(Error{ErrorCode::not_supported, "RT shader requires enabled ray tracing"});
     auto state = memory::make_shared_in<detail::ShaderState>(queue.resource, queue.owner, queue.resource);
     state->entry = shader.entry;
     state->stage = shader.stage;
     state->group = shader.thread_group_size;
+    state->ray_interface = shader.ray_interface;
     for (const auto& binding : shader.bindings)
         state->bindings.push_back({binding.set, binding.binding, binding.type, binding.count, binding.block_size, binding.image_shape});
     state->push.assign(shader.push_constants.begin(), shader.push_constants.end());

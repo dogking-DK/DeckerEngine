@@ -30,6 +30,10 @@ SlangStage slang_stage(ShaderStage stage)
     case ShaderStage::vertex: return SLANG_STAGE_VERTEX;
     case ShaderStage::fragment: return SLANG_STAGE_FRAGMENT;
     case ShaderStage::compute: return SLANG_STAGE_COMPUTE;
+    case ShaderStage::raygeneration: return SLANG_STAGE_RAY_GENERATION;
+    case ShaderStage::miss: return SLANG_STAGE_MISS;
+    case ShaderStage::closesthit: return SLANG_STAGE_CLOSEST_HIT;
+    case ShaderStage::anyhit: return SLANG_STAGE_ANY_HIT;
     }
     return SLANG_STAGE_NONE;
 }
@@ -56,7 +60,8 @@ Result<void> reflect(slang::ProgramLayout* layout, CompiledShader& output)
     auto* entry_type = entry->getVarLayout()->getTypeLayout();
     for (unsigned i = 0; i < entry_type->getCategoryCount(); ++i) {
         const auto category = entry_type->getCategoryByIndex(i);
-        if (category != Category::VaryingInput && category != Category::VaryingOutput) {
+        if (category != Category::VaryingInput && category != Category::VaryingOutput &&
+            !(is_ray_tracing_stage(output.stage) && (category == Category::RayPayload || category == Category::HitAttributes))) {
             return fail("entry-point uniform or resource parameters");
         }
     }
@@ -117,6 +122,7 @@ Result<void> reflect(slang::ProgramLayout* layout, CompiledShader& output)
         case slang::BindingType::Texture: result.type = ShaderDescriptorType::sampled_image; break;
         case slang::BindingType::MutableTexture: result.type = ShaderDescriptorType::storage_image; break;
         case slang::BindingType::Sampler: result.type = ShaderDescriptorType::sampler; break;
+        case slang::BindingType::RayTracingAccelerationStructure: result.type = ShaderDescriptorType::acceleration_structure; break;
         default: return fail(name + ": unsupported descriptor type");
         }
         if (result.type == ShaderDescriptorType::sampled_image || result.type == ShaderDescriptorType::storage_image) {
@@ -170,6 +176,7 @@ Result<CompiledShader> compile_shader_impl(const ShaderCompileRequest& request, 
     CompiledShader output{resource};
     output.entry.assign(request.entry);
     output.stage = request.stage;
+    output.requires_ray_tracing = is_ray_tracing_stage(request.stage);
     const auto fail = [&](std::string operation, ErrorCode code = ErrorCode::invalid_argument) -> Result<CompiledShader> {
         if (!output.diagnostics.empty()) { operation += "\n" + std::string{output.diagnostics}; }
         return std::unexpected(Error{code, std::move(operation), {*path, "entry=" + std::string{request.entry},
@@ -278,6 +285,23 @@ Result<CompiledShader> compile_shader_impl(const ShaderCompileRequest& request, 
     }
     std::ranges::sort(output.dependencies);
     output.dependencies.erase(std::unique(output.dependencies.begin(), output.dependencies.end()), output.dependencies.end());
+    auto ray_interface = reflect_ray_interface(output);
+    if (!ray_interface) return fail(ray_interface.error().message, ray_interface.error().code);
+    output.ray_interface = std::move(*ray_interface);
+    output.source_fingerprint = 14695981039346656037ULL;
+    const auto hash = [&](std::span<const std::byte> bytes_to_hash) {
+        for (const auto byte : bytes_to_hash) { output.source_fingerprint ^= std::to_integer<unsigned char>(byte); output.source_fingerprint *= 1099511628211ULL; }
+    };
+    const auto hash_text = [&](std::string_view text) { hash(std::as_bytes(std::span{text})); const std::array delimiter{std::byte{0}}; hash(delimiter); };
+    hash_text(output.compiler); hash_text("spirv_1_5/row_major"); hash_text(output.entry); hash_text(shader_stage_name(output.stage));
+    for (const auto& define : request.defines) { hash_text(define.name); hash_text(define.value); }
+    for (const auto& dependency : output.dependencies) {
+        auto dependency_path = path_from_utf8(dependency);
+        if (!dependency_path) return fail(dependency_path.error().message);
+        auto content = read_file_bytes(*dependency_path);
+        if (!content) return fail(content.error().message);
+        hash_text(dependency); hash(*content);
+    }
     return output;
 }
 } // namespace
@@ -305,11 +329,17 @@ Result<Vector<CompiledShader>> compile_shaders(std::span<const ShaderCompileRequ
 
 String shader_reflection_json(const CompiledShader& shader)
 {
-    nlohmann::ordered_json json{{"schema_version", 2}, {"compiler", std::string_view{shader.compiler}},
+    nlohmann::ordered_json json{{"schema_version", 3}, {"compiler", std::string_view{shader.compiler}},
         {"target", "spirv_1_5"}, {"matrix_layout", "row_major"}, {"entry", std::string_view{shader.entry}},
         {"stage", shader_stage_name(shader.stage)}, {"spirv_bytes", shader.spirv.size() * sizeof(std::uint32_t)},
         {"thread_group_size", shader.thread_group_size}, {"bindings", nlohmann::ordered_json::array()},
-        {"push_constants", nlohmann::ordered_json::array()}};
+        {"push_constants", nlohmann::ordered_json::array()}, {"requires_ray_tracing", shader.requires_ray_tracing},
+        {"source_fingerprint", shader.source_fingerprint}, {"ray_payloads", nlohmann::ordered_json::array()}, {"ray_traces", nlohmann::ordered_json::array()}};
+    for (const auto& payload : shader.ray_interface.payloads)
+        json["ray_payloads"].push_back({{"kind", payload.kind == RayInterfaceKind::outgoing_payload ? "outgoing" : payload.kind == RayInterfaceKind::incoming_payload ? "incoming" : "hit_attribute"},
+            {"location",payload.location},{"bytes",payload.bytes},{"signature",std::string_view{payload.signature}}});
+    for (const auto& trace : shader.ray_interface.traces)
+        json["ray_traces"].push_back({{"offset",trace.offset},{"stride",trace.stride},{"miss",trace.miss},{"payload_location",trace.payload_location}});
     for (const auto& binding : shader.bindings) {
         json["bindings"].push_back({{"name", std::string_view{binding.name}}, {"set", binding.set},
             {"binding", binding.binding}, {"type", shader_descriptor_name(binding.type)}, {"count", binding.count},

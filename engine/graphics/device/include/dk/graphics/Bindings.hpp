@@ -7,10 +7,11 @@ namespace detail { struct BindingState; }
 struct BufferBinding { const Buffer* buffer = nullptr; vk::DeviceSize offset = 0, size = VK_WHOLE_SIZE; };
 struct ImageBinding { const ImageView* view = nullptr; vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal; };
 struct SamplerBinding { const Sampler* sampler = nullptr; };
+struct AccelerationStructureBinding { const AccelerationStructure* structure = nullptr; };
 // One array element per write. A set must be completely initialized.
 struct BindingWrite {
     std::uint32_t binding = 0, array_element = 0;
-    std::variant<BufferBinding, ImageBinding, SamplerBinding> resource;
+    std::variant<BufferBinding, ImageBinding, SamplerBinding, AccelerationStructureBinding> resource;
 };
 class BindingSet final {
 public:

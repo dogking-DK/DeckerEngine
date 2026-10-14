@@ -9,6 +9,10 @@ vk::ShaderStageFlagBits native_stage(ShaderStage stage) noexcept
     case ShaderStage::vertex: return vk::ShaderStageFlagBits::eVertex;
     case ShaderStage::fragment: return vk::ShaderStageFlagBits::eFragment;
     case ShaderStage::compute: return vk::ShaderStageFlagBits::eCompute;
+    case ShaderStage::raygeneration: return vk::ShaderStageFlagBits::eRaygenKHR;
+    case ShaderStage::miss: return vk::ShaderStageFlagBits::eMissKHR;
+    case ShaderStage::closesthit: return vk::ShaderStageFlagBits::eClosestHitKHR;
+    case ShaderStage::anyhit: return vk::ShaderStageFlagBits::eAnyHitKHR;
     }
     return static_cast<vk::ShaderStageFlagBits>(0);
 }
@@ -20,6 +24,7 @@ vk::DescriptorType native_descriptor(ShaderDescriptorType type) noexcept
     case ShaderDescriptorType::sampled_image: return vk::DescriptorType::eSampledImage;
     case ShaderDescriptorType::storage_image: return vk::DescriptorType::eStorageImage;
     case ShaderDescriptorType::sampler: return vk::DescriptorType::eSampler;
+    case ShaderDescriptorType::acceleration_structure: return vk::DescriptorType::eAccelerationStructureKHR;
     }
     return static_cast<vk::DescriptorType>(-1);
 }
@@ -39,19 +44,21 @@ bool compatible_layouts(const LayoutState& a, const LayoutState& b, std::uint32_
     return std::equal(a.bindings.begin(), ae, b.bindings.begin(), be, same_binding);
 }
 Result<LayoutDescription> merge_interfaces(memory::ResourceHandle resource, std::span<const ShaderLayoutView> shaders,
-                                          const vk::PhysicalDeviceLimits& limits)
+                                          const vk::PhysicalDeviceLimits& limits, const vk::PhysicalDeviceAccelerationStructurePropertiesKHR& acceleration_limits)
 {
-    if (shaders.empty() || shaders.size() > 3) return std::unexpected(invalid("layout requires 1..3 distinct shader stages"));
+    if (shaders.empty() || shaders.size() > 256) return std::unexpected(invalid("layout requires 1..256 shaders"));
+    const bool rt = is_ray_tracing_stage(shaders.front().stage);
     LayoutDescription result{resource};
     vk::ShaderStageFlags used{};
     for (const auto& shader : shaders) {
         const auto stage = native_stage(shader.stage);
-        if (!static_cast<VkShaderStageFlags>(stage) || (used & stage)) return std::unexpected(invalid("invalid or duplicate layout shader stage"));
+        if (!static_cast<VkShaderStageFlags>(stage) || (!rt && (used & stage)) || is_ray_tracing_stage(shader.stage) != rt)
+            return std::unexpected(invalid("invalid, mixed or duplicate non-RT layout shader stage"));
         used |= stage;
         for (std::size_t i = 0; i < shader.bindings.size(); ++i) {
             const auto& input = shader.bindings[i];
             if (!input.count || input.set >= limits.maxBoundDescriptorSets ||
-                native_descriptor(input.type) == static_cast<vk::DescriptorType>(-1))
+                native_descriptor(input.type) == static_cast<vk::DescriptorType>(-1) || (!rt && input.type == ShaderDescriptorType::acceleration_structure))
                 return std::unexpected(invalid("invalid descriptor count/type/set"));
             for (std::size_t j = 0; j < i; ++j)
                 if (shader.bindings[j].set == input.set && shader.bindings[j].binding == input.binding)
@@ -76,6 +83,8 @@ Result<LayoutDescription> merge_interfaces(memory::ResourceHandle resource, std:
             last = std::max(last, push.offset + push.size);
         }
         if (last) {
+            for (const auto& range : result.push) if ((range.stageFlags & stage) && (range.offset != first || range.size != last-first))
+                return std::unexpected(invalid("same-stage shader push constant ranges disagree"));
             auto same = std::find_if(result.push.begin(), result.push.end(), [&](const auto& p) { return p.offset == first && p.size == last-first; });
             if (same == result.push.end()) result.push.push_back({stage, first, last-first});
             else same->stageFlags |= stage;
@@ -88,13 +97,14 @@ Result<LayoutDescription> merge_interfaces(memory::ResourceHandle resource, std:
         return std::tuple{a.offset, a.size, static_cast<VkShaderStageFlags>(a.stageFlags)} <
             std::tuple{b.offset, b.size, static_cast<VkShaderStageFlags>(b.stageFlags)};
     });
-    const std::array<std::uint32_t, 5> total_limits{limits.maxDescriptorSetUniformBuffers, limits.maxDescriptorSetStorageBuffers,
-        limits.maxDescriptorSetSampledImages, limits.maxDescriptorSetStorageImages, limits.maxDescriptorSetSamplers};
-    const std::array<std::uint32_t, 5> stage_limits{limits.maxPerStageDescriptorUniformBuffers, limits.maxPerStageDescriptorStorageBuffers,
-        limits.maxPerStageDescriptorSampledImages, limits.maxPerStageDescriptorStorageImages, limits.maxPerStageDescriptorSamplers};
-    std::array<std::uint64_t, 5> totals{};
-    std::array<std::array<std::uint64_t, 5>, 3> per_stage{};
-    constexpr std::array stages{vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment, vk::ShaderStageFlagBits::eCompute};
+    const std::array<std::uint32_t, 6> total_limits{limits.maxDescriptorSetUniformBuffers, limits.maxDescriptorSetStorageBuffers,
+        limits.maxDescriptorSetSampledImages, limits.maxDescriptorSetStorageImages, limits.maxDescriptorSetSamplers, acceleration_limits.maxDescriptorSetAccelerationStructures};
+    const std::array<std::uint32_t, 6> stage_limits{limits.maxPerStageDescriptorUniformBuffers, limits.maxPerStageDescriptorStorageBuffers,
+        limits.maxPerStageDescriptorSampledImages, limits.maxPerStageDescriptorStorageImages, limits.maxPerStageDescriptorSamplers, acceleration_limits.maxPerStageDescriptorAccelerationStructures};
+    std::array<std::uint64_t, 6> totals{};
+    std::array<std::array<std::uint64_t, 6>, 7> per_stage{};
+    constexpr std::array stages{vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment, vk::ShaderStageFlagBits::eCompute,
+        vk::ShaderStageFlagBits::eRaygenKHR, vk::ShaderStageFlagBits::eMissKHR, vk::ShaderStageFlagBits::eClosestHitKHR, vk::ShaderStageFlagBits::eAnyHitKHR};
     for (const auto& binding : result.bindings) {
         const auto type = static_cast<std::size_t>(binding.type);
         totals[type] += binding.count;
@@ -106,7 +116,7 @@ Result<LayoutDescription> merge_interfaces(memory::ResourceHandle resource, std:
     }
     for (const auto& counts : per_stage) {
         // Standalone samplers do not count toward maxPerStageResources.
-        if (counts[0]+counts[1]+counts[2]+counts[3] > limits.maxPerStageResources)
+        if (counts[0]+counts[1]+counts[2]+counts[3]+counts[5] > limits.maxPerStageResources)
             return std::unexpected(unsupported("pipeline layout exceeds maxPerStageResources"));
     }
     return result;
@@ -142,9 +152,12 @@ Result<PipelineLayout> ResourceFactory::create_pipeline_layout(std::span<const S
     for (const auto* shader : shaders) {
         if (!shader || !shader->state_ || shader->state_->owner != queue.owner)
             return std::unexpected(Error{ErrorCode::invalid_argument, "layout shader is empty or belongs to another device"});
+        if (is_ray_tracing_stage(shader->state_->stage) && !queue.owner->device.ray_tracing_enabled())
+            return std::unexpected(Error{ErrorCode::not_supported, "RT layout requires enabled ray tracing"});
         inputs.push_back({shader->state_->stage, shader->state_->bindings, shader->state_->push});
     }
-    auto merged = detail::merge_interfaces(queue.resource, inputs, queue.owner->device.adapter().properties.limits);
+    auto merged = detail::merge_interfaces(queue.resource, inputs, queue.owner->device.adapter().properties.limits,
+        queue.owner->device.adapter().ray_tracing.acceleration_structure_limits);
     if (!merged) return std::unexpected(merged.error());
     auto state = memory::make_shared_in<detail::LayoutState>(queue.resource, queue.owner, queue.resource);
     state->bindings = std::move(merged->bindings);
@@ -170,8 +183,8 @@ Result<PipelineLayout> ResourceFactory::create_pipeline_layout(std::span<const S
     if (auto status = detail::object_creation_status(queue, "create pipeline layout"); !status) return std::unexpected(status.error());
     return PipelineLayout{std::move(state)};
 }
-namespace {
-Result<void> check_stage(const detail::QueueState& queue, const ShaderModule* shader, const PipelineLayout* layout, ShaderStage expected)
+namespace detail {
+Result<void> check_pipeline_stage(const QueueState& queue, const ShaderModule* shader, const PipelineLayout* layout, ShaderStage expected)
 {
     if (!shader || !*shader || !layout || !*layout)
         return std::unexpected(Error{ErrorCode::invalid_argument, "pipeline requires shader and layout"});
@@ -202,7 +215,7 @@ Result<ComputePipeline> ResourceFactory::create_compute_pipeline(const ComputePi
     auto checked = detail::factory_queue(queue_);
     if (!checked) return std::unexpected(checked.error());
     auto& queue = **checked;
-    if (auto valid = check_stage(queue, desc.shader, desc.layout, ShaderStage::compute); !valid) return std::unexpected(valid.error());
+    if (auto valid = detail::check_pipeline_stage(queue, desc.shader, desc.layout, ShaderStage::compute); !valid) return std::unexpected(valid.error());
     const auto& shader = *desc.shader->state_;
     const auto& limits = queue.owner->device.adapter().properties.limits;
     std::uint32_t total = 1;
@@ -224,9 +237,9 @@ Result<GraphicsPipeline> ResourceFactory::create_graphics_pipeline(const Graphic
     auto checked = detail::factory_queue(queue_);
     if (!checked) return std::unexpected(checked.error());
     auto& queue = **checked;
-    if (auto valid = check_stage(queue, desc.vertex, desc.layout, ShaderStage::vertex); !valid) return std::unexpected(valid.error());
+    if (auto valid = detail::check_pipeline_stage(queue, desc.vertex, desc.layout, ShaderStage::vertex); !valid) return std::unexpected(valid.error());
     if (desc.fragment || desc.color_format != vk::Format::eUndefined)
-        if (auto valid = check_stage(queue, desc.fragment, desc.layout, ShaderStage::fragment); !valid) return std::unexpected(valid.error());
+        if (auto valid = detail::check_pipeline_stage(queue, desc.fragment, desc.layout, ShaderStage::fragment); !valid) return std::unexpected(valid.error());
     const auto& device = queue.owner->device;
     const auto& limits = device.adapter().properties.limits;
     const bool has_color = desc.color_format != vk::Format::eUndefined;

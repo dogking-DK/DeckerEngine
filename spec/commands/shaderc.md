@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T19:03:00+08:00"
-updated_at: "2026-10-12T16:40:00+08:00"
+updated_at: "2026-10-14T12:15:10+08:00"
 ---
 
 # dk-shaderc 离线工具
@@ -13,7 +13,7 @@ updated_at: "2026-10-12T16:40:00+08:00"
 将一个 Slang 具名入口编译为原始 SPIR-V 1.5，并输出最小反射 JSON。
 
 ```text
-dk-shaderc compile --source FILE --entry NAME --stage vertex|fragment|compute --output FILE.spv
+dk-shaderc compile --source FILE --entry NAME --stage STAGE --output FILE.spv
                    [--include DIR ...] [--define NAME=VALUE ...]
 dk-shaderc --help
 ```
@@ -22,7 +22,7 @@ dk-shaderc --help
 | --- | --- |
 | `--source FILE` | 必填；UTF-8 Slang 源文件，最多 64 MiB；拒绝 NUL |
 | `--entry NAME` | 必填；ASCII 标识符，具名入口需能由 Slang 识别阶段 |
-| `--stage` | 必填；vertex、fragment 或 compute，必须与源码实际阶段相同 |
+| `--stage` | 必填；vertex、fragment、compute、raygeneration、miss、closesthit、anyhit；必须与源码实际阶段相同 |
 | `--output FILE.spv` | 必填；父目录已存在且可写，不能覆盖源/include/import 文件或其硬链接别名 |
 | `--include DIR` | 可重复；按参数顺序提供 include/import 搜索目录，默认无额外目录 |
 | `--define NAME=VALUE` | 可重复；宏名是 ASCII 标识符且不能重复；VALUE 可为空，默认无额外宏 |
@@ -35,21 +35,29 @@ dk-shaderc --help
 
 ## 返回、错误与副作用
 
-成功 stdout 是一个 JSON 对象（schema_version=2），stderr 可包含 Slang 警告：
+成功 stdout 是一个 JSON 对象（schema_version=3），stderr 可包含 Slang 警告：
 
 | JSON 字段 | 内容 |
 | --- | --- |
 | compiler / target / matrix_layout | 编译器 build tag、spirv_1_5、row_major |
 | entry / stage / spirv_bytes | SPIR-V 入口名、阶段、输出字节数 |
-| thread_group_size | compute 的三个本地维度；graphics 为 `[0,0,0]` |
+| thread_group_size | compute 的三个本地维度；其他阶段为 `[0,0,0]` |
 | bindings | 按 set/binding 排序；每项含 name、set、binding、type、count、block_size、image_shape |
 | push_constants | offset/size 字节范围；当前最多一个 offset=0 的块 |
+| requires_ray_tracing | 四个RT阶段为true，基线阶段为false；执行时必须启用RT设备能力组 |
+| source_fingerprint | 编译器/profile/matrix、入口/阶段、宏与依赖路径及内容的FNV-1a 64-bit标记；不是安全散列或跨机器缓存key |
+| ray_payloads | kind（outgoing/incoming/hit_attribute）、location、bytes、signature；基线为空 |
+| ray_traces | TraceRay的静态offset、stride、miss、payload_location；基线为空 |
 
 binding的image_shape为none/2d/2d_array/3d；非图像使用none，图像维度与descriptor count独立。
-descriptor type 为 uniform_buffer、storage_buffer、sampled_image、storage_image 或 sampler；
+descriptor type 为 uniform_buffer、storage_buffer、sampled_image、storage_image、sampler 或 acceleration_structure；
 block_size 仅 uniform_buffer 有效，其余为 0。反射包含组合程序声明的全部全局资源，
 不表示优化后的实际访问集合；不包含成员偏移、顶点输入布局、跨阶段合并或设备能力检查。
 ParameterBlock、嵌套资源、未定长 descriptor 数组、入口 uniform、typed buffer、1D/cube/MSAA图像等当前无法表达的布局明确拒绝。
+RT payload支持32-bit标量/向量/结构体/固定数组；bytes是逻辑字节数，signature表达结构类型，不能用同字节数替代类型匹配。
+incoming payload无Location时记0，callee按类型匹配调用；三角hit attribute须为float2。
+TraceRay限raygeneration并使用静态SBT选择器；动态选择、callee递归TraceRay、callable/intersection不在首版范围。
+RT阶段能力白名单只追加RayTracingKHR，其他未启用的可选SPIR-V能力在使用层拒绝。
 
 | 退出码 | 含义 |
 | --- | --- |

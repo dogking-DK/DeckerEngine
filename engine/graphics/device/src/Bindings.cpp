@@ -1,12 +1,13 @@
 #include "ObjectInternal.hpp"
 #include "ResourcePolicy.hpp"
+#include "AccelerationInternal.hpp"
 
 namespace dk::graphics {
 vk::DescriptorSet BindingSet::handle() const noexcept { return state_ ? *state_->set : vk::DescriptorSet{}; }
 std::uint32_t BindingSet::set_index() const noexcept { return state_ ? state_->set_index : 0; }
 namespace {
 constexpr std::uint32_t sets_per_page = 32, max_pages = 64, max_set_descriptors = 4096;
-Result<std::shared_ptr<detail::PoolPage>> pool_page(detail::QueueState& queue, const std::array<std::uint32_t,5>& counts)
+Result<std::shared_ptr<detail::PoolPage>> pool_page(detail::QueueState& queue, const std::array<std::uint32_t,6>& counts)
 {
     for (auto& weak : queue.descriptor_pages) if (auto page = weak.lock()) {
         if (page->counts == counts && page->allocations < sets_per_page) return page;
@@ -21,7 +22,7 @@ Result<std::shared_ptr<detail::PoolPage>> pool_page(detail::QueueState& queue, c
     }
     auto page = memory::make_shared_in<detail::PoolPage>(queue.resource, queue.owner);
     page->counts = counts;
-    std::array<vk::DescriptorPoolSize, 5> sizes{};
+    std::array<vk::DescriptorPoolSize, 6> sizes{};
     std::size_t size_count = 0;
     for (std::size_t i = 0; i < counts.size(); ++i) if (counts[i])
         sizes[size_count++] = {detail::native_descriptor(static_cast<ShaderDescriptorType>(i)), counts[i] * sets_per_page};
@@ -42,7 +43,7 @@ Result<BindingSet> ResourceFactory::create_bindings(const PipelineLayout& layout
     auto& queue = **checked;
     if (!layout.state_ || layout.state_->owner != queue.owner || set_index >= layout.state_->sets.size())
         return std::unexpected(Error{ErrorCode::invalid_argument, "binding layout/set is empty, out of range or foreign"});
-    std::array<std::uint32_t, 5> counts{};
+    std::array<std::uint32_t, 6> counts{};
     std::uint64_t expected = 0;
     for (const auto& binding : layout.state_->bindings) if (binding.set == set_index) {
         expected += binding.count;
@@ -97,6 +98,12 @@ Result<BindingSet> ResourceFactory::create_bindings(const PipelineLayout& layout
                 (storage && image->layout != vk::ImageLayout::eGeneral) ||
                 (!storage && image->layout != vk::ImageLayout::eGeneral && image->layout != vk::ImageLayout::eShaderReadOnlyOptimal))
                 return std::unexpected(Error{ErrorCode::invalid_argument, "descriptor image usage/layout mismatch"});
+        } else if (const auto* acceleration = std::get_if<AccelerationStructureBinding>(&write.resource)) {
+            if (!acceleration->structure || !*acceleration->structure || !queue.owner->device.ray_tracing_enabled() ||
+                acceleration->structure->kind() != AccelerationStructureKind::top_level ||
+                detail::ObjectAccess::state(*acceleration->structure)->owner != queue.owner || found->type != ShaderDescriptorType::acceleration_structure)
+                return std::unexpected(Error{ErrorCode::invalid_argument, "AS descriptor requires an owned TLAS from this RT submission domain"});
+            bound.acceleration = detail::ObjectAccess::state(*acceleration->structure);
         } else {
             const auto& sampler = std::get<SamplerBinding>(write.resource);
             if (!sampler.sampler || !sampler.sampler->state_ || sampler.sampler->state_->owner != queue.owner || found->type != ShaderDescriptorType::sampler)
@@ -109,9 +116,13 @@ Result<BindingSet> ResourceFactory::create_bindings(const PipelineLayout& layout
     Vector<vk::DescriptorBufferInfo> buffers{memory::Allocator<vk::DescriptorBufferInfo>{queue.resource}};
     Vector<vk::DescriptorImageInfo> images{memory::Allocator<vk::DescriptorImageInfo>{queue.resource}};
     Vector<vk::WriteDescriptorSet> native_writes{memory::Allocator<vk::WriteDescriptorSet>{queue.resource}};
+    Vector<vk::WriteDescriptorSetAccelerationStructureKHR> accelerations{memory::Allocator<vk::WriteDescriptorSetAccelerationStructureKHR>{queue.resource}};
+    Vector<vk::AccelerationStructureKHR> acceleration_handles{memory::Allocator<vk::AccelerationStructureKHR>{queue.resource}};
     buffers.resize(writes.size());
     images.resize(writes.size());
     native_writes.resize(writes.size());
+    accelerations.resize(writes.size());
+    acceleration_handles.resize(writes.size());
     for (std::size_t i = 0; i < state->resources.size(); ++i) {
         const auto& bound = state->resources[i];
         auto& write = native_writes[i];
@@ -120,6 +131,10 @@ Result<BindingSet> ResourceFactory::create_bindings(const PipelineLayout& layout
         if (bound.buffer) {
             buffers[i] = vk::DescriptorBufferInfo{vk::Buffer{bound.buffer->buffer}, bound.offset, bound.size};
             write.setBufferInfo(buffers[i]);
+        } else if (bound.acceleration) {
+            acceleration_handles[i] = *bound.acceleration->acceleration;
+            accelerations[i].setAccelerationStructures(acceleration_handles[i]);
+            write.setPNext(&accelerations[i]);
         } else {
             if (bound.view) images[i].setImageView(*bound.view->view).setImageLayout(bound.image_layout);
             if (bound.sampler) images[i].setSampler(*bound.sampler->sampler);

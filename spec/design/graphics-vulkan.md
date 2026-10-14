@@ -1,7 +1,7 @@
 ---
 module: graphics-vulkan
 created_at: "2026-09-30T10:18:48+08:00"
-updated_at: "2026-10-13T13:12:00+08:00"
+updated_at: "2026-10-14T12:15:10+08:00"
 status: accepted
 ---
 
@@ -80,7 +80,14 @@ Device 保持初始化和能力查询职责，不把所有创建方法继续加�
 | ShaderModule | create_shader(compiled) | 复制入口、阶段、最小反射元数据，创建 SPIR-V module；返回后可释放编译产物 |
 | PipelineLayout | create_pipeline_layout(shader_entries) | 跨阶段合并反射并创建 set layouts / push ranges |
 | GraphicsPipeline / ComputePipeline | create_graphics_pipeline(desc) / create_compute_pipeline(desc) | 管线拥有 layout；管线可跨多次录制复用 |
+| RayTracingPipeline / ShaderBindingTable | create_ray_tracing_pipeline(desc) / create_shader_binding_table(pipeline) | RT阶段/接口/布局验证；SBT按设备对齐创建并保留对应pipeline/layout |
 | BindingSet | create_bindings(layout, set_index, writes) | 拥有 descriptor 分配、layout 与全部被绑定资源 |
+
+M16.4在RayTracing.hpp提供四阶段RT管线、triangle hit groups和借用RayTracingEncoder；
+布局允许重复RT阶段但禁止RT与基线阶段混合，合并AS descriptor并检查设备AS限额。
+AS/SBT访问通过CommandBatch::prepare_trace显式准备，普通buffer/image用prepare；trace负责校验和录制，
+调用前核对SBT身份、TLAS实例索引、声明访问、绑定和dispatch limits，失败不消费访问或发布状态。
+详细范围与寿命见[光追契约](graphics-raytracing.md#m164实施契约)。
 
 公开 owner 均 move-only，内部控制块保存同一设备寿命与 owner 身份；`handle()` 只借用。
 工厂拒绝移后/已关闭队列、关闭中的 Memory resource 和 lost 设备。

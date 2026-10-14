@@ -30,7 +30,7 @@ TEST_CASE("buffer descriptions reject unsupported features and invalid roles")
     desc.usage = vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR;
     REQUIRE(policy::validate_buffer(desc));
     desc.usage = vk::BufferUsageFlagBits::eShaderBindingTableKHR;
-    REQUIRE_FALSE(policy::validate_buffer(desc)); // SBT remains a later stage.
+    REQUIRE(policy::validate_buffer(desc));
     desc.usage = vk::BufferUsageFlags{0x80000000u};
     REQUIRE_FALSE(policy::validate_buffer(desc));
     desc.usage = vk::BufferUsageFlagBits::eTransferSrc;

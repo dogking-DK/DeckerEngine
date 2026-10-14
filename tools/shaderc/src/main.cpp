@@ -15,7 +15,7 @@ void diagnostic(const dk::Error& error)
 }
 int run(const std::vector<std::string>& args)
 {
-    constexpr auto usage = "Usage: dk-shaderc compile --source FILE --entry NAME --stage vertex|fragment|compute --output FILE.spv\n"
+    constexpr auto usage = "Usage: dk-shaderc compile --source FILE --entry NAME --stage vertex|fragment|compute|raygeneration|miss|closesthit|anyhit --output FILE.spv\n"
         "                         [--include DIR ...] [--define NAME=VALUE ...]\n"
         "Writes SPIR-V atomically; reflection JSON goes to stdout, diagnostics to stderr.\n";
     if (args.size() == 1 && args[0] == "--help") { std::cout << usage; return 0; }
@@ -43,6 +43,10 @@ int run(const std::vector<std::string>& args)
     if (options.at("--stage") == "vertex") { stage = dk::graphics::ShaderStage::vertex; }
     else if (options.at("--stage") == "fragment") { stage = dk::graphics::ShaderStage::fragment; }
     else if (options.at("--stage") == "compute") { stage = dk::graphics::ShaderStage::compute; }
+    else if (options.at("--stage") == "raygeneration") { stage = dk::graphics::ShaderStage::raygeneration; }
+    else if (options.at("--stage") == "miss") { stage = dk::graphics::ShaderStage::miss; }
+    else if (options.at("--stage") == "closesthit") { stage = dk::graphics::ShaderStage::closesthit; }
+    else if (options.at("--stage") == "anyhit") { stage = dk::graphics::ShaderStage::anyhit; }
     else { std::cerr << usage; return 2; }
     const auto source = dk::path_from_utf8(options.at("--source"));
     const auto output = dk::path_from_utf8(options.at("--output"));

@@ -244,7 +244,7 @@ Result<Buffer> SubmissionQueue::create_buffer(const BufferDesc& description)
     if (auto result = state_->accepting(); !result) return std::unexpected(result.error());
     if (auto result = detail::validate_buffer(description); !result) return std::unexpected(result.error());
     if ((description.usage & (vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR |
-        vk::BufferUsageFlagBits::eAccelerationStructureStorageKHR)) && !device().ray_tracing_enabled())
+        vk::BufferUsageFlagBits::eAccelerationStructureStorageKHR | vk::BufferUsageFlagBits::eShaderBindingTableKHR)) && !device().ray_tracing_enabled())
         return std::unexpected(Error{ErrorCode::not_supported, "buffer device address / acceleration structures are not enabled"});
     auto resource = memory::make_shared_in<detail::ResourceState>(state_->resource, state_->owner, state_->resource);
     resource->states.resize(1);

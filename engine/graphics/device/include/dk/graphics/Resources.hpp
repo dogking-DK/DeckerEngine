@@ -41,6 +41,9 @@ class ComputePipeline;
 class GraphicsPipeline;
 class BindingSet;
 class AccelerationStructure;
+class RayTracingPipeline;
+class ShaderBindingTable;
+class RayTracingEncoder;
 class ReadbackRequest;
 struct ResourceUse;
 struct ResourceBarrier;
@@ -141,6 +144,8 @@ public:
     [[nodiscard]] Result<void> retain(const BindingSet& bindings);
     // One immutable candidate BUILD. Handles input/scratch/BLAS dependencies and retention.
     [[nodiscard]] Result<void> build(const AccelerationStructure& candidate);
+    [[nodiscard]] Result<void> prepare_trace(const ShaderBindingTable& table, std::span<const AccelerationStructure* const> structures);
+    [[nodiscard]] Result<RayTracingEncoder> ray_tracing();
     [[nodiscard]] Result<void> copy(const Buffer& source, const Buffer& destination,
         vk::DeviceSize size, vk::DeviceSize source_offset = 0, vk::DeviceSize destination_offset = 0);
     [[nodiscard]] Result<void> copy_to_image(const Buffer& source, const Image& destination);
