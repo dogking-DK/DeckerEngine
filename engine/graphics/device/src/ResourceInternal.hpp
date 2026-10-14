@@ -8,6 +8,14 @@ namespace dk::graphics::detail {
 struct PoolPage;
 struct ObjectState;
 struct EncoderState;
+struct AccelerationState;
+struct AccelerationUse {
+    std::shared_ptr<AccelerationState> resource;
+    AccessState access;
+    bool built = false;
+};
+void release_acceleration_uses(Vector<AccelerationUse>& uses, bool recording, bool completed = false) noexcept;
+void commit_acceleration_uses(Vector<AccelerationUse>& uses, std::uint64_t submission) noexcept;
 struct DeviceLifetime {
     explicit DeviceLifetime(Device&& value) : device(std::move(value)) {}
     Device device;
@@ -59,13 +67,14 @@ inline void complete_requests(Vector<std::shared_ptr<ReadbackState>>& requests, 
 { for (auto& request : requests) request->status = status; requests.clear(); }
 struct Slot {
     explicit Slot(memory::ResourceHandle resource) : uses(memory::Allocator<Use>{resource}), objects(memory::Allocator<std::shared_ptr<ObjectState>>{resource}),
-        requests(memory::Allocator<std::shared_ptr<ReadbackState>>{resource}) {}
+        requests(memory::Allocator<std::shared_ptr<ReadbackState>>{resource}), accelerations(memory::Allocator<AccelerationUse>{resource}) {}
     // Command buffer must be destroyed before its pool.
     vk::raii::CommandPool pool{nullptr};
     vk::raii::CommandBuffer command{nullptr};
     Vector<Use> uses;
     Vector<std::shared_ptr<ObjectState>> objects;
     Vector<std::shared_ptr<ReadbackState>> requests;
+    Vector<AccelerationUse> accelerations;
     SlotPhase phase = SlotPhase::free;
     std::shared_ptr<void> external_sync_owner;
     std::uint64_t value = 0;
@@ -125,6 +134,7 @@ struct QueueState {
             auto& slot = *next; // Publish telemetry in queue order, even after slot reuse.
             collect_gpu_profile(*this, slot);
             release_uses(slot.uses, false);
+            release_acceleration_uses(slot.accelerations, false, true);
             slot.objects.clear();
             complete_requests(slot.requests, ReadbackStatus::ready);
             slot.external_sync_owner.reset();
@@ -137,6 +147,7 @@ struct QueueState {
             if (slot.profile) slot.profile->status = GpuProfileStatus::device_lost;
             slot.profile.reset();
             release_uses(slot.uses, false);
+            release_acceleration_uses(slot.accelerations, false);
             slot.objects.clear();
             complete_requests(slot.requests, ReadbackStatus::device_lost);
             slot.external_sync_owner.reset();
@@ -161,12 +172,13 @@ struct BatchState {
     BatchState(std::shared_ptr<QueueState> queue_value, std::size_t index)
         : queue(std::move(queue_value)), slot(index), uses(memory::Allocator<Use>{queue->resource}),
           objects(memory::Allocator<std::shared_ptr<ObjectState>>{queue->resource}),
-          requests(memory::Allocator<std::shared_ptr<ReadbackState>>{queue->resource}) {}
+          requests(memory::Allocator<std::shared_ptr<ReadbackState>>{queue->resource}), accelerations(memory::Allocator<AccelerationUse>{queue->resource}) {}
     std::shared_ptr<QueueState> queue;
     std::size_t slot;
     Vector<Use> uses;
     Vector<std::shared_ptr<ObjectState>> objects;
     Vector<std::shared_ptr<ReadbackState>> requests;
+    Vector<AccelerationUse> accelerations;
     std::shared_ptr<EncoderState> encoding;
     std::shared_ptr<GpuProfileState> profile;
     std::shared_ptr<void> external_sync_owner;
@@ -179,6 +191,7 @@ struct BatchState {
         if (active) {
             complete_requests(requests, queue->owner->lost ? ReadbackStatus::device_lost : ReadbackStatus::cancelled);
             release_uses(uses, true);
+            release_acceleration_uses(accelerations, true);
             queue->slots[slot].phase = SlotPhase::free;
         }
     }

@@ -10,6 +10,8 @@ class BindingSet;
 struct GraphicsPipelineDesc;
 struct ComputePipelineDesc;
 struct BindingWrite;
+struct TriangleGeometry;
+struct AccelerationStructureInstance;
 namespace detail { struct ViewState; struct SamplerState; struct ShaderState; struct ObjectAccess; }
 struct ImageViewDesc {
     vk::ImageViewType type = vk::ImageViewType::e2D;
@@ -77,6 +79,9 @@ public:
     ResourceFactory() = default;
     [[nodiscard]] Result<Buffer> create_buffer(const BufferDesc& description) const;
     [[nodiscard]] Result<Image> create_image(const ImageDesc& description) const;
+    // Copy descriptions and retain input/BLAS owners. No commands are recorded or submitted here.
+    [[nodiscard]] Result<AccelerationStructure> create_blas(std::span<const TriangleGeometry> geometries) const;
+    [[nodiscard]] Result<AccelerationStructure> create_tlas(std::span<const AccelerationStructureInstance> instances) const;
     [[nodiscard]] Result<ImageView> create_view(const Image& image, const ImageViewDesc& description = {}) const;
     [[nodiscard]] Result<Sampler> create_sampler(const SamplerDesc& description = {}) const;
     [[nodiscard]] Result<ShaderModule> create_shader(const CompiledShader& shader) const;

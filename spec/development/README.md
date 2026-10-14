@@ -112,5 +112,6 @@
 | 0108 | [渐进式路径追踪任务规划](0108-pathtracing-plan.md) | graphics-raytracing、render-pathtracing、architecture、render-pipeline | completed |
 | 0109 | [M16.1 CPU路径追踪参考](0109-pathtracing-reference.md) | render-pathtracing、architecture | completed |
 | 0110 | [M16.2 RT设备能力与BDA/VMA](0110-raytracing-device.md) | graphics-raytracing、graphics-device、graphics-resources、architecture、render-pathtracing | completed |
+| 0111 | [M16.3 拥有型BLAS/TLAS与候选构建](0111-acceleration-structures.md) | graphics-raytracing、graphics-resources、architecture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

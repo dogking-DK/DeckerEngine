@@ -243,8 +243,9 @@ Result<Buffer> SubmissionQueue::create_buffer(const BufferDesc& description)
     DK_PROFILE_ZONE("graphics.buffer.create");
     if (auto result = state_->accepting(); !result) return std::unexpected(result.error());
     if (auto result = detail::validate_buffer(description); !result) return std::unexpected(result.error());
-    if ((description.usage & vk::BufferUsageFlagBits::eShaderDeviceAddress) && !device().ray_tracing_enabled())
-        return std::unexpected(Error{ErrorCode::not_supported, "bufferDeviceAddress is not enabled"});
+    if ((description.usage & (vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR |
+        vk::BufferUsageFlagBits::eAccelerationStructureStorageKHR)) && !device().ray_tracing_enabled())
+        return std::unexpected(Error{ErrorCode::not_supported, "buffer device address / acceleration structures are not enabled"});
     auto resource = memory::make_shared_in<detail::ResourceState>(state_->resource, state_->owner, state_->resource);
     resource->states.resize(1);
     resource->buffer_desc = description;
@@ -369,6 +370,9 @@ Result<Submission> SubmissionQueue::submit_impl(CommandBatch&& batch, vk::Semaph
     static_assert(noexcept(slot.uses = std::move(recording->uses)));
     slot.uses = std::move(recording->uses);
     slot.objects = std::move(recording->objects);
+    static_assert(noexcept(slot.accelerations = std::move(recording->accelerations)));
+    slot.accelerations = std::move(recording->accelerations);
+    detail::commit_acceleration_uses(slot.accelerations, ticket.value_);
     slot.external_sync_owner = std::move(recording->external_sync_owner);
     static_assert(noexcept(slot.requests = std::move(recording->requests)));
     slot.requests = std::move(recording->requests);
@@ -439,7 +443,7 @@ SubmissionStats SubmissionQueue::stats() const noexcept
         if (slot.phase == detail::SlotPhase::free) ++result.free_slots;
         if (slot.phase == detail::SlotPhase::recording) ++result.recording_slots;
         if (slot.phase == detail::SlotPhase::pending) ++result.pending_slots;
-        result.retained_resources += slot.uses.size();
+        result.retained_resources += slot.uses.size() + slot.accelerations.size();
     }
     return result;
 }

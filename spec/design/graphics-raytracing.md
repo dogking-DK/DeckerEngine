@@ -1,7 +1,7 @@
 ---
 module: graphics-raytracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-14T11:03:02+08:00"
+updated_at: "2026-10-14T11:28:52+08:00"
 status: accepted
 ---
 
@@ -10,7 +10,7 @@ status: accepted
 ## 目标与当前边界
 
 为[渐进式路径追踪](render-pathtracing.md)提供硬件三角形求交、加速结构、光追管线和 Graph 调度。
-M16.2能力契约见下节；AS/管线/Graph接口仍为拟议契约，阶段状态和任务顺序由[Roadmap](../roadmap.md)维护。
+M16.2能力与M16.3 AS实施契约见下节；管线/Graph接口仍为拟议契约，阶段状态和任务顺序由[Roadmap](../roadmap.md)维护。
 沿用 Windows x64、Vulkan 1.4、Slang、Vulkan-Hpp RAII、VMA 和单提交队列，不新增跨 API RHI。
 
 核对当前代码后的缺口：
@@ -19,7 +19,7 @@ M16.2能力契约见下节；AS/管线/Graph接口仍为拟议契约，阶段状
 | --- | --- | --- |
 | [Device.hpp](../../engine/graphics/device/include/dk/graphics/Device.hpp) | Vulkan 1.4、确定性选卡、同族共享设备；RT三态请求、支持/启用/缺项与limits | 后续按材质需要扩展独立非一致索引能力组 |
 | [ShaderArtifact.hpp](../../engine/graphics/shader-types/include/dk/graphics/ShaderArtifact.hpp) | vertex/fragment/compute、五种 descriptor | raygen/miss/closest-hit/any-hit、AS descriptor、能力需求 |
-| [Device](../../engine/graphics/device) | Buffer/Image、graphics/compute、提交保活；BDA buffer与VMA配置 | BLAS/TLAS、SBT、RT pipeline/encoder |
+| [Device](../../engine/graphics/device) | Buffer/Image、graphics/compute、提交保活；BDA/VMA、拥有型BLAS/TLAS与候选BUILD | SBT、RT pipeline/encoder |
 | [Graph](../../engine/graphics/graph) | buffer/image 声明、同步和导入导出 | AS 内容依赖、build/trace 访问和类型化回调 |
 | [GpuAssets.cpp](../../engine/render/resources/src/GpuAssets.cpp) | vertex/index/transfer usage | RT 专用构建输入和着色数据；旧 buffer 不能事后追加 usage |
 
@@ -49,12 +49,48 @@ BufferDesc允许ShaderDeviceAddress usage；创建在VMA分配前要求Device已
 `Buffer::device_address()`拒绝空buffer、lost device和未声明usage；成功返回当前buffer的非零地址。
 查询不修改资源访问/初始化状态、不提交GPU工作，普通buffer不能事后追加usage。
 地址只是借用数值，Buffer及Device寿命仍靠已有owner/share/提交保活；禁止把地址当所有权。
-AS storage/build input/SBT usage和同步访问在相应后续阶段接入，本阶段不宣称可构建AS或trace。
+AS storage/build input usage在M16.3接入；SBT和trace仍留待后续阶段。
 
 验证分层：纯策略遍历六项缺失及required/if_available/disabled、显式选卡与WSI组合；
 fake dispatch验证查询结构、启用链、VMA flags、缺入口/创建失败/取消逆序回收与共享寿命；
 真实required RT+validation probe核对limits、创建BDA buffer、非零稳定地址、普通buffer拒绝与关闭回收。
 required probe缺设备/feature/validation一律失败，不以77跳过计为通过。普通Device/资源回归和CPU-only命令独立验证。
+
+## M16.3 BLAS/TLAS实施契约
+
+`AccelerationStructure.hpp`提供move/share拥有型AS、三角几何与实例描述、构建尺寸和状态快照。
+`ResourceFactory::create_blas/create_tlas`创建独立候选，`CommandBatch::build`仅允许首次BUILD。
+BLAS支持多几何、R32G32B32Sfloat、非索引或uint16/uint32索引；顶点stride/offset、索引offset、
+primitive/vertex count、缓冲范围、设备geometry/primitive上限在查询尺寸前校验。
+索引内容由调用者保证小于vertex_count，设备私有buffer不做隐式CPU读回。
+TLAS输入CPU实例描述，复制行主序3x4变换及24-bit custom index/SBT offset、8-bit mask和基本flags；
+拒绝非有限/不可逆变换、非法flags与上限，内部生成拥有型实例buffer，不接受裸BLAS地址。
+空几何/实例拒绝；调用者为空场景选择环境路径。所有对象和输入必须属于同一提交域。
+
+每个AS拥有原生句柄、独立VMA storage和Device；析构先销毁AS再释放storage。
+候选拥有构建输入，TLAS在整个寿命内拥有其BLAS；构建完成后释放输入，scratch仅由录制/提交批次持有。
+使用驱动查询的storage/scratch尺寸；每次录制独立scratch，检查size+alignment溢出，按实际BDA地址向上对齐，
+允许驱动返回零scratch需求。AS storage offset固定0，不做suballocation。
+
+AS使用独立类型账本，记录访问、candidate/submitted/completed和generation；generation为首次成功构建提交的timeline值，
+在同一提交域内解释（同批次AS可共享该代）。录制只修改本地账本/保留资源；同批BLAS先构建后TLAS可读取，
+跨批次使用已成功提交BLAS。queue submit成功才发布代和访问；poll/wait/close确认后才标completed。
+录制放弃、参数/创建/提交失败保持旧代及候选状态，释放预约后可重试候选；已提交对象不能重建。
+timeout保留pending引用，device lost状态覆盖普通状态。队列关闭/卸载走既有等待和保活路径。
+创建/录制不自动替换调用者持有的旧代；调用者仅在submit成功后交换拥有句柄。
+
+类型化build内部完成输入到AS-build shader-read屏障、BLAS build-write到TLAS build-read屏障；
+scratch为专用临时工作区，不读取旧内容也不将其记为业务初始化。输入要求账本已有完整初始化，
+可由本批upload或host write建立；只读重复输入合并。AS访问不伪装成普通storage-buffer访问。
+尚不开放Graph AS声明/trace；后续复用此拥有关系和提交账本。
+
+验证：纯策略覆盖计数/格式/跨度/地址溢出、scratch对齐、变换和字段边界；required RT GPU probe执行
+多几何BLAS、多个BLAS的多实例TLAS、同批和跨批依赖，检查代/地址、失败保持旧代、放弃重试、
+pending外部释放/timeout/关闭、VMA与Memory回收及validation/sync零诊断。已知射线命中仍属M16.4。
+规范依据：[构建命令](https://docs.vulkan.org/refpages/latest/refpages/source/vkCmdBuildAccelerationStructuresKHR.html)、
+[尺寸查询](https://docs.vulkan.org/refpages/latest/refpages/source/vkGetAccelerationStructureBuildSizesKHR.html)、
+[三角输入](https://docs.vulkan.org/refpages/latest/refpages/source/VkAccelerationStructureGeometryTrianglesDataKHR.html)、
+[实例布局](https://docs.vulkan.org/refpages/latest/refpages/source/VkAccelerationStructureInstanceKHR.html)。
 
 ## 模块与依赖
 
@@ -95,7 +131,7 @@ CPU-only 模块和 RT 关闭设备不得调用这些入口；共享 Device view 
 
 ## 资源、构建与所有权
 
-拟提供拥有型 `AccelerationStructure`、构建尺寸/描述、`ShaderBindingTable` 和 `RayTracingPipeline`；
+已提供拥有型 `AccelerationStructure`和构建尺寸/描述；`ShaderBindingTable`与`RayTracingPipeline`留待后续阶段。
 AS 区分 bottom/top level，并具有提交域身份、内容有效性、最后访问与构建代次。
 AS owner 保留 storage buffer 和 Device，析构先释放 AS 句柄再释放 VMA buffer；禁止双重拥有同一 Vulkan buffer。
 公开地址仅供内部描述组装，不能把整数地址作为寿命凭据。
@@ -108,13 +144,14 @@ AS owner 保留 storage buffer 和 Device，析构先释放 AS 句柄再释放 V
 | SBT | shader binding table、shader device address、必要 transfer usage | 与创建它的 pipeline 代次绑定，trace 提交保活 |
 | 材质/几何表、输出 | storage / sampled / transfer 按实际声明 | 绑定集、图执行和提交闭包保活 |
 
-初版按 primitive 建不可变 BLAS；相同资产内容/上传代次和构建选项复用，变换变化只重建 TLAS。
+后续Render集成按primitive建不可变BLAS并按资产内容/上传代次及构建选项复用；Device允许单个BLAS含多个三角几何。
+变换变化只重建TLAS，资产缓存策略不在Device层实现。
 TLAS owner 保留全部引用的 BLAS owner，描述中的 device address 不代替此引用。
 几何变化重建相关 BLAS，拓扑/实例集合或变换变化重建 TLAS；材质值变化只更新着色表，
 opaque/mask 或单/双面影响构建/instance flags 时，按实际 key 失效相应 AS。
 空场景采用独立环境输出路径，不提交非法空构建。不可逆变换、实例索引超限和不支持的格式在提交前拒绝。
 
-构建遵循 candidate → submitted → completed。Graph 提交成功后才发布 submitted 资源状态和代次；
+构建遵循 candidate → submitted → completed。SubmissionQueue提交成功后才发布submitted资源状态和代次；
 同队列后续使用可依靠已声明依赖接续，CPU 不可将 submitted 报作完成。独立失败不污染旧快照。
 首版不在旧 AS 上原地 rebuild/update，避免新旧帧同时引用时破坏不可变契约。
 

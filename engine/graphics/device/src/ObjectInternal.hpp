@@ -2,6 +2,7 @@
 #include "ResourceInternal.hpp"
 #include <dk/graphics/GpuObjects.hpp>
 #include <dk/graphics/Bindings.hpp>
+#include <dk/graphics/AccelerationStructure.hpp>
 
 namespace dk::graphics::detail {
 struct ObjectState {
@@ -48,6 +49,7 @@ struct ObjectAccess {
     static const auto& state(const Buffer& value) { return value.state_; }
     static const auto& state(const Image& value) { return value.state_; }
     static const auto& state(const CommandBatch& value) { return value.state_; }
+    static const auto& state(const AccelerationStructure& value) { return value.state_; }
     static void fail_creation(const ResourceFactory& factory, VkResult result) {
         if (auto queue = factory.queue_.lock()) queue->object_creation_failure = result;
     }
