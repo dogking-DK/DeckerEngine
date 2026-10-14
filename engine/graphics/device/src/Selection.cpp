@@ -30,8 +30,10 @@ std::array<std::string_view, 6> RayTracingSupport::missing() const noexcept
 }
 
 Result<AdapterSelection> select_adapter(std::span<const AdapterInfo> adapters, std::optional<std::uint32_t> requested,
-    bool presentation, RayTracingMode ray_tracing)
+    bool presentation, RayTracingMode ray_tracing, SampledImageIndexingMode indexing)
 {
+    if (indexing != SampledImageIndexingMode::disabled && indexing != SampledImageIndexingMode::if_available && indexing != SampledImageIndexingMode::required)
+        return std::unexpected(Error{ErrorCode::invalid_argument, "invalid sampled image indexing mode"});
     if (ray_tracing != RayTracingMode::disabled && ray_tracing != RayTracingMode::if_available && ray_tracing != RayTracingMode::required)
         return std::unexpected(Error{ErrorCode::invalid_argument, "invalid ray tracing mode"});
     if (requested && *requested >= adapters.size())
@@ -50,6 +52,8 @@ Result<AdapterSelection> select_adapter(std::span<const AdapterInfo> adapters, s
         require(adapter.synchronization2, "synchronization2");
         require(adapter.dynamic_rendering, "dynamicRendering");
         require(adapter.maintenance4, "maintenance4");
+        if (indexing == SampledImageIndexingMode::required)
+            require(adapter.sampled_image_non_uniform_indexing, "shaderSampledImageArrayNonUniformIndexing");
         if (ray_tracing == RayTracingMode::required)
             for (const auto reason : adapter.ray_tracing.missing()) if (!reason.empty()) { missing += reason; missing += "; "; }
         if (presentation) {

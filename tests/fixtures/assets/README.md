@@ -7,6 +7,7 @@ JPEG 使用 Pillow 11.1.0（无色度降采样、quality 95）；生成器不是
 - gray16.png：2×2 16 位灰度 PNG，检查拒绝隐式降精度。
 - red.jpg：2×2 红色 JPEG，检查有损解码（允许舍入误差）。
 - triangle.gltf + triangle.bin：交错 POSITION/UV 和 uint16 索引、基础材质、外部 rgba.png。
+- pathtrace-mask.gltf：同一网格/PNG，显式metallic=0、MASK、双面与nearest/repeat/mirror sampler；用于路径追踪导入/产物重载验收。
 - triangle.glb：同样的网格，改为 bufferView 内嵌 red.jpg，单文件依赖。
 
 `python tests/fixtures/assets/generate.py` 可重建全部夹具。测试复制到专用临时工程，源夹具不产生 meta。

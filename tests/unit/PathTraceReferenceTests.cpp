@@ -142,7 +142,7 @@ TEST_CASE("unsupported materials malformed assets and scene budgets reject befor
     const int mode=GENERATE(0,1,2,3,4,5,6,7,8,9,10);
     switch(mode) {
     case 0: f.asset.materials[0].metallic=1; break;
-    case 1: f.asset.materials[0].alpha_mode=AlphaMode::mask; break;
+    case 1: f.asset.materials[0].alpha_mode=AlphaMode::blend; break;
     case 2: f.asset.materials[0].base_color_texture=AssetId::generate().value(); break;
     case 3: f.asset.mesh.primitives[0].material.reset(); break;
     case 4: f.asset.mesh.primitives[0].indices.push_back(0); break;
@@ -254,7 +254,7 @@ TEST_CASE("budgets invalid inputs media and cancellation preserve previous resul
     case 1: s.max_triangle_tests=1; break;
     case 2: s.max_bounces=0; break;
     case 3: s.rr_start=33; break;
-    case 4: s.model_version=2; break;
+    case 4: s.model_version=1; break;
     case 5: s.sampler_version=2; break;
     case 6: s.estimator=static_cast<PathTraceEstimator>(42); break;
     case 7: s.environment_rgb.x()=std::numeric_limits<double>::quiet_NaN(); break;

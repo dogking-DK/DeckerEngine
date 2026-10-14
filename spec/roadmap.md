@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-14T14:39:28+08:00"
+updated_at: "2026-10-14T16:57:16+08:00"
 status: accepted
 ---
 
@@ -75,7 +75,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M13 实验管理与参数扫描 | 批量实验、产物索引、失败恢复与对比报告 | M9、M12 | 已完成，见0089–0092 |
 | M14 大气渲染 | 物理天空、太阳漫反射、空气透视及编辑器/截图一致性 | M7、M8/M9、M11 | 已完成，见0094–0100；保留性能目标实测差距 |
 | M15 体积云 | 可复现云场、光照/合成、时域重建、云影及质量性能验收 | M14；自动化复用M9/M13原则 | 已完成质量/性能基线；非零云GPU与在途峰值候选未达 |
-| M16 渐进式路径追踪 | CPU参考、Vulkan RT表面积分、每视图累积、编辑器与固定spp截图 | M5/M6/M7；集成需M8/M9，观测复用M11 | 进行中；M16.1–6 CPU参考、RT/Graph底座和GPU无历史Lambert完成，见[0109](development/0109-pathtracing-reference.md)至[0114](development/0114-gpu-pathtracing.md) |
+| M16 渐进式路径追踪 | CPU参考、Vulkan RT表面积分、每视图累积、编辑器与固定spp截图 | M5/M6/M7；集成需M8/M9，观测复用M11 | 进行中；M16.1–6及M16.7.1 CPU参考、RT/Graph底座和GPU无历史纹理Lambert完成，见[0109](development/0109-pathtracing-reference.md)至[0115](development/0115-pathtracing-textures.md) |
 
 默认执行表中顺序。M5 在 Foundation 补充完成后具备独立探索条件，
 M9 的 Luau 命令绑定在 M3 后可提前做；若调整次序，仍需满足对应集成验收依赖。
@@ -709,7 +709,7 @@ M14.4日光接收、M14.5空气透视、M14.6环境编辑/截图闭环和M14.7�
 | M16.4 | Slang raygen/miss/closest-hit/any-hit、AS反射、RT pipeline/SBT/trace encoder | M16.3、M5 shader/使用层 | 阶段与payload/布局错误拒绝；SBT handle/stride/alignment/index核验；真实已知射线命中/重心/距离/visibility正确，shaderc参考同步 | 完成，见[0112](development/0112-raytracing-pipeline.md) |
 | M16.5 | Graph AS类型、构建/trace依赖与同步、类型化Pass回调 | M16.4、M6 | upload→BLAS→TLAS→trace→readback；裁剪/初始化/导入导出/跨图与队列拒绝；失败不提交状态；required GPU同步验证及原buffer/image回归 | 完成，见[0113](development/0113-graph-raytracing.md) |
 | M16.6 | GPU无历史Lambert路径追踪、不可变场景/灯光表、HDR诊断 | M16.5、M16.1 | 主/阴影/多次反弹、NEE/MIS/RR；空场景、缩放/剪切、发光/遮挡；CPU/解析参考误差与收敛过门槛；失败保留旧帧 | 完成，见[0114](development/0114-gpu-pathtracing.md) |
-| M16.7.1 | 纹理/alpha-mask/双面语义、固定descriptor数组与非一致索引能力 | M16.6 | CPU采样与GPU一致，sRGB/alpha/UV/wrap、radiance和visibility mask、负缩放正反面；容量/能力拒绝，当前资产路径可追溯 | 未开始 |
+| M16.7.1 | 纹理/alpha-mask/双面语义、固定descriptor数组与非一致索引能力 | M16.6 | CPU采样与GPU一致，sRGB/alpha/UV/wrap、radiance和visibility mask、负缩放正反面；容量/能力拒绝，当前资产路径可追溯 | 完成，见[0115](development/0115-pathtracing-textures.md) |
 | M16.7.2 | metallic-roughness GGX子集，CPU eval/sample/PDF与GPU实现 | M16.7.1 | metallic/roughness端点、掠射/法线、能量与MIS均值检验；先冻结CPU模型/阈值再验GPU；不混同Lambert与默认metallic材质 | 未开始 |
 | M16.8 | 每视图渐进累积、计数式样本、reset/poll、tile与工作/显存额度 | M16.7.2 | 批次/分块不重漏样本，固定spp与一次参考一致；相机/资产/手势重置；曝光不重采样；迟到/失败/取消不推进completed_spp；有界在途资源 | 未开始 |
 | M16.9 | 编辑器模式切换、后台预览、进度/暂停/重置和完成图像交接 | M16.8、M8/M12视口机制 | 实际GUI/IPC编辑同输入；拖动/resize/切场景不混历史；能力不足可见；owner不做GPU等待，单队列串行与关闭安全；启动测试使用--background | 未开始 |
@@ -717,7 +717,7 @@ M14.4日光接收、M14.5空气透视、M14.6环境编辑/截图闭环和M14.7�
 | M16.11 | 固定质量/多seed收敛、动态重置、三轮性能/显存基线和交付 | M16.9、M16.10、M11观测 | 程序化与受支持磁盘场景、CPU参考及required RT GPU通过；冷/热/达到固定质量的耗时、取消/回收及显存峰值留原始证据；性能缺口不伪装成达标 | 未开始 |
 
 M16.7 为材质任务组，只有 M16.7.1/2 全部验收才完成；每行独立开发记录与本地提交。
-默认按表串行推进，M16.7.1 是下一项；过大行在开工前继续拆 Mx.y.z。M16.10核心可独立于GUI准备，
+默认按表串行推进，M16.7.2 是下一项；过大行在开工前继续拆 Mx.y.z。M16.10核心可独立于GUI准备，
 最终一致性必须在M16.9后验证。没有人员/日历预算，不虚构工期。
 
 **交付节点F（计划）：** 用户可选路径追踪视口，静止逐步收敛，改场景/相机后重置，
@@ -784,7 +784,8 @@ M13.3已完成，见[0091](development/0091-experiment-recovery.md)：批处理�
 参数/seed扫描自动生成可追溯报告，CPU-only与GPU图像分别验收，300拍重跑和跨后端容差通过。
 **M0–M15质量与基线交付已完成。M14环境模型、体积底座、天空/日光/空气透视、编辑器与截图闭环见[0094](development/0094-environment-model.md)至[0099](development/0099-environment-integration.md)；质量/性能基线与三预设交付见[0100](development/0100-atmosphere-baseline.md)。1.5ms性能候选目标未达，保留原质量门槛与实测差距。M15.1云CPU模型、environment v2迁移、确定性天气/3D噪声、风时间与有界GPU纹理见[0101](development/0101-cloud-fields.md)。M15.2无历史CPU/GPU积分、太阳光照及收敛参考已完成，见[0102](development/0102-cloud-reference.md)。M15.3云/空气/几何联合合成、诊断和有界截图参考已完成，见[0103](development/0103-cloud-composition.md)。M15.4半分辨率/跳跃/保边与有界每视图时域优化已完成，21项定向验收见[0104](development/0104-cloud-reconstruction.md)，性能候选结果见M15.7。M15.5固定世界云透射阴影、直射接收及资源寿命已完成，21项定向验收见[0105](development/0105-cloud-shadows.md)。M15.6云预设/面板、固定时间序列、Python/Luau和版本化用例报告已完成，见[0106](development/0106-cloud-integration.md)。M15.7四预设固定质量、动态/失败回归与三轮性能/显存交付见[0107](development/0107-cloud-delivery.md)。云增量4ms、联合5.5ms和在途峰值192MiB候选未达；后续优化需另行规划，并维持已冻结质量门槛。**
 M16渐进式路径追踪已完成CPU参考、RT/Graph底座及GPU无历史Lambert积分、不可变场景/异步帧和HDR诊断，设计与实测见[0109](development/0109-pathtracing-reference.md)至[0114](development/0114-gpu-pathtracing.md)。
-**下一项为M16.7.1：纹理/alpha-mask/双面语义、固定descriptor数组与非一致索引能力。** 继续沿用冻结的CPU解析与统计验收标准。
+M16.7.1纹理/alpha-mask/双面、固定64槽数组与独立非一致索引能力已完成，含CPU/GPU数值、失败寿命与glTF产物链路，见[0115](development/0115-pathtracing-textures.md)。
+**下一项为M16.7.2：metallic-roughness GGX子集，先冻结CPU eval/sample/PDF与能量门槛，再核对GPU。**
 编辑器 Play 视口已在 M12 验收，批量实验在 M13 验收；检查点、其他平台与发布打包仍未纳入本轮扩展。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。

@@ -49,6 +49,7 @@ struct CompiledShader {
     Vector<ShaderPushConstant> push_constants;
     Vector<String> dependencies;
     bool requires_ray_tracing = false;
+    bool requires_sampled_image_indexing = false;
     std::uint64_t source_fingerprint = 0; // FNV-1a content/config fingerprint; not a security digest.
     ShaderRayInterface ray_interface;
 };

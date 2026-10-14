@@ -21,8 +21,14 @@ struct PathTraceHit {
 };
 struct PathTraceSceneLimits {
     std::size_t max_triangles = 4096, max_primitive_instances = 4096;
+    std::size_t max_textures = 64, max_texture_bytes = 64*1024*1024;
 };
-// Immutable CPU input. Material mode is opaque, untextured, flat-normal Lambert v1.
+struct PathTraceTextureInfo {
+    AssetId mesh, texture;
+    std::string_view origin; // Borrowed from the immutable scene.
+    std::uint32_t width = 0, height = 0;
+};
+// Immutable CPU input. Model v2 adds baseColor textures and alpha-mask to Lambert.
 class PathTraceScene final {
 public:
     PathTraceScene() = default;
@@ -34,6 +40,9 @@ public:
     [[nodiscard]] std::uint64_t fingerprint() const noexcept;
     [[nodiscard]] std::size_t triangle_count() const noexcept;
     [[nodiscard]] std::size_t degenerate_count() const noexcept;
+    [[nodiscard]] std::size_t texture_count() const noexcept;
+    [[nodiscard]] std::size_t masked_emitter_count() const noexcept;
+    [[nodiscard]] Result<PathTraceTextureInfo> texture_info(std::size_t) const;
     [[nodiscard]] Result<std::optional<PathTraceHit>> nearest(const PathTraceRay&) const;
 private:
     friend struct detail::PathReferenceAccess;
@@ -43,7 +52,7 @@ private:
 enum class PathTraceEstimator { mis, bsdf_only };
 enum class PathTraceSun { none, scene };
 struct PathTraceSettings {
-    std::uint32_t model_version = 1, sampler_version = 1;
+    std::uint32_t model_version = 2, sampler_version = 1;
     std::uint64_t seed = 1;
     std::uint32_t max_bounces = 8, rr_start = 3; // 0 disables RR for comparison.
     Vec3d environment_rgb = Vec3d::Zero(); // Constant radiance; never includes a solar disk.
@@ -63,6 +72,7 @@ struct PathTraceImageInfo {
     std::uint32_t width = 0, height = 0;
     SceneId scene;
     std::uint64_t revision = 0, fingerprint = 0;
+    std::size_t texture_count = 0, masked_emitter_count = 0;
     ViewDescription view;
     PathTraceSettings settings;
     PathTraceSamples samples;

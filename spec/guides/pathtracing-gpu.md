@@ -1,13 +1,13 @@
 ---
 created_at: "2026-10-14T14:37:00+08:00"
-updated_at: "2026-10-14T14:37:00+08:00"
+updated_at: "2026-10-14T16:57:16+08:00"
 ---
 
 # GPU无历史Lambert路径追踪
 
 [返回项目入口](../../README.md)。[M16.6设计](../design/render-pathtracing.md#m166-gpu无历史lambert实施契约)
 提供硬件三角形求交、NEE/MIS/RR和拥有型HDR结果，使用与[CPU参考](pathtracing-reference.md)一致的冻结输入与采样模型。
-当前为≤64×64正确性参考，历史累积、纹理/PBR、编辑器和capture命令按Roadmap后续阶段接入。
+当前为≤64×64正确性参考，支持Lambert baseColor纹理/alpha-mask；历史累积、GGX、编辑器和capture命令按Roadmap后续阶段接入。
 
 ## 构建与验证
 
@@ -25,9 +25,16 @@ Scene/Math/Memory和Graphics Device/Graph/Shader须已启用；GPU开关同时�
 
 ## 场景、提交与读回
 
-使用`PathTraceScene::create`冻结RenderScene与被引用的CpuAsset；此阶段只接收opaque、无纹理、metallic=0材质。
+使用`PathTraceScene::create`冻结RenderScene与被引用的CpuAsset；接收opaque/mask、metallic=0材质及baseColor纹理。
 GPU renderer读取冻结的世界三角形，保留完整仿射结果、几何法线、单/双面、发光与面积权重。
 浮点转换导致几何退化或无法表示的正面积/光源权重会被拒绝，旧场景保持有效。
+
+带纹理设备在DeviceOptions中设置`sampled_image_indexing=SampledImageIndexingMode::required`（或if_available），
+并另设`ray_tracing=RayTracingMode::required`。renderer根据实际启用状态选择固定64槽纹理变体；
+未启用纹理能力时prepare_scene明确拒绝贴图，原无纹理路径仍可用。Shader和布局分别检查能力及设备descriptor limits。
+最多64张、单边2048、总64MiB RGBA8；使用标准sRGB解码后上传RGBA32F，图像与staging各最多256MiB。
+LOD=0使用mag_filter，支持nearest/linear与repeat/clamp/mirrored_repeat；UV不翻转，alpha不做sRGB解码。
+mask同时作用于radiance与visibility，发光mask不进入NEE灯分布，仍可被BSDF命中。
 
 以下展示生命周期；`heap/queue/source/view`分别是开放Memory、已启用RT的提交队列、PathTraceScene和匹配RenderView。
 为突出调用顺序使用value()，正式调用应检查Result错误。
@@ -64,6 +71,7 @@ stop_token只在CPU阶段、提交前及读取发布前检查，已提交GPU不�
 - `linear_rgb()`是曝光前线性RGB均值；`second_moment()`为样本RGB平方的均值。无tone、去噪或亮点截断。
 - `primary_hits()`记录每像素本区间第一个样本的主射线命中，含距离、重心、世界法线、front_face和Entity/Asset/primitive/triangle来源；miss为空。
 - `info()`记录scene/revision/fingerprint、视图、settings、样本区间、fixed_rays/first_pixel和实际trace射线数。
+  texture_count/masked_emitter_count记录冻结纹理数及未纳入NEE的mask发光三角形数，model_version=2、sampler_version=1。
   空场景compute的硬件射线数为0；硬件三角遍历计数不可得，triangle_tests为0而非测得0次遍历。
 - NaN/Inf、负辐亮度和非法诊断拒绝整帧。指纹仅作稳定诊断摘要，不是安全校验或缓存相等证明。
 
@@ -73,9 +81,12 @@ BLAS从世界顶点合并构建，尚无资产BLAS复用、UPDATE/refit、跨队
 
 ## 可执行验收与报告
 
-[PathTraceProbe.cpp](../../tests/integration/PathTraceProbe.cpp)提供五组required测试：
+[PathTraceProbe.cpp](../../tests/integration/PathTraceProbe.cpp)提供原五组required测试：
 解析/几何/跨尺度阴影、8 seed光照统计、完整图像与分段、失败/在途寿命、内存分配失败和恢复。
 CPU oracle使用独立双精度暴力求交，面积灯再用独立二维积分校核；参考先验证N/4N收敛再对比GPU。
+新增texture_numeric/mask/lifetime/disabled/allocations，以及启用Assets时的texture_assets组；
+覆盖64张发散访问、过滤/UV/wrap、双面/mask发光、能力拒绝、失败寿命，以及glTF导入/产物重载到GPU。
+材质实施与实测记录见[0115](../development/0115-pathtracing-textures.md)。
 
 images用例在构建目录`tests/integration/pathtrace-hdr.json`写入4×4、seed=42、256spp线性数据。
 报告的comparison对象单独记录8 seed、4096/16384spp对照协议和nRMSE，不能把这组误差当作256spp图像的参考误差。

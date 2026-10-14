@@ -1,6 +1,12 @@
 #include "../RenderAssetSupport.hpp"
 #include <dk/render/PathTraceRenderer.hpp>
 #include <dk/scene/SceneDocument.hpp>
+#include <dk/graphics/ShaderCompiler.hpp>
+#include <dk/graphics/GpuObjects.hpp>
+#ifdef DK_PATH_ASSET_DIR
+#include <dk/assets/AssetCompiler.hpp>
+#include <dk/assets/CpuArtifact.hpp>
+#endif
 #include "SubmissionInternal.hpp"
 #include <atomic>
 #include <cmath>
@@ -242,6 +248,11 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
     const auto bounded=system.create_heap({"path-failures",memory::DomainCategory::render,16*1024*1024}).value();
     {
         auto renderer=take(PathTraceRenderer::create(bounded,queue,DK_PATH_SHADER_DIR)); Fixture f{heap}; f.quad(-2,2,0,{.5f,.5f,.5f});
+        if(queue.device().sampled_image_indexing_enabled()) {
+            TextureData texture; texture.id=AssetId::generate().value(); texture.width=texture.height=2; texture.rgba8.resize(16,std::byte{255});
+            for(std::size_t i=0;i<2;++i) { f.asset.materials[i].base_color_texture=texture.id; f.asset.mesh.primitives[i].texcoords={{0,0},{1,0},{0,1}}; }
+            f.asset.textures.push_back(std::move(texture));
+        }
         auto source=f.scene(); auto scene=take(renderer.prepare_scene(queue,source)); auto s=settings(); s.environment_rgb=Vec3d::Ones();
         const auto frame=take(renderer.submit_rays(queue,scene,std::span{&down,1},s,{0,4})); const auto old=complete(queue,frame);
         struct Block { void* pointer; std::size_t size; }; std::vector<Block> blocks;
@@ -271,6 +282,7 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
     require(bounded.snapshot().live_allocations==0,"bounded Memory leaked"); std::puts("initial/mid-allocation/old-frame/recovery/closing=pass");
 }
 }
+#include "PathTextureCases.hpp"
 int main(int argc,char** argv) {
     try {
         require(argc==2,"expected analytic/statistics/images/lifetime case");
@@ -278,8 +290,10 @@ int main(int argc,char** argv) {
             memory::ResourceHandle heap=system.create_heap({"path-probe",memory::DomainCategory::render}).value(); } memory;
         Diagnostics diagnostics;
         {
-            memory::ThreadContext context{memory.system}; memory::ExecutionScope scope{context,memory.heap};
+            memory::ThreadContext context{memory.system,memory.heap}; memory::ExecutionScope scope{context,memory.heap};
             DeviceOptions options; options.validation=ValidationMode::required; options.ray_tracing=RayTracingMode::required;
+            const std::string_view requested=argv[1];
+            if(requested.starts_with("texture_") && requested!="texture_disabled") options.sampled_image_indexing=SampledImageIndexingMode::required;
             options.diagnostic_sink=diagnostic; options.diagnostic_user_data=&diagnostics; auto device=take(Device::create(memory.heap,options)); auto view=take(device.share_queue(0));
             std::printf("GPU=%s validation=%d case=%s\n",device.adapter().properties.deviceName.data(),device.validation_enabled(),argv[1]);
             native_submit=reinterpret_cast<PFN_vkQueueSubmit2>(device.device_proc("vkQueueSubmit2")); native_wait=reinterpret_cast<PFN_vkWaitSemaphores>(device.device_proc("vkWaitSemaphores"));
@@ -291,6 +305,14 @@ int main(int argc,char** argv) {
               else if(mode=="images") images(memory.heap,renderer,queue);
               else if(mode=="lifetime") lifetime(memory.heap,renderer,queue,view);
               else if(mode=="allocations") allocations(memory.system,memory.heap,queue);
+              else if(mode=="texture_numeric") texture_numeric(memory.heap,renderer,queue);
+              else if(mode=="texture_mask") texture_mask(memory.heap,renderer,queue);
+              else if(mode=="texture_lifetime") texture_lifetime(memory.heap,renderer,queue);
+              else if(mode=="texture_disabled") texture_disabled(memory.heap,renderer,queue);
+              else if(mode=="texture_allocations") allocations(memory.system,memory.heap,queue);
+#ifdef DK_PATH_ASSET_DIR
+              else if(mode=="texture_assets") texture_assets(memory.heap,renderer,queue);
+#endif
               else throw std::runtime_error("unknown case"); }
             check(queue.close()); VmaTotalStatistics statistics{}; vmaCalculateStatistics(view.allocator(),&statistics);
             require(statistics.total.statistics.allocationCount==0,"GPU allocation leak");

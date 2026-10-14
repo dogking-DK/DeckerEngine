@@ -271,6 +271,13 @@ Result<CompiledShader> compile_shader_impl(const ShaderCompileRequest& request, 
     }
     output.spirv.resize(code->getBufferSize() / sizeof(std::uint32_t));
     std::memcpy(output.spirv.data(), code->getBufferPointer(), code->getBufferSize());
+    for (std::size_t i=5;i<output.spirv.size();) {
+        const auto count=output.spirv[i]>>16, opcode=output.spirv[i]&0xffffu;
+        if (!count || count>output.spirv.size()-i) return fail("Malformed SPIR-V instruction");
+        if (opcode==17 && count==2 && (output.spirv[i+1]==5301 || output.spirv[i+1]==5307))
+            output.requires_sampled_image_indexing=true;
+        i+=count;
+    }
     if (output.spirv[0] != 0x07230203U || output.spirv[1] != 0x00010500U) {
         return fail("Unexpected SPIR-V magic/version", ErrorCode::internal_error);
     }
@@ -334,6 +341,7 @@ String shader_reflection_json(const CompiledShader& shader)
         {"stage", shader_stage_name(shader.stage)}, {"spirv_bytes", shader.spirv.size() * sizeof(std::uint32_t)},
         {"thread_group_size", shader.thread_group_size}, {"bindings", nlohmann::ordered_json::array()},
         {"push_constants", nlohmann::ordered_json::array()}, {"requires_ray_tracing", shader.requires_ray_tracing},
+        {"requires_sampled_image_indexing", shader.requires_sampled_image_indexing},
         {"source_fingerprint", shader.source_fingerprint}, {"ray_payloads", nlohmann::ordered_json::array()}, {"ray_traces", nlohmann::ordered_json::array()}};
     for (const auto& payload : shader.ray_interface.payloads)
         json["ray_payloads"].push_back({{"kind", payload.kind == RayInterfaceKind::outgoing_payload ? "outgoing" : payload.kind == RayInterfaceKind::incoming_payload ? "incoming" : "hit_attribute"},

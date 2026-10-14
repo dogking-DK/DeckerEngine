@@ -12,7 +12,7 @@ dk_target_defaults(dk_core_tests)
 
 include(Catch)
 if(TARGET dk_render_pathtracing_reference)
-    add_executable(dk_pathtracing_reference_tests PathTraceReferenceTests.cpp)
+    add_executable(dk_pathtracing_reference_tests PathTraceReferenceTests.cpp PathTextureTests.cpp)
     target_link_libraries(dk_pathtracing_reference_tests PRIVATE dk::render_pathtracing_reference dk::geometry Catch2::Catch2WithMain Threads::Threads)
     dk_target_defaults(dk_pathtracing_reference_tests)
     catch_discover_tests(dk_pathtracing_reference_tests TEST_PREFIX "dk.pathtracing."

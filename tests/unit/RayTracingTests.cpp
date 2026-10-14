@@ -56,3 +56,23 @@ TEST_CASE("RT layout merges repeated stages and enforces acceleration descriptor
     as.maxPerStageDescriptorAccelerationStructures=2; as.maxDescriptorSetAccelerationStructures=1; REQUIRE_FALSE(policy::merge_interfaces(heap,views,limits,as));
     views[1].stage=ShaderStage::compute; REQUIRE_FALSE(policy::merge_interfaces(heap,views,limits,as));
 }
+
+TEST_CASE("RT texture arrays enforce sampler image set stage and aggregate limits") {
+    auto system=dk::memory::MemorySystem::create().value(); auto heap=system.create_heap({"texture-layout",dk::memory::DomainCategory::render}).value();
+    vk::PhysicalDeviceLimits limits{}; limits.maxBoundDescriptorSets=1; limits.maxPerStageResources=64;
+    limits.maxDescriptorSetSampledImages=limits.maxPerStageDescriptorSampledImages=64;
+    limits.maxDescriptorSetSamplers=limits.maxPerStageDescriptorSamplers=64;
+    const std::array bindings{policy::ReflectedBinding{0,0,ShaderDescriptorType::sampled_image,64,0,ShaderImageShape::image_2d},
+        policy::ReflectedBinding{0,1,ShaderDescriptorType::sampler,64,0}};
+    const std::array views{policy::ShaderLayoutView{ShaderStage::raygeneration,bindings,{}},policy::ShaderLayoutView{ShaderStage::anyhit,bindings,{}}};
+    REQUIRE(policy::merge_interfaces(heap,views,limits));
+    for(int which=0;which<5;++which) {
+        auto low=limits;
+        if(which==0) low.maxDescriptorSetSampledImages=63;
+        if(which==1) low.maxPerStageDescriptorSampledImages=63;
+        if(which==2) low.maxDescriptorSetSamplers=63;
+        if(which==3) low.maxPerStageDescriptorSamplers=63;
+        if(which==4) low.maxPerStageResources=63;
+        CHECK_FALSE(policy::merge_interfaces(heap,views,low));
+    }
+}

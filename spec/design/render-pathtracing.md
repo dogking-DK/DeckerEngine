@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-14T14:37:00+08:00"
+updated_at: "2026-10-14T16:59:14+08:00"
 status: accepted
 ---
 
@@ -11,7 +11,44 @@ status: accepted
 
 用户选择先建立正确性参考，再接入编辑器和截图。M16 交付静态三角形场景的渐进式表面路径追踪：
 CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、确定性样本编号、每视图累积、
-后台交互预览和固定 spp 截图。M16.1与M16.6实施契约见下文；其余拟议接口/额度仍是规划，阶段状态见[Roadmap](../roadmap.md)。
+后台交互预览和固定 spp 截图。M16.1、M16.6与M16.7.1实施契约见下文；其余拟议接口/额度仍是规划，阶段状态见[Roadmap](../roadmap.md)。
+
+## M16.7.1 纹理与mask实施契约
+
+在Lambert参考上加入当前CpuAsset的baseColor纹理与opaque/mask，不接受blend或metallic非零。
+冻结被引用纹理的身份、origin、RGBA8、sampler及三角形UV；纹理按资产包/纹理ID去重，
+最多64份、单边2048、总RGBA8字节64MiB，允许调用者下调额度。缺纹理、重复ID、缺失/非有限UV、
+非法sampler/数据长度/alpha cutoff在创建候选时拒绝。消费的纹理内容、采样器、UV和mask参与指纹，
+资产原始内存或文件变化不能改变旧scene/image。报告纹理数与未纳入NEE的mask发光三角形数。
+
+采样版本保持随机源v1，材质语义版本升级为model v2；只接受当前版本，不以旧版本解释新材质。
+纹理top-row-first、UV不翻转；明确LOD=0，空间过滤采用mag_filter（缺省linear），GPU两种filter设为同一值；
+min_filter及mip模式保留来源但在本阶段不参与采样。nearest取floor(uv*extent)，linear在uv*extent-0.5处
+双线性插值，RGB每个texel先按IEC sRGB解码，alpha不解码；repeat/clamp/mirrored_repeat按各轴独立处理。
+GPU上传前解码为RGBA32F线性纹理，再用硬件过滤；这与sRGB先解码再过滤的数学语义一致。
+实测本机RGBA8-sRGB硬件解码误差超过冻结nearest门槛，故保留门槛并采用显式标准解码，
+不将近似误差吞入容差。GPU图像与上传各最多256MiB，CPU冻结仍为64MiB RGBA8；M16.8再统一显存准入。
+UV准入绝对值不超过1e6，避免整数转换溢出；CPU使用double作为数值参考，GPU使用float。
+alpha乘factor后以float比较，严格小于cutoff才剔除，等于保留；opaque忽略alpha。
+radiance和visibility使用同一mask/背面规则。mask发光面light PDF为0，BSDF命中权重1，
+不进入面积灯CDF；opaque有纹理面仍按未纹理化emissive提供面积灯。
+
+Device增加独立SampledImageIndexingMode的disabled/if_available/required请求及支持/启用查询，
+只启用shaderSampledImageArrayNonUniformIndexing，不要求runtimeDescriptorArray、partiallyBound或updateAfterBind。
+shader产物从实际SPIR-V反射ShaderNonUniform和SampledImageArrayNonUniformIndexing需求，
+设备未启用时在创建shader前拒绝。renderer按已启用能力编译64个image与sampler固定数组变体，
+布局沿现有Device逐set/per-stage limits检查；全部槽绑定有效实际或默认白纹理。
+无能力时仍可创建无纹理renderer，prepare_scene拒绝纹理输入，不静默丢失贴图。
+Slang使用NonUniformResourceIndex；纹理upload与AS BUILD在同一Graph提交，trace声明全部可能采样图像，
+pending保留image/view/sampler及冻结输入。失败不发布scene/frame，外部旧代及已完成图像保持。
+
+验证先冻结CPU独立解析采样/过滤/wrap/alpha与背面案例，再做required RT/validation/sync GPU对照。
+非边界nearest RGB绝对误差≤3e-3，linear≤5e-3（float计算与硬件子texel精度）；alpha拓扑测试避开过滤阈值歧义，
+另用精确0/1及factor=cutoff测试等号。灯光统计仍用8 seed、2%与5标准误差、N/4N≤0.5%旧门槛。
+包含多纹理同批发散、64/65容量、disabled/required/limits、负缩放/双面、主与阴影mask、mask发光、
+输入突变/失败/在途释放；使用现有glTF导入/CPU产物再加载一条受支持磁盘资产链路证明来源。
+非一致索引依据[Vulkan features](https://docs.vulkan.org/spec/latest/chapters/features.html)与
+[Slang NonUniformResourceIndex](https://docs.shader-slang.org/en/stable/external/core-module-reference/global-decls/nonuniformresourceindex-03ai.html)。
 
 ## M16.6 GPU无历史Lambert实施契约
 
@@ -30,9 +67,9 @@ submit_view与submit_rays分别接受已冻结RenderView和固定世界射线集
 frame不持有裸queue地址；读取时通过票据核对提交域，显式wait/close沿用Device契约。
 取消在CPU准备、编译和submit前检查，已提交工作不可抢占；读取前的取消拒绝发布。
 
-GPU复用CPU v1模型、样本维度/连续编号、深度、NEE三类等概率选光、面积×亮度CDF、power MIS与RR。
+GPU复用CPU model v2材质、sampler v1样本维度/连续编号、深度、NEE三类等概率选光、面积×亮度CDF、power MIS与RR。
 raygen循环散射；两种静态SBT射线类型分别用于最近命中和visibility，hit仅返回距离/重心/三角形索引，
-any-hit按冻结的单/双面标志拒绝背面，不引入纹理/alpha材质。geometry normal、world area和发光保持一致，
+any-hit按冻结的单/双面标志和mask拒绝候选；纹理/alpha遵循上文M16.7.1契约。geometry normal、world area和发光保持一致，
 GPU使用float误差尺度偏移并逐分量向外取下一可表示值，有限面光源阴影同时偏移两端；无firefly clamp。
 计数hash保持uint32，GPU输出24位样本的float近似并保持开区间，不承诺CPU/GPU逐位相同。
 空场景由compute写常量环境和诊断，仍使用Graph写入/读回与提交契约。
@@ -58,9 +95,9 @@ Geometry BVH只在测试中作为独立求交对照；CPU参考独立双精度�
 返回不可变共享快照；不保留输入地址或读取磁盘。按RenderScene实体/引用、primitive和triangle顺序稳定编号，
 保留EntityId/AssetId/primitive/triangle来源。重复实例允许、重复资产包ID/缺失mesh/material拒绝。
 非mesh实体引用沿RenderData约定忽略，不能猜成材质覆盖。资产unit_scale已由导入器应用，不二次缩放。
-只消费opaque、metallic=0、无baseColor纹理的线性baseColor/emissive；roughness保留但不参与Lambert。
+只消费opaque/mask、metallic=0的baseColor/emissive及baseColor纹理；roughness保留但不参与Lambert。
 缺材质沿CpuData默认metallic=1，因此拒绝而不是静默变成漫反射。几何法线来自世界顶点绕序，
-明确不使用顶点法线/UV；双面可翻转法线，单面背面被剔除，负缩放翻转绕序。退化三角形跳过并报告计数。
+明确不使用顶点法线；纹理UV按重心插值。双面可翻转法线，单面背面被剔除，负缩放翻转绕序。退化三角形跳过并报告计数。
 场景指纹为稳定字节序FNV-1a64诊断摘要，覆盖消费的世界几何、材质、来源和冻结太阳，不作安全验证/缓存相等证明。
 
 限制固定为最多4096个输入资产/实例primitive引用及4096个展开前计数的三角形（退化也占额度），
@@ -68,7 +105,7 @@ Geometry BVH只在测试中作为独立求交对照；CPU参考独立双精度�
 调用者可下调额度，不能放大硬上限。创建/图像输出使用调用者Memory，预算失败不发布候选；
 旧快照和已完成图像可在输入销毁/Memory closing后读取，新建仍要求open heap。
 
-`PathTraceSettings`固定model/sampler版本1，seed为uint64，max_bounces=8、范围1..32；
+`PathTraceSettings`固定model版本2（M16.7.1扩展材质）/sampler版本1，seed为uint64，max_bounces=8、范围1..32；
 反弹数指最多多少次BSDF散射，末次散射后的射线仍评估emission/miss但不继续NEE/散射。
 rr_start=3，0表示诊断用关闭RR，其余须≤max_bounces；存活率clamp(max(throughput),0.05,0.95)，
 在指定散射次数后执行并除以存活率。模式为MIS或bsdf_only；后者仍单独估计delta太阳，避免漏掉不可由BSDF命中的光。
@@ -129,7 +166,7 @@ reference开关默认OFF，已支持无GPU依赖构建与测试，使用见[CPU�
 GPU开关DK_BUILD_RENDER_PATHTRACING独立默认OFF，启用时检查Device/Shader/Graph并构建reference；
 用法与required探针见[GPU指南](../guides/pathtracing-gpu.md)。GpuAssets 不统一加 RT usage；
 M16.6从冻结PathTraceScene建立自己的世界顶点、材质/光源表及单BLAS/TLAS，尚不复用资产BLAS。
-后续纹理可在相同队列/描述契约满足时复用，否则独立上传。重复GPU载荷计入额度，不宣称零拷贝。
+M16.7.1纹理独立上传为线性RGBA32F，来源保留CPU资产身份/采样器/内容；重复GPU载荷计入额度，不宣称零拷贝。
 
 ## 数据与拟议接口
 
@@ -181,7 +218,7 @@ Lambert 为 `baseColor / pi`；CPU 先验证常量天空白炉、黑场和单灯
 核心方法依据 [PBRT 路径追踪推导](https://pbr-book.org/4ed/Light_Transport_I_Surface_Reflection/A_Better_Path_Tracer)，
 这是项目选择的积分器方案，不移植其 renderer 或引入运行时依赖。
 
-材质任务分两步，均先扩展 CPU 参考再核对 GPU：
+材质任务分两步，均先扩展 CPU 参考再核对 GPU；第1步当前实施契约见上文，第2步仍规划：
 
 1. baseColor sRGB 纹理在采样时解码为线性 RGB，alpha 保持线性，使用明确 LOD=0；
    复用当前 sampler/wrap/UV 定义，不假装已有 mip/ray differential。opaque 忽略 alpha，mask 按 alpha*factor/cutoff 拒绝命中，

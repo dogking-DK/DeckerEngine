@@ -68,6 +68,7 @@ struct Fake {
     RayTracingSupport rt;
     std::string missing_rt_proc;
     bool rt_contract = false, bda_enabled = false;
+    bool indexing_support = false, indexing_enabled = false;
     unsigned rt_feature_queries = 0;
     VmaAllocatorCreateFlags allocator_flags = 0;
     VkResult device_extension_result = VK_SUCCESS;
@@ -169,7 +170,8 @@ struct Fake {
             switch (next->sType) {
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES: {
                 auto* f = reinterpret_cast<VkPhysicalDeviceVulkan12Features*>(next);
-                f->timelineSemaphore = VK_TRUE; f->bufferDeviceAddress = active->rt.buffer_device_address; break;
+                f->timelineSemaphore = VK_TRUE; f->bufferDeviceAddress = active->rt.buffer_device_address;
+                f->shaderSampledImageArrayNonUniformIndexing=active->indexing_support; break;
             }
             case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES: {
                 auto* f = reinterpret_cast<VkPhysicalDeviceVulkan13Features*>(next);
@@ -198,6 +200,9 @@ struct Fake {
         const auto* f13 = static_cast<const VkPhysicalDeviceVulkan13Features*>(f12->pNext);
         const void* tail=f13->pNext;
         active->bda_enabled = f12->bufferDeviceAddress == VK_TRUE;
+        active->indexing_enabled=f12->shaderSampledImageArrayNonUniformIndexing==VK_TRUE;
+        REQUIRE_FALSE(f12->runtimeDescriptorArray); REQUIRE_FALSE(f12->descriptorBindingPartiallyBound);
+        REQUIRE_FALSE(f12->descriptorBindingSampledImageUpdateAfterBind);
         if (active->bda_enabled) {
             const auto* as = static_cast<const VkPhysicalDeviceAccelerationStructureFeaturesKHR*>(f13->pNext);
             REQUIRE(as); REQUIRE(as->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR);
@@ -699,4 +704,26 @@ TEST_CASE("secondary queue request preserves single queue fallback")
         CHECK_FALSE(device->share_queue(1)); CHECK(device->queue_index()==0);
     }
     CHECK(fake.destroyed=="ADMI");
+}
+
+TEST_CASE("sampled image indexing has independent disabled optional required and shared device state") {
+    Memory memory; Fake fake;
+    DeviceOptions options;
+    for(const bool support:{false,true}) {
+        fake.indexing_support=support;
+        for(const auto mode:{SampledImageIndexingMode::disabled,SampledImageIndexingMode::if_available,SampledImageIndexingMode::required}) {
+            options.sampled_image_indexing=mode;
+            auto device=fake.create(memory.resource,options);
+            if(!support && mode==SampledImageIndexingMode::required) { REQUIRE_FALSE(device); continue; }
+            REQUIRE(device); CHECK(device->adapter().sampled_image_non_uniform_indexing==support);
+            const bool enabled=support && mode!=SampledImageIndexingMode::disabled;
+            CHECK(device->sampled_image_indexing_enabled()==enabled); CHECK(fake.indexing_enabled==enabled);
+            CHECK(device->share_queue(0)->sampled_image_indexing_enabled()==enabled); CHECK_FALSE(device->ray_tracing_enabled());
+        }
+    }
+    options.sampled_image_indexing=static_cast<SampledImageIndexingMode>(42); CHECK_FALSE(fake.create(memory.resource,options));
+    std::array adapters{suitable(memory.resource),suitable(memory.resource)};
+    adapters[1].sampled_image_non_uniform_indexing=true;
+    CHECK(select_adapter(adapters,{},false,RayTracingMode::disabled,SampledImageIndexingMode::required)->adapter_index==1);
+    CHECK_FALSE(select_adapter(adapters,0,false,RayTracingMode::disabled,SampledImageIndexingMode::required));
 }

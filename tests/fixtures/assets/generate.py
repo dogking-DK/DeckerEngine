@@ -47,6 +47,14 @@ scene = {
 (root / "triangle.bin").write_bytes(binary)
 (root / "triangle.gltf").write_text(json.dumps(scene, indent=2) + "\n", encoding="utf-8")
 
+# Lambert + mask subset consumed by the path tracing asset roundtrip probe.
+pathtrace = json.loads(json.dumps(scene))
+pathtrace["materials"][0]["pbrMetallicRoughness"]["metallicFactor"] = 0
+pathtrace["materials"][0].update(alphaMode="MASK", alphaCutoff=0.75, doubleSided=True)
+pathtrace["samplers"] = [{"magFilter": 9728, "minFilter": 9984, "wrapS": 10497, "wrapT": 33648}]
+pathtrace["textures"][0]["sampler"] = 0
+(root / "pathtrace-mask.gltf").write_text(json.dumps(pathtrace, indent=2) + "\n", encoding="utf-8")
+
 # Embedded JPEG variant, no external dependencies.
 binary += b"\0" * (-len(binary) % 4)
 jpeg = (root / "red.jpg").read_bytes()

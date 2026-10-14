@@ -268,3 +268,11 @@ TEST_CASE("reflection distinguishes volume array texture and descriptor array sh
     CHECK(depth->bindings[0].image_shape==ShaderImageShape::image_2d);
     auto rejected=fixture.compile("unsupported-cube.slang"); CHECK_FALSE(rejected);
 }
+
+TEST_CASE("sampled image nonuniform capabilities and fixed arrays survive reflection", "[shaders]") {
+    Fixture fixture; auto shader=fixture.compile("nonuniform.slang"); require_success(shader);
+    REQUIRE(shader->requires_sampled_image_indexing); REQUIRE(validate_shader_artifact(*shader));
+    REQUIRE(shader->bindings.size()==3); CHECK(shader->bindings[0].count==64); CHECK(shader->bindings[1].count==64);
+    CHECK(shader_reflection_json(*shader).find("requires_sampled_image_indexing")!=std::string::npos);
+    shader->requires_sampled_image_indexing=false; CHECK_FALSE(validate_shader_artifact(*shader));
+}

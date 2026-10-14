@@ -155,6 +155,7 @@ struct Device::Impl {
     AdapterInfo info;
     bool validation = false;
     bool ray_tracing = false;
+    bool sampled_image_indexing = false;
     DiagnosticSink sink = nullptr;
     void* sink_data = nullptr;
     std::atomic<std::uint64_t> errors = 0, warnings = 0;
@@ -213,6 +214,9 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     if (options.ray_tracing != RayTracingMode::disabled && options.ray_tracing != RayTracingMode::if_available &&
         options.ray_tracing != RayTracingMode::required)
         return std::unexpected(Error{ErrorCode::invalid_argument, "invalid ray tracing mode"});
+    if (options.sampled_image_indexing != SampledImageIndexingMode::disabled &&
+        options.sampled_image_indexing != SampledImageIndexingMode::if_available && options.sampled_image_indexing != SampledImageIndexingMode::required)
+        return std::unexpected(Error{ErrorCode::invalid_argument, "invalid sampled image indexing mode"});
     const bool presentation = options.surface.create != nullptr;
     if (presentation && (!options.surface.owner || options.surface.instance_extensions.empty()))
         return std::unexpected(Error{ErrorCode::invalid_argument, "surface requires a lifetime owner and instance extensions"});
@@ -364,6 +368,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
             info.dynamic_rendering = features13.dynamicRendering == VK_TRUE;
             info.maintenance4 = features13.maintenance4 == VK_TRUE;
             rt.buffer_device_address = features12.bufferDeviceAddress == VK_TRUE;
+            info.sampled_image_non_uniform_indexing = features12.shaderSampledImageArrayNonUniformIndexing == VK_TRUE;
             if (rt.acceleration_structure_extension) {
                 rt.acceleration_structure = physical_device.getFeatures2<vk::PhysicalDeviceFeatures2,
                     vk::PhysicalDeviceAccelerationStructureFeaturesKHR>().get<vk::PhysicalDeviceAccelerationStructureFeaturesKHR>().accelerationStructure == VK_TRUE;
@@ -403,13 +408,14 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
         }
         adapters.push_back(std::move(info));
     }
-    auto selection = select_adapter(adapters, options.adapter_index, presentation, options.ray_tracing);
+    auto selection = select_adapter(adapters, options.adapter_index, presentation, options.ray_tracing, options.sampled_image_indexing);
     if (!selection) return std::unexpected(selection.error());
     const auto native_physical = (*physicals)[selection->adapter_index];
     impl->physical = vk::raii::PhysicalDevice{impl->instance, native_physical};
     impl->family = selection->queue_family;
     impl->info = std::move(adapters[selection->adapter_index]);
     impl->ray_tracing = options.ray_tracing != RayTracingMode::disabled && impl->info.ray_tracing.supported();
+    impl->sampled_image_indexing = options.sampled_image_indexing != SampledImageIndexingMode::disabled && impl->info.sampled_image_non_uniform_indexing;
     const float priorities[]{1.0f,1.0f};
     impl->queue_count=options.secondary_queue && impl->info.queues[impl->family].queueCount>1 ? 2u : 1u;
     vk::DeviceQueueCreateInfo queue_info{};
@@ -425,6 +431,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     if (presentation) features13.pNext = &maintenance;
     vk::PhysicalDeviceVulkan12Features features12{};
     features12.timelineSemaphore = VK_TRUE;
+    features12.shaderSampledImageArrayNonUniformIndexing = impl->sampled_image_indexing;
     features12.pNext = &features13;
     vk::PhysicalDeviceAccelerationStructureFeaturesKHR acceleration{};
     vk::PhysicalDeviceRayTracingPipelineFeaturesKHR tracing{};
@@ -517,6 +524,7 @@ std::uint32_t Device::queue_family() const noexcept { return impl_->family; }
 vk::SurfaceKHR Device::surface() const noexcept { return *impl_->surface; }
 const AdapterInfo& Device::adapter() const noexcept { return impl_->info; }
 bool Device::ray_tracing_enabled() const noexcept { return impl_->ray_tracing; }
+bool Device::sampled_image_indexing_enabled() const noexcept { return impl_->sampled_image_indexing; }
 bool Device::validation_enabled() const noexcept { return impl_->validation; }
 std::uint64_t Device::validation_errors() const noexcept { return impl_->errors.load(std::memory_order_relaxed); }
 std::uint64_t Device::validation_warnings() const noexcept { return impl_->warnings.load(std::memory_order_relaxed); }

@@ -18,6 +18,7 @@ namespace dk::graphics {
 inline constexpr std::uint32_t device_api_version = VK_API_VERSION_1_4;
 enum class ValidationMode { disabled, if_available, required };
 enum class RayTracingMode { disabled, if_available, required };
+enum class SampledImageIndexingMode { disabled, if_available, required };
 
 // Hardware support, independent of logical-device enablement. No borrowed pNext.
 struct RayTracingSupport {
@@ -60,6 +61,7 @@ struct DeviceOptions {
     std::stop_token cancel; // Cooperative checkpoints; never interrupts a driver call.
     bool secondary_queue = false; // Request a second same-family queue when available.
     RayTracingMode ray_tracing = RayTracingMode::disabled;
+    SampledImageIndexingMode sampled_image_indexing = SampledImageIndexingMode::disabled;
 };
 
 struct AdapterInfo {
@@ -75,12 +77,14 @@ struct AdapterInfo {
     Vector<std::uint8_t> present_queues;
     bool swapchain = false, swapchain_maintenance1 = false;
     RayTracingSupport ray_tracing;
+    bool sampled_image_non_uniform_indexing = false;
 };
 struct AdapterSelection { std::uint32_t adapter_index; std::uint32_t queue_family; };
 // Pure policy functions; no loader, instance, or GPU is needed.
 [[nodiscard]] Result<AdapterSelection> select_adapter(std::span<const AdapterInfo> adapters,
     std::optional<std::uint32_t> requested = {}, bool presentation = false,
-    RayTracingMode ray_tracing = RayTracingMode::disabled);
+    RayTracingMode ray_tracing = RayTracingMode::disabled,
+    SampledImageIndexingMode sampled_image_indexing = SampledImageIndexingMode::disabled);
 [[nodiscard]] Result<bool> select_validation(ValidationMode mode, bool layer_available, bool debug_utils_available);
 [[nodiscard]] std::string_view vulkan_result_name(VkResult result) noexcept;
 
@@ -116,6 +120,7 @@ public:
     [[nodiscard]] const AdapterInfo& adapter() const noexcept;
     // AS + RT pipeline + BDA are enabled together; queue views share this state.
     [[nodiscard]] bool ray_tracing_enabled() const noexcept;
+    [[nodiscard]] bool sampled_image_indexing_enabled() const noexcept;
     [[nodiscard]] bool validation_enabled() const noexcept;
     [[nodiscard]] std::uint64_t validation_errors() const noexcept;
     [[nodiscard]] std::uint64_t validation_warnings() const noexcept;

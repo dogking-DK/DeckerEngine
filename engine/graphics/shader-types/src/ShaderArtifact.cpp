@@ -67,6 +67,7 @@ Result<void> validate_shader_artifact(const CompiledShader& shader)
         stage == ShaderStage::raygeneration ? 5313U : stage == ShaderStage::anyhit ? 5315U : stage == ShaderStage::closesthit ? 5316U : 5317U;
     unsigned entries = 0;
     bool ray_capability = false, ray_extension = false;
+    bool non_uniform = false, sampled_indexing = false;
     for (std::size_t i = 5; i < words.size();) {
         const auto count = words[i] >> 16;
         const auto opcode = words[i] & 0xFFFFU;
@@ -74,8 +75,10 @@ Result<void> validate_shader_artifact(const CompiledShader& shader)
         if (opcode == 17) { // Explicit baseline and opt-in ray tracing capability allowlist.
             if (count != 2) return std::unexpected(invalid("malformed SPIR-V capability"));
             ray_capability |= words[i+1] == 4479;
-            if (words[i + 1] != 0 && words[i + 1] != 1 && !(rt && words[i+1] == 4479))
-                return std::unexpected(unsupported("shader requires a capability outside Shader/Matrix and enabled RayTracingKHR"));
+            non_uniform |= words[i+1] == 5301;
+            sampled_indexing |= words[i+1] == 5307;
+            if (words[i + 1] != 0 && words[i + 1] != 1 && !(rt && words[i+1] == 4479) && words[i+1] != 5301 && words[i+1] != 5307)
+                return std::unexpected(unsupported("shader requires a capability outside the baseline, RT and sampled-image indexing groups: " + std::to_string(words[i+1])));
         }
         if (opcode == 10) { // OpExtension.
             const auto* name = reinterpret_cast<const char*>(&words[i+1]);
@@ -94,6 +97,8 @@ Result<void> validate_shader_artifact(const CompiledShader& shader)
         i += count;
     }
     if (entries != 1) return std::unexpected(invalid("exactly one SPIR-V entry point is required"));
+    if (shader.requires_sampled_image_indexing != (non_uniform || sampled_indexing) || sampled_indexing != non_uniform)
+        return std::unexpected(invalid("sampled-image indexing metadata/capabilities disagree"));
     if (rt && (!ray_capability || !ray_extension)) return std::unexpected(invalid("RT artifact requires RayTracingKHR and SPV_KHR_ray_tracing"));
     if (!rt && (ray_capability || ray_extension)) return std::unexpected(unsupported("ray tracing requires a ray tracing entry point"));
     auto interface = reflect_ray_interface(shader);

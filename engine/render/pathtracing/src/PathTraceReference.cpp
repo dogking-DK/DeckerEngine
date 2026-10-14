@@ -11,7 +11,7 @@ std::uint32_t mix(std::uint32_t x) noexcept {
 }
 bool color_valid(const Vec3d& c) { return c.allFinite() && (c.array()>=0).all() && (c.array()<=1e6).all(); }
 Result<void> work_valid(const PathSceneState& scene,std::uint64_t pixels,const PathTraceSettings& s,PathTraceSamples range) {
-    if (s.model_version!=1 || s.sampler_version!=1 || !s.max_bounces || s.max_bounces>32 || s.rr_start>s.max_bounces ||
+    if (s.model_version!=2 || s.sampler_version!=1 || !s.max_bounces || s.max_bounces>32 || s.rr_start>s.max_bounces ||
         !color_valid(s.environment_rgb) || (s.sun!=PathTraceSun::none && s.sun!=PathTraceSun::scene) ||
         (s.estimator!=PathTraceEstimator::mis && s.estimator!=PathTraceEstimator::bsdf_only) ||
         !range.count || range.count>65536 || range.first>65536-range.count ||
@@ -83,7 +83,8 @@ bool visible(const PathSceneState& scene,const PathTraceHit& hit,const Vec3d& di
 Vec3d direct(const PathSceneState& scene,const PathTraceHit& hit,const Lights& lights,const PathTraceSettings& s,
     std::uint32_t pixel,std::uint32_t sample,std::uint32_t bounce,PathTraceStatistics& stats) {
     const auto& t=scene.triangles[hit.index];
-    if (t.albedo.maxCoeff()==0) return Vec3d::Zero();
+    const Vec3d albedo=path_base_color(scene,t,hit.barycentric).head<3>();
+    if (albedo.maxCoeff()==0) return Vec3d::Zero();
     auto random=[&](std::uint32_t dim) { return path_trace_sample(s.seed,pixel,sample,bounce,dim); };
     const bool bsdf_only=s.estimator==PathTraceEstimator::bsdf_only;
     if (bsdf_only && !lights.solar) return Vec3d::Zero();
@@ -112,7 +113,7 @@ Vec3d direct(const PathSceneState& scene,const PathTraceHit& hit,const Lights& l
     const double cosine=hit.normal.dot(wi);
     if (cosine<=0 || pdf<=0 || !visible(scene,hit,wi,stats,emitter,point)) return Vec3d::Zero();
     const double weight=delta ? 1 : power_weight(pdf,cosine/path_pi);
-    return t.albedo.cwiseProduct(radiance)*(cosine*weight/(path_pi*pdf));
+    return albedo.cwiseProduct(radiance)*(cosine*weight/(path_pi*pdf));
 }
 Result<Vec3d> trace_one(const PathSceneState& scene,PathTraceRay ray,const PathTraceSettings& s,const Lights& lights,
     std::uint32_t pixel,std::uint32_t sample,PathTraceStatistics& stats,std::stop_token cancel) {
@@ -127,14 +128,15 @@ Result<Vec3d> trace_one(const PathSceneState& scene,PathTraceRay ray,const PathT
             break;
         }
         const auto& t=scene.triangles[hit->index];
+        const Vec3d albedo=path_base_color(scene,t,hit->barycentric).head<3>();
         const double weight=depth && s.estimator==PathTraceEstimator::mis ?
             power_weight(bsdf_pdf,area_pdf(scene,t,previous,hit->position,lights.class_pdf)) : 1;
         radiance+=throughput.cwiseProduct(t.emission)*weight;
-        if (depth==s.max_bounces || t.albedo.maxCoeff()==0) break;
+        if (depth==s.max_bounces || albedo.maxCoeff()==0) break;
         radiance+=throughput.cwiseProduct(direct(scene,*hit,lights,s,pixel,sample,depth,stats));
         const Vec3d wi=hemisphere(hit->normal,path_trace_sample(s.seed,pixel,sample,depth,6),path_trace_sample(s.seed,pixel,sample,depth,7));
         bsdf_pdf=std::max(0.0,hit->normal.dot(wi))/path_pi; previous=hit->position;
-        throughput=throughput.cwiseProduct(t.albedo);
+        throughput=throughput.cwiseProduct(albedo);
         if (s.rr_start && depth+1>=s.rr_start) {
             const double survival=std::clamp(throughput.maxCoeff(),.05,.95);
             if (path_trace_sample(s.seed,pixel,sample,depth,8)>=survival) break;
@@ -235,7 +237,7 @@ Result<PathTraceImage> render_path_reference(memory::ResourceHandle heap,const P
     if (cancel.stop_requested()) return std::unexpected(path_cancelled());
     try {
         auto image=memory::make_shared_in<detail::PathImageState>(heap,heap);
-        image->info={camera->width,camera->height,scene.id(),scene.revision(),scene.fingerprint(),view.description(),s,samples,{}};
+        image->info={camera->width,camera->height,scene.id(),scene.revision(),scene.fingerprint(),scene.texture_count(),scene.masked_emitter_count(),view.description(),s,samples,{}};
         image->pixels.resize(static_cast<std::size_t>(pixels),Vec3d::Zero());
         const auto lights=lights_for(*state,s);
         for (std::uint32_t y=0;y<camera->height;++y) for (std::uint32_t x=0;x<camera->width;++x) {

@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T19:03:00+08:00"
-updated_at: "2026-10-14T12:15:10+08:00"
+updated_at: "2026-10-14T16:57:16+08:00"
 ---
 
 # dk-shaderc 离线工具
@@ -45,6 +45,7 @@ dk-shaderc --help
 | bindings | 按 set/binding 排序；每项含 name、set、binding、type、count、block_size、image_shape |
 | push_constants | offset/size 字节范围；当前最多一个 offset=0 的块 |
 | requires_ray_tracing | 四个RT阶段为true，基线阶段为false；执行时必须启用RT设备能力组 |
+| requires_sampled_image_indexing | 实际SPIR-V含ShaderNonUniform/SampledImageArrayNonUniformIndexing时为true；执行时必须独立启用纹理非一致索引 |
 | source_fingerprint | 编译器/profile/matrix、入口/阶段、宏与依赖路径及内容的FNV-1a 64-bit标记；不是安全散列或跨机器缓存key |
 | ray_payloads | kind（outgoing/incoming/hit_attribute）、location、bytes、signature；基线为空 |
 | ray_traces | TraceRay的静态offset、stride、miss、payload_location；基线为空 |
@@ -57,7 +58,8 @@ ParameterBlock、嵌套资源、未定长 descriptor 数组、入口 uniform、t
 RT payload支持32-bit标量/向量/结构体/固定数组；bytes是逻辑字节数，signature表达结构类型，不能用同字节数替代类型匹配。
 incoming payload无Location时记0，callee按类型匹配调用；三角hit attribute须为float2。
 TraceRay限raygeneration并使用静态SBT选择器；动态选择、callee递归TraceRay、callable/intersection不在首版范围。
-RT阶段能力白名单只追加RayTracingKHR，其他未启用的可选SPIR-V能力在使用层拒绝。
+RT阶段能力白名单追加RayTracingKHR；固定纹理数组另允许ShaderNonUniform/SampledImageArrayNonUniformIndexing。
+runtimeDescriptorArray、其他非一致descriptor类别及未支持的可选SPIR-V能力仍拒绝。
 
 | 退出码 | 含义 |
 | --- | --- |

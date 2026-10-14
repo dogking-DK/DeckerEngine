@@ -161,3 +161,12 @@ foreach(entry rayMain missMain)
         message(FATAL_ERROR "Invalid RT compile replaced prior output")
     endif()
 endforeach()
+
+# Fixed descriptor arrays expose the independently enabled nonuniform capability.
+compile(0 "${FIXTURES}/nonuniform.slang" "${output}")
+string(JSON requires_indexing GET "${last_json}" requires_sampled_image_indexing)
+string(JSON textures GET "${last_json}" bindings 0 count)
+string(JSON samplers GET "${last_json}" bindings 1 count)
+if(NOT requires_indexing OR NOT textures EQUAL 64 OR NOT samplers EQUAL 64)
+    message(FATAL_ERROR "Missing fixed-array nonuniform metadata: ${last_json}")
+endif()

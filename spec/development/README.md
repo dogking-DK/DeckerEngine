@@ -116,5 +116,6 @@
 | 0112 | [M16.4 RT shader、管线、SBT与trace](0112-raytracing-pipeline.md) | graphics-raytracing、graphics-shaders、graphics-vulkan、graphics-resources | completed |
 | 0113 | [M16.5 Graph AS、构建与trace](0113-graph-raytracing.md) | graphics-graph、graphics-raytracing、graphics-resources、architecture | completed |
 | 0114 | [M16.6 GPU无历史Lambert路径追踪](0114-gpu-pathtracing.md) | render-pathtracing、architecture | completed |
+| 0115 | [M16.7.1 路径追踪纹理与alpha-mask](0115-pathtracing-textures.md) | render-pathtracing、graphics-raytracing、graphics-shaders | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

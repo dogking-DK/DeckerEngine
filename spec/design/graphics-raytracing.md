@@ -1,7 +1,7 @@
 ---
 module: graphics-raytracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-14T14:39:28+08:00"
+updated_at: "2026-10-14T16:57:16+08:00"
 status: accepted
 ---
 
@@ -17,8 +17,8 @@ M16.2–5已提供能力、AS、管线/SBT与Graph构建/trace；实施契约见
 
 | 当前入口 | 已有能力 | 本轮需要补充 |
 | --- | --- | --- |
-| [Device.hpp](../../engine/graphics/device/include/dk/graphics/Device.hpp) | Vulkan 1.4、确定性选卡、同族共享设备；RT三态请求、支持/启用/缺项与limits | 后续按材质需要扩展独立非一致索引能力组 |
-| [ShaderArtifact.hpp](../../engine/graphics/shader-types/include/dk/graphics/ShaderArtifact.hpp) | graphics/compute、四种RT阶段、AS descriptor与payload/SBT需求 | 后续按材质需求扩展能力组 |
+| [Device.hpp](../../engine/graphics/device/include/dk/graphics/Device.hpp) | Vulkan 1.4、确定性选卡、同族共享设备；RT及独立纹理非一致索引三态请求、支持/启用/缺项与limits | 后续按Render需求扩展受支持子集 |
+| [ShaderArtifact.hpp](../../engine/graphics/shader-types/include/dk/graphics/ShaderArtifact.hpp) | graphics/compute、四种RT阶段、AS descriptor、payload/SBT及纹理非一致索引需求 | 后续按材质需求扩展能力组 |
 | [Device](../../engine/graphics/device) | Buffer/Image、graphics/compute、提交保活；BDA/VMA、拥有型BLAS/TLAS、SBT与RT pipeline/encoder | 后续按Render需求扩展受支持子集 |
 | [Graph](../../engine/graphics/graph) | buffer/image/AS/SBT声明、构建/trace内容依赖、同步、导入导出与类型化回调 | GPU路径积分作为Graph客户端接入 |
 | [GpuAssets.cpp](../../engine/render/resources/src/GpuAssets.cpp) | vertex/index/transfer usage | RT 专用构建输入和着色数据；旧 buffer 不能事后追加 usage |
@@ -37,7 +37,8 @@ pipeline library、indirect trace、ray query、SER、异步 compute 或多 GPU�
 missing()返回固定六项字符串数组，满足项为空。属性快照分别保存AS/RT pipeline原生limits，pNext清空；
 不支持的扩展不查询对应结构且limits为零。Vulkan 1.4基线和队列要求仍由普通选卡契约校验。
 `Device::ray_tracing_enabled()`只表示实际启用的整组；BDA在本阶段随RT整组启用，不提供单独BDA请求。
-纹理非一致索引能力组仍留待M16.7.1，M16.2不顺带启用无关shader/descriptor feature。
+纹理非一致索引能力组在M16.7.1独立接入，遵循[纹理实施契约](render-pathtracing.md#m1671-纹理与mask实施契约)，
+不随核心RT组自动启用；固定数组布局仍检查设备实际descriptor limits。
 
 逻辑设备仅增加AS、RT pipeline、deferred host operations三个扩展及bufferDeviceAddress、
 accelerationStructure、rayTracingPipeline三个feature。WSI扩展/feature链与RT合并，

@@ -92,6 +92,7 @@
 | GPU Graph 同步、执行、导入导出、诊断与失败保护 | dk_graph_probe | `^dk\.graph\.gpu_`（gpu label；77 为跳过） |
 | Graph AS/SBT、upload→build→trace→readback、身份/状态/失败与寿命 | dk_graph_raytracing_probe | `^dk\.graph\.rt_required_validation$`（required RT GPU/validation/sync；缺环境失败） |
 | GPU Lambert路径追踪、CPU/解析/统计/HDR对照、失败与寿命 | dk_pathtracing_probe | `^dk\.pathtracing\.(analytic\|statistics\|images\|lifetime\|allocations)_gpu_required$`（required RT/validation/sync；缺环境失败） |
+| GPU纹理sRGB/过滤/wrap、64槽发散、alpha-mask/双面、能力拒绝、失败寿命及glTF产物 | dk_pathtracing_probe | `^dk\.pathtracing\.texture_.*_gpu_required$`（required RT/validation/sync；assets组需Assets Runtime/Importers） |
 | Vulkan 设备策略、缺失环境和失败清理（无需 GPU） | dk_device_tests | `^dk\.device\.unit\.` |
 | RT三态请求、必需能力/limits、BDA/VMA与共享寿命 | dk_raytracing_device_probe | `^dk\.device\.rt_required_validation$`（required RT GPU/validation，同步验证；缺环境失败，非77跳过） |
 | BLAS/TLAS输入、地址/尺寸、scratch与实例纯策略 | dk_acceleration_structure_tests | `^dk\.acceleration\.unit\.` |

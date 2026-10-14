@@ -1,13 +1,13 @@
 ---
 created_at: "2026-09-28T19:03:00+08:00"
-updated_at: "2026-10-14T12:15:10+08:00"
+updated_at: "2026-10-14T16:57:16+08:00"
 ---
 
 # Slang 离线编译
 
 [返回项目入口](../../README.md)。M5.3 提供 `dk::graphics_shaders` 和 `dk-shaderc`，
 编译 vertex、fragment、compute 与 raygeneration、miss、closesthit、anyhit 到 SPIR-V 1.5。
-反射JSON现为schema_version=3，保留image_shape并增加RT需求、来源指纹和payload/TraceRay接口；
+反射JSON现为schema_version=3，保留image_shape并增加RT需求、纹理非一致索引需求、来源指纹和payload/TraceRay接口；
 升级消费者并重新编译旧产物，字段见[工具参考](../commands/shaderc.md)。
 工具无需 Vulkan loader、驱动、GPU 或窗口；执行产物的管线与读回见 [M5.4 离屏指南](offscreen.md)。
 

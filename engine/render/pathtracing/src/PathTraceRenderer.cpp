@@ -21,13 +21,17 @@ struct PathGpuState {
     RayTracingPipeline pipeline;
     ShaderBindingTable table;
     ComputePipeline empty_pipeline;
+    bool textured = false;
 };
+struct PathGpuTexture { Image image; ImageView view; Sampler sampler; };
 struct PathGpuScene {
     std::shared_ptr<PathGpuState> program;
     PathTraceScene source;
     Buffer triangles;
     AccelerationStructure blas,tlas;
     Submission built;
+    std::array<PathGpuTexture,64> textures;
+    std::size_t texture_count = 0;
 };
 struct PathGpuFrame {
     memory::ResourceHandle heap;
@@ -73,21 +77,30 @@ graph::Use use(graph::BufferId id,vk::PipelineStageFlags2 stage,vk::AccessFlags2
 graph::PassId add(graph::Graph& graph,std::string_view name,std::span<const graph::Use> uses) { return take(graph.add_pass({name,uses})); }
 graph::AccelerationId declare(graph::Graph& graph,std::string_view name,AccelerationStructureKind kind,
     std::span<const graph::ResourceId> deps,bool built=false) { return take(graph.declare_acceleration(name,kind,deps,built)); }
-struct BuildContext { vk::DeviceSize bytes; };
+struct BuildContext { vk::DeviceSize bytes; const PathGpuScene& scene; };
 Result<void> build_record(graph::PassContext& pass,void* context) {
-    if (pass.pass_index()==0) return pass.copy_buffer(0,1,static_cast<BuildContext*>(context)->bytes);
-    return pass.build(pass.pass_index()+1); // BLAS=2, TLAS=3.
+    const auto& c=*static_cast<BuildContext*>(context); const auto count=c.scene.texture_count;
+    if (pass.pass_index()==0) {
+        if(auto copied=pass.copy_buffer(0,1,c.bytes);!copied) return copied;
+        for(std::size_t i=0;i<count;++i) {
+            const auto d=c.scene.textures[i].image.description();
+            if(auto copied=pass.copy_to_image(2+i,2+count+i,{0,0,0,0,d.width,d.height});!copied) return copied;
+        }
+        return {};
+    }
+    return pass.build(2*count+pass.pass_index()+1);
 }
 struct TraceContext {
     const PathGpuState& state; const BindingSet& bindings;
     std::uint32_t width,height; bool empty;
+    std::size_t shader_table;
 };
 Result<void> trace_record(graph::PassContext& pass,void* context) {
     const auto& c=*static_cast<TraceContext*>(context);
     try {
         if (pass.pass_index()==1) return pass.copy_buffer(3,4,std::uint64_t{c.width}*c.height*sizeof(PathGpuPixel));
         const std::array<const BindingSet*,1> sets{&c.bindings};
-        if (!c.empty) return pass.trace(c.state.pipeline,7,sets,{}, {c.width,c.height,1});
+        if (!c.empty) return pass.trace(c.state.pipeline,c.shader_table,sets,{}, {c.width,c.height,1});
         auto encoder=take(pass.compute()); check(encoder.bind_pipeline(c.state.empty_pipeline)); check(encoder.bind_sets(sets));
         return encoder.dispatch({(c.width*c.height+63)/64,1,1});
     } catch (const Error& error) { return std::unexpected(error); }
@@ -119,6 +132,10 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     Vector<BindingWrite> writes(0,memory::Allocator<BindingWrite>{state.heap});
     if (!empty) { writes.push_back({0,0,AccelerationStructureBinding{&scene.tlas}}); writes.push_back({1,0,BufferBinding{&scene.triangles}}); writes.push_back({4,0,BufferBinding{&input}}); }
     writes.push_back({2,0,BufferBinding{&uniform}}); writes.push_back({3,0,BufferBinding{&output}});
+    if(!empty && state.textured) for(std::uint32_t i=0;i<64;++i) {
+        const auto& texture=scene.textures[std::min<std::size_t>(i,scene.texture_count-1)];
+        writes.push_back({5,i,ImageBinding{&texture.view}}); writes.push_back({6,i,SamplerBinding{&texture.sampler}});
+    }
     auto bindings=take(state.factory.create_bindings(empty ? state.empty_layout : state.layout,0,writes));
     auto g=take(graph::Graph::create(state.heap));
     const auto params=take(g.declare_buffer("parameters",uniform.description(),graph::Lifetime::external,true));
@@ -131,6 +148,12 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     uses.push_back(use(params,stage,vk::AccessFlagBits2::eShaderRead)); uses.push_back(use(result,stage,vk::AccessFlagBits2::eShaderWrite,true));
     Vector<graph::ExternalBinding> imports(0,memory::Allocator<graph::ExternalBinding>{state.heap});
     imports.push_back({0,&uniform}); imports.push_back({3,&output}); imports.push_back({4,&frame->readback});
+    for(std::size_t i=0;i<scene.texture_count;++i) {
+        const auto& texture=scene.textures[i];
+        auto id=take(g.declare_image("baseColor-"+std::to_string(i),texture.image.description(),graph::Lifetime::external,true));
+        uses.push_back({id,{{stage,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal}}});
+        imports.push_back({5+i,nullptr,&texture.image});
+    }
     if (!empty) {
         const auto blas=declare(g,"BLAS",AccelerationStructureKind::bottom_level,{},true);
         const std::array<graph::ResourceId,1> children{blas}; const auto tlas=declare(g,"TLAS",AccelerationStructureKind::top_level,children,true);
@@ -138,12 +161,13 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
         uses.push_back(use(geometry,stage,vk::AccessFlagBits2::eShaderRead)); uses.push_back(use(ray_input,stage,vk::AccessFlagBits2::eShaderRead));
         uses.push_back(graph::acceleration_read(blas)); uses.push_back(graph::acceleration_read(tlas)); uses.push_back(graph::shader_table_read(sbt));
         imports.push_back({1,&scene.triangles}); imports.push_back({2,&input});
-        imports.push_back({5,nullptr,nullptr,{},&scene.blas}); imports.push_back({6,nullptr,nullptr,{},&scene.tlas}); imports.push_back({7,nullptr,nullptr,{},nullptr,&state.table});
+        const auto base=5+scene.texture_count;
+        imports.push_back({base,nullptr,nullptr,{},&scene.blas}); imports.push_back({base+1,nullptr,nullptr,{},&scene.tlas}); imports.push_back({base+2,nullptr,nullptr,{},nullptr,&state.table});
     }
     add(g,empty ? "empty environment" : "Lambert path trace",uses);
     const std::array copy{use(result,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead),use(readback,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,true)};
     add(g,"HDR readback",copy); check(g.mark_output(readback));
-    auto plan=take(g.compile(stop)); TraceContext context{state,bindings,frame->info.width,frame->info.height,empty};
+    auto plan=take(g.compile(stop)); TraceContext context{state,bindings,frame->info.width,frame->info.height,empty,7+scene.texture_count};
     const std::array callbacks{graph::PassCallback{0,trace_record,&context},graph::PassCallback{1,trace_record,&context}};
     const std::array final{graph::FinalAccess{4,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}}};
     cancelled(stop); auto execution=take(graph::execute(plan,queue,{imports,callbacks,final}));
@@ -152,7 +176,8 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
 PathTraceGpuImageInfo info_for(const PathTraceScene& scene,std::uint32_t width,std::uint32_t height,
     const PathTraceSettings& settings,PathTraceSamples samples) {
     PathTraceGpuImageInfo info; info.width=width; info.height=height; info.scene=scene.id(); info.revision=scene.revision();
-    info.fingerprint=scene.fingerprint(); info.settings=settings; info.samples=samples; return info;
+    info.fingerprint=scene.fingerprint(); info.texture_count=scene.texture_count(); info.masked_emitter_count=scene.masked_emitter_count();
+    info.settings=settings; info.samples=samples; return info;
 }
 }
 
@@ -161,11 +186,13 @@ Result<PathTraceRenderer> PathTraceRenderer::create(memory::ResourceHandle heap,
     if (!heap || heap.state()!=memory::ResourceState::open || !queue.device().ray_tracing_enabled())
         return std::unexpected(Error{ErrorCode::not_supported,"Path renderer requires open Memory and enabled RT"});
     auto state=memory::make_shared_in<detail::PathGpuState>(heap); state->heap=heap; state->factory=queue.resources();
+    state->textured=queue.device().sampled_image_indexing_enabled();
     state->identity=take(state->factory.create_buffer({4}));
     const std::array names{"pathMain","pathMiss","shadowMiss","pathHit","pathAnyHit"};
     const std::array stages{ShaderStage::raygeneration,ShaderStage::miss,ShaderStage::miss,ShaderStage::closesthit,ShaderStage::anyhit};
     std::array<ShaderCompileRequest,6> requests;
-    for (std::size_t i=0;i<5;++i) requests[i]={directory/"pathtrace.slang",names[i],stages[i]};
+    const std::array defines{ShaderDefine{"DK_PATH_TEXTURES",state->textured ? "1" : "0"}};
+    for (std::size_t i=0;i<5;++i) requests[i]={directory/"pathtrace.slang",names[i],stages[i],{},defines};
     requests[5]={directory/"pathtrace-empty.slang","emptyMain",ShaderStage::compute};
     auto compiled=take(compile_shaders(requests,heap,stop));
     std::array<ShaderModule,6> shaders; for (std::size_t i=0;i<shaders.size();++i) { cancelled(stop); shaders[i]=take(state->factory.create_shader(compiled[i])); }
@@ -184,6 +211,7 @@ catch (const std::exception& error) { return std::unexpected(Error{ErrorCode::in
 Result<PathTraceGpuScene> PathTraceRenderer::prepare_scene(SubmissionQueue& queue,const PathTraceScene& source,std::stop_token stop) const try {
     ready(state_,queue,stop); const auto* cpu=PathReferenceAccess::get(source);
     if (!cpu) return std::unexpected(path_invalid("Empty path scene"));
+    if(!cpu->textures.empty() && !state_->textured) return std::unexpected(Error{ErrorCode::not_supported,"Path textures require enabled sampled-image non-uniform indexing"});
     auto scene=memory::make_shared_in<PathGpuScene>(state_->heap); scene->program=state_; scene->source=source;
     if (cpu->triangles.empty()) return PathTraceGpuScene{std::move(scene)};
     Vector<Float4> packed(0,memory::Allocator<Float4>{state_->heap});
@@ -196,7 +224,9 @@ Result<PathTraceGpuScene> PathTraceRenderer::prepare_scene(SubmissionQueue& queu
         if (float(t.area)<std::numeric_limits<float>::min() || (t.light_weight>0 && float(t.light_weight)<std::numeric_limits<float>::min()))
             return std::unexpected(Error{ErrorCode::not_supported,"Path area/light weight is below normal float range"});
         for (const auto& point:{a,b,c}) for (int k=0;k<3;++k) vertices.push_back(point[k]);
-        for (const auto& value:{pack(t.a,t.area),pack(t.b,t.light_weight),pack(t.c,t.light_cdf),pack(t.normal,t.double_sided ? 1 : 0),pack(t.albedo),pack(t.emission)}) packed.push_back(value);
+        for (const auto& value:{pack(t.a,t.area),pack(t.b,t.light_weight),pack(t.c,t.light_cdf),pack(t.normal,t.double_sided ? 1 : 0),pack(t.albedo,t.alpha),pack(t.emission,t.cutoff),
+            Float4{float(t.uv_a.x()),float(t.uv_a.y()),float(t.uv_b.x()),float(t.uv_b.y())},
+            Float4{float(t.uv_c.x()),float(t.uv_c.y()),std::bit_cast<float>(t.texture),t.mask ? 1.f : 0.f}}) packed.push_back(value);
     }
     scene->triangles=upload(state_->factory,std::as_bytes(std::span{packed}),vk::BufferUsageFlagBits::eStorageBuffer);
     auto staging=upload(state_->factory,std::as_bytes(std::span{vertices}),vk::BufferUsageFlagBits::eTransferSrc);
@@ -210,15 +240,53 @@ Result<PathTraceGpuScene> PathTraceRenderer::prepare_scene(SubmissionQueue& queu
     auto graph=take(graph::Graph::create(state_->heap));
     const auto input=take(graph.declare_buffer("geometry upload",staging.description(),graph::Lifetime::external,true));
     const auto vertex=take(graph.declare_buffer("world geometry",geometry.description(),graph::Lifetime::external));
+    Vector<Buffer> texture_staging(0,memory::Allocator<Buffer>{state_->heap});
+    Vector<graph::Use> copy(0,memory::Allocator<graph::Use>{state_->heap});
+    copy.push_back(use(input,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead));
+    copy.push_back(use(vertex,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,true));
+    Vector<graph::ExternalBinding> imports(0,memory::Allocator<graph::ExternalBinding>{state_->heap});
+    imports.push_back({0,&staging}); imports.push_back({1,&geometry});
+    scene->texture_count=state_->textured ? std::max<std::size_t>(1,cpu->textures.size()) : 0;
+    texture_staging.reserve(scene->texture_count);
+    const auto address=[](TextureWrap w) { return w==TextureWrap::clamp ? vk::SamplerAddressMode::eClampToEdge :
+        w==TextureWrap::mirrored_repeat ? vk::SamplerAddressMode::eMirroredRepeat : vk::SamplerAddressMode::eRepeat; };
+    const std::array white{Float4{1,1,1,1}};
+    for(std::size_t i=0;i<scene->texture_count;++i) {
+        cancelled(stop); const auto* texture=cpu->textures.empty() ? nullptr : &cpu->textures[i];
+        Vector<Float4> linear(0,memory::Allocator<Float4>{state_->heap});
+        if(texture) {
+            linear.resize(std::size_t(texture->width)*texture->height);
+            for(std::size_t pixel=0;pixel<linear.size();++pixel) {
+                if(pixel%2048==0) cancelled(stop);
+                for(std::size_t channel=0;channel<4;++channel) {
+                    const double value=std::to_integer<unsigned char>(texture->rgba8[pixel*4+channel])/255.0;
+                    linear[pixel][channel]=float(channel==3 ? value : value<=.04045 ? value/12.92 : std::pow((value+.055)/1.055,2.4));
+                }
+            }
+        }
+        const auto bytes=texture ? std::as_bytes(std::span<const Float4>{linear}) : std::as_bytes(std::span{white});
+        texture_staging.push_back(upload(state_->factory,bytes,vk::BufferUsageFlagBits::eTransferSrc));
+        auto& staging_texture=texture_staging.back(); auto& out=scene->textures[i];
+        ImageDesc image_desc{texture ? texture->width : 1,texture ? texture->height : 1,vk::Format::eR32G32B32A32Sfloat};
+        image_desc.require_linear_filter=!texture || texture->sampler.mag_filter!=TextureFilter::nearest;
+        out.image=take(state_->factory.create_image(image_desc)); out.view=take(state_->factory.create_view(out.image));
+        SamplerDesc sampler; sampler.min_filter=sampler.mag_filter=image_desc.require_linear_filter ? vk::Filter::eLinear : vk::Filter::eNearest;
+        if(texture) { sampler.address_u=address(texture->sampler.wrap_s); sampler.address_v=address(texture->sampler.wrap_t); }
+        out.sampler=take(state_->factory.create_sampler(sampler));
+        const auto buffer=take(graph.declare_buffer("texture upload-"+std::to_string(i),staging_texture.description(),graph::Lifetime::external,true));
+        const auto image=take(graph.declare_image("baseColor-"+std::to_string(i),image_desc,graph::Lifetime::external));
+        copy.push_back(use(buffer,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead));
+        copy.push_back({image,{{vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal},0,VK_WHOLE_SIZE,{vk::ImageAspectFlagBits::eColor,0,1,0,1},true}});
+        check(graph.mark_output(image)); imports.push_back({2+i,&staging_texture}); imports.push_back({2+scene->texture_count+i,nullptr,&out.image});
+    }
     const std::array<graph::ResourceId,1> buffers{vertex}; const auto blas=declare(graph,"BLAS",AccelerationStructureKind::bottom_level,buffers);
     const std::array<graph::ResourceId,1> children{blas}; const auto tlas=declare(graph,"TLAS",AccelerationStructureKind::top_level,children);
-    const std::array copy{use(input,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead),use(vertex,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,true)};
     const std::array bottom{graph::build_input(vertex),graph::acceleration_build(blas)},top{graph::acceleration_read(blas,false),graph::acceleration_build(tlas)};
     add(graph,"upload",copy); add(graph,"BLAS",bottom); add(graph,"TLAS",top); check(graph.mark_output(tlas));
-    auto plan=take(graph.compile(stop)); BuildContext context{staging.size()};
+    auto plan=take(graph.compile(stop)); BuildContext context{staging.size(),*scene};
     const std::array callbacks{graph::PassCallback{0,build_record,&context},graph::PassCallback{1,build_record,&context},graph::PassCallback{2,build_record,&context}};
-    const std::array imports{graph::ExternalBinding{0,&staging},graph::ExternalBinding{1,&geometry},
-        graph::ExternalBinding{2,nullptr,nullptr,{},&scene->blas},graph::ExternalBinding{3,nullptr,nullptr,{},&scene->tlas}};
+    imports.push_back({2+2*scene->texture_count,nullptr,nullptr,{},&scene->blas});
+    imports.push_back({3+2*scene->texture_count,nullptr,nullptr,{},&scene->tlas});
     cancelled(stop); auto execution=take(graph::execute(plan,queue,{imports,callbacks,{}})); scene->built=execution.submission();
     return PathTraceGpuScene{std::move(scene)};
 } catch (const Error& error) { return std::unexpected(error); }

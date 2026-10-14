@@ -1,7 +1,7 @@
 ---
 module: graphics-shaders
 created_at: "2026-09-28T19:00:00+08:00"
-updated_at: "2026-10-14T12:15:10+08:00"
+updated_at: "2026-10-14T16:57:16+08:00"
 status: accepted
 ---
 
@@ -96,6 +96,9 @@ RayInterface.cpp从SPIR-V提取结构签名、逻辑字节数、payload location
 支持32-bit scalar/vector/struct/fixed array，三角属性为float2。IncomingRayPayload不要求Location，按调用payload类型匹配。
 动态SBT选择、callee TraceRay、callable及未支持的payload类型明确拒绝。
 产物校验重新解析RT接口并核对元数据；RT阶段必须含RayTracingKHR和SPV_KHR_ray_tracing，
-基线Shader/Matrix之外只为RT开放RayTracingKHR，不放开Int64等其他可选能力。
+基线Shader/Matrix之外为RT开放RayTracingKHR；M16.7.1另开放ShaderNonUniform(5301)与
+SampledImageArrayNonUniformIndexing(5307)，不放开Int64或其他descriptor索引类别。
+编译器从实际SPIR-V能力提取requires_sampled_image_indexing，产物校验重新核对两项能力及元数据。
+schema v3添加该布尔字段；布局仍为固定长度且全部初始化，Device在创建shader前检查独立能力已启用。
 Device在native module/layout创建前检查RT启用；pipeline级payload/布局/选择器校验见
 [RT实施契约](graphics-raytracing.md#m164实施契约)。完整SPIR-V语义仍由Vulkan validation验证。

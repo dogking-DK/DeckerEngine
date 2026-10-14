@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-14T10:18:00+08:00"
-updated_at: "2026-10-14T14:37:00+08:00"
+updated_at: "2026-10-14T16:57:16+08:00"
 ---
 
 # CPU路径追踪参考
@@ -48,8 +48,12 @@ cmake --preset windows-dev -DDK_BUILD_RENDER_PATHTRACING_REFERENCE=ON
 再用RenderView调用render_path_reference；`estimate_path_reference`用于固定射线的解析/统计实验。
 快照复制消费数据，源资产/文档修改不影响旧结果；同一revision下资产改变会改变诊断指纹。
 
-参考材质必须显式设置metallic=0、opaque且无纹理；默认MaterialData的metallic=1会拒绝。
-使用世界三角形平面法线，忽略顶点法线/UV；单面背面剔除，双面翻转几何法线。
+参考材质必须显式设置metallic=0，支持opaque/mask及baseColor纹理；默认MaterialData的metallic=1会拒绝。
+当前model_version=2、sampler_version=1；示例报告renderer为cpu_lambert_reference_v2。
+使用世界三角形平面法线，忽略顶点法线；纹理UV按重心插值，单面背面剔除，双面翻转几何法线。
+LOD=0采用mag_filter（缺省linear），RGB按sRGB逐texel解码、alpha保持线性，支持repeat/clamp/mirrored_repeat。
+mask在alpha×factor小于cutoff时拒绝主/阴影命中；发光mask面仅由BSDF命中提供光照。
+最多64张、单边2048、总64MiB RGBA8；PathTraceScene的texture_info可查询被冻结的资产身份、origin及尺寸。
 当前是表面参考，不积分空气或云；场景启用介质时必须显式设置surface_only，报告此范围。
 
 最多64×64、4096个计入预算的三角形；样本区间在[0,65536)，相机为刚体透视针孔、

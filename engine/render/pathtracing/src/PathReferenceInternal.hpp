@@ -9,16 +9,30 @@ struct PathTriangle {
     Vec3d a, b, c, normal, albedo, emission;
     double area = 0, light_weight = 0, light_cdf = 0;
     bool double_sided = false;
+    Vec2d uv_a = Vec2d::Zero(), uv_b = Vec2d::Zero(), uv_c = Vec2d::Zero();
+    std::uint32_t texture = 0xffffffffu;
+    float alpha = 1, cutoff = .5f;
+    bool mask = false;
     EntityId entity;
     AssetId mesh;
     std::size_t primitive = 0, triangle = 0;
 };
+struct PathTexture {
+    explicit PathTexture(memory::ResourceHandle heap) : rgba8(0,memory::Allocator<std::byte>{heap}),origin(memory::Allocator<char>{heap}) {}
+    AssetId mesh, id;
+    std::uint32_t width = 0, height = 0;
+    TextureSampler sampler;
+    Vector<std::byte> rgba8;
+    String origin;
+};
 struct PathSceneState {
-    explicit PathSceneState(memory::ResourceHandle heap) : triangles(0, memory::Allocator<PathTriangle>{heap}) {}
+    explicit PathSceneState(memory::ResourceHandle heap) : triangles(0, memory::Allocator<PathTriangle>{heap}),textures(memory::Allocator<PathTexture>{heap}) {}
     RenderScene source;
     Vector<PathTriangle> triangles;
+    Vector<PathTexture> textures;
     double light_weight = 0;
     std::size_t degenerate = 0;
+    std::size_t masked_emitters = 0;
     std::uint64_t fingerprint = 0;
 };
 struct PathImageState {
@@ -38,4 +52,6 @@ inline double luminance(const Vec3d& c) { return c.dot(Vec3d{.2126,.7152,.0722})
 [[nodiscard]] Result<void> validate_path_view(const PathSceneState&, const RenderView&);
 [[nodiscard]] std::optional<PathTraceHit> nearest_path(const PathSceneState&, const PathTraceRay&, PathTraceStatistics&);
 [[nodiscard]] Vec3d offset_path_origin(const PathTriangle&, const Vec3d& position, const Vec3d& direction);
+[[nodiscard]] Vec4d path_base_color(const PathSceneState&,const PathTriangle&,const Vec3d& barycentric);
+[[nodiscard]] Result<void> validate_path_texture(const TextureData&);
 } // namespace dk::render::detail
