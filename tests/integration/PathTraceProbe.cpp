@@ -283,6 +283,7 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
 }
 }
 #include "PathTextureCases.hpp"
+#include "PathGgxCases.hpp"
 int main(int argc,char** argv) {
     try {
         require(argc==2,"expected analytic/statistics/images/lifetime case");
@@ -293,7 +294,7 @@ int main(int argc,char** argv) {
             memory::ThreadContext context{memory.system,memory.heap}; memory::ExecutionScope scope{context,memory.heap};
             DeviceOptions options; options.validation=ValidationMode::required; options.ray_tracing=RayTracingMode::required;
             const std::string_view requested=argv[1];
-            if(requested.starts_with("texture_") && requested!="texture_disabled") options.sampled_image_indexing=SampledImageIndexingMode::required;
+            if((requested.starts_with("texture_") && requested!="texture_disabled") || requested=="ggx_lifetime") options.sampled_image_indexing=SampledImageIndexingMode::required;
             options.diagnostic_sink=diagnostic; options.diagnostic_user_data=&diagnostics; auto device=take(Device::create(memory.heap,options)); auto view=take(device.share_queue(0));
             std::printf("GPU=%s validation=%d case=%s\n",device.adapter().properties.deviceName.data(),device.validation_enabled(),argv[1]);
             native_submit=reinterpret_cast<PFN_vkQueueSubmit2>(device.device_proc("vkQueueSubmit2")); native_wait=reinterpret_cast<PFN_vkWaitSemaphores>(device.device_proc("vkWaitSemaphores"));
@@ -305,6 +306,10 @@ int main(int argc,char** argv) {
               else if(mode=="images") images(memory.heap,renderer,queue);
               else if(mode=="lifetime") lifetime(memory.heap,renderer,queue,view);
               else if(mode=="allocations") allocations(memory.system,memory.heap,queue);
+              else if(mode=="ggx_numeric") ggx_numeric(memory.heap,renderer,queue);
+              else if(mode=="ggx_statistics") ggx_statistics(memory.heap,renderer,queue);
+              else if(mode=="ggx_indirect") ggx_indirect(memory.heap,renderer,queue);
+              else if(mode=="ggx_lifetime") ggx_lifetime(memory.heap,renderer,queue);
               else if(mode=="texture_numeric") texture_numeric(memory.heap,renderer,queue);
               else if(mode=="texture_mask") texture_mask(memory.heap,renderer,queue);
               else if(mode=="texture_lifetime") texture_lifetime(memory.heap,renderer,queue);

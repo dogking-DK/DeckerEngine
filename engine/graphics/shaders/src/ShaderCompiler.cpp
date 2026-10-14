@@ -214,7 +214,7 @@ Result<CompiledShader> compile_shader_impl(const ShaderCompileRequest& request, 
     slang::TargetDesc target{};
     target.format = SLANG_SPIRV;
     target.profile = global->findProfile("spirv_1_5");
-    slang::CompilerOptionEntry options[4]{};
+    slang::CompilerOptionEntry options[5]{};
     options[0].name = slang::CompilerOptionName::EmitSpirvDirectly;
     options[0].value.intValue0 = 1;
     options[1].name = slang::CompilerOptionName::VulkanUseEntryPointName;
@@ -223,6 +223,10 @@ Result<CompiledShader> compile_shader_impl(const ShaderCompileRequest& request, 
     options[2].value.intValue0 = SLANG_OPTIMIZATION_LEVEL_DEFAULT;
     options[3].name = slang::CompilerOptionName::DebugInformation;
     options[3].value.intValue0 = SLANG_DEBUG_INFO_LEVEL_NONE;
+    options[4].name = slang::CompilerOptionName::FloatingPointMode;
+    options[4].value.intValue0 = SLANG_FLOATING_POINT_MODE_PRECISE;
+    target.compilerOptionEntries = &options[4];
+    target.compilerOptionEntryCount = request.precise_floating_point ? 1 : 0;
     slang::SessionDesc session_desc{};
     session_desc.targets = &target;
     session_desc.targetCount = 1;
@@ -302,6 +306,7 @@ Result<CompiledShader> compile_shader_impl(const ShaderCompileRequest& request, 
     const auto hash_text = [&](std::string_view text) { hash(std::as_bytes(std::span{text})); const std::array delimiter{std::byte{0}}; hash(delimiter); };
     hash_text(output.compiler); hash_text("spirv_1_5/row_major"); hash_text(output.entry); hash_text(shader_stage_name(output.stage));
     for (const auto& define : request.defines) { hash_text(define.name); hash_text(define.value); }
+    if (request.precise_floating_point) hash_text("fp-mode=precise");
     for (const auto& dependency : output.dependencies) {
         auto dependency_path = path_from_utf8(dependency);
         if (!dependency_path) return fail(dependency_path.error().message);

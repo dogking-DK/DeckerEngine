@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-14T16:59:14+08:00"
+updated_at: "2026-10-14T17:37:19+08:00"
 status: accepted
 ---
 
@@ -11,17 +11,42 @@ status: accepted
 
 用户选择先建立正确性参考，再接入编辑器和截图。M16 交付静态三角形场景的渐进式表面路径追踪：
 CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、确定性样本编号、每视图累积、
-后台交互预览和固定 spp 截图。M16.1、M16.6与M16.7.1实施契约见下文；其余拟议接口/额度仍是规划，阶段状态见[Roadmap](../roadmap.md)。
+后台交互预览和固定 spp 截图。M16.1、M16.6与M16.7.1/2实施契约见下文；其余拟议接口/额度仍是规划，阶段状态见[Roadmap](../roadmap.md)。
 
+## M16.7.2 metallic-roughness GGX实施契约
+
+create的末参数PathTraceMaterialModel显式选择lambert（默认、保持既有解析参考）或metallic_roughness；
+选择随scene冻结并进入指纹与帧报告。Lambert仍拒绝metallic非零，GGX接受metallic/roughness的[0,1]有限值，
+缺材质沿CpuData默认metallic=1/roughness=1解释为金属，不能隐式变成漫反射。model_version升级3，sampler仍1。
+baseColor纹理、mask/双面与发光规则沿M16.7.1；仅使用几何法线，不引入法线或metallic-roughness贴图。
+
+冻结各向同性单次散射GGX：感知粗糙度r转alpha=max(r*r,0.0025)，r=0明确映射有限窄叶而非delta镜面。
+D使用GGX分布，G使用高度相关Smith，F使用Schlick，介质F0=0.04，金属F0=baseColor；
+混合金属度m的漫反射为(1-m)*(1-F_dielectric(NoV))*(1-F_dielectric(NoL))*baseColor/pi，镜面F0=lerp(0.04,baseColor,m)。
+这是保守的介质层近似，保持互易性；初始glTF半程F混合在掠射白炉增能，故不宣称完整glTF BRDF。
+不做多次微表面能量补偿或亮点截断。wi/wo都从表面指向外界，背向/零余弦返回零值与零PDF。
+可见GGX法线采样与cosine漫反射混合，镜面选择概率q=(1+m)/2；复用维度6作选择并在分支内重映射，维度7作方位。
+无效反射方向返回零贡献，不重采样；eval返回完整混合BRDF和同一混合PDF，throughput乘f*cos/pdf。
+NEE与BSDF命中使用该PDF计算MIS，delta太阳不参与竞争；黑色介质仍保留Fresnel镜面，不能按baseColor=0早退。
+CPU双精度与GPU独立float实现；先冻结CPU正确性，再验GPU。场景候选完成校验/复制后发布，GPU提交点与旧帧保护不变。
+
+验收门槛：CPU解析端点/互易性误差1e-10；独立半球积分（中点规则加倍网格验证收敛）误差≤0.5%，
+白炉反射率≤1+0.005（单次散射允许能量损失），sample估计与积分差≤2%且≤5标准误差（加积分离散误差）；
+包含metallic=0/0.5/1、roughness=0/0.05/0.2/0.5/1、法线/掠射、无效方向、黑色介质与默认材质。
+CPU/GPU确定性太阳量相对误差≤1e-3（绝对底限1e-5）；8 seed积分线性nRMSE≤2%，
+N/4N均值差≤0.5%，MIS/BSDF-only及RR均值与独立面积/半球积分保持既有2%/5标准误差门槛。
+纹理/mask与GGX组合、材质突变/指纹、非法参数旧代保护、连续样本区间和required validation/sync一并检查。
+公式参考[glTF BRDF](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#appendix-b-brdf-implementation)；
+可见法线与Smith参考[PBRT微表面](https://pbr-book.org/4ed/Reflection_Models/Roughness_Using_Microfacet_Theory)。
 ## M16.7.1 纹理与mask实施契约
 
-在Lambert参考上加入当前CpuAsset的baseColor纹理与opaque/mask，不接受blend或metallic非零。
+纹理层支持当前CpuAsset的baseColor纹理与opaque/mask，不接受blend；Lambert模式仍拒绝metallic非零。
 冻结被引用纹理的身份、origin、RGBA8、sampler及三角形UV；纹理按资产包/纹理ID去重，
 最多64份、单边2048、总RGBA8字节64MiB，允许调用者下调额度。缺纹理、重复ID、缺失/非有限UV、
 非法sampler/数据长度/alpha cutoff在创建候选时拒绝。消费的纹理内容、采样器、UV和mask参与指纹，
 资产原始内存或文件变化不能改变旧scene/image。报告纹理数与未纳入NEE的mask发光三角形数。
 
-采样版本保持随机源v1，材质语义版本升级为model v2；只接受当前版本，不以旧版本解释新材质。
+采样版本保持随机源v1，材质语义在M16.7.1为model v2，现由M16.7.2升级为v3；只接受当前版本，不以旧版本解释新材质。
 纹理top-row-first、UV不翻转；明确LOD=0，空间过滤采用mag_filter（缺省linear），GPU两种filter设为同一值；
 min_filter及mip模式保留来源但在本阶段不参与采样。nearest取floor(uv*extent)，linear在uv*extent-0.5处
 双线性插值，RGB每个texel先按IEC sRGB解码，alpha不解码；repeat/clamp/mirrored_repeat按各轴独立处理。
@@ -67,7 +92,7 @@ submit_view与submit_rays分别接受已冻结RenderView和固定世界射线集
 frame不持有裸queue地址；读取时通过票据核对提交域，显式wait/close沿用Device契约。
 取消在CPU准备、编译和submit前检查，已提交工作不可抢占；读取前的取消拒绝发布。
 
-GPU复用CPU model v2材质、sampler v1样本维度/连续编号、深度、NEE三类等概率选光、面积×亮度CDF、power MIS与RR。
+GPU复用CPU model v3材质、sampler v1样本维度/连续编号、深度、NEE三类等概率选光、面积×亮度CDF、power MIS与RR。
 raygen循环散射；两种静态SBT射线类型分别用于最近命中和visibility，hit仅返回距离/重心/三角形索引，
 any-hit按冻结的单/双面标志和mask拒绝候选；纹理/alpha遵循上文M16.7.1契约。geometry normal、world area和发光保持一致，
 GPU使用float误差尺度偏移并逐分量向外取下一可表示值，有限面光源阴影同时偏移两端；无firefly clamp。
@@ -78,7 +103,7 @@ GPU使用float误差尺度偏移并逐分量向外取下一可表示值，有限
 先建立数值参考；M16.8再扩展分块、交互批次与显存额度。GPU几何、表、输出均在这些上限内有界，
 不将CPU triangle_tests计数冒充硬件遍历统计。结果包含线性RGB、二阶矩、实际trace射线数、
 首个样本的主射线命中距离/重心/法线/来源，以及scene/revision/fingerprint、camera/settings/sample区间。
-输出按像素使用补偿求和；NaN/Inf/负辐亮度及非法诊断在读回时拒绝整帧。
+路径shader显式启用precise_floating_point编译，保护补偿求和不被浮点重结合消除；输出按像素使用补偿求和；NaN/Inf/负辐亮度及非法诊断在读回时拒绝整帧。
 
 验收使用required RT+validation/sync：黑场/常量环境/发光、太阳遮挡、单/双面和缩放/剪切、
 面积灯独立积分、8 seed CPU/GPU线性nRMSE≤2%、N/4N均值差≤0.5%、64/256/1024集合误差下降、
@@ -95,8 +120,8 @@ Geometry BVH只在测试中作为独立求交对照；CPU参考独立双精度�
 返回不可变共享快照；不保留输入地址或读取磁盘。按RenderScene实体/引用、primitive和triangle顺序稳定编号，
 保留EntityId/AssetId/primitive/triangle来源。重复实例允许、重复资产包ID/缺失mesh/material拒绝。
 非mesh实体引用沿RenderData约定忽略，不能猜成材质覆盖。资产unit_scale已由导入器应用，不二次缩放。
-只消费opaque/mask、metallic=0的baseColor/emissive及baseColor纹理；roughness保留但不参与Lambert。
-缺材质沿CpuData默认metallic=1，因此拒绝而不是静默变成漫反射。几何法线来自世界顶点绕序，
+消费opaque/mask的baseColor/emissive、baseColor纹理及metallic/roughness；Lambert模式要求metallic=0且不消费roughness。
+缺材质沿CpuData默认metallic=1，Lambert模式拒绝，显式GGX模式按金属处理。几何法线来自世界顶点绕序，
 明确不使用顶点法线；纹理UV按重心插值。双面可翻转法线，单面背面被剔除，负缩放翻转绕序。退化三角形跳过并报告计数。
 场景指纹为稳定字节序FNV-1a64诊断摘要，覆盖消费的世界几何、材质、来源和冻结太阳，不作安全验证/缓存相等证明。
 
@@ -105,7 +130,7 @@ Geometry BVH只在测试中作为独立求交对照；CPU参考独立双精度�
 调用者可下调额度，不能放大硬上限。创建/图像输出使用调用者Memory，预算失败不发布候选；
 旧快照和已完成图像可在输入销毁/Memory closing后读取，新建仍要求open heap。
 
-`PathTraceSettings`固定model版本2（M16.7.1扩展材质）/sampler版本1，seed为uint64，max_bounces=8、范围1..32；
+`PathTraceSettings`固定model版本3（M16.7.2显式材质模式）/sampler版本1，seed为uint64，max_bounces=8、范围1..32；
 反弹数指最多多少次BSDF散射，末次散射后的射线仍评估emission/miss但不继续NEE/散射。
 rr_start=3，0表示诊断用关闭RR，其余须≤max_bounces；存活率clamp(max(throughput),0.05,0.95)，
 在指定散射次数后执行并除以存活率。模式为MIS或bsdf_only；后者仍单独估计delta太阳，避免漏掉不可由BSDF命中的光。
@@ -137,8 +162,8 @@ NaN/Inf结果视为错误，禁用firefly clamp。此处是CPU参考额度，GPU
 覆盖黑场/常量环境/太阳解析遮挡/白炉/面积灯及间接颜色传播、MIS对BSDF-only、RR开关、几何仿射/尺度、
 样本分区/输入旧代/取消/额度/Memory失败/CPU-only链接。可执行CPU示例输出PPM和线性数值报告，不增加命令服务。
 
-首轮光源为常量 RGB 环境、显式方向太阳和发光三角形；参考先使用 opaque Lambert 与无纹理发光面。
-随后扩展当前资产已有的 baseColor 纹理、metallic/roughness 标量、emissive、opaque/mask、单/双面。
+光源为常量RGB环境、显式方向太阳和发光三角形；材质显式选择Lambert或GGX。
+已消费当前资产的baseColor纹理、metallic/roughness标量、emissive、opaque/mask与单/双面。
 首轮不支持透射/折射、alpha blend、法线贴图、完整 glTF PBR 扩展、HDRI 导入、景深、运动模糊、
 形变/蒙皮/布片接入、去噪、自适应采样、时域重投影、ReSTIR、wavefront 或实时帧率承诺。
 CPU renderer 是小场景参考，不作为硬件不支持时的静默交互回退。
@@ -158,8 +183,8 @@ M16 不复用其 screen-space 合成到路径追踪结果，也不把太阳、�
 
 | 模块/入口 | 依赖和职责 |
 | --- | --- |
-| `engine/render/pathtracing` 的 `dk_render_pathtracing_reference` / `dk::render_pathtracing_reference` | 已实现纯 CPU：PUBLIC render_data、asset_data，通过其传递依赖Math/Memory；独立求交、输入转换、采样、Lambert、参考积分，不链接Geometry实现/Vulkan/Slang |
-| 同目录 `dk_render_pathtracing` / `dk::render_pathtracing` | PUBLIC render_pathtracing_reference、graphics_device；PRIVATE graphics_graph、graphics_shaders；不可变GPU场景、无历史Lambert积分、异步帧与HDR诊断 |
+| `engine/render/pathtracing` 的 `dk_render_pathtracing_reference` / `dk::render_pathtracing_reference` | 已实现纯 CPU：PUBLIC render_data、asset_data，通过其传递依赖Math/Memory；独立求交、输入转换、采样、Lambert/GGX、参考积分，不链接Geometry实现/Vulkan/Slang |
+| 同目录 `dk_render_pathtracing` / `dk::render_pathtracing` | PUBLIC render_pathtracing_reference、graphics_device；PRIVATE graphics_graph、graphics_shaders；不可变GPU场景、无历史Lambert/GGX积分、异步帧与HDR诊断 |
 | RenderDisk / CaptureService / Editor 装配（规划） | 读取/冻结资产并调用 renderer；Render 不反向依赖 Framework/Editor；公开路径不暴露其类型 |
 
 reference开关默认OFF，已支持无GPU依赖构建与测试，使用见[CPU参考指南](../guides/pathtracing-reference.md)。
@@ -218,7 +243,7 @@ Lambert 为 `baseColor / pi`；CPU 先验证常量天空白炉、黑场和单灯
 核心方法依据 [PBRT 路径追踪推导](https://pbr-book.org/4ed/Light_Transport_I_Surface_Reflection/A_Better_Path_Tracer)，
 这是项目选择的积分器方案，不移植其 renderer 或引入运行时依赖。
 
-材质任务分两步，均先扩展 CPU 参考再核对 GPU；第1步当前实施契约见上文，第2步仍规划：
+材质任务分两步，均先扩展CPU参考再核对GPU；两步的当前实施契约见上文：
 
 1. baseColor sRGB 纹理在采样时解码为线性 RGB，alpha 保持线性，使用明确 LOD=0；
    复用当前 sampler/wrap/UV 定义，不假装已有 mip/ray differential。opaque 忽略 alpha，mask 按 alpha*factor/cutoff 拒绝命中，
@@ -227,7 +252,7 @@ Lambert 为 `baseColor / pi`；CPU 先验证常量天空白炉、黑场和单灯
 2. 引入明确版本的 metallic-roughness 子集：GGX 单次散射、Smith masking、Schlick Fresnel，
    dielectric F0=0.04、metal F0=baseColor，漫反射随 metallic/Fresnel 分配能量；采样/eval/PDF 必须使用同一混合概率。
    粗糙度到 alpha 的映射和最小值在 CPU 阶段冻结并写入模型版本；不得为隐藏亮点临时改变。
-   metallic=0/1、粗糙度端点、掠射、双面/法线修正的能量测试通过后才接任意当前资产。
+   metallic=0/1、粗糙度端点、掠射、双面/几何法线与能量测试约束当前支持的资产；顶点/贴图法线仍未支持。
 
 微表面分布与masking的参考依据为[PBRT微表面模型](https://pbr-book.org/4ed/Reflection_Models/Roughness_Using_Microfacet_Theory)；
 本项目选择的金属混合、Fresnel近似和粗糙度下限须独立版本化，不能把参考书的具体材质实现等同于本模型。

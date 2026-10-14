@@ -17,6 +17,7 @@ struct ShaderCompileRequest {
     ShaderStage stage = ShaderStage::compute;
     std::span<const std::filesystem::path> include_paths{};
     std::span<const ShaderDefine> defines{};
+    bool precise_floating_point = false; // Preserve compensated arithmetic; included in source fingerprint.
 };
 
 // Fresh Slang session per call. Input files must remain stable during the call.

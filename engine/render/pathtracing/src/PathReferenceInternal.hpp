@@ -12,6 +12,7 @@ struct PathTriangle {
     Vec2d uv_a = Vec2d::Zero(), uv_b = Vec2d::Zero(), uv_c = Vec2d::Zero();
     std::uint32_t texture = 0xffffffffu;
     float alpha = 1, cutoff = .5f;
+    float metallic = 0, roughness = 1;
     bool mask = false;
     EntityId entity;
     AssetId mesh;
@@ -28,6 +29,7 @@ struct PathTexture {
 struct PathSceneState {
     explicit PathSceneState(memory::ResourceHandle heap) : triangles(0, memory::Allocator<PathTriangle>{heap}),textures(memory::Allocator<PathTexture>{heap}) {}
     RenderScene source;
+    PathTraceMaterialModel material_model = PathTraceMaterialModel::lambert;
     Vector<PathTriangle> triangles;
     Vector<PathTexture> textures;
     double light_weight = 0;

@@ -1,11 +1,11 @@
 ---
 created_at: "2026-10-14T10:18:00+08:00"
-updated_at: "2026-10-14T16:57:16+08:00"
+updated_at: "2026-10-14T17:37:19+08:00"
 ---
 
 # CPU路径追踪参考
 
-[M16.1设计](../design/render-pathtracing.md#m161-cpu参考实施契约)提供小场景双精度Lambert参考，
+[M16.1设计](../design/render-pathtracing.md#m161-cpu参考实施契约)提供小场景双精度Lambert/GGX参考，
 用于[GPU无历史管线](pathtracing-gpu.md)正确性对照。渐进式编辑器和路径追踪capture命令尚未接入。
 
 ## 构建与定向验证
@@ -48,8 +48,11 @@ cmake --preset windows-dev -DDK_BUILD_RENDER_PATHTRACING_REFERENCE=ON
 再用RenderView调用render_path_reference；`estimate_path_reference`用于固定射线的解析/统计实验。
 快照复制消费数据，源资产/文档修改不影响旧结果；同一revision下资产改变会改变诊断指纹。
 
-参考材质必须显式设置metallic=0，支持opaque/mask及baseColor纹理；默认MaterialData的metallic=1会拒绝。
-当前model_version=2、sampler_version=1；示例报告renderer为cpu_lambert_reference_v2。
+默认Lambert参考模式要求metallic=0；create末参数显式选择PathTraceMaterialModel::metallic_roughness可启用GGX。
+GGX模式消费metallic/roughness，缺材质沿MaterialData默认metallic=1/roughness=1；两种模式都支持opaque/mask和baseColor纹理。
+当前model_version=3、sampler_version=1；示例报告renderer为cpu_lambert_reference_v3。
+GGX使用alpha=max(roughness²,0.0025)、单次散射/Smith/Schlick和双向Fresnel漫反射衰减；不是完整glTF BRDF。
+无理想镜面delta、法线/metallic-roughness贴图或多次散射补偿；具体公式与门槛见[材质契约](../design/render-pathtracing.md#m1672-metallic-roughness-ggx实施契约)。
 使用世界三角形平面法线，忽略顶点法线；纹理UV按重心插值，单面背面剔除，双面翻转几何法线。
 LOD=0采用mag_filter（缺省linear），RGB按sRGB逐texel解码、alpha保持线性，支持repeat/clamp/mirrored_repeat。
 mask在alpha×factor小于cutoff时拒绝主/阴影命中；发光mask面仅由BSDF命中提供光照。

@@ -15,22 +15,22 @@ struct Fingerprint {
     void vector(const Vec3d& v) { for (int i=0;i<3;++i) number(v[i]); }
     template<class T> void id(T id) { for (auto b:id.bytes()) byte(b); }
 };
-Result<void> material_valid(const MaterialData& m) {
+Result<void> material_valid(const MaterialData& m, PathTraceMaterialModel model) {
     if (!m.base_color.allFinite() || (m.base_color.array()<0).any() || (m.base_color.array()>1).any() ||
         !m.emissive.allFinite() || (m.emissive.array()<0).any() || (m.emissive.array()>1e6).any() ||
-        !std::isfinite(m.roughness) || m.roughness<0 || m.roughness>1 || !std::isfinite(m.metallic) ||
+        !std::isfinite(m.roughness) || m.roughness<0 || m.roughness>1 || !std::isfinite(m.metallic) || m.metallic<0 || m.metallic>1 ||
         !std::isfinite(m.alpha_cutoff) || m.alpha_cutoff<0 || m.alpha_cutoff>1)
         return std::unexpected(path_invalid("Invalid reference material"));
-    if (m.metallic!=0 || (m.alpha_mode!=AlphaMode::opaque && m.alpha_mode!=AlphaMode::mask))
-        return std::unexpected(Error{ErrorCode::not_supported,"Reference v2 requires opaque/mask metallic=0 Lambert material"});
+    if ((model==PathTraceMaterialModel::lambert && m.metallic!=0) || (m.alpha_mode!=AlphaMode::opaque && m.alpha_mode!=AlphaMode::mask))
+        return std::unexpected(Error{ErrorCode::not_supported,"Path materials require opaque/mask; Lambert requires metallic=0"});
     return {};
 }
 }
 Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const RenderScene& source,
-    std::span<const CpuAsset* const> assets, const PathTraceSceneLimits& limits) {
+    std::span<const CpuAsset* const> assets, const PathTraceSceneLimits& limits, PathTraceMaterialModel model) {
     if (!heap || heap.state()!=memory::ResourceState::open || !source)
         return std::unexpected(Error{ErrorCode::invalid_state,"Path scene requires an open heap and render scene"});
-    if (assets.size()>4096 || !limits.max_triangles || limits.max_triangles>4096 ||
+    if ((model!=PathTraceMaterialModel::lambert && model!=PathTraceMaterialModel::metallic_roughness) || assets.size()>4096 || !limits.max_triangles || limits.max_triangles>4096 ||
         !limits.max_primitive_instances || limits.max_primitive_instances>4096 || limits.max_textures>64 || limits.max_texture_bytes>64*1024*1024)
         return std::unexpected(path_invalid("Invalid path scene limits"));
     try {
@@ -40,8 +40,8 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
                 return std::unexpected(path_invalid("Duplicate CPU mesh identity"));
         }
         auto state = memory::make_shared_in<detail::PathSceneState>(heap,heap);
-        state->source=source;
-        Fingerprint hash; hash.integer(2); hash.id(source.id()); hash.integer(source.revision());
+        state->source=source; state->material_model=model;
+        Fingerprint hash; hash.integer(3); hash.integer(std::uint32_t(model)); hash.id(source.id()); hash.integer(source.revision());
         const auto env=source.environment(); hash.integer(env.enabled); hash.integer(env.clouds.enabled);
         for (double v:env.sun.direction) hash.number(v);
         for (double v:env.sun.irradiance) hash.number(v);
@@ -81,7 +81,7 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
                         if (m==asset.materials.end()) return std::unexpected(Error{ErrorCode::not_found,"Path material missing"});
                         material=&*m;
                     }
-                    if (auto valid=material_valid(*material);!valid) return std::unexpected(valid.error());
+                    if (auto valid=material_valid(*material,model);!valid) return std::unexpected(valid.error());
                     std::uint32_t texture=0xffffffffu;
                     if(material->base_color_texture) {
                         if(p.texcoords.size()!=p.positions.size()) return std::unexpected(path_invalid("Textured path primitive requires UVs"));
@@ -126,7 +126,8 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
                         }
                         t.entity=entity.id; t.mesh=ref.id; t.primitive=pi; t.triangle=ti;
                         t.albedo=material->base_color.head<3>().cast<double>(); t.emission=material->emissive.cast<double>();
-                        t.double_sided=material->double_sided;
+                        t.double_sided=material->double_sided; t.metallic=material->metallic; t.roughness=material->roughness;
+                        if(model==PathTraceMaterialModel::metallic_roughness) { hash.number(t.metallic); hash.number(t.roughness); }
                         t.texture=texture; t.alpha=material->base_color.w(); t.cutoff=material->alpha_cutoff; t.mask=material->alpha_mode==AlphaMode::mask;
                         hash.integer(texture); hash.number(t.alpha); hash.number(t.cutoff); hash.integer(t.mask);
                         hash.vector(t.albedo); hash.vector(t.emission); hash.integer(t.double_sided);
@@ -154,6 +155,7 @@ std::size_t PathTraceScene::triangle_count() const noexcept { return state_ ? st
 std::size_t PathTraceScene::degenerate_count() const noexcept { return state_ ? state_->degenerate : 0; }
 std::size_t PathTraceScene::texture_count() const noexcept { return state_ ? state_->textures.size() : 0; }
 std::size_t PathTraceScene::masked_emitter_count() const noexcept { return state_ ? state_->masked_emitters : 0; }
+PathTraceMaterialModel PathTraceScene::material_model() const noexcept { return state_ ? state_->material_model : PathTraceMaterialModel::lambert; }
 Result<PathTraceTextureInfo> PathTraceScene::texture_info(std::size_t index) const {
     if(!state_ || index>=state_->textures.size()) return std::unexpected(path_invalid("Path texture index out of range"));
     const auto& t=state_->textures[index]; return PathTraceTextureInfo{t.mesh,t.id,t.origin,t.width,t.height};

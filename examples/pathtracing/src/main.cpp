@@ -60,7 +60,7 @@ int run(const std::filesystem::path& directory,std::uint32_t spp) {
             }
         }
         if (!std::isfinite(maximum) || maximum<=0) throw std::runtime_error("Reference image is empty or nonfinite");
-        nlohmann::json report{{"schema_version",1},{"renderer","cpu_lambert_reference_v2"},{"model_version",settings.model_version},{"sampler_version",1},
+        nlohmann::json report{{"schema_version",1},{"renderer","cpu_lambert_reference_v3"},{"model_version",settings.model_version},{"sampler_version",1},
             {"scene",scene.id().to_string()},{"revision",scene.revision()},{"fingerprint",scene.fingerprint()},
             {"width",24},{"height",24},{"seed",42},{"first_sample",0},{"spp",spp},{"max_bounces",4},{"rr_start",3},
             {"estimator","mis"},{"environment_rgb",{0,0,0}},{"sun","none"},{"surface_only",false},

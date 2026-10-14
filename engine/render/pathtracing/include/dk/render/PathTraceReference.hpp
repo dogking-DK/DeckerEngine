@@ -28,12 +28,13 @@ struct PathTraceTextureInfo {
     std::string_view origin; // Borrowed from the immutable scene.
     std::uint32_t width = 0, height = 0;
 };
-// Immutable CPU input. Model v2 adds baseColor textures and alpha-mask to Lambert.
+enum class PathTraceMaterialModel { lambert, metallic_roughness };
+// Immutable CPU input. Model v3 keeps Lambert and explicitly adds metallic-roughness.
 class PathTraceScene final {
 public:
     PathTraceScene() = default;
     [[nodiscard]] static Result<PathTraceScene> create(memory::ResourceHandle, const RenderScene&,
-        std::span<const CpuAsset* const>, const PathTraceSceneLimits& = {});
+        std::span<const CpuAsset* const>, const PathTraceSceneLimits& = {}, PathTraceMaterialModel = PathTraceMaterialModel::lambert);
     [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
     [[nodiscard]] SceneId id() const noexcept;
     [[nodiscard]] std::uint64_t revision() const noexcept;
@@ -42,6 +43,7 @@ public:
     [[nodiscard]] std::size_t degenerate_count() const noexcept;
     [[nodiscard]] std::size_t texture_count() const noexcept;
     [[nodiscard]] std::size_t masked_emitter_count() const noexcept;
+    [[nodiscard]] PathTraceMaterialModel material_model() const noexcept;
     [[nodiscard]] Result<PathTraceTextureInfo> texture_info(std::size_t) const;
     [[nodiscard]] Result<std::optional<PathTraceHit>> nearest(const PathTraceRay&) const;
 private:
@@ -52,7 +54,7 @@ private:
 enum class PathTraceEstimator { mis, bsdf_only };
 enum class PathTraceSun { none, scene };
 struct PathTraceSettings {
-    std::uint32_t model_version = 2, sampler_version = 1;
+    std::uint32_t model_version = 3, sampler_version = 1;
     std::uint64_t seed = 1;
     std::uint32_t max_bounces = 8, rr_start = 3; // 0 disables RR for comparison.
     Vec3d environment_rgb = Vec3d::Zero(); // Constant radiance; never includes a solar disk.
@@ -73,6 +75,7 @@ struct PathTraceImageInfo {
     SceneId scene;
     std::uint64_t revision = 0, fingerprint = 0;
     std::size_t texture_count = 0, masked_emitter_count = 0;
+    PathTraceMaterialModel material_model = PathTraceMaterialModel::lambert;
     ViewDescription view;
     PathTraceSettings settings;
     PathTraceSamples samples;

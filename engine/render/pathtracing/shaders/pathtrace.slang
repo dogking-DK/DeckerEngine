@@ -9,9 +9,9 @@ struct PathPayload { float distance; float2 barycentric; uint index; uint found;
 [[vk::binding(6,0)]] SamplerState baseSamplers[64];
 #endif
 float4 baseColor(uint index,float2 barycentric) {
-    float4 factor=triangles[index*8+4];
+    float4 factor=triangles[index*9+4];
 #if DK_PATH_TEXTURES
-    float4 a=triangles[index*8+6],b=triangles[index*8+7]; uint texture=asuint(b.z);
+    float4 a=triangles[index*9+6],b=triangles[index*9+7]; uint texture=asuint(b.z);
     if(texture!=0xffffffffu) {
         if(texture>=64) return asfloat(0x7fc00000u).xxxx;
         float2 uv=a.xy*(1-barycentric.x-barycentric.y)+a.zw*barycentric.x+b.xy*barycentric.y;
@@ -22,6 +22,11 @@ float4 baseColor(uint index,float2 barycentric) {
     return factor;
 }
 static const float pi=3.14159265358979323846;
+#include "path-bsdf.slang"
+PathBsdf materialAt(uint index,float2 barycentric) {
+    float4 material=triangles[index*9+8];
+    PathBsdf result; result.color=baseColor(index,barycentric).xyz; result.metallic=material.x; result.roughness=material.y; result.ggx=material.z!=0; return result;
+}
 static const float infinity=3.402823466e+38;
 float largest(float3 v) { return max(v.x,max(v.y,v.z)); }
 uint mixBits(uint x) { x^=x>>16; x*=0x7feb352d; x^=x>>15; x*=0x846ca68b; return x^(x>>16); }
@@ -36,22 +41,22 @@ float nextFloat(float v,float direction) {
     uint bits=asuint(v); return asfloat((v>0)==(direction>0) ? bits+1 : bits-1);
 }
 float3 offsetOrigin(uint index,float3 position,float3 direction) {
-    float3 extent=max(max(abs(triangles[index*8].xyz),abs(triangles[index*8+1].xyz)),abs(triangles[index*8+2].xyz))+abs(position);
+    float3 extent=max(max(abs(triangles[index*9].xyz),abs(triangles[index*9+1].xyz)),abs(triangles[index*9+2].xyz))+abs(position);
     float error=64*1.1920928955078125e-7*largest(extent);
-    float3 n=normalize(triangles[index*8+3].xyz); if(dot(n,direction)<0) n=-n;
+    float3 n=normalize(triangles[index*9+3].xyz); if(dot(n,direction)<0) n=-n;
     float3 result=position+n*error;
     for(uint k=0;k<3;++k) if(n[k]!=0) result[k]=nextFloat(result[k],n[k]);
     return result;
 }
 float3 positionOf(PathPayload hit) {
-    return triangles[hit.index*8].xyz*(1-hit.barycentric.x-hit.barycentric.y)+
-        triangles[hit.index*8+1].xyz*hit.barycentric.x+triangles[hit.index*8+2].xyz*hit.barycentric.y;
+    return triangles[hit.index*9].xyz*(1-hit.barycentric.x-hit.barycentric.y)+
+        triangles[hit.index*9+1].xyz*hit.barycentric.x+triangles[hit.index*9+2].xyz*hit.barycentric.y;
 }
 float3 normalOf(PathPayload hit,float3 direction) {
-    float3 normal=normalize(triangles[hit.index*8+3].xyz); return dot(normal,direction)<0 ? normal : -normal;
+    float3 normal=normalize(triangles[hit.index*9+3].xyz); return dot(normal,direction)<0 ? normal : -normal;
 }
 float areaPdf(uint index,float3 from,float3 point) {
-    float4 a=triangles[index*8],b=triangles[index*8+1],n=triangles[index*8+3];
+    float4 a=triangles[index*9],b=triangles[index*9+1],n=triangles[index*9+3];
     if(b.w<=0) return 0;
     float3 delta=point-from; float distance2=dot(delta,delta); if(distance2<=0) return 0;
     float cosine=-dot(normalize(n.xyz),delta/sqrt(distance2)); if(n.w!=0) cosine=abs(cosine);
@@ -69,8 +74,7 @@ bool visible(uint index,float3 position,float3 direction,uint lightIndex,float3 
     TraceRay(scene,RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH|RAY_FLAG_SKIP_CLOSEST_HIT_SHADER,255,1,2,1,ray,payload);
     return payload.found==0;
 }
-float3 directLight(PathPayload hit,float3 position,float3 normal,uint pixel,uint sample,uint depth,inout uint rays) {
-    float3 albedo=baseColor(hit.index,hit.barycentric).xyz; if(largest(albedo)==0) return 0;
+float3 directLight(PathPayload hit,float3 position,float3 normal,PathBsdf bsdf,float3 wo,uint pixel,uint sample,uint depth,inout uint rays) {
     uint4 flags=asuint(parameters[2]); bool bsdfOnly=flags.x!=0,solar=flags.y!=0;
     float classPdf=parameters[4].w;
     if((bsdfOnly && !solar) || (!bsdfOnly && classPdf==0)) return 0;
@@ -83,21 +87,17 @@ float3 directLight(PathPayload hit,float3 position,float3 normal,uint pixel,uint
         wi=normalize(parameters[5].xyz); radiance=parameters[4].xyz; pdf=bsdfOnly ? 1 : classPdf; delta=true;
     } else if(parameters[3].w>0) {
         float target=randomValue(pixel,sample,depth,3)*parameters[3].w; uint lo=0,hi=flags.z;
-        while(lo<hi) { uint mid=(lo+hi)/2; if(target<triangles[mid*8+2].w) hi=mid; else lo=mid+1; }
+        while(lo<hi) { uint mid=(lo+hi)/2; if(target<triangles[mid*9+2].w) hi=mid; else lo=mid+1; }
         if(lo==flags.z) return 0; light=lo;
         float root=sqrt(randomValue(pixel,sample,depth,4)),v=randomValue(pixel,sample,depth,5);
-        point=triangles[light*8].xyz*(1-root)+triangles[light*8+1].xyz*(root*(1-v))+triangles[light*8+2].xyz*(root*v);
+        point=triangles[light*9].xyz*(1-root)+triangles[light*9+1].xyz*(root*(1-v))+triangles[light*9+2].xyz*(root*v);
         float3 displacement=point-position; if(dot(displacement,displacement)==0) return 0;
-        wi=normalize(displacement); radiance=triangles[light*8+5].xyz; pdf=areaPdf(light,position,point);
+        wi=normalize(displacement); radiance=triangles[light*9+5].xyz; pdf=areaPdf(light,position,point);
     }
     float cosine=dot(normal,wi);
     if(cosine<=0 || pdf<=0 || !visible(hit.index,position,wi,light,point,rays)) return 0;
-    return albedo*radiance*(cosine*(delta ? 1 : weight(pdf,cosine/pi))/(pi*pdf));
-}
-float3 hemisphere(float3 n,float u,float v) {
-    float r=sqrt(u),phi=2*pi*v; float3 axis=abs(n.z)<.9 ? float3(0,0,1) : float3(0,1,0);
-    float3 tangent=normalize(cross(axis,n)),bitangent=cross(n,tangent);
-    return normalize(tangent*(r*cos(phi))+bitangent*(r*sin(phi))+n*sqrt(1-u));
+    BsdfEval evaluated=evalBsdf(bsdf,normal,wo,wi);
+    return evaluated.value*radiance*(cosine*(delta ? 1 : weight(pdf,evaluated.pdf))/pdf);
 }
 RayDesc primaryRay(uint2 coordinate,uint pixel,uint sample) {
     RayDesc ray;
@@ -122,13 +122,15 @@ float3 tracePath(RayDesc ray,uint pixel,uint sample,inout uint rays,out float4 f
             radiance+=throughput*parameters[3].xyz*(depth!=0 && flags.x==0 ? weight(bsdfPdf,parameters[4].w/(4*pi)) : 1); break;
         }
         float3 position=positionOf(hit),normal=normalOf(hit,ray.Direction);
-        if(depth==0) { firstHit=float4(hit.distance,hit.barycentric,float(hit.index+1)); firstNormal=float4(normal,dot(ray.Direction,triangles[hit.index*8+3].xyz)<0 ? 1 : -1); }
-        float3 albedo=baseColor(hit.index,hit.barycentric).xyz,emission=triangles[hit.index*8+5].xyz;
+        if(depth==0) { firstHit=float4(hit.distance,hit.barycentric,float(hit.index+1)); firstNormal=float4(normal,dot(ray.Direction,triangles[hit.index*9+3].xyz)<0 ? 1 : -1); }
+        PathBsdf bsdf=materialAt(hit.index,hit.barycentric); float3 emission=triangles[hit.index*9+5].xyz;
         radiance+=throughput*emission*(depth!=0 && flags.x==0 ? weight(bsdfPdf,areaPdf(hit.index,previous,position)) : 1);
-        if(depth==counts.z || largest(albedo)==0) break;
-        radiance+=throughput*directLight(hit,position,normal,pixel,sample,depth,rays);
-        float3 wi=hemisphere(normal,randomValue(pixel,sample,depth,6),randomValue(pixel,sample,depth,7));
-        bsdfPdf=max(0.0,dot(normal,wi))/pi; previous=position; throughput*=albedo;
+        if(depth==counts.z || (!bsdf.ggx && largest(bsdf.color)==0)) break;
+        radiance+=throughput*directLight(hit,position,normal,bsdf,-ray.Direction,pixel,sample,depth,rays);
+        float3 wi=sampleBsdf(bsdf,normal,-ray.Direction,randomValue(pixel,sample,depth,6),randomValue(pixel,sample,depth,7));
+        BsdfEval evaluated=evalBsdf(bsdf,normal,-ray.Direction,wi); if(evaluated.pdf<=0) break;
+        bsdfPdf=evaluated.pdf; previous=position; throughput*=evaluated.value*(max(0.0,dot(normal,wi))/bsdfPdf);
+        if(largest(throughput)==0) break;
         if(counts.w!=0 && depth+1>=counts.w) {
             float survival=clamp(largest(throughput),.05,.95);
             if(randomValue(pixel,sample,depth,8)>=survival) break; throughput/=survival;
@@ -166,7 +168,7 @@ void pathHit(inout PathPayload payload,BuiltInTriangleIntersectionAttributes att
 }
 [shader("anyhit")]
 void pathAnyHit(inout PathPayload payload,BuiltInTriangleIntersectionAttributes attributes) {
-    uint index=PrimitiveIndex(); float4 n=triangles[index*8+3];
+    uint index=PrimitiveIndex(); float4 n=triangles[index*9+3];
     if((n.w==0 && dot(n.xyz,WorldRayDirection())>=0) ||
-       (triangles[index*8+7].w!=0 && baseColor(index,attributes.barycentrics).w<triangles[index*8+5].w)) IgnoreHit();
+       (triangles[index*9+7].w!=0 && baseColor(index,attributes.barycentrics).w<triangles[index*9+5].w)) IgnoreHit();
 }

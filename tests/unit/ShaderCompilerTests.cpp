@@ -276,3 +276,21 @@ TEST_CASE("sampled image nonuniform capabilities and fixed arrays survive reflec
     CHECK(shader_reflection_json(*shader).find("requires_sampled_image_indexing")!=std::string::npos);
     shader->requires_sampled_image_indexing=false; CHECK_FALSE(validate_shader_artifact(*shader));
 }
+
+TEST_CASE("precise floating point preserves arithmetic decorations and changes source fingerprint", "[shaders]")
+{
+    Fixture fixture;
+    ShaderCompileRequest request{std::filesystem::path{DK_TEST_SHADER_DIR}/"compensated.slang","computeMain"};
+    auto original=compile_shader(request,fixture.heap); require_success(original);
+    request.precise_floating_point=true;
+    auto precise=compile_shader(request,fixture.heap); require_success(precise);
+    CHECK(precise->source_fingerprint!=original->source_fingerprint);
+    CHECK(precise->spirv!=original->spirv);
+    bool preserved=false;
+    for(std::size_t i=5;i<precise->spirv.size();i+=precise->spirv[i]>>16) {
+        if((precise->spirv[i]&0xffffu)==71 && (precise->spirv[i]>>16)==3 && precise->spirv[i+2]==42) preserved=true; // OpDecorate NoContraction.
+    }
+    CHECK(preserved);
+    auto repeated=compile_shader(request,fixture.heap); require_success(repeated);
+    CHECK(repeated->source_fingerprint==precise->source_fingerprint);
+}

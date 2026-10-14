@@ -1,4 +1,5 @@
 #include "PathReferenceInternal.hpp"
+#include "PathBsdf.hpp"
 #include <Eigen/LU>
 #include <algorithm>
 #include <cmath>
@@ -11,7 +12,7 @@ std::uint32_t mix(std::uint32_t x) noexcept {
 }
 bool color_valid(const Vec3d& c) { return c.allFinite() && (c.array()>=0).all() && (c.array()<=1e6).all(); }
 Result<void> work_valid(const PathSceneState& scene,std::uint64_t pixels,const PathTraceSettings& s,PathTraceSamples range) {
-    if (s.model_version!=2 || s.sampler_version!=1 || !s.max_bounces || s.max_bounces>32 || s.rr_start>s.max_bounces ||
+    if (s.model_version!=3 || s.sampler_version!=1 || !s.max_bounces || s.max_bounces>32 || s.rr_start>s.max_bounces ||
         !color_valid(s.environment_rgb) || (s.sun!=PathTraceSun::none && s.sun!=PathTraceSun::scene) ||
         (s.estimator!=PathTraceEstimator::mis && s.estimator!=PathTraceEstimator::bsdf_only) ||
         !range.count || range.count>65536 || range.first>65536-range.count ||
@@ -36,12 +37,6 @@ double power_weight(double a,double b) {
     if (b<=0) return 1;
     const double ratio=b/a;
     return 1/(1+ratio*ratio);
-}
-Vec3d hemisphere(const Vec3d& n,double u,double v) {
-    const double r=std::sqrt(u),phi=2*path_pi*v;
-    const Vec3d axis=std::abs(n.z())<.9 ? Vec3d::UnitZ() : Vec3d::UnitY();
-    const Vec3d tangent=axis.cross(n).normalized(),bitangent=n.cross(tangent);
-    return (tangent*(r*std::cos(phi))+bitangent*(r*std::sin(phi))+n*std::sqrt(1-u)).normalized();
 }
 struct Lights {
     Vec3d sun, direction;
@@ -80,11 +75,8 @@ bool visible(const PathSceneState& scene,const PathTraceHit& hit,const Vec3d& di
     }
     return !nearest_path(scene,ray,stats);
 }
-Vec3d direct(const PathSceneState& scene,const PathTraceHit& hit,const Lights& lights,const PathTraceSettings& s,
+Vec3d direct(const PathSceneState& scene,const PathTraceHit& hit,const PathBsdf& bsdf,const Vec3d& wo,const Lights& lights,const PathTraceSettings& s,
     std::uint32_t pixel,std::uint32_t sample,std::uint32_t bounce,PathTraceStatistics& stats) {
-    const auto& t=scene.triangles[hit.index];
-    const Vec3d albedo=path_base_color(scene,t,hit.barycentric).head<3>();
-    if (albedo.maxCoeff()==0) return Vec3d::Zero();
     auto random=[&](std::uint32_t dim) { return path_trace_sample(s.seed,pixel,sample,bounce,dim); };
     const bool bsdf_only=s.estimator==PathTraceEstimator::bsdf_only;
     if (bsdf_only && !lights.solar) return Vec3d::Zero();
@@ -112,8 +104,9 @@ Vec3d direct(const PathSceneState& scene,const PathTraceHit& hit,const Lights& l
     }
     const double cosine=hit.normal.dot(wi);
     if (cosine<=0 || pdf<=0 || !visible(scene,hit,wi,stats,emitter,point)) return Vec3d::Zero();
-    const double weight=delta ? 1 : power_weight(pdf,cosine/path_pi);
-    return albedo.cwiseProduct(radiance)*(cosine*weight/(path_pi*pdf));
+    const auto evaluated=eval_path_bsdf(bsdf,hit.normal,wo,wi);
+    const double weight=delta ? 1 : power_weight(pdf,evaluated.pdf);
+    return evaluated.value.cwiseProduct(radiance)*(cosine*weight/pdf);
 }
 Result<Vec3d> trace_one(const PathSceneState& scene,PathTraceRay ray,const PathTraceSettings& s,const Lights& lights,
     std::uint32_t pixel,std::uint32_t sample,PathTraceStatistics& stats,std::stop_token cancel) {
@@ -129,14 +122,18 @@ Result<Vec3d> trace_one(const PathSceneState& scene,PathTraceRay ray,const PathT
         }
         const auto& t=scene.triangles[hit->index];
         const Vec3d albedo=path_base_color(scene,t,hit->barycentric).head<3>();
+        const PathBsdf bsdf{albedo,t.metallic,t.roughness,scene.material_model};
         const double weight=depth && s.estimator==PathTraceEstimator::mis ?
             power_weight(bsdf_pdf,area_pdf(scene,t,previous,hit->position,lights.class_pdf)) : 1;
         radiance+=throughput.cwiseProduct(t.emission)*weight;
-        if (depth==s.max_bounces || albedo.maxCoeff()==0) break;
-        radiance+=throughput.cwiseProduct(direct(scene,*hit,lights,s,pixel,sample,depth,stats));
-        const Vec3d wi=hemisphere(hit->normal,path_trace_sample(s.seed,pixel,sample,depth,6),path_trace_sample(s.seed,pixel,sample,depth,7));
-        bsdf_pdf=std::max(0.0,hit->normal.dot(wi))/path_pi; previous=hit->position;
-        throughput=throughput.cwiseProduct(albedo);
+        if (depth==s.max_bounces || (scene.material_model==PathTraceMaterialModel::lambert && albedo.maxCoeff()==0)) break;
+        radiance+=throughput.cwiseProduct(direct(scene,*hit,bsdf,-ray.direction,lights,s,pixel,sample,depth,stats));
+        const auto sampled=sample_path_bsdf(bsdf,hit->normal,-ray.direction,path_trace_sample(s.seed,pixel,sample,depth,6),path_trace_sample(s.seed,pixel,sample,depth,7));
+        if(sampled.evaluated.pdf<=0) break;
+        const Vec3d wi=sampled.direction;
+        bsdf_pdf=sampled.evaluated.pdf; previous=hit->position;
+        throughput=throughput.cwiseProduct(sampled.evaluated.value)*(std::max(0.0,hit->normal.dot(wi))/bsdf_pdf);
+        if(throughput.maxCoeff()==0) break;
         if (s.rr_start && depth+1>=s.rr_start) {
             const double survival=std::clamp(throughput.maxCoeff(),.05,.95);
             if (path_trace_sample(s.seed,pixel,sample,depth,8)>=survival) break;
@@ -237,7 +234,7 @@ Result<PathTraceImage> render_path_reference(memory::ResourceHandle heap,const P
     if (cancel.stop_requested()) return std::unexpected(path_cancelled());
     try {
         auto image=memory::make_shared_in<detail::PathImageState>(heap,heap);
-        image->info={camera->width,camera->height,scene.id(),scene.revision(),scene.fingerprint(),scene.texture_count(),scene.masked_emitter_count(),view.description(),s,samples,{}};
+        image->info={camera->width,camera->height,scene.id(),scene.revision(),scene.fingerprint(),scene.texture_count(),scene.masked_emitter_count(),scene.material_model(),view.description(),s,samples,{}};
         image->pixels.resize(static_cast<std::size_t>(pixels),Vec3d::Zero());
         const auto lights=lights_for(*state,s);
         for (std::uint32_t y=0;y<camera->height;++y) for (std::uint32_t x=0;x<camera->width;++x) {

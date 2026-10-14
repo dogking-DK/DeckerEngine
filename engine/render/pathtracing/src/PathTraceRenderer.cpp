@@ -164,7 +164,7 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
         const auto base=5+scene.texture_count;
         imports.push_back({base,nullptr,nullptr,{},&scene.blas}); imports.push_back({base+1,nullptr,nullptr,{},&scene.tlas}); imports.push_back({base+2,nullptr,nullptr,{},nullptr,&state.table});
     }
-    add(g,empty ? "empty environment" : "Lambert path trace",uses);
+    add(g,empty ? "empty environment" : "surface path trace",uses);
     const std::array copy{use(result,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead),use(readback,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,true)};
     add(g,"HDR readback",copy); check(g.mark_output(readback));
     auto plan=take(g.compile(stop)); TraceContext context{state,bindings,frame->info.width,frame->info.height,empty,7+scene.texture_count};
@@ -177,7 +177,7 @@ PathTraceGpuImageInfo info_for(const PathTraceScene& scene,std::uint32_t width,s
     const PathTraceSettings& settings,PathTraceSamples samples) {
     PathTraceGpuImageInfo info; info.width=width; info.height=height; info.scene=scene.id(); info.revision=scene.revision();
     info.fingerprint=scene.fingerprint(); info.texture_count=scene.texture_count(); info.masked_emitter_count=scene.masked_emitter_count();
-    info.settings=settings; info.samples=samples; return info;
+    info.material_model=scene.material_model(); info.settings=settings; info.samples=samples; return info;
 }
 }
 
@@ -194,6 +194,7 @@ Result<PathTraceRenderer> PathTraceRenderer::create(memory::ResourceHandle heap,
     const std::array defines{ShaderDefine{"DK_PATH_TEXTURES",state->textured ? "1" : "0"}};
     for (std::size_t i=0;i<5;++i) requests[i]={directory/"pathtrace.slang",names[i],stages[i],{},defines};
     requests[5]={directory/"pathtrace-empty.slang","emptyMain",ShaderStage::compute};
+    for(auto& request:requests) request.precise_floating_point=true;
     auto compiled=take(compile_shaders(requests,heap,stop));
     std::array<ShaderModule,6> shaders; for (std::size_t i=0;i<shaders.size();++i) { cancelled(stop); shaders[i]=take(state->factory.create_shader(compiled[i])); }
     const std::array<const ShaderModule*,5> entries{&shaders[0],&shaders[1],&shaders[2],&shaders[3],&shaders[4]};
@@ -226,7 +227,7 @@ Result<PathTraceGpuScene> PathTraceRenderer::prepare_scene(SubmissionQueue& queu
         for (const auto& point:{a,b,c}) for (int k=0;k<3;++k) vertices.push_back(point[k]);
         for (const auto& value:{pack(t.a,t.area),pack(t.b,t.light_weight),pack(t.c,t.light_cdf),pack(t.normal,t.double_sided ? 1 : 0),pack(t.albedo,t.alpha),pack(t.emission,t.cutoff),
             Float4{float(t.uv_a.x()),float(t.uv_a.y()),float(t.uv_b.x()),float(t.uv_b.y())},
-            Float4{float(t.uv_c.x()),float(t.uv_c.y()),std::bit_cast<float>(t.texture),t.mask ? 1.f : 0.f}}) packed.push_back(value);
+            Float4{float(t.uv_c.x()),float(t.uv_c.y()),std::bit_cast<float>(t.texture),t.mask ? 1.f : 0.f},Float4{t.metallic,t.roughness,cpu->material_model==PathTraceMaterialModel::metallic_roughness ? 1.f : 0.f,0}}) packed.push_back(value);
     }
     scene->triangles=upload(state_->factory,std::as_bytes(std::span{packed}),vk::BufferUsageFlagBits::eStorageBuffer);
     auto staging=upload(state_->factory,std::as_bytes(std::span{vertices}),vk::BufferUsageFlagBits::eTransferSrc);

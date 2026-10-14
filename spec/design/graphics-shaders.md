@@ -1,7 +1,7 @@
 ---
 module: graphics-shaders
 created_at: "2026-09-28T19:00:00+08:00"
-updated_at: "2026-10-14T16:57:16+08:00"
+updated_at: "2026-10-14T17:37:19+08:00"
 status: accepted
 ---
 
@@ -102,3 +102,11 @@ SampledImageArrayNonUniformIndexing(5307)，不放开Int64或其他descriptor索
 schema v3添加该布尔字段；布局仍为固定长度且全部初始化，Device在创建shader前检查独立能力已启用。
 Device在native module/layout创建前检查RT启用；pipeline级payload/布局/选择器校验见
 [RT实施契约](graphics-raytracing.md#m164实施契约)。完整SPIR-V语义仍由Vulkan validation验证。
+
+### 有限精度积分编译选项
+
+ShaderCompileRequest末字段precise_floating_point（默认false）允许数值积分显式请求Slang全局fp-mode precise；
+默认策略不变，精确模式仍使用原优化级别，但禁止改变浮点运算结果的重结合。该选项进入source_fingerprint。
+路径追踪显式开启，保护补偿求和与BSDF数值；仅写局部precise在当前SPIR-V后端不足以保证补偿项保留。
+验证包括非二进制常量65536项求和/二阶矩及最低粗糙度统计；不新增CLI选项或反射schema字段。
+参考[Slang编译选项](https://github.com/shader-slang/slang/blob/master/docs/command-line-slangc-reference.md)。

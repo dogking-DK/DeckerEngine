@@ -12,7 +12,7 @@ if(TARGET dk_render_pathtracing)
         set_tests_properties(dk.pathtracing.texture_assets_gpu_required PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
     endif()
-    foreach(case IN ITEMS analytic statistics images lifetime allocations texture_numeric texture_mask texture_lifetime texture_disabled texture_allocations)
+    foreach(case IN ITEMS analytic statistics images lifetime allocations ggx_numeric ggx_statistics ggx_indirect ggx_lifetime texture_numeric texture_mask texture_lifetime texture_disabled texture_allocations)
         add_test(NAME dk.pathtracing.${case}_gpu_required COMMAND dk_pathtracing_probe ${case})
         set_tests_properties(dk.pathtracing.${case}_gpu_required PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")

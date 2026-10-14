@@ -1,13 +1,13 @@
 ---
 created_at: "2026-10-14T14:37:00+08:00"
-updated_at: "2026-10-14T16:57:16+08:00"
+updated_at: "2026-10-14T17:37:19+08:00"
 ---
 
-# GPU无历史Lambert路径追踪
+# GPU无历史Lambert/GGX路径追踪
 
 [返回项目入口](../../README.md)。[M16.6设计](../design/render-pathtracing.md#m166-gpu无历史lambert实施契约)
 提供硬件三角形求交、NEE/MIS/RR和拥有型HDR结果，使用与[CPU参考](pathtracing-reference.md)一致的冻结输入与采样模型。
-当前为≤64×64正确性参考，支持Lambert baseColor纹理/alpha-mask；历史累积、GGX、编辑器和capture命令按Roadmap后续阶段接入。
+当前为≤64×64正确性参考，支持Lambert/GGX、baseColor纹理/alpha-mask；历史累积、编辑器和capture命令按Roadmap后续阶段接入。
 
 ## 构建与验证
 
@@ -15,7 +15,7 @@ updated_at: "2026-10-14T16:57:16+08:00"
 cmake --preset windows-graphics -DDK_BUILD_RENDER_PATHTRACING=ON
 & ./scripts/verify.ps1 -BuildDir out/build/windows-graphics -Configuration RelWithDebInfo `
   -Target dk_pathtracing_probe -TestRegex '^dk\.pathtracing\..*_gpu_required$' `
-  -Reason 'GPU Lambert解析/统计/图像/寿命/分配失败验收'
+  -Reason 'GPU表面路径追踪解析/统计/图像/寿命/分配失败验收'
 ```
 
 开关默认OFF，消费者链接`dk::render_pathtracing`，包含`dk/render/PathTraceRenderer.hpp`。
@@ -25,7 +25,10 @@ Scene/Math/Memory和Graphics Device/Graph/Shader须已启用；GPU开关同时�
 
 ## 场景、提交与读回
 
-使用`PathTraceScene::create`冻结RenderScene与被引用的CpuAsset；接收opaque/mask、metallic=0材质及baseColor纹理。
+使用`PathTraceScene::create`冻结RenderScene与被引用的CpuAsset；接收opaque/mask及baseColor纹理。
+默认Lambert要求metallic=0；GGX输入使用PathTraceScene::create(heap, renderScene, assets, {}, PathTraceMaterialModel::metallic_roughness)。
+材质模式冻结在scene中，prepare_scene自动采用，并由image.info().material_model报告。
+GGX边界与粗糙度下限见[CPU指南](pathtracing-reference.md)。
 GPU renderer读取冻结的世界三角形，保留完整仿射结果、几何法线、单/双面、发光与面积权重。
 浮点转换导致几何退化或无法表示的正面积/光源权重会被拒绝，旧场景保持有效。
 
@@ -71,7 +74,7 @@ stop_token只在CPU阶段、提交前及读取发布前检查，已提交GPU不�
 - `linear_rgb()`是曝光前线性RGB均值；`second_moment()`为样本RGB平方的均值。无tone、去噪或亮点截断。
 - `primary_hits()`记录每像素本区间第一个样本的主射线命中，含距离、重心、世界法线、front_face和Entity/Asset/primitive/triangle来源；miss为空。
 - `info()`记录scene/revision/fingerprint、视图、settings、样本区间、fixed_rays/first_pixel和实际trace射线数。
-  texture_count/masked_emitter_count记录冻结纹理数及未纳入NEE的mask发光三角形数，model_version=2、sampler_version=1。
+  texture_count/masked_emitter_count记录冻结纹理数及未纳入NEE的mask发光三角形数，model_version=3、sampler_version=1。
   空场景compute的硬件射线数为0；硬件三角遍历计数不可得，triangle_tests为0而非测得0次遍历。
 - NaN/Inf、负辐亮度和非法诊断拒绝整帧。指纹仅作稳定诊断摘要，不是安全校验或缓存相等证明。
 
@@ -86,7 +89,8 @@ BLAS从世界顶点合并构建，尚无资产BLAS复用、UPDATE/refit、跨队
 CPU oracle使用独立双精度暴力求交，面积灯再用独立二维积分校核；参考先验证N/4N收敛再对比GPU。
 新增texture_numeric/mask/lifetime/disabled/allocations，以及启用Assets时的texture_assets组；
 覆盖64张发散访问、过滤/UV/wrap、双面/mask发光、能力拒绝、失败寿命，以及glTF导入/产物重载到GPU。
-材质实施与实测记录见[0115](../development/0115-pathtracing-textures.md)。
+ggx_numeric/statistics/indirect/lifetime验证材质端点、白炉/面积灯、多次反弹、MIS/RR及纹理组合与在途寿命。
+材质实施与实测记录见[0115](../development/0115-pathtracing-textures.md)和[0116](../development/0116-pathtracing-ggx.md)。
 
 images用例在构建目录`tests/integration/pathtrace-hdr.json`写入4×4、seed=42、256spp线性数据。
 报告的comparison对象单独记录8 seed、4096/16384spp对照协议和nRMSE，不能把这组误差当作256spp图像的参考误差。
