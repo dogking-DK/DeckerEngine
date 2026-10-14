@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-10-13T20:13:08+08:00"
+updated_at: "2026-10-14T08:20:00+08:00"
 status: accepted
 ---
 
@@ -19,6 +19,14 @@ DK_BUILD_RENDER_PIPELINE 默认 OFF，windows-graphics 启用。无新增依赖/
 M15.3提供显式render_clouds(queue,view,assets,sky,textures,cloud_settings,settings)，
 环境完整入口render_environment在实际非零云时走独立混合介质合成，接口、预算与失败边界见
 [云合成实施契约](render-clouds.md#m153-混合介质与图像合成实施契约)。零云走原M14；显式unlit/atmosphere诊断入口保持各自语义。
+
+## M16 独立路径追踪规划
+
+[路径追踪草案](render-pathtracing.md)规划独立 renderer，复用 RenderView、资产输入和显示色彩约定，
+通过[光追底座](graphics-raytracing.md)与 Graph 执行，不把 depth/opaque 管线改名为路径追踪。
+编辑器和 CaptureService 在后续阶段显式选择 renderer；现有默认行为、环境模式及质量标签保持语义。
+路径追踪按每视图的连续样本区间累积线性 HDR，完成后再曝光/tone；不复用云重投影历史或视点天空 LUT 计算任意反弹。
+本次仅定义规划入口，无新 API、命令或 shader；前置任务和验收见[Roadmap M16](../roadmap.md#m16渐进式路径追踪)。
 
 ## 公开入口
 

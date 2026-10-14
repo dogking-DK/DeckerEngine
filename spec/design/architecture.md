@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-13T18:54:48+08:00"
+updated_at: "2026-10-14T08:20:00+08:00"
 status: accepted
 ---
 
@@ -83,6 +83,18 @@ render/clouds负责云场与单/混合介质参考，render/pipeline组合天空
 首轮接入普通场景视口和render.capture；独立布料RenderSimulation视口的环境集成另行规划。
 云风场采用显式时间驱动的程序化输入，不耦合XPBD或新增天气流体求解器。
 范围、前置和验收由[Roadmap](../roadmap.md)维护；这里不改变上文已实现模块的现状。
+
+## 渐进式路径追踪规划
+
+M16 规划独立的[表面路径追踪管线](render-pathtracing.md)，先 CPU 正确性参考，
+再补齐[Vulkan 光追底座](graphics-raytracing.md)、GPU 积分、每视图累积、编辑器与固定 spp 截图。
+Device/Shader/Graph 扩展既有模块的能力与资源类型，Render 负责资产/场景映射、BSDF、光照和累积；
+不新建平行的设备所有权或提交系统，不让 CPU-only Runtime 依赖 GPU。
+参考和 GPU renderer 为独立可选 target，接口、开关和测试只在对应阶段实现时登记。
+首轮使用常量环境、方向太阳和发光三角形，受限 metallic-roughness 表面材质；
+大气/云多重散射、模拟布片、去噪和实时性能目标另行规划。
+ScenePipeline 的默认光栅行为保持；新后端明确选择和报告能力，不能静默替换输出。
+本节是规划边界，不表示已经有 RT 设备、AS/SBT、路径追踪 shader 或可调用命令；状态见[Roadmap](../roadmap.md)。
 
 ## 关键约束
 
