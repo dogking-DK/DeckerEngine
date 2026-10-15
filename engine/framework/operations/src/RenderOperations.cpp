@@ -9,6 +9,13 @@ Json integer(std::uint64_t maximum=UINT64_MAX,std::uint64_t minimum=0) {
 Json uuid() { return schema::string(36,36); }
 Json number(double low,double high) { return {{"type","number"},{"minimum",low},{"maximum",high}}; }
 Json vector_schema() { return schema::array(schema::number(),3,3); }
+Json path_schema(bool complete=false) {
+    return schema::object({{"version",integer(1,1)},{"target_spp",integer(65536,1)},{"seed",integer()},
+        {"max_bounces",integer(16,1)},{"rr_start",integer(16)},
+        {"environment_rgb",schema::array(number(0,1e6),3,3)},{"sun",schema::boolean()},
+        {"surface_only",schema::boolean()},{"exposure_ev",number(-32,32)}},
+        complete ? Json{"version","target_spp","seed","max_bounces","rr_start","environment_rgb","sun","surface_only","exposure_ev"} : Json{"version","target_spp"});
+}
 Json camera_schema(bool complete=false) {
     const auto vec=vector_schema();
     return schema::object({{"eye",vec},{"target",vec},{"up",vec},{"fov_y",schema::number()},
@@ -24,7 +31,12 @@ Json render_options_schema(bool complete=false) {
 Json provenance_schema() {
     return schema::object({{"environment",operations_detail::environment_schema()},{"camera",camera_schema(true)},
         {"exposure",schema::number()},{"time_seconds",schema::number()},
-        {"quality",{{"type","string"},{"enum",{"atmosphere_v1","unlit_v1","cloud_reference_v1","cloud_temporal_v1"}}}},
+        {"quality",{{"type","string"},{"enum",{"atmosphere_v1","unlit_v1","cloud_reference_v1","cloud_temporal_v1","pathtrace_v1"}}}},
+        {"renderer",{{"type","string"},{"enum",{"raster","pathtrace"}}}},{"format",{{"type","string"},{"enum",{"ppm","linear_json","sequence_json"}}}},
+        {"pathtrace",schema::nullable(path_schema(true))},{"model_version",integer()},{"sampler_version",integer()},
+        {"material_model",schema::string()},{"estimator",schema::string()},{"actual_spp",integer(65536)},
+        {"input_fingerprint",{{"type",{"string","null"}}}},
+        {"input_fingerprint_version",integer(2,2)},
         {"render_options",render_options_schema(true)},{"warmup_frames",integer(64)},{"sample_count",integer(128,1)},
         {"profile",{{"type","string"},{"enum",{"strict","unlit_preview"}}}},
         {"shader_fingerprint",{{"type",{"string","null"}}}}},
@@ -43,6 +55,15 @@ CaptureRequest request(const Json& p,bool sequence) {
     r.profile=p.value("profile",std::string{"unlit_preview"})=="strict" ? GltfImportProfile::strict : GltfImportProfile::unlit_preview;
     r.exposure=p.value("exposure",1.f); r.require_validation=p.value("validation",std::string{"if_available"})=="required";
     r.warmup_frames=p.value("warmup_frames",0U); r.environment.time_seconds=p.value("time_seconds",0.0);
+    r.pathtrace=p.value("renderer",std::string{"raster"})=="pathtrace";
+    r.linear_json=p.value("format",std::string{"ppm"})=="linear_json";
+    if(p.contains("pathtrace")) {
+        const auto& v=p["pathtrace"]; CapturePathTrace path;
+        path.version=v["version"].get<std::uint32_t>(); path.target_spp=v["target_spp"].get<std::uint32_t>();
+        path.seed=v.value("seed",std::uint64_t{1}); path.max_bounces=v.value("max_bounces",8U); path.rr_start=v.value("rr_start",3U);
+        if(v.contains("environment_rgb")) path.environment_rgb=vector(v["environment_rgb"]);
+        path.sun=v.value("sun",false); path.surface_only=v.value("surface_only",false); path.exposure_ev=v.value("exposure_ev",0.0); r.path=path;
+    }
     if(p.contains("render_options")) {
         const auto& o=p["render_options"]; auto& s=r.environment;
         s.mode=o.value("mode",std::string{"reference"})=="temporal" ? render::CloudRenderMode::temporal : render::CloudRenderMode::reference;
@@ -75,11 +96,19 @@ Result<void> register_render_commands(CommandRegistry& registry,CaptureService& 
         if(sequence) {
             params["samples"]=schema::array(schema::object({{"camera",camera_schema()},{"time_seconds",number(-1e9,1e9)},{"camera_cut",schema::boolean()}},{"camera","time_seconds"}),1,128);
             required.push_back("samples");
-        } else { params["camera"]=camera_schema(); params["time_seconds"]=number(-1e9,1e9); }
+        } else {
+            params["camera"]=camera_schema(); params["time_seconds"]=number(-1e9,1e9);
+            params["renderer"]={{"type","string"},{"enum",{"raster","pathtrace"}}};
+            params["format"]={{"type","string"},{"enum",{"ppm","linear_json"}}}; params["pathtrace"]=path_schema();
+        }
         auto added=registry.add({sequence ? "render.sequence" : "render.capture",
-            sequence ? "Render frozen camera/time samples from empty history to an atomic JSON report" : "Capture the guarded scene at an explicit time to a project-relative PPM",
+            sequence ? "Render frozen camera/time samples from empty history to an atomic JSON report" : "Capture the guarded scene with raster or fixed-spp path tracing to an atomic PPM/linear JSON",
             schema::object(std::move(params),std::move(required)),std::move(result),CommandEffect::external,false},
             [&service,&scene,sequence](const Json& p)->Result<Json> {
+                if(p.value("renderer",std::string{"raster"})=="pathtrace") {
+                    for(const char* name:{"exposure","time_seconds","render_options","warmup_frames"}) if(p.contains(name))
+                        return std::unexpected(Error{ErrorCode::invalid_argument,std::string{"Raster-only parameter: "}+name});
+                }
                 auto guard=parse_edit_guard(p["guard"]); if(!guard) return std::unexpected(guard.error());
                 auto ticket=service.capture(scene,*guard,request(p,sequence)); if(!ticket) return std::unexpected(ticket.error());
                 const auto& i=ticket->info;

@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-15T09:28:38+08:00"
+updated_at: "2026-10-15T10:25:23+08:00"
 status: accepted
 ---
 
@@ -713,12 +713,11 @@ M14.4日光接收、M14.5空气透视、M14.6环境编辑/截图闭环和M14.7�
 | M16.7.2 | metallic-roughness GGX子集，CPU eval/sample/PDF与GPU实现 | M16.7.1 | metallic/roughness端点、掠射/法线、能量与MIS均值检验；先冻结CPU模型/阈值再验GPU；不混同Lambert与默认metallic材质 | 完成，见[0116](development/0116-pathtracing-ggx.md) |
 | M16.8 | 每视图渐进累积、计数式样本、reset/poll、tile与工作/显存额度 | M16.7.2 | 批次/分块不重漏样本，固定spp与一次参考一致；相机/资产/手势重置；曝光不重采样；迟到/失败/取消不推进completed_spp；有界在途资源 | 完成，见[0117](development/0117-pathtracing-progressive.md) |
 | M16.9 | 编辑器模式切换、后台预览、进度/暂停/重置和完成图像交接 | M16.8、M8/M12视口机制 | 实际GUI/IPC编辑同输入；拖动/resize/切场景不混历史；能力不足可见；owner不做GPU等待，单队列串行与关闭安全；启动测试使用--background | 完成，见[0118](development/0118-editor-pathtracing.md) |
-| M16.10 | render.capture显式后端/固定spp、Job进度/取消、provenance与线性报告、Python/Luau例子 | M16.8、M7.4/M9；一致性需M16.9 | commands.list/describe与文档一致；从0精确到目标spp；场景/输入版本绑定；GUI与capture线性一致；取消/失败保留旧文件，CPU-only明确无GPU能力 | 未开始 |
+| M16.10 | render.capture显式后端/固定spp、Job进度/取消、provenance与线性报告、Python/Luau例子 | M16.8、M7.4/M9；一致性需M16.9 | commands.list/describe与文档一致；从0精确到目标spp；场景/输入版本绑定；GUI与capture线性一致；取消/失败保留旧文件，CPU-only明确无GPU能力 | 完成，见[0119](development/0119-pathtracing-capture.md) |
 | M16.11 | 固定质量/多seed收敛、动态重置、三轮性能/显存基线和交付 | M16.9、M16.10、M11观测 | 程序化与受支持磁盘场景、CPU参考及required RT GPU通过；冷/热/达到固定质量的耗时、取消/回收及显存峰值留原始证据；性能缺口不伪装成达标 | 未开始 |
 
 M16.7材质任务组的M16.7.1/2均已验收；每行有独立开发记录与本地提交。
-默认按表串行推进，M16.10 是下一项；过大行在开工前继续拆 Mx.y.z。M16.10核心可独立于GUI准备，
-最终一致性必须在M16.9后验证。没有人员/日历预算，不虚构工期。
+默认按表串行推进，M16.11 是下一项；过大行在开工前继续拆 Mx.y.z。M16.10已完成固定capture、进度/取消和GUI线性一致性验收。没有人员/日历预算，不虚构工期。
 
 **交付节点F（计划）：** 用户可选路径追踪视口，静止逐步收敛，改场景/相机后重置，
 以明确 seed/反弹数/spp 通过GUI、IPC或脚本获得可追溯截图；失败和不支持的输入有明确结果。
@@ -788,7 +787,8 @@ M16.7.1纹理/alpha-mask/双面、固定64槽数组与独立非一致索引能�
 M16.7.2显式Lambert/GGX、可见法线混合采样和能量/MIS检验已完成；同时修复高样本GPU补偿求和，55项定向验收见[0116](development/0116-pathtracing-ggx.md)。
 M16.8双视图GPU累积、连续样本、tile/reset/poll与实际owner额度完成；47项定向验收见[0117](development/0117-pathtracing-progressive.md)。
 M16.9编辑器模式、后台渐进预览、GPU显示交接与共享队列同步完成；真实GUI/IPC、模块关闭回退和定向回归见[0118](development/0118-editor-pathtracing.md)。
-**下一项为M16.10：路径追踪capture、Job进度/取消和输入来源报告。**
+M16.10固定spp路径capture、Job进度/取消、输入摘要和线性报告完成；Python/Luau、GUI逐像素一致与CPU-only边界见[0119](development/0119-pathtracing-capture.md)。
+**下一项为M16.11：固定质量、多seed收敛与三轮性能/显存基线。**
 编辑器 Play 视口已在 M12 验收，批量实验在 M13 验收；检查点、其他平台与发布打包仍未纳入本轮扩展。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。

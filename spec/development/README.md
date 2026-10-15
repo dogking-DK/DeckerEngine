@@ -120,5 +120,6 @@
 | 0116 | [M16.7.2 metallic-roughness GGX](0116-pathtracing-ggx.md) | render-pathtracing、graphics-shaders | completed |
 | 0117 | [M16.8 每视图渐进累积与额度](0117-pathtracing-progressive.md) | render-pathtracing、graphics-resources | completed |
 | 0118 | [M16.9 编辑器路径追踪预览](0118-editor-pathtracing.md) | editor、render-pathtracing、graphics-resources | completed |
+| 0119 | [路径追踪capture与自动化](0119-pathtracing-capture.md) | render-capture、render-pathtracing、foundation-jobs | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

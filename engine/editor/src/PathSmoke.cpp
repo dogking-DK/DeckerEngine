@@ -84,6 +84,20 @@ void PathSmoke::presented(const Workspace& model,const WorkbenchUi& ui,Viewport&
         {"generation",progress.generation},{"target",progress.target_spp},{"spp",progress.completed_spp},{"paused",progress.paused},{"pending",progress.pending},
         {"exposure",ui.path_settings().exposure},{"pixels",pixels},{"width",viewport.info().width},{"height",viewport.info().height},
         {"camera",ui.input().camera().revision()},{"undo",model.history().undo_count},{"path_mode",ui.path_mode()}};
+    if(stage_==0 || stage_==4 || stage_==5) {
+        const auto& camera=ui.input().camera(); const auto world=camera.world().matrix();
+        const Vec3d eye=world.block<3,1>(0,3),target=eye-world.block<3,1>(0,2),up=world.block<3,1>(0,1);
+        report["capture_camera"]={{"eye",{eye.x(),eye.y(),eye.z()}},{"target",{target.x(),target.y(),target.z()}},
+            {"up",{up.x(),up.y(),up.z()}},{"fov_y",65},{"near",camera.near_plane()},{"far",camera.far_plane()}};
+        const auto& settings=ui.path_settings();
+        report["pathtrace"]={{"version",1},{"target_spp",2},{"seed",settings.seed},{"max_bounces",settings.bounces},
+            {"rr_start",std::min(3u,settings.bounces)},{"environment_rgb",{settings.sky.x(),settings.sky.y(),settings.sky.z()}},
+            {"sun",settings.sun},{"surface_only",settings.surface_only},{"exposure_ev",settings.exposure}};
+        Json linear=Json::array(); for(const auto& v:viewport.path_linear()) linear.push_back({v.x(),v.y(),v.z()});
+        require(linear.size()==std::size_t{viewport.info().width}*viewport.info().height,"missing completed linear image");
+        const auto data=linear.dump();
+        check(write_file_bytes_atomic(directory_/(std::string{names[stage_]}+".linear.json"),std::as_bytes(std::span{data.data(),data.size()})));
+    }
     const auto text=report.dump(2); check(write_file_bytes_atomic(directory_/(std::string{names[stage_]}+".json"),std::as_bytes(std::span{text.data(),text.size()})));
     waiting_=true;
 }

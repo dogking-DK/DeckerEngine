@@ -53,9 +53,23 @@ def main():
         def advance(name):
             (evidence / (name + ".continue")).touch()
 
+        def compare_capture(value):
+            name = value["checkpoint"]
+            captured = client.capture(dict(guard=dict(document_id=value["document_id"], revision=value["revision"]),
+                                          renderer="pathtrace", format="linear_json", output=name + "-capture.json",
+                                          width=value["width"], height=value["height"], camera=value["capture_camera"],
+                                          pathtrace=value["pathtrace"], validation="required"), timeout=150)
+            image = json.loads((root / captured.job["result"]["output"]).read_text())
+            gui = json.loads((evidence / (name + ".linear.json")).read_text())
+            assert len(gui) == len(image["linear_rgb"]) == value["width"] * value["height"]
+            error = max(abs(a-b) for left, right in zip(gui, image["linear_rgb"]) for a, b in zip(left, right))
+            assert error <= 1e-5, (name, error)
+            report.setdefault("linear_comparisons", []).append(dict(checkpoint=name, max_abs=error, pixels=len(gui)))
+
         try:
             initial = checkpoint("path")
             assert initial["spp"] == 2 and initial["path_mode"] and initial["undo"] == 0
+            compare_capture(initial)
             advance("path")
             paused = checkpoint("paused")
             assert paused["paused"] and paused["target"] == 3 and paused["spp"] == 2 and paused["pixels"] == initial["pixels"]
@@ -69,10 +83,12 @@ def main():
             advance("reset")
             resumed = checkpoint("resumed")
             assert resumed["pixels"] == exposure["pixels"] and not resumed["paused"]
+            compare_capture(resumed)
             advance("resumed")
             camera = checkpoint("camera")
             assert camera["camera"] != resumed["camera"] and camera["generation"] > resumed["generation"]
             assert camera["pixels"] != resumed["pixels"] and camera["revision"] == resumed["revision"]
+            compare_capture(camera)
             advance("camera")
             gizmo = checkpoint("gizmo")
             assert gizmo["undo"] == 1 and gizmo["revision"] == camera["revision"] + 1

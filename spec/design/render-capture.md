@@ -1,7 +1,7 @@
 ---
 module: render-capture
 created_at: "2026-10-03T21:21:47+08:00"
-updated_at: "2026-10-13T19:07:53+08:00"
+updated_at: "2026-10-15T10:16:45+08:00"
 status: accepted
 ---
 
@@ -88,3 +88,26 @@ capture保留单PPM原子输出并增加环境渲染会话设置；默认referen
 所有相机、时间、模式、预热与像素预算在入队前预检；成功接受只占用一个作业身份，不修改Scene。worker循环检查取消，GPU在途必须等待；失败/取消不发布候选报告。owner drain单次write_file_bytes_atomic是唯一外部提交点，既有PPM/JSON在失败时保持；返回摘要先于提交完成分配。
 每帧最多65536像素、总262144像素、1–128样本、temporal预热0–64且reference禁预热。输入预约保守计入每像素256字节、相机样本和完整Scene；最终JSON≤64MiB、Job摘要≤4096字节。报告保存全部原始线性值/图像、身份、完整参数、source指纹、历史/云影状态和设备；采集时间为端到端wall，gpu_ms为null表示未采集，不伪装成0。
 新命令参数/schema/返回值见[截图命令](../commands/render.md)，完整上层契约见[云设计](render-clouds.md#m156-上层配置预设与用例清单)。
+
+## M16.10 固定路径追踪 capture
+
+render.capture 新增 renderer=raster/pathtrace（默认 raster）、format=ppm/linear_json（默认 ppm）及 pathtrace v1 对象。
+pathtrace 必须显式提供 version=1、target_spp；默认 seed=1、max_bounces=8、rr_start=3、environment_rgb=[0,0,0]、sun=false、surface_only=false、exposure_ev=0。
+固定 metallic_roughness/model=3/sampler=1/MIS、batch=1/tile=64；与 Editor 同一渐进 renderer 和 GPU tone。
+不接受路径请求混用 raster 的 exposure/time/render_options/warmup；profile 固定 unlit_preview；sequence 不扩展后端。
+路径 PPM 支持 1..2048，linear_json 最多 524288 像素/128MiB文件，预约256字节/像素，沿用192MiB总队列额度。
+每个任务新建设备/renderer/视图，从样本0精确到目标1..65536；没有设备/模块/RT能力明确失败，不降级。
+支持能力由 runtime.capabilities.pathtrace_capture 表示编译装配，不创建或探测设备；实际 RT 能力在执行时确认。
+
+Job 进度由通用有界 metadata 返回 {phase,unit,completed,submitted,total}，unit=spp，phase 为 queued/preparing/building/rendering/readback/publishing。
+completed 仅计全图完成样本；submitted 不代表完成。查询/取消/等待均包含 progress；非进度任务为null，终态保留最后进度。
+worker 每 tile 轮询取消，关闭/取消必须收完在途 GPU；owner drain 唯一原子输出提交点不变。
+
+路径 provenance 冻结完整场景环境/相机/参数；worker 加入导入内容 fingerprint、shader 源闭包摘要及模型/采样版本。
+PPM 的 Job 摘要含上述来源和实际 spp；linear_json 是单独任务的唯一输出，包含完整 provenance、线性RGB、sRGB RGBA8、
+尺寸/身份、device/driver/build、显存额度/峰值及worker开始到报告组装的 wall_ms（不含序列化/owner发布，GPU分项未测为null）。不做多文件事务。
+源 shader 在编译前后和发布准备前比较，变化失败；资产摘要来自不可变 PathTraceScene，执行期不再重读资产。
+路径支持域沿4096三角形/64纹理/源纹理64MiB/1GiB GPU额度，空气云只允许显式 surface_only 忽略体积。
+
+验收新增真实RT capture任务、单文件保护、输入冻结、进度和Python/Luau；GUI验收显式打开测试专用线性读回，
+通过真实呈现的完成帧与同相机/seed/spp capture报告逐像素比较，正常GUI不启用CPU读回。

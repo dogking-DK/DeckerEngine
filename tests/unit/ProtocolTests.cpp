@@ -115,6 +115,11 @@ TEST_CASE("synchronous task IDs expose terminal status and bounded retention")
     auto success = p.call(request("runtime.capabilities"));
     REQUIRE(success["result"]["status"] == "succeeded");
     REQUIRE(success["result"]["value"]["async_tasks"] == false);
+#ifdef DK_CAPTURE_PATHTRACING
+    REQUIRE(success["result"]["value"]["pathtrace_capture"] == true);
+#else
+    REQUIRE(success["result"]["value"]["pathtrace_capture"] == false);
+#endif
     auto first_id = success["result"]["task_id"];
     REQUIRE(TaskId::parse(first_id.get<std::string>()));
     auto metadata = p.call(request("tasks.get", {{"id", first_id}}))["result"]["value"];
@@ -163,4 +168,17 @@ TEST_CASE("stdio EOF recovers errors and shutdown refuses later batch mutations"
     REQUIRE(run_json_lines(*notification.runtime, queued, no_response, diagnostics, false, true) == 0);
     REQUIRE(no_response.str().empty());
     REQUIRE(queued.peek() == '{');
+}
+
+TEST_CASE("runtime GPU capture capability follows compiled modules") {
+    Protocol p;
+    const auto capabilities=p.call(request("runtime.capabilities"))["result"]["value"];
+    const auto names=p.call(request("commands.list"))["result"]["value"];
+    bool capture=false; for(const auto& item:names) if(item["name"]=="render.capture") capture=true;
+#ifdef DK_RUNTIME_CAPTURE
+    CHECK(capture); CHECK(capabilities["render_capture"]==true);
+#else
+    CHECK_FALSE(capture); CHECK(capabilities["render_capture"]==false); CHECK(capabilities["pathtrace_capture"]==false);
+    CHECK(p.call(request("commands.describe",{{"name","render.capture"}})).contains("error"));
+#endif
 }

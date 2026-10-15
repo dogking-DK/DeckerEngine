@@ -909,6 +909,21 @@ if(TARGET dk_render_clouds AND TARGET dk_scripting_luau AND TARGET dk_run AND TA
     endif()
 endif()
 
+if(TARGET dk_render_services AND TARGET dk_render_pathtracing AND TARGET dk_run AND TARGET dk_ctl AND WIN32)
+    find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME dk.pathtracing.capture_gpu_required
+            COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python" "PYTHONDONTWRITEBYTECODE=1"
+                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/PathCaptureTest.py"
+                --runner "$<TARGET_FILE:dk_run>" --client "$<TARGET_FILE:dk_ctl>"
+                --fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+                --python-example "${PROJECT_SOURCE_DIR}/examples/automation/pathtrace_capture.py"
+                --luau-example "${PROJECT_SOURCE_DIR}/examples/scripting/pathtrace-capture.luau"
+                --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+        set_tests_properties(dk.pathtracing.capture_gpu_required PROPERTIES TIMEOUT 480 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+    endif()
+endif()
 if(TARGET dk_editor_app AND TARGET dk_render_pathtracing AND TARGET dk_ctl AND WIN32)
     find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)

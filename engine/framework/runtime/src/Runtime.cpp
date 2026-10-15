@@ -100,6 +100,7 @@ Result<void> Runtime::register_runtime_commands()
                                             {"async_tasks", schema::boolean()},
                                             {"async_jobs", schema::boolean()},
                                             {"render_capture",schema::boolean()},
+                                            {"pathtrace_capture",schema::boolean()},
                                             {"simulation", schema::object({{"fixed_step", schema::boolean()},
                                                 {"solver", schema::string()}, {"gpu",schema::boolean()}, {"experiment_export",schema::boolean()},
                                                 {"finite_tasks",schema::boolean()},{"max_task_steps",schema::integer()},
@@ -116,7 +117,7 @@ Result<void> Runtime::register_runtime_commands()
                                             {"max_batch_requests", schema::integer()},
                                             {"transactions", schema::boolean()},
                                             {"guard", schema::string()}},
-                                           {"protocol", "async_tasks", "async_jobs", "render_capture", "simulation", "capture_limits", "job_limits", "task_retention", "max_line_bytes",
+                                           {"protocol", "async_tasks", "async_jobs", "render_capture", "pathtrace_capture", "simulation", "capture_limits", "job_limits", "task_retention", "max_line_bytes",
                                             "max_batch_requests", "transactions", "guard"})},
                            [this](const Json &) -> Result<Json>
                            {
@@ -139,6 +140,10 @@ Result<void> Runtime::register_runtime_commands()
                                    {"terminal",limits.terminal},{"input_bytes",limits.input_bytes}};
 #endif
                                value["render_capture"]=false; value["capture_limits"]=nullptr;
+                               value["pathtrace_capture"]=false;
+#ifdef DK_CAPTURE_PATHTRACING
+                               value["pathtrace_capture"]=true;
+#endif
 #ifdef DK_RUNTIME_CAPTURE
                                const auto capture_limits=captures_->limits();
                                value["async_jobs"]=true; value["render_capture"]=true;

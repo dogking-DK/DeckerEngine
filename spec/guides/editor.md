@@ -58,7 +58,7 @@ Windows后台运行可加 `--background`：启动及程序恢复窗口时不抢�
 路径模式目前仅支持表面照明：场景开启空气或云时，先在面板勾选 **Surface-only acknowledgement**。
 不支持的GPU/构建会显示禁用原因。继承现有路径管线限制：4096三角形、64纹理、纹理源总计64MiB、
 renderer资源额度1GiB，材质限制见[GPU路径追踪指南](pathtracing-gpu.md)。Sponza完整场景超过三角形限制；
-应使用受支持的小场景验证。此阶段没有路径追踪`render.capture`入口。
+应使用受支持的小场景验证。固定spp路径截图和线性报告已通过[render.capture](../commands/render.md#固定-spp-路径追踪)提供；显式匹配GUI相机、尺寸和Path参数。
 
 定向验收使用真实后台窗口和外部IPC：
 

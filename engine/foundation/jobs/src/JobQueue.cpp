@@ -10,6 +10,10 @@
 
 namespace dk {
 namespace {
+bool valid_progress(const JobProgress& p) {
+    return !p.phase.empty() && p.phase.size()<=32 && !p.unit.empty() && p.unit.size()<=32 &&
+        p.completed<=p.submitted && p.submitted<=p.total;
+}
 Error missing() { return {ErrorCode::not_found, "Job is unknown or no longer retained"}; }
 std::string clipped(std::string_view text, std::size_t limit)
 {
@@ -31,7 +35,7 @@ void bound(Error& error)
 struct JobQueue::Impl {
     struct Record {
         JobSnapshot view;
-        Work work;
+        ProgressWork work;
         memory::RoutingToken token;
         std::stop_source stop;
         std::optional<Result<Payload>> completion;
@@ -106,7 +110,7 @@ struct JobQueue::Impl {
             memory::ThreadContextCache contexts;
             for (;;) {
                 std::shared_ptr<Record> record;
-                Work work; memory::RoutingToken token;
+                ProgressWork work; memory::RoutingToken token;
                 {
                     std::unique_lock lock(mutex);
                     changed.wait(lock, [&] { return closing || !pending.empty(); });
@@ -125,7 +129,21 @@ struct JobQueue::Impl {
                     } else {
                         auto& context = contexts.acquire(token, {token.resource(), {}, token.resource(), {}});
                         memory::ExecutionScope execution(context, token); memory::ScratchScope scratch;
-                        result.emplace(work(record->stop.get_token()));
+                        Reporter report=[this,weak=std::weak_ptr<Record>{record}](JobProgress value) {
+                            if(!valid_progress(value)) throw std::logic_error("Invalid Job progress");
+                            {
+                                std::lock_guard lock(mutex);
+                                auto r=weak.lock();
+                                if(!r || r->view.state!=JobState::running || r->completion || r->view.cancel_requested) return;
+                                const auto& previous=r->view.progress;
+                                if(!previous || value.unit!=previous->unit || value.total!=previous->total ||
+                                    value.completed<previous->completed || value.submitted<previous->submitted)
+                                    throw std::logic_error("Job progress cannot change units/total or regress");
+                                r->view.progress=std::move(value); ++sequence;
+                            }
+                            signal();
+                        };
+                        result.emplace(work(record->stop.get_token(),report));
                         if (!*result) bound(result->error());
                     }
                 } catch (const memory::ContextError& error) {
@@ -154,6 +172,16 @@ JobQueue::~JobQueue() { close(); }
 JobLimits JobQueue::limits() const noexcept { return impl_->limits; }
 Result<JobId> JobQueue::submit(Work work, std::size_t input_bytes)
 {
+    if(!work) return std::unexpected(Error{ErrorCode::invalid_argument,"Work required"});
+    return submit_work([work=std::move(work)](std::stop_token stop,const Reporter&) { return work(stop); },input_bytes,{});
+}
+Result<JobId> JobQueue::submit(ProgressWork work,std::size_t input_bytes,JobProgress initial)
+{
+    if(!valid_progress(initial)) return std::unexpected(Error{ErrorCode::invalid_argument,"Invalid initial Job progress"});
+    return submit_work(std::move(work),input_bytes,std::move(initial));
+}
+Result<JobId> JobQueue::submit_work(ProgressWork work,std::size_t input_bytes,std::optional<JobProgress> initial)
+{
     auto& s = *impl_; s.check_owner(); rethrow_failure();
     DK_PROFILE_ZONE("Jobs.Submit");
     if (!work || !input_bytes) return std::unexpected(Error{ErrorCode::invalid_argument, "Work and input byte reservation required"});
@@ -165,6 +193,7 @@ Result<JobId> JobQueue::submit(Work work, std::size_t input_bytes)
         return std::unexpected(Error{ErrorCode::invalid_state, "JobQueue capacity exhausted"});
     auto id = JobId::generate(); if (!id) return std::unexpected(id.error());
     auto record = memory::make_shared_in<Impl::Record>(s.resource);
+    record->view.progress=std::move(initial);
     record->view.id = *id; record->work = std::move(work); record->token = std::move(token); record->bytes = input_bytes;
     s.records.push_back(record); s.pending.push_back(std::move(record));
     ++s.active; s.bytes += input_bytes; ++s.sequence; s.changed.notify_all();
@@ -179,7 +208,7 @@ Result<JobSnapshot> JobQueue::query(JobId id) const
 Result<JobCancel> JobQueue::request_cancel(JobId id)
 {
     auto& s = *impl_; s.check_owner();
-    std::shared_ptr<Impl::Record> record; Work released; memory::RoutingToken token;
+    std::shared_ptr<Impl::Record> record; ProgressWork released; memory::RoutingToken token;
     JobCancel result;
     {
         std::lock_guard lock(s.mutex);

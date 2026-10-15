@@ -11,7 +11,7 @@ void Viewport::update_path(const SceneReadSnapshot& snapshot,std::uint32_t width
         if(!path_active_ || attempted_!=key || path_settings_!=settings) {
             if(snapshot.scene.logical_bytes()>32U*1024U*1024U) throw std::runtime_error("Path preview snapshot exceeds 32 MiB");
             if(!path_active_) path_samples_=0;
-            path_->request({snapshot,camera,width,height,srgb,edit,preview,path_reload_,++path_sequence_,settings});
+            path_->request({snapshot,camera,width,height,srgb,edit,preview,path_reload_,++path_sequence_,settings,retain_pixels_});
             attempted_=key; published_.reset(); path_settings_=settings; path_active_=true; error_.clear();
         }
         if(auto result=path_->take_result(); result && result->sequence==path_sequence_) {
@@ -25,6 +25,7 @@ void Viewport::update_path(const SceneReadSnapshot& snapshot,std::uint32_t width
             published_=key; published_session_=result->document.document_id; published_camera_=result->camera.revision();
             camera_=result->camera; scene_=std::move(result->scene); meshes_=std::move(result->meshes);
             path_samples_=result->info.samples.count; error_.clear();
+            path_linear_=std::move(result->linear);
         }
         const auto status=path_->status(); if(status.sequence==path_sequence_ && !status.error.empty()) error_=status.error;
     } catch(const std::exception& error) { error_=error.what(); }

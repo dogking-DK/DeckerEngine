@@ -28,6 +28,7 @@ public:
     [[nodiscard]] PathPreviewStatus path_status() const { return path_ ? path_->status() : PathPreviewStatus{}; }
     [[nodiscard]] std::uint32_t path_samples() const { return path_samples_; }
     std::uint64_t capture_path_pixels();
+    [[nodiscard]] std::span<const Vec3d> path_linear() const { return path_linear_.linear_rgb(); }
 #endif
     void retry_simulation() { simulation_view_.reset(); }
     [[nodiscard]] std::optional<SimulationId> simulation_run() const { return simulation_run_; }
@@ -72,6 +73,7 @@ private:
     std::optional<PathPreviewSettings> path_settings_;
     std::uint64_t path_sequence_=0;
     std::uint32_t path_samples_=0;
+    render::PathTraceGpuImage path_linear_;
     bool path_active_=false;
 #endif
     memory::ResourceHandle heap_;

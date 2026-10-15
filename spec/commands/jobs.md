@@ -1,7 +1,7 @@
 ---
 module: jobs-command-reference
 created_at: "2026-09-28T15:02:00+08:00"
-updated_at: "2026-10-13T11:25:00+08:00"
+updated_at: "2026-10-15T10:16:45+08:00"
 status: accepted
 ---
 
@@ -16,7 +16,7 @@ JobId 与同步命令 TaskId、JSON-RPC id 各自独立。提交命令返回的 
 | jobs.wait | id；可选 timeout_ms=0，整数 0–1000 | `{job,timed_out}` | query |
 | jobs.cancel | id | `{job,accepted}` | control |
 
-Job 为 `{id,state,cancel_requested,result,error}`，state 为 queued/running/succeeded/failed/cancelled。
+Job 为 `{id,state,cancel_requested,result,error,progress}`，state 为 queued/running/succeeded/failed/cancelled。
 资产成功 result 为 `{root_id,key,cache_hit}`；截图成功 result 为 [CaptureResult](render.md)，带 kind="capture" 与 document_id/scene_id/revision/frame/尺寸/output/draw_count，以及冻结环境/相机/曝光/质量/时间/shader指纹provenance。
 未成功 result 为 null；失败 error 为 `{code,message,context}`，其余为 null。
 启用截图时 result schema 使用两类结果的可选字段并集（当前 schema 子集无 oneOf）；服务保证返回完整的一种结果，调用者按 kind="capture" 区分。
@@ -41,3 +41,8 @@ wait 超时仅返回快照及 timed_out=true，不取消、不代表失败。wai
 ```
 
 将 `<job_id>` 替换为 assets.import、assets.load 或 render.capture 返回值；TaskId 不可代用。
+
+
+progress在未报告进度的作业中为null；路径截图返回`{phase,unit:"spp",completed,submitted,total}`。
+phase/unit长度1–32，计数满足completed≤submitted≤total且单任务不回退；total/unit不变，终态保留最后值。
+completed仅含完整图像的样本数。publishing阶段仍须等待succeeded；wait超时可读当前进度，不自动取消。

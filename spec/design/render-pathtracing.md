@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-15T09:28:38+08:00"
+updated_at: "2026-10-15T10:25:23+08:00"
 status: accepted
 ---
 
@@ -11,7 +11,7 @@ status: accepted
 
 用户选择先建立正确性参考，再接入编辑器和截图。M16 交付静态三角形场景的渐进式表面路径追踪：
 CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、确定性样本编号、每视图累积、
-后台交互预览和固定 spp 截图。M16.1、M16.6、M16.7.1/2、M16.8和M16.9实施契约见下文；capture集成仍是规划，阶段状态见[Roadmap](../roadmap.md)。
+后台交互预览和固定 spp 截图。M16.1、M16.6、M16.7.1/2、M16.8、M16.9和M16.10实施契约见下文；capture集成契约见M16.10，阶段状态见[Roadmap](../roadmap.md)。
 
 ## M16.9 GPU 显示与编辑器消费者
 
@@ -52,7 +52,7 @@ renderer自有VMA分配默认上限1GiB，可在create时收紧，至少1MiB；
 
 验证：不等批次/非整除tile与一次GPU及CPU参考比较、双视图/重置矩阵、重复/降目标/曝光、
 迟到/取消/后续tile提交故障、错误配置保留、工作额度及实际资源owner寿命与预算回收，required RT/sync validation。
-GPU显示与Editor消费者见M16.9契约；文件capture仍属M16.10。
+GPU显示与Editor消费者见M16.9契约；固定spp文件capture见M16.10契约。
 
 ## M16.7.2 metallic-roughness GGX实施契约
 
@@ -244,7 +244,7 @@ RT 场景键须含资产内容/缓存身份与代次，不能只用 Scene revisi
 `PathTraceSettings` 为会话/请求设置，首轮不写进 Scene，不增加 Scene 格式版本或 Undo 操作。
 PathTraceSettings包含 model/sampler 版本、seed、max_bounces、rr_start、预算、
 constant_rgb/sun_mode；material_mode随scene冻结，目标/批次/tile/session/gesture/暂停/曝光属于PathTraceSchedule。
-当前默认max_bounces=8、rr_start=3、每批1 spp、目标256 spp；capture服务尚未接入。
+renderer默认max_bounces=8、rr_start=3、每批1 spp、目标256 spp；capture要求显式目标spp。
 允许范围为 max_bounces 1..32、目标 spp 1..65536，rr_start 不超过 max_bounces。
 工作预算不能仅看这些单项上限；所有乘积预检，总路径段/候选 GPU 内存超额则入队/提交前拒绝。
 
@@ -376,10 +376,10 @@ device_lost 终止会话并报告实际错误，不自动循环重试或宣称�
 拖动期间不断重置样本，松手后在同一最终输入继续累积；不把旧代清晰图当作新场景结果。
 独立模拟布片视口保持原职责。
 
-拟在现有 `render.capture` 添加显式 renderer 和版本化 pathtrace 设置，默认旧光栅行为不变；
+在现有 `render.capture` 添加显式 renderer 和版本化 pathtrace 设置，默认旧光栅行为不变；
 精确 spp 请求进入现有 Job 查询/等待/取消体系。既有 `quality` 表示大气/云质量，不能借它隐式切换 renderer。
-有限任务进度公开 queued/preparing/building/rendering/readback/publishing 及 completed_spp/target_spp，
-submitted_spp 单列，不能作为已完成进度。GPU 不可用时明确失败，不自动换成光栅图。
+有限任务进度公开 queued/preparing/building/rendering/readback/publishing 及 unit=spp的completed/total，
+submitted 单列，不能作为已完成进度。GPU 不可用时明确失败，不自动换成光栅图。
 
 捕获冻结 SceneSnapshot、完整相机/设置及导入后的资产内容摘要；保留当前“资产在 worker 开始时读取”边界，
 不声称磁盘文件在接受请求时已经冻结。worker 一旦完成输入准备，整个样本循环不再读取可变文件。
@@ -390,7 +390,7 @@ PNG/EXR 不是本轮依赖：复用单 PPM 输出和已有有界线性报告机�
 provenance 至少保存 scene/revision、输入摘要、camera/尺寸、环境与材质模式、shader/integrator/sampler 版本、
 seed、实际 spp、max_bounces/rr_start、曝光、设备/驱动/构建、计时范围与预算；缺测计时为 null。
 Python/Luau/IPC 调用同一服务。对应阶段应用 command-development，同步 schema、commands.list/describe、
-命令参考及可执行示例；本次规划不预注册新命令，不把 M13 布料实验格式当成已有渲染扫描器。
+命令参考及可执行示例；M16.10复用现有命令，不引入M13布料实验格式。
 
 ## 验收集、阈值与性能基线
 
@@ -432,3 +432,10 @@ CPU参考的输入/采样/积分模型与解析验收已冻结；后续任务顺
 [架构](architecture.md)、[光追底座](graphics-raytracing.md)、[渲染资源](render-resources.md)、
 [截图](render-capture.md)、[编辑器](editor.md)、[0108规划记录](../development/0108-pathtracing-plan.md)、
 [0109 CPU参考实现与验证](../development/0109-pathtracing-reference.md)、[0114 GPU积分与验收](../development/0114-gpu-pathtracing.md)。
+
+## M16.10 实施接口
+
+固定capture后端/参数、进度、原子PPM或单线性JSON报告和测试专用GUI读回见[截图契约](render-capture.md#m1610-固定路径追踪-capture)。
+使用现有 gpu_progressive 积分和GPU tone，不引入第二条积分算法；capture计算shader源闭包摘要用于输入版本保护。
+
+M16.10将输入摘要算法明确为v2：纹理绑定使用确定性遍历槽与内容/采样/来源，不包含导入器临时生成的纹理UUID；Scene/实体/mesh持久身份和revision仍参与摘要。相同冻结场景重复导入必须得到相同摘要，像素/采样/UV变动必须改变摘要。

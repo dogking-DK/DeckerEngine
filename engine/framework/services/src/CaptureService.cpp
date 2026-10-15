@@ -8,9 +8,11 @@
 #include <numbers>
 #include <chrono>
 #include <algorithm>
+#include "CaptureInternal.hpp"
 
 namespace dk {
 namespace {
+using capture_detail::Completion;
 template<class T> T take(Result<T> r) { if (!r) throw std::move(r.error()); return std::move(*r); }
 void check(Result<void> r) { if (!r) throw std::move(r.error()); }
 void require(bool valid,const char* text,ErrorCode code=ErrorCode::invalid_argument) {
@@ -92,13 +94,26 @@ nlohmann::json settings_json(const render::EnvironmentRenderSettings& s) {
 std::string provenance(const CaptureRequest& r,const EnvironmentDescription& environment) {
     const auto& clouds=environment.clouds;
     const bool cloudy=clouds.enabled && clouds.coverage>0 && clouds.density>0 && clouds.extinction_per_m>0;
-    return nlohmann::json{{"environment",environment_json(environment)},{"camera",camera_json(r.camera)},
+    auto value=nlohmann::json{{"environment",environment_json(environment)},{"camera",camera_json(r.camera)},
         {"exposure",r.exposure},{"time_seconds",r.environment.time_seconds},
         {"quality",cloudy ? (r.environment.mode==render::CloudRenderMode::reference ? "cloud_reference_v1" : "cloud_temporal_v1") : environment.enabled ? "atmosphere_v1" : "unlit_v1"},
         {"render_options",settings_json(r.environment)},{"warmup_frames",r.warmup_frames},{"sample_count",r.samples.empty() ? 1 : r.samples.size()},
-        {"profile",r.profile==GltfImportProfile::strict ? "strict" : "unlit_preview"},{"shader_fingerprint",nullptr}}.dump();
+        {"profile",r.profile==GltfImportProfile::strict ? "strict" : "unlit_preview"},{"shader_fingerprint",nullptr}};
+    value["renderer"]=r.pathtrace ? "pathtrace" : "raster";
+    value["format"]=!r.samples.empty() ? "sequence_json" : r.linear_json ? "linear_json" : "ppm";
+    value["pathtrace"]=nullptr;
+    if(r.pathtrace) {
+        const auto& p=*r.path;
+        value["quality"]="pathtrace_v1";
+        value["pathtrace"]={{"version",p.version},{"target_spp",p.target_spp},{"seed",p.seed},{"max_bounces",p.max_bounces},
+            {"rr_start",p.rr_start},{"environment_rgb",{p.environment_rgb.x(),p.environment_rgb.y(),p.environment_rgb.z()}},
+            {"sun",p.sun},{"surface_only",p.surface_only},{"exposure_ev",p.exposure_ev}};
+        value["model_version"]=3; value["sampler_version"]=1; value["material_model"]="metallic_roughness";
+        value["estimator"]="mis"; value["actual_spp"]=0; value["input_fingerprint"]=nullptr;
+        value["input_fingerprint_version"]=2;
+    }
+    return value.dump();
 }
-struct Completion { std::filesystem::path output; ByteBuffer ppm; std::string summary; nlohmann::json provenance; };
 Result<JobQueue::Payload> render_capture(memory::ResourceHandle resource,const SceneReadSnapshot& input,
     const CaptureRequest& request,const CaptureInfo& info,render::ViewDescription view,
     const std::filesystem::path& shader_directory,const std::filesystem::path& output,std::stop_token stop) {
@@ -213,6 +228,20 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
     auto& s=*impl_; memory::ExecutionScope scope(s.context,s.render_heap);
     try {
         auto view=view_description(request);
+        require(request.pathtrace==request.path.has_value(),"Path tracing requires renderer=pathtrace and explicit pathtrace settings");
+        require(!request.linear_json || request.pathtrace,"linear_json requires renderer=pathtrace");
+        if(request.pathtrace) {
+#ifndef DK_CAPTURE_PATHTRACING
+            throw Error{ErrorCode::not_supported,"Path tracing capture was not built"};
+#endif
+            const auto& p=*request.path;
+            require(request.samples.empty() && request.profile==GltfImportProfile::unlit_preview && request.exposure==1 &&
+                request.warmup_frames==0 && request.environment==render::EnvironmentRenderSettings{},"Path capture requires unlit_preview and no raster sequence/exposure/warmup/options");
+            require(p.version==1 && p.target_spp>=1 && p.target_spp<=65536 && p.max_bounces>=1 && p.max_bounces<=16 &&
+                p.rr_start<=p.max_bounces && p.environment_rgb.allFinite() && p.environment_rgb.minCoeff()>=0 && p.environment_rgb.maxCoeff()<=1e6 &&
+                std::isfinite(p.exposure_ev) && std::abs(p.exposure_ev)<=32,"Invalid pathtrace v1 settings");
+            require(!request.linear_json || std::size_t{request.width}*request.height<=524288,"Path linear report allows at most 524288 pixels");
+        }
         check(render::validate_environment_render_settings(request.environment));
         require(request.warmup_frames<=64 && (request.environment.mode==render::CloudRenderMode::temporal || !request.warmup_frames),"Warmup requires temporal mode and at most 64 frames");
         require(request.samples.size()<=128,"Sequence allows at most 128 samples");
@@ -228,7 +257,7 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
         require(request.profile==GltfImportProfile::strict || request.profile==GltfImportProfile::unlit_preview,"Invalid capture profile");
         require(!request.output.empty() && request.output.size()<=1024,"Capture output must be 1..1024 UTF-8 bytes");
         auto relative=take(path_from_utf8(request.output));
-        require(relative.extension()==(request.samples.empty() ? ".ppm" : ".json"),"Capture output must be .ppm; sequence output must be .json");
+        require(relative.extension()==(request.samples.empty() && !request.linear_json ? ".ppm" : ".json"),"Output extension must match ppm or linear_json/sequence format");
         auto snapshot=take(scene.read_snapshot(guard));
         const auto& clouds=snapshot.scene.environment().clouds;
         if(!request.samples.empty() && request.environment.mode==render::CloudRenderMode::reference && clouds.enabled && clouds.coverage>0 && clouds.density>0 && clouds.extinction_per_m>0)
@@ -243,14 +272,19 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
             (output.native().size()+s.shaders.native().size()+snapshot.project.paths().root().native().size())*sizeof(std::filesystem::path::value_type)+
             snapshot.project.description().name.size()+snapshot.project.description().scene.size()+request.output.size()+8192;
         for (const auto& asset : snapshot.project.description().assets) input_bytes+=sizeof(AssetRecord)+asset.path.size()+64;
-        input_bytes+=request.samples.empty() ? static_cast<std::size_t>(request.width)*request.height*7 :
+        input_bytes+=request.linear_json ? static_cast<std::size_t>(request.width)*request.height*256 : request.samples.empty() ? static_cast<std::size_t>(request.width)*request.height*7 :
             static_cast<std::size_t>(request.width)*request.height*request.samples.size()*256+request.samples.size()*sizeof(CaptureSample);
         require(s.next_frame!=UINT64_MAX,"Capture frame counter exhausted",ErrorCode::invalid_state);
         view.frame=s.next_frame;
         CaptureInfo info{snapshot.state.document_id,{snapshot.scene.id(),snapshot.scene.revision(),view.frame,request.width,request.height,0},output_name,provenance(request,snapshot.scene.environment())};
-        auto job=s.queue.submit([input=std::move(snapshot),request,info,view,resource=s.render_heap,shaders=s.shaders,output](std::stop_token stop) {
+        auto work=[input=std::move(snapshot),request,info,view,resource=s.render_heap,shaders=s.shaders,output](std::stop_token stop,const JobQueue::Reporter& report)->Result<JobQueue::Payload> {
+#ifdef DK_CAPTURE_PATHTRACING
+            if(request.pathtrace) return capture_detail::render_path_capture(resource,input,request,info,view,output,stop,report);
+#endif
             return render_capture(resource,input,request,info,view,shaders,output,stop);
-        },input_bytes);
+        };
+        auto job=request.pathtrace ? s.queue.submit(std::move(work),input_bytes,{"queued","spp",0,0,request.path->target_spp}) :
+            s.queue.submit([work=std::move(work)](std::stop_token stop) { return work(stop,{}); },input_bytes);
         if (!job) return std::unexpected(job.error());
         ++s.next_frame;
         return CaptureTicket{*job,std::move(info)};

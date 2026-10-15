@@ -97,3 +97,20 @@ TEST_CASE("capture sequence budgets modes and schema reject before any publicati
     CHECK(read_file_bytes(c.files.root/"old.json")->size()==8);
     CHECK_FALSE(c.call("scene.transaction",{{"commands",Json::array({{{"method","render.sequence"},{"params",base}}})}},true));
 }
+
+TEST_CASE("capture pathtrace schema and unsupported combinations preserve state") {
+    CaptureCommands c; const auto state=c.value("scene.new"); c.files.write("old.json","previous");
+    const Json base={{"guard",{{"document_id",state["document_id"]},{"revision",state["revision"]}}},
+        {"renderer","pathtrace"},{"format","linear_json"},{"output","old.json"},{"width",16},{"height",16},
+        {"pathtrace",{{"version",1},{"target_spp",3}}}};
+    auto descriptor=c.value("commands.describe",{{"name","render.capture"}});
+    CHECK(descriptor["parameters"]["properties"]["pathtrace"]["properties"]["target_spp"]["maximum"]==65536);
+    const Json bad=GENERATE(Json{{"renderer","raster"}},Json{{"exposure",1}},Json{{"time_seconds",0}},Json{{"render_options",Json::object()}},
+        Json{{"warmup_frames",0}},Json{{"profile","strict"}},Json{{"output","old.ppm"}},Json{{"width",1024},{"height",1024}},
+        Json{{"pathtrace",{{"version",2},{"target_spp",1}}}},Json{{"pathtrace",{{"version",1},{"target_spp",0}}}},
+        Json{{"pathtrace",{{"version",1},{"target_spp",65537}}}},Json{{"pathtrace",{{"version",1},{"target_spp",1},{"max_bounces",2},{"rr_start",3}}}},
+        Json{{"pathtrace",{{"version",1},{"target_spp",1},{"environment_rgb",{-1,0,0}}}}});
+    auto params=base; params.update(bad); CHECK_FALSE(c.call("render.capture",params));
+    params=base; params.erase("pathtrace"); CHECK_FALSE(c.call("render.capture",params));
+    CHECK(c.value("scene.query")["state"]==state); CHECK(read_file_bytes(c.files.root/"old.json")->size()==8);
+}

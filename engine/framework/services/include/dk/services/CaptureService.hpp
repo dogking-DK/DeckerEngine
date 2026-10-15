@@ -14,6 +14,13 @@ struct CaptureSample {
     double time_seconds=0;
     bool camera_cut=false;
 };
+struct CapturePathTrace {
+    std::uint32_t version=1,target_spp=256,max_bounces=8,rr_start=3;
+    std::uint64_t seed=1;
+    Vec3d environment_rgb=Vec3d::Zero();
+    bool sun=false,surface_only=false;
+    double exposure_ev=0;
+};
 struct CaptureRequest {
     std::string output;
     std::uint32_t width=960, height=540;
@@ -24,7 +31,8 @@ struct CaptureRequest {
     render::EnvironmentRenderSettings environment;
     std::uint32_t warmup_frames=0;
     std::vector<CaptureSample> samples; // Empty: one PPM. Otherwise: atomic sequence JSON.
-
+    bool pathtrace=false,linear_json=false;
+    std::optional<CapturePathTrace> path;
 };
 struct CaptureInfo {
     DocumentId document;

@@ -1,7 +1,7 @@
 ---
 module: command-reference-runtime
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-10-09T19:38:24+08:00"
+updated_at: "2026-10-15T10:16:45+08:00"
 status: accepted
 ---
 
@@ -71,3 +71,7 @@ effect=query，undoable=false；返回一条 TaskRecord。未知或已淘汰 ID 
 ```
 
 有限模拟任务由 simulation.run/query/cancel 和 run_id 管理。async_tasks 仍为 false；Commands TaskId 表示受理命令已同步完成，不表示整个模拟实验完成。
+
+
+M16.10另返回pathtrace_capture:boolean，仅同时编译capture与GPU路径模块时为true；CPU-only为false。
+此查询不创建GPU；设备是否支持RT在后台作业初始化时确认，参见[路径截图](render.md#固定-spp-路径追踪)。

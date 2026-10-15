@@ -8,11 +8,15 @@ Json error_schema() { return schema::nullable(schema::object({{"code",integer()}
 Json error_json(const std::optional<Error>& error) { return error ? Json{{"code",static_cast<unsigned>(error->code)},
     {"message",error->message},{"context",error->context}} : Json(nullptr); }
 Json job_schema(const Json& result_schema) { return schema::object({{"id",uuid()},{"state",{{"type","string"},{"enum",{"queued","running","succeeded","failed","cancelled"}}}},
+    {"progress",schema::nullable(schema::object({{"phase",schema::string(1,32)},{"unit",schema::string(1,32)},
+        {"completed",integer()},{"submitted",integer()},{"total",integer()}},{"phase","unit","completed","submitted","total"}))},
     {"cancel_requested",schema::boolean()},{"result",schema::nullable(result_schema)},{"error",error_schema()}},
-    {"id","state","cancel_requested","result","error"}); }
+    {"id","state","cancel_requested","result","error","progress"}); }
 Json job_json(const JobSnapshot& job) {
     constexpr const char* states[] = {"queued","running","succeeded","failed","cancelled"};
     return {{"id",job.id.to_string()},{"state",states[static_cast<unsigned>(job.state)]},{"cancel_requested",job.cancel_requested},
+        {"progress",job.progress ? Json{{"phase",job.progress->phase},{"unit",job.progress->unit},{"completed",job.progress->completed},
+            {"submitted",job.progress->submitted},{"total",job.progress->total}} : Json(nullptr)},
         {"result",job.summary.empty() ? Json(nullptr) : Json::parse(job.summary)},{"error",error_json(job.error)}};
 }
 template<class Id> Result<Id> id(const Json& value) {

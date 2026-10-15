@@ -30,6 +30,7 @@ void PathPreview::run(std::stop_token stop) {
     render::DiskScene disk; render::RenderScene scene; render::PathTraceGpuScene gpu;
     std::vector<PickMesh> meshes;
     std::optional<render::PathTraceDisplayFrame> display;
+    std::optional<render::PathTraceFrame> linear;
     std::uint64_t display_sequence=0;
     render::PathTraceGpuImageInfo display_info;
     std::uint32_t displayed_spp=0;
@@ -51,11 +52,17 @@ void PathPreview::run(std::stop_token stop) {
                 if(active && enabled && display_sequence==active->sequence && !cancel.stop_requested()) {
                     PathPreviewResult result; result.sequence=display_sequence; result.document=active->snapshot.state;
                     result.camera=active->camera; result.info=display_info; result.scene=scene; result.meshes=meshes;
+                    if(linear) {
+                        auto value=take(linear->read(*queue,cancel));
+                        if(!value) { busy=true; continue; }
+                        result.linear=std::move(*value);
+                    }
                     result.image=take(queue->export_image(display->image));
                     std::lock_guard lock(mutex_);
                     if(enabled_ && wanted_==display_sequence) result_=std::move(result);
                 }
                 display.reset();
+                linear.reset();
             }
             if(!enabled) { if(configured && !suspended) check(renderer.cancel(1)); suspended=true; continue; }
             if(pending_config) {
@@ -114,6 +121,7 @@ void PathPreview::run(std::stop_token stop) {
             auto completed=renderer.completed_frame(1);
             if(!display && completed && (displayed_spp!=progress.completed_spp || displayed_exposure!=active->settings.exposure)) {
                 display=take(renderer.display(*queue,completed,active->settings.exposure,!active->srgb,cancel));
+                if(active->read_linear) linear=take(completed.read_linear(*queue,cancel));
                 display_sequence=active->sequence; display_info=completed.info();
                 displayed_spp=progress.completed_spp; displayed_exposure=active->settings.exposure;
             }

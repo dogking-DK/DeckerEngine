@@ -1,7 +1,7 @@
 ---
 module: foundation-jobs
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-10-03T21:44:26+08:00"
+updated_at: "2026-10-15T10:06:53+08:00"
 status: accepted
 ---
 
@@ -123,3 +123,11 @@ M4.4.3–4 验证命令 schema/发现和真实 stdio：stdin 保持打开时后�
 [开发安排](../development/0020-m4-development-plan.md)。
 
 M4.4.4 确认诊断/摘要裁剪会释放多余 capacity，并保持 UTF-8 截断边界；close 将活动作业转为终态时仍执行保留上限。独立 CPU 和完整进程验收见 [0040](../development/0040-cpu-assets-delivery.md)。
+
+## M16.10 有界工作进度
+
+保留 Work(stop_token)；新增 ProgressWork(stop_token,reporter) 与带初值的 submit 重载。
+JobProgress 仅保存长度≤32的 phase/unit 和 completed/submitted/total 三个计数，不依赖渲染类型。
+reporter 仅在当前work调用期间同步使用，更新受队列mutex保护并唤醒change；必须满足 completed≤submitted≤total、计数不回退、total/unit不变。
+完成、取消或淘汰后不能修改进度；reporter不持有Record强引用。普通work的progress=null；终态只保留有界进度元数据。
+进度不是成功承诺，所有发布仍由owner消费决定；wait仍等待终态，不因进度变化返回成功。

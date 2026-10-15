@@ -96,3 +96,11 @@ TEST_CASE("texture CPU allocation failure unwinds copied bytes and preserves old
     { const auto recovered=PathTraceScene::create(bounded,source,assets); REQUIRE(recovered); CHECK(recovered->texture_count()==1); }
     CHECK(bounded.snapshot().live_allocations==0); bounded.begin_close();
 }
+
+TEST_CASE("texture CPU provenance ignores transient import UUIDs but preserves binding content") {
+    Fixture f; const auto original=f.scene().value();
+    auto id=AssetId::generate().value(); f.asset.textures[0].id=id; f.asset.materials[0].base_color_texture=id;
+    CHECK(f.scene()->fingerprint()==original.fingerprint());
+    f.asset.textures[0].rgba8[0]=std::byte{0};
+    CHECK(f.scene()->fingerprint()!=original.fingerprint());
+}

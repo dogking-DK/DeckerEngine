@@ -41,7 +41,7 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
         }
         auto state = memory::make_shared_in<detail::PathSceneState>(heap,heap);
         state->source=source; state->material_model=model;
-        Fingerprint hash; hash.integer(3); hash.integer(std::uint32_t(model)); hash.id(source.id()); hash.integer(source.revision());
+        Fingerprint hash; hash.integer(3); hash.integer(2); hash.integer(std::uint32_t(model)); hash.id(source.id()); hash.integer(source.revision());
         const auto env=source.environment(); hash.integer(env.enabled); hash.integer(env.clouds.enabled);
         for (double v:env.sun.direction) hash.number(v);
         for (double v:env.sun.irradiance) hash.number(v);
@@ -100,7 +100,9 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
                             target.mesh=asset.mesh.id; target.id=input.id; target.width=input.width; target.height=input.height;
                             target.sampler=input.sampler; target.rgba8.assign(input.rgba8.begin(),input.rgba8.end()); target.origin=input.origin;
                             texture_bytes+=input.rgba8.size();
-                            hash.id(target.mesh); hash.id(target.id); hash.integer(target.width); hash.integer(target.height);
+                            // Imported texture UUIDs can be ephemeral without a source .meta.
+                            // Hash stable binding order and contents, not allocation identity.
+                            hash.id(target.mesh); hash.integer(texture); hash.integer(target.width); hash.integer(target.height);
                             hash.integer(std::uint32_t(target.sampler.wrap_s)); hash.integer(std::uint32_t(target.sampler.wrap_t));
                             hash.integer(target.sampler.min_filter ? std::uint32_t(*target.sampler.min_filter) : 0);
                             hash.integer(target.sampler.mag_filter ? std::uint32_t(*target.sampler.mag_filter) : 0);

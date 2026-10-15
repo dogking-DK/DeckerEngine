@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-14T14:37:00+08:00"
-updated_at: "2026-10-15T09:28:38+08:00"
+updated_at: "2026-10-15T10:16:45+08:00"
 ---
 
 # GPU Lambert/GGX与渐进路径追踪
@@ -143,3 +143,10 @@ images用例在构建目录`tests/integration/pathtrace-hdr.json`写入4×4、se
 仅在非sRGB目标前设置encode_srgb=true。图像和参数计入同一个renderer额度。
 图像票据完成后，可用export_image/import_image交给同设备同队列族的GUI队列；消费者持有期间继续计费。
 共享原生队列的native调用须持Device::queue_gate；每个SubmissionQueue ledger仍只允许一个串行所有者。
+
+
+## 自动化固定采样
+
+[render.capture](../commands/render.md#固定-spp-路径追踪)提供显式pathtrace后端、精确spp、进度/取消、PPM和单文件线性JSON。
+[Python](../../examples/automation/pathtrace_capture.py)与[Luau](../../examples/scripting/pathtrace-capture.luau)示例共用该服务。
+命令能力由runtime.capabilities.pathtrace_capture报告；缺RT时失败，不自动退回光栅。

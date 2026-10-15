@@ -1,7 +1,7 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-10-13T18:54:48+08:00"
+updated_at: "2026-10-15T10:25:23+08:00"
 status: accepted
 ---
 
@@ -18,7 +18,10 @@ status: accepted
 | 参数 | 必填/默认 | 含义 |
 | --- | --- | --- |
 | guard | 必填 | document_id + revision，必须匹配当前活动文档 |
-| output | 必填 | 工程根内相对 .ppm 路径，1–1024 UTF-8 字节；父目录须存在 |
+| output | 必填 | 工程根内相对路径：ppm为.ppm，linear_json为.json；1–1024 UTF-8字节，父目录须存在 |
+| renderer | raster | raster或pathtrace，显式选择后端 |
+| format | ppm | ppm或linear_json；linear_json仅用于pathtrace |
+| pathtrace | pathtrace后端必填 | 版本化固定spp设置，见下节 |
 | width / height | 960 / 540 | 各为 1–2048 的整数 |
 | camera | 默认 Sponza 相机 | 对象，提供时 eye[3] 和 target[3] 必填；其余可省略 |
 | profile | unlit_preview | strict 或 unlit_preview；后者保留基础色/alpha mask，省略切线和光照纹理 |
@@ -49,7 +52,7 @@ frame 在当前 Runtime 内从 1 递增，拒绝请求不消耗帧号。输出�
 
 使用 [jobs.get / jobs.wait / jobs.cancel](jobs.md) 查询、等待和取消。
 succeeded 的 result 为 `{kind:"capture",document_id,scene_id,revision,frame,width,height,output,draw_count,provenance}`。
-其余状态 result=null；failed 的 error 记录导入、GPU 或 IO 错误；提交响应提供失败任务的原始版本关联。
+路径结果draw_count=0（无光栅draw），采样数见provenance.actual_spp。其余状态 result=null；failed 的 error 记录导入、GPU 或 IO 错误；提交响应提供失败任务的原始版本关联。
 任务成功表示 GPU 已完成、读回和原子文件替换已完成。PPM 为 P6、RGB8/sRGB，覆盖同名文件。
 取消先被 owner 接受则不会发布；失败保留既有输出。之后的另一次成功截图仍可替换该文件。
 
@@ -75,7 +78,7 @@ succeeded 的 result 为 `{kind:"capture",document_id,scene_id,revision,frame,wi
 ```
 
 该示例使用默认 Sponza 工程，创建输出父目录，自动取得 guard、等待终态并关闭 runner。
-命令尚不支持 PNG、PBR、透明混合、HDR 环境贴图采样或天空盒。
+光栅截图不支持PBR；路径追踪材质沿下节。两者均不支持PNG、透明混合、HDR环境贴图采样或天空盒。
 
 `provenance`包含完整环境（与environment.query同结构）、camera（含缺省up/fov_y/near/far）、
 exposure、profile、time_seconds、render_options、warmup_frames、sample_count及shader_fingerprint。
@@ -117,7 +120,7 @@ effect=external、undoable=false；需要活动场景和guard，不允许scene.t
 每次调用使用独立Pipeline，先等待GPU，再推进下一帧。关闭/取消等待在途GPU回收。失败/取消result=null、保留既有JSON；成功表示完整报告已原子替换。
 
 返回与capture相同ticket；provenance中的camera/time为首样本、sample_count为样本数。成功Job result的kind为`render_sequence`，其他身份字段与ticket一致。
-frame表示作业请求身份，报告内各样本以index从0计数；samples完整列表和图像在文件中，Job摘要保持≤4096字节。
+provenance.renderer=raster、format=sequence_json、pathtrace=null。frame表示作业请求身份，报告内各样本以index从0计数；samples完整列表和图像在文件中，Job摘要保持≤4096字节。
 
 输出JSON schema_version=1、kind=`decker.render_sequence`、status=`succeeded`，含document_id/scene_id/revision/frame/width/height、完整provenance、device(name/driver)、wall_ms/gpu_ms和frames：
 
@@ -140,3 +143,60 @@ JSON最大64MiB。报告是唯一提交文件；[Python用例工具](../guides/c
 ```
 
 可运行[Python](../../examples/automation/cloud_sequence.py)和[Luau](../../examples/scripting/cloud-sequence.luau)示例修改夹具环境并输出序列，说明见[云指南](../guides/clouds.md)。
+
+
+## 固定 spp 路径追踪
+
+`renderer="pathtrace"`另需编译DK_BUILD_RENDER_PATHTRACING；runtime.capabilities.pathtrace_capture只表示编译能力，
+不保证设备支持RT。未编译时提交返回not_supported；设备/RT不可用时Job明确failed，不降级光栅。
+pathtrace对象禁止未知字段：
+
+| 字段 | 必填/默认 | 范围与语义 |
+| --- | --- | --- |
+| version | 必填1 | 当前参数格式版本 |
+| target_spp | 必填 | 1–65536整数，从样本0精确渲染到目标 |
+| seed | 1 | 完整uint64整数；Luau使用其精确整数范围 |
+| max_bounces | 8 | 1–16整数 |
+| rr_start | 3 | 0关闭RR，否则≤max_bounces；减少反弹时须同时调整 |
+| environment_rgb | [0,0,0] | 常量线性环境辐亮度，每分量0–1e6 |
+| sun | false | true使用冻结Scene太阳，false不采样太阳 |
+| surface_only | false | 场景空气或云开启时，须true确认只渲染表面光照 |
+| exposure_ev | 0 | [-32,32]，显示曝光乘2^EV；不影响线性样本 |
+
+固定metallic_roughness/model_version=3/sampler_version=1/MIS、1spp批次和64像素tile，与GUI共用渐进renderer。
+支持上限4096三角形、64纹理/源纹理64MiB、renderer自有GPU分配1GiB；完整Sponza通常超出范围。
+路径后端只接受profile=unlit_preview；显式传入顶层exposure/time_seconds/render_options/warmup_frames均拒绝，
+这些字段属于光栅配置；render.sequence仍只支持原后端。宽高≤2048，全部样本的保守射线预算≤2^32。
+
+每次任务拥有新视图和空历史。Job.progress的unit=spp，completed为全图已完成样本、submitted为提交到的样本上界、total为目标，
+仅提交或部分tile完成不增加completed。阶段为queued/preparing/building/rendering/readback/publishing；终态由state判断，
+completed==total仍不等同于文件发布成功。取消按tile间安全点处理，在途GPU须完成回收；旧文件保护同上。
+
+provenance额外包含renderer/format/pathtrace完整参数、material_model、model_version、sampler_version、estimator、actual_spp、input_fingerprint和input_fingerprint_version=2。
+提交时actual_spp=0、input_fingerprint和shader_fingerprint为null；成功记录实际目标spp、导入几何/材质/纹理的内容摘要及本次shader源闭包摘要。
+provenance.sample_count保留相机/时间帧数语义，路径任务为1；Monte Carlo样本数使用actual_spp和报告sample_count。环境和相机始终是提交时完整值。fingerprint为非加密诊断，不是跨驱动逐位一致承诺。资产文件仍在worker开始时读取。
+
+`format="linear_json"`每图≤524288像素、文件≤128MiB，预约256字节/像素，仍受队列192MiB总输入额度限制。
+每次任务只发布这个JSON，不隐式写PPM/sidecar。报告schema_version=1、kind=decker.pathtrace_capture、status=succeeded，包含：
+
+- document_id/scene_id/revision/frame/width/height及完整provenance。
+- sample_first=0、sample_count=实际spp；linear_rgb为顶部第一行、每像素3个曝光前线性值；rgba8为同顺序展平的sRGB RGBA8数组。
+- device.name/driver、build（配置/编译器）、validation、memory.limit_bytes/peak_bytes（renderer自有资源，额外RGBA8读回不含在此计数）。
+- wall_ms为worker开始到报告组装的耗时，包含准备/编译/渲染/读回；不含后续JSON序列化和owner文件发布，gpu_ms=null表示GPU分项未测。
+
+PPM仍是GPU Reinhard显示后sRGB RGB8，线性JSON与PPM应作为两次独立任务调用。若需与GUI比较，使用相同已提交场景、尺寸、相机裁剪、
+seed/目标/反弹/RR/环境/太阳/surface_only；GUI默认环境[.3,.4,.6]、太阳开启、反弹4，与命令默认值不同。曝光只影响显示。
+
+```json
+{"jsonrpc":"2.0","id":2,"method":"render.capture","params":{
+  "guard":{"document_id":"<当前 document_id>","revision":1},
+  "renderer":"pathtrace","format":"linear_json","output":"path.json","width":48,"height":32,
+  "camera":{"eye":[0,0,-2],"target":[0,0,0],"near":0.05,"far":10000},
+  "pathtrace":{"version":1,"target_spp":3,"seed":7,"max_bounces":4,"environment_rgb":[0.3,0.4,0.6]},
+  "validation":"required"
+}}
+```
+
+可执行[Python](../../examples/automation/pathtrace_capture.py)通过IPC渲染活动场景；[Luau](../../examples/scripting/pathtrace-capture.luau)加载project.json。
+先将tests/fixtures/render-disk复制到独立工程；Python示例：`python examples/automation/pathtrace_capture.py --pipe <endpoint> --ctl <dk-ctl路径>`。
+两者输出path-python.json/path-luau.json；使用小型受支持场景，若空气/云开启须明确决定surface_only。

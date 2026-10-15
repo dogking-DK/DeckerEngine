@@ -186,3 +186,23 @@ TEST_CASE("queue close applies terminal retention to cancelled active records")
     queue.close(); CHECK_FALSE(queue.query(*first));
     REQUIRE(queue.query(*second)); CHECK(queue.query(*second)->state == JobState::cancelled);
 }
+
+TEST_CASE("queue progress is observable before publication and retained after cancellation")
+{
+    Environment env; JobQueue queue(env.queue_heap); std::latch progressed{1};
+    auto id=queue.submit([&](std::stop_token stop,const JobQueue::Reporter& report)->Result<JobQueue::Payload> {
+        report({"rendering","spp",1,2,4}); progressed.count_down();
+        std::mutex mutex; std::condition_variable_any cv; std::unique_lock lock(mutex);
+        cv.wait(lock,stop,[]{return false;});
+        report({"readback","spp",4,4,4}); // Accepted cancel prevents late progress publication.
+        return payload();
+    },1,{"queued","spp",0,0,4});
+    REQUIRE(id); progressed.wait();
+    auto state=queue.query(*id).value(); REQUIRE(state.progress); CHECK(state.progress->completed==1);
+    CHECK(state.progress->submitted==2); CHECK(state.summary.empty()); CHECK(state.state==JobState::running);
+    CHECK(queue.wait(*id,JobQueue::Clock::now())->timed_out);
+    REQUIRE(queue.request_cancel(*id)->accepted);
+    const auto done=complete(queue,*id); CHECK(done.state==JobState::cancelled); REQUIRE(done.progress);
+    CHECK(done.progress->completed==1); CHECK(done.summary.empty());
+    CHECK_FALSE(queue.submit([](std::stop_token,const JobQueue::Reporter&)->Result<JobQueue::Payload>{return payload();},1,{"queued","spp",2,1,4}));
+}

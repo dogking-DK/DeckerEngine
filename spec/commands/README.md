@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-10-14T16:57:16+08:00"
+updated_at: "2026-10-15T10:16:45+08:00"
 status: accepted
 ---
 
@@ -132,3 +132,5 @@ stdio 在 EOF/shutdown 正常退出时为 0，先前可恢复的请求错误不�
 服务语义同时对照设计与实现；只运行受影响的命令示例或相关测试。
 设计原因见 [命令层](../design/commands.md)、[应用服务](../design/application-services.md)、
 [Runtime](../design/runtime.md) 和 [自动化协议](../design/automation-protocol.md)。
+
+路径截图参数/线性报告见[render.capture](render.md#固定-spp-路径追踪)，采样进度通过[jobs](jobs.md)返回。

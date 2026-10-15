@@ -105,7 +105,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     ShutdownPhase gui_phase{shutdown,"gui"};
     GuiRenderer gui{queue,window};
     ShutdownPhase viewport_phase{shutdown,"viewport"};
-    Viewport viewport{memory,heap,queue,device,options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke};
+    Viewport viewport{memory,heap,queue,device,options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.pathtrace_smoke};
     WorkbenchUi ui{*model,options.fixture_camera};
     SmokeDriver smoke{options.interaction_smoke,options.simulation_smoke};
     std::optional<ConsistencyDriver> consistency;
