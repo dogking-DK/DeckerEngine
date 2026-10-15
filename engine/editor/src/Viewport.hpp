@@ -6,6 +6,9 @@
 #include <dk/graphics/CommandEncoder.hpp>
 #include <imgui.h>
 #include "EnvironmentPreview.hpp"
+#ifdef DK_EDITOR_PATHTRACING
+#include "PathPreview.hpp"
+#endif
 
 namespace dk::editor::detail {
 class Viewport final {
@@ -17,6 +20,15 @@ public:
         const std::optional<TransformEdit>&,std::uint64_t preview_revision,float exposure=1,const render::EnvironmentRenderSettings& environment = {});
     void update_simulation(Workspace&,const SimulationRunState&,std::uint32_t width,std::uint32_t height,const Camera&);
     void show_edit();
+    void suspend_path();
+    void close_path();
+    [[nodiscard]] const std::string& path_unavailable() const { return path_unavailable_; }
+#ifdef DK_EDITOR_PATHTRACING
+    void update_path(const SceneReadSnapshot&,std::uint32_t,std::uint32_t,bool,const Camera&,const std::optional<TransformEdit>&,std::uint64_t,const PathPreviewSettings&);
+    [[nodiscard]] PathPreviewStatus path_status() const { return path_ ? path_->status() : PathPreviewStatus{}; }
+    [[nodiscard]] std::uint32_t path_samples() const { return path_samples_; }
+    std::uint64_t capture_path_pixels();
+#endif
     void retry_simulation() { simulation_view_.reset(); }
     [[nodiscard]] std::optional<SimulationId> simulation_run() const { return simulation_run_; }
     [[nodiscard]] std::uint64_t simulation_steps() const { return simulation_steps_; }
@@ -27,7 +39,7 @@ public:
     [[nodiscard]] Result<std::optional<EntityId>> pick(const Vec2d& uv) const;
     [[nodiscard]] geometry::Bounds bounds(EntityId,const SceneSnapshot&) const;
     [[nodiscard]] bool camera_current(const Camera& camera) const { return !simulation_run_ && published_camera_==camera.revision(); }
-    void retry() { attempted_.reset(); asset_session_.reset(); }
+    void retry() { attempted_.reset(); asset_session_.reset(); ++path_reload_; }
     [[nodiscard]] std::uint64_t environment_discarded() const { return environment_.discarded(); }
     [[nodiscard]] const render::EnvironmentRenderSettings& environment_settings() const { return published_environment_; }
     [[nodiscard]] const render::CloudFrameInfo& environment_history() const { return published_history_; }
@@ -53,6 +65,15 @@ private:
         bool operator==(const Key&) const = default;
     };
     void publish(std::vector<std::byte>,const render::FrameInfo&,render::RenderScene,const Camera&,const Key&);
+    std::string path_unavailable_="Path tracing is not compiled in this editor.";
+    std::uint64_t path_reload_=0;
+#ifdef DK_EDITOR_PATHTRACING
+    std::unique_ptr<PathPreview> path_;
+    std::optional<PathPreviewSettings> path_settings_;
+    std::uint64_t path_sequence_=0;
+    std::uint32_t path_samples_=0;
+    bool path_active_=false;
+#endif
     memory::ResourceHandle heap_;
     graphics::SubmissionQueue& queue_;
     render::ScenePipeline pipeline_;

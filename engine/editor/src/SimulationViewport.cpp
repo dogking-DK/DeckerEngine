@@ -13,6 +13,7 @@ void Viewport::show_edit() {
     view_={}; image_={}; info_={}; pixels_.clear();
 }
 void Viewport::update_simulation(Workspace& model,const SimulationRunState& run,std::uint32_t width,std::uint32_t height,const Camera& camera) {
+    suspend_path();
     if (simulation_run_!=run.run_id) {
         release_texture(); view_={}; image_={}; info_={}; pixels_.clear(); error_.clear();
         simulation_run_=run.run_id; simulation_steps_=0; simulation_published_=0; simulation_view_.reset();

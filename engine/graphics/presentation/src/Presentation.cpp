@@ -322,7 +322,10 @@ Result<PresentResult> Presenter::present(Frame&& frame)
     const VkFence fence = static_cast<VkFence>(*sync.presented);
     const VkSwapchainPresentFenceInfoEXT completion{VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT, nullptr, 1, &fence};
     const VkPresentInfoKHR info{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, &completion, 1, &wait, 1, &swapchain, &current->image_index, nullptr};
-    const auto result = state_->api.present(static_cast<VkQueue>(*state_->device().queue()), &info);
+    const auto result = [&] {
+        std::lock_guard lock(state_->device().queue_gate());
+        return state_->api.present(static_cast<VkQueue>(*state_->device().queue()), &info);
+    }();
     if (detail::present_enqueued(result)) {
         sync.present_pending = true;
         current->acquired = false;

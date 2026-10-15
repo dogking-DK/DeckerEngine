@@ -206,30 +206,55 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
         ImGui::DockBuilderDockWindow("Hierarchy",left); ImGui::DockBuilderDockWindow("Inspector",right);
         ImGui::DockBuilderDockWindow("Simulation",simulation);
         ImGui::DockBuilderDockWindow("Environment",right);
+#ifdef DK_EDITOR_PATHTRACING
+        ImGui::DockBuilderDockWindow("Path tracing",right);
+#endif
         ImGui::DockBuilderDockWindow("Viewport",center); ImGui::DockBuilderDockWindow("Assets",bottom);
         ImGui::DockBuilderDockWindow("Console",log); ImGui::DockBuilderFinish(dock);
         ImGui::SetWindowFocus("Inspector");
         layout_=true;
     }
     hierarchy(); inspector(); environment();
+#ifdef DK_EDITOR_PATHTRACING
+    path_panel(preview);
+#endif
     input_.environment(model_.snapshot() && (model_.snapshot()->scene.environment().enabled || model_.snapshot()->scene.environment().clouds.enabled));
     const bool visible=ImGui::Begin("Viewport",nullptr,ImGuiWindowFlags_NoScrollWithMouse|ImGuiWindowFlags_NoScrollbar);
-    if (!visible) input_.cancel();
+    if (!visible) { input_.cancel(); preview.suspend_path(); }
     if (!simulation_view(preview,visible)) {
     preview.show_edit();
+#ifdef DK_EDITOR_PATHTRACING
     const auto* environment = model_.snapshot() ? &model_.snapshot()->scene.environment() : nullptr;
-    ImGui::TextUnformatted(environment && environment->clouds.enabled ? "CLOUDS" :
-                          environment && environment->enabled ? "ATMOSPHERE" : "UNLIT PREVIEW"); ImGui::SameLine();
+    if(ImGui::RadioButton("Raster",!path_mode_)) { path_mode_=false; input_.cancel(); preview.suspend_path(); } mark("path_raster"); ImGui::SameLine();
+    const bool needs_surface=environment && (environment->enabled || environment->clouds.enabled) && !path_settings_.surface_only;
+    ImGui::BeginDisabled(!preview.path_unavailable().empty() || needs_surface);
+    if(ImGui::RadioButton("Path trace",path_mode_)) { path_mode_=true; input_.cancel(); ImGui::SetWindowFocus("Path tracing"); } mark("path_mode");
+    ImGui::EndDisabled();
+    if(needs_surface && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("Enable Surface-only acknowledgement in the Path tracing panel.");
+    if(path_mode_ && needs_surface) { preview.suspend_path(); path_mode_=false; }
+    ImGui::SameLine();
+#else
+    ImGui::TextDisabled("Path trace unavailable (module disabled)"); ImGui::SameLine();
+#endif
     ImGui::BeginDisabled(input_.active());
     if (ImGui::SmallButton("Refresh")) preview.retry();
     ImGui::EndDisabled();
     input_.toolbar(model_,preview,controls_);
     if (const auto* s=model_.snapshot(); s && visible) {
-        if (preview.texture()) ImGui::Text("rev %llu  /  %zu draws  /  %s",
-            static_cast<unsigned long long>(preview.info().revision),preview.info().draw_count,
-            preview.current(s->state) ? "Current scene" : "STALE PREVIEW");
-        else ImGui::TextUnformatted("Preparing scene...");
-        if(preview.texture() && (s->scene.environment().enabled || s->scene.environment().clouds.enabled)) {
+        if (preview.texture()) {
+#ifdef DK_EDITOR_PATHTRACING
+            if(path_mode_) ImGui::Text("rev %llu  /  %s",static_cast<unsigned long long>(preview.info().revision),
+                preview.current(s->state) ? "Current scene" : "STALE PREVIEW");
+            else
+#endif
+            ImGui::Text("rev %llu  /  %zu draws  /  %s",static_cast<unsigned long long>(preview.info().revision),preview.info().draw_count,
+                preview.current(s->state) ? "Current scene" : "STALE PREVIEW");
+        } else ImGui::TextUnformatted("Preparing scene...");
+        if(preview.texture() && (s->scene.environment().enabled || s->scene.environment().clouds.enabled)
+#ifdef DK_EDITOR_PATHTRACING
+            && !path_mode_
+#endif
+        ) {
             const auto& used=preview.environment_settings();
             ImGui::Text("t %.3f / %s / warmup %u / history %s / shadow %llu",used.time_seconds,
                 used.mode==render::CloudRenderMode::temporal ? "temporal" : "reference",preview.environment_warmup(),
@@ -240,6 +265,10 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
             const auto width=static_cast<std::uint32_t>(std::clamp(available.x,32.0f,1600.0f));
             const auto height=static_cast<std::uint32_t>(std::clamp(available.y,32.0f,1200.0f));
             environment_settings_.camera_revision=input_.camera().revision();
+#ifdef DK_EDITOR_PATHTRACING
+            if(path_mode_) preview.update_path(*s,width,height,srgb,input_.camera(),input_.edit(),input_.revision(),path_settings_);
+            else
+#endif
             preview.update(*s,width,height,srgb,input_.camera(),input_.edit(),input_.revision(),exposure_,environment_settings_);
             if (preview.texture()) {
                 const auto& info=preview.info();
@@ -247,7 +276,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
                 ImGui::Image(preview.texture(),{static_cast<float>(info.width)*scale,static_cast<float>(info.height)*scale});
                 input_.image(model_,preview,controls_,[&](const char* action,Result<void> result) { return report(action,std::move(result)); });
             } else ImGui::TextWrapped("Preview unavailable. See Console and press Refresh to retry.");
-        } else input_.cancel();
+        } else { input_.cancel(); preview.suspend_path(); }
         if (preview.error()!=viewport_error_) {
             viewport_error_=preview.error();
             if (!viewport_error_.empty()) report("Viewport",std::unexpected(Error{ErrorCode::internal_error,viewport_error_}));

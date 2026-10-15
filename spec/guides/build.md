@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-14T14:37:00+08:00"
+updated_at: "2026-10-15T09:28:38+08:00"
 ---
 
 # 构建与依赖配置
@@ -17,7 +17,7 @@ target为`dk_pathtracing_reference_tests`/`dk_pathtracing_reference_demo`，筛�
 不启用Graphics/Slang，固定场景与线性输出用法见[CPU参考指南](pathtracing-reference.md)。
 
 M16.6 GPU路径追踪使用`cmake --preset windows-graphics -DDK_BUILD_RENDER_PATHTRACING=ON`，
-默认OFF，PUBLIC依赖CPU reference/Device、PRIVATE依赖Graph/Shader；自动提供reference，不自动升级依赖。
+选项默认OFF（windows-editor预设开启），PUBLIC依赖CPU reference/Device、PRIVATE依赖Graph/Shader；自动提供reference，不自动升级依赖。
 目标`dk_pathtracing_probe`、筛选`^dk\.pathtracing\..*_gpu_required$`要求RT设备和validation/sync，缺环境失败。
 异步帧、HDR诊断及数值验收见[GPU路径追踪指南](pathtracing-gpu.md)。
 

@@ -1,0 +1,44 @@
+#include "Viewport.hpp"
+#include "EditorSupport.hpp"
+#include <imgui_impl_vulkan.h>
+namespace dk::editor::detail {
+void Viewport::update_path(const SceneReadSnapshot& snapshot,std::uint32_t width,std::uint32_t height,bool srgb,const Camera& camera,
+    const std::optional<TransformEdit>& edit,std::uint64_t preview,const PathPreviewSettings& settings) {
+    show_edit(); environment_.cancel();
+    if(!path_) { error_=path_unavailable_; return; }
+    const Key key{snapshot.state.document_id,snapshot.state.revision,width,height,srgb,camera.revision(),preview,float(settings.exposure),{}};
+    try {
+        if(!path_active_ || attempted_!=key || path_settings_!=settings) {
+            if(snapshot.scene.logical_bytes()>32U*1024U*1024U) throw std::runtime_error("Path preview snapshot exceeds 32 MiB");
+            if(!path_active_) path_samples_=0;
+            path_->request({snapshot,camera,width,height,srgb,edit,preview,path_reload_,++path_sequence_,settings});
+            attempted_=key; published_.reset(); path_settings_=settings; path_active_=true; error_.clear();
+        }
+        if(auto result=path_->take_result(); result && result->sequence==path_sequence_) {
+            auto image=take(queue_.import_image(std::move(result->image)));
+            auto view=take(queue_.resources().create_view(image));
+            auto descriptor=ImGui_ImplVulkan_AddTexture(static_cast<VkImageView>(view.handle()),VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            if(!descriptor) throw std::runtime_error("Path trace texture registration failed");
+            if(descriptor_) ImGui_ImplVulkan_RemoveTexture(descriptor_);
+            image_=std::move(image); view_=std::move(view); descriptor_=descriptor;
+            info_={result->info.scene,result->info.revision,result->sequence,result->info.width,result->info.height,0};
+            published_=key; published_session_=result->document.document_id; published_camera_=result->camera.revision();
+            camera_=result->camera; scene_=std::move(result->scene); meshes_=std::move(result->meshes);
+            path_samples_=result->info.samples.count; error_.clear();
+        }
+        const auto status=path_->status(); if(status.sequence==path_sequence_ && !status.error.empty()) error_=status.error;
+    } catch(const std::exception& error) { error_=error.what(); }
+}
+std::uint64_t Viewport::capture_path_pixels() {
+    if(!path_active_ || !descriptor_) throw std::runtime_error("No path image to inspect");
+    auto batch=take(queue_.begin());
+    auto readback=take(batch.readback(image_,{0,0,0,0,info_.width,info_.height}));
+    check(batch.transition(image_,vk::ImageLayout::eShaderReadOnlyOptimal));
+    if(!take(queue_.wait(take(queue_.submit(std::move(batch)))))) throw std::runtime_error("Path image inspection timed out");
+    pixels_.resize(static_cast<std::size_t>(info_.width)*info_.height*4);
+    if(!take(readback.try_read(pixels_))) throw std::runtime_error("Path image inspection incomplete");
+    pixel_signature_=14695981039346656037ULL;
+    for(const auto b:pixels_) { pixel_signature_^=std::to_integer<unsigned char>(b); pixel_signature_*=1099511628211ULL; }
+    return pixel_signature_;
+}
+}

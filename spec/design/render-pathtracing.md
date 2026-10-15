@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-14T18:27:05+08:00"
+updated_at: "2026-10-15T09:28:38+08:00"
 status: accepted
 ---
 
@@ -11,7 +11,15 @@ status: accepted
 
 用户选择先建立正确性参考，再接入编辑器和截图。M16 交付静态三角形场景的渐进式表面路径追踪：
 CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、确定性样本编号、每视图累积、
-后台交互预览和固定 spp 截图。M16.1、M16.6、M16.7.1/2和M16.8实施契约见下文；编辑器与capture集成仍是规划，阶段状态见[Roadmap](../roadmap.md)。
+后台交互预览和固定 spp 截图。M16.1、M16.6、M16.7.1/2、M16.8和M16.9实施契约见下文；capture集成仍是规划，阶段状态见[Roadmap](../roadmap.md)。
+
+## M16.9 GPU 显示与编辑器消费者
+
+PathTraceRenderer::display接受已完成线性帧和曝光EV，异步生成RGBA8 UNORM显示图像与提交票据。
+16×16 compute通过Reinhard转换；sRGB交换链前保持线性，非sRGB交换链前显式编码一次。
+显示图像和参数沿用renderer的AllocationBudget；不改样本计数或积分键，不隐式等待或读回。
+图像完成后可通过ImageTransfer封存交接，消费者保活期间仍计入原renderer额度。
+worker合并请求、GUI控件、版本/手势隔离与关闭契约统一见[编辑器设计](editor.md#m169-编辑器路径追踪接入契约)。
 
 ## M16.8 渐进会话实施契约
 
@@ -44,7 +52,7 @@ renderer自有VMA分配默认上限1GiB，可在create时收紧，至少1MiB；
 
 验证：不等批次/非整除tile与一次GPU及CPU参考比较、双视图/重置矩阵、重复/降目标/曝光、
 迟到/取消/后续tile提交故障、错误配置保留、工作额度及实际资源owner寿命与预算回收，required RT/sync validation。
-Editor、tone显示集成和文件capture分别属于M16.9/M16.10。
+GPU显示与Editor消费者见M16.9契约；文件capture仍属M16.10。
 
 ## M16.7.2 metallic-roughness GGX实施契约
 
@@ -111,7 +119,7 @@ pending保留image/view/sampler及冻结输入。失败不发布scene/frame，�
 ## M16.6 GPU无历史Lambert实施契约
 
 独立默认OFF的DK_BUILD_RENDER_PATHTRACING启用dk::render_pathtracing，同时提供纯CPU reference；
-PUBLIC依赖reference和graphics_device，PRIVATE依赖graphics_graph/graphics_shaders，不接入Runtime或编辑器。
+PUBLIC依赖reference和graphics_device，PRIVATE依赖graphics_graph/graphics_shaders，不反向依赖Runtime或编辑器。
 PathTraceRenderer::create编译固定shader目录的RT与空场景compute程序，失败不发布半套管线。
 prepare_scene复制已冻结PathTraceScene的世界三角形/材质/光源CDF，构建单BLAS与恒等TLAS，
 保留稳定三角形到Entity/Asset/primitive/triangle的映射。完整仿射效果在CPU冻结时已应用；
@@ -218,7 +226,7 @@ M16 不复用其 screen-space 合成到路径追踪结果，也不把太阳、�
 | --- | --- |
 | `engine/render/pathtracing` 的 `dk_render_pathtracing_reference` / `dk::render_pathtracing_reference` | 已实现纯 CPU：PUBLIC render_data、asset_data，通过其传递依赖Math/Memory；独立求交、输入转换、采样、Lambert/GGX、参考积分，不链接Geometry实现/Vulkan/Slang |
 | 同目录 `dk_render_pathtracing` / `dk::render_pathtracing` | PUBLIC render_pathtracing_reference、graphics_device；PRIVATE graphics_graph、graphics_shaders；不可变GPU场景、Lambert/GGX积分、双视图渐进会话、异步帧与HDR诊断 |
-| RenderDisk / CaptureService / Editor 装配（规划） | 读取/冻结资产并调用 renderer；Render 不反向依赖 Framework/Editor；公开路径不暴露其类型 |
+| RenderDisk / Editor装配；CaptureService仍规划 | 读取/冻结资产并调用 renderer；Render 不反向依赖 Framework/Editor；公开路径不暴露其类型 |
 
 reference开关默认OFF，已支持无GPU依赖构建与测试，使用见[CPU参考指南](../guides/pathtracing-reference.md)。
 GPU开关DK_BUILD_RENDER_PATHTRACING独立默认OFF，启用时检查Device/Shader/Graph并构建reference；
@@ -347,14 +355,14 @@ M16.8冻结限制：GPU渐进图像≤2048²，CPU 参考≤64²；每批 1..16 
 
 renderer自有GPU分配预算冻结为1GiB，包含几何复制、AS、scratch、纹理、历史/候选/读回及在途旧代。
 每像素历史128字节，单张2048²为512MiB；新旧两张已占1GiB，故此尺寸续批需明确报告额度不足，
-不能保证所有维度、场景和外部持有组合均可用。显示集成尚无独立资源，后续必须沿同一额度。
+不能保证所有维度、场景和外部持有组合均可用。GPU显示图像与参数沿同一额度，外部显示owner也继续计费。
 记录owned allocation当前/峰值及host-visible/device-local（可重叠）；全设备VMA allocation/block单列。
 CPU输入沿资产/Memory额度；driver隐藏pipeline/descriptor开销不可观测。额度是准入上限，未证明交互性能。
 
 预览复用 Editor 既有 worker/owner 交接模式：owner 不做长编译/AS build/等待；worker 串行拥有队列。
 编辑器设备创建可请求 RT if_available，后台使用同逻辑设备的已启用能力；切模式前检查 enabled，
 不重建正在被 UI 使用的设备。GPU-only 图像经已有完成图像交接进入显示；不得反复 CPU 读回上传。
-单原生队列时沿用串行提交所有者/回退调度，不让 UI 和 worker 并发访问同一队列。
+单原生队列时UI与worker各自独占ledger，native submit/present/idle使用同一个Device gate串行。
 关闭先拒绝新任务、取消并 join，再释放 worker/视口资源；旧图可保留显示但必须标出来源和过期状态。
 
 取消在资产/编译/构建阶段之间、tile/样本批次之间检查，已提交 GPU 工作不可硬抢占。

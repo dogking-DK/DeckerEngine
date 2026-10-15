@@ -174,6 +174,7 @@ struct Device::Impl {
     vk::raii::Queue queue{nullptr};
     vk::raii::Queue secondary{nullptr};
     std::uint32_t queue_count=1;
+    std::array<std::mutex,2> queue_gates;
     AllocatorOwner allocator;
     void report(const Diagnostic& diagnostic) noexcept
     {
@@ -513,6 +514,7 @@ const vk::raii::Instance& Device::instance() const noexcept { return impl_->inst
 const vk::raii::PhysicalDevice& Device::physical_device() const noexcept { return impl_->physical; }
 const vk::raii::Device& Device::logical_device() const noexcept { return impl_->device; }
 const vk::raii::Queue& Device::queue() const noexcept { return queue_index_ ? impl_->secondary : impl_->queue; }
+std::mutex& Device::queue_gate() const noexcept { return impl_->queue_gates[queue_index_]; }
 std::uint32_t Device::queue_count() const noexcept { return impl_->queue_count; }
 Result<Device> Device::share_queue(std::uint32_t index) const {
     if (index>=impl_->queue_count) return std::unexpected(Error{ErrorCode::invalid_argument,"Queue index is not available"});

@@ -92,6 +92,10 @@ Result<void> align_tracy(QueueState& queue, GpuProfiler& profiler) {
     vk::SubmitInfo2 submit{}; submit.setCommandBufferInfos(command);
     const auto* api = device.logical_device().getDispatcher();
     const auto before = profile_clock();
+    auto other=device.share_queue(device.queue_count()>1 ? 1-device.queue_index() : device.queue_index());
+    std::unique_lock<std::mutex> gate(device.queue_gate(),std::defer_lock), second;
+    if(device.queue_count()>1) { second=std::unique_lock<std::mutex>{other->queue_gate(),std::defer_lock}; std::lock(gate,second); }
+    else gate.lock();
     auto status = api->vkQueueSubmit2(static_cast<VkQueue>(*device.queue()), 1, reinterpret_cast<const VkSubmitInfo2*>(&submit), VK_NULL_HANDLE);
     if (status != VK_SUCCESS) return std::unexpected(queue.failure("GPU clock alignment submit", status));
     status = api->vkQueueWaitIdle(static_cast<VkQueue>(*device.queue()));

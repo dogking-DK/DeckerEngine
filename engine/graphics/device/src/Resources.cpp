@@ -381,8 +381,11 @@ Result<Submission> SubmissionQueue::submit_impl(CommandBatch&& batch, vk::Semaph
     submit.signalSemaphoreInfoCount = binary_signal ? 2u : 1u;
     submit.pSignalSemaphoreInfos = signals.data();
     submit.setWaitSemaphoreInfos(waits);
-    const auto result = state_->api.submit(static_cast<VkQueue>(*device().queue()), 1,
-        reinterpret_cast<const VkSubmitInfo2*>(&submit), VK_NULL_HANDLE);
+    const auto result = [&] {
+        std::lock_guard lock(device().queue_gate());
+        return state_->api.submit(static_cast<VkQueue>(*device().queue()), 1,
+            reinterpret_cast<const VkSubmitInfo2*>(&submit), VK_NULL_HANDLE);
+    }();
     if (result != VK_SUCCESS) return std::unexpected(state_->failure("vkQueueSubmit2", result));
     // Commit: all ownership transfers below are noexcept and require no allocation.
     static_assert(noexcept(slot.uses = std::move(recording->uses)));

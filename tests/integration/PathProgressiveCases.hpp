@@ -40,6 +40,23 @@ void progressive_images(memory::ResourceHandle heap,PathTraceRenderer& r,Submiss
     auto a=finish_view(r,q,11); compare_images(a,once,0); // Same-device Kahan continuation is exact.
     auto reference=take(render_path_reference(heap,cpu,view,s,{0,19}));
     for(std::size_t i=0;i<reference.linear_rgb().size();++i) close_color(a.linear_rgb()[i],reference.linear_rgb()[i],2e-4);
+    // Display uses the immutable completed HDR buffer; it must neither resample nor change history.
+    const auto generation=take(r.status(11)).generation;
+    for(const bool encoded:{false,true}) for(const double ev:{-2.,0.,2.}) {
+        auto display=take(r.display(q,r.completed_frame(11),ev,encoded));
+        require(take(q.wait(display.submission)),"tone submission timeout");
+        auto batch=take(q.begin()); auto read=take(batch.readback(display.image,{0,0,0,0,7,7}));
+        check(batch.transition(display.image,vk::ImageLayout::eShaderReadOnlyOptimal));
+        require(take(q.wait(take(q.submit(std::move(batch))))),"tone readback timeout");
+        std::array<std::byte,7*7*4> pixels{}; require(take(read.try_read(pixels)),"tone readback missing");
+        for(std::size_t i=0;i<a.linear_rgb().size();++i) for(int channel=0;channel<3;++channel) {
+            const double linear=a.linear_rgb()[i][channel]*std::exp2(ev); double expected=linear/(1+linear);
+            if(encoded) expected=expected<=.0031308 ? 12.92*expected : 1.055*std::pow(expected,1./2.4)-.055;
+            require(std::abs(int(std::to_integer<unsigned char>(pixels[i*4+channel]))-std::lround(expected*255))<=1,"tone/exposure/sRGB mismatch");
+        }
+    }
+    require(take(r.status(11)).generation==generation && take(r.status(11)).completed_spp==19,"display changed history");
+    require(!r.display(q,r.completed_frame(11),33),"invalid display exposure accepted");
     schedule.batch_spp=16; schedule.tile_edge=2;
     check(r.configure_view(q,22,gpu,view,s,schedule)); compare_images(finish_view(r,q,22),once,0);
     check(r.release_view(22)); check(r.reset(11));

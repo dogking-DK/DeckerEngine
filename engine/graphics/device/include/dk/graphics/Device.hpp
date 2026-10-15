@@ -1,4 +1,5 @@
 #pragma once
+#include <mutex>
 
 #include <dk/core/Result.hpp>
 #include <dk/memory/Containers.hpp>
@@ -113,7 +114,9 @@ public:
     [[nodiscard]] std::uint32_t queue_family() const noexcept;
     [[nodiscard]] std::uint32_t queue_count() const noexcept;
     [[nodiscard]] std::uint32_t queue_index() const noexcept { return queue_index_; }
-    // Explicit shared lifetime. Each native queue still requires a single serial owner.
+    // Shared native-call gate; each SubmissionQueue ledger still needs one serial owner.
+    [[nodiscard]] std::mutex& queue_gate() const noexcept;
+    // Explicit shared lifetime. Native borrowed queue calls must hold queue_gate().
     // The final view must be released on the surface/window owner's thread, if any.
     [[nodiscard]] Result<Device> share_queue(std::uint32_t index) const;
     [[nodiscard]] vk::SurfaceKHR surface() const noexcept;

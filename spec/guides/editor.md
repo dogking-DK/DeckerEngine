@@ -32,7 +32,7 @@ Windows后台运行可加 `--background`：启动及程序恢复窗口时不抢�
 - **Hierarchy**：显示实体层级，点击选择，与视口共用选择。存在未应用草稿时先 Apply 或 Revert。
 - **Inspector**：修改名称、本地 translation、四元数 rotation（X/Y/Z/W）和 scale。
   Apply 以一次事务提交，Undo/Redo 使用引擎现有历史；无效变换或过期版本会报错并保留草稿。
-- **Viewport**：预览当前内存版本，包括未保存编辑；显示 revision 和 draw count。
+- **Viewport**：预览当前内存版本，包括未保存编辑；显示 revision（光栅另显示draw count）。
   默认从 Sponza 相机位置开始，使用 unlit preview，HDR/天空盒仍只是项目测试资产。
   左键点击网格使用 CPU 三角形拾取，选择最近实体；点击空白清空选择。黄色框标示选择范围。
   拾取为双面几何查询，不检查纹理 alpha；不可逆零缩放实例不能拾取。
@@ -46,6 +46,26 @@ Windows后台运行可加 `--background`：启动及程序恢复窗口时不抢�
   有未保存修改时提供 Save / Discard / Cancel。保存失败不会继续切换/关闭。
   本阶段不修改 manifest 和资产映射，也不提供新建项目向导。
 - **Assets / Console**：只读查看项目资产映射和最近 64 条操作/失败信息。
+
+## 路径追踪预览（M16.9）
+
+`windows-editor`预设默认启用`DK_BUILD_RENDER_PATHTRACING`。视口选择 **Path trace**，
+右侧 **Path tracing** 面板调整目标spp、seed、反弹、常量环境、场景太阳和曝光EV，支持Pause/Resume和Reset accumulation。
+默认64spp；修改曝光/目标保留已完成线性样本，相机、尺寸、积分设置、资产刷新或场景版本变化重新累积。
+后台编译/资产准备/逐tile渲染期间主界面和IPC保持可用；旧图会标为STALE PREVIEW，当前输入的完整批次完成才替换。
+切回Raster、隐藏/最小化视口或进入Simulation停止后续路径工作。Refresh重新加载资产并重试错误。
+
+路径模式目前仅支持表面照明：场景开启空气或云时，先在面板勾选 **Surface-only acknowledgement**。
+不支持的GPU/构建会显示禁用原因。继承现有路径管线限制：4096三角形、64纹理、纹理源总计64MiB、
+renderer资源额度1GiB，材质限制见[GPU路径追踪指南](pathtracing-gpu.md)。Sponza完整场景超过三角形限制；
+应使用受支持的小场景验证。此阶段没有路径追踪`render.capture`入口。
+
+定向验收使用真实后台窗口和外部IPC：
+
+```powershell
+./scripts/verify.ps1 -BuildDir out/build/windows-editor -Configuration RelWithDebInfo -Target @('dk_editor_app','dk_ctl','dk_pathtracing_probe') -TestRegex '^dk\.(editor\.pathtracing_gpu_validation|pathtracing\.progressive_images_gpu_required)$' -Reason 'M16.9 GUI/IPC和GPU显示'
+```
+
 
 ## Simulation面板（M12.1）
 

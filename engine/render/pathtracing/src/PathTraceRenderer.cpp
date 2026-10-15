@@ -22,7 +22,8 @@ struct PathGpuState {
     PipelineLayout layout,empty_layout;
     RayTracingPipeline pipeline;
     ShaderBindingTable table;
-    ComputePipeline empty_pipeline;
+    ComputePipeline empty_pipeline,tone_pipeline;
+    PipelineLayout tone_layout;
     bool textured = false;
     std::shared_ptr<AllocationBudget> budget;
     std::array<std::shared_ptr<PathGpuView>,2> views;
@@ -241,13 +242,14 @@ Result<PathTraceRenderer> PathTraceRenderer::create(memory::ResourceHandle heap,
     state->identity=take(state->factory.create_buffer({4}));
     const std::array names{"pathMain","pathMiss","shadowMiss","pathHit","pathAnyHit"};
     const std::array stages{ShaderStage::raygeneration,ShaderStage::miss,ShaderStage::miss,ShaderStage::closesthit,ShaderStage::anyhit};
-    std::array<ShaderCompileRequest,6> requests;
+    std::array<ShaderCompileRequest,7> requests;
     const std::array defines{ShaderDefine{"DK_PATH_TEXTURES",state->textured ? "1" : "0"}};
     for (std::size_t i=0;i<5;++i) requests[i]={directory/"pathtrace.slang",names[i],stages[i],{},defines};
     requests[5]={directory/"pathtrace-empty.slang","emptyMain",ShaderStage::compute};
+    requests[6]={directory/"pathtrace-tone.slang","toneMain",ShaderStage::compute};
     for(auto& request:requests) request.precise_floating_point=true;
     auto compiled=take(compile_shaders(requests,heap,stop));
-    std::array<ShaderModule,6> shaders; for (std::size_t i=0;i<shaders.size();++i) { cancelled(stop); shaders[i]=take(state->factory.create_shader(compiled[i])); }
+    std::array<ShaderModule,7> shaders; for (std::size_t i=0;i<shaders.size();++i) { cancelled(stop); shaders[i]=take(state->factory.create_shader(compiled[i])); }
     const std::array<const ShaderModule*,5> entries{&shaders[0],&shaders[1],&shaders[2],&shaders[3],&shaders[4]};
     state->layout=take(state->factory.create_pipeline_layout(entries));
     const std::array<const ShaderModule*,2> misses{&shaders[1],&shaders[2]};
@@ -256,6 +258,9 @@ Result<PathTraceRenderer> PathTraceRenderer::create(memory::ResourceHandle heap,
     state->table=take(state->factory.create_shader_binding_table(state->pipeline));
     const std::array<const ShaderModule*,1> empty{&shaders[5]}; state->empty_layout=take(state->factory.create_pipeline_layout(empty));
     state->empty_pipeline=take(state->factory.create_compute_pipeline({&shaders[5],&state->empty_layout}));
+    const std::array<const ShaderModule*,1> tone{&shaders[6]};
+    state->tone_layout=take(state->factory.create_pipeline_layout(tone));
+    state->tone_pipeline=take(state->factory.create_compute_pipeline({&shaders[6],&state->tone_layout}));
     cancelled(stop); return PathTraceRenderer{std::move(state)};
 } catch (const Error& error) { return std::unexpected(error); }
 catch (const std::exception& error) { return std::unexpected(Error{ErrorCode::internal_error,error.what()}); }
@@ -557,6 +562,44 @@ PathTraceCompletedFrame PathTraceRenderer::completed_frame(std::uint64_t id) con
     if(state_) if(auto* slot=view_slot(*state_,id)) return PathTraceCompletedFrame{(*slot)->completed};
     return {};
 }
+Result<PathTraceDisplayFrame> PathTraceRenderer::display(SubmissionQueue& queue,const PathTraceCompletedFrame& frame,
+    double exposure,bool encode_srgb,std::stop_token stop) const try {
+    ready(state_,queue,stop);
+    if(!frame || !std::isfinite(exposure) || std::abs(exposure)>32)
+        return std::unexpected(path_invalid("Invalid completed frame or display exposure"));
+    const auto& info=frame.info();
+    const Float4 values{float(info.width),float(info.height),float(std::exp2(exposure)),encode_srgb ? 1.f : 0.f};
+    auto uniform=upload(state_->factory,std::as_bytes(std::span{&values,1}),vk::BufferUsageFlagBits::eStorageBuffer);
+    ImageDesc description{info.width,info.height,vk::Format::eR8G8B8A8Unorm,
+        vk::ImageUsageFlagBits::eStorage|vk::ImageUsageFlagBits::eSampled|vk::ImageUsageFlagBits::eTransferSrc};
+    PathTraceDisplayFrame result; result.image=take(state_->factory.create_image(description));
+    auto view=take(state_->factory.create_view(result.image));
+    const std::array writes{BindingWrite{0,0,BufferBinding{&uniform}},BindingWrite{1,0,BufferBinding{frame.linear_buffer()}},
+        BindingWrite{2,0,ImageBinding{&view,vk::ImageLayout::eGeneral}}};
+    auto bindings=take(state_->factory.create_bindings(state_->tone_layout,0,writes));
+    auto graph=take(graph::Graph::create(state_->heap));
+    auto params=take(graph.declare_buffer("tone parameters",uniform.description(),graph::Lifetime::external,true));
+    auto history=take(graph.declare_buffer("completed linear",frame.linear_buffer()->description(),graph::Lifetime::external,true));
+    auto image=take(graph.declare_image("tone image",description,graph::Lifetime::external));
+    const auto stage=vk::PipelineStageFlagBits2::eComputeShader;
+    const std::array uses{use(params,stage,vk::AccessFlagBits2::eShaderRead),use(history,stage,vk::AccessFlagBits2::eShaderRead),
+        graph::Use{image,{{stage,vk::AccessFlagBits2::eShaderWrite,vk::ImageLayout::eGeneral},0,VK_WHOLE_SIZE,{vk::ImageAspectFlagBits::eColor,0,1,0,1},true}}};
+    add(graph,"path tone",uses); check(graph.mark_output(image));
+    auto plan=take(graph.compile(stop));
+    struct Context { const PathGpuState& state; const BindingSet& bindings; std::uint32_t width,height; } context{*state_,bindings,info.width,info.height};
+    const auto record=[](graph::PassContext& pass,void* pointer)->Result<void> {
+        const auto& c=*static_cast<Context*>(pointer);
+        try { auto encoder=take(pass.compute()); check(encoder.bind_pipeline(c.state.tone_pipeline));
+            const std::array<const BindingSet*,1> sets{&c.bindings}; check(encoder.bind_sets(sets));
+            return encoder.dispatch({(c.width+15)/16,(c.height+15)/16,1});
+        } catch(const Error& error) { return std::unexpected(error); }
+    };
+    const std::array imports{graph::ExternalBinding{0,&uniform},graph::ExternalBinding{1,frame.linear_buffer()},graph::ExternalBinding{2,nullptr,&result.image}};
+    const std::array callbacks{graph::PassCallback{0,record,&context}};
+    const std::array final{graph::FinalAccess{2,{{vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal}}}};
+    cancelled(stop); auto execution=take(graph::execute(plan,queue,{imports,callbacks,final})); result.submission=execution.submission(); return result;
+} catch(const Error& error) { return std::unexpected(error); }
+catch(const std::exception& error) { return std::unexpected(Error{ErrorCode::internal_error,error.what()}); }
 PathTraceMemoryStats PathTraceRenderer::memory_stats(const SubmissionQueue& queue) const noexcept {
     PathTraceMemoryStats stats; if(state_) stats.owned=state_->budget->stats();
     VmaTotalStatistics total{}; vmaCalculateStatistics(queue.device().allocator(),&total);

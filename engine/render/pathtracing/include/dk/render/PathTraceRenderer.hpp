@@ -76,6 +76,10 @@ private:
     explicit PathTraceCompletedFrame(std::shared_ptr<const detail::PathGpuCompleted> s) : state_(std::move(s)) {}
     std::shared_ptr<const detail::PathGpuCompleted> state_;
 };
+struct PathTraceDisplayFrame {
+    graphics::Image image;
+    graphics::Submission submission;
+};
 struct PathTraceMemoryStats {
     graphics::AllocationBudgetStats owned;
     std::uint64_t device_allocation_bytes = 0, device_block_bytes = 0;
@@ -103,6 +107,9 @@ public:
     [[nodiscard]] Result<void> release_view(std::uint64_t view_id);
     [[nodiscard]] Result<PathTraceProgress> status(std::uint64_t view_id) const;
     [[nodiscard]] PathTraceCompletedFrame completed_frame(std::uint64_t view_id) const noexcept;
+    // GPU-only Reinhard display. Exposure is in EV; encode_srgb only for a non-sRGB destination.
+    [[nodiscard]] Result<PathTraceDisplayFrame> display(graphics::SubmissionQueue&, const PathTraceCompletedFrame&,
+        double exposure = 0, bool encode_srgb = false, std::stop_token = {}) const;
     [[nodiscard]] PathTraceMemoryStats memory_stats(const graphics::SubmissionQueue&) const noexcept;
 
 private:

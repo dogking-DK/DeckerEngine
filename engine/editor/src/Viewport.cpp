@@ -7,8 +7,24 @@
 
 namespace dk::editor::detail {
 Viewport::Viewport(memory::MemorySystem& memory,memory::ResourceHandle heap,graphics::SubmissionQueue& queue,const graphics::DeviceOptions& options,bool retain_pixels)
-    : heap_(heap),queue_(queue),pipeline_(take(render::ScenePipeline::create(heap,queue,DK_EDITOR_SHADER_DIR))),environment_(memory,heap,options),retain_pixels_(retain_pixels) {}
-Viewport::~Viewport() { release_texture(); }
+    : heap_(heap),queue_(queue),pipeline_(take(render::ScenePipeline::create(heap,queue,DK_EDITOR_SHADER_DIR))),environment_(memory,heap,options),retain_pixels_(retain_pixels) {
+#ifdef DK_EDITOR_PATHTRACING
+    if(!queue.device().ray_tracing_enabled()) path_unavailable_="GPU ray tracing is unavailable (AS / RT pipeline / buffer device address).";
+    else if(!queue.device().sampled_image_indexing_enabled()) path_unavailable_="Non-uniform sampled image indexing is unavailable.";
+    else { path_=std::make_unique<PathPreview>(memory,heap,take(queue.device().share_queue(0))); path_unavailable_.clear(); }
+#endif
+}
+Viewport::~Viewport() { close_path(); release_texture(); }
+void Viewport::close_path() {
+#ifdef DK_EDITOR_PATHTRACING
+    path_.reset();
+#endif
+}
+void Viewport::suspend_path() {
+#ifdef DK_EDITOR_PATHTRACING
+    if(path_active_) { path_->suspend(); path_active_=false; attempted_.reset(); path_settings_.reset(); }
+#endif
+}
 void Viewport::release_texture() {
     if (descriptor_) ImGui_ImplVulkan_RemoveTexture(descriptor_);
     descriptor_=VK_NULL_HANDLE;
@@ -17,7 +33,7 @@ void Viewport::release_texture() {
 }
 void Viewport::update(const SceneReadSnapshot& snapshot,std::uint32_t width,std::uint32_t height,bool srgb,const Camera& camera,
     const std::optional<TransformEdit>& edit,std::uint64_t preview_revision,float exposure,const render::EnvironmentRenderSettings& environment) {
-    show_edit();
+    suspend_path(); show_edit();
     const Key key{snapshot.state.document_id,snapshot.state.revision,width,height,srgb,camera.revision(),preview_revision,exposure,environment};
     if(snapshot.scene.environment().enabled || snapshot.scene.environment().clouds.enabled) {
         try {

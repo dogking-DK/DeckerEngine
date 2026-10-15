@@ -1,13 +1,13 @@
 ---
 created_at: "2026-10-14T14:37:00+08:00"
-updated_at: "2026-10-14T18:27:05+08:00"
+updated_at: "2026-10-15T09:28:38+08:00"
 ---
 
 # GPU Lambert/GGX与渐进路径追踪
 
 [返回项目入口](../../README.md)。[M16.6设计](../design/render-pathtracing.md#m166-gpu无历史lambert实施契约)
 提供硬件三角形求交、NEE/MIS/RR和拥有型HDR结果，使用与[CPU参考](pathtracing-reference.md)一致的冻结输入与采样模型。
-提供≤64×64无历史参考和≤2048×2048渐进接口，支持Lambert/GGX、baseColor纹理/alpha-mask；编辑器和capture命令按Roadmap后续阶段接入。
+提供≤64×64无历史参考和≤2048×2048渐进接口，支持Lambert/GGX、baseColor纹理/alpha-mask；[编辑器](editor.md#路径追踪预览m169)已接入后台渐进预览；capture命令仍属后续阶段。
 
 ## 构建与验证
 
@@ -18,7 +18,7 @@ cmake --preset windows-graphics -DDK_BUILD_RENDER_PATHTRACING=ON
   -Reason 'GPU表面路径追踪解析/统计/图像/寿命/分配失败验收'
 ```
 
-开关默认OFF，消费者链接`dk::render_pathtracing`，包含`dk/render/PathTraceRenderer.hpp`。
+开关默认OFF（windows-editor预设开启），消费者链接`dk::render_pathtracing`，包含`dk/render/PathTraceRenderer.hpp`。
 Scene/Math/Memory和Graphics Device/Graph/Shader须已启用；GPU开关同时提供CPU reference，
 单独开启reference不链接GPU。required探针要求真实RT与Khronos validation，同步验证由CTest设置，缺失不按77跳过。
 本机旧AMD隐式层的进程级兼容处理及实测见[0114](../development/0114-gpu-pathtracing.md)。
@@ -105,7 +105,7 @@ create末参数memory_limit默认1GiB，可收紧到至少1MiB；memory_stats报
 预算跟随GPU资源owner，在途工作、外部保留的completed及显式读回也占额度；丢弃不用的帧后可重试。
 历史128字节/像素，2048²单张为512MiB，两张加场景超过默认额度，因此尺寸上限不保证所有组合可运行。
 驱动隐藏分配不计入额度；host-visible与device-local可能重叠，VMA block是全设备共享池。
-本阶段没有tone显示或Editor集成，GPU缓冲入口供后续消费者直接读取，不要求每批全帧CPU读回。
+M16.9已由GPU tone直接读取完成缓冲并交给Editor，不做每批全帧CPU读回。
 
 ## 线性结果与诊断
 
@@ -135,3 +135,11 @@ progressive_images/state/failure/budget/lost验证分块/65536spp一致性、重
 images用例在构建目录`tests/integration/pathtrace-hdr.json`写入4×4、seed=42、256spp线性数据。
 报告的comparison对象单独记录8 seed、4096/16384spp对照协议和nRMSE，不能把这组误差当作256spp图像的参考误差。
 真实结果、门槛与未验证范围见[0114](../development/0114-gpu-pathtracing.md)。
+
+## GPU 显示图像
+
+`renderer.display(queue, completed_frame, exposure_ev, encode_srgb)`返回RGBA8 UNORM图像和提交票据，
+不重采样、不隐式等待、不读回CPU。曝光使用2^EV，Reinhard输出到sRGB交换链前保持线性；
+仅在非sRGB目标前设置encode_srgb=true。图像和参数计入同一个renderer额度。
+图像票据完成后，可用export_image/import_image交给同设备同队列族的GUI队列；消费者持有期间继续计费。
+共享原生队列的native调用须持Device::queue_gate；每个SubmissionQueue ledger仍只允许一个串行所有者。

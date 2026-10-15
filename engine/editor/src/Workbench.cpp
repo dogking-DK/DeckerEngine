@@ -5,6 +5,9 @@
 #include "ConsistencyDriver.hpp"
 #include "SimulationConsistencyDriver.hpp"
 #include "ResponseProbe.hpp"
+#ifdef DK_EDITOR_PATHTRACING
+#include "PathSmoke.hpp"
+#endif
 #include "EditorSupport.hpp"
 #include <dk/memory/MemorySystem.hpp>
 #include <dk/memory/Context.hpp>
@@ -53,7 +56,7 @@ void write_capture(const std::filesystem::path& output,const graphics::ReadbackR
     check(write_file_bytes_atomic(output,ppm));
 }
 int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory::ResourceHandle heap,Diagnostics& diagnostics) {
-    if ((options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe) && !std::filesystem::is_regular_file(options.root/".dk-editor-smoke"))
+    if ((options.pathtrace_smoke || options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe) && !std::filesystem::is_regular_file(options.root/".dk-editor-smoke"))
         throw std::runtime_error("--smoke requires a disposable project with .dk-editor-smoke marker");
     ShutdownProbe shutdown{options.simulation_response_probe};
     ShutdownPhase model_phase{shutdown,"model"};
@@ -69,6 +72,10 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     graphics::DeviceOptions device;
     device.validation=options.validation ? graphics::ValidationMode::required : options.disable_validation ?
         graphics::ValidationMode::disabled : graphics::ValidationMode::if_available;
+#ifdef DK_EDITOR_PATHTRACING
+    device.ray_tracing=options.pathtrace_smoke ? graphics::RayTracingMode::required : graphics::RayTracingMode::if_available;
+    device.sampled_image_indexing=options.pathtrace_smoke ? graphics::SampledImageIndexingMode::required : graphics::SampledImageIndexingMode::if_available;
+#endif
     device.diagnostic_sink=diagnostic; device.diagnostic_user_data=&diagnostics;
 #ifdef DK_SIMULATION_GPU
     device.secondary_queue=true;
@@ -107,12 +114,22 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     if (options.simulation_response_probe) response.emplace(options.root);
     if (options.consistency_smoke || options.environment_consistency_smoke) consistency.emplace(options.root,options.environment_consistency_smoke);
     if (options.simulation_consistency_smoke) simulation_consistency.emplace(options.root);
+#ifdef DK_EDITOR_PATHTRACING
+    std::optional<PathSmoke> path_smoke;
+    if(options.pathtrace_smoke) path_smoke.emplace(options.root);
+#else
+    if(options.pathtrace_smoke) throw std::runtime_error("Path tracing module is disabled");
+#endif
     unsigned frames=0;
     const auto start=std::chrono::steady_clock::now();
     try {
         for (;;) {
             if (response) response->tick(model->simulation_state());
             const auto status=take(window.poll_events(event_sink,&ui));
+#ifdef DK_EDITOR_PATHTRACING
+            if(path_smoke) path_smoke->poll_window(window,status.minimized);
+#endif
+            if(options.pathtrace_smoke && std::chrono::steady_clock::now()-start>std::chrono::seconds(240)) throw std::runtime_error("Path smoke timed out");
             if (options.simulation_smoke) smoke.poll_window(window,status.minimized);
             if (status.close_requested) { check(window.clear_close_request()); ui.request_close(); }
             model->pump();
@@ -122,7 +139,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
                 throw std::runtime_error("Workbench acceptance run timed out");
             if ((consistency || simulation_consistency) && std::chrono::steady_clock::now()-start>std::chrono::seconds(options.environment_consistency_smoke ? 360 : 180))
                 throw std::runtime_error("Consistency acceptance run timed out");
-            if (status.minimized || !status.pixel_width || !status.pixel_height) { SDL_Delay(16); continue; }
+            if (status.minimized || !status.pixel_width || !status.pixel_height) { viewport.suspend_path(); SDL_Delay(16); continue; }
             auto acquired=take(presenter.acquire());
             if (acquired.status!=graphics::AcquireStatus::ready) { SDL_Delay(8); continue; }
             // Acquisition can wait for presentation. Handle requests that arrived
@@ -134,6 +151,9 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
                 viewport.release_texture(); gui.shutdown_gpu(); gui.initialize(frame);
             }
             gui.new_frame([&] {
+#ifdef DK_EDITOR_PATHTRACING
+                if(path_smoke) path_smoke->input(ui,*model,viewport,window);
+#endif
                 if (options.smoke) smoke.input(*model,ui,window,viewport);
                 if (consistency) consistency->input(ui,*model,viewport);
                 if (simulation_consistency) simulation_consistency->input(ui);
@@ -144,7 +164,11 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
             ImGui::Render();
             gui.record(frame,viewport.texture() ? &viewport.image() : nullptr,viewport.texture() ? &viewport.image_view() : nullptr);
             ++frames;
-            const bool finish_requested=(options.smoke && smoke.done()) || (consistency && consistency->done()) ||
+            const bool finish_requested=
+#ifdef DK_EDITOR_PATHTRACING
+                (path_smoke && path_smoke->done()) ||
+#endif
+                (options.smoke && smoke.done()) || (consistency && consistency->done()) ||
                 (simulation_consistency && simulation_consistency->done()) || (options.frames && frames>=options.frames);
             const bool finish=finish_requested && (!options.environment_consistency_smoke || viewport.current(model->snapshot()->state));
             std::optional<graphics::ReadbackRequest> capture;
@@ -156,6 +180,9 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
             if (!take(queue.wait(presented.completion))) throw std::runtime_error("GUI submission timed out");
             if (consistency) consistency->presented(*model,ui,viewport);
             if (simulation_consistency) simulation_consistency->presented(*model,ui,viewport);
+#ifdef DK_EDITOR_PATHTRACING
+            if(path_smoke) path_smoke->presented(*model,ui,viewport);
+#endif
             if (response) response->presented();
             if (capture) write_capture(options.screenshot,*capture);
             if (finish) {
@@ -163,7 +190,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
                 const auto simulation=model->simulation_state();
                 const bool current=viewport.simulation_run() ? simulation.run && viewport.simulation_run()==simulation.run->run_id && viewport.simulation_view_current() :
                     viewport.current(model->snapshot()->state);
-                if (!viewport.texture() || !viewport.error().empty() || !current)
+                if (!viewport.texture() || !viewport.error().empty() || (!current && !options.pathtrace_smoke))
                     throw std::runtime_error("Viewport did not publish the current scene");
                 std::printf("workbench frames=%u revision=%llu draws=%zu viewport=%ux%u smoke=%s\n",frames,
                     static_cast<unsigned long long>(viewport.info().revision),viewport.info().draw_count,
@@ -180,11 +207,13 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
 #endif
         // Rendering completion is sufficient for the viewport/ImGui resources.
         // Keep the swapchain and its presentation fences until after their cleanup.
+        viewport.close_path();
         check(queue.close());
         shutdown.mark("render_closed");
         if (response) response->finish();
     } catch (...) {
         // Drain before descriptor/backend destruction, including a failed frame.
+        viewport.close_path();
         const auto closed=presenter.close();
         if (!closed) std::fprintf(stderr,"presenter close: %s\n",closed.error().message.c_str());
         throw;

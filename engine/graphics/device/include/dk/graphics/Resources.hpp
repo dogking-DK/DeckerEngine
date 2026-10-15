@@ -32,15 +32,16 @@ struct AllocationBudgetStats {
     std::uint64_t limit = 0, current = 0, peak = 0;
     std::uint64_t host_visible = 0, device_local = 0, allocations = 0;
 };
-// Externally serialized, shared by factories and actual allocation owners.
+// Thread-safe accounting shared by factories and actual allocation owners.
 class AllocationBudget final {
 public:
     explicit AllocationBudget(std::uint64_t limit) { stats_.limit=limit; }
     AllocationBudget(const AllocationBudget&) = delete;
     AllocationBudget& operator=(const AllocationBudget&) = delete;
-    [[nodiscard]] AllocationBudgetStats stats() const noexcept { return stats_; }
+    [[nodiscard]] AllocationBudgetStats stats() const noexcept { std::lock_guard lock(mutex_); return stats_; }
 private:
     friend struct detail::ResourceState;
+    mutable std::mutex mutex_;
     AllocationBudgetStats stats_;
 };
 class CommandBatch;

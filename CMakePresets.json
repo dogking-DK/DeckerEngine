@@ -140,7 +140,8 @@
       "inherits": "windows-presentation",
       "displayName": "Windows editor workbench",
       "cacheVariables": {
-        "DK_BUILD_EDITOR": "ON"
+        "DK_BUILD_EDITOR": "ON",
+        "DK_BUILD_RENDER_PATHTRACING": "ON"
       }
     },
     {

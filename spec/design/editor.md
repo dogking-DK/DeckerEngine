@@ -1,11 +1,43 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-13T18:27:52+08:00"
+updated_at: "2026-10-15T09:28:38+08:00"
 status: accepted
 ---
 
 # M8.1 编辑器工作台
+
+## M16.9 编辑器路径追踪接入契约
+
+编辑场景视口提供Raster/Path trace显式切换；Path trace显示实际completed/target spp、阶段、暂停/继续、
+Reset、seed、反弹、环境RGB、太阳和曝光EV。设置为会话状态，不写Scene/Undo；空气/云启用时要求显式surface-only确认。
+构建未启用或设备RT未启用时显示原因，不退回光栅冒充路径图。默认目标64spp，batch=1，tile≤64。
+窗口设备在启用模块的构建请求RT和纹理索引if_available，不切模式重建设备；windows-editor预设启用路径模块。
+
+PathPreview worker独占自己的SubmissionQueue、renderer、DiskScene和资产版本；GUI只提交拥有型快照、
+相机/尺寸/手势与设置、领取已完成图像。最多一个待处理输入、一个进行中输入和一个待领取结果；输入合并，
+长导入/编译使用stop_token，tile间收集新输入，过期generation/sequence不能覆盖新场景。
+重配前以poll收完旧producer提交，避免连续拖动耗尽命令槽；reset计数在配置成功后才记为已应用。
+场景会话或显式Refresh重载磁盘资产，revision/手势重建冻结RT场景，相机/尺寸只重置历史；
+曝光/目标/暂停保留已完成线性历史；新请求取消未完成批次，不硬抢占已提交tile。隐藏/最小化/切Simulation停止后续批次；恢复可从已完成历史继续。
+错误停止重试并报告原因，Retry/配置变化才重新尝试；旧图保留但标记来源与过期，不能继续旧图拾取。
+
+worker与Presenter共享同一逻辑设备的原生队列0；Device为每个原生队列提供共享gate，
+SubmissionQueue和Presenter的native submit/present/queue-idle入口持锁，独立队列ledger仍由各自线程串行访问。
+ImGui动态字体更新含自己的queue submit/idle，在GuiRenderer中提前处理并持同一gate；常规draw录制不持锁。
+这也是单队列设备回退，无需CPU图像回传或UI执行路径编译/AS build/完成等待。已有Simulation队列1保持独立。
+同队列GPU执行按提交顺序串行，tile额度限制单次工作；不宣称GPU抢占或毫秒硬上限。
+
+renderer增加GPU tone输出：已完成线性buffer经Reinhard与曝光写RGBA8 UNORM，sRGB交换链前保留线性，
+非sRGB交换链前显式编码一次。显示image和参数继承同一allocation预算，GPU完成后export/import ImageTransfer，
+GUI在前次GUI提交完成后替换texture descriptor，正常预览不读回全帧。外部图像释放可能跨线程，
+AllocationBudget的计费和统计同步保护；queue资源ledger仍不跨线程共享。
+worker退出先停止请求、取消并排空自己提交，GUI完成后释放显示图，最后销毁设备；异常关闭同样join。
+
+验收通过真实--background窗口和ImGui输入切模式/暂停/重置/曝光/导航/手势，并以IPC修改和Reload同一场景，
+检查输入版本与已显示图像一致、暂停计数稳定、曝光不重采样、旧结果隔离、resize/最小化/活动关闭、
+共享单队列同步validation及零存活资源。只在验收模式显式读回已显示图像作签名与CPU/GPU参考核验。
+M16.10 capture命令和M16.11性能基线不在本阶段。
 
 ## 窗口启动方式
 

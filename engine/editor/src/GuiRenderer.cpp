@@ -118,6 +118,13 @@ void GuiRenderer::new_frame(const std::function<void()>& input) {
     ImGui::NewFrame();
 }
 void GuiRenderer::record(graphics::Frame& frame,const graphics::Image* texture,const graphics::ImageView* view) {
+    // The backend uploads dynamic font glyphs with its own vkQueueSubmit/WaitIdle.
+    // Finish those updates under the shared native gate before ordinary draw recording.
+    if(auto* textures=ImGui::GetDrawData()->Textures) for(auto* font_texture:*textures)
+        if(font_texture->Status!=ImTextureStatus_OK) {
+            std::lock_guard lock(queue_.device().queue_gate());
+            ImGui_ImplVulkan_UpdateTexture(font_texture);
+        }
     auto& batch=frame.commands();
     auto color=graphics::image_use(frame.color(),vk::PipelineStageFlagBits2::eColorAttachmentOutput,
         vk::AccessFlagBits2::eColorAttachmentRead | vk::AccessFlagBits2::eColorAttachmentWrite,vk::ImageLayout::eColorAttachmentOptimal);

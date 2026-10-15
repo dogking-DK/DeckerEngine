@@ -10,6 +10,10 @@ public:
     explicit WorkbenchUi(Workspace& model,bool fixture);
     void draw(Viewport&,bool srgb);
     void request_close();
+#ifdef DK_EDITOR_PATHTRACING
+    [[nodiscard]] const PathPreviewSettings& path_settings() const { return path_settings_; }
+    [[nodiscard]] bool path_mode() const { return path_mode_; }
+#endif
     void cancel_interaction() { input_.cancel(); simulation_navigation_=-1; }
     [[nodiscard]] bool closing() const { return closing_; }
     [[nodiscard]] const std::map<std::string,ImVec2>& controls() const { return controls_; }
@@ -27,6 +31,11 @@ private:
     void inspector();
     void assets();
     void environment();
+#ifdef DK_EDITOR_PATHTRACING
+    void path_panel(Viewport&);
+    PathPreviewSettings path_settings_;
+    bool path_mode_=false;
+#endif
     void console();
     void simulation();
     void simulation_results(const SimulationRunState*);

@@ -32,6 +32,7 @@ struct ResourceState {
     VkMemoryPropertyFlags memory_flags = 0;
     Result<void> reserve(const std::shared_ptr<AllocationBudget>& value, std::uint64_t bytes) {
         if (!value) return {};
+        std::lock_guard lock(value->mutex_);
         auto& stats=value->stats_;
         if (bytes>stats.limit-stats.current)
             return std::unexpected(Error{ErrorCode::invalid_argument,"GPU allocation budget exceeded"});
@@ -41,6 +42,7 @@ struct ResourceState {
     void allocated() {
         if (!budget) return;
         vmaGetAllocationMemoryProperties(owner->device.allocator(),allocation,&memory_flags);
+        std::lock_guard lock(budget->mutex_);
         if (memory_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) budget->stats_.host_visible+=charge;
         if (memory_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) budget->stats_.device_local+=charge;
     }
@@ -61,6 +63,7 @@ struct ResourceState {
         if (buffer) vmaDestroyBuffer(owner->device.allocator(), buffer, allocation);
         if (image && !external_owner && !imported) vmaDestroyImage(owner->device.allocator(), image, allocation);
         if (budget) {
+            std::lock_guard lock(budget->mutex_);
             budget->stats_.current-=charge; --budget->stats_.allocations;
             if (memory_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) budget->stats_.host_visible-=charge;
             if (memory_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) budget->stats_.device_local-=charge;
@@ -183,6 +186,7 @@ struct QueueState {
         if (submitted > completed && !owner->lost) {
             auto result = wait_value(submitted, std::numeric_limits<std::uint64_t>::max());
             if (result != VK_SUCCESS && result != VK_ERROR_DEVICE_LOST) {
+                std::lock_guard lock(owner->device.queue_gate());
                 result = owner->device.logical_device().getDispatcher()->vkQueueWaitIdle(static_cast<VkQueue>(*owner->device.queue()));
             }
             if (result != VK_SUCCESS && result != VK_ERROR_DEVICE_LOST) std::terminate();
