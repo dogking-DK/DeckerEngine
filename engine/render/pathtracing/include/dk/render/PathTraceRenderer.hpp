@@ -106,6 +106,8 @@ public:
     [[nodiscard]] Result<void> cancel(std::uint64_t view_id); // Retains completed history, discards current batch.
     [[nodiscard]] Result<void> release_view(std::uint64_t view_id);
     [[nodiscard]] Result<PathTraceProgress> status(std::uint64_t view_id) const;
+    // Current tile ticket for explicit wait/profiling. Empty between tiles; no state change.
+    [[nodiscard]] graphics::Submission pending_submission() const noexcept;
     [[nodiscard]] PathTraceCompletedFrame completed_frame(std::uint64_t view_id) const noexcept;
     // GPU-only Reinhard display. Exposure is in EV; encode_srgb only for a non-sRGB destination.
     [[nodiscard]] Result<PathTraceDisplayFrame> display(graphics::SubmissionQueue&, const PathTraceCompletedFrame&,

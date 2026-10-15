@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-15T10:25:23+08:00"
+updated_at: "2026-10-15T11:35:39+08:00"
 status: accepted
 ---
 
@@ -75,7 +75,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M13 实验管理与参数扫描 | 批量实验、产物索引、失败恢复与对比报告 | M9、M12 | 已完成，见0089–0092 |
 | M14 大气渲染 | 物理天空、太阳漫反射、空气透视及编辑器/截图一致性 | M7、M8/M9、M11 | 已完成，见0094–0100；保留性能目标实测差距 |
 | M15 体积云 | 可复现云场、光照/合成、时域重建、云影及质量性能验收 | M14；自动化复用M9/M13原则 | 已完成质量/性能基线；非零云GPU与在途峰值候选未达 |
-| M16 渐进式路径追踪 | CPU参考、Vulkan RT表面积分、每视图累积、编辑器与固定spp截图 | M5/M6/M7；集成需M8/M9，观测复用M11 | 进行中；M16.1–7 CPU参考、RT/Graph底座和GPU无历史纹理Lambert/GGX完成，见[0109](development/0109-pathtracing-reference.md)至[0116](development/0116-pathtracing-ggx.md) |
+| M16 渐进式路径追踪 | CPU参考、Vulkan RT表面积分、每视图累积、编辑器与固定spp截图 | M5/M6/M7；集成需M8/M9，观测复用M11 | 已完成质量与基线交付；CPU参考、RT/GGX、渐进视口和固定capture，见[0120](development/0120-pathtracing-delivery.md)；实时性能候选未达 |
 
 默认执行表中顺序。M5 在 Foundation 补充完成后具备独立探索条件，
 M9 的 Luau 命令绑定在 M3 后可提前做；若调整次序，仍需满足对应集成验收依赖。
@@ -714,15 +714,15 @@ M14.4日光接收、M14.5空气透视、M14.6环境编辑/截图闭环和M14.7�
 | M16.8 | 每视图渐进累积、计数式样本、reset/poll、tile与工作/显存额度 | M16.7.2 | 批次/分块不重漏样本，固定spp与一次参考一致；相机/资产/手势重置；曝光不重采样；迟到/失败/取消不推进completed_spp；有界在途资源 | 完成，见[0117](development/0117-pathtracing-progressive.md) |
 | M16.9 | 编辑器模式切换、后台预览、进度/暂停/重置和完成图像交接 | M16.8、M8/M12视口机制 | 实际GUI/IPC编辑同输入；拖动/resize/切场景不混历史；能力不足可见；owner不做GPU等待，单队列串行与关闭安全；启动测试使用--background | 完成，见[0118](development/0118-editor-pathtracing.md) |
 | M16.10 | render.capture显式后端/固定spp、Job进度/取消、provenance与线性报告、Python/Luau例子 | M16.8、M7.4/M9；一致性需M16.9 | commands.list/describe与文档一致；从0精确到目标spp；场景/输入版本绑定；GUI与capture线性一致；取消/失败保留旧文件，CPU-only明确无GPU能力 | 完成，见[0119](development/0119-pathtracing-capture.md) |
-| M16.11 | 固定质量/多seed收敛、动态重置、三轮性能/显存基线和交付 | M16.9、M16.10、M11观测 | 程序化与受支持磁盘场景、CPU参考及required RT GPU通过；冷/热/达到固定质量的耗时、取消/回收及显存峰值留原始证据；性能缺口不伪装成达标 | 未开始 |
+| M16.11 | 固定质量/多seed收敛、动态重置、三轮性能/显存基线和交付 | M16.9、M16.10、M11观测 | 程序化与受支持磁盘场景、CPU参考及required RT GPU通过；冷/热/达到固定质量的耗时、取消/回收及显存峰值留原始证据；性能缺口不伪装成达标 | 完成，见[0120](development/0120-pathtracing-delivery.md) |
 
 M16.7材质任务组的M16.7.1/2均已验收；每行有独立开发记录与本地提交。
-默认按表串行推进，M16.11 是下一项；过大行在开工前继续拆 Mx.y.z。M16.10已完成固定capture、进度/取消和GUI线性一致性验收。没有人员/日历预算，不虚构工期。
+M16.1–16.11均已验收，交付节点F完成；质量与三轮性能/显存证据见[实测报告](benchmarks/2026-10-15-pathtracing.md)。1080p实时性能和GGX在1024 spp达到2%质量的候选未达，后续优化需另行规划；不虚构工期。
 
-**交付节点F（计划）：** 用户可选路径追踪视口，静止逐步收敛，改场景/相机后重置，
+**交付节点F（已验收）：** 用户可选路径追踪视口，静止逐步收敛，改场景/相机后重置，
 以明确 seed/反弹数/spp 通过GUI、IPC或脚本获得可追溯截图；失败和不支持的输入有明确结果。
 阶段交付要求原始线性质量证据；PPM预览不能代替积分验证。初始阈值/工作额度见管线设计，
-CPU参考收敛后、GPU优化前冻结；本机RT底座及无历史Lambert已通过required验证，后续材质质量与性能仍需逐阶段实测。
+CPU参考收敛后、GPU优化前冻结；CPU-only、required RT/同步验证及真实GUI/capture通过。三轮原始性能数据与未达候选均保留，不承诺60fps。
 
 首轮范围不含大气/云体积路径追踪、完整PBR/IBL、透射、去噪、形变/布片、AS refit/压缩、
 异步compute和实时性能承诺。M14/M15现有质量门槛和未达性能目标保持，M16不替代其优化任务。
@@ -788,7 +788,7 @@ M16.7.2显式Lambert/GGX、可见法线混合采样和能量/MIS检验已完成�
 M16.8双视图GPU累积、连续样本、tile/reset/poll与实际owner额度完成；47项定向验收见[0117](development/0117-pathtracing-progressive.md)。
 M16.9编辑器模式、后台渐进预览、GPU显示交接与共享队列同步完成；真实GUI/IPC、模块关闭回退和定向回归见[0118](development/0118-editor-pathtracing.md)。
 M16.10固定spp路径capture、Job进度/取消、输入摘要和线性报告完成；Python/Luau、GUI逐像素一致与CPU-only边界见[0119](development/0119-pathtracing-capture.md)。
-**下一项为M16.11：固定质量、多seed收敛与三轮性能/显存基线。**
+**M16.11及交付F完成：三个输入/8 seed固定质量与参考收敛、50项定向检查及三轮性能/显存基线通过，见[0120](development/0120-pathtracing-delivery.md)。1080p整批16.67ms候选、GGX在1024 spp达到2%误差候选未达；当前已编号阶段全部完成，下一阶段须按实测差距另行规划。**
 编辑器 Play 视口已在 M12 验收，批量实验在 M13 验收；检查点、其他平台与发布打包仍未纳入本轮扩展。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。

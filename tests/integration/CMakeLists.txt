@@ -1,4 +1,26 @@
 if(TARGET dk_render_pathtracing)
+    if(TARGET dk_render_disk)
+        find_package(nlohmann_json CONFIG REQUIRED)
+        add_executable(dk_pathtracing_benchmark PathBenchmark.cpp)
+        set_target_properties(dk_pathtracing_benchmark PROPERTIES OUTPUT_NAME dk-pathtracing-benchmark)
+        target_link_libraries(dk_pathtracing_benchmark PRIVATE dk::render_pathtracing dk::render_disk dk::profiling nlohmann_json::nlohmann_json)
+        target_compile_definitions(dk_pathtracing_benchmark PRIVATE
+            DK_PATH_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/pathtracing/shaders"
+            DK_PATH_DISK_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+            DK_BENCH_CONFIG="$<CONFIG>" DK_BENCH_COMPILER="${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}")
+        dk_target_defaults(dk_pathtracing_benchmark)
+        dk_deploy_slang(dk_pathtracing_benchmark)
+        find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
+        if(Python3_Interpreter_FOUND)
+            add_test(NAME dk.pathtracing.benchmark_quality_gpu_required COMMAND "${Python3_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/scripts/benchmark-pathtracing.py" --executable "$<TARGET_FILE:dk_pathtracing_benchmark>"
+                --output "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/path-benchmark-quality" --quality-only)
+            set_tests_properties(dk.pathtracing.benchmark_quality_gpu_required PROPERTIES TIMEOUT 1200 RUN_SERIAL TRUE LABELS "gpu"
+                ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+            add_test(NAME dk.pathtracing.benchmark_aggregation COMMAND "${CMAKE_COMMAND}" -E env "PYTHONDONTWRITEBYTECODE=1"
+                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/PathBenchmarkTest.py")
+        endif()
+    endif()
     add_executable(dk_pathtracing_probe PathTraceProbe.cpp)
     target_link_libraries(dk_pathtracing_probe PRIVATE dk::render_pathtracing dk::graphics_shaders)
     target_include_directories(dk_pathtracing_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")

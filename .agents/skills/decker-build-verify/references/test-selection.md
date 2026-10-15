@@ -96,6 +96,7 @@
 | GPU每视图渐进累积、GPU显示/sRGB/曝光、tile/reset/poll、取消/迟到/设备丢失与工作/资源额度 | dk_pathtracing_probe | `^dk\.pathtracing\.progressive_.*_gpu_required$`（required RT/validation/sync） |
 | GPU Lambert路径追踪、CPU/解析/统计/HDR对照、失败与寿命 | dk_pathtracing_probe | `^dk\.pathtracing\.(analytic\|statistics\|images\|lifetime\|allocations)_gpu_required$`（required RT/validation/sync；缺环境失败） |
 | GPU纹理sRGB/过滤/wrap、64槽发散、alpha-mask/双面、能力拒绝、失败寿命及glTF产物 | dk_pathtracing_probe | `^dk\.pathtracing\.texture_.*_gpu_required$`（required RT/validation/sync；assets组需Assets Runtime/Importers） |
+| 路径追踪固定质量、多 seed 收敛与报告拒绝检查 | dk_pathtracing_benchmark | `^dk\.pathtracing\.benchmark_`（GPU质量需required RT/validation/sync；性能另用`scripts/benchmark-pathtracing.py`连续三轮、关闭验证层） |
 | GGX端点/白炉/面积灯/MIS/RR、多次反弹与纹理寿命 | dk_pathtracing_reference_tests、dk_pathtracing_probe、dk_shader_tests | `^dk\.pathtracing\.GGX CPU`、`^dk\.pathtracing\.ggx_.*_gpu_required$`；精确浮点产物用`^dk\.shaders\.precise floating` |
 | Vulkan 设备策略、缺失环境和失败清理（无需 GPU） | dk_device_tests | `^dk\.device\.unit\.` |
 | RT三态请求、必需能力/limits、BDA/VMA与共享寿命 | dk_raytracing_device_probe | `^dk\.device\.rt_required_validation$`（required RT GPU/validation，同步验证；缺环境失败，非77跳过） |

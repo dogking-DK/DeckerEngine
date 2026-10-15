@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-15T10:25:23+08:00"
+updated_at: "2026-10-15T11:35:39+08:00"
 status: accepted
 ---
 
@@ -439,3 +439,29 @@ CPU参考的输入/采样/积分模型与解析验收已冻结；后续任务顺
 使用现有 gpu_progressive 积分和GPU tone，不引入第二条积分算法；capture计算shader源闭包摘要用于输入版本保护。
 
 M16.10将输入摘要算法明确为v2：纹理绑定使用确定性遍历槽与内容/采样/来源，不包含导入器临时生成的纹理UUID；Scene/实体/mesh持久身份和revision仍参与摘要。相同冻结场景重复导入必须得到相同摘要，像素/采样/UV变动必须改变摘要。
+
+
+## M16.11 质量与性能交付协议
+
+新增独立PathBenchmark，固定三种输入：程序化Lambert面积灯、带彩色墙/面积灯的GGX盒、磁盘render-disk纹理/mask。
+程序化Scene/entity/mesh身份固定，磁盘输入只读；报告保留完整线性数据、相机/材质/环境/版本、shader和源码/二进制hash。
+质量在4×4、4反弹、RR=3、8个seed（101+7919*i）运行。CPU参考N=16384、4N=65536；
+8 seed平均图N/4N nRMSE≤0.5%，并报告按seed均值计算的95%置信区间（t7=2.365），不把像素当独立样本。
+相同seed/65536样本CPU与GPU的汇总nRMSE≤2%；64/256/1024 spp误差使用各seed图对4N平均参考的合并平方误差，
+要求集合误差随档位下降，允许1e-6数值地板。固定质量候选为2%，未到者明确记未达，不降低目标或伪造达到耗时。
+上半/下半与超过图像均值两倍的高亮区域另报ROI（没有高亮像素则为null）；门槛在实测前冻结，不因噪声失败而事后提高。
+
+动态重置沿已有progressive_state/failure/lost/budget与真实Editor/IPC/capture验收，另用新质量夹具验证相机变化、
+reset及pending取消之后重采样与新视图逐像素一致。性能/质量数据不替代失败注入和CPU解析/独立积分oracle。
+
+性能运行关闭validation，开启原生GPU timestamp；独立新进程至少3轮，固定设备/驱动/配置/输入/seed。
+报告冷设备/编译、CPU输入准备、上传/BLAS/TLAS、各批CPU record-submit/wait-poll和GPU提交时长，
+GPU trace与accumulate在同shader中，明确联合计时，不能拆出虚构耗时；另报tone和显式readback。
+只读pending_submission返回当前tile票据供显式观测，默认不启用profiling、不改变调度/发布/取消。
+热负载1920×1080、8反弹、1 spp/批，首帧与后续至少6批；测在途旧图保活峰值、稳态、取消调用/最终回收与释放后VMA。
+默认1GiB额度保持，拒绝即记拒绝，不自动降分辨率。16.67ms/1spp只作对照候选，不构成既定实时承诺。
+达到固定质量的时间在上述4×4/4反弹/8seed负载实测，不能外推1080p收敛；原始样本和未达状态一起保存。
+CPU所有者与GPU worker角色同现有独占队列，此独立探针的CPU时间属于worker；不冒充GUI owner延迟，后者保留IPC验收结果。
+汇总器拒绝缺失/重复轮次、缺像素/非有限值、验证层误开、输入/hash不一致、丢失timestamp、泄漏和失败文件；保留失败原因与原始报告。
+
+[复现指南](../guides/pathtracing-benchmark.md)与[交付实测](../benchmarks/2026-10-15-pathtracing.md)保留固定门槛、原始线性/计时数据和未达候选。归档由verify-pathtracing-evidence.py校验hash并重算三轮汇总，不能用旧数据替代当前GPU测试。

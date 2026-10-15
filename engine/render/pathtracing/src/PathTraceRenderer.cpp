@@ -546,6 +546,9 @@ Result<void> PathTraceRenderer::release_view(std::uint64_t id) {
     auto* slot=view_slot(*state_,id); if(!slot) return std::unexpected(path_invalid("Unknown path view"));
     slot->reset(); return {};
 }
+Submission PathTraceRenderer::pending_submission() const noexcept {
+    return state_ && state_->active && state_->active->frame ? state_->active->frame->ticket : Submission{};
+}
 Result<PathTraceProgress> PathTraceRenderer::status(std::uint64_t id) const {
     if(!state_) return std::unexpected(path_invalid("Empty path renderer"));
     auto* slot=view_slot(*state_,id); if(!slot) return std::unexpected(path_invalid("Unknown path view"));

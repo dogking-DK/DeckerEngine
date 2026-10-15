@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "status": "passed",
+  "binary_sha256": "117b97fa312a4a7802ccc2392e77b9a2807372360fd7771134b514f5c5e38a24",
+  "sources": {
+    "engine/render/pathtracing/CMakeLists.txt": "e7505b524c7b4b8cc1c315f2ac58ce17fd18f8707c41bd76f6688130044a4d45",
+    "engine/render/pathtracing/include/dk/render/PathTraceReference.hpp": "6207c355a1d4b3755bb37a9895d67d78db5e611daff7d896a6b8e6581f1e3c48",
+    "engine/render/pathtracing/include/dk/render/PathTraceRenderer.hpp": "38dc952599dc1398681d4c854a3186ebf3d586589b87ded139e7c1964494d0b4",
+    "engine/render/pathtracing/shaders/path-accumulate.slang": "ca5f1eb05a10d74bd632c5ae05d77256667b0a10c62da1f6045cfbac94e455b7",
+    "engine/render/pathtracing/shaders/path-bsdf.slang": "cc66cfa3c46d3f123ef3dff4268fc94b9043d2d3aeda4c9d42255b25fc766f54",
+    "engine/render/pathtracing/shaders/pathtrace-empty.slang": "22aa4493cfc909a5718cdb2920cfe09bb92e5b13a74b2643a6eb549c3ffadaa6",
+    "engine/render/pathtracing/shaders/pathtrace-tone.slang": "86488378b89de251f8d085737633d7c922886da293a8be9e00610c3c5126db88",
+    "engine/render/pathtracing/shaders/pathtrace.slang": "ecfcb2d16e56306013dce9848b7827748638740c256e46dcaa05c6bd4c4fad27",
+    "engine/render/pathtracing/src/PathBsdf.cpp": "b3a445a1e0b9c1a7884ab7d74124169894b2c1ebf1c7a9269a0629f853541f40",
+    "engine/render/pathtracing/src/PathBsdf.hpp": "4b6a0339d36695af75ea3e0cee87016f897d8ab1e69812e33f27bf1fc5fe6c3b",
+    "engine/render/pathtracing/src/PathReferenceInternal.hpp": "98672710e1ace9fe36400e111a46c4c03959fc283ce77c4bbc9c7de4d40491ac",
+    "engine/render/pathtracing/src/PathTexture.cpp": "f46906a848c430d1b44d29c87c4d9bc71c972b9dbbff3708e1b6b71a0183ee3a",
+    "engine/render/pathtracing/src/PathTraceReference.cpp": "399c6a18b5e3fa7a26473c6f3547dcacb015374fac60a429028c238cdfaf9437",
+    "engine/render/pathtracing/src/PathTraceRenderer.cpp": "594b79ea208c2fbedd81b69163957c70da5e54692dbcb6630641e18b9f07513a",
+    "engine/render/pathtracing/src/PathTraceScene.cpp": "e08f130c64f2b2f71ae789f69b4b5ec200b3b82ae24ea782c3d7dffe47720de1",
+    "scripts/benchmark-pathtracing.py": "1d2f15b327b639ab33e22bada7103c080c27f17390b95cb333f67e7a506014ca",
+    "tests/fixtures/render-disk/assets/back.gltf": "14b7cc07cc911b11f9c9410e32840567fff8fb43c2b327b77d7236a5e2c2d0e4",
+    "tests/fixtures/render-disk/assets/mask.gltf": "89e7a285e807b25c362ca30a787c963524c3c66e4558252730300840c7320539",
+    "tests/fixtures/render-disk/assets/mask.png": "711e4172531c1d14b17d25a34cd6ff36abba276ef7c342bbd9453669df27ec69",
+    "tests/fixtures/render-disk/assets/quad.bin": "9c66ee0e75b4f66a9ef1394f56e356973b9ce5acd39385bee4194d2ebd2d9377",
+    "tests/fixtures/render-disk/project.json": "03a28e4ec3b2a8a9cdb55e306dc9d540cd621c2842e3aa6e164f6e634c76647a",
+    "tests/fixtures/render-disk/README.md": "235c8030a7cf39df7505c3a7ce82b998e3110db0568f3ad3af0ac8a11c0a6e63",
+    "tests/fixtures/render-disk/scene.json": "1919073e0045f778355d02fed6419462d24438d676bdeaa9d0e30a6177b39650",
+    "tests/integration/PathBenchmark.cpp": "48df0a102a0d4cd65882a84b240545bce3502bf32430cec4ca1f4d0097557993",
+    "tests/integration/PathBenchmarkSupport.hpp": "0b359b7d130106f1f89b3b083cc92a611f4f92e795243844caa33eed4f2798f3"
+  },
+  "runs": [
+    {
+      "name": "quality",
+      "status": "passed",
+      "raw": "quality.json",
+      "sha256": "ef31ae785478671b4d8bb82ee71a7740bd3131648e3d21ded1d9dde75b77fffb",
+      "reused": true
+    },
+    {
+      "name": "round-1",
+      "status": "passed",
+      "raw": "round-1.json",
+      "sha256": "38c9a3dfef65543fd8ad33faad99f649731305ff4ba376425c24e025deb7f64e"
+    },
+    {
+      "name": "round-2",
+      "status": "passed",
+      "raw": "round-2.json",
+      "sha256": "8331e9c898276b2525ab2972c928588aa70d572be619b5514f8badef2c0e745c"
+    },
+    {
+      "name": "round-3",
+      "status": "passed",
+      "raw": "round-3.json",
+      "sha256": "17ef4c8597ff58022f667633595421ae08ec3883d90e57ca57172bb86b6b6f3e"
+    }
+  ]
+}
