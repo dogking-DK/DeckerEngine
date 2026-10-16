@@ -66,7 +66,7 @@
 | 编辑器外部 IPC 与窗口退出 | dk_editor_app、dk_run、dk_ctl | `^dk\.ipc\.editor_gpu_validation$`（gpu label） |
 | GUI/IPC 指定 revision、视口/截图像素与保存后 runner 重现（M8.4） | dk_editor_app、dk_run、dk_ctl | `^dk\.editor\.consistency_gpu_validation$`（gpu label） |
 | 截图 schema/guard、取消关闭、导入失败（无需 GPU） | dk_protocol_tests | `^dk\.protocol\.capture ` |
-| 路径capture固定spp、Job进度/取消、输入摘要、线性报告和Python/Luau（required RT） | dk_run、dk_ctl | `^dk\.pathtracing\.capture_gpu_required$`；GUI线性一致另跑dk_editor_app与`^dk\.editor\.pathtracing_gpu_validation$` |
+| 路径capture固定spp、介质v2、Job进度/取消、来源与Python/Luau（required RT） | dk_run、dk_ctl | `^dk\.pathtracing\.(media_)?capture_gpu_required$`；GUI线性一致另跑dk_editor_app与`^dk\.editor\.(media_)?pathtracing_gpu_validation$` |
 | Runtime 截图、版本/像素、原子发布和退出 | dk_run | `^dk\.runtime\.capture_gpu_validation$`（gpu label；77 为跳过） |
 | Runtime 的 batch/stdio 进程行为 | dk_run | `^dk\.runtime\.` |
 | 编辑器选择/草稿、相机、Gizmo 事务/撤销、保存重载与失败保护（无需 GPU） | dk_editor_tests | `^dk\.editor\.(workspace \|runtime \|camera \|interaction )` |

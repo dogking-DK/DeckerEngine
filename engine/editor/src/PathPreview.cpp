@@ -26,7 +26,8 @@ void PathPreview::run(std::stop_token stop) {
     render::PathTraceRenderer renderer; bool initialized=false,configured=false,terminal=false,suspended=true,busy=false,pending_config=false;
     std::optional<PathPreviewRequest> active;
     std::optional<DocumentId> asset_session;
-    std::uint64_t asset_reload=0,scene_revision=0,scene_preview=0,applied_reset=0;
+    std::uint64_t asset_reload=0,scene_revision=0,scene_preview=0,applied_reset=0,session=0;
+    std::shared_ptr<const render::CloudFieldData> cloud_field;
     render::DiskScene disk; render::RenderScene scene; render::PathTraceGpuScene gpu;
     std::vector<PickMesh> meshes;
     std::optional<render::PathTraceDisplayFrame> display;
@@ -104,9 +105,14 @@ void PathPreview::run(std::stop_token stop) {
                     // The input is valid and obsolete submissions have drained. Keep the
                     // exported display image, but retire old tracing history/geometry before
                     // allocating a new large scene under the same renderer budget.
-                    if(configured) { check(renderer.release_view(1)); configured=false; }
-                    gpu={};
+                    // Keep geometry alive across environment-only edits so prepare_scene can
+                    // verify consumed content and reuse AS. Large geometry changes still retire first.
+                    if(!gpu || gpu.source().geometry_fingerprint()!=source.geometry_fingerprint()) {
+                        if(configured) { check(renderer.release_view(1)); configured=false; }
+                        gpu={};
+                    }
                     gpu=take(renderer.prepare_scene(*queue,source,cancel)); scene=std::move(candidate);
+                    if(reload) ++session; // A new document or explicit asset refresh starts fresh history.
                     asset_session=active->snapshot.state.document_id; asset_reload=active->reload;
                     scene_revision=active->snapshot.state.revision; scene_preview=active->preview;
                 }
@@ -116,9 +122,27 @@ void PathPreview::run(std::stop_token stop) {
                 settings.rr_start=std::min(3u,settings.max_bounces); settings.environment_rgb=active->settings.sky;
                 settings.sun=active->settings.sun ? render::PathTraceSun::scene : render::PathTraceSun::none;
                 settings.surface_only=active->settings.surface_only;
-                render::PathTraceSchedule schedule; schedule.target_spp=active->settings.target; schedule.gesture=active->preview;
+                render::PathTraceSchedule schedule; schedule.session=session; schedule.target_spp=active->settings.target; schedule.gesture=active->preview;
                 schedule.paused=active->settings.paused; schedule.exposure=active->settings.exposure;
-                check(renderer.configure_view(*queue,1,gpu,view,settings,schedule));
+                if(active->settings.scene_media) {
+                    const auto& environment=active->snapshot.scene.environment(); const auto& clouds=environment.clouds;
+                    std::shared_ptr<const render::CloudFieldData> candidate;
+                    if(clouds.enabled && clouds.coverage>0 && clouds.density>0 && clouds.extinction_per_m>0) {
+                        if(cloud_field && cloud_field->key()==render::cloud_field_key(clouds)) candidate=cloud_field;
+                        else {
+                            // Two CPU generations at most: committed plus local candidate.
+                            render::CloudFieldCache fields{{8U*1024U*1024U-(cloud_field ? cloud_field->bytes() : 0),1}};
+                            candidate=take(fields.prepare(clouds));
+                        }
+                    }
+                    if(cancel.stop_requested()) throw std::runtime_error("Path preview cancelled");
+                    const auto medium=take(render::PathMediumSnapshot::create(environment,
+                        {1,active->settings.time_seconds,active->settings.cloud_albedo,active->settings.cloud_anisotropy},candidate));
+                    render::VolumePathSettings volume; volume.seed=settings.seed; volume.max_bounces=settings.max_bounces;
+                    volume.rr_start=settings.rr_start; volume.environment_rgb=settings.environment_rgb; volume.sun=active->settings.sun;
+                    check(renderer.configure_medium_view(*queue,1,gpu,medium,view,volume,schedule));
+                    cloud_field=std::move(candidate);
+                } else { check(renderer.configure_view(*queue,1,gpu,view,settings,schedule)); cloud_field.reset(); }
                 if(configured && applied_reset!=active->settings.reset) check(renderer.reset(1));
                 configured=true; applied_reset=active->settings.reset; pending_config=false;
             }

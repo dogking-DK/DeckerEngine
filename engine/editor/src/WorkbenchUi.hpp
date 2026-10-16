@@ -2,12 +2,13 @@
 #include "Viewport.hpp"
 #include "ViewportInput.hpp"
 #include <map>
+#include <array>
 
 namespace dk::editor::detail {
 enum class PendingAction { none, open, close };
 class WorkbenchUi final {
 public:
-    explicit WorkbenchUi(Workspace& model,bool fixture);
+    explicit WorkbenchUi(Workspace& model,bool fixture,unsigned acceptance_path_extent=0);
     void draw(Viewport&,bool srgb);
     void request_close();
 #ifdef DK_EDITOR_PATHTRACING
@@ -35,6 +36,7 @@ private:
     void path_panel(Viewport&);
     PathPreviewSettings path_settings_;
     bool path_mode_=false;
+
 #endif
     void console();
     void simulation();
@@ -46,6 +48,7 @@ private:
     Workspace& model_;
     ViewportInput input_;
     std::string manifest_;
+    std::array<char,8193> console_input_{};
     std::map<std::string,ImVec2> controls_;
     std::vector<std::string> log_;
     std::string viewport_error_;
@@ -62,7 +65,7 @@ private:
     int simulation_navigation_=-1;
     PendingAction pending_ = PendingAction::none;
     bool popup_ = false,closing_ = false,layout_ = false,scroll_log_ = true;
-    unsigned errors_ = 0;
+    unsigned errors_ = 0,acceptance_path_extent_=0;
     float exposure_=1;
     render::EnvironmentRenderSettings environment_settings_=[] { render::EnvironmentRenderSettings s; s.mode=render::CloudRenderMode::temporal; return s; }();
 };

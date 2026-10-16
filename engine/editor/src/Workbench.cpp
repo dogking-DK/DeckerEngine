@@ -112,7 +112,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     GuiRenderer gui{queue,window};
     ShutdownPhase viewport_phase{shutdown,"viewport"};
     Viewport viewport{memory,heap,queue,device,options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || path_acceptance};
-    WorkbenchUi ui{*model,options.fixture_camera};
+    WorkbenchUi ui{*model,options.fixture_camera,options.media_pathtrace_smoke ? 96u : 0u};
     SmokeDriver smoke{options.interaction_smoke,options.simulation_smoke};
     std::optional<ConsistencyDriver> consistency;
     std::optional<SimulationConsistencyDriver> simulation_consistency;
@@ -122,7 +122,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     if (options.simulation_consistency_smoke) simulation_consistency.emplace(options.root);
 #ifdef DK_EDITOR_PATHTRACING
     std::optional<PathSmoke> path_smoke;
-    if(path_acceptance) path_smoke.emplace(options.root,options.desktop_render_smoke);
+    if(path_acceptance) path_smoke.emplace(options.root,options.desktop_render_smoke,options.media_pathtrace_smoke);
 #else
     if(path_acceptance) throw std::runtime_error("Path tracing module is disabled");
 #endif

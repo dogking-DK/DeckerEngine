@@ -942,6 +942,16 @@ if(TARGET dk_render_services AND TARGET dk_render_pathtracing AND TARGET dk_run 
                 --python-example "${PROJECT_SOURCE_DIR}/examples/automation/pathtrace_capture.py"
                 --luau-example "${PROJECT_SOURCE_DIR}/examples/scripting/pathtrace-capture.luau"
                 --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+        add_test(NAME dk.pathtracing.media_capture_gpu_required
+            COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python" "PYTHONDONTWRITEBYTECODE=1"
+                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/PathCaptureTest.py" --media
+                --runner "$<TARGET_FILE:dk_run>" --client "$<TARGET_FILE:dk_ctl>"
+                --fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+                --python-example "${PROJECT_SOURCE_DIR}/examples/automation/pathtrace_capture.py"
+                --luau-example "${PROJECT_SOURCE_DIR}/examples/scripting/pathtrace-media-capture.luau"
+                --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+        set_tests_properties(dk.pathtracing.media_capture_gpu_required PROPERTIES TIMEOUT 480 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
         set_tests_properties(dk.pathtracing.capture_gpu_required PROPERTIES TIMEOUT 480 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
     endif()
@@ -967,6 +977,14 @@ if(TARGET dk_editor_app AND TARGET dk_render_pathtracing AND TARGET dk_ctl AND W
                 --editor "$<TARGET_FILE:dk_editor_app>" --client "$<TARGET_FILE:dk_ctl>"
                 --fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
                 --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+        add_test(NAME dk.editor.media_pathtracing_gpu_validation
+            COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python" "PYTHONDONTWRITEBYTECODE=1"
+                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/EditorPathTraceTest.py" --media
+                --editor "$<TARGET_FILE:dk_editor_app>" --client "$<TARGET_FILE:dk_ctl>"
+                --fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+                --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+        set_tests_properties(dk.editor.media_pathtracing_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
         set_tests_properties(dk.editor.pathtracing_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
         if(TARGET dk_render_atmosphere AND TARGET dk_render_clouds)

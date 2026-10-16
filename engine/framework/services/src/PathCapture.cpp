@@ -17,7 +17,7 @@ void require(bool v,const char* message) { if(!v) throw Error{ErrorCode::invalid
 void checkpoint(std::stop_token stop) { require(!stop.stop_requested(),"Path capture cancelled"); }
 std::string fingerprint(const std::filesystem::path& directory) {
     std::uint64_t hash=14695981039346656037ull;
-    for(const auto* name:{"pathtrace.slang","pathtrace-empty.slang","path-bsdf.slang","path-accumulate.slang","pathtrace-tone.slang"}) {
+    for(const auto* name:{"pathtrace.slang","pathtrace-empty.slang","path-bsdf.slang","path-accumulate.slang","pathtrace-tone.slang","path-air.slang","path-air-empty.slang","path-cloud.slang"}) {
         for(char c:std::string_view{name}) { hash^=static_cast<unsigned char>(c); hash*=1099511628211ull; }
         const auto bytes=take(read_file_bytes(directory/name));
         for(auto b:bytes) { hash^=std::to_integer<unsigned char>(b); hash*=1099511628211ull; }
@@ -55,9 +55,18 @@ Result<JobQueue::Payload> render_path_capture(memory::ResourceHandle resource,co
         auto render_view=take(render::RenderView::create(disk.scene(),view));
         render::PathTraceSettings settings; settings.seed=p.seed; settings.max_bounces=p.max_bounces; settings.rr_start=p.rr_start;
         settings.environment_rgb=p.environment_rgb; settings.sun=p.sun ? render::PathTraceSun::scene : render::PathTraceSun::none;
-        settings.surface_only=p.surface_only;
+        settings.surface_only=p.version==2 || p.surface_only;
         render::PathTraceSchedule schedule; schedule.target_spp=p.target_spp; schedule.exposure=p.exposure_ev;
-        check(renderer.configure_view(queue,1,gpu,render_view,settings,schedule));
+        if(p.scene_media) {
+            const auto& environment=input.scene.environment(); const auto& clouds=environment.clouds;
+            render::CloudFieldCache fields; std::shared_ptr<const render::CloudFieldData> field;
+            if(clouds.enabled && clouds.coverage>0 && clouds.density>0 && clouds.extinction_per_m>0) field=take(fields.prepare(clouds));
+            checkpoint(stop);
+            const auto medium=take(render::PathMediumSnapshot::create(environment,{1,p.time_seconds,p.cloud_albedo,p.cloud_anisotropy},field));
+            render::VolumePathSettings volume; volume.seed=p.seed; volume.max_bounces=p.max_bounces; volume.rr_start=p.rr_start;
+            volume.environment_rgb=p.environment_rgb; volume.sun=p.sun; volume.max_tracking_steps=p.max_tracking_steps; volume.max_steps_per_path=p.max_steps_per_path;
+            check(renderer.configure_medium_view(queue,1,gpu,medium,render_view,volume,schedule));
+        } else check(renderer.configure_view(queue,1,gpu,render_view,settings,schedule));
         std::uint32_t last_completed=UINT32_MAX,last_submitted=UINT32_MAX;
         for(;;) {
             checkpoint(stop); (void)take(renderer.poll(queue,stop));
@@ -83,6 +92,11 @@ Result<JobQueue::Payload> render_path_capture(memory::ResourceHandle resource,co
         auto& provenance=completion->provenance;
         provenance["shader_fingerprint"]=shader;
         provenance["input_fingerprint"]=std::format("fnv1a64:{:016x}",source.fingerprint()); provenance["actual_spp"]=p.target_spp;
+        if(p.version==2) provenance["geometry_fingerprint"]=std::format("fnv1a64:{:016x}",completed.info().geometry_fingerprint);
+        if(p.scene_media) {
+            require(completed.info().medium.has_value(),"Missing completed medium provenance");
+            provenance["cloud_field_hash"]=std::format("fnv1a64:{:016x}",completed.info().medium->field_hash);
+        }
         if(request.linear_json) {
             auto readback=take(completed.read_linear(queue,stop)); std::optional<render::PathTraceGpuImage> image;
             while(!(image=take(readback.read(queue,stop)))) { checkpoint(stop); std::this_thread::sleep_for(std::chrono::milliseconds(1)); }

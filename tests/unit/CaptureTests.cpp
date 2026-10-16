@@ -114,3 +114,24 @@ TEST_CASE("capture pathtrace schema and unsupported combinations preserve state"
     params=base; params.erase("pathtrace"); CHECK_FALSE(c.call("render.capture",params));
     CHECK(c.value("scene.query")["state"]==state); CHECK(read_file_bytes(c.files.root/"old.json")->size()==8);
 }
+
+TEST_CASE("capture media v2 rejects ambiguous modes and invalid work before publication") {
+    CaptureCommands c; const auto state=c.value("scene.new"); const auto history=c.value("history.status");
+    c.files.write("old.json","previous");
+    const Json base={{"guard",{{"document_id",state["document_id"]},{"revision",state["revision"]}}},
+        {"renderer","pathtrace"},{"format","linear_json"},{"output","old.json"},{"width",16},{"height",16}};
+    const Json invalid=GENERATE(
+        Json{{"version",1},{"target_spp",1},{"medium_mode","scene_media"}},
+        Json{{"version",1},{"target_spp",1},{"time_seconds",0}},
+        Json{{"version",2},{"target_spp",1}},
+        Json{{"version",2},{"target_spp",1},{"medium_mode","scene_media"},{"surface_only",false}},
+        Json{{"version",2},{"target_spp",1},{"medium_mode","surface_only"},{"time_seconds",0}},
+        Json{{"version",2},{"target_spp",1},{"medium_mode","scene_media"},{"cloud_albedo",1.01}},
+        Json{{"version",2},{"target_spp",1},{"medium_mode","scene_media"},{"cloud_anisotropy",-.951}},
+        Json{{"version",2},{"target_spp",1},{"medium_mode","scene_media"},{"max_tracking_steps",0}},
+        Json{{"version",2},{"target_spp",1},{"medium_mode","scene_media"},{"max_steps_per_path",1048577}},
+        Json{{"version",2},{"target_spp",1},{"medium_mode","scene_media"},{"time_seconds",1e10}});
+    auto params=base; params["pathtrace"]=invalid; CHECK_FALSE(c.call("render.capture",params));
+    CHECK(c.value("scene.query")["state"]==state); CHECK(c.value("history.status")==history);
+    CHECK(read_file_bytes(c.files.root/"old.json")->size()==8);
+}

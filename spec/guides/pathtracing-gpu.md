@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-14T14:37:00+08:00"
-updated_at: "2026-10-16T14:54:53+08:00"
+updated_at: "2026-10-16T15:16:16+08:00"
 ---
 
 # GPU表面、空气、云与渐进路径追踪
@@ -8,7 +8,7 @@ updated_at: "2026-10-16T14:54:53+08:00"
 [返回项目入口](../../README.md)。[M16.6设计](../design/render-pathtracing.md#m166-gpu无历史lambert实施契约)
 提供硬件三角形求交、NEE/MIS/RR和拥有型HDR结果，使用与[CPU参考](pathtracing-reference.md)一致的冻结输入与采样模型。
 提供≤64×64无历史参考和≤2048×2048渐进接口，支持Lambert/GGX、baseColor纹理/alpha-mask，以及显式GPU空气/云积分。
-[编辑器](editor.md#路径追踪预览m169)与capture当前接入表面模式，空气/云联合接入按M17.5推进。
+[编辑器](editor.md#路径追踪预览m169)支持 Surface only / Scene media；固定 capture v2 同样可追踪空气/云。
 
 ## 构建与验证
 
@@ -188,7 +188,7 @@ GPU field buffer、候选及在途资源均计入同一额度；旧场可能与�
 时间/风/太阳/密度等改变重置历史但复用场；曝光/调度不重置。失败上传/提交不替换旧缓存/视图。
 结果`info.medium`包含完整环境、物理与积分设置及`field_hash`，替代M17.3的`info.air`字段。
 required GPU验收覆盖数值、遮蔽、多次散射和失败寿命；记录见[0126](../development/0126-gpu-cloud-pathtracing.md)。
-Editor与capture的Scene media选项仍在M17.5接入，当前入口是C++模块API。
+Editor 的 Scene media 与 capture v2 调用同一 GPU 积分器；用法见 [Editor](editor.md#scene-media与consolem175) 和 [捕获命令](../commands/render.md#统一介质路径v2)。
 
 ## 可执行验收与报告
 

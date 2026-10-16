@@ -5,8 +5,9 @@ void WorkbenchUi::path_panel(Viewport& preview) {
     ImGui::Begin("Path tracing");
     if(!preview.path_unavailable().empty()) { ImGui::TextWrapped("%s",preview.path_unavailable().c_str()); ImGui::End(); return; }
     ImGui::TextUnformatted(path_mode_ ? "GPU path tracing" : "Select Path trace in Viewport");
-    ImGui::TextWrapped("Surface lighting only. Atmosphere and clouds are not traced.");
-    ImGui::Checkbox("Surface-only acknowledgement",&path_settings_.surface_only); mark("path_surface");
+    if(ImGui::RadioButton("Surface only",!path_settings_.scene_media)) path_settings_.scene_media=false; mark("path_surface");
+    ImGui::SameLine(); if(ImGui::RadioButton("Scene media",path_settings_.scene_media)) path_settings_.scene_media=true; mark("path_media");
+    ImGui::TextWrapped(path_settings_.scene_media ? "Trace scene air, clouds and surfaces at a fixed time." : "Trace surface lighting; omit scene air and clouds.");
     int target=int(path_settings_.target),seed=int(path_settings_.seed),bounces=int(path_settings_.bounces);
     ImGui::SetNextItemWidth(125);
     if(ImGui::InputInt("Target spp",&target)) path_settings_.target=std::uint32_t(std::clamp(target,1,65536)); mark("path_target"); controls_["path_target"].x=ImGui::GetItemRectMin().x+30;
@@ -23,6 +24,22 @@ void WorkbenchUi::path_panel(Viewport& preview) {
     if(ImGui::InputFloat("Exposure (EV)",&exposure,.25f,1,"%.2f")) path_settings_.exposure=std::clamp(double(exposure),-16.,16.); mark("path_exposure"); controls_["path_exposure"].x=ImGui::GetItemRectMin().x+30;
     if(ImGui::Button(path_settings_.paused ? "Resume" : "Pause")) path_settings_.paused=!path_settings_.paused; mark("path_pause");
     ImGui::SameLine(); if(ImGui::Button("Reset accumulation")) ++path_settings_.reset; mark("path_reset");
+    if(path_settings_.scene_media) {
+        ImGui::SetNextItemWidth(125);
+        if(ImGui::InputDouble("Time (s)",&path_settings_.time_seconds,1,10,"%.3f")) path_settings_.time_seconds=std::clamp(path_settings_.time_seconds,-1e9,1e9); mark("path_time");
+        controls_["path_time"].x=ImGui::GetItemRectMin().x+30;
+        ImGui::SetNextItemWidth(125);
+        if(ImGui::InputDouble("Cloud albedo",&path_settings_.cloud_albedo,.05,.1,"%.3f")) path_settings_.cloud_albedo=std::clamp(path_settings_.cloud_albedo,0.,1.);
+        ImGui::SetNextItemWidth(125);
+        if(ImGui::InputDouble("Cloud anisotropy",&path_settings_.cloud_anisotropy,.05,.1,"%.3f")) path_settings_.cloud_anisotropy=std::clamp(path_settings_.cloud_anisotropy,-.95,.95);
+    }
+    if(preview.path_samples()) {
+        const auto& used=preview.path_info();
+        ImGui::TextWrapped("Shown: %s / model %u / sampler %u",used.medium ? "Scene media" : "Surface only",
+            used.medium ? used.medium->settings.model_version : used.settings.model_version,
+            used.medium ? used.medium->settings.sampler_version : used.settings.sampler_version);
+        if(used.medium) ImGui::Text("t %.3f / field %016llx",used.medium->medium.time_seconds,static_cast<unsigned long long>(used.medium->field_hash));
+    }
     const auto status=preview.path_status(); const auto& p=status.progress;
     ImGui::Text("%s: %u / %u spp",status.phase.c_str(),p.completed_spp,p.target_spp);
     ImGui::ProgressBar(p.target_spp ? float(p.completed_spp)/float(p.target_spp) : 0,{-1,0});

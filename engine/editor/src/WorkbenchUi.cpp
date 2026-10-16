@@ -6,7 +6,7 @@
 #include <unordered_map>
 
 namespace dk::editor::detail {
-WorkbenchUi::WorkbenchUi(Workspace& model,bool fixture) : model_(model),input_(fixture),manifest_(take(path_to_utf8(model.manifest()))) {
+WorkbenchUi::WorkbenchUi(Workspace& model,bool fixture,unsigned acceptance_path_extent) : model_(model),input_(fixture),manifest_(take(path_to_utf8(model.manifest()))),acceptance_path_extent_(acceptance_path_extent) {
     log_.push_back("Opened "+manifest_);
     log_.push_back("Viewport: CPU picking / local Gizmo / orbit camera. Edits use guarded commands.");
 }
@@ -168,8 +168,21 @@ void WorkbenchUi::assets() {
 }
 void WorkbenchUi::console() {
     ImGui::Begin("Console");
+    ImGui::BeginChild("Command log",{0,-ImGui::GetFrameHeightWithSpacing()},false,ImGuiWindowFlags_HorizontalScrollbar);
     for (const auto& line:log_) ImGui::TextWrapped("%s",line.c_str());
     if (scroll_log_) { ImGui::SetScrollHereY(1.0f); scroll_log_=false; }
+    ImGui::EndChild();
+    ImGui::SetNextItemWidth(-55);
+    const bool enter=ImGui::InputTextWithHint("##command","JSON {method,params}",console_input_.data(),console_input_.size(),ImGuiInputTextFlags_EnterReturnsTrue); mark("console_input");
+    ImGui::SameLine(); const bool run=ImGui::Button("Run"); mark("console_run");
+    if(enter || run) {
+        auto result=model_.execute_console(console_input_.data());
+        if(result) {
+            auto text=result->dump(); if(text.size()>4096) { text.resize(4096); text+=" ... (truncated; use IPC for full result)"; }
+            if(log_.size()==64) log_.erase(log_.begin());
+            log_.push_back(std::move(text)); scroll_log_=true;
+        } else report("Command",std::unexpected(result.error()));
+    }
     ImGui::End();
 }
 void WorkbenchUi::confirmation() {
@@ -224,21 +237,17 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     if (!simulation_view(preview,visible)) {
     preview.show_edit();
 #ifdef DK_EDITOR_PATHTRACING
-    const auto* environment = model_.snapshot() ? &model_.snapshot()->scene.environment() : nullptr;
     if(ImGui::RadioButton("Raster",!path_mode_)) { path_mode_=false; input_.cancel(); preview.suspend_path(); } mark("path_raster"); ImGui::SameLine();
-    const bool needs_surface=environment && (environment->enabled || environment->clouds.enabled) && !path_settings_.surface_only;
-    ImGui::BeginDisabled(!preview.path_unavailable().empty() || needs_surface);
+    ImGui::BeginDisabled(!preview.path_unavailable().empty());
     if(ImGui::RadioButton("Path trace",path_mode_)) { path_mode_=true; input_.cancel(); ImGui::SetWindowFocus("Path tracing"); } mark("path_mode");
     ImGui::EndDisabled();
-    if(needs_surface && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("Enable Surface-only acknowledgement in the Path tracing panel.");
     ImGui::SameLine(); if(ImGui::SmallButton("Settings")) ImGui::SetWindowFocus("Path tracing"); mark("path_settings");
-    if(path_mode_ && needs_surface) { preview.suspend_path(); path_mode_=false; }
     ImGui::SameLine();
 #else
     ImGui::TextDisabled("Path trace unavailable (module disabled)"); ImGui::SameLine();
 #endif
     ImGui::BeginDisabled(input_.active());
-    if (ImGui::SmallButton("Refresh")) preview.retry();
+    if (ImGui::SmallButton("Refresh")) preview.retry(); mark("path_refresh");
     ImGui::EndDisabled();
     input_.toolbar(model_,preview,controls_);
     if (const auto* s=model_.snapshot(); s && visible) {
@@ -267,7 +276,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
             const auto height=static_cast<std::uint32_t>(std::clamp(available.y,32.0f,1200.0f));
             environment_settings_.camera_revision=input_.camera().revision();
 #ifdef DK_EDITOR_PATHTRACING
-            if(path_mode_) preview.update_path(*s,width,height,srgb,input_.camera(),input_.edit(),input_.revision(),path_settings_);
+            if(path_mode_) preview.update_path(*s,acceptance_path_extent_ ? std::min(width,acceptance_path_extent_) : width,acceptance_path_extent_ ? std::min(height,acceptance_path_extent_) : height,srgb,input_.camera(),input_.edit(),input_.revision(),path_settings_);
             else
 #endif
             preview.update(*s,width,height,srgb,input_.camera(),input_.edit(),input_.revision(),exposure_,environment_settings_);

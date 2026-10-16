@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-16T11:29:51+08:00"
+updated_at: "2026-10-16T15:22:36+08:00"
 status: accepted
 ---
 
@@ -11,8 +11,7 @@ status: accepted
 
 [M17设计](render-pathtracing.md#m17-大气云与表面路径的统一传输)规划Scene media模式，显式使用场景空气/云，
 与原Surface only分开；设置、输入版本与实际完成spp必须对应。环境编辑需细分几何与介质失效，避免无条件重建Sponza AS。
-当前仅推进CPU介质参考，GUI仍沿M16要求surface-only确认。M17.5才接入真实GUI/Console/IPC/capture一致性，
-M17.6再验收交互响应和固定质量性能；不能提前声称联合渲染可用。
+M17.5 接入下述模式与命令；M17.6 单独验收 Sponza 固定质量性能。
 
 ## Sponza 交互性能与云预览
 
@@ -30,7 +29,7 @@ Sponza worker探针分别记录首次与稳态完整帧、云首帧/收敛帧、
 ## M16.9 编辑器路径追踪接入契约
 
 编辑场景视口提供Raster/Path trace显式切换；Path trace显示实际completed/target spp、阶段、暂停/继续、
-Reset、seed、反弹、环境RGB、太阳和曝光EV。设置为会话状态，不写Scene/Undo；空气/云启用时要求显式surface-only确认。
+Reset、seed、反弹、环境RGB、太阳和曝光EV。设置为会话状态，不写Scene/Undo；Surface only 明确忽略空气/云，Scene media 使用统一介质路径。
 构建未启用或设备RT未启用时显示原因，不退回光栅冒充路径图。默认目标64spp，batch=1，tile≤64。
 窗口设备在启用模块的构建请求RT和纹理索引if_available，不切模式重建设备；windows-editor预设启用路径模块。
 
@@ -38,7 +37,8 @@ Reset、seed、反弹、环境RGB、太阳和曝光EV。设置为会话状态，
 保留base color、mask、双面、金属度/粗糙度常量，面板说明不导入法线/AO/金属粗糙度纹理和切线。
 路径场景允许100万三角形、4096 primitive、64张纹理和128MiB RGBA8源数据，GPU仍受1GiB实际分配额度约束；
 CPU参考默认额度不变。失败不替换已显示图像；切换到大气时默认模型穿过地面的包围盒不应拒绝整帧。
-场景重建先校验CPU候选，再在旧提交排空后退休旧路径history/GPU场景，避免两套大场景同时占据预算；
+几何变化先校验CPU候选，再在旧提交排空后退休旧路径history/GPU场景，避免两套大场景同时占据预算；
+环境变化保留几何 owner，校验内容后复用 AS；
 若新GPU准备失败，GUI仍保留旧显示图并标过期，Retry重新构建，不承诺恢复已退休的累积。
 验收使用正常相机、真实窗口尺寸和默认工程副本，分别实际显示路径完成样本、大气及sparse带云图像，再返回路径模式。
 
@@ -309,3 +309,14 @@ Environment面板提供clear/sparse/overcast/sunset版本化预设和完整云�
 会话区提供reference/temporal、固定时间与单步、云影开关/固定覆盖区，不保存到Scene。后台请求携带全部设置；结果包含实际生效时间、mode、history和shadow generation，旧请求的迟到结果不能覆盖新请求。
 temporal每个请求独立重置视图、固定时间；先发布首帧，再每4次更新发布一次，至32次结束。实际warmup随结果变化，一致性测试等待32次后与序列截图比较。
 空气或云启用时均走后台环境路径。UI显示当前scene revision与结果设置，常规视口禁用超过4096像素的reference选择；底层接口仍明确拒绝越界，temporal供常规视口。外部环境修改、取消、退出延续单active/单replaceable队列与完整资源释放规则。
+
+## M17.5 Scene media 与 Console
+
+Path tracing 面板显式选择 Surface only（默认）或 Scene media，后者冻结 Scene 空气/云与固定时间、云反照率/各向异性；不自动推进风时间。
+Scene/物理参数/相机/模式/会话变化重置累积；曝光/暂停/目标保留已有样本。普通呈现继续 GPU 图像交接，无线性读回。
+环境编辑保留旧 GPU geometry owner，再 prepare 新 Scene wrapper，让 renderer 比较实际内容复用 AS；几何确实改变时沿旧的大场景释放策略。
+CPU 云字段采用一个已提交 owner 和一个局部候选，成功 configure 后才提交；失败释放候选，不占用后续恢复代。GPU 场缓存沿 renderer 预算。
+队列旧工作先排空，失败保留 GUI 上一完整图及其冻结来源，显示 STALE；成功替换时一并发布 mode/model/sampler/field/geometry 来源，禁止以当前设置冒充旧图。
+Console 输入有界 JSON {method,params}，调用 Workspace/Runtime 既有命令。必须显式 guard；活动草稿拒绝非 query 命令，避免覆盖未提交编辑。
+Console 不阻塞等待 Job（jobs.wait 只允许 timeout_ms=0），用户通过 jobs.get 查看异步捕获；命令成功后刷新快照，输出/错误有界。
+自动验收使用 --background 和仅限独立夹具的输入驱动，覆盖真实面板、Console、IPC、介质变更/错误恢复/会话切换，并与固定 capture 比较线性结果。

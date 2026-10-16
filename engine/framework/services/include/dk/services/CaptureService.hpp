@@ -20,6 +20,10 @@ struct CapturePathTrace {
     Vec3d environment_rgb=Vec3d::Zero();
     bool sun=false,surface_only=false;
     double exposure_ev=0;
+    bool scene_media=false; // v2 explicitly chooses a transport mode.
+    double time_seconds=0,cloud_albedo=.9,cloud_anisotropy=.6;
+    std::uint64_t max_tracking_steps=1ull<<26;
+    std::uint32_t max_steps_per_path=1u<<16;
 };
 struct CaptureRequest {
     std::string output;

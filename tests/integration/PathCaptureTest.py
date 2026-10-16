@@ -15,8 +15,9 @@ def main():
     parser = argparse.ArgumentParser()
     for name in ("runner", "client", "fixtures", "work-dir", "python-example", "luau-example"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--media", action="store_true")
     args = parser.parse_args()
-    root = args.work_dir / ("path-capture-" + uuid4().hex)
+    root = args.work_dir / (("media-capture-" if args.media else "path-capture-") + uuid4().hex)
     shutil.copytree(args.fixtures, root)
     for asset in (root / "assets").glob("*.gltf"):
         data = json.loads(asset.read_text())
@@ -36,6 +37,8 @@ def main():
                           width=48, height=32, validation="required",
                           camera=dict(eye=[0, 0, -2], target=[0, 0, 0], near=.05, far=10000),
                           pathtrace=dict(version=1, target_spp=spp, seed=7, max_bounces=4, environment_rgb=[.3, .4, .6]))
+            if args.media:
+                params["pathtrace"].update(version=2, medium_mode="scene_media")
             params.update(extra)
             return call("render.capture", params)
         def finish(ticket, state="succeeded"):
@@ -80,7 +83,18 @@ def main():
                 (root / (name + ".schema.json")).write_text(json.dumps(descriptor, indent=2), encoding="utf-8")
                 if name == "render.capture":
                     assert descriptor["parameters"]["properties"]["renderer"]["enum"] == ["raster", "pathtrace"]
+                    fields = descriptor["parameters"]["properties"]["pathtrace"]["properties"]
+                    assert fields["version"]["maximum"] == 2 and fields["medium_mode"]["enum"] == ["surface_only", "scene_media"]
+                    assert fields["max_tracking_steps"]["maximum"] == 268435456
             call("scene.load", dict(manifest="project.json"))
+            if args.media:
+                env = call("environment.query")["environment"]
+                env["enabled"] = True
+                env["clouds"].update(enabled=True, coverage=1, extinction_per_m=.00005,
+                                     weather_resolution=16, base_resolution=16, detail_resolution=16,
+                                     wind_velocity_mps=[1000, 0])
+                call("environment.set", dict(guard=guard(call("scene.query")["state"]), environment=env))
+                call("scene.save", dict(guard=guard(call("scene.query")["state"])))
             state = call("scene.query")["state"]
             history = call("history.status")
             first = read(submit("first.json"))
@@ -102,13 +116,37 @@ def main():
             finish(ppm)
             rgba = first["rgba8"]
             assert (root / "display.ppm").read_bytes() == b"P6\n48 32\n255\n" + bytes(v for i, v in enumerate(rgba) if i % 4 != 3)
-            exposed = read(submit("exposed.json", pathtrace=dict(version=1, target_spp=3, seed=7, max_bounces=4, environment_rgb=[.3, .4, .6], exposure_ev=2)))
+            path = dict(version=2, medium_mode="scene_media", target_spp=3, seed=7, max_bounces=4, environment_rgb=[.3, .4, .6]) if args.media else dict(version=1, target_spp=3, seed=7, max_bounces=4, environment_rgb=[.3, .4, .6])
+            exposed = read(submit("exposed.json", pathtrace=dict(path, exposure_ev=2)))
             assert exposed["linear_rgb"] == first["linear_rgb"] and exposed["rgba8"] != first["rgba8"]
             full_seed = read(submit("full-seed.json", width=1, height=1,
-                                    pathtrace=dict(version=1, target_spp=1, seed=18446744073709551615, environment_rgb=[.3, .4, .6])))
+                                    pathtrace=dict(path, target_spp=1, seed=18446744073709551615)))
             assert full_seed["provenance"]["pathtrace"]["seed"] == 18446744073709551615
             evidence["checks"].append("exact sample range, repeatability, frozen revision/content, edit changes, PPM and exposure")
             (root / "old.json").write_text("previous", encoding="utf-8")
+            if args.media:
+                provenance = first["provenance"]
+                assert provenance["model_version"] == 4 and provenance["sampler_version"] == 2
+                assert provenance["cloud_field_hash"] not in (None, "fnv1a64:0000000000000000")
+                shifted = read(submit("time.json", pathtrace=dict(path, time_seconds=2)))
+                assert shifted["linear_rgb"] != first["linear_rgb"]
+                assert shifted["provenance"]["geometry_fingerprint"] == provenance["geometry_fingerprint"]
+                assert shifted["provenance"]["cloud_field_hash"] == provenance["cloud_field_hash"]
+                surface = dict(path, medium_mode="surface_only")
+                surface_image = read(submit("surface.json", pathtrace=surface))
+                legacy = dict(surface, version=1, surface_only=True); del legacy["medium_mode"]
+                old = read(submit("legacy.json", pathtrace=legacy))
+                assert old["linear_rgb"] == surface_image["linear_rgb"] != first["linear_rgb"]
+                for i in range(2):
+                    bad = copy.deepcopy(env); bad["clouds"].update(shape_scale_m=1, seed=10+i)
+                    call("environment.set", dict(guard=guard(call("scene.query")["state"]), environment=bad))
+                    finish(submit("old.json"), "failed")
+                    assert (root / "old.json").read_text() == "previous"
+                call("environment.set", dict(guard=guard(call("scene.query")["state"]), environment=env))
+                recovered = read(submit("recovered.json"))
+                assert recovered["linear_rgb"] == first["linear_rgb"]
+                assert recovered["provenance"]["cloud_field_hash"] == provenance["cloud_field_hash"]
+                evidence["checks"].append("v2 media provenance, fixed wind time, surface/v1 equality and repeated invalid-field recovery")
             long = submit("old.json", spp=4096, width=64, height=64)
             deadline = time.monotonic() + 90
             while True:
@@ -126,16 +164,19 @@ def main():
             assert call("jobs.cancel", dict(id=long["job_id"]))["accepted"]
             finish(long, "cancelled")
             assert (root / "old.json").read_text() == "previous"
-            query = call("environment.query")
-            environment = query["environment"]
-            environment["enabled"] = True
-            call("environment.set", dict(guard=guard(query["state"]), environment=environment))
-            finish(submit("old.json"), "failed")
+            if args.media:
+                finish(submit("old.json", pathtrace=dict(path, max_tracking_steps=1, max_steps_per_path=1)), "failed")
+            else:
+                query = call("environment.query")
+                environment = query["environment"]
+                environment["enabled"] = True
+                call("environment.set", dict(guard=guard(query["state"]), environment=environment))
+                finish(submit("old.json"), "failed")
+                call("history.undo", dict(guard=guard(call("scene.query")["state"])))
             assert (root / "old.json").read_text() == "previous"
-            call("history.undo", dict(guard=guard(call("scene.query")["state"])))
             assert not call("jobs.cancel", dict(id=ppm["job_id"]))["accepted"]
             evidence["checks"].append("observable completed/submitted progress, running cancellation and failed task preserve old file")
-            script = subprocess.run([sys.executable, str(args.python_example), "--pipe", endpoint, "--ctl", str(args.client)],
+            script = subprocess.run([sys.executable, str(args.python_example), "--pipe", endpoint, "--ctl", str(args.client)] + (["--media"] if args.media else []),
                                     capture_output=True, text=True, timeout=160, creationflags=subprocess.CREATE_NO_WINDOW)
             assert script.returncode == 0, (script.stdout, script.stderr)
             python = json.loads((root / "path-python.json").read_text())

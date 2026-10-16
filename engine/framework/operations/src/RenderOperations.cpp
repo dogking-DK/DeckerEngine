@@ -10,11 +10,14 @@ Json uuid() { return schema::string(36,36); }
 Json number(double low,double high) { return {{"type","number"},{"minimum",low},{"maximum",high}}; }
 Json vector_schema() { return schema::array(schema::number(),3,3); }
 Json path_schema(bool complete=false) {
-    return schema::object({{"version",integer(1,1)},{"target_spp",integer(65536,1)},{"seed",integer()},
+    return schema::object({{"version",integer(2,1)},{"target_spp",integer(65536,1)},{"seed",integer()},
         {"max_bounces",integer(16,1)},{"rr_start",integer(16)},
         {"environment_rgb",schema::array(number(0,1e6),3,3)},{"sun",schema::boolean()},
-        {"surface_only",schema::boolean()},{"exposure_ev",number(-32,32)}},
-        complete ? Json{"version","target_spp","seed","max_bounces","rr_start","environment_rgb","sun","surface_only","exposure_ev"} : Json{"version","target_spp"});
+        {"surface_only",schema::boolean()},{"exposure_ev",number(-32,32)},
+        {"medium_mode",{{"type","string"},{"enum",{"surface_only","scene_media"}}}},
+        {"time_seconds",number(-1e9,1e9)},{"cloud_albedo",number(0,1)},{"cloud_anisotropy",number(-.95,.95)},
+        {"max_tracking_steps",integer(1ull<<28,1)},{"max_steps_per_path",integer(1u<<20,1)}},
+        complete ? Json{"version","target_spp","seed","max_bounces","rr_start","environment_rgb","sun","exposure_ev"} : Json{"version","target_spp"});
 }
 Json camera_schema(bool complete=false) {
     const auto vec=vector_schema();
@@ -31,12 +34,14 @@ Json render_options_schema(bool complete=false) {
 Json provenance_schema() {
     return schema::object({{"environment",operations_detail::environment_schema()},{"camera",camera_schema(true)},
         {"exposure",schema::number()},{"time_seconds",schema::number()},
-        {"quality",{{"type","string"},{"enum",{"atmosphere_v1","unlit_v1","cloud_reference_v1","cloud_temporal_v1","pathtrace_v1"}}}},
+        {"quality",{{"type","string"},{"enum",{"atmosphere_v1","unlit_v1","cloud_reference_v1","cloud_temporal_v1","pathtrace_v1","pathtrace_v2"}}}},
         {"renderer",{{"type","string"},{"enum",{"raster","pathtrace"}}}},{"format",{{"type","string"},{"enum",{"ppm","linear_json","sequence_json"}}}},
         {"pathtrace",schema::nullable(path_schema(true))},{"model_version",integer()},{"sampler_version",integer()},
         {"material_model",schema::string()},{"estimator",schema::string()},{"actual_spp",integer(65536)},
         {"input_fingerprint",{{"type",{"string","null"}}}},
         {"input_fingerprint_version",integer(2,2)},
+        {"medium_model_version",integer(1,1)},{"cloud_field_hash",{{"type",{"string","null"}}}},
+        {"geometry_fingerprint",{{"type",{"string","null"}}}},
         {"render_options",render_options_schema(true)},{"warmup_frames",integer(64)},{"sample_count",integer(128,1)},
         {"profile",{{"type","string"},{"enum",{"strict","unlit_preview"}}}},
         {"shader_fingerprint",{{"type",{"string","null"}}}}},
@@ -62,7 +67,11 @@ CaptureRequest request(const Json& p,bool sequence) {
         path.version=v["version"].get<std::uint32_t>(); path.target_spp=v["target_spp"].get<std::uint32_t>();
         path.seed=v.value("seed",std::uint64_t{1}); path.max_bounces=v.value("max_bounces",8U); path.rr_start=v.value("rr_start",3U);
         if(v.contains("environment_rgb")) path.environment_rgb=vector(v["environment_rgb"]);
-        path.sun=v.value("sun",false); path.surface_only=v.value("surface_only",false); path.exposure_ev=v.value("exposure_ev",0.0); r.path=path;
+        path.sun=v.value("sun",false); path.surface_only=v.value("surface_only",false); path.exposure_ev=v.value("exposure_ev",0.0);
+        path.scene_media=v.value("medium_mode",std::string{})=="scene_media";
+        path.time_seconds=v.value("time_seconds",0.0); path.cloud_albedo=v.value("cloud_albedo",.9); path.cloud_anisotropy=v.value("cloud_anisotropy",.6);
+        path.max_tracking_steps=v.value("max_tracking_steps",1ull<<26); path.max_steps_per_path=v.value("max_steps_per_path",1u<<16);
+        r.path=path;
     }
     if(p.contains("render_options")) {
         const auto& o=p["render_options"]; auto& s=r.environment;
@@ -108,6 +117,16 @@ Result<void> register_render_commands(CommandRegistry& registry,CaptureService& 
                 if(p.value("renderer",std::string{"raster"})=="pathtrace") {
                     for(const char* name:{"exposure","time_seconds","render_options","warmup_frames"}) if(p.contains(name))
                         return std::unexpected(Error{ErrorCode::invalid_argument,std::string{"Raster-only parameter: "}+name});
+                }
+                if(p.contains("pathtrace")) {
+                    const auto& v=p["pathtrace"]; const bool v2=v["version"]==2;
+                    if(v2 && (!v.contains("medium_mode") || v.contains("surface_only")))
+                        return std::unexpected(Error{ErrorCode::invalid_argument,"Pathtrace v2 requires medium_mode and forbids surface_only"});
+                    if(!v2 && v.contains("medium_mode"))
+                        return std::unexpected(Error{ErrorCode::invalid_argument,"medium_mode requires pathtrace v2"});
+                    if(!v2 || v["medium_mode"]!="scene_media")
+                        for(const char* field:{"time_seconds","cloud_albedo","cloud_anisotropy","max_tracking_steps","max_steps_per_path"}) if(v.contains(field))
+                            return std::unexpected(Error{ErrorCode::invalid_argument,std::string{"Scene media v2 parameter: "}+field});
                 }
                 auto guard=parse_edit_guard(p["guard"]); if(!guard) return std::unexpected(guard.error());
                 auto ticket=service.capture(scene,*guard,request(p,sequence)); if(!ticket) return std::unexpected(ticket.error());

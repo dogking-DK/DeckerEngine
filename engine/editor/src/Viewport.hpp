@@ -26,6 +26,7 @@ public:
 #ifdef DK_EDITOR_PATHTRACING
     void update_path(const SceneReadSnapshot&,std::uint32_t,std::uint32_t,bool,const Camera&,const std::optional<TransformEdit>&,std::uint64_t,const PathPreviewSettings&);
     [[nodiscard]] PathPreviewStatus path_status() const { return path_ ? path_->status() : PathPreviewStatus{}; }
+    [[nodiscard]] const render::PathTraceGpuImageInfo& path_info() const { return path_info_; }
     [[nodiscard]] std::uint32_t path_samples() const { return path_samples_; }
     std::uint64_t capture_path_pixels();
     [[nodiscard]] std::span<const Vec3d> path_linear() const { return path_linear_.linear_rgb(); }
@@ -74,6 +75,7 @@ private:
     std::uint64_t path_sequence_=0;
     std::uint32_t path_samples_=0;
     render::PathTraceGpuImage path_linear_;
+    render::PathTraceGpuImageInfo path_info_;
     bool path_active_=false;
 #endif
     memory::ResourceHandle heap_;

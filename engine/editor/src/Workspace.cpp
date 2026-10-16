@@ -54,6 +54,22 @@ Result<Json> Workspace::call(std::string_view method, Json p) {
     if (!result) return std::unexpected(result.error());
     return std::move(result->result);
 }
+Result<Json> Workspace::execute_console(std::string_view text) {
+    if(text.size()>8192) return std::unexpected(Error{ErrorCode::invalid_argument,"Console input exceeds 8192 bytes"});
+    const auto input=Json::parse(text,nullptr,false);
+    if(!input.is_object() || input.size()!=2 || !input.contains("method") || !input["method"].is_string() ||
+        !input.contains("params") || !input["params"].is_object())
+        return std::unexpected(Error{ErrorCode::invalid_argument,"Expected JSON {method,params}"});
+    const auto& method=input["method"].get_ref<const std::string&>(); const auto& params=input["params"];
+    // Waiting would occupy the GUI owner. Poll a job instead.
+    if(method=="jobs.wait" && params.contains("timeout_ms") && params["timeout_ms"]!=0)
+        return std::unexpected(Error{ErrorCode::invalid_argument,"Console jobs.wait requires timeout_ms=0; use jobs.get"});
+    auto descriptor=call("commands.describe",{{"name",method}}); if(!descriptor) return std::unexpected(descriptor.error());
+    if(pending() && (*descriptor)["effect"]!="query") return std::unexpected(pending_error());
+    auto result=call(method,params); if(!result) return result;
+    if(!stopping()) { auto refreshed=refresh(); if(!refreshed) return std::unexpected(refreshed.error()); }
+    return result;
+}
 Json Workspace::guard() const {
     return guard_json({snapshot_->state.document_id,snapshot_->state.revision});
 }

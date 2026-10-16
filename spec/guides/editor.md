@@ -48,7 +48,7 @@ Release/RelWithDebInfo普通启动默认关闭Vulkan验证层；Debug默认尝�
 - **Save / Open / Reload**：Save 先应用草稿，再原子保存场景文件；Open/Reload 或关闭前
   有未保存修改时提供 Save / Discard / Cancel。保存失败不会继续切换/关闭。
   本阶段不修改 manifest 和资产映射，也不提供新建项目向导。
-- **Assets / Console**：只读查看项目资产映射和最近 64 条操作/失败信息。
+- **Assets / Console**：查看项目资产映射和最近 64 条操作/失败信息；Console 可输入 JSON 命令，见下文。
 
 ## 路径追踪预览（M16.9）
 
@@ -58,7 +58,7 @@ Release/RelWithDebInfo普通启动默认关闭Vulkan验证层；Debug默认尝�
 后台编译/资产准备/逐tile渲染期间主界面和IPC保持可用；旧图会标为STALE PREVIEW，当前输入的完整批次完成才替换。
 切回Raster、隐藏/最小化视口或进入Simulation停止后续路径工作。Refresh重新加载资产并重试错误。
 
-路径模式目前仅支持表面照明：场景开启空气或云时，先在面板勾选 **Surface-only acknowledgement**。
+路径模式默认 **Surface only**；联合渲染场景空气/云时，在面板选择 **Scene media**，设置见下文。
 可点击视口的 **Settings** 打开Path tracing面板。不支持的GPU/构建会显示禁用原因。
 编辑器额度为100万三角形、64纹理、纹理源总计128MiB及1GiB GPU实际分配，可预览默认Sponza。
 导入沿用光栅的预览配置：保留base color纹理和材质常量，省略法线/AO/金属粗糙度纹理及切线；不支持blend。
@@ -190,3 +190,21 @@ VS2026 用户打开 `out/build/windows-editor/DeckerEngine.slnx`，选择 Debug/
 未应用草稿不改变视口，外部编辑导致旧guard冲突时先Revert再编辑。
 
 云面板预设、固定时间/质量/阴影区域与序列截图的一致性设置见[云指南](clouds.md)。
+
+## Scene media与Console（M17.5）
+
+在 Viewport 选择 **Path trace**，Path tracing 面板选择 **Scene media**，再在 Environment 面板开启/应用空气或云。
+**Surface only** 是默认模式，明确忽略场景空气和云。介质时间使用 Path tracing 面板的 **Time (s)**，不随墙钟推进，
+与 Raster 的时间设置独立；云反照率和各向异性控制散射。相机、介质、种子、模式与会话变化重置累积，曝光只改变显示。
+面板的 Shown 来源来自最后完整帧，显示模式、模型/采样版本、固定时间和场 hash；失败时旧图保留并标 STALE PREVIEW。
+修改合法参数或按 Refresh 可恢复；GPU 不支持的尺度/工作额度仍会明确报错。Sponza 固定质量性能预算由 M17.6 验收。
+
+Console 输入 `{"method":"scene.query","params":{}}` 后按 Enter 或 Run，取得当前 document_id/revision。
+用 `{"method":"render.capture","params":{...}}` 提交[完整 v2 参数](../commands/render.md#统一介质路径v2)，guard 必须显式填写。
+返回 job_id 后通过 `{"method":"jobs.get","params":{"id":"<job_id>"}}` 观察进度/终态；不隐式等待或保存 Scene。
+输入最多 8192 字节，每条结果显示最多 4096 字节，完整 schema/结果可用 IPC；保留最近 64 条日志。
+有未应用草稿时仅允许 query 命令，先 Apply/Revert 再修改或捕获；Console 的 jobs.wait 仅允许 timeout_ms=0，避免占用 GUI 线程。
+
+`dk.editor.media_pathtracing_gpu_validation` 使用独立夹具、--background 和 --media-pathtrace-smoke：真实点击模式/环境/时间/曝光、Console 输入，
+与 IPC capture 比较冻结线性结果，连续错误恢复和换会话检查。该验收将路径画面固定为至多 96×96 以控制同步验证成本；
+正常 Editor 分辨率不变，原路径验收继续覆盖正常视口、resize/minimize 与相机/实体编辑。不得把验收尺寸作为 Sponza 性能证据。

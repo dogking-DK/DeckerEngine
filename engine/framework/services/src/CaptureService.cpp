@@ -104,11 +104,20 @@ std::string provenance(const CaptureRequest& r,const EnvironmentDescription& env
     value["pathtrace"]=nullptr;
     if(r.pathtrace) {
         const auto& p=*r.path;
-        value["quality"]="pathtrace_v1";
+        value["quality"]=p.version==2 ? "pathtrace_v2" : "pathtrace_v1";
         value["pathtrace"]={{"version",p.version},{"target_spp",p.target_spp},{"seed",p.seed},{"max_bounces",p.max_bounces},
             {"rr_start",p.rr_start},{"environment_rgb",{p.environment_rgb.x(),p.environment_rgb.y(),p.environment_rgb.z()}},
             {"sun",p.sun},{"surface_only",p.surface_only},{"exposure_ev",p.exposure_ev}};
-        value["model_version"]=3; value["sampler_version"]=1; value["material_model"]="metallic_roughness";
+        if(p.version==2) {
+            auto& path=value["pathtrace"]; path.erase("surface_only"); path["medium_mode"]=p.scene_media ? "scene_media" : "surface_only";
+            value["geometry_fingerprint"]=nullptr;
+            if(p.scene_media) {
+                path["time_seconds"]=p.time_seconds; path["cloud_albedo"]=p.cloud_albedo; path["cloud_anisotropy"]=p.cloud_anisotropy;
+                path["max_tracking_steps"]=p.max_tracking_steps; path["max_steps_per_path"]=p.max_steps_per_path;
+                value["time_seconds"]=p.time_seconds; value["medium_model_version"]=1; value["cloud_field_hash"]=nullptr;
+            }
+        }
+        value["model_version"]=p.scene_media ? 4 : 3; value["sampler_version"]=p.scene_media ? 2 : 1; value["material_model"]="metallic_roughness";
         value["estimator"]="mis"; value["actual_spp"]=0; value["input_fingerprint"]=nullptr;
         value["input_fingerprint_version"]=2;
     }
@@ -237,9 +246,14 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
             const auto& p=*request.path;
             require(request.samples.empty() && request.profile==GltfImportProfile::unlit_preview && request.exposure==1 &&
                 request.warmup_frames==0 && request.environment==render::EnvironmentRenderSettings{},"Path capture requires unlit_preview and no raster sequence/exposure/warmup/options");
-            require(p.version==1 && p.target_spp>=1 && p.target_spp<=65536 && p.max_bounces>=1 && p.max_bounces<=16 &&
+            require((p.version==1 || p.version==2) && p.target_spp>=1 && p.target_spp<=65536 && p.max_bounces>=1 && p.max_bounces<=16 &&
                 p.rr_start<=p.max_bounces && p.environment_rgb.allFinite() && p.environment_rgb.minCoeff()>=0 && p.environment_rgb.maxCoeff()<=1e6 &&
-                std::isfinite(p.exposure_ev) && std::abs(p.exposure_ev)<=32,"Invalid pathtrace v1 settings");
+                std::isfinite(p.exposure_ev) && std::abs(p.exposure_ev)<=32,"Invalid pathtrace settings");
+            require((p.version==2 || !p.scene_media) && std::isfinite(p.time_seconds) && std::abs(p.time_seconds)<=1e9 &&
+                std::isfinite(p.cloud_albedo) && p.cloud_albedo>=0 && p.cloud_albedo<=1 &&
+                std::isfinite(p.cloud_anisotropy) && std::abs(p.cloud_anisotropy)<=.95 &&
+                p.max_tracking_steps>=1 && p.max_tracking_steps<=(1ull<<28) && p.max_steps_per_path>=1 && p.max_steps_per_path<=(1u<<20),
+                "Invalid pathtrace media settings");
             require(!request.linear_json || std::size_t{request.width}*request.height<=524288,"Path linear report allows at most 524288 pixels");
         }
         check(render::validate_environment_render_settings(request.environment));

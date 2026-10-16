@@ -1,7 +1,7 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-10-15T10:25:23+08:00"
+updated_at: "2026-10-16T15:16:16+08:00"
 status: accepted
 ---
 
@@ -153,7 +153,7 @@ pathtrace对象禁止未知字段：
 
 | 字段 | 必填/默认 | 范围与语义 |
 | --- | --- | --- |
-| version | 必填1 | 当前参数格式版本 |
+| version | 必填1（本节） | v2 见下节，参数版本与物理模型独立 |
 | target_spp | 必填 | 1–65536整数，从样本0精确渲染到目标 |
 | seed | 1 | 完整uint64整数；Luau使用其精确整数范围 |
 | max_bounces | 8 | 1–16整数 |
@@ -199,4 +199,43 @@ seed/目标/反弹/RR/环境/太阳/surface_only；GUI默认环境[.3,.4,.6]、�
 
 可执行[Python](../../examples/automation/pathtrace_capture.py)通过IPC渲染活动场景；[Luau](../../examples/scripting/pathtrace-capture.luau)加载project.json。
 先将tests/fixtures/render-disk复制到独立工程；Python示例：`python examples/automation/pathtrace_capture.py --pipe <endpoint> --ctl <dk-ctl路径>`。
-两者输出path-python.json/path-luau.json；使用小型受支持场景，若空气/云开启须明确决定surface_only。
+两者输出path-python.json/path-luau.json；使用小型受支持场景，v1 若空气/云开启须明确 surface_only；联合介质使用下节 v2。
+
+## 统一介质路径（v2）
+
+仍用 render.capture、renderer=pathtrace、format=ppm/linear_json，guard/effect/Jobs/原子发布与上文相同。
+pathtrace.version=2 时必须提供 medium_mode：surface_only 使用旧 model=3/sampler=1 并显式忽略 Scene 空气/云；
+scene_media 使用 model=4/sampler=2，联合追踪冻结 Scene 空气、非均匀云和表面光照。v2 禁止旧 surface_only 字段。
+公共字段 target_spp/seed/max_bounces/rr_start/environment_rgb/sun/exposure_ev 的范围和默认不变；以下字段仅 scene_media 可用：
+
+| 字段 | 默认 | 范围与语义 |
+| --- | --- | --- |
+| time_seconds | 0 | 有限 [-1e9,1e9]，固定风时间，不使用墙钟 |
+| cloud_albedo | 0.9 | [0,1]，云单次散射反照率 |
+| cloud_anisotropy | 0.6 | [-0.95,0.95]，云 HG 各向异性 |
+| max_tracking_steps | 67108864 | 整数 1..268435456，每 GPU tile 的追踪步额度 |
+| max_steps_per_path | 65536 | 整数 1..1048576，每路径追踪步额度 |
+
+v1 禁止 medium_mode 及上述字段；v2 surface_only 也禁止介质字段，错误在创建 Job 前拒绝。
+GPU 数值域仍要求行星半径至少 1000m，云 weather/shape 尺度至少 100m、detail 至少 10m，地下相机不支持；
+运行时不支持域/工作额度耗尽使 Job failed、result=null，旧文件保留，无静默回退。场景和捕获尺寸上限沿上文。
+
+v2 provenance.quality=pathtrace_v2，增加 geometry_fingerprint；scene_media 另有 medium_model_version=1、cloud_field_hash，
+pathtrace 对象返回全部实际参数，顶层 time_seconds 同步固定时间。提交时两个新增 hash 为 null；完成时为 fnv1a64 字符串，
+零云的场 hash 为 fnv1a64:0000000000000000。shader_fingerprint 覆盖表面、空气、云与显示源文件；哈希用于诊断，不是加密或跨 GPU 一致性保证。
+
+```json
+{"jsonrpc":"2.0","id":3,"method":"render.capture","params":{
+  "guard":{"document_id":"<当前 document_id>","revision":1},
+  "renderer":"pathtrace","format":"linear_json","output":"media.json","width":48,"height":32,
+  "camera":{"eye":[0,1,-2],"target":[0,1,0],"near":0.05,"far":10000},
+  "pathtrace":{"version":2,"medium_mode":"scene_media","target_spp":3,"seed":7,"max_bounces":4,
+    "environment_rgb":[0.3,0.4,0.6],"sun":true,"time_seconds":2,"cloud_albedo":0.9,"cloud_anisotropy":0.6},
+  "validation":"required"
+}}
+```
+
+Editor Console 使用同一 method/params 对象（不带 jsonrpc/id）；先 scene.query 获取 guard。
+[Python](../../examples/automation/pathtrace_capture.py) 增加 --media，对活动 Scene 固定时间零捕获；
+[Luau](../../examples/scripting/pathtrace-media-capture.luau) 从 project.json 加载已保存 Scene，输出 path-luau.json。
+两者不隐式启用空气/云；先通过环境面板或 environment.set 配置，需要跨进程一致时显式 scene.save。

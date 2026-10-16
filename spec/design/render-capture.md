@@ -1,17 +1,17 @@
 ---
 module: render-capture
 created_at: "2026-10-03T21:21:47+08:00"
-updated_at: "2026-10-16T11:29:51+08:00"
+updated_at: "2026-10-16T15:16:16+08:00"
 status: accepted
 ---
 
 # M7.4 截图作业与自动化验收
 
-## M17 后续体积路径截图
+## M17 体积路径截图
 
-[M17设计](render-pathtracing.md#m17-大气云与表面路径的统一传输)在M17.5计划扩展版本化路径介质设置及来源报告，
-冻结显式时间、环境内容、场hash、模型/采样版本，与Editor共享积分器；继续在owner原子替换时发布文件。
-命令发现、schema、参考页和Python/Luau用例到实际实现时同步。当前capture不新增可用模式，M17.1仅提供CPU介质基础。
+[M17设计](render-pathtracing.md#m17-大气云与表面路径的统一传输)的统一积分器通过 pathtrace v2 接入，
+冻结显式时间、环境内容、场 hash、模型/采样版本，与 Editor 共用渐进 renderer；继续在 owner 原子替换时发布文件。
+具体字段见[命令参考](../commands/render.md#统一介质路径v2)，旧 v1 表面行为保留。
 
 ## 边界与依赖
 
@@ -117,3 +117,14 @@ PPM 的 Job 摘要含上述来源和实际 spp；linear_json 是单独任务的�
 
 验收新增真实RT capture任务、单文件保护、输入冻结、进度和Python/Luau；GUI验收显式打开测试专用线性读回，
 通过真实呈现的完成帧与同相机/seed/spp capture报告逐像素比较，正常GUI不启用CPU读回。
+
+## M17.5 统一介质捕获
+
+保留 pathtrace version=1 的表面语义和 surface_only 确认；version=2 必须显式 medium_mode=surface_only/scene_media，禁止混用旧 surface_only。
+scene_media 使用 model 4 / sampler 2 / MIS；surface_only 保留 model 3 / sampler 1。两种模式共用原固定 spp、取消、owner 原子单文件发布及旧文件保护。
+v2 增加固定 time_seconds、cloud_albedo、cloud_anisotropy、每 tile max_tracking_steps 和每路径 max_steps_per_path；参数格式与物理模型分别版本化。
+v1 禁止介质字段；v2 surface_only 禁止介质专用字段，避免静默忽略。公共反弹范围继续 1..16，RR 不大于反弹数。
+冻结完整 Scene 环境和相机，worker 从不可变字段构建 PathMediumSnapshot；仅非零云生成字段。失败无隐式光栅或晴空降级。
+提交来源保留 null shader/input/field hash，完成来源包含字段 hash、几何 hash 和包含空气/云的 shader 源闭包；媒体参数与实际 spp 同源。
+GUI 与命令使用相同默认批次/tile；线性 JSON 做逐像素对照，非兼容 GPU 域和工作额度失败保护旧文件。
+新增命令字段仍由 Operations 解码、Service 校验；Console/IPC/Python/Luau 共享注册表，无新协议分支。

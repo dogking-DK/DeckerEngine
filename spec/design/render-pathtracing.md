@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-16T14:54:53+08:00"
+updated_at: "2026-10-16T15:16:16+08:00"
 status: accepted
 ---
 
@@ -179,9 +179,9 @@ GPU介质纹理、majorant、上传/暂存与外部旧帧沿renderer预算计费
 prepare完成资源候选、configure通过准入、GPU完成且generation仍匹配后才能发布；取消/失败保留旧完成图并标注旧来源。
 不能以显示旧图、首个tile、GUI present次数作为新视角完成或新样本计数。
 
-Editor最终用Surface only/Scene media明确选择，后者读取场景环境，无需勾选忽略介质；能力不足显示原因。
+Editor用Surface only/Scene media明确选择，后者读取场景环境，无需勾选忽略介质；能力不足显示原因。
 capture在M17.5增加版本化设置、命令发现/文档、Python/Luau用例和线性provenance，与GUI调用同一积分链路。
-尚未实现前，旧命令只接受现有字段；不提前登记不可调用能力。
+v1 保留旧表面字段；v2 必须显式 medium_mode，细节见 [capture](render-capture.md#m175-统一介质捕获)。
 
 M17.6优化以同模型/同质量为前提：保守空间majorant及空区跳跃、太阳/环境重要性采样、
 按已测GPU时间调节tile工作量和交互分辨率（必须显式显示并在静止恢复完整尺寸）、缓存失效细分。
@@ -651,3 +651,8 @@ CPU所有者与GPU worker角色同现有独占队列，此独立探针的CPU时�
 汇总器拒绝缺失/重复轮次、缺像素/非有限值、验证层误开、输入/hash不一致、丢失timestamp、泄漏和失败文件；保留失败原因与原始报告。
 
 [复现指南](../guides/pathtracing-benchmark.md)与[交付实测](../benchmarks/2026-10-15-pathtracing.md)保留固定门槛、原始线性/计时数据和未达候选。归档由verify-pathtracing-evidence.py校验hash并重算三轮汇总，不能用旧数据替代当前GPU测试。
+
+## M17.5 上层集成
+
+Editor Scene media 与固定 capture 直接调用 configure_medium_view，表面路径继续 configure_view；参数与来源见 [Editor](editor.md#m175-scene-media-与-console) 和 [capture](render-capture.md#m175-统一介质捕获)。
+介质、表面模式不共享累积；媒体输入冻结、旧帧保护、GPU 数值域和工作额度沿 M17.4。环境编辑保持几何 owner 以复用 AS；Sponza 固定质量优化留在 M17.6。

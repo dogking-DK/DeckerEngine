@@ -269,3 +269,21 @@ TEST_CASE("workspace cloud preset is an unapplied draft with undo redo and reloa
     CHECK(m.apply_environment().error().code==ErrorCode::conflict); CHECK(m.pending());
     REQUIRE(m.revert_environment()); CHECK(m.environment_draft()->value==preset);
 }
+
+TEST_CASE("workspace console shares explicit guards and protects drafts without blocking waits") {
+    EditorFixture f; auto& model=*f.model; const auto before=model.snapshot()->state;
+    auto query=model.execute_console(R"({"method":"scene.query","params":{}})"); REQUIRE(query);
+    CHECK((*query)["state"]["revision"]==before.revision);
+    CHECK_FALSE(model.execute_console("invalid"));
+    CHECK_FALSE(model.execute_console(std::string(8193,' ')));
+    CHECK_FALSE(model.execute_console(R"({"method":"jobs.wait","params":{"timeout_ms":1000}})"));
+    CHECK_FALSE(model.execute_console(R"({"method":"entity.create","params":{}})"));
+    const Json params={{"guard",{{"document_id",before.document_id.to_string()},{"revision",before.revision}}}};
+    const auto command=Json{{"method","entity.create"},{"params",params}}.dump();
+    f.select(); model.draft()->modified=true;
+    CHECK_FALSE(model.execute_console(command)); REQUIRE(model.execute_console(R"({"method":"scene.query","params":{}})"));
+    REQUIRE(model.revert()); REQUIRE(model.execute_console(command));
+    CHECK(model.snapshot()->state.revision==before.revision+1); CHECK(model.history().undo_count==1);
+    CHECK_FALSE(model.execute_console(command)); // stale explicit guard
+    REQUIRE(model.undo()); CHECK(model.snapshot()->scene.entities().size()==query->at("entities").size());
+}
