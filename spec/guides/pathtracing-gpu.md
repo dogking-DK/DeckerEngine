@@ -1,13 +1,14 @@
 ---
 created_at: "2026-10-14T14:37:00+08:00"
-updated_at: "2026-10-15T10:16:45+08:00"
+updated_at: "2026-10-16T14:12:04+08:00"
 ---
 
-# GPU Lambert/GGX与渐进路径追踪
+# GPU表面、空气与渐进路径追踪
 
 [返回项目入口](../../README.md)。[M16.6设计](../design/render-pathtracing.md#m166-gpu无历史lambert实施契约)
 提供硬件三角形求交、NEE/MIS/RR和拥有型HDR结果，使用与[CPU参考](pathtracing-reference.md)一致的冻结输入与采样模型。
-提供≤64×64无历史参考和≤2048×2048渐进接口，支持Lambert/GGX、baseColor纹理/alpha-mask；[编辑器](editor.md#路径追踪预览m169)已接入后台渐进预览；capture命令仍属后续阶段。
+提供≤64×64无历史参考和≤2048×2048渐进接口，支持Lambert/GGX、baseColor纹理/alpha-mask，以及显式GPU空气积分。
+[编辑器](editor.md#路径追踪预览m169)与capture当前接入表面模式，空气联合接入按M17.5推进。
 
 ## 构建与验证
 
@@ -60,6 +61,8 @@ if (queue.wait(frame.submission()).value()) {
 
 同一队列串行操作；无需在场景构建与trace之间CPU等待，Graph记录GPU依赖。
 `prepare_scene`发布不可变GPU场景和BUILD票据，空场景不创建AS，其场景票据value为0。
+相同已消费几何/材质/纹理可复用两个弱缓存中的owner与原BUILD票据；新wrapper仍保留最新场景来源。
+geometry_fingerprint只作为预筛，随后逐内容比较；环境或revision改变不会单独重建AS/纹理，资产内容改变会重建。
 `submit_view`发布frame及提交票据，不代表GPU已完成；`frame.read(queue)`不阻塞等待，成功但optional为空表示仍在途。
 完成后read返回独立CPU拥有型结果；读回或分配失败不发布部分图像，额度恢复后可重试同一frame。
 关闭Memory后旧image仍可读，新准备/提交/read拒绝。丢弃renderer/scene/frame不会取消已提交GPU工作，queue.close负责完成和回收。
@@ -117,8 +120,40 @@ M16.9已由GPU tone直接读取完成缓冲并交给Editor，不做每批全帧C
 - NaN/Inf、负辐亮度和非法诊断拒绝整帧。指纹仅作稳定诊断摘要，不是安全校验或缓存相等证明。
 
 无历史接口图像≤64×64、场景≤4096三角形、样本区间位于[0,65536)、反弹1..32，沿用CPU工作上界预检，超额不自动降质。
-太阳可显式选择冻结Scene太阳，环境为常量RGB；空气/云启用时必须显式surface_only，未实现介质积分。
+旧surface入口的太阳是冻结Scene方向太阳、环境为常量RGB；空气/云启用时必须显式surface_only。
+空气传输需调用下节独立入口，不能向旧接口传入model=4。
 BLAS从世界顶点合并构建，尚无资产BLAS复用、UPDATE/refit、跨队列AS；GPU浮点与CPU双精度不承诺逐位相同。
+
+## 世界空间空气路径
+
+`submit_air_rays`、`submit_air_view`和`configure_air_view`消费同一冻结环境的PathTraceScene与PathMediumSnapshot，
+使用VolumePathSettings（model=4、sampler=2），反弹0..32；0仅保留无散射透射和终端发光。
+接口要求clouds.enabled=false；不支持GPU云，零密度但enabled的云也明确拒绝。
+空气关闭时可验证真空退化；开启但系数为零时行星仍不透明。相机地下、环境不匹配或超出支持域明确返回错误。
+
+```cpp
+// environment须与创建source的RenderScene环境一致；view也须匹配source。
+auto medium = dk::render::PathMediumSnapshot::create(environment).value();
+dk::render::VolumePathSettings air;
+air.max_bounces = 8;
+air.sun = true; // 有限太阳圆盘；不可再叠加方向太阳或含太阳的Sky LUT。
+renderer.configure_air_view(queue, 1, scene, medium, view, air, schedule).value();
+// 后续共用submit_batch/poll/completed_frame/display；独立参考可用submit_air_view。
+auto reference = renderer.submit_air_view(queue, scene, medium, view, air, {0, 64}).value();
+```
+
+主网格查询遵守near/far，空气、后续反弹和阴影按物理边界继续。
+阴影同时检查几何/mask、行星及空气透射；Rayleigh/Mie真实散射、Lambert/GGX、有限太阳和面积灯共用NEE/MIS/RR。
+空气结果info.air保存完整环境、介质和体积设置；公共settings报告model=4/sampler=2及公共字段。
+primary_hits只记录第一个样本直接到达的网格，先发生介质事件或命中行星时为空。
+statistics.rays在空气模式计逻辑几何查询（含空几何）；triangle_tests仍不可得，不报告GPU介质事件统计。
+
+max_tracking_steps按一次dispatch计费，渐进时是一个tile；max_steps_per_path约束单路径含阴影的tracking draw。
+tracking额度耗尽、无效系数/结果拒绝整个候选，保留旧completed_spp与帧；调整预算后可重试。
+预算/曝光/批次/tile/目标变更不重置历史，物理环境或积分参数变更重置；正在执行的批次冻结旧预算。
+空气参数、计数/错误缓冲、读回、纹理和AS共享renderer额度；弱缓存不延长无人持有的GPU资源寿命。
+同设备相同样本跨batch/tile保持连续累积；CPU双精度与GPU float按数值/统计门槛比较。
+此入口不依赖M14/M15的视图LUT，未接Editor/capture，也不构成Sponza交互性能承诺。
 
 ## 可执行验收与报告
 
@@ -129,6 +164,8 @@ CPU oracle使用独立双精度暴力求交，面积灯再用独立二维积分�
 覆盖64张发散访问、过滤/UV/wrap、双面/mask发光、能力拒绝、失败寿命，以及glTF导入/产物重载到GPU。
 ggx_numeric/statistics/indirect/lifetime验证材质端点、白炉/面积灯、多次反弹、MIS/RR及纹理组合与在途寿命。
 progressive_images/state/failure/budget/lost验证分块/65536spp一致性、重置矩阵、迟到/失败/取消、额度与终端device loss。
+air_numeric/statistics/progressive/failure/resources覆盖空气CPU对照、解析吸收/单散射、8 seed收敛、低太阳多散射、
+近地/远景、反射/mask、分批连续性、几何复用、失败与1MiB资源额度；实现及结果见[0125](../development/0125-gpu-air-pathtracing.md)。
 会话实施与实测见[0117](../development/0117-pathtracing-progressive.md)。
 材质实施与实测记录见[0115](../development/0115-pathtracing-textures.md)和[0116](../development/0116-pathtracing-ggx.md)。
 

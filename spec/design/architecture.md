@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-16T12:14:04+08:00"
+updated_at: "2026-10-16T14:12:04+08:00"
 status: accepted
 ---
 
@@ -102,7 +102,9 @@ CPU参考使用常量环境、方向太阳和发光三角形，opaque/mask、bas
 VolumePathReference按逐路径RGB通道执行空气/云自由程、真实多次散射、有限太阳圆盘、表面/介质NEE与MIS，
 输出均值、二阶矩及冻结环境/云场来源；原表面入口继续使用独立的model=3语义。
 pathtracing_reference增加PUBLIC CloudFields依赖以持有不可变场，仍不引入Vulkan/Slang；纯CPU构建自动提供CloudFields。
-M17后续按GPU空气/云、Editor/capture、固定质量优化验收；CPU参考通过不表示Editor已可联合渲染或达到实时性能。
+GPU空气入口显式消费相同介质快照及VolumePathSettings，覆盖晴空、任意反弹和阴影透射、行星边界与渐进累积；
+空几何使用compute、有几何使用RT。几何/纹理owner以独立内容身份复用，环境变化保留AS并重置历史。
+GPU云、Editor/capture联合接入及固定质量优化按M17后续推进；模块测试通过不表示Editor已可联合渲染或达到实时性能。
 模拟布片与去噪仍另行规划。
 ScenePipeline 的默认光栅行为保持；新后端明确选择和报告能力，不能静默替换输出。
 AS/SBT、含纹理/mask的Lambert/GGX shader、渐进累积和可调用截图命令已实现；M17体积集成状态见[Roadmap](../roadmap.md)。

@@ -43,6 +43,8 @@ public:
     [[nodiscard]] SceneId id() const noexcept;
     [[nodiscard]] std::uint64_t revision() const noexcept;
     [[nodiscard]] std::uint64_t fingerprint() const noexcept;
+    // Consumed geometry/material/texture identity, excluding scene revision and environment.
+    [[nodiscard]] std::uint64_t geometry_fingerprint() const noexcept;
     [[nodiscard]] std::size_t triangle_count() const noexcept;
     [[nodiscard]] std::size_t degenerate_count() const noexcept;
     [[nodiscard]] std::size_t texture_count() const noexcept;

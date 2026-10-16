@@ -9,7 +9,8 @@ namespace {
 using namespace detail;
 struct Fingerprint {
     std::uint64_t value = 14695981039346656037ull;
-    void byte(std::uint8_t b) { value = (value ^ b) * 1099511628211ull; }
+    Fingerprint* geometry = nullptr;
+    void byte(std::uint8_t b) { value = (value ^ b) * 1099511628211ull; if(geometry) geometry->byte(b); }
     void integer(std::uint64_t n) { for (unsigned i=0;i<8;++i) { byte(static_cast<std::uint8_t>(n)); n >>= 8; } }
     void number(double d) { integer(std::bit_cast<std::uint64_t>(d == 0 ? 0.0 : d)); }
     void vector(const Vec3d& v) { for (int i=0;i<3;++i) number(v[i]); }
@@ -46,6 +47,8 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
         const auto env=source.environment(); hash.integer(env.enabled); hash.integer(env.clouds.enabled);
         for (double v:env.sun.direction) hash.number(v);
         for (double v:env.sun.irradiance) hash.number(v);
+        Fingerprint geometry; geometry.integer(1); geometry.integer(std::uint32_t(model)); geometry.id(source.id());
+        hash.geometry=&geometry;
         std::size_t primitive_count=0, triangle_count=0, texture_bytes=0;
         for (std::size_t ei=0;ei<source.entities().size();++ei) {
             const auto& entity=source.entities()[ei];
@@ -146,6 +149,7 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
             }
         }
         state->fingerprint=hash.value;
+        state->geometry_fingerprint=geometry.value;
         return PathTraceScene{std::move(state)};
     } catch (const std::bad_alloc&) {
         return std::unexpected(Error{ErrorCode::internal_error,"Path scene allocation failed"});
@@ -154,6 +158,7 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
 SceneId PathTraceScene::id() const noexcept { return state_ ? state_->source.id() : SceneId{}; }
 std::uint64_t PathTraceScene::revision() const noexcept { return state_ ? state_->source.revision() : 0; }
 std::uint64_t PathTraceScene::fingerprint() const noexcept { return state_ ? state_->fingerprint : 0; }
+std::uint64_t PathTraceScene::geometry_fingerprint() const noexcept { return state_ ? state_->geometry_fingerprint : 0; }
 std::size_t PathTraceScene::triangle_count() const noexcept { return state_ ? state_->triangles.size() : 0; }
 std::size_t PathTraceScene::degenerate_count() const noexcept { return state_ ? state_->degenerate : 0; }
 std::size_t PathTraceScene::texture_count() const noexcept { return state_ ? state_->textures.size() : 0; }
@@ -169,6 +174,24 @@ Result<std::optional<PathTraceHit>> PathTraceScene::nearest(const PathTraceRay& 
     PathTraceStatistics statistics; return detail::nearest_path(*state_,ray,statistics);
 }
 namespace detail {
+bool same_path_geometry(const PathSceneState& a,const PathSceneState& b) {
+    if(a.geometry_fingerprint!=b.geometry_fingerprint || a.source.id()!=b.source.id() || a.material_model!=b.material_model ||
+        a.triangles.size()!=b.triangles.size() || a.textures.size()!=b.textures.size() || a.degenerate!=b.degenerate) return false;
+    for(std::size_t i=0;i<a.triangles.size();++i) {
+        const auto& x=a.triangles[i]; const auto& y=b.triangles[i];
+        if(x.a!=y.a || x.b!=y.b || x.c!=y.c || x.normal!=y.normal || x.albedo!=y.albedo || x.emission!=y.emission ||
+            x.uv_a!=y.uv_a || x.uv_b!=y.uv_b || x.uv_c!=y.uv_c || x.texture!=y.texture || x.alpha!=y.alpha ||
+            x.cutoff!=y.cutoff || x.mask!=y.mask || x.double_sided!=y.double_sided || x.metallic!=y.metallic || x.roughness!=y.roughness ||
+            x.entity!=y.entity || x.mesh!=y.mesh || x.primitive!=y.primitive || x.triangle!=y.triangle) return false;
+    }
+    for(std::size_t i=0;i<a.textures.size();++i) {
+        const auto& x=a.textures[i]; const auto& y=b.textures[i];
+        if(x.width!=y.width || x.height!=y.height || x.rgba8!=y.rgba8 || x.origin!=y.origin ||
+            x.sampler.wrap_s!=y.sampler.wrap_s || x.sampler.wrap_t!=y.sampler.wrap_t ||
+            x.sampler.min_filter!=y.sampler.min_filter || x.sampler.mag_filter!=y.sampler.mag_filter) return false;
+    }
+    return true;
+}
 Result<void> validate_path_ray(const PathTraceRay& ray) {
     if (!ray.origin.allFinite() || (ray.origin.array().abs()>1e6).any() || !ray.direction.allFinite() ||
         std::abs(ray.direction.squaredNorm()-1)>1e-10 || !std::isfinite(ray.minimum) || !std::isfinite(ray.maximum) ||

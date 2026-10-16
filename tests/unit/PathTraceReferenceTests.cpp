@@ -113,6 +113,19 @@ TEST_CASE("scene snapshots freeze consumed assets revision and lifetime") {
     f.document.reset(); f.asset.mesh.primitives.clear(); f.heap.begin_close();
     CHECK(old.nearest(down).value()->distance==1); CHECK(old.triangle_count()==1);
 }
+TEST_CASE("geometry identity excludes environment revision but includes consumed materials and transforms") {
+    Fixture f; f.triangle({-1,-1,0},{1,-1,0},{0,1,0}); const auto original=f.scene();
+    EnvironmentDescription e; e.enabled=true; e.sun.direction={1,0,0}; f.document->set_environment(e).value();
+    auto atmosphere=f.scene();
+    CHECK(atmosphere.geometry_fingerprint()==original.geometry_fingerprint());
+    CHECK(atmosphere.fingerprint()!=original.fingerprint()); CHECK(atmosphere.revision()!=original.revision());
+    e.atmosphere.mie_anisotropy=.4; f.document->set_environment(e).value();
+    CHECK(f.scene().geometry_fingerprint()==original.geometry_fingerprint());
+    f.asset.materials[0].emissive={1,0,0}; CHECK(f.scene().geometry_fingerprint()!=original.geometry_fingerprint());
+    f.asset.materials[0].emissive.setZero(); CHECK(f.scene().geometry_fingerprint()==original.geometry_fingerprint());
+    Trsd moved; moved.translation={1,0,0}; f.document->set_local_transform(f.entity,moved).value();
+    CHECK(f.scene().geometry_fingerprint()!=original.geometry_fingerprint());
+}
 TEST_CASE("scale aware offsets avoid self shadows and instance area weights remain physical") {
     const double scale=GENERATE(1e-6,1.0,1e4);
     Fixture f; f.quad(-8,8,0,{.6f,.6f,.6f}); f.quad(-1,1,2,{0,0,0},{2,2,2},true);

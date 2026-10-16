@@ -92,8 +92,8 @@ void texture_lifetime(memory::ResourceHandle heap,PathTraceRenderer& renderer,Su
     Fixture f{heap}; f.triangle({-1,-1,0},{1,-1,0},{0,1,0},{1,1,1}); add_texture(f,0,{.75,.75});
     auto source=f.scene(); auto scene=take(renderer.prepare_scene(queue,source)); auto s=settings(); s.environment_rgb=Vec3d::Ones(); s.estimator=PathTraceEstimator::bsdf_only;
     const auto old=ray_image(renderer,queue,scene,s,1); const auto before=queue.stats().submitted;
-    fail_submit=true; require(!renderer.prepare_scene(queue,source),"failed texture upload published scene"); require(queue.stats().submitted==before,"failed upload advanced ticket");
     f.asset.textures[0].rgba8[12]=std::byte{0}; auto changed=f.scene(); require(changed.fingerprint()!=source.fingerprint(),"texture bytes absent from fingerprint");
+    fail_submit=true; require(!renderer.prepare_scene(queue,changed),"failed texture upload published scene"); require(queue.stats().submitted==before,"failed upload advanced ticket");
     auto next=take(renderer.prepare_scene(queue,changed)); const auto current=ray_image(renderer,queue,next,s,1);
     require(current.linear_rgb()[0].x()<.001 && old.linear_rgb()[0].x()>.99,"texture edit corrupted old generation");
     auto pending=take(renderer.submit_rays(queue,next,std::span{&down,1},s,{0,128}));

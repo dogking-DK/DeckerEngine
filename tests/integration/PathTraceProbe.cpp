@@ -213,7 +213,8 @@ void lifetime(memory::ResourceHandle heap,PathTraceRenderer& renderer,Submission
     require(queue.stats().submitted==before,"rejected request submitted work");
     { auto foreign=take(SubmissionQueue::create(heap,take(view.share_queue(0)),1));
       require(!renderer.prepare_scene(foreign,source),"foreign prepare accepted"); require(!renderer.submit_rays(foreign,gpu,std::span{&down,1},s,{0,1}),"foreign trace accepted"); check(foreign.close()); }
-    fail_submit=true; require(!renderer.prepare_scene(queue,source),"failed AS submit published scene");
+    f.asset.materials[0].emissive={.1f,0,0}; const auto failed_source=f.scene(); f.asset.materials[0].emissive.setZero();
+    fail_submit=true; require(!renderer.prepare_scene(queue,failed_source),"failed AS submit published scene");
     require(queue.stats().submitted==before,"AS failure advanced submission"); fail_submit=true;
     require(!renderer.submit_rays(queue,gpu,std::span{&down,1},s,{0,1}),"failed trace submit published frame"); require(queue.stats().submitted==before,"trace failure advanced submission");
     close_color(old.linear_rgb()[0],old_value,0);
@@ -257,13 +258,18 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
         }
         auto source=f.scene(); auto scene=take(renderer.prepare_scene(queue,source)); auto s=settings(); s.environment_rgb=Vec3d::Ones();
         const auto frame=take(renderer.submit_rays(queue,scene,std::span{&down,1},s,{0,4})); const auto old=complete(queue,frame);
-        struct Block { void* pointer; std::size_t size; }; std::vector<Block> blocks;
+        f.asset.materials[0].emissive={.1f,0,0}; const auto changed=f.scene(); // Force a real upload, not a cache hit.
+        struct Block { void* pointer; std::size_t size; };
+        struct Blocks : std::vector<Block> {
+            memory::ResourceHandle heap;
+            ~Blocks() { for(const auto& block:*this) heap.deallocate(block.pointer,block.size); }
+        } blocks; blocks.heap=bounded;
         for(const std::size_t bytes:{65536u,256u}) while(auto block=bounded.try_allocate(bytes)) blocks.push_back({*block,bytes});
         bool scene_failed=false,frame_failed=false,read_failed=false,partial=false,success=false;
         for (;;) {
-            const auto before=bounded.snapshot(); const auto submitted=queue.stats().submitted;
+            const auto before=bounded.snapshot(); const auto submitted=queue.stats().submitted; bool prepared=false;
             {
-                auto candidate=renderer.prepare_scene(queue,source); scene_failed|=!candidate;
+                auto candidate=renderer.prepare_scene(queue,changed); scene_failed|=!candidate; prepared=bool(candidate);
                 if (candidate) require(take(queue.wait(candidate->submission())),"candidate wait failed");
                 auto render=renderer.submit_rays(queue,scene,std::span{&down,1},s,{0,1}); frame_failed|=!render;
                 if (render) require(take(queue.wait(render->submission())),"frame wait failed");
@@ -272,12 +278,13 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
                 if (!candidate && !render) require(queue.stats().submitted==submitted,"allocation failure submitted work");
                 success=bool(candidate) && bool(render) && bool(image);
             }
-            require(bounded.snapshot().live_allocations==before.live_allocations && bounded.snapshot().backing_requested_bytes==before.backing_requested_bytes,"failed candidate leaked Memory");
+            // A successful prepare can replace the bounded weak-cache control blocks. Failed prepares cannot.
+            if(!prepared) require(bounded.snapshot().live_allocations==before.live_allocations && bounded.snapshot().backing_requested_bytes==before.backing_requested_bytes,"failed candidate leaked Memory");
             require(old.info().fingerprint==source.fingerprint() && old.linear_rgb().size()==1,"old image changed during allocation failure");
             if(success || blocks.empty()) break;
             auto block=blocks.back(); blocks.pop_back(); bounded.deallocate(block.pointer,block.size);
         }
-        for (const auto& block:blocks) bounded.deallocate(block.pointer,block.size);
+        for (const auto& block:blocks) bounded.deallocate(block.pointer,block.size); blocks.clear();
         require(scene_failed && frame_failed && read_failed && partial && success,"allocation test missed failure/recovery path");
         bounded.begin_close(); require(!renderer.prepare_scene(queue,source) && !frame.read(queue),"closing Memory accepted new work"); require(old.linear_rgb().size()==1,"closing invalidated old image");
     }
@@ -287,6 +294,7 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
 #include "PathTextureCases.hpp"
 #include "PathGgxCases.hpp"
 #include "PathProgressiveCases.hpp"
+#include "PathAirCases.hpp"
 int main(int argc,char** argv) {
     try {
         require(argc==2,"expected analytic/statistics/images/lifetime case");
@@ -297,14 +305,19 @@ int main(int argc,char** argv) {
             memory::ThreadContext context{memory.system,memory.heap}; memory::ExecutionScope scope{context,memory.heap};
             DeviceOptions options; options.validation=ValidationMode::required; options.ray_tracing=RayTracingMode::required;
             const std::string_view requested=argv[1];
-            if((requested.starts_with("texture_") && requested!="texture_disabled") || requested=="ggx_lifetime") options.sampled_image_indexing=SampledImageIndexingMode::required;
+            if((requested.starts_with("texture_") && requested!="texture_disabled") || requested=="ggx_lifetime" || requested=="air_resources") options.sampled_image_indexing=SampledImageIndexingMode::required;
             options.diagnostic_sink=diagnostic; options.diagnostic_user_data=&diagnostics; auto device=take(Device::create(memory.heap,options)); auto view=take(device.share_queue(0));
             std::printf("GPU=%s validation=%d case=%s\n",device.adapter().properties.deviceName.data(),device.validation_enabled(),argv[1]);
             native_submit=reinterpret_cast<PFN_vkQueueSubmit2>(device.device_proc("vkQueueSubmit2")); native_wait=reinterpret_cast<PFN_vkWaitSemaphores>(device.device_proc("vkWaitSemaphores"));
             auto queue=take(graphics::detail::SubmissionAccess::create(memory.heap,std::move(device),3,{submit_override,nullptr,wait_override}));
             { auto renderer=take(PathTraceRenderer::create(memory.heap,queue,DK_PATH_SHADER_DIR));
               const std::string_view mode=argv[1];
-              if(mode=="progressive_images") progressive_images(memory.heap,renderer,queue);
+              if(mode=="air_numeric") air_numeric(memory.heap,renderer,queue);
+              else if(mode=="air_statistics") air_statistics(memory.heap,renderer,queue);
+              else if(mode=="air_progressive") air_progressive(memory.heap,renderer,queue);
+              else if(mode=="air_failure") air_failure(memory.heap,renderer,queue);
+              else if(mode=="air_resources") air_resources(memory.heap,queue);
+              else if(mode=="progressive_images") progressive_images(memory.heap,renderer,queue);
               else if(mode=="progressive_state") progressive_state(memory.heap,renderer,queue);
               else if(mode=="progressive_failure") progressive_failure(memory.heap,renderer,queue);
               else if(mode=="progressive_lost") progressive_lost(memory.heap,view);

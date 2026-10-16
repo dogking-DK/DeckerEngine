@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-16T12:14:04+08:00"
+updated_at: "2026-10-16T14:12:04+08:00"
 status: accepted
 ---
 
@@ -20,7 +20,7 @@ CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、
 
 M17补齐世界空间介质；当前Editor仍执行M16表面模式，不能把本节规划理解为已可联合渲染。
 分阶段状态统一见[Roadmap](../roadmap.md#m17大气云与路径追踪集成)，介质基础见[0123](../development/0123-path-media-foundation.md)，
-CPU体积积分与统计验收见[0124](../development/0124-volume-path-reference.md)。
+CPU体积积分与统计验收见[0124](../development/0124-volume-path-reference.md)，GPU空气与渐进验收见[0125](../development/0125-gpu-air-pathtracing.md)。
 
 ### 模型与接入顺序
 
@@ -114,6 +114,36 @@ M17.1所有系数/密度支持域继续适用；主射线沿用表面参考的�
 验收包括相函数归一化/矩、采样序列、真空与表面白炉/面积灯、太阳圆盘能量和遮蔽、纯吸收解析与参考、
 无云单次散射对独立数值积分、保守散射白炉及多次散射/深度收敛、真实云阴影、MIS对continuation-only及RR开关，
 固定seed集合与样本分区、环境不匹配、非法/额度/活动取消/分配失败/旧输入寿命。阈值沿M17统计协议，新增具体夹具记录在[0124](../development/0124-volume-path-reference.md)。
+
+### M17.3 GPU空气实施契约
+
+在PathTraceRenderer新增submit_air_rays、submit_air_view、configure_air_view，显式消费PathMediumSnapshot和VolumePathSettings。
+复用M17.2 model=4/sampler=2的RGB通道、analog自由程、Rayleigh/Mie混合相函数、真实多次散射、有限太阳、NEE/ratio tracking/MIS/RR。
+只接受clouds.enabled=false；空气关闭可作真空对照，旧surface入口仍用model=3并保留surface-only规则。
+返回既有GPU帧类型，info.air显式记录完整环境、介质和体积设置；公共settings同步模型/采样/反弹等公共字段，不能误报表面模型。
+空几何用空气compute入口执行相同积分，不创建虚假BLAS/TLAS；有几何复用原RT/radiance/visibility/mask/GGX与Graph。
+
+几何GPU owner与场景来源wrapper分开；prepare_scene可复用两个弱缓存中完全相同的已消费几何/材质/纹理。
+几何指纹排除revision/环境，保留实际消费内容；命中指纹后再逐内容校验，环境变更不重建AS或纹理。
+缓存不保活无消费者的GPU资源；新wrapper持有最新CPU场景来源。准备失败保留旧owner，缓存只在准备成功后更新。
+
+不要求shaderFloat64。主起点先量化到GPU float位置，再在CPU双精度计算径向单位向量和离地高度。
+GPU沿路径传播径向向量/高度，以差平方表达式求球壳交点和高度增量，避免世界坐标减去地球半径丢失近地高度。
+自由程使用小参数稳定log、补偿距离累加，并先以剩余光学距离判断出界，避免稀薄介质除法溢出或短步被float距离吞掉。
+网格/行星取最近边界，地面起点作显式数值外推；near/far只限制主网格，任意反弹与阴影持续到物理边界。
+太阳小角度采样用1-cos和sin的稳定形式，圆盘命中用叉积角度判定；不能因float的cos舍入把小太阳膨胀成大圆盘。
+支持域沿M17.2；原点float量化导致地下、非有限或不可前进路径明确拒绝，不伪装成真空或静默clamp概率。
+
+每路径tracking上限沿VolumePathSettings；max_tracking_steps在GPU按一次dispatch计费（渐进时为单tile）。
+原子计数及错误标志由本次提交独占，候选超限或出现无效值就整体失败；不会用截断后的样本推进completed_spp。
+无历史读回也携带错误诊断；渐进延续既有4字节状态读回、整批发布、generation、取消、迟到丢弃及1GiB预算机制。
+空气参数上传/状态/读回等资源沿同一AllocationBudget计费，GPU在途与外部完成图继续保活。
+空气物理内容、算法/采样设置进入历史身份；曝光/调度不重采样，预算变动仅影响下一批，非法配置不替换旧视图。
+本阶段不接Editor/capture schema；GPU代码与CPU参考通过后才推进后续上层集成。
+
+验收：空场/有限太阳与纯吸收解析、近地/切线/行星/远景、低太阳单次散射、表面与GGX反射、几何/mask阴影，
+8 seed CPU/GPU均值与标准误差、同设备批次/tile连续样本，环境改变复用AS且重置历史，曝光保留，
+GPU额度/取消/迟到/错误候选/外部owner寿命，required RT与validation/sync零警告错误。证据见[0125](../development/0125-gpu-air-pathtracing.md)。
 
 ### 状态、接口演进与优化约束
 

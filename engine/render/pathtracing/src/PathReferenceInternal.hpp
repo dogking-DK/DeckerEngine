@@ -1,5 +1,6 @@
 #pragma once
 #include <dk/render/PathTraceReference.hpp>
+#include <dk/render/VolumePathReference.hpp>
 #include <dk/memory/SmartPtr.hpp>
 #include <numbers>
 
@@ -36,6 +37,7 @@ struct PathSceneState {
     std::size_t degenerate = 0;
     std::size_t masked_emitters = 0;
     std::uint64_t fingerprint = 0;
+    std::uint64_t geometry_fingerprint = 0;
 };
 struct PathImageState {
     explicit PathImageState(memory::ResourceHandle heap) : pixels(0, memory::Allocator<Vec3d>{heap}) {}
@@ -57,4 +59,7 @@ inline double luminance(const Vec3d& c) { return c.dot(Vec3d{.2126,.7152,.0722})
 [[nodiscard]] Vec3d offset_path_origin(const PathTriangle&, const Vec3d& position, const Vec3d& direction);
 [[nodiscard]] Vec4d path_base_color(const PathSceneState&,const PathTriangle&,const Vec3d& barycentric);
 [[nodiscard]] Result<void> validate_path_texture(const TextureData&);
+[[nodiscard]] bool same_path_geometry(const PathSceneState&,const PathSceneState&);
+[[nodiscard]] Result<void> validate_volume_work(const PathTraceScene&,const PathMediumSnapshot&,const VolumePathSettings&,
+    PathTraceSamples,std::uint64_t pixels,bool cpu_geometry=true);
 } // namespace dk::render::detail

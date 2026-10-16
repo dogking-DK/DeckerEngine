@@ -1,9 +1,16 @@
+#ifndef DK_PATH_EMPTY
+#define DK_PATH_EMPTY 0
+#endif
 struct PathPayload { float distance; float2 barycentric; uint index; uint found; };
+#if !DK_PATH_EMPTY
 [[vk::binding(0,0)]] RaytracingAccelerationStructure scene;
 [[vk::binding(1,0)]] StructuredBuffer<float4> triangles;
+#endif
 [[vk::binding(2,0)]] StructuredBuffer<float4> parameters;
 [[vk::binding(3,0)]] RWStructuredBuffer<float4> output;
 [[vk::binding(4,0)]] StructuredBuffer<float4> inputRays;
+#include "path-accumulate.slang"
+#if !DK_PATH_EMPTY
 #if DK_PATH_TEXTURES
 [[vk::binding(5,0)]] Texture2D<float4> baseTextures[64];
 [[vk::binding(6,0)]] SamplerState baseSamplers[64];
@@ -21,12 +28,15 @@ float4 baseColor(uint index,float2 barycentric) {
 #endif
     return factor;
 }
+#endif
 static const float pi=3.14159265358979323846;
 #include "path-bsdf.slang"
+#if !DK_PATH_EMPTY
 PathBsdf materialAt(uint index,float2 barycentric) {
     float4 material=triangles[index*9+8];
     PathBsdf result; result.color=baseColor(index,barycentric).xyz; result.metallic=material.x; result.roughness=material.y; result.ggx=material.z!=0; return result;
 }
+#endif
 static const float infinity=3.402823466e+38;
 float largest(float3 v) { return max(v.x,max(v.y,v.z)); }
 uint mixBits(uint x) { x^=x>>16; x*=0x7feb352d; x^=x>>15; x*=0x846ca68b; return x^(x>>16); }
@@ -40,6 +50,7 @@ float nextFloat(float v,float direction) {
     if(v==0) return asfloat(direction>0 ? 1u : 0x80000001u);
     uint bits=asuint(v); return asfloat((v>0)==(direction>0) ? bits+1 : bits-1);
 }
+#if !DK_PATH_EMPTY
 float3 offsetOrigin(uint index,float3 position,float3 direction) {
     float3 extent=max(max(abs(triangles[index*9].xyz),abs(triangles[index*9+1].xyz)),abs(triangles[index*9+2].xyz))+abs(position);
     float error=64*1.1920928955078125e-7*largest(extent);
@@ -99,19 +110,24 @@ float3 directLight(PathPayload hit,float3 position,float3 normal,PathBsdf bsdf,f
     BsdfEval evaluated=evalBsdf(bsdf,normal,wo,wi);
     return evaluated.value*radiance*(cosine*(delta ? 1 : weight(pdf,evaluated.pdf))/pdf);
 }
+#endif
+#include "path-air.slang"
 RayDesc primaryRay(uint2 coordinate,uint pixel,uint sample) {
     RayDesc ray;
     if(asuint(parameters[2]).w!=0) {
-        float4 a=inputRays[pixel*2],b=inputRays[pixel*2+1]; ray.Origin=a.xyz; ray.TMin=a.w; ray.Direction=normalize(b.xyz); ray.TMax=b.w;
+        uint stride=asuint(parameters[12]).x!=0 ? 3u : 2u;
+        float4 a=inputRays[pixel*stride],b=inputRays[pixel*stride+1]; ray.Origin=a.xyz; ray.TMin=a.w; ray.Direction=normalize(b.xyz); ray.TMax=b.w;
     } else {
         uint counter=pixel+asuint(parameters[10]).x;
         float2 subpixel=float2(randomValue(counter,sample,0,0),randomValue(counter,sample,0,1));
+        if(asuint(parameters[12]).x!=0) subpixel=float2(airRandom(counter,sample,0,1),airRandom(counter,sample,0,1,1));
         float3 near=parameters[7].xyz+parameters[8].xyz*(float(coordinate.x)+subpixel.x)+parameters[9].xyz*(float(coordinate.y)+subpixel.y);
         float scale=largest(abs(near)); float3 scaled=near/scale; float distance=length(scaled);
         ray.Origin=parameters[6].xyz; ray.TMin=distance*scale; ray.Direction=scaled/distance; ray.TMax=ray.TMin*parameters[5].w;
     }
     return ray;
 }
+#if !DK_PATH_EMPTY
 float3 tracePath(RayDesc ray,uint pixel,uint sample,inout uint rays,out float4 firstHit,out float4 firstNormal) {
     uint4 counts=asuint(parameters[1]),flags=asuint(parameters[2]);
     float3 radiance=0,throughput=1,previous=0; float bsdfPdf=0;
@@ -139,20 +155,30 @@ float3 tracePath(RayDesc ray,uint pixel,uint sample,inout uint rays,out float4 f
     }
     return radiance;
 }
-#include "path-accumulate.slang"
-[shader("raygeneration")]
-void pathMain() {
-    uint2 coordinate=DispatchRaysIndex().xy; uint4 image=asuint(parameters[0]),tile=asuint(parameters[11]);
+#endif
+void runPathPixel(uint2 coordinate) {
+    uint4 image=asuint(parameters[0]),tile=asuint(parameters[11]);
     uint localPixel=coordinate.y*image.x+coordinate.x;
     if(tile.w!=0) coordinate+=tile.xy;
     uint pixel=tile.w!=0 ? coordinate.y*tile.z+coordinate.x : localPixel;
     Accumulation a=beginAccumulation(pixel);
     for(uint sample=image.z;sample<image.z+image.w;++sample) {
-        float4 hit,n; float3 value=tracePath(primaryRay(coordinate,pixel,sample),pixel+asuint(parameters[10]).x,sample,a.rays,hit,n);
+        float4 hit=0,n=0; float3 value=0; RayDesc ray=primaryRay(coordinate,pixel,sample);
+        if(asuint(parameters[12]).x!=0) {
+            float4 initial=asuint(parameters[2]).w!=0 ? inputRays[pixel*3+2] : parameters[13];
+            AirLocation location; location.radial=normalize(initial.xyz); location.height=initial.w;
+            value=traceAir(ray,location,pixel+asuint(parameters[10]).x,sample,a.rays,hit,n);
+        }
+#if !DK_PATH_EMPTY
+        else value=tracePath(ray,pixel+asuint(parameters[10]).x,sample,a.rays,hit,n);
+#endif
         addSample(a,value,sample,hit,n);
     }
     finishAccumulation(a,pixel,localPixel);
 }
+#if !DK_PATH_EMPTY
+[shader("raygeneration")]
+void pathMain() { runPathPixel(DispatchRaysIndex().xy); }
 [shader("miss")]
 void pathMiss(inout PathPayload payload) { payload.found=0; }
 [shader("miss")]
@@ -167,3 +193,10 @@ void pathAnyHit(inout PathPayload payload,BuiltInTriangleIntersectionAttributes 
     if((n.w==0 && dot(n.xyz,WorldRayDirection())>=0) ||
        (triangles[index*9+7].w!=0 && baseColor(index,attributes.barycentrics).w<triangles[index*9+5].w)) IgnoreHit();
 }
+#else
+[shader("compute")]
+[numthreads(64,1,1)]
+void airEmptyMain(uint3 id:SV_DispatchThreadID) {
+    uint4 image=asuint(parameters[0]); if(id.x<image.x*image.y) runPathPixel(uint2(id.x%image.x,id.x/image.x));
+}
+#endif

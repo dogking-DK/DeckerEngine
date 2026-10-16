@@ -29,7 +29,7 @@ Error cancelled() { return {ErrorCode::invalid_state,"CPU volume path tracing ca
 std::uint32_t mix(std::uint32_t x) { x^=x>>16; x*=0x7feb352du; x^=x>>15; x*=0x846ca68bu; return x^(x>>16); }
 double power(double a,double b) { if(a<=0) return 0; if(b<=0) return 1; const double q=b/a; return 1/(1+q*q); }
 const PathSceneState& validate(const PathTraceScene& scene,const PathMediumSnapshot& medium,const VolumePathSettings& s,
-    PathTraceSamples samples,std::uint64_t pixels) {
+    PathTraceSamples samples,std::uint64_t pixels,bool cpu_geometry=true) {
     const auto* state=PathReferenceAccess::get(scene);
     if(!state || !medium) throw path_invalid("Volume path requires valid frozen scene and medium");
     if(state->source.environment()!=medium.environment()) throw path_invalid("Volume scene and medium environment mismatch");
@@ -41,7 +41,7 @@ const PathSceneState& validate(const PathTraceScene& scene,const PathMediumSnaps
         !s.max_tracking_steps || s.max_tracking_steps>(1ull<<28) || !s.max_steps_per_path || s.max_steps_per_path>(1u<<20))
         throw path_invalid("Invalid volume path settings or sample/work interval");
     const auto rays=pixels*samples.count*(2ull*s.max_bounces+1);
-    if(rays>s.max_rays || rays>s.max_triangle_tests/std::max<std::size_t>(1,state->triangles.size()))
+    if(rays>s.max_rays || (cpu_geometry && rays>s.max_triangle_tests/std::max<std::size_t>(1,state->triangles.size())))
         throw path_invalid("CPU volume geometry work budget exceeded");
     return *state;
 }
@@ -290,6 +290,11 @@ struct Moments {
         if(!sum.allFinite() || !square.allFinite()) throw Error{ErrorCode::internal_error,"Nonfinite volume moments"};
     }
 };
+}
+Result<void> detail::validate_volume_work(const PathTraceScene& scene,const PathMediumSnapshot& medium,const VolumePathSettings& settings,
+    PathTraceSamples samples,std::uint64_t pixels,bool cpu_geometry) {
+    try { (void)validate(scene,medium,settings,samples,pixels,cpu_geometry); return {}; }
+    catch(const Error& error) { return std::unexpected(error); }
 }
 double volume_path_sample(std::uint64_t seed,std::uint32_t pixel,std::uint32_t sample,std::uint32_t event,
     VolumeSampleStream stream,std::uint32_t counter) noexcept {

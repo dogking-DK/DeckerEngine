@@ -98,9 +98,9 @@ void ggx_lifetime(memory::ResourceHandle heap,PathTraceRenderer& renderer,Submis
     f.asset.textures[0].rgba8[7]=std::byte{255};
     auto whole=ray_image(renderer,queue,scene,s,256),first=ray_image(renderer,queue,scene,s,100),last=ray_image(renderer,queue,scene,s,156,down,100);
     close_color(whole.linear_rgb()[0],(first.linear_rgb()[0]*100+last.linear_rgb()[0]*156)/256,1e-6);
-    const auto submitted=queue.stats().submitted; fail_submit=true; require(!renderer.prepare_scene(queue,cpu),"GGX failed upload published scene"); require(queue.stats().submitted==submitted,"GGX failed upload advanced ticket");
     f.asset.materials[0].metallic=1; f.asset.materials[0].roughness=1;
     auto changed=ggx_scene(f); require(changed.fingerprint()!=cpu.fingerprint(),"GGX material absent from fingerprint");
+    const auto submitted=queue.stats().submitted; fail_submit=true; require(!renderer.prepare_scene(queue,changed),"GGX failed upload published scene"); require(queue.stats().submitted==submitted,"GGX failed upload advanced ticket");
     auto next=take(renderer.prepare_scene(queue,changed)); auto pending=take(renderer.submit_rays(queue,next,std::span{&down,1},s,{0,4096}));
     const auto expected=take(estimate_path_reference(changed,down,s,{0,4096})).mean;
     timeout_once=true; require(!take(pending.read(queue)),"GGX pending published early");
