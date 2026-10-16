@@ -1,11 +1,17 @@
 ---
 module: render-capture
 created_at: "2026-10-03T21:21:47+08:00"
-updated_at: "2026-10-15T10:16:45+08:00"
+updated_at: "2026-10-16T11:29:51+08:00"
 status: accepted
 ---
 
 # M7.4 截图作业与自动化验收
+
+## M17 后续体积路径截图
+
+[M17设计](render-pathtracing.md#m17-大气云与表面路径的统一传输)在M17.5计划扩展版本化路径介质设置及来源报告，
+冻结显式时间、环境内容、场hash、模型/采样版本，与Editor共享积分器；继续在owner原子替换时发布文件。
+命令发现、schema、参考页和Python/Luau用例到实际实现时同步。当前capture不新增可用模式，M17.1仅提供CPU介质基础。
 
 ## 边界与依赖
 

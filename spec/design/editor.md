@@ -1,11 +1,18 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-16T10:30:00+08:00"
+updated_at: "2026-10-16T11:29:51+08:00"
 status: accepted
 ---
 
 # M8.1 编辑器工作台
+
+## M17 环境与路径的后续集成
+
+[M17设计](render-pathtracing.md#m17-大气云与表面路径的统一传输)规划Scene media模式，显式使用场景空气/云，
+与原Surface only分开；设置、输入版本与实际完成spp必须对应。环境编辑需细分几何与介质失效，避免无条件重建Sponza AS。
+当前仅推进CPU介质参考，GUI仍沿M16要求surface-only确认。M17.5才接入真实GUI/Console/IPC/capture一致性，
+M17.6再验收交互响应和固定质量性能；不能提前声称联合渲染可用。
 
 ## Sponza 交互性能与云预览
 

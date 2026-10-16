@@ -1,11 +1,19 @@
 ---
 module: render-clouds
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-16T10:30:00+08:00"
+updated_at: "2026-10-16T11:29:51+08:00"
 status: accepted
 ---
 
 # 体积云设计
+
+## M17 路径介质接入边界
+
+[路径介质设计](render-pathtracing.md#m17-大气云与表面路径的统一传输)复用CloudFieldData、采样/风时间与密度硬上界。
+M17.1只持有现有不可变CPU场，不修改CloudFieldCache；真实非零云要求field key匹配，零云不强制生成纹理。
+后续GPU路径使用世界空间密度/majorant，不以相机云历史或地面专用云影覆盖任意反弹/阴影。
+本模块三项多散射与各向同性天空近似仍只属于原模型；完整体积路径通过真实散射事件处理，不能重复加入近似光源。
+实施状态由[Roadmap](../roadmap.md#m17大气云与路径追踪集成)维护。
 
 ## 目标与边界
 

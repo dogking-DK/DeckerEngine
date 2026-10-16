@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-16T10:30:00+08:00"
+updated_at: "2026-10-16T11:29:51+08:00"
 status: accepted
 ---
 
@@ -15,6 +15,91 @@ status: accepted
 用户选择先建立正确性参考，再接入编辑器和截图。M16 交付静态三角形场景的渐进式表面路径追踪：
 CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、确定性样本编号、每视图累积、
 后台交互预览和固定 spp 截图。M16.1、M16.6、M16.7.1/2、M16.8、M16.9和M16.10实施契约见下文；capture集成契约见M16.10，阶段状态见[Roadmap](../roadmap.md)。
+
+## M17 大气、云与表面路径的统一传输
+
+M17补齐世界空间介质；当前Editor仍执行M16表面模式，不能把本节规划理解为已可联合渲染。
+分阶段状态统一见[Roadmap](../roadmap.md#m17大气云与路径追踪集成)，本次计划及M17.1证据见[0123](../development/0123-path-media-foundation.md)。
+
+### 模型与接入顺序
+
+目标覆盖主射线、任意表面反弹、介质散射和朝光源的阴影射线，而非把M14/M15视点相关图像叠在路径结果上。
+物理输入继续来自冻结EnvironmentDescription及CloudFieldData；SI米、scene-linear RGB/D65、显式风时间。
+空气使用现有Rayleigh、Mie、吸收剖面；云复用确定性密度场，以消光、单次散射反照率和HG相函数描述。
+M15的三项多散射增亮及常量天空源不进入物理路径积分；实际多次散射由介质事件产生。
+现有M14/M15参考可对照透射及限制到单次散射的实验，不能把近似模型与完整路径的差异当成数值误差。
+
+太阳最终统一为已有角半径/辐照度对应的有限圆盘，NEE和命中使用同一能量/PDF，并计入大气、云、行星和场景几何遮蔽。
+不得同时叠加方向太阳与圆盘的完整能量；M16常量环境/方向太阳保留原模型版本，M17新增模型和采样版本。
+大气顶外的边界辐射与介质散射分开，不能把含太阳或多散射的Sky LUT作为额外全能量源。
+地球表面作为有明确反照率的Lambert边界，取最近的网格或行星交点；穿地网格不使整个Sponza场景被拒绝。
+相机地下返回可恢复错误；阴影长度由采样光源决定，不能受相机far截断。主射线几何far与介质边界语义在M17.2冻结并单列测试。
+
+先完成独立双精度介质查询和透射参考（M17.1），再完成CPU体积路径、相函数/光源MIS及多次散射（M17.2）。
+CPU参考首选逐路径随机RGB通道、按选择概率补偿的标量估计器，避免把RGB最大消光当作无权重的三通道自由程。
+先用保守全局majorant验证null-collision与阴影ratio tracking；null事件不消耗物理反弹次数。
+随机编号包含路径事件、null事件和用途，不能复用BSDF/NEE/RR维度；达到工作上限拒绝整个候选，不能截断路径冒充收敛样本。
+M17.2先冻结估计器与统计验收，再分别接入GPU晴空（M17.3）和非均匀云（M17.4），随后统一Editor/capture（M17.5）。
+原有raygen迭代、BLAS/TLAS、Graph、tile、completed_spp发布机制继续使用；本轮不新增wavefront、异步队列或去噪依赖。
+
+采样与透射估计依据：[PBRT介质与majorant](https://pbr-book.org/4ed/Volume_Scattering/Media)、
+[PBRT体积积分器](https://pbr-book.org/4ed/Light_Transport_II_Volume_Rendering/Volume_Scattering_Integrators)。
+这些是算法依据，不是本机正确性、性能或已实现能力的证据。
+
+### M17.1 世界空间介质参考契约
+
+在现有pathtracing模块新增CPU `PathMediumReference.hpp`，只依赖Scene/Math和CloudFields，不依赖Graphics/Editor。
+`PathMediumSnapshot::create`复制并规范化环境与显式时间、云反照率/各向异性，持有不可变云场owner；
+有实际非零云时要求匹配的field key及有效数据，零云无需创建场。失败不改变调用者输入、缓存current或旧snapshot。
+快照不包含GPU/LUT/视图历史，也不负责修改场景或生成云场；field缓存/预算继续由原CloudFieldCache管理。
+
+公开操作：世界点查询Rayleigh/Mie/云散射及总RGB消光；保守全局消光上界；有限射线空气/云有序区间；
+按区间积分的双精度RGB Beer–Lambert透射及光学厚度。它不计算入射光或散射辐亮度，不是体积路径积分器。
+总消光为三种空气消光与云密度乘extinction之和；云散射为云消光乘显式反照率，避免把散射和吸收重复相加。
+上界取空气各剖面的全局峰值与云density硬上界之和并向上舍入；后续优化majorant可以更紧，但不能低估或静默clamp真实密度。
+
+支持域沿CPU云几何参考：R∈[1,1e7]米、空气厚度≤1e6米、中心各轴绝对值≤1e8米，
+世界坐标绝对值≤1e9米，射线长度有限[0,2e7]米，方向非零有限并稳定归一化；地下起点拒绝。
+时间∈[-1e9,1e9]秒，云反照率∈[0,1]，HG g∈[-.95,.95]，model_version=1。
+区间先裁到空气顶/最近地面/调用者距离，再按云壳分为最多5段；无云空气段和混合云段按实际位置标记。
+地面命中单独返回距离和标志：透射T只描述到地面前的介质，不把不透明地面伪装成介质T=0；调用者负责边界遮蔽。
+两种介质均关闭时返回真空且不引入隐式行星；已启用介质的零系数不关闭其边界。
+
+参考按空气段余弦分布/云段均匀中点积分，不做时域/随机抖动/早停；每段steps∈[1,8192]，
+实际采样总数先按区间数检查max_samples（≤40960），再计算，取消在采样循环安全点检查且不返回部分结果。
+默认512步/段；步数只是数值设置而非画质承诺，真实云必须用步数翻倍检查收敛。
+零长度/真空T=1、光学厚度0；返回全RGB，不能压缩为单个alpha；有限结果和T∈[0,1]须验证。
+
+M17.1验收：独立垂直指数/三角吸收解析解、反向/分段乘积、近地与双壳/切线/地面裁剪、
+真实云对M15独立参考透射、空气与云消光叠加、系数/上界、固定时间/旧场寿命、非法输入/工作预算/取消。
+不在此阶段移除surface-only限制，也不更改capture schema或宣称Editor完成联合渲染。
+
+### 状态、接口演进与优化约束
+
+M17新增介质设置、算法/采样版本、显式时间、场内容hash及环境物理内容进入积分身份；曝光/暂停/目标spp不进入。
+相机变化只重置视图历史，太阳变化不重建纯密度场，风时间变化复用噪声纹理并重置积分，seed/场分辨率变化才生成新云场。
+M17.3/4将几何GPU所有权与介质候选拆开，环境编辑不得无条件重建大场景BLAS/TLAS；保留明确的几何/资产失效键。
+GPU介质纹理、majorant、上传/暂存与外部旧帧沿renderer预算计费；跨renderer共享的owner不能漏计或重复计费。
+prepare完成资源候选、configure通过准入、GPU完成且generation仍匹配后才能发布；取消/失败保留旧完成图并标注旧来源。
+不能以显示旧图、首个tile、GUI present次数作为新视角完成或新样本计数。
+
+Editor最终用Surface only/Scene media明确选择，后者读取场景环境，无需勾选忽略介质；能力不足显示原因。
+capture在M17.5增加版本化设置、命令发现/文档、Python/Luau用例和线性provenance，与GUI调用同一积分链路。
+尚未实现前，旧命令只接受现有字段；不提前登记不可调用能力。
+
+M17.6优化以同模型/同质量为前提：保守空间majorant及空区跳跃、太阳/环境重要性采样、
+按已测GPU时间调节tile工作量和交互分辨率（必须显式显示并在静止恢复完整尺寸）、缓存失效细分。
+屏幕空间云历史不用于任意反弹；如后续采用LUT或多散射近似，须作为另一个明确模式记录模型偏差，不混入无偏参考。
+限制单个GPU提交的工作量以保持交互；timeout只是诊断，不保证GPU硬抢占。运行时预算拒绝不得静默减反弹或丢弃样本。
+
+验收固定Sponza庭院/抬头、远景雾、粗糙与近镜面材质、低太阳、云下/内/上、几何及mask遮蔽，
+另以小场景CPU参考/解析量约束正确性。固定seed集合/物理时间/曝光/尺寸/反弹预算，保存线性输出、方差和输入摘要。
+先冻结CPU参考收敛，再比较GPU：解析透射误差≤1e-4；统计量8 seed均值误差≤2%且落在5标准误差加1e-4内，
+参考N/4N集合均值差≤0.5%；无法满足时明确记录失败，不能以调曝光/改物理参数代替修正。
+每个模式分别记录冷初始化、首个完整新视角、稳态每spp、达到固定质量耗时、GUI响应/取消p50/p95和VMA额度峰值。
+三轮串行性能关闭validation，正确性另跑required RT/sync validation；保留M16 surface基线作为开销对照，不用其帧率承诺体积性能。
+交互候选目标为输入到首个完整预览p95≤100ms、取消响应p95≤100ms、稳态tile GPU p95≤8ms；
+仅在明确尺寸/模型/硬件下测量，不宣称完整体积路径60fps。性能未达不关闭性能阶段；正确性阶段可以独立验收。
 
 ## M16.9 GPU 显示与编辑器消费者
 
@@ -218,7 +303,7 @@ M14/M15 的视点相关天空/空气透视和云历史不能直接充当任意�
 M16 不复用其 screen-space 合成到路径追踪结果，也不把太阳、天空发光或衰减重复计算。
 设置需显式指定 `environment_mode=constant` 和常量辐亮度；太阳可选择 none 或读取冻结 Scene 的方向/辐照度。
 空气/云开启的场景只有明确选择表面模式才可请求路径追踪，UI/结果注明未模拟介质；
-请求 atmosphere/clouds 模式明确返回 unsupported，不自动忽略。体积路径追踪及其多重散射单独立项。
+请求 atmosphere/clouds 模式明确返回 unsupported，不自动忽略。体积路径追踪及其多重散射按M17单独推进；完成上层接入前本约定保持。
 
 ## 现状、模块与依赖
 
@@ -229,9 +314,9 @@ M16 不复用其 screen-space 合成到路径追踪结果，也不把太阳、�
 
 | 模块/入口 | 依赖和职责 |
 | --- | --- |
-| `engine/render/pathtracing` 的 `dk_render_pathtracing_reference` / `dk::render_pathtracing_reference` | 已实现纯 CPU：PUBLIC render_data、asset_data，通过其传递依赖Math/Memory；独立求交、输入转换、采样、Lambert/GGX、参考积分，不链接Geometry实现/Vulkan/Slang |
+| `engine/render/pathtracing` 的 `dk_render_pathtracing_reference` / `dk::render_pathtracing_reference` | 已实现纯 CPU：PUBLIC render_data、asset_data、render_cloud_fields，通过其传递依赖Math/Memory；独立求交、采样、Lambert/GGX及世界空间介质系数/透射参考，不链接Geometry实现/Vulkan/Slang |
 | 同目录 `dk_render_pathtracing` / `dk::render_pathtracing` | PUBLIC render_pathtracing_reference、graphics_device；PRIVATE graphics_graph、graphics_shaders；不可变GPU场景、Lambert/GGX积分、双视图渐进会话、异步帧与HDR诊断 |
-| RenderDisk / Editor装配；CaptureService仍规划 | 读取/冻结资产并调用 renderer；Render 不反向依赖 Framework/Editor；公开路径不暴露其类型 |
+| RenderDisk / Editor / CaptureService装配 | 读取/冻结资产并调用 renderer；Render 不反向依赖 Framework/Editor；公开路径不暴露其类型 |
 
 reference开关默认OFF，已支持无GPU依赖构建与测试，使用见[CPU参考指南](../guides/pathtracing-reference.md)。
 GPU开关DK_BUILD_RENDER_PATHTRACING独立默认OFF，启用时检查Device/Shader/Graph并构建reference；

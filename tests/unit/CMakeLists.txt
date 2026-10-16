@@ -12,8 +12,12 @@ dk_target_defaults(dk_core_tests)
 
 include(Catch)
 if(TARGET dk_render_pathtracing_reference)
-    add_executable(dk_pathtracing_reference_tests PathTraceReferenceTests.cpp PathTextureTests.cpp PathBsdfTests.cpp)
+    add_executable(dk_pathtracing_reference_tests PathTraceReferenceTests.cpp PathTextureTests.cpp PathBsdfTests.cpp PathMediumTests.cpp)
     target_link_libraries(dk_pathtracing_reference_tests PRIVATE dk::render_pathtracing_reference dk::geometry Catch2::Catch2WithMain Threads::Threads)
+    if(TARGET dk::render_cloud_reference)
+        target_link_libraries(dk_pathtracing_reference_tests PRIVATE dk::render_cloud_reference)
+        target_compile_definitions(dk_pathtracing_reference_tests PRIVATE DK_PATH_MEDIUM_CLOUD_REFERENCE=1)
+    endif()
     dk_target_defaults(dk_pathtracing_reference_tests)
     catch_discover_tests(dk_pathtracing_reference_tests TEST_PREFIX "dk.pathtracing."
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 240 LABELS "cpu")
