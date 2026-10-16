@@ -1,12 +1,13 @@
 ---
 created_at: "2026-10-14T10:18:00+08:00"
-updated_at: "2026-10-14T17:37:19+08:00"
+updated_at: "2026-10-16T12:14:04+08:00"
 ---
 
 # CPU路径追踪参考
 
 [M16.1设计](../design/render-pathtracing.md#m161-cpu参考实施契约)提供小场景双精度Lambert/GGX参考，
-用于[GPU无历史管线](pathtracing-gpu.md)正确性对照。渐进式编辑器和路径追踪capture命令尚未接入。
+用于[GPU管线](pathtracing-gpu.md)正确性对照。表面模式已接入Editor和capture；
+CPU体积路径使用本页末尾的独立库入口，GPU及上层体积接入阶段见[Roadmap](../roadmap.md#m17大气云与路径追踪集成)。
 
 ## 构建与定向验证
 
@@ -57,7 +58,7 @@ GGX使用alpha=max(roughness²,0.0025)、单次散射/Smith/Schlick和双向Fres
 LOD=0采用mag_filter（缺省linear），RGB按sRGB逐texel解码、alpha保持线性，支持repeat/clamp/mirrored_repeat。
 mask在alpha×factor小于cutoff时拒绝主/阴影命中；发光mask面仅由BSDF命中提供光照。
 最多64张、单边2048、总64MiB RGBA8；PathTraceScene的texture_info可查询被冻结的资产身份、origin及尺寸。
-当前是表面参考，不积分空气或云；场景启用介质时必须显式设置surface_only，报告此范围。
+上述PathTraceReference入口是表面参考，不积分空气或云；场景启用介质时必须显式设置surface_only，报告此范围。
 
 最多64×64、4096个计入预算的三角形；样本区间在[0,65536)，相机为刚体透视针孔、
 Vulkan深度0..1、有限near/far。每次同时受2^24射线和2^29候选求交上限约束，
@@ -66,3 +67,40 @@ Vulkan深度0..1、有限near/far。每次同时受2^24射线和2^29候选求交
 
 检验误差应读取线性报告；不能用PPM截断/曝光后的像素替代收敛判断。
 实测结果与限制见[0109](../development/0109-pathtracing-reference.md)。
+
+## CPU体积路径参考
+
+[VolumePathReference.hpp](../../engine/render/pathtracing/include/dk/render/VolumePathReference.hpp)属于同一可选CPU target。
+先构造PathTraceScene，再从同一RenderScene的environment构造PathMediumSnapshot；非零云需由CloudFieldCache.prepare提供匹配的不可变场。
+PathMediumSettings显式指定time_seconds、cloud_albedo（默认0.9）和cloud_anisotropy（默认0.6）。
+时间不会从frame或系统时钟推断；更换场景环境后必须重建对应快照。
+
+`estimate_volume_path_reference(scene, medium, ray, settings, samples, pixel, stop)`提供固定射线的RGB均值、二阶矩和工作统计。
+`render_volume_path_reference(heap, scene, medium, view, settings, samples, stop)`返回≤64×64拥有型线性图，
+`info()`保留完整环境、介质设置、云场hash、模型/采样版本、来源、相机和样本区间；`second_moments()`可用于方差分析。
+旧图保活其几何/场输入，改变或关闭原始文档/heap不使已完成像素失效；闭合heap拒绝新图。
+
+VolumePathSettings采用model=4/sampler=2，默认sun=true、黑色外边界、max_bounces=8、rr_start=3。
+反弹计数包含表面和真实介质散射；null碰撞不计反弹。max_bounces=0、rr_start=0可观察无散射传输，
+rr_start=0单独关闭俄罗斯轮盘；bsdf_only估计器关闭NEE，便于统计对照。
+有限太阳圆盘、常量边界与opaque面积灯共享MIS；空气、云和表面沿同一光路散射，不加M14/M15的近似增亮。
+
+每路径只采一个RGB通道并乘3补偿，因此低样本图有通道噪声；它是数值参考，不是编辑器实时预览。
+样本区间[0,65536)，上限32次真实散射，主射线坐标各轴绝对值≤1e6米；地下相机拒绝。
+几何near/far只裁主射线网格，介质持续到实际空气顶/地面，后续反弹和阴影使用完整距离。
+空气或云启用就保留Lambert行星边界，即使系数为0；均关闭才退化为无隐式行星的真空。
+
+默认工作上限2^24 rays、2^29 triangle tests、2^26 tracking steps及每路径2^16 steps；
+tracking可显式提高到请求2^28、每路径2^20。消光上界按已知无云/混合壳区间选择。
+超限、取消、majorant低估或非有限结果均返回错误，不降低样本数、不发布部分图。
+几何仍为CPU逐三角形参考；不承诺大场景或高光学厚度的交互性能。
+
+定向验收使用已有CPU配置（Configuration应匹配实际配置）：
+
+```powershell
+& ./scripts/verify.ps1 -BuildDir out/build/windows-path-media-cpu -Configuration Release `
+  -Target dk_pathtracing_reference_tests -TestRegex '^dk\.pathtracing\.volume '
+```
+
+夹具、独立积分、8 seed统计、收敛与实际结果见[0124](../development/0124-volume-path-reference.md)。
+原示例程序仍调用表面入口，不输出体积图；Editor/GPU/capture尚未调用此体积入口。

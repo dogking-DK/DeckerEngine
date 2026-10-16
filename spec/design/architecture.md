@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-16T11:29:51+08:00"
+updated_at: "2026-10-16T12:14:04+08:00"
 status: accepted
 ---
 
@@ -98,9 +98,12 @@ Device/Shader/Graph 扩展既有模块的能力与资源类型，Render 负责�
 不新建平行的设备所有权或提交系统，不让 CPU-only Runtime 依赖 GPU。
 参考和GPU renderer为独立默认OFF的可选target；GPU开关同时提供reference，纯CPU开关不拉入Graphics/Slang。
 CPU参考使用常量环境、方向太阳和发光三角形，opaque/mask、baseColor纹理与显式Lambert或metallic-roughness材质。
-大气/云统一传输已在[M17路径设计](render-pathtracing.md#m17-大气云与表面路径的统一传输)规划，先交付CPU世界空间介质基础。
+大气/云统一传输见[M17路径设计](render-pathtracing.md#m17-大气云与表面路径的统一传输)：CPU世界空间介质基础及独立体积路径入口已实现。
+VolumePathReference按逐路径RGB通道执行空气/云自由程、真实多次散射、有限太阳圆盘、表面/介质NEE与MIS，
+输出均值、二阶矩及冻结环境/云场来源；原表面入口继续使用独立的model=3语义。
 pathtracing_reference增加PUBLIC CloudFields依赖以持有不可变场，仍不引入Vulkan/Slang；纯CPU构建自动提供CloudFields。
-M17后续按CPU体积参考、GPU空气/云、Editor/capture、固定质量优化验收；模拟布片与去噪仍另行规划。
+M17后续按GPU空气/云、Editor/capture、固定质量优化验收；CPU参考通过不表示Editor已可联合渲染或达到实时性能。
+模拟布片与去噪仍另行规划。
 ScenePipeline 的默认光栅行为保持；新后端明确选择和报告能力，不能静默替换输出。
 AS/SBT、含纹理/mask的Lambert/GGX shader、渐进累积和可调用截图命令已实现；M17体积集成状态见[Roadmap](../roadmap.md)。
 

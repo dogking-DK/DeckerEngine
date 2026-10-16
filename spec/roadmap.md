@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-16T11:29:51+08:00"
+updated_at: "2026-10-16T12:14:04+08:00"
 status: accepted
 ---
 
@@ -737,7 +737,7 @@ CPU参考收敛后、GPU优化前冻结；CPU-only、required RT/同步验证及
 | 子阶段 | 范围与交付物 | 前置 | 独立验收条件 | 状态 |
 | --- | --- | --- | --- | --- |
 | M17.1 | 冻结世界空间空气/云输入、系数/保守上界、有序区间和CPU RGB透射参考 | M14/M15字段、M16数据 | 8项介质及6项旧表面回归通过，CPU隔离配置9项通过；解析/真实云参考、边界/旧代/取消/预算均覆盖 | 已完成，见[0123](development/0123-path-media-foundation.md) |
-| M17.2 | CPU完整体积路径、相函数/自由程、太阳圆盘、表面/介质NEE与MIS、多次散射 | M17.1 | 真空退化、纯吸收/单次散射、白炉/能量、多次散射收敛、独立seed统计、随机维度及预算拒绝 | 未开始 |
+| M17.2 | CPU完整体积路径、相函数/自由程、太阳圆盘、表面/介质NEE与MIS、多次散射 | M17.1 | 真空退化、纯吸收/单次散射、白炉/能量、多次散射收敛、独立seed统计、随机维度及预算拒绝 | 完成，见[0124](development/0124-volume-path-reference.md) |
 | M17.3 | GPU晴空/空气透射、任意反弹/阴影的介质与行星边界、渐进历史 | M17.2 | CPU/GPU数值及统计对照、低太阳/反射/远景、required RT/sync、失败保留和资源预算 | 未开始 |
 | M17.4 | GPU云密度/自由程/多次散射、自遮蔽与场景几何遮蔽、世界空间保守上界 | M17.3 | 云下/内/上、双壳/切线、零云退化、表面反射/云影、固定风时间及上界不低估 | 未开始 |
 | M17.5 | Editor Scene media模式、固定capture与Console/IPC、会话重置和来源报告 | M17.4 | 真实后台GUI启用/编辑/切换/错误恢复；GUI/capture线性一致；schema/Python/Luau及旧表面模式回归 | 未开始 |
@@ -806,7 +806,7 @@ M16.7.2显式Lambert/GGX、可见法线混合采样和能量/MIS检验已完成�
 M16.8双视图GPU累积、连续样本、tile/reset/poll与实际owner额度完成；47项定向验收见[0117](development/0117-pathtracing-progressive.md)。
 M16.9编辑器模式、后台渐进预览、GPU显示交接与共享队列同步完成；真实GUI/IPC、模块关闭回退和定向回归见[0118](development/0118-editor-pathtracing.md)。
 M16.10固定spp路径capture、Job进度/取消、输入摘要和线性报告完成；Python/Luau、GUI逐像素一致与CPU-only边界见[0119](development/0119-pathtracing-capture.md)。
-**M16.11及交付F完成：三个输入/8 seed固定质量与参考收敛、50项定向检查及三轮性能/显存基线通过，见[0120](development/0120-pathtracing-delivery.md)。1080p整批16.67ms候选、GGX在1024 spp达到2%误差候选未达。M17.1介质参考完成，下一步M17.2 CPU体积路径参考；优化目标以同质量实测为依据，Editor联合渲染尚未接入。**
+**M16.11及交付F完成：三个输入/8 seed固定质量与参考收敛、50项定向检查及三轮性能/显存基线通过，见[0120](development/0120-pathtracing-delivery.md)。1080p整批16.67ms候选、GGX在1024 spp达到2%误差候选未达。M17.1介质基础和M17.2 CPU体积路径参考完成，下一步M17.3 GPU晴空/空气；优化目标以同质量实测为依据，Editor联合渲染尚未接入。**
 编辑器 Play 视口已在 M12 验收，批量实验在 M13 验收；检查点、其他平台与发布打包仍未纳入本轮扩展。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。

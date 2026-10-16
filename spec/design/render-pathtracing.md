@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-16T11:29:51+08:00"
+updated_at: "2026-10-16T12:14:04+08:00"
 status: accepted
 ---
 
@@ -19,7 +19,8 @@ CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、
 ## M17 大气、云与表面路径的统一传输
 
 M17补齐世界空间介质；当前Editor仍执行M16表面模式，不能把本节规划理解为已可联合渲染。
-分阶段状态统一见[Roadmap](../roadmap.md#m17大气云与路径追踪集成)，本次计划及M17.1证据见[0123](../development/0123-path-media-foundation.md)。
+分阶段状态统一见[Roadmap](../roadmap.md#m17大气云与路径追踪集成)，介质基础见[0123](../development/0123-path-media-foundation.md)，
+CPU体积积分与统计验收见[0124](../development/0124-volume-path-reference.md)。
 
 ### 模型与接入顺序
 
@@ -73,6 +74,46 @@ M17.2先冻结估计器与统计验收，再分别接入GPU晴空（M17.3）和�
 M17.1验收：独立垂直指数/三角吸收解析解、反向/分段乘积、近地与双壳/切线/地面裁剪、
 真实云对M15独立参考透射、空气与云消光叠加、系数/上界、固定时间/旧场寿命、非法输入/工作预算/取消。
 不在此阶段移除surface-only限制，也不更改capture schema或宣称Editor完成联合渲染。
+
+### M17.2 CPU体积路径实施契约
+
+`VolumePathReference.hpp`提供单射线estimate与≤64×64线性图像render入口，消费同一冻结环境的PathTraceScene和PathMediumSnapshot。
+另用VolumePathSettings（model=4、sampler=2），不改变M16的model=3/sampler=1或surface-only拒绝行为。
+每路径均匀选一个RGB通道，使用该通道的介质系数/BSDF/光源值，输出乘3；这是离散RGB参考，不是光谱渲染。
+真实碰撞以analog delta tracking选择散射/吸收/null；吸收终止，null不消耗物理反弹，散射选择Rayleigh/Mie/云的混合相函数。
+已知无云壳段使用空气全局上界，混合壳段使用空气加云全局上界；不引入密度估计或低估上界的空间跳跃。
+混合概率按该通道散射系数归一化，方向PDF为完整混合PDF；HG采用正前向余弦dot(来路方向,新方向)，Rayleigh解析逆CDF采样。
+相函数与BSDF共用物理事件深度（0..32），max_bounces=0可诊断无散射透射；RR可关闭，启用时按真实事件深度处理。
+到达深度上限仍评价终端发光/边界，但不产生下一个散射顶点；这是明确的有限路径模型，不宣称无穷阶收敛。
+
+直接光在常量边界、均匀太阳圆盘和opaque发光三角形中等概率选类；太阳L=E/(πsin²α)，圆锥PDF=1/(2π(1-cosα))，
+用sin(α/2)计算小角度的1-cosα。环境和太阳重叠方向分别计贡献及其选择PDF，不能重复使用总光源PDF或把太阳当成delta。
+表面BSDF/体积相函数采样与显式NEE用power heuristic互补权重，bsdf_only关闭NEE用于均值对照。
+NEE阴影用独立ratio tracking估计RGB选中通道的T，并检查网格/mask及行星遮挡；不复用radiance射线的null随机序列。
+MIS按方向PDF分配权重；analog存活与ratio估计都包含同一段T，互补权重不重复乘/除存活概率。
+大气、云和表面多次散射沿同一迭代循环，禁止加入M14/MS或M15低阶增亮。
+
+主射线near/far只裁剪最初的网格查询；介质从相机起点到实际物理边界积分，不把far当作大气顶。
+第一次表面或介质散射后及NEE使用完整光源距离。行星启用条件为环境空气或云enabled，与消光是否为0无关；
+行星为ground_albedo的Lambert边界，与网格取最近交点，相等时保留网格；两者关闭时不添加行星。
+表面偏移复用原几何误差偏移，行星接触位置再外推到可表示的外侧，避免数值误差把合法二次射线变成地下相机。
+媒体路径计算完整空气外球出口（不固定裁到2e7）；实际需要的积分距离超过M17.1支持的2e7米则明确not_supported。
+M17.1所有系数/密度支持域继续适用；主射线沿用表面参考的各轴坐标绝对值≤1e6米、单位方向和有限near/far。
+相机地下仍拒绝，不能把物理不支持域当真空。
+
+采样v2独立哈希seed高低位、pixel、sample、physical_event、用途stream和该stream的counter；
+固定pixel/channel/light/BSDF/phase/RR/自由程/碰撞类型/阴影用途，跨壳区间延续null计数，不因取消/分批重排随机维度。
+样本区间仍在[0,65536)；报告均值、二阶矩和实际geometry rays/triangle tests/tracking steps/null/scatter/absorption/ground统计，
+另计发生至少两次真实介质散射的路径数。tracking step包含越过区间终点的自由程draw，不能只计命中的候选碰撞。
+几何保守工作上界在分配前校验（≤2^24 rays、≤2^29 triangle tests），tracking按实际draw次数计费（请求≤2^28、每路径≤2^20）。
+任何工作上限耗尽、非有限值、majorant低估或取消使整个请求失败；不能截断null循环、clamp负概率或把部分图当完成。
+空路径/真空同样检查取消；参数/环境/视图一致性先验证，图像在全部像素完成后才返回拥有型结果；失败不改变scene/medium/旧图。
+图像provenance包含环境全量、云场hash、介质设置、模型/采样、材质模型、来源指纹、相机和样本区间，不借旧表面指纹省略环境信息。
+闭合heap拒绝新图，已完成图可读；本阶段只新增CPU文件与测试，不接入GUI/命令/GPU。
+
+验收包括相函数归一化/矩、采样序列、真空与表面白炉/面积灯、太阳圆盘能量和遮蔽、纯吸收解析与参考、
+无云单次散射对独立数值积分、保守散射白炉及多次散射/深度收敛、真实云阴影、MIS对continuation-only及RR开关，
+固定seed集合与样本分区、环境不匹配、非法/额度/活动取消/分配失败/旧输入寿命。阈值沿M17统计协议，新增具体夹具记录在[0124](../development/0124-volume-path-reference.md)。
 
 ### 状态、接口演进与优化约束
 

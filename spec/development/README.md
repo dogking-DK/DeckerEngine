@@ -125,5 +125,6 @@
 | 0121 | [默认编辑器路径追踪与大气修复](0121-editor-default-rendering.md) | editor、render-pathtracing、render-pipeline、render-clouds | completed |
 | 0122 | [Sponza渲染性能与云预览](0122-editor-render-performance.md) | editor、render-pipeline、render-pathtracing、render-clouds | completed |
 | 0123 | [大气云路径集成规划与介质参考](0123-path-media-foundation.md) | render-pathtracing、render-atmosphere、render-clouds、editor、render-capture、architecture | completed |
+| 0124 | [M17.2 CPU体积路径参考](0124-volume-path-reference.md) | render-pathtracing、architecture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。
