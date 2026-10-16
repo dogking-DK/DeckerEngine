@@ -197,7 +197,8 @@ VS2026 用户打开 `out/build/windows-editor/DeckerEngine.slnx`，选择 Debug/
 **Surface only** 是默认模式，明确忽略场景空气和云。介质时间使用 Path tracing 面板的 **Time (s)**，不随墙钟推进，
 与 Raster 的时间设置独立；云反照率和各向异性控制散射。相机、介质、种子、模式与会话变化重置累积，曝光只改变显示。
 面板的 Shown 来源来自最后完整帧，显示模式、模型/采样版本、固定时间和场 hash；失败时旧图保留并标 STALE PREVIEW。
-修改合法参数或按 Refresh 可恢复；GPU 不支持的尺度/工作额度仍会明确报错。Sponza 固定质量性能预算由 M17.6 验收。
+修改合法参数或按 Refresh 可恢复；GPU 不支持的尺度/工作额度仍会明确报错。Scene media 操作相机时使用长边192像素的临时预览，面板显示 Motion preview/Shown size；停动200ms恢复原尺寸并重新累积。
+这只改善操作反馈，完整尺寸收敛仍需要等待；固定质量和性能边界见[测量指南](path-media-benchmark.md)。
 
 Console 输入 `{"method":"scene.query","params":{}}` 后按 Enter 或 Run，取得当前 document_id/revision。
 用 `{"method":"render.capture","params":{...}}` 提交[完整 v2 参数](../commands/render.md#统一介质路径v2)，guard 必须显式填写。

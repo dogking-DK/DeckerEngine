@@ -39,7 +39,7 @@ Json provenance_schema() {
         {"pathtrace",schema::nullable(path_schema(true))},{"model_version",integer()},{"sampler_version",integer()},
         {"material_model",schema::string()},{"estimator",schema::string()},{"actual_spp",integer(65536)},
         {"input_fingerprint",{{"type",{"string","null"}}}},
-        {"input_fingerprint_version",integer(2,2)},
+        {"input_fingerprint_version",integer(3,3)},
         {"medium_model_version",integer(1,1)},{"cloud_field_hash",{{"type",{"string","null"}}}},
         {"geometry_fingerprint",{{"type",{"string","null"}}}},
         {"render_options",render_options_schema(true)},{"warmup_frames",integer(64)},{"sample_count",integer(128,1)},

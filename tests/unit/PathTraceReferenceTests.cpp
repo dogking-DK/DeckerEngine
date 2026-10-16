@@ -83,6 +83,28 @@ TEST_CASE("counter samples have frozen sequence range and independent dimensions
     CHECK(sum/10000==Catch::Approx(.5).margin(.015));
     CHECK(path_trace_sample(1,0,0,0,0)!=path_trace_sample(1ull<<32,0,0,0,0));
 }
+TEST_CASE("path rebind shares frozen geometry and rejects changed instances") {
+    Fixture f; f.quad(-1,1,0,{.5f,.5f,.5f});
+    auto original=f.scene(); const auto geometry=original.geometry_fingerprint(),fingerprint=original.fingerprint();
+    auto env=environment_preset("sparse").value(); f.document->set_environment(env).value();
+    auto rebound=original.rebind(f.heap,f.source()); REQUIRE(rebound);
+    CHECK(rebound->geometry_fingerprint()==geometry); CHECK(rebound->fingerprint()!=fingerprint);
+    CHECK(rebound->fingerprint()==f.scene().fingerprint());
+    const auto hit=original.nearest(down).value(); original={};
+    CHECK(rebound->nearest(down).value()->distance==hit->distance);
+    for(unsigned i=0;i<30;++i) {
+        env.clouds.density+=.001; f.document->set_environment(env).value();
+        rebound=rebound->rebind(f.heap,f.source()); REQUIRE(rebound);
+    }
+    CHECK(rebound->fingerprint()==f.scene().fingerprint());
+    auto invalid=rebound->rebind({},f.source()); REQUIRE_FALSE(invalid); CHECK(invalid.error().code==ErrorCode::invalid_state);
+    Trsd moved; moved.translation={1,0,0}; f.document->set_local_transform(f.entity,moved).value();
+    auto conflict=rebound->rebind(f.heap,f.source()); REQUIRE_FALSE(conflict); CHECK(conflict.error().code==ErrorCode::conflict);
+    CHECK(rebound->nearest(down).value()->distance==hit->distance);
+    f.document->set_local_transform(f.entity,Trsd{}).value();
+    f.document->set_asset_references(f.entity,{}).value(); CHECK_FALSE(rebound->rebind(f.heap,f.source()));
+    auto other=SceneDocument::create().value(); CHECK_FALSE(rebound->rebind(f.heap,RenderScene::extract(f.heap,other->snapshot().value()).value()));
+}
 TEST_CASE("world triangles agree with independent BVH under shear reflection and scale") {
     Fixture f; f.triangle({-1,-1,0},{1,-1,0},{0,1,0},{.5f,.5f,.5f},{0,0,0},true);
     const auto parent=f.document->create_entity().value(); Trsd p; p.scale={-2,3,.5};

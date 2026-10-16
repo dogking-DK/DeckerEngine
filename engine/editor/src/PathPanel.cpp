@@ -39,7 +39,9 @@ void WorkbenchUi::path_panel(Viewport& preview) {
             used.medium ? used.medium->settings.model_version : used.settings.model_version,
             used.medium ? used.medium->settings.sampler_version : used.settings.sampler_version);
         if(used.medium) ImGui::Text("t %.3f / field %016llx",used.medium->medium.time_seconds,static_cast<unsigned long long>(used.medium->field_hash));
+        ImGui::Text("Shown size: %u x %u",used.width,used.height);
     }
+    if(preview.path_interactive()) ImGui::TextWrapped("Motion preview. Full size resumes after the camera stops.");
     const auto status=preview.path_status(); const auto& p=status.progress;
     ImGui::Text("%s: %u / %u spp",status.phase.c_str(),p.completed_spp,p.target_spp);
     ImGui::ProgressBar(p.target_spp ? float(p.completed_spp)/float(p.target_spp) : 0,{-1,0});

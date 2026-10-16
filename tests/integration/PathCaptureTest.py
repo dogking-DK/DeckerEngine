@@ -63,6 +63,7 @@ def main():
             assert report["provenance"] == job["result"]["provenance"]
             assert report["sample_first"] == 0 and report["sample_count"] == job["progress"]["completed"]
             assert report["provenance"]["actual_spp"] == report["sample_count"]
+            assert report["provenance"]["input_fingerprint_version"] == 3
             assert report["gpu_ms"] is None and report["wall_ms"] > 0 and report["device"]["name"]
             assert report["memory"]["peak_bytes"] <= report["memory"]["limit_bytes"] == 1073741824
             return report
@@ -86,6 +87,8 @@ def main():
                     fields = descriptor["parameters"]["properties"]["pathtrace"]["properties"]
                     assert fields["version"]["maximum"] == 2 and fields["medium_mode"]["enum"] == ["surface_only", "scene_media"]
                     assert fields["max_tracking_steps"]["maximum"] == 268435456
+                    fingerprint = descriptor["result"]["properties"]["provenance"]["properties"]["input_fingerprint_version"]
+                    assert fingerprint["minimum"] == fingerprint["maximum"] == 3
             call("scene.load", dict(manifest="project.json"))
             if args.media:
                 env = call("environment.query")["environment"]

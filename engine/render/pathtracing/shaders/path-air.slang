@@ -13,10 +13,19 @@ float airOpticalDistance(float u) {
 }
 bool airStep(inout uint steps) {
     if(status[0]!=0) return false;
-    uint previous; InterlockedAdd(status[1],1,previous);
     uint4 limits=asuint(parameters[12]);
-    if(steps>=limits.z || previous>=limits.w) { airError(2); return false; }
+    if(steps>=limits.z) { airError(2); return false; }
     ++steps; return true;
+}
+// Merge once per path. The per-path cap bounds in-flight work; the tile cap
+// rejects the entire candidate before publication. The first excess is detected
+// without overflowing: limit <= 2^28 and steps <= 2^20. Any later wrap belongs
+// to an already rejected tile; the sticky error cannot be cleared by another ray.
+void airCommitSteps(uint steps) {
+    if(steps==0 || status[0]!=0) return;
+    uint limit=asuint(parameters[12]).w,previous;
+    InterlockedAdd(status[1],steps,previous);
+    if(previous>limit || steps>limit-previous) airError(2);
 }
 AirLocation airMove(AirLocation a,float3 delta) {
     AirLocation b=a;
@@ -284,6 +293,7 @@ float3 traceAir(RayDesc ray,AirLocation location,uint pixel,uint sample,inout ui
         }
         previous=v.position; ray.Origin=airOrigin(v,wi,location); ray.Direction=wi; ray.TMin=0; ray.TMax=infinity;
     }
+    airCommitSteps(steps);
     if(status[0]!=0) return asfloat(0x7fc00000u).xxx;
     float3 result=0; result[channel]=3*value; return result;
 }

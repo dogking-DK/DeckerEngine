@@ -191,7 +191,9 @@ void air_resources(memory::ResourceHandle heap,SubmissionQueue& q) {
         f.asset.textures.push_back(std::move(texture)); auto first=take(r.prepare_scene(q,f.scene())); require(take(q.wait(first.submission())),"texture build failed");
         const auto owned=r.memory_stats(q).owned.current,submitted=q.stats().submitted;
         auto e=air_environment(); e.atmosphere.planet_center_m[1]-=100; f.document->set_environment(e).value();
-        auto second=take(r.prepare_scene(q,f.scene()));
+        auto rebound=take(first.source().rebind(heap,f.source()));
+        require(rebound.fingerprint()==f.scene().fingerprint(),"Rebound input differs from fresh scene");
+        auto second=take(r.prepare_scene(q,rebound));
         require(q.stats().submitted==submitted && r.memory_stats(q).owned.current==owned,"environment duplicated texture/AS allocation");
         auto m=take(PathMediumSnapshot::create(e)); auto s=air_settings(1); s.environment_rgb=Vec3d::Ones();
         auto textured=air_image(r,q,second,m,s,1024,down); require(textured.info().texture_count==1 && textured.primary_hits()[0],"textured air path not exercised");

@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-16T15:23:31+08:00"
+updated_at: "2026-10-16T16:28:00+08:00"
 status: accepted
 ---
 
@@ -741,7 +741,7 @@ CPU参考收敛后、GPU优化前冻结；CPU-only、required RT/同步验证及
 | M17.3 | GPU晴空/空气透射、任意反弹/阴影的介质与行星边界、渐进历史 | M17.2 | CPU/GPU数值及统计、低太阳/反射/远景、失败与资源额度、required RT/sync及上层表面回归共50项通过 | 完成，见[0125](development/0125-gpu-air-pathtracing.md) |
 | M17.4 | GPU云密度/自由程/多次散射、自遮蔽与场景几何遮蔽、世界空间保守上界 | M17.3 | 云壳/零云/固定时间、空气云多散射、纹理反射/几何遮蔽、保守上界/额度/历史及上层兼容共53项通过 | 完成，见[0126](development/0126-gpu-cloud-pathtracing.md) |
 | M17.5 | Editor Scene media模式、固定capture与Console/IPC、会话重置和来源报告 | M17.4 | 真实后台GUI/Console/IPC与捕获线性一致、连续错误恢复/会话及Refresh重置、schema/Python/Luau和旧表面回归12项通过 | 完成，见[0127](development/0127-editor-media-pathtracing.md) |
-| M17.6 | Sponza固定质量下缓存/majorant/采样/调度优化及三轮交互与显存基线 | M17.5 | 冻结画质门槛、达到固定质量耗时、首完整帧/取消p95、GPU tile及额度峰值；未达候选明确保留 | 未开始 |
+| M17.6 | Sponza固定质量下缓存/计数/调度优化及三轮交互与显存基线 | M17.5 | 42项定向检查、四个CPU参考及同样本比较、三轮性能/显存与真实GUI通过；8个Sponza质量候选未达并保留null | 完成，见[0128](development/0128-path-media-performance.md) |
 
 交付节点G须M17.1–6逐项验收。先建立数值参考，随后GPU，最后交互优化；M17.1完成不意味着Editor可以联合渲染。
 不以新增伪接口或声明新模式代替实际集成，不提前更改命令能力；不在本轮引入去噪、wavefront或新依赖。
@@ -806,7 +806,7 @@ M16.7.2显式Lambert/GGX、可见法线混合采样和能量/MIS检验已完成�
 M16.8双视图GPU累积、连续样本、tile/reset/poll与实际owner额度完成；47项定向验收见[0117](development/0117-pathtracing-progressive.md)。
 M16.9编辑器模式、后台渐进预览、GPU显示交接与共享队列同步完成；真实GUI/IPC、模块关闭回退和定向回归见[0118](development/0118-editor-pathtracing.md)。
 M16.10固定spp路径capture、Job进度/取消、输入摘要和线性报告完成；Python/Luau、GUI逐像素一致与CPU-only边界见[0119](development/0119-pathtracing-capture.md)。
-**M16.11及交付F完成：三个输入/8 seed固定质量与参考收敛、50项定向检查及三轮性能/显存基线通过，见[0120](development/0120-pathtracing-delivery.md)。1080p整批16.67ms候选、GGX在1024 spp达到2%误差候选未达。M17.1–M17.5介质基础、CPU/GPU空气/云路径和Editor/Console/IPC/capture联合接入完成；下一步M17.6 Sponza固定质量优化及三轮交互/显存基线，性能目标以同质量实测为依据。**
+**M16.11及交付F完成：三个输入/8 seed固定质量与参考收敛、50项定向检查及三轮性能/显存基线通过，见[0120](development/0120-pathtracing-delivery.md)。1080p整批16.67ms候选、GGX在1024 spp达到2%误差候选未达。M17.1–M17.6及交付G完成：介质CPU/GPU、Editor/Console/IPC/capture与Sponza缓存/计数/调度验收完成，见[0128](development/0128-path-media-performance.md)。实测热GUI预览p95约61ms，三轮额度内；8个Sponza高质量候选仍未达，完整体积路径不承诺60fps。**
 编辑器 Play 视口已在 M12 验收，批量实验在 M13 验收；检查点、其他平台与发布打包仍未纳入本轮扩展。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。

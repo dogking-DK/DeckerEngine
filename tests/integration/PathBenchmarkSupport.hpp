@@ -110,7 +110,7 @@ struct Fixture {
     }
     Json metadata(std::string_view name) const {
         const auto v=view().description(); Json projection=Json::array(); for(int row=0;row<4;++row) for(int col=0;col<4;++col) projection.push_back(v.projection(row,col));
-        return {{"name",name},{"fingerprint",cpu.fingerprint()},{"fingerprint_version",2},{"scene",source.id().to_string()},
+        return {{"name",name},{"fingerprint",cpu.fingerprint()},{"fingerprint_version",3},{"scene",source.id().to_string()},
             {"revision",source.revision()},{"triangles",cpu.triangle_count()},{"textures",cpu.texture_count()},
             {"material_model",model==PathTraceMaterialModel::lambert ? "lambert" : "metallic_roughness"},
             {"eye",{eye.x(),eye.y(),eye.z()}},{"quality_projection",projection},{"quality_width",4},{"quality_height",4},

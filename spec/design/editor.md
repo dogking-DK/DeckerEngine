@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-16T15:22:36+08:00"
+updated_at: "2026-10-16T16:28:00+08:00"
 status: accepted
 ---
 
@@ -320,3 +320,12 @@ CPU 云字段采用一个已提交 owner 和一个局部候选，成功 configur
 Console 输入有界 JSON {method,params}，调用 Workspace/Runtime 既有命令。必须显式 guard；活动草稿拒绝非 query 命令，避免覆盖未提交编辑。
 Console 不阻塞等待 Job（jobs.wait 只允许 timeout_ms=0），用户通过 jobs.get 查看异步捕获；命令成功后刷新快照，输出/错误有界。
 自动验收使用 --background 和仅限独立夹具的输入驱动，覆盖真实面板、Console、IPC、介质变更/错误恢复/会话切换，并与固定 capture 比较线性结果。
+
+## M17.6 缓存与交互调度
+
+同资产、相同世界实例/引用的环境版本复用 CPU 路径几何，并通过 renderer 相同几何owner复用 AS；源重绑失败不发布候选。相机变化不重建几何。
+Scene media 相机移动期间长边192像素，面板显示 Motion preview 和实际 Shown size；停动200ms恢复完整请求尺寸并从样本0累积。相机请求等待完整预览，渲染阶段最多100ms后替换；冷编译/导入期间合并相机输入，不反复取消准备工作，物理变更/刷新立即失效，不混合尺寸历史。
+请求合并和失效规则保持document/revision/物理参数边界，迟到帧保留实际相机与尺寸并标旧来源；完整新视角与GUI帧循环分别测量。
+性能观测使用独立开关，GPU时间戳/VMA读取只在测量时启用；所有阶段遵守原1GiB renderer预算，取消返回与GPU回收分别记录。
+
+Suspend 通知立即唤醒 worker；排空在途提交后才报告 Suspended，不将 cancel 调用返回作为 GPU 回收完成。

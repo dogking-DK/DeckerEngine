@@ -5,6 +5,7 @@
 #include <dk/render/ScenePipeline.hpp>
 #include <dk/graphics/CommandEncoder.hpp>
 #include <imgui.h>
+#include <chrono>
 #include "EnvironmentPreview.hpp"
 #ifdef DK_EDITOR_PATHTRACING
 #include "PathPreview.hpp"
@@ -28,6 +29,11 @@ public:
     [[nodiscard]] PathPreviewStatus path_status() const { return path_ ? path_->status() : PathPreviewStatus{}; }
     [[nodiscard]] const render::PathTraceGpuImageInfo& path_info() const { return path_info_; }
     [[nodiscard]] std::uint32_t path_samples() const { return path_samples_; }
+    [[nodiscard]] bool path_interactive() const { return path_interactive_; }
+    // Acceptance calls this after the GUI submission has completed.
+    [[nodiscard]] double path_latency_ms() const {
+        return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-path_published_request_).count();
+    }
     std::uint64_t capture_path_pixels();
     [[nodiscard]] std::span<const Vec3d> path_linear() const { return path_linear_.linear_rgb(); }
 #endif
@@ -77,6 +83,9 @@ private:
     render::PathTraceGpuImage path_linear_;
     render::PathTraceGpuImageInfo path_info_;
     bool path_active_=false;
+    bool path_interactive_=false;
+    std::uint64_t path_observed_camera_=0;
+    std::chrono::steady_clock::time_point path_motion_until_{},path_requested_at_{},path_published_request_{};
 #endif
     memory::ResourceHandle heap_;
     graphics::SubmissionQueue& queue_;

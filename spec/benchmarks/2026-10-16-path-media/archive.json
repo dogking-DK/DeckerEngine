@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "files": {
+    "summary.json": {
+      "file": "summary.json",
+      "sha256": "4520c42f5721153769e945d73d4c9a668d8862230fc2aabff468a81efabe2844",
+      "raw_sha256": "4520c42f5721153769e945d73d4c9a668d8862230fc2aabff468a81efabe2844"
+    },
+    "baseline-manifest.json": {
+      "file": "baseline-manifest.json",
+      "sha256": "5c7e6845b736d101c4e5b3fab72b5e28979546015057f093cf41c24222a9f28c",
+      "raw_sha256": "5c7e6845b736d101c4e5b3fab72b5e28979546015057f093cf41c24222a9f28c"
+    },
+    "optimized-manifest.json": {
+      "file": "optimized-manifest.json",
+      "sha256": "234eb299cd0527714780f5fc0242d360d0d6f8b93d9fcbc705caa7623a8dfcb2",
+      "raw_sha256": "234eb299cd0527714780f5fc0242d360d0d6f8b93d9fcbc705caa7623a8dfcb2"
+    },
+    "quality.json": {
+      "file": "quality.json.gz",
+      "sha256": "a416662fccd9aa4855cb2a3633a9232e2506095fc18afa2358677bb8b246b412",
+      "raw_sha256": "67d6a7f1048842df818e3dd312a5510a6b63a6a1a8156f7c26d28b2181c63c83"
+    },
+    "baseline-1.json": {
+      "file": "baseline-1.json.gz",
+      "sha256": "de599be0e6eccee13f0ad380f6f8bed90211fdd7868d5d7dedf6119f864b86be",
+      "raw_sha256": "64e9bdb27e8ad8547bd13f35932ef9db6ab88dbe32ca6d9add17e858edcf9ac9"
+    },
+    "baseline-2.json": {
+      "file": "baseline-2.json.gz",
+      "sha256": "762c445501e2330b58c667d46a3c032795bd374bb9baa8b410fe30ce8b8f3c13",
+      "raw_sha256": "24984b8001f8661efa17b8d4f212159589a700e2dbd9107372f6346ad3234578"
+    },
+    "baseline-3.json": {
+      "file": "baseline-3.json.gz",
+      "sha256": "5cc6445f877ebbfc0fe75cb2eaefa0ebeec26c9f785f404a96553bccb8511f31",
+      "raw_sha256": "abbcf4598c27591a10cb2426d5547d465222bf2a2577810df474981cc3f507b3"
+    },
+    "optimized-1.json": {
+      "file": "optimized-1.json.gz",
+      "sha256": "b9441fbe16dca62b6b8d83e3b455c0da3079357afb59dfcd77064eae02e05870",
+      "raw_sha256": "45260ebcc161e4f87b72fe81152b719ff12aa20246b074f7458c8b62219231e6"
+    },
+    "optimized-2.json": {
+      "file": "optimized-2.json.gz",
+      "sha256": "28b70c45d89abac56cecd0c0f9ce9e62ef468fb217c4df83e6457da60bddf6cc",
+      "raw_sha256": "47255909e908959020fc3c42f3ec82d917c7bab5ffbcd7f3b8aa5ecec9c32f9b"
+    },
+    "optimized-3.json": {
+      "file": "optimized-3.json.gz",
+      "sha256": "34a3c7e2827a4982d65864b90aaf5a52f0fc35a94d3cc93b906ea8b480c59aeb",
+      "raw_sha256": "0c1742a260ddaa931325a18d759d219ce09b89e95627bab121d4be7d3bb9209d"
+    },
+    "editor.json": {
+      "file": "editor.json.gz",
+      "sha256": "3bd8acc34bdff99ee22de91c1725c33197dcd02d45d4c3abdc97f9ea4dbf10bb",
+      "raw_sha256": "aa490ca5ff2a25ea3e1e5957bd6c0df5423f758bd6eca52395f30dcd9fcb43a6"
+    }
+  }
+}

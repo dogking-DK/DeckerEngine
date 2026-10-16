@@ -22,5 +22,6 @@ private:
     std::chrono::steady_clock::time_point motion_start_{};
     std::uint64_t motion_signature_=0;
     unsigned motion_frames_=0,motion_updates_=0;
+    Json motion_samples_=Json::array();
 };
 }

@@ -39,6 +39,9 @@ public:
     PathTraceScene() = default;
     [[nodiscard]] static Result<PathTraceScene> create(memory::ResourceHandle, const RenderScene&,
         std::span<const CpuAsset* const>, const PathTraceSceneLimits& = {}, PathTraceMaterialModel = PathTraceMaterialModel::lambert);
+    // Reuse frozen assets after comparing entity/world/reference identities. A geometry
+    // change returns conflict. Asset reloads must use create, even for unchanged IDs.
+    [[nodiscard]] Result<PathTraceScene> rebind(memory::ResourceHandle, const RenderScene&) const;
     [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
     [[nodiscard]] SceneId id() const noexcept;
     [[nodiscard]] std::uint64_t revision() const noexcept;

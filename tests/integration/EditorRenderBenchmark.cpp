@@ -22,8 +22,12 @@ void ppm(const std::filesystem::path& path,const EnvironmentPreviewResult& r) {
 }
 int main(int argc,char** argv) {
     if(argc<3) return 2;
-    const bool validation=argc>3 && std::string_view{argv[3]}=="--validation";
-    const bool profile=argc>3 && std::string_view{argv[3]}=="--profile";
+    bool validation=false,profile=false,media=false;
+    for(int i=3;i<argc;++i) {
+        const std::string_view option=argv[i];
+        if(option=="--validation") validation=true; else if(option=="--profile") profile=true;
+        else if(option=="--media") media=true; else return 2;
+    }
     const std::filesystem::path output=argv[2]; std::filesystem::create_directories(output);
     Json report={{"status","failed"},{"validation",validation},{"profile",profile},{"environment",Json::array()},{"path",Json::array()}};
     int code=1;
@@ -40,11 +44,12 @@ int main(int argc,char** argv) {
             }
         };
         const unsigned width=validation ? 320 : 1280,height=validation ? 180 : 720;
-        report["width"]=width; report["height"]=height;
+        report["width"]=media ? 192 : width; report["height"]=media ? 108 : height;
+        if(media) report.update({{"model",4},{"sampler",2},{"seed",1},{"time",17},{"bounces",4}});
         {
             memory::ThreadContext context{system,heap}; memory::ExecutionScope scope{context,heap};
             Camera camera; camera.set_environment(true);
-            {
+            if(!media) {
                 EnvironmentPreview worker{system,heap,options,profile}; std::uint64_t sequence=0;
                 for(const char* name:{"clear","sparse","overcast","sky-clear","sky-overcast"}) {
                     const bool sky_view=std::string_view{name}.starts_with("sky-");
@@ -94,7 +99,7 @@ int main(int argc,char** argv) {
                 }
             }
             check(model->preset_environment("clear")); check(model->apply_environment());
-            {
+            if(!media) {
                 options.ray_tracing=graphics::RayTracingMode::required;
                 options.sampled_image_indexing=graphics::SampledImageIndexingMode::required;
                 auto device=take(graphics::Device::create(heap,options));
@@ -114,6 +119,55 @@ int main(int argc,char** argv) {
                     }
                     const auto status=worker.status(); if(!status.error.empty()) throw std::runtime_error(status.error);
                     require(elapsed(start)<120000,"Path worker timed out"); std::this_thread::sleep_for(1ms);
+                }
+            }
+            if(media) {
+                options.ray_tracing=graphics::RayTracingMode::required;
+                options.sampled_image_indexing=graphics::SampledImageIndexingMode::required;
+                const auto device_start=Clock::now();
+                auto device=take(graphics::Device::create(heap,options));
+                report["device_ms"]=elapsed(device_start);
+                report["device"]=device.adapter().properties.deviceName.data();
+                PathPreview worker{system,heap,std::move(device)}; std::uint64_t sequence=0;
+                report["media"]=Json::array();
+                for(const char* preset:{"clear","sparse","overcast"}) {
+                    check(model->preset_environment(preset)); check(model->apply_environment());
+                    const auto world=camera.world().matrix();
+                    const Vec3d eye=world.block<3,1>(0,3),target=eye-world.block<3,1>(0,2);
+                    Json item={{"preset",preset},{"camera_ms",Json::array()},{"cancel_ms",Json::array()},
+                        {"eye",{eye.x(),eye.y(),eye.z()}},{"target",{target.x(),target.y(),target.z()}},
+                        {"environment",take(model->execute_console(R"({"method":"environment.query","params":{}})"))["environment"]}};
+                    for(unsigned i=0;i<13;++i) {
+                        if(i) camera.orbit(.5,0);
+                        PathPreviewRequest request{*model->snapshot(),camera};
+                        request.width=192; request.height=108; request.sequence=++sequence;
+                        request.settings.target=64; request.settings.scene_media=true; request.settings.time_seconds=17;
+                        request.observe_memory=true;
+                        const auto start=Clock::now(); worker.request(request);
+                        for(;;) {
+                            if(auto result=worker.take_result()) {
+                                require(result->sequence==sequence && result->camera.revision()==camera.revision(),"Obsolete media camera");
+                                require(result->info.medium && result->info.width==192 && result->info.height==108,"Wrong media input");
+                                require(result->memory.owned.peak<=result->memory.owned.limit,"Worker GPU budget exceeded");
+                                item["owned_peak"]=result->memory.owned.peak;
+                                if(i) item["camera_ms"].push_back(elapsed(start)); else item["first_ms"]=elapsed(start);
+                                break;
+                            }
+                            const auto status=worker.status(); require(status.error.empty(),status.error.c_str());
+                            require(elapsed(start)<120000,"Media worker timeout"); std::this_thread::sleep_for(1ms);
+                        }
+                        const auto pending=Clock::now();
+                        while(!worker.status().progress.pending) {
+                            require(elapsed(pending)<30000,"Missing in-flight media tile"); std::this_thread::sleep_for(1ms);
+                        }
+                        const auto cancel=Clock::now(); worker.suspend();
+                        while(worker.status().phase!="Suspended") {
+                            require(elapsed(cancel)<10000,"Media cancellation did not drain"); std::this_thread::sleep_for(1ms);
+                        }
+                        item["cancel_ms"].push_back(elapsed(cancel));
+                        require(!worker.take_result(),"Late publication after suspend");
+                    }
+                    report["media"].push_back(item); std::cout<<item.dump()<<std::endl;
                 }
             }
         }

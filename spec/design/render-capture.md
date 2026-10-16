@@ -1,7 +1,7 @@
 ---
 module: render-capture
 created_at: "2026-10-03T21:21:47+08:00"
-updated_at: "2026-10-16T15:16:16+08:00"
+updated_at: "2026-10-16T16:28:00+08:00"
 status: accepted
 ---
 
@@ -128,3 +128,5 @@ v1 禁止介质字段；v2 surface_only 禁止介质专用字段，避免静默�
 提交来源保留 null shader/input/field hash，完成来源包含字段 hash、几何 hash 和包含空气/云的 shader 源闭包；媒体参数与实际 spp 同源。
 GUI 与命令使用相同默认批次/tile；线性 JSON 做逐像素对照，非兼容 GPU 域和工作额度失败保护旧文件。
 新增命令字段仍由 Operations 解码、Service 校验；Console/IPC/Python/Luau 共享注册表，无新协议分支。
+
+M17.6 将 input_fingerprint_version 升为3：几何内容hash与源身份/revision、完整环境组合。资产刷新仍重新生成几何；模型4/采样2及capture参数版本不变。

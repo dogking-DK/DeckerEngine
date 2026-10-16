@@ -9,13 +9,29 @@ namespace {
 using namespace detail;
 struct Fingerprint {
     std::uint64_t value = 14695981039346656037ull;
-    Fingerprint* geometry = nullptr;
-    void byte(std::uint8_t b) { value = (value ^ b) * 1099511628211ull; if(geometry) geometry->byte(b); }
+    void byte(std::uint8_t b) { value = (value ^ b) * 1099511628211ull; }
     void integer(std::uint64_t n) { for (unsigned i=0;i<8;++i) { byte(static_cast<std::uint8_t>(n)); n >>= 8; } }
     void number(double d) { integer(std::bit_cast<std::uint64_t>(d == 0 ? 0.0 : d)); }
     void vector(const Vec3d& v) { for (int i=0;i<3;++i) number(v[i]); }
     template<class T> void id(T id) { for (auto b:id.bytes()) byte(b); }
 };
+std::uint64_t input_fingerprint(const RenderScene& source,PathTraceMaterialModel model,std::uint64_t geometry) {
+    Fingerprint h; h.integer(3); h.integer(3); h.integer(std::uint32_t(model));
+    h.id(source.id()); h.integer(source.revision()); h.integer(geometry);
+    auto vector=[&](const auto& v) { for(double x:v) h.number(x); };
+    const auto e=source.environment(); const auto& a=e.atmosphere; const auto& c=e.clouds;
+    h.integer(e.enabled); vector(e.sun.direction); vector(e.sun.irradiance); h.number(e.sun.angular_radius_rad);
+    vector(a.planet_center_m); h.number(a.ground_radius_m); h.number(a.atmosphere_height_m);
+    vector(a.rayleigh_scattering_per_m); h.number(a.rayleigh_scale_height_m);
+    vector(a.mie_scattering_per_m); vector(a.mie_extinction_per_m); h.number(a.mie_scale_height_m); h.number(a.mie_anisotropy);
+    vector(a.absorption_extinction_per_m); h.number(a.absorption_center_height_m); h.number(a.absorption_half_width_m); vector(a.ground_albedo);
+    h.integer(c.enabled); h.integer(c.seed); h.integer(c.generator_version);
+    h.integer(c.weather_resolution); h.integer(c.base_resolution); h.integer(c.detail_resolution);
+    h.number(c.bottom_height_m); h.number(c.top_height_m); h.number(c.coverage); h.number(c.density); h.number(c.extinction_per_m);
+    h.number(c.weather_scale_m); h.number(c.shape_scale_m); h.number(c.detail_scale_m);
+    h.number(c.bottom_fade_fraction); h.number(c.top_fade_fraction); vector(c.wind_velocity_mps);
+    return h.value;
+}
 Result<void> material_valid(const MaterialData& m, PathTraceMaterialModel model) {
     if (!m.base_color.allFinite() || (m.base_color.array()<0).any() || (m.base_color.array()>1).any() ||
         !m.emissive.allFinite() || (m.emissive.array()<0).any() || (m.emissive.array()>1e6).any() ||
@@ -43,12 +59,7 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
         }
         auto state = memory::make_shared_in<detail::PathSceneState>(heap,heap);
         state->source=source; state->material_model=model;
-        Fingerprint hash; hash.integer(3); hash.integer(2); hash.integer(std::uint32_t(model)); hash.id(source.id()); hash.integer(source.revision());
-        const auto env=source.environment(); hash.integer(env.enabled); hash.integer(env.clouds.enabled);
-        for (double v:env.sun.direction) hash.number(v);
-        for (double v:env.sun.irradiance) hash.number(v);
-        Fingerprint geometry; geometry.integer(1); geometry.integer(std::uint32_t(model)); geometry.id(source.id());
-        hash.geometry=&geometry;
+        Fingerprint hash; hash.integer(1); hash.integer(std::uint32_t(model)); hash.id(source.id());
         std::size_t primitive_count=0, triangle_count=0, texture_bytes=0;
         for (std::size_t ei=0;ei<source.entities().size();++ei) {
             const auto& entity=source.entities()[ei];
@@ -93,14 +104,14 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
                             return std::unexpected(path_invalid("Path UV outside finite coordinate domain"));
                         auto found_texture=std::ranges::find(asset.textures,*material->base_color_texture,&TextureData::id);
                         if(found_texture==asset.textures.end()) return std::unexpected(Error{ErrorCode::not_found,"Path texture missing"});
-                        const auto prior=std::ranges::find_if(state->textures,[&](const PathTexture& t) { return t.mesh==asset.mesh.id && t.id==found_texture->id; });
-                        texture=std::uint32_t(prior-state->textures.begin());
-                        if(prior==state->textures.end()) {
+                        const auto prior=std::ranges::find_if(state->owned_textures,[&](const PathTexture& t) { return t.mesh==asset.mesh.id && t.id==found_texture->id; });
+                        texture=std::uint32_t(prior-state->owned_textures.begin());
+                        if(prior==state->owned_textures.end()) {
                             const auto& input=*found_texture;
                             if(auto valid=validate_path_texture(input);!valid) return std::unexpected(valid.error());
-                            if(state->textures.size()>=limits.max_textures || input.rgba8.size()>limits.max_texture_bytes-texture_bytes)
+                            if(state->owned_textures.size()>=limits.max_textures || input.rgba8.size()>limits.max_texture_bytes-texture_bytes)
                                 return std::unexpected(path_invalid("Path texture count/byte budget exceeded"));
-                            state->textures.emplace_back(heap); auto& target=state->textures.back();
+                            state->owned_textures.emplace_back(heap); auto& target=state->owned_textures.back();
                             target.mesh=asset.mesh.id; target.id=input.id; target.width=input.width; target.height=input.height;
                             target.sampler=input.sampler; target.rgba8.assign(input.rgba8.begin(),input.rgba8.end()); target.origin=input.origin;
                             texture_bytes+=input.rgba8.size();
@@ -143,17 +154,43 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
                         t.light_weight=t.mask ? 0 : t.area*luminance(t.emission);
                         if(t.mask && t.emission.maxCoeff()>0) ++state->masked_emitters;
                         state->light_weight+=t.light_weight; t.light_cdf=state->light_weight;
-                        state->triangles.push_back(t);
+                        state->owned_triangles.push_back(t);
                     }
                 }
             }
         }
-        state->fingerprint=hash.value;
-        state->geometry_fingerprint=geometry.value;
+        state->triangles=state->owned_triangles; state->textures=state->owned_textures;
+        state->geometry_fingerprint=hash.value;
+        state->fingerprint=input_fingerprint(source,model,hash.value);
         return PathTraceScene{std::move(state)};
     } catch (const std::bad_alloc&) {
         return std::unexpected(Error{ErrorCode::internal_error,"Path scene allocation failed"});
     }
+}
+Result<PathTraceScene> PathTraceScene::rebind(memory::ResourceHandle heap,const RenderScene& source) const {
+    if(!state_ || !heap || heap.state()!=memory::ResourceState::open || !source)
+        return std::unexpected(Error{ErrorCode::invalid_state,"Rebinding requires an immutable path scene and open heap"});
+    const auto changed=[] { return std::unexpected(Error{ErrorCode::conflict,"Path geometry changed; create a new scene"}); };
+    const auto& old=state_->source;
+    if(source.id()!=old.id() || source.entities().size()!=old.entities().size()) return changed();
+    for(std::size_t i=0;i<source.entities().size();++i) {
+        const auto& a=source.entities()[i]; const auto& b=old.entities()[i];
+        if(a.id!=b.id || a.world.matrix()!=b.world.matrix()) return changed();
+        const auto ar=source.assets(i),br=old.assets(i);
+        if(!ar) return std::unexpected(ar.error());
+        if(!br) return std::unexpected(br.error());
+        if(!std::ranges::equal(*ar,*br)) return changed();
+    }
+    try {
+        auto next=memory::make_shared_in<detail::PathSceneState>(heap,heap);
+        next->geometry_owner=state_->geometry_owner ? state_->geometry_owner : state_;
+        next->source=source; next->material_model=state_->material_model;
+        next->triangles=state_->triangles; next->textures=state_->textures;
+        next->light_weight=state_->light_weight; next->degenerate=state_->degenerate; next->masked_emitters=state_->masked_emitters;
+        next->geometry_fingerprint=state_->geometry_fingerprint;
+        next->fingerprint=input_fingerprint(source,next->material_model,next->geometry_fingerprint);
+        return PathTraceScene{std::move(next)};
+    } catch(const std::bad_alloc&) { return std::unexpected(Error{ErrorCode::internal_error,"Path rebind allocation failed"}); }
 }
 SceneId PathTraceScene::id() const noexcept { return state_ ? state_->source.id() : SceneId{}; }
 std::uint64_t PathTraceScene::revision() const noexcept { return state_ ? state_->source.revision() : 0; }
@@ -177,6 +214,7 @@ namespace detail {
 bool same_path_geometry(const PathSceneState& a,const PathSceneState& b) {
     if(a.geometry_fingerprint!=b.geometry_fingerprint || a.source.id()!=b.source.id() || a.material_model!=b.material_model ||
         a.triangles.size()!=b.triangles.size() || a.textures.size()!=b.textures.size() || a.degenerate!=b.degenerate) return false;
+    if((a.geometry_owner ? a.geometry_owner.get() : &a)==(b.geometry_owner ? b.geometry_owner.get() : &b)) return true;
     for(std::size_t i=0;i<a.triangles.size();++i) {
         const auto& x=a.triangles[i]; const auto& y=b.triangles[i];
         if(x.a!=y.a || x.b!=y.b || x.c!=y.c || x.normal!=y.normal || x.albedo!=y.albedo || x.emission!=y.emission ||

@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-16T15:16:16+08:00"
+updated_at: "2026-10-16T16:28:00+08:00"
 status: accepted
 ---
 
@@ -18,7 +18,7 @@ CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、
 
 ## M17 大气、云与表面路径的统一传输
 
-M17补齐世界空间介质；当前Editor仍执行M16表面模式，不能把本节规划理解为已可联合渲染。
+M17补齐世界空间介质；Editor/capture 联合接入见 M17.5，性能优化以 M17.6 的固定质量验收为准。
 分阶段状态统一见[Roadmap](../roadmap.md#m17大气云与路径追踪集成)，介质基础见[0123](../development/0123-path-media-foundation.md)，
 CPU体积积分与统计验收见[0124](../development/0124-volume-path-reference.md)，GPU空气与渐进验收见[0125](../development/0125-gpu-air-pathtracing.md)，GPU云见[0126](../development/0126-gpu-cloud-pathtracing.md)。
 
@@ -655,4 +655,19 @@ CPU所有者与GPU worker角色同现有独占队列，此独立探针的CPU时�
 ## M17.5 上层集成
 
 Editor Scene media 与固定 capture 直接调用 configure_medium_view，表面路径继续 configure_view；参数与来源见 [Editor](editor.md#m175-scene-media-与-console) 和 [capture](render-capture.md#m175-统一介质捕获)。
-介质、表面模式不共享累积；媒体输入冻结、旧帧保护、GPU 数值域和工作额度沿 M17.4。环境编辑保持几何 owner 以复用 AS；Sponza 固定质量优化留在 M17.6。
+介质、表面模式不共享累积；媒体输入冻结、旧帧保护、GPU 数值域和工作额度沿 M17.4。环境编辑保持几何 owner 以复用 AS；M17.6 进一步复用冻结 CPU 几何，协议见下文。
+
+### M17.6 测量与优化实施契约
+
+先保存 M17.5 实现的独立 benchmark 二进制/源闭包及三轮基线，再测最终实现，禁止并行占用 GPU。
+冻结 model=4/sampler=2、4 反弹/RR3、seed 集合 101+7919*i、time=17、曝光0；Sponza 庭院/天空分别 clear/sparse/overcast/低太阳，surface 为独立开销对照。
+同样本优化前后线性均值/二阶矩逐值比较（绝对误差<=1e-6），不得降低 spp/反弹/介质质量作为加速证据。
+小场景 CPU 参考 N=16384/4N=65536、8 seed，均值收敛<=0.5%，GPU/CPU 统计偏差<=2% 且<=5联合标准误差+1e-4；解析透射沿既有<=1e-4门槛。
+固定质量另用 Sponza 小图的8 seed GPU 参考与 spp 阶梯，报告真正达到误差门槛的耗时；未达到时记录 null，不以1spp或低尺寸预览代替质量收敛。
+候选优化：局部追踪计数合并，保持随机维度和消光/majorant 不变；CPU 几何拥有型快照复用，源几何逐项验证后重绑版本/环境；按实测 GPU tile 时间选择工作粒度。
+计数合并仍检查每路径硬界，tile 总计超限使整个候选失败、无部分发布；首次超额必须在无整数溢出的范围被检测并置不可清除错误位；已失败候选的计数不作有效统计。错误候选不更换完整历史。
+源重绑必须保持旧owner可读，资产刷新强制重建；诊断输入hash改为v3（源元数据+完整环境+既有几何hash）以避免重新遍历纹理，GPU物理模型和采样版本不变。
+三轮记录冷初始化、首完整新视角、每spp、tile GPU p50/p95、取消到回收p50/p95、VMA与1GiB自有额度峰值；GUI使用真实后台窗口补充输入/显示/停动恢复。
+当前候选目标仍为预览/取消p95<=100ms、tile p95<=8ms。未达时保留具体缺口与测量尺度，不能以旧图呈现冒充新视角完成。
+
+复现入口见[介质性能指南](../guides/path-media-benchmark.md)。

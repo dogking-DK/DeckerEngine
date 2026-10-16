@@ -1,7 +1,7 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-10-16T15:16:16+08:00"
+updated_at: "2026-10-16T16:28:00+08:00"
 status: accepted
 ---
 
@@ -172,7 +172,7 @@ pathtrace对象禁止未知字段：
 仅提交或部分tile完成不增加completed。阶段为queued/preparing/building/rendering/readback/publishing；终态由state判断，
 completed==total仍不等同于文件发布成功。取消按tile间安全点处理，在途GPU须完成回收；旧文件保护同上。
 
-provenance额外包含renderer/format/pathtrace完整参数、material_model、model_version、sampler_version、estimator、actual_spp、input_fingerprint和input_fingerprint_version=2。
+provenance额外包含renderer/format/pathtrace完整参数、material_model、model_version、sampler_version、estimator、actual_spp、input_fingerprint和input_fingerprint_version=3。
 提交时actual_spp=0、input_fingerprint和shader_fingerprint为null；成功记录实际目标spp、导入几何/材质/纹理的内容摘要及本次shader源闭包摘要。
 provenance.sample_count保留相机/时间帧数语义，路径任务为1；Monte Carlo样本数使用actual_spp和报告sample_count。环境和相机始终是提交时完整值。fingerprint为非加密诊断，不是跨驱动逐位一致承诺。资产文件仍在worker开始时读取。
 

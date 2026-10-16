@@ -41,8 +41,8 @@ void PathPreview::run(std::stop_token stop) {
         std::optional<PathPreviewRequest> incoming; bool enabled;
         {
             std::unique_lock lock(mutex_);
-            if(!enabled_ || !busy)
-                condition_.wait_for(lock,stop,std::chrono::milliseconds(50),[&] { return request_.has_value(); });
+            if(!busy)
+                condition_.wait_for(lock,stop,std::chrono::milliseconds(50),[&] { return request_.has_value() || (!enabled_ && !suspended); });
             if(stop.stop_requested()) break;
             enabled=enabled_; incoming=std::exchange(request_,{});
             if(incoming) cancel=cancel_.get_token();
@@ -67,7 +67,16 @@ void PathPreview::run(std::stop_token stop) {
                 display.reset();
                 linear.reset();
             }
-            if(!enabled) { if(configured && !suspended) check(renderer.cancel(1)); suspended=true; continue; }
+            if(!enabled) {
+                if(configured && !suspended) check(renderer.cancel(1));
+                suspended=true; busy=queue && queue->stats().pending_slots!=0;
+                if(!busy && active) phase(active->sequence,"Suspended");
+                else if(busy) {
+                    const auto ticket=display ? display->submission : renderer.pending_submission();
+                    if(ticket.value()) (void)take(queue->wait(ticket,1000000));
+                }
+                continue;
+            }
             if(pending_config) {
                 // Drain obsolete producer work by polling before rebuilding. This bounds the
                 // queue even during continuous resize/drag and never blocks the GUI owner.
@@ -101,7 +110,9 @@ void PathPreview::run(std::stop_token stop) {
                     if(active->edit) transform=render::LocalTransformOverride{active->edit->entity,active->edit->value};
                     auto candidate=take(render::RenderScene::extract(heap_,active->snapshot.scene,transform));
                     std::vector<const CpuAsset*> assets; for(const auto& asset:disk.assets()) assets.push_back(asset.get());
-                    auto source=take(render::PathTraceScene::create(heap_,candidate,assets,render::desktop_path_scene_limits(),render::PathTraceMaterialModel::metallic_roughness));
+                    auto rebound=!reload && gpu ? gpu.source().rebind(heap_,candidate) : Result<render::PathTraceScene>{std::unexpected(Error{ErrorCode::conflict,"Asset reload"})};
+                    if(!rebound && rebound.error().code!=ErrorCode::conflict) throw std::runtime_error(rebound.error().message);
+                    auto source=rebound ? std::move(*rebound) : take(render::PathTraceScene::create(heap_,candidate,assets,render::desktop_path_scene_limits(),render::PathTraceMaterialModel::metallic_roughness));
                     // The input is valid and obsolete submissions have drained. Keep the
                     // exported display image, but retire old tracing history/geometry before
                     // allocating a new large scene under the same renderer budget.
@@ -156,7 +167,8 @@ void PathPreview::run(std::stop_token stop) {
                 display_sequence=active->sequence; display_info=completed.info();
                 displayed_spp=progress.completed_spp; displayed_exposure=active->settings.exposure;
             }
-            if(!display) (void)take(renderer.submit_batch(*queue,1,cancel));
+            if(!display && take(renderer.submit_batch(*queue,1,cancel)))
+                phase(active->sequence,"Rendering",take(renderer.status(1)));
             busy=bool(display) || progress.pending || (!progress.paused && progress.completed_spp<progress.target_spp);
             // A Windows timed sleep can round a 1 ms tile delay up to a scheduler
             // tick. Wait for actual GPU completion instead; never hold mutex_ or

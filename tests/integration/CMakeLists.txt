@@ -968,6 +968,10 @@ if(TARGET dk_editor_app AND TARGET dk_render_pathtracing AND TARGET dk_ctl AND W
             "${PROJECT_SOURCE_DIR}/projects/demo" "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/render-worker" --validation)
         set_tests_properties(dk.editor.render_worker_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+        add_test(NAME dk.editor.media_worker_gpu_validation COMMAND dk_editor_render_benchmark
+            "${PROJECT_SOURCE_DIR}/projects/demo" "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/media-worker" --media --validation)
+        set_tests_properties(dk.editor.media_worker_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
     endif()
     find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
@@ -996,5 +1000,24 @@ if(TARGET dk_editor_app AND TARGET dk_render_pathtracing AND TARGET dk_ctl AND W
             set_tests_properties(dk.editor.desktop_render_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
                 ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
         endif()
+    endif()
+endif()
+
+if(TARGET dk_editor_model AND TARGET dk_render_pathtracing AND TARGET dk_render_disk)
+    add_executable(dk_pathmedia_benchmark PathMediaBenchmark.cpp)
+    set_target_properties(dk_pathmedia_benchmark PROPERTIES OUTPUT_NAME dk-pathmedia-benchmark)
+    target_include_directories(dk_pathmedia_benchmark PRIVATE "${PROJECT_SOURCE_DIR}/engine/editor/src")
+    target_link_libraries(dk_pathmedia_benchmark PRIVATE dk::editor_model dk::render_pathtracing dk::render_disk dk::profiling nlohmann_json::nlohmann_json)
+    target_compile_definitions(dk_pathmedia_benchmark PRIVATE DK_PATH_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/pathtracing/shaders"
+        DK_PATH_DISK_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk" DK_BENCH_CONFIG="$<CONFIG>")
+    dk_target_defaults(dk_pathmedia_benchmark)
+    dk_deploy_slang(dk_pathmedia_benchmark)
+    add_test(NAME dk.pathtracing.media_benchmark_gpu_validation COMMAND dk_pathmedia_benchmark --smoke
+        --root "${PROJECT_SOURCE_DIR}/projects/demo" --output "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/media-benchmark/smoke.json")
+    set_tests_properties(dk.pathtracing.media_benchmark_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
+        ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME dk.pathtracing.media_benchmark_aggregation COMMAND "${CMAKE_COMMAND}" -E env "PYTHONDONTWRITEBYTECODE=1"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/PathMediaBenchmarkTest.py")
     endif()
 endif()

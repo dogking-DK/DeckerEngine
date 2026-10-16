@@ -28,11 +28,14 @@ struct PathTexture {
     String origin;
 };
 struct PathSceneState {
-    explicit PathSceneState(memory::ResourceHandle heap) : triangles(0, memory::Allocator<PathTriangle>{heap}),textures(memory::Allocator<PathTexture>{heap}) {}
+    explicit PathSceneState(memory::ResourceHandle heap) : owned_triangles(0, memory::Allocator<PathTriangle>{heap}),owned_textures(memory::Allocator<PathTexture>{heap}) {}
     RenderScene source;
     PathTraceMaterialModel material_model = PathTraceMaterialModel::lambert;
-    Vector<PathTriangle> triangles;
-    Vector<PathTexture> textures;
+    Vector<PathTriangle> owned_triangles;
+    Vector<PathTexture> owned_textures;
+    std::span<const PathTriangle> triangles;
+    std::span<const PathTexture> textures;
+    std::shared_ptr<const PathSceneState> geometry_owner;
     double light_weight = 0;
     std::size_t degenerate = 0;
     std::size_t masked_emitters = 0;

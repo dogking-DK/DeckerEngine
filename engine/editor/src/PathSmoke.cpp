@@ -8,7 +8,7 @@ namespace dk::editor::detail {
 namespace {
 constexpr std::array names={"path","paused","exposure","reset","resumed","camera","gizmo","external","resize","minimize","raster","returned","reloaded","closing"};
 constexpr std::array media_names={"surface","air","cloud","time","exposure","rejected","rejected_again","recovered","surface_again","media_again","reloaded","console","closing"};
-constexpr std::array desktop_names={"path","atmosphere","air_motion","clouds_enabled","clouds","cloud_motion","rejected","recovered","underground","camera_recovered","returned"};
+constexpr std::array desktop_names={"path","atmosphere","air_motion","clouds_enabled","clouds","cloud_motion","rejected","recovered","underground","camera_recovered","returned","media_air","media_air_motion","media_cloud","media_cloud_motion"};
 void require(bool value,const char* message) { if(!value) throw std::runtime_error(std::string{"Path smoke: "}+message); }
 std::span<const char* const> actions(std::size_t stage,bool desktop,bool media) {
     static constexpr std::array desktop_path={"path_mode","path_target",":all",":one",":enter"};
@@ -27,7 +27,8 @@ std::span<const char* const> actions(std::size_t stage,bool desktop,bool media) 
             case 8:return surface; case 9:return medium; case 11:return console; case 12:return closing; default:return {}; }
     }
     if(desktop) { if(stage==0) return desktop_path; if(stage==1) return desktop_air; if(stage==4) return desktop_clouds;
-        if(stage==8) return underground; if(stage==9) return home; if(stage==10) return desktop_return; return {}; }
+        if(stage==8) return underground; if(stage==9) return home; if(stage==10) return desktop_return;
+        static constexpr std::array media_mode={"path_settings","path_media"}; if(stage==11) return media_mode; return {}; }
     static constexpr std::array path={"path_mode","path_target",":all",":two",":enter"};
     static constexpr std::array pause={"path_pause","path_target",":all",":three",":enter"};
     static constexpr std::array resume={"path_target",":all",":two",":enter","path_pause"}; static constexpr std::array reset={"path_reset"}; static constexpr std::array exposure={"path_exposure",":all",":two",":enter"};
@@ -54,17 +55,17 @@ void PathSmoke::input(const WorkbenchUi& ui,const Workspace& model,const Viewpor
     if(waiting_) {
         if(!std::filesystem::is_regular_file(directory_/(std::string{media_ ? media_names[stage_] : desktop_ ? desktop_names[stage_] : names[stage_]}+".continue"))) return;
         waiting_=false; ready_=false; tick_=0;
-        motion_start_={}; motion_frames_=motion_updates_=0;
+        motion_start_={}; motion_frames_=motion_updates_=0; motion_samples_=Json::array();
         if(++stage_==(media_ ? media_names.size() : desktop_ ? desktop_names.size() : names.size())) { done_=true; return; }
     }
     auto& io=ImGui::GetIO(); io.ConfigInputTrickleEventQueue=false;
     if(tick_++<12) return;
-    if(desktop_ && (stage_==2 || stage_==5)) {
+    if(desktop_ && (stage_==2 || stage_==5 || stage_==12 || stage_==14)) {
         if(ready_) return;
         if(motion_start_==std::chrono::steady_clock::time_point{}) {
             motion_start_=std::chrono::steady_clock::now(); pointer_=ui.controls().at("viewport");
             motion_origin_=pointer_;
-            motion_signature_=viewport.pixel_signature(); io.AddFocusEvent(true);
+            motion_signature_=stage_>=11 ? viewport.info().frame : viewport.pixel_signature(); io.AddFocusEvent(true);
             io.AddMousePosEvent(pointer_.x,pointer_.y); io.AddMouseButtonEvent(1,true);
         } else if(std::chrono::steady_clock::now()-motion_start_<std::chrono::seconds(2)) {
             const double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-motion_start_).count();
@@ -112,7 +113,12 @@ void PathSmoke::presented(const Workspace& model,const WorkbenchUi& ui,Viewport&
     if(media_) { presented_media(model,ui,viewport); return; }
     if(desktop_ && !waiting_ && !ready_ && motion_start_!=std::chrono::steady_clock::time_point{}) {
         ++motion_frames_;
-        if(viewport.pixel_signature()!=motion_signature_) { ++motion_updates_; motion_signature_=viewport.pixel_signature(); }
+        const auto signature=stage_>=11 ? viewport.info().frame : viewport.pixel_signature();
+        if(signature!=motion_signature_) {
+            ++motion_updates_; motion_signature_=signature;
+            if(stage_>=11) motion_samples_.push_back({{"latency_ms",viewport.path_latency_ms()},
+                {"width",viewport.info().width},{"height",viewport.info().height},{"camera",viewport.published_camera().revision()}});
+        }
     }
     if(done_ || waiting_ || !ready_) return;
     require(viewport.path_unavailable().empty(),viewport.path_unavailable().c_str());
@@ -128,13 +134,17 @@ void PathSmoke::presented(const Workspace& model,const WorkbenchUi& ui,Viewport&
         if(!raster && (progress.completed_spp!=1 || viewport.path_samples()!=1)) return;
         require(ui.path_mode()!=raster,"desktop render mode did not change");
         require(stage_==0 || model.snapshot()->scene.environment().enabled,"atmosphere was not enabled through GUI");
-        require(stage_<3 || model.snapshot()->scene.environment().clouds.enabled,"clouds were not enabled");
-        if(stage_==2 || stage_==5) require(motion_updates_>=2,"continuous camera motion starved completed images");
+        require(stage_<3 || stage_==11 || stage_==12 || model.snapshot()->scene.environment().clouds.enabled,"clouds were not enabled");
+        if(stage_==2 || stage_==5 || stage_==12 || stage_==14) require(motion_updates_>=2,"continuous camera motion starved completed images");
+        if(stage_>=11) {
+            if(viewport.path_interactive() || std::max(viewport.info().width,viewport.info().height)<=192) return;
+            require(viewport.path_info().medium.has_value(),"Scene media not enabled");
+        }
         const auto signature=raster ? viewport.pixel_signature() : viewport.capture_path_pixels();
         const auto name=desktop_names[stage_]; const auto& info=viewport.info();
         Json report{{"checkpoint",name},{"spp",raster ? 0 : progress.completed_spp},{"width",info.width},{"height",info.height},
             {"pixels",signature},{"revision",info.revision},{"scene_revision",model.snapshot()->state.revision},{"path_mode",ui.path_mode()},
-            {"error",viewport.error()},{"motion_frames",motion_frames_},{"motion_updates",motion_updates_},{"motion_seconds",2}};
+            {"error",viewport.error()},{"motion_samples",motion_samples_},{"motion_frames",motion_frames_},{"motion_updates",motion_updates_},{"motion_seconds",2}};
         const auto bytes=viewport.retained_pixels();
         std::string ppm="P6\n"+std::to_string(info.width)+" "+std::to_string(info.height)+"\n255\n";
         for(std::size_t i=0;i<bytes.size();i+=4) for(unsigned c=0;c<3;++c) ppm.push_back(char(std::to_integer<unsigned char>(bytes[i+c])));
