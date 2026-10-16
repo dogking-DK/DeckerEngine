@@ -17,7 +17,7 @@
 | automation-transport | [Named Pipe 与 owner 分派](automation-transport.md) | accepted | 帧、队列、去重、断连与关闭 | [automation](../../engine/automation) | [集成](../../tests/integration/CMakeLists.txt) |
 | automation-client | [dk-ctl 客户端](automation-client.md) | accepted | 轻量调用、超时和显式重试 | [apps](../../apps)、[automation](../../engine/automation) | [集成](../../tests/integration/CMakeLists.txt) |
 | geometry-query | [CPU 几何查询](geometry-query.md) | accepted | AABB、三角形 BVH 与仿射实例射线 | [geometry](../../engine/geometry) | [单元](../../tests/unit/CMakeLists.txt) |
-| editor-interaction | [编辑器交互](editor-interaction.md) | accepted | CPU 拾取、Gizmo 手势和会话相机 | [editor](../../engine/editor) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
+| editor-interaction | [编辑器交互](editor-interaction.md) | accepted | CPU 拾取、Gizmo 手势和会话 Orbit 相机；M18 多模式/镜头/正交扩展设计 | [editor](../../engine/editor) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | architecture | [整体架构](architecture.md) | accepted | 长期模块边界和依赖方向 | [模块目录](../../engine) | [流程/检查](../README.md) |
 | editor | [编辑器工作台](editor.md) | accepted | 面板、命令编辑、后台大气/云/路径预览、模式/采样控制、预设和 GUI/IPC/截图一致性 | [editor](../../engine/editor) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | render-disk | [磁盘场景与资产集成](render-disk.md) | accepted | M2 场景、M4 导入/产物与 GPU 资源加载 | [disk](../../engine/render/disk) | [集成](../../tests/integration/CMakeLists.txt) |

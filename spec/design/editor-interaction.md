@@ -1,11 +1,11 @@
 ---
 module: editor-interaction
 created_at: "2026-10-08T11:35:00+08:00"
-updated_at: "2026-10-10T14:33:00+08:00"
+updated_at: "2026-10-16T17:01:00+08:00"
 status: accepted
 ---
 
-# M8.2 选择、Gizmo 与编辑器相机
+# 编辑器交互：选择、Gizmo 与会话相机
 
 ## 模拟取景（M12.2）
 
@@ -59,6 +59,166 @@ CPU 验证投影/射线对应、相机奇点/无文档副作用、父级缩放�
 真实窗口 smoke 注入拾取、三种 Gizmo、取消与相机输入，检查 preview/commit 像素与 revision，
 最后保存、重载和 runner 读取同一状态；保留 M8.1 smoke。
 默认 Sponza 做实际窗口预览，GPU validation 必须零告警/错误；CPU-only 模型独立构建。
-M8.3 IPC、纹理 alpha 精确拾取、多选、世界轴 Gizmo、吸附和飞行相机不在本阶段。
+M8.3 IPC、纹理 alpha 精确拾取、多选、世界轴 Gizmo、吸附和飞行相机不在原 M8.2 阶段。
 
 关联：[工作台](editor.md)、[几何查询](geometry-query.md)、[Render 数据](render-data.md)、[0066](../development/0066-editor-interaction.md)。
+
+## M18 相机扩展计划（尚未实现）
+
+本节是 2026-10-16 的源码检查与功能设计；上述已实现行为仍有效。只完成设计，不修改引擎、
+命令 schema 或测试。阶段状态与执行顺序由 [Roadmap M18](../roadmap.md#m18相机操作模式与投影扩展) 维护。
+首期 Walk 按水平漫游设计；没有地面碰撞、重力、台阶或跳跃，不作为角色行走模拟。
+
+### 当前能力与缺口
+
+| 范围 | 源码检查结果 | 扩展影响 |
+| --- | --- | --- |
+| 编辑相机 | [Camera](../../engine/editor/src/Camera.cpp) 仅有 target/yaw/pitch/distance；右键 Orbit、中键 Pan、滚轮 Dolly、F 聚焦与 Home 重置 | 没有导航模式、键盘连续移动、移速或可调镜头 |
+| 投影与尺度 | FOV 固定 65°，投影、ray、pan、frame、units_per_pixel 共用硬编码 tan(32.5°)；far=10000，near 通常 0.05、环境标志启用时为 1 | FOV 必须同时进入所有投影/交互计算，不能只改矩阵 |
+| 输入 | [ViewportInput](../../engine/editor/src/ViewportInput.cpp) 与 [SimulationViewUi](../../engine/editor/src/SimulationViewUi.cpp) 分别实现导航 | 抽出共用控制器；编辑和模拟仍持有独立相机状态 |
+| 基础光栅/模拟 | [RenderView](../../engine/render/data/src/RenderScene.cpp) 接收有限可逆投影；[基础管线](../../engine/render/pipeline/src/PipelinePolicy.hpp) 和 [模拟视口](../../engine/editor/src/SimulationViewport.cpp) 消费矩阵 | 有接入正交的基础，但没有完整正交编辑器功能或专项验收 |
+| 路径追踪 | [CPU 相机](../../engine/render/pathtracing/src/PathTraceReference.cpp) 明确验证透视形式；[GPU 参数](../../engine/render/pathtracing/src/PathTraceRenderer.cpp) 和 [主射线](../../engine/render/pathtracing/shaders/pathtrace.slang) 使用共用眼点 | 正交须同时改 CPU/GPU 主射线、验证和历史；Scene media 也受影响 |
+| 光栅大气/云 | [PipelinePolicy](../../engine/render/pipeline/src/PipelinePolicy.hpp) 明确拒绝正交；[合成](../../engine/render/pipeline/src/ScenePipeline.cpp) 使用透视深度、眼点锚定的天空/AP | 不能只放开校验或替换矩阵；需要单独的正交射线/深度/介质方案 |
+| 固定截图 | [CaptureCamera](../../engine/framework/services/include/dk/services/CaptureService.hpp) 和 [render.capture](../commands/render.md) 已能设置透视 FOV/near/far；不支持正交 | 截图的可调 FOV 不等于交互视口已有设置；新增正交需兼容旧请求 |
+| 一致性驱动 | [ConsistencyDriver](../../engine/editor/src/ConsistencyDriver.cpp)、[PathSmoke](../../engine/editor/src/PathSmoke.cpp) 输出相机时写死 fov_y=65 | 接入真实镜头参数和已发布相机，避免比较了不同输入 |
+
+结论：当前用户界面不支持正交；底层矩阵容器可承载它，路径追踪和环境合成仍明确限制为透视。
+已有 [相机测试](../../tests/unit/EditorTests.cpp)、[路径相机拒绝测试](../../tests/unit/PathTraceReferenceTests.cpp)、
+[大气投影拒绝测试](../../tests/unit/RenderPipelineTests.cpp) 是扩展回归入口；本次没有运行这些测试或启动窗口。
+
+### 功能与输入约定
+
+导航枚举 `NavigationMode { orbit, fly, walk }` 与投影枚举 `ProjectionMode { perspective, orthographic }` 分开。
+导航定义眼点如何移动，投影定义画面如何形成；渲染后端 Raster/Path trace 是第三个独立选择。
+首期 Fly/Walk 只开放透视，正交采用 Orbit/Pan，避免把正交前移误称为缩放。
+
+| 模式 | 旋转与平移 | 滚轮与快捷键 |
+| --- | --- | --- |
+| Orbit | 保留右键围绕 pivot 旋转、中键沿视平面平移 | 透视滚轮改距离；正交滚轮改可见高度；F 聚焦，Home 重置视角 |
+| Fly | 按住右键进入鼠标观察；W/S 沿观察方向，A/D 沿相机右轴，Q/E 沿世界 -Y/+Y；保持无 roll | 捕获时滚轮按指数调基础移速；Shift 加速、Ctrl 精细移动；松开右键立即停止 |
+| Walk | 按住右键观察；W/S 使用 yaw 对应的水平前向，A/D 水平侧移；保持进入模式时的世界 Y 高度；Q/E 不移动 | 同 Fly 调速；俯仰改变观察方向但不改变行进高度 |
+
+Fly/Walk 未捕获时滚轮不移动相机，避免意外穿行；模式提示显示当前按键与速度。
+F 在三种模式中均显式移动眼点以框住选择，并更新 pivot/focus_distance；Walk 同时更新固定高度。
+Home 恢复当前视口的默认姿态并停止导航，保留用户设置；单独的 Restore camera defaults 恢复模式、镜头和导航设置。
+模拟视口 F/Home 继续按规则布片和地面范围取景，保留其独立镜头/导航偏好；新 run 重新取景，Stop 不覆盖 Edit 相机。
+
+### 参数、面板与范围
+
+Viewport 工具栏提供模式、投影和 Camera 设置入口；Camera 弹层显示当前编辑/模拟视口的设置。
+姿态与偏好首期均为本次应用会话状态，不写 Scene Camera、项目文件、revision、dirty 或 Undo。
+跨启动偏好保存、相机书签和实体 Camera 组件另行设计，本阶段不新增配置文件格式。
+
+| 设置 | 初始值/建议操作范围 | 语义 |
+| --- | --- | --- |
+| 垂直 FOV | 65°；滑条 10–120°，数值输入要求 1° < 值 < 179° 且通过当前后端校验 | 透视专用；保持姿态和 pivot，改变镜头；正交时禁用并保留该值 |
+| 基础移速 | 3 m/s；0.01–1000 m/s | Fly/Walk 的世界空间速度，与帧率和 FOV 无关 |
+| 加速/精细倍率 | 4 / 0.25；范围分别 1–100 / 0.01–1 | 同时按下时精细优先；释放修饰键恢复基础速度 |
+| 观察灵敏度 | 0.003 rad/逻辑像素；0.0001–0.05 | Fly/Walk 鼠标观察，可切换反转 Y |
+| Orbit 灵敏度 | 0.006 rad/逻辑像素；0.0001–0.05 | 默认保持既有拖动手感 |
+| 平移倍率/滚轮系数 | 1 / 0.15；0.01–10 / 0.01–1 | 平移乘相机实际屏幕尺度；滚轮采用指数变化并限制结果 |
+| 正交可见高度 | 首次由透视焦平面换算；建议 0.01–100000 m | 表示整个视口的世界空间高度，宽度=高度×aspect；后端支持域另校验 |
+| 裁剪 | Auto 默认开启；普通 near=0.05、环境 near=1、far=10000 | 高级设置允许 Manual near/far；显示实际生效值及后端约束 |
+
+所有输入须有限，速度/尺寸为正、far>near>0；手动非法输入显示错误并保留最后有效相机，不静默夹取数值输入。
+鼠标连续缩放/调速允许在已公布范围内饱和，饱和无变化不递增视图版本。
+Auto 应由实际渲染路径决定裁剪，覆盖 cloud-only 情况，而非只检查空气 enabled。
+光栅环境现有限制仍保留：far≤1e6、far/near≤10000、投影 |p00|/|p11|≥0.1；
+因此宽高比也参与 FOV 校验，不能宣称 1–179° 在任意环境视口都可用。resize 使设置不再适用时停止提交、
+保留旧图并显示原因，允许调参/恢复 Auto；不能污染场景设置或悄悄更改 FOV。
+后端/环境切换和外部 IPC 修改也触发能力复查；UI 禁用不是唯一校验层。
+
+### 数据模型、共享计算与切换
+
+`dk_editor_model` 维护 Camera 的姿态/镜头值与不依赖 ImGui/SDL 的导航控制器；UI 将每帧输入转为
+`NavigationInput`（观察增量、移动轴、滚轮、修饰键、有效 dt），Edit/Simulation 共用同一更新规则。
+模型建议以 eye + yaw/pitch 为唯一姿态，pivot/focus_distance 用于 Orbit 和取景；不维护两套可漂移的眼点。
+纯投影/反投影计算适合提取到 [Foundation Math](foundation-math.md)，供 Editor 与 Capture/Render 复用，
+无 Scene/SDL/Vulkan 类型、无新三方依赖；`geometry::Ray` 的包装留在 Geometry/Editor，避免 Math 反向依赖 Geometry。
+实施 M18.1 时先更新 Math 的现有范围设计和显式 target 依赖；RenderView 继续是不可变矩阵输入，不拥有导航状态。
+
+导航模式切换保持世界眼点、观察方向和镜头不变；Orbit→Fly/Walk 从当前姿态开始，进入 Walk 记录当前 Y。
+Fly/Walk→Orbit 令 pivot=eye+forward×有效 focus_distance；使用最近聚焦距离，否则使用保留的有效距离，避免跳回旧 target。
+自由导航俯仰限制保持约 ±1.55 rad、yaw 有界环绕；正交六视图采用固定姿态，允许顶/底视精确到 ±π/2，
+使用预定义稳定基向量，不能依赖退化的 world-up 叉积。右键拖动退出固定视向并进入受限自由 Orbit，UI 同步取消视向高亮。
+切换导航但姿态/镜头不变时只改控制状态，不清空路径累积。
+
+透视→正交以 pivot 焦平面保持尺度：`ortho_height = 2 * focus_distance * tan(fov_y / 2)`。
+正交→透视沿当前观察轴调整眼点距离为 `ortho_height / (2 * tan(fov_y / 2))`，保持 pivot 和该平面构图；
+它可能改变眼点位置，应与保持姿态的导航切换区分。候选越界时拒绝切换，不能用截断破坏构图承诺。
+正交首期只允许 Orbit；从 Fly/Walk 切入时 UI 明示“切换至正交 Orbit”，一次提交两个状态，并记住透视导航模式供返回。
+增设 Front/Back/Left/Right/Top/Bottom 视向按钮，明确世界 +Y 向上与屏幕朝向，不另引入命名为“正交”的导航控制器。
+
+正交 `ray` 每像素使用不同近裁剪平面起点、相同 forward，区间为 [0, far-near]；
+project 与 ray 遵循 Vulkan Y 翻转/Z [0,1]，拾取限制仍与真实裁剪面一致。
+正交 `units_per_pixel=ortho_height/image_height`，与物体深度无关；pan 和 Gizmo 使用该尺度。
+frame 按相机基向量下的包围盒水平/垂直范围和 aspect 决定高度，同时确保深度裁剪覆盖；
+透视 frame 使用实际 FOV。不能仅使包围盒中心位于视口而宣称已完整框选。
+
+### 输入寿命与失败保护
+
+相机与控制器由 GUI owner 串行修改；worker 只读取拥有型相机快照。输入更新先计算、校验候选，再一次提交。
+非法参数、切换不支持组合或非有限计算失败保留旧姿态/设置；设置错误显示在面板，不能留下半个模式切换。
+移动使用归一化后的组合方向×有效速度×dt，避免斜向加速；鼠标增量不再乘 dt。
+dt 取单调时钟秒数，单帧最大 0.05 秒；切入、恢复与取消时重置时钟，不追补后台或卡顿时间；首期不引入惯性。
+Walk 水平前向从 yaw 计算，仰视/俯视时不会因投影归一化而出现方向奇点。
+
+右键只能在实际 Image 内、窗口可输入且没有文本/弹层/Gizmo 活动时开始捕获。键盘移动仅属于已捕获视口，
+不能在 Console/Inspector 输入 WASD 时移动。Fly/Walk 使用 UI 私有的相对鼠标适配，防止到达屏幕边缘后停止转向；
+复用 [Platform 借用窗口入口](platform.md)，鼠标相对模式/游标恢复由一个主线程 owner 管理。
+启用相对模式失败时不进入导航；不能并行消费 SDL 原始增量与 ImGui 增量导致双倍旋转，DPI 换算只做一次。
+松开右键、Esc、失焦、最小化、隐藏视口、切视图/模式、打开设置/文本输入/弹层、关闭请求均取消捕获并清空移动轴。
+原生失焦/最小化在跳过 NewFrame 前释放鼠标；关闭失败或返回应用时不自动恢复上一段移动。
+Gizmo 期间禁用相机/镜头修改，导航期间禁止拾取和 Gizmo；恢复交互要求画面与当前相机一致。
+
+姿态、有效投影/FOV/裁剪/正交高度变化才递增渲染视图 revision；速度/灵敏度/模式等纯偏好变化不使画面失效。
+同值设置和零输入不递增。路径累积/云历史按视图变化重置，几何与资产/AS 不因此重建。
+保留 [0086](../development/0086-simulation-camera-progress.md)、[0122](../development/0122-editor-render-performance.md)、
+[0127](../development/0127-editor-media-pathtracing.md) 的最近完整帧发布规则：连续移动不能饿死显示；
+旧图保留真实相机、尺寸、序号与样本来源，并标记更新中；停下后收敛，旧图不能用新镜头拾取。
+相机进入地下或超出现有介质支持域时仍可导航、Home 或改设置恢复，不把 Walk 当作阻止地下相机的碰撞系统。
+
+### 正交支持分层与截图兼容
+
+M18.3 首先验收基础光栅、模拟、拾取/Gizmo 与正交取景。编辑器增加显式的会话级 Unlit inspection 视图选项，
+让带环境的场景也能检查正交几何；该选项选择基础光栅入口，不改 Scene.environment，面板明确显示未渲染环境。
+切换正交前必须选择支持它的后端/显示组合；不自动关环境或悄悄切换渲染器。
+若外部修改使当前组合不再支持，保留最后完成图并说明恢复方式。Path trace 和光栅环境正交在对应阶段完成前保持禁用。
+模拟不使用场景空气/云合成，仍需独立验证矩阵、裁剪和发布序号，不能由 Edit 的成功推定。
+
+M18.4 扩展路径 CPU/GPU（Surface only 和 Scene media）的正交主射线；平行方向与像素相关起点必须共同进入 GPU 参数。
+正交主射线统一从近裁剪平面开始，近裁剪面之前的几何/介质不计入图像；此约定写入捕获来源并由 CPU/GPU 同时验证。
+像素抖动移动正交起点，不能修改平行方向；介质从每条射线的起点计算行星坐标/云采样，不复用透视共用眼点的径向/相位量。
+CPU/GPU 共用相机语义，保留主射线裁剪与反弹射线裁剪分离；比较解析几何、不同深度等尺寸物体、CPU/GPU及历史重置。
+
+同阶段规划 `render.capture` / `render.capture_sequence` 的 camera 增加可选 `projection` 与 `ortho_height`：
+缺省仍为 perspective，旧 eye/target/up/fov_y/near/far 请求及默认 far=100 保持；orthographic 必须给正高度。
+正交分支拒绝显式 fov_y，透视分支拒绝 ortho_height，避免无效设置被当作生效；schema 支持字段发现，跨字段规则由服务校验。
+provenance 表达实际生效的投影字段；同步 [RenderOperations](../../engine/framework/operations/src/RenderOperations.cpp) 的请求和结果 schema、
+[CaptureService](../../engine/framework/services/src/CaptureService.cpp)、[捕获设计](render-capture.md)、命令参考、序列逐样本相机及 Python/Luau 相关示例。
+保持 effect=external、guard、任务/取消和原子输出约定，失败保留旧文件；导航模式/速度不属于离屏截图参数。
+M18.1 就消除一致性驱动中的固定 65°，无需等正交 schema 才保证可调透视 FOV 的 GUI/capture 一致。
+首期不增加控制 UI 相机的 Runtime 命令；需要该能力时先设计 Editor owner 服务/能力发现，不能让无窗口 runner 持有虚构相机。
+
+M18.5 为独立的光栅环境正交扩展：先更新 [管线设计](render-pipeline.md)、[大气](render-atmosphere.md) 与 [云](render-clouds.md)，
+建立逐像素起点/平行方向和正交线性深度的 CPU 参考，明确从哪里开始介质积分、天空锚点近似适用域，
+再修改天空查询、AP 体积/深度重建、云射线/保边上采样/时域重投影与云影接入。
+仅放宽 `perspective_depth` 校验不构成支持；若暂不能保证误差，保持显式不支持，不以共用天空眼点伪装全正交环境。
+M18.1–4 可先交付可用相机和有限正交；只有此阶段验收后才宣称光栅环境支持正交。
+
+### 定向验收计划
+
+以下是未来实现的验收要求，不是本次已经通过的测试；不默认执行全量或双配置。
+
+| 范围 | 关键可观察断言 | 现有验证入口 |
+| --- | --- | --- |
+| 镜头与控制器 CPU | FOV 改变仍 project/ray 一致；frame 完整框选；30/60/144Hz 相同总时间移动近似相同；斜向不加速；Walk 高度不变；模式切换不跳位；非法/同值状态保护 | [EditorTests](../../tests/unit/EditorTests.cpp)，dk_editor_tests；新增纯数学部分用 dk_math_tests |
+| 输入与会话 | 真实键鼠模式/调参、松键停机、失焦/文本/模态/最小化/关闭释放鼠标；两视口独立；无 Scene/Undo 副作用；持续运动显示更新 | [交互验收](../../tests/integration/EditorInteractionTest.ps1)、[模拟驱动](../../engine/editor/src/SimulationSmoke.cpp)，dk_editor_app / dk_run |
+| 正交编辑 | 同尺寸物体在不同深度像素尺寸一致；不同像素平行射线；近远裁剪、宽高比、六视图、平移/缩放、拾取/Gizmo 对齐 | dk_editor_tests、dk_render_data_tests、dk_render_pipeline_tests 与真实后台窗口 |
+| 渲染和截图 | 透视 FOV 的 GUI/capture 匹配；正交 CPU/GPU 主射线与线性图像一致；切投影重置而改移速不重置；旧请求兼容、非法组合拒绝且输出不变 | [PathTraceReferenceTests](../../tests/unit/PathTraceReferenceTests.cpp)、[PathTraceProbe](../../tests/integration/PathTraceProbe.cpp)、[EditorPathTraceTest](../../tests/integration/EditorPathTraceTest.py)、capture 协议/集成测试 |
+| 光栅环境正交 | 逐像素起点和真实米制光程；天空/地平线/几何遮挡/云内外、历史重投影、时域反遮挡、失败旧图保护 | 对应大气/云 CPU 参考与 required GPU 用例，在 M18.5 设计中细化 |
+
+实现时按 [测试选择表](../../.agents/skills/decker-build-verify/references/test-selection.md) 选实际受影响用例并补足缺失断言；
+CPU 控制器保持可在不启用 GUI/GPU 的配置中构建。窗口自动化一律 `--background`，不能为了捕获测试抢用户焦点；
+相对鼠标的 OS 捕获与输入注入分开验证，不能只测试直接调用 Camera 方法。
+GPU 正确性使用 required validation；持续导航分别记录 GUI 呈现与实际新视图发布，停机后核对最终镜头/序号，不能用 GUI FPS 代替画面更新。
