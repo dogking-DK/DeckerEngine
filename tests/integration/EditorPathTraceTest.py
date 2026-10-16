@@ -159,10 +159,12 @@ def main():
             else:
                 initial = checkpoint("path")
                 assert initial["spp"] == 2 and initial["path_mode"] and initial["undo"] == 0
+                assert initial["capture_camera"]["fov_y"] == 55
                 compare_capture(initial)
                 advance("path")
                 paused = checkpoint("paused")
                 assert paused["paused"] and paused["target"] == 3 and paused["spp"] == 2 and paused["pixels"] == initial["pixels"]
+                assert paused["generation"] == initial["generation"] and paused["camera"] == initial["camera"]
                 advance("paused")
                 exposure = checkpoint("exposure")
                 assert exposure["generation"] == paused["generation"] and exposure["exposure"] == 2

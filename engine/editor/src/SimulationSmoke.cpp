@@ -15,6 +15,7 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
     auto& io=ImGui::GetIO(); io.ConfigInputTrickleEventQueue=false;
     if (tick_++<20 || done_) return;
     constexpr std::array actions{"sim_prepare",":initial","sim_sample","sim_step",":stepped","sim_sample","sim_export","sim_export_duplicate","sim_resume",":running",":orbit_running",":pan_running","sim_pause",":paused",
+        "simulation_camera_settings","simulation_camera_fov",":all",":fov",":enter","simulation_camera_apply",
         ":orbit",":pan",":zoom","simulation_frame",":resize",":minimize","simulation_edit_view","simulation_view",
         "sim_cancel","sim_stop","sim_play",":running","sim_stop"};
     const bool select_gpu=simulation_backend_==1 && simulation_stage_<2;
@@ -55,7 +56,10 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
         if (viewport.simulation_run() && viewport.texture()) stage_pixels_=viewport.capture_simulation_pixels();
         io.AddFocusEvent(true);
         if (action=="sim_export_duplicate") { ++simulation_expected_errors_; simulation_export_bytes_=export_bytes(); }
-        if (action==":resize") check(window.resize(simulation_backend_ ? 1360 : 1280,simulation_backend_ ? 820 : 800));
+        if(action==":all") { io.AddKeyEvent(ImGuiMod_Ctrl,true); io.AddKeyEvent(ImGuiKey_A,true); }
+        else if(action==":fov") io.AddInputCharactersUTF8(simulation_backend_ ? "75" : "55");
+        else if(action==":enter") io.AddKeyEvent(ImGuiKey_Enter,true);
+        else if (action==":resize") check(window.resize(simulation_backend_ ? 1360 : 1280,simulation_backend_ ? 820 : 800));
         else if (action==":minimize") {
             suspended_frames_=0; check(window.minimize()); restore_at_=std::chrono::steady_clock::now()+std::chrono::milliseconds{150};
         } else if (navigation || action==":zoom") {
@@ -94,6 +98,8 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
     }
     io.AddMousePosEvent(pointer_.x,pointer_.y);
     if (phase==1 && !action.starts_with(":")) io.AddMouseButtonEvent(0,false);
+    if(phase==1 && action==":all") { io.AddKeyEvent(ImGuiKey_A,false); io.AddKeyEvent(ImGuiMod_Ctrl,false); }
+    if(phase==1 && action==":enter") io.AddKeyEvent(ImGuiKey_Enter,false);
     if (phase<6) return;
     require(ui.errors()==simulation_expected_errors_,"Unexpected control, export or viewport failure");
     const auto state=model.simulation_state(); const auto& shown=ui.displayed_simulation();
@@ -103,7 +109,16 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
     require(viewport.error().empty(),viewport.error().c_str());
     const bool image=state.run && viewport.simulation_run()==state.run->run_id && viewport.texture() && viewport.simulation_view_current();
     bool ready=false;
-    if (action=="sim_solver") ready=ui.controls().contains("sim_gpu");
+    if(action=="simulation_camera_apply") {
+        ready=image && ui.simulation_camera().fov_y()==(simulation_backend_ ? 75 : 55);
+        if(ready) {
+            require(ui.input().camera().fov_y()==65,"Simulation lens changed Edit lens");
+            require(ui.simulation_camera().revision()!=simulation_camera_revision_,"Simulation lens did not invalidate view");
+            require(viewport.capture_simulation_pixels()!=stage_pixels_,"Simulation FOV did not alter the image");
+        }
+    }
+    else if(action.starts_with("simulation_camera_") || action==":all" || action==":fov" || action==":enter") ready=image;
+    else if (action=="sim_solver") ready=ui.controls().contains("sim_gpu");
     else if (action=="sim_gpu") ready=model.simulation_draft().gpu;
     else if (action=="sim_stop") ready=!state.run && !shown.run && !viewport.simulation_run() && viewport.current(model.snapshot()->state);
     else if (action=="simulation_edit_view") ready=!viewport.simulation_run() && viewport.current(model.snapshot()->state);

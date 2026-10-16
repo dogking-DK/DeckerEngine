@@ -21,6 +21,7 @@ void Viewport::update_simulation(Workspace& model,const SimulationRunState& run,
 #ifdef DK_SIMULATION_GPU
     if (run.fault) { error_="Simulation faulted; showing the last completed preview."; return; }
     try {
+        check(camera.validate(double(width)/height));
         SimulationView view{width,height};
         const auto matrix=camera.clip(double(width)/height).cast<float>().eval();
         for (int row=0;row<4;++row) for (int col=0;col<4;++col) view.view_projection[row*4+col]=matrix(row,col);

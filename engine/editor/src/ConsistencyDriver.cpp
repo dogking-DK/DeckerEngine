@@ -11,6 +11,8 @@ void require(bool value,const char* message) {
     if (!value) throw std::runtime_error{std::string{"Consistency smoke: "}+message};
 }
 std::span<const char* const> actions(std::size_t stage,bool environment,bool clouds) {
+    static constexpr std::array lens={"camera_settings","camera_fov",":all",":fov",":enter","camera_apply"};
+    if(stage==0) return lens;
     static constexpr std::array gui={"viewport","name",":all",":name","translation",":all",":translation","apply"};
     static constexpr std::array draft={"name",":all",":draft"};
     static constexpr std::array conflict={"apply","revert"};
@@ -49,7 +51,7 @@ Json entity(const EntityData& value) {
 Json camera(const Camera& value) {
     const Mat4d world=value.world().matrix();
     const Vec3d eye=world.block<3,1>(0,3),target=eye-world.block<3,1>(0,2),up=world.block<3,1>(0,1);
-    return {{"eye",vector(eye)},{"target",vector(target)},{"up",vector(up)},{"fov_y",65},{"near",value.near_plane()},{"far",value.far_plane()}};
+    return {{"eye",vector(eye)},{"target",vector(target)},{"up",vector(up)},{"fov_y",value.fov_y()},{"near",value.near_plane()},{"far",value.far_plane()}};
 }
 }
 ConsistencyDriver::ConsistencyDriver(const std::filesystem::path& root,bool environment) : directory_(root/(environment ? ".dk-environment" : ".dk-consistency")),environment_(environment),clouds_(std::filesystem::is_regular_file(root/".dk-cloud-integration")) {
@@ -80,6 +82,8 @@ void ConsistencyDriver::input(WorkbenchUi& ui,const Workspace& model,const Viewp
         else if (action==":drag") pointer_.x+=40;
         else if (action==":release") io.AddMouseButtonEvent(0,false);
         else if (action==":name") io.AddInputCharactersUTF8("GUI consistency");
+        else if (action==":fov") io.AddInputCharactersUTF8("55");
+        else if (action==":enter") io.AddKeyEvent(ImGuiKey_Enter,true);
         else if (action==":translation") io.AddInputCharactersUTF8("0.25");
         else if (action==":draft") io.AddInputCharactersUTF8("Stale GUI draft");
         else {
@@ -91,6 +95,7 @@ void ConsistencyDriver::input(WorkbenchUi& ui,const Workspace& model,const Viewp
     io.AddMousePosEvent(pointer_.x,pointer_.y);
     if (phase==1) {
         if (action==":all") { io.AddKeyEvent(ImGuiKey_A,false); io.AddKeyEvent(ImGuiMod_Ctrl,false); }
+        else if(action==":enter") io.AddKeyEvent(ImGuiKey_Enter,false);
         else if (!action.starts_with(":") && !(environment_ && stage_==9 && action=="gizmo_0")) io.AddMouseButtonEvent(0,false);
     }
 }

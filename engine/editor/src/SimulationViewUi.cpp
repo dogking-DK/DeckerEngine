@@ -7,9 +7,15 @@ void WorkbenchUi::frame_simulation(const ClothConfig& cloth,double aspect) {
     const double half=(cloth.columns-1)*cloth.spacing/2.0,depth=(cloth.rows-1)*cloth.spacing;
     bounds.include({-half,std::min(double(cloth.physics.floor_y),double(cloth.height)),0});
     bounds.include({half,cloth.height,depth});
-    simulation_camera_.reset(true);
-    simulation_camera_.orbit(65,70);
-    simulation_camera_.frame(bounds,aspect);
+    Camera candidate=simulation_camera_;
+    candidate.reset(true);
+    // Framing orientation is independent of the user's navigation sensitivity/invert preference.
+    auto settings=candidate.settings(),orientation=settings;
+    orientation.navigation.orbit_sensitivity=.006; orientation.navigation.invert_y=false;
+    if(!report("Frame cloth",candidate.set_settings(orientation,aspect))) return;
+    candidate.orbit(65,70);
+    if(!report("Frame cloth",candidate.set_settings(settings,aspect))) return;
+    if(report("Frame cloth",candidate.frame(bounds,aspect))) simulation_camera_=candidate;
 }
 void WorkbenchUi::simulation_navigation() {
     auto& io=ImGui::GetIO();
@@ -51,6 +57,8 @@ bool WorkbenchUi::simulation_view(Viewport& preview,bool visible) {
     }
     mark("simulation_frame"); ImGui::SameLine();
     if (ImGui::SmallButton("Retry preview")) preview.retry_simulation();
+    ImGui::SameLine();
+    if(simulation_settings_ui_.draw(simulation_camera_,true,simulation_aspect_,controls_,"simulation_camera_")) simulation_navigation_=-1;
     ImGui::TextDisabled("RMB: orbit | MMB: pan | wheel: zoom | F/Home: frame");
     if (preview.texture() && preview.simulation_run()==state.run->run_id)
         ImGui::Text("%s cloth | displayed step %llu | %s",state.run->gpu ? "GPU" : "CPU",
@@ -61,6 +69,7 @@ bool WorkbenchUi::simulation_view(Viewport& preview,bool visible) {
     if (available.x>=32 && available.y>=32) {
         const auto width=static_cast<std::uint32_t>(std::clamp(available.x,32.0f,1600.0f));
         const auto height=static_cast<std::uint32_t>(std::clamp(available.y,32.0f,1200.0f));
+        simulation_aspect_=double(width)/height;
         preview.update_simulation(model_,*state.run,width,height,simulation_camera_);
         if (preview.texture() && preview.simulation_run()==state.run->run_id) {
             const auto& info=preview.info();

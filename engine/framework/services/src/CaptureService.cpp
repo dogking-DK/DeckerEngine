@@ -3,6 +3,7 @@
 #include <dk/memory/MemorySystem.hpp>
 #include <dk/io/File.hpp>
 #include <dk/profiling/Profiler.hpp>
+#include <dk/math/Projection.hpp>
 #include <nlohmann/json.hpp>
 #include <cmath>
 #include <numbers>
@@ -38,11 +39,7 @@ render::ViewDescription view_description(const CaptureRequest& r) {
     Mat4d world=Mat4d::Identity(); world.block<3,1>(0,0)=right; world.block<3,1>(0,1)=up;
     world.block<3,1>(0,2)=-forward; world.block<3,1>(0,3)=c.eye;
     render::ViewDescription v{r.width,r.height,0}; v.camera_world=take(Transformd::from_matrix(world));
-    const double f=1/std::tan(c.fov_y*std::numbers::pi/360);
-    v.projection=Mat4d::Zero(); v.projection(0,0)=f/(static_cast<double>(r.width)/r.height); v.projection(1,1)=-f;
-    v.projection(2,2)=c.far_plane/(c.near_plane-c.far_plane);
-    v.projection(2,3)=c.far_plane*c.near_plane/(c.near_plane-c.far_plane); v.projection(3,2)=-1;
-    require(v.projection.allFinite(),"Capture projection overflow");
+    v.projection=take(perspective_projection({radians(c.fov_y),c.near_plane,c.far_plane},static_cast<double>(r.width)/r.height));
     return v;
 }
 nlohmann::json environment_json(const EnvironmentDescription& e) {

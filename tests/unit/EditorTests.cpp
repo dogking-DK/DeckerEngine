@@ -5,6 +5,7 @@
 #include <catch2/catch_approx.hpp>
 #include <algorithm>
 #include <thread>
+#include <limits>
 using namespace dk;
 using namespace dk::editor;
 namespace {
@@ -161,7 +162,7 @@ TEST_CASE("camera projected positions match rays across resize orbit pan and foc
         camera.orbit(80,40); camera.pan(15,-10,600); camera.dolly(2);
     }
     camera.orbit(0,100000); camera.dolly(100000); CHECK(camera.world().matrix().allFinite());
-    camera.dolly(-100000); camera.frame({{-1,-2,-3},{1,2,3}},0.5);
+    camera.dolly(-100000); REQUIRE(camera.frame({{-1,-2,-3},{1,2,3}},0.5));
     CHECK(camera.project({0,0,0},0.5)->isApprox(Vec2d{0.5,0.5},1e-10));
     CHECK_FALSE(camera.ray({-0.1,0.5},1)); CHECK_FALSE(camera.ray({0.5,0.5},0));
     const auto before=camera.revision(); camera.orbit(0,0); camera.dolly(0); CHECK(camera.revision()==before);
@@ -255,6 +256,77 @@ TEST_CASE("environment camera uses compatible projection and matching pick rays"
     const auto ray=camera.ray({.3,.6},1.6).value();
     CHECK(camera.project(ray.origin+ray.direction*4,1.6)->isApprox(Vec2d{.3,.6},1e-10));
     camera.set_environment(false); CHECK(camera.near_plane()==.05);
+}
+
+TEST_CASE("camera lens settings keep pose and align rays framing pan and gizmo scale") {
+    for(double fov : {10.,45.,95.,120.}) for(double aspect : {.5,1.,2.5}) {
+        Camera camera{true}; camera.orbit(50,30);
+        const auto before=camera.world().matrix(); auto settings=camera.settings();
+        settings.lens.fov_y=fov; REQUIRE(camera.set_settings(settings,aspect));
+        CHECK(camera.world().matrix()==before);
+        const geometry::Bounds bounds{{-2,-1,-3},{4,2,5}};
+        REQUIRE(camera.frame(bounds,aspect));
+        for(int i=0;i<8;++i) {
+            const Vec3d p{i&1 ? 4. : -2.,i&2 ? 2. : -1.,i&4 ? 5. : -3.};
+            auto uv=camera.project(p,aspect); REQUIRE(uv);
+            CHECK((uv->array()>=0).all()); CHECK((uv->array()<=1).all());
+        }
+        for(Vec2d uv : {Vec2d{.1,.8},Vec2d{.5,.5},Vec2d{.9,.2}}) {
+            auto ray=camera.ray(uv,aspect).value();
+            CHECK(camera.project(ray.origin+ray.direction*20,aspect)->isApprox(uv,1e-10));
+        }
+        const Vec3d center{1,.5,1}; const auto m=camera.world().matrix();
+        const double units=camera.units_per_pixel(center,600);
+        const auto a=camera.project(center,aspect).value();
+        const auto b=camera.project(center+m.block<3,1>(0,0)*units*80,aspect).value();
+        CHECK((b.x()-a.x())*600*aspect==Catch::Approx(80));
+        camera.pan(12,-7,600);
+        const auto c=camera.project(center,aspect).value();
+        CHECK((c.x()-a.x())*600*aspect==Catch::Approx(12));
+        CHECK((c.y()-a.y())*600==Catch::Approx(-7));
+    }
+}
+TEST_CASE("camera settings commit atomically and navigation preferences preserve render revision") {
+    Camera camera{true}; auto settings=camera.settings(); const auto initial=camera.revision();
+    settings.navigation.move_speed=20; settings.navigation.orbit_sensitivity=.012;
+    settings.navigation.fast_multiplier=8; settings.navigation.invert_y=true;
+    REQUIRE(camera.set_settings(settings,1)); CHECK(camera.revision()==initial);
+    REQUIRE(camera.set_settings(settings,1)); CHECK(camera.revision()==initial);
+    settings.lens.fov_y=45; REQUIRE(camera.set_settings(settings,1)); CHECK(camera.revision()==initial+1);
+    const auto pose=camera.world().matrix(); const auto revision=camera.revision();
+    for(double bad : {1.,179.,std::numeric_limits<double>::quiet_NaN(),std::numeric_limits<double>::infinity()}) {
+        auto candidate=settings; candidate.lens.fov_y=bad;
+        CHECK_FALSE(camera.set_settings(candidate,1)); CHECK(camera.settings()==settings);
+        CHECK(camera.revision()==revision); CHECK(camera.world().matrix()==pose);
+    }
+    auto bad=settings; bad.navigation.move_speed=0; bad.lens.fov_y=90;
+    CHECK_FALSE(camera.set_settings(bad,1)); CHECK(camera.settings()==settings);
+    bad=settings; bad.lens.automatic_clip=false; bad.lens.near_plane=100; bad.lens.far_plane=1;
+    CHECK_FALSE(camera.set_settings(bad,1)); CHECK(camera.revision()==revision);
+    camera.orbit(12,10); camera.reset(true); CHECK(camera.settings()==settings);
+    CHECK(camera.world().matrix()==pose);
+    REQUIRE(camera.restore_defaults(true,1)); CHECK(camera.settings()==CameraSettings{});
+    const auto restored=camera.revision(); REQUIRE(camera.restore_defaults(true,1)); CHECK(camera.revision()==restored);
+    camera.dolly(100000); const auto close=camera.revision(); camera.dolly(100000); CHECK(camera.revision()==close);
+}
+TEST_CASE("camera environment policy rejects unsupported lenses and frame failure preserves state") {
+    Camera camera{true}; camera.set_environment(true); REQUIRE(camera.validate(1));
+    auto settings=camera.settings(); settings.lens.fov_y=120;
+    REQUIRE(camera.set_settings(settings,1)); const auto revision=camera.revision();
+    CHECK_FALSE(camera.validate(10)); CHECK(camera.revision()==revision);
+    auto bad=settings; bad.lens.automatic_clip=false;
+    CHECK_FALSE(camera.set_settings(bad,1)); CHECK(camera.settings()==settings);
+    bad.lens.near_plane=2; REQUIRE(camera.set_settings(bad,1)); CHECK(camera.near_plane()==2);
+    const auto manual=camera.revision(); camera.set_environment(false);
+    CHECK(camera.near_plane()==2); CHECK(camera.revision()==manual);
+    bad.lens.near_plane=.05; REQUIRE(camera.set_settings(bad,1));
+    camera.set_environment(true); CHECK_FALSE(camera.validate(1));
+    REQUIRE(camera.restore_defaults(true,1)); CHECK(camera.near_plane()==1);
+    const auto before=camera.world().matrix(); const auto stable=camera.revision();
+    CHECK_FALSE(camera.frame({{-1e6,-1e6,-1e6},{1e6,1e6,1e6}},1));
+    CHECK(camera.world().matrix()==before); CHECK(camera.revision()==stable);
+    CHECK_FALSE(camera.frame({},1)); CHECK(camera.revision()==stable);
+    REQUIRE(camera.frame({{0,0,0},{0,0,0}},1)); REQUIRE(camera.project({0,0,0},1));
 }
 
 TEST_CASE("workspace cloud preset is an unapplied draft with undo redo and reload parity") {

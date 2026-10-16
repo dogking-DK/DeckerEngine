@@ -231,7 +231,6 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
 #ifdef DK_EDITOR_PATHTRACING
     path_panel(preview);
 #endif
-    input_.environment(model_.snapshot() && (model_.snapshot()->scene.environment().enabled || model_.snapshot()->scene.environment().clouds.enabled));
     const bool visible=ImGui::Begin("Viewport",nullptr,ImGuiWindowFlags_NoScrollWithMouse|ImGuiWindowFlags_NoScrollbar);
     if (!visible) { input_.cancel(); preview.suspend_path(); }
     if (!simulation_view(preview,visible)) {
@@ -249,7 +248,12 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     ImGui::BeginDisabled(input_.active());
     if (ImGui::SmallButton("Refresh")) preview.retry(); mark("path_refresh");
     ImGui::EndDisabled();
-    input_.toolbar(model_,preview,controls_);
+    bool environment_projection=model_.snapshot() && (model_.snapshot()->scene.environment().enabled || model_.snapshot()->scene.environment().clouds.enabled);
+#ifdef DK_EDITOR_PATHTRACING
+    environment_projection=environment_projection && !path_mode_;
+#endif
+    input_.environment(environment_projection);
+    input_.toolbar(model_,preview,controls_,[&](const char* action,Result<void> result) { return report(action,std::move(result)); });
     if (const auto* s=model_.snapshot(); s && visible) {
         if (preview.texture()) {
 #ifdef DK_EDITOR_PATHTRACING
@@ -274,6 +278,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
         if (available.x>=32 && available.y>=32) {
             const auto width=static_cast<std::uint32_t>(std::clamp(available.x,32.0f,1600.0f));
             const auto height=static_cast<std::uint32_t>(std::clamp(available.y,32.0f,1200.0f));
+            input_.aspect(double(width)/height);
             environment_settings_.camera_revision=input_.camera().revision();
 #ifdef DK_EDITOR_PATHTRACING
             if(path_mode_) preview.update_path(*s,acceptance_path_extent_ ? std::min(width,acceptance_path_extent_) : width,acceptance_path_extent_ ? std::min(height,acceptance_path_extent_) : height,srgb,input_.camera(),input_.edit(),input_.revision(),path_settings_);

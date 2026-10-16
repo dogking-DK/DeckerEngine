@@ -1,7 +1,7 @@
 ---
 module: render-capture
 created_at: "2026-10-03T21:21:47+08:00"
-updated_at: "2026-10-16T16:28:00+08:00"
+updated_at: "2026-10-16T17:25:00+08:00"
 status: accepted
 ---
 
@@ -61,6 +61,7 @@ Runtime idle pump 同时消费资产与截图；`jobs.*` 通过 JobId 路由到�
 
 只输出 PPM（顶部第一行、sRGB RGB8），父目录必须存在；路径在工程根内，输出扩展名 .ppm。
 相机使用 eye/target/up、透视 fov_y/near/far，默认采用 Sponza 示例相机；
+M18.1 的投影生成复用 [Math 透视计算](foundation-math.md#m181-透视计算)，FOV 校验、默认值和命令 schema 不变。
 默认 unlit_preview，支持 opaque/mask，不新增 PBR/透明/天空盒/HDR 照明。
 M8.4 与编辑器共用 Render 的 unlit_preview_settings。比较视口和截图必须显式匹配尺寸与相机，
 包括 FOV/near/far（编辑器 far=10000，截图默认 far=100），并固定资产文件与设备；

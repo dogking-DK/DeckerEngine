@@ -32,6 +32,7 @@ void EnvironmentPreview::run(std::stop_token stop) {
         }
         EnvironmentPreviewResult result; result.sequence=request->sequence; bool published=false;
         try {
+            check(request->camera.validate(double(request->width)/request->height));
             if(request->snapshot.scene.logical_bytes()>32U*1024U*1024U) throw std::runtime_error("Environment preview snapshot exceeds 32 MiB");
             const auto& atmosphere=request->snapshot.scene.environment().atmosphere;
             const Vec3d center{atmosphere.planet_center_m[0],atmosphere.planet_center_m[1],atmosphere.planet_center_m[2]};

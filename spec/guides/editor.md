@@ -115,6 +115,20 @@ GPU预览直接使用GPU输出与图像，不经CPU读回再上传；CPU预览�
 检查连续图像变化与暂停稳定，并保存带运行中布片的工作台截图；
 只使用带`.dk-editor-smoke`标记的一次性项目。该模式启用required+同步验证，仅单列已知AMD加载层版本警告。
 
+## 相机镜头与导航设置
+
+Edit 和 Simulation 视口工具栏均有 **Camera** 按钮，各自保存独立的会话设置：
+
+- 垂直 FOV 默认 65°；可拖动滑条或输入角度。**Auto clipping** 默认开启，光栅大气/云使用 near=1m，其余视图 near=0.05m，far=10000m；关闭后可输入 near/far。
+- Orbit 灵敏度、平移倍率、滚轮系数和反转 Y 立即影响应用后的鼠标导航。
+- 移速、加速/精细倍率和观察灵敏度可以保存为偏好；Fly/Walk 尚未接入，当前仍使用 Orbit。
+- **Apply** 校验整组设置后应用，**Cancel** 丢弃草稿。无效值保留原相机和草稿并显示原因。
+- **Home / Reset** 只恢复视角、保留设置；**Restore defaults** 恢复默认相机和设置。模拟 **Frame cloth / F / Home** 按当前镜头重新取景。
+
+镜头改变同步影响绘制、拾取、Gizmo 尺寸与聚焦；调移速等偏好不重置路径累积。相机设置不写入 Scene、Undo 或项目文件，退出后不保留。
+光栅环境还受 far/near≤10000、far≤1e6 和投影尺度限制；窗口变得过宽或外部启用环境后不兼容时，保留旧图并显示错误，可用 Camera 修改 FOV/裁剪或恢复默认值。
+正交仍未提供；其分期范围见 [相机设计](../design/editor-interaction.md#m18-相机扩展计划)。
+
 ## 编辑预览与外部命令
 
 预览在版本或面板尺寸变化后同步渲染；每个文档会话复用 GPU 资产。
@@ -127,7 +141,7 @@ Inspector 和 Viewport 刷新到新 revision；已输入的 Inspector 草稿保�
 
 比较视口与 [render.capture](../commands/render.md) 时，要使用相同 scene/revision、资产文件、
 相机和像素尺寸。两者共用背景色与 exposure，但相机是编辑器会话状态，不写入场景：
-截图需显式提供 eye/target/up、fov_y=65、near=0.05、far=10000 和 `profile=unlit_preview`。
+截图需显式提供实际 eye/target/up、Camera 中生效的 fov_y/near/far 和 `profile=unlit_preview`，不能固定假设 FOV 仍为 65°。
 截图默认 far=100；只提供 guard 不会自动取得 GUI 当前视图。
 Save 后另启 runner 加载同一 manifest，scene_id/revision/实体保持一致，document_id 会更换。
 

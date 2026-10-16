@@ -31,17 +31,18 @@ std::optional<double> angle(const geometry::Ray& ray,const Vec3d& pivot,const Ma
 }
 }
 void ViewportInput::cancel() { if (edit_) { edit_.reset(); ++revision_; } navigation_=-1; }
-void ViewportInput::toolbar(Workspace& model,Viewport& preview,std::map<std::string,ImVec2>& controls) {
+void ViewportInput::toolbar(Workspace& model,Viewport& preview,std::map<std::string,ImVec2>& controls,const Report& report) {
     ImGui::BeginDisabled(active());
     if (ImGui::RadioButton("Move",mode_==Mode::translate)) mode_=Mode::translate; mark(controls,"mode_move"); ImGui::SameLine();
     if (ImGui::RadioButton("Rotate",mode_==Mode::rotate)) mode_=Mode::rotate; mark(controls,"mode_rotate"); ImGui::SameLine();
     if (ImGui::RadioButton("Scale",mode_==Mode::scale)) mode_=Mode::scale; mark(controls,"mode_scale"); ImGui::SameLine();
-    if (ImGui::SmallButton("Reset")) camera_.reset(fixture_); mark(controls,"camera_reset");
+    if (ImGui::SmallButton("Reset")) { navigation_=-1; camera_.reset(fixture_); } mark(controls,"camera_reset");
     ImGui::SameLine();
     ImGui::BeginDisabled(!model.selection());
-    if (ImGui::SmallButton("Frame") && model.snapshot()) camera_.frame(preview.bounds(*model.selection(),model.snapshot()->scene),
-        preview.info().height ? double(preview.info().width)/preview.info().height : 1);
-    mark(controls,"camera_frame"); ImGui::EndDisabled(); ImGui::EndDisabled();
+    if (ImGui::SmallButton("Frame") && model.snapshot()) report("Frame",camera_.frame(preview.bounds(*model.selection(),model.snapshot()->scene),aspect_));
+    mark(controls,"camera_frame"); ImGui::EndDisabled(); ImGui::SameLine();
+    if(settings_ui_.draw(camera_,fixture_,aspect_,controls,"camera_")) navigation_=-1;
+    ImGui::EndDisabled();
     ImGui::TextDisabled(active() ? "Transform preview | release: commit | Esc: cancel" : "Local axes | RMB: orbit | MMB: pan | wheel: zoom | F: frame | Home: reset");
 }
 void ViewportInput::image(Workspace& model,Viewport& preview,std::map<std::string,ImVec2>& controls,const Report& report) {
@@ -51,7 +52,7 @@ void ViewportInput::image(Workspace& model,Viewport& preview,std::map<std::strin
     auto& io=ImGui::GetIO(); const Vec2d mouse=vector(io.MousePos),uv=(mouse-minimum).cwiseQuotient(size);
     controls["viewport"]=point(minimum+size/2); controls["viewport_empty"]=point(minimum+Vec2d{size.x()*0.03,size.y()*0.03});
     const bool modal=ImGui::IsPopupOpen(nullptr,ImGuiPopupFlags_AnyPopupId|ImGuiPopupFlags_AnyPopupLevel);
-    if (io.AppFocusLost || modal || !model.snapshot()) { cancel(); return; }
+    if (io.AppFocusLost || modal || io.WantTextInput || !model.snapshot()) { cancel(); return; }
     if(!preview.error().empty() && active()) cancel();
     if (active() && (edit_->guard.document_id!=model.snapshot()->state.document_id || edit_->guard.revision!=model.snapshot()->state.revision)) { cancel(); return; }
     if (ImGui::IsKeyPressed(ImGuiKey_Escape,false)) { cancel(); return; }
@@ -65,7 +66,7 @@ void ViewportInput::image(Workspace& model,Viewport& preview,std::map<std::strin
         if (hovered && io.MouseWheel!=0) camera_.dolly(io.MouseWheel);
         if (hovered && ImGui::IsKeyPressed(ImGuiKey_Home,false)) camera_.reset(fixture_);
         if (hovered && ImGui::IsKeyPressed(ImGuiKey_F,false) && model.selection())
-            camera_.frame(preview.bounds(*model.selection(),model.snapshot()->scene),aspect);
+            report("Frame",camera_.frame(preview.bounds(*model.selection(),model.snapshot()->scene),aspect));
     }
     if (!preview.error().empty() || (!active() && !preview.current(model.snapshot()->state)) || !preview.camera_current(camera_) || navigation_>=0) return;
     auto* draw=ImGui::GetWindowDrawList();

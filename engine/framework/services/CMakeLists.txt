@@ -42,7 +42,7 @@ if(DK_BUILD_RENDER_CAPTURE)
     add_library(dk::render_services ALIAS dk_render_services)
     target_sources(dk_render_services PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/services/CaptureService.hpp)
     target_link_libraries(dk_render_services PUBLIC dk::scene_services dk::jobs dk::render_pipeline dk::asset_importers
-        PRIVATE dk::render_disk dk::profiling nlohmann_json::nlohmann_json)
+        PRIVATE dk::render_disk dk::profiling dk::math nlohmann_json::nlohmann_json)
     dk_target_defaults(dk_render_services)
     if(TARGET dk_render_pathtracing)
         target_sources(dk_render_services PRIVATE src/PathCapture.cpp)

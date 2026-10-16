@@ -130,5 +130,6 @@
 | 0126 | [M17.4 GPU云路径传输](0126-gpu-cloud-pathtracing.md) | render-pathtracing、architecture | completed |
 | 0127 | [M17.5 Editor与固定捕获统一介质](0127-editor-media-pathtracing.md) | editor、render-capture、render-pathtracing | completed |
 | 0128 | [M17.6 Sponza介质路径性能](0128-path-media-performance.md) | render-pathtracing、editor、render-capture | completed |
+| 0129 | [M18.1 相机镜头与导航设置](0129-camera-settings.md) | editor-interaction、editor、foundation-math、render-capture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

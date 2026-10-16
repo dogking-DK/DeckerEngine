@@ -34,6 +34,10 @@ void Viewport::release_texture() {
 void Viewport::update(const SceneReadSnapshot& snapshot,std::uint32_t width,std::uint32_t height,bool srgb,const Camera& camera,
     const std::optional<TransformEdit>& edit,std::uint64_t preview_revision,float exposure,const render::EnvironmentRenderSettings& environment) {
     suspend_path(); show_edit();
+    if(auto valid=camera.validate(double(width)/height); !valid) {
+        environment_.cancel(); environment_key_.reset(); environment_has_frame_=true;
+        attempted_.reset(); published_.reset(); error_=valid.error().message; return;
+    }
     const Key key{snapshot.state.document_id,snapshot.state.revision,width,height,srgb,camera.revision(),preview_revision,exposure,environment};
     if(snapshot.scene.environment().enabled || snapshot.scene.environment().clouds.enabled) {
         try {

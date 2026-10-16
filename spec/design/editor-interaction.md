@@ -1,7 +1,7 @@
 ---
 module: editor-interaction
 created_at: "2026-10-08T11:35:00+08:00"
-updated_at: "2026-10-16T17:01:00+08:00"
+updated_at: "2026-10-16T17:25:00+08:00"
 status: accepted
 ---
 
@@ -34,6 +34,7 @@ UI 私有适配负责 ImGui 图像矩形、轴/环绘制、输入路由和 DiskS
 选中实体用包围盒和轴标记；没有网格的实体仍可从 Hierarchy 选择。
 
 编辑器相机只属于 UI 会话，不写 Scene Camera、revision、dirty 或历史。
+M18.1 已提供可调镜头与导航偏好，实施契约见下文；当前导航仍为 Orbit。
 右键拖动环绕、滚轮缩放、中键平移；F 聚焦选择、Home/Reset 恢复默认相机。
 距离和俯仰限制避免奇点；尺寸/相机改变使视口失效，绘制与拾取共享相机矩阵。
 输入仅在图像区域或已捕获的拖动中处理；文本/模态框不触发快捷键。
@@ -63,13 +64,13 @@ M8.3 IPC、纹理 alpha 精确拾取、多选、世界轴 Gizmo、吸附和飞�
 
 关联：[工作台](editor.md)、[几何查询](geometry-query.md)、[Render 数据](render-data.md)、[0066](../development/0066-editor-interaction.md)。
 
-## M18 相机扩展计划（尚未实现）
+## M18 相机扩展计划
 
-本节是 2026-10-16 的源码检查与功能设计；上述已实现行为仍有效。只完成设计，不修改引擎、
-命令 schema 或测试。阶段状态与执行顺序由 [Roadmap M18](../roadmap.md#m18相机操作模式与投影扩展) 维护。
+本节以 2026-10-16 的源码检查为起点；阶段状态与执行顺序由 [Roadmap M18](../roadmap.md#m18相机操作模式与投影扩展) 维护。
+M18.1 已实现镜头与导航设置，其后模式/正交仍为规划。历史检查结果见下表，实际变更和验证见 [0129](../development/0129-camera-settings.md)。
 首期 Walk 按水平漫游设计；没有地面碰撞、重力、台阶或跳跃，不作为角色行走模拟。
 
-### 当前能力与缺口
+### 扩展前能力与缺口（M18 检查基线）
 
 | 范围 | 源码检查结果 | 扩展影响 |
 | --- | --- | --- |
@@ -82,9 +83,22 @@ M8.3 IPC、纹理 alpha 精确拾取、多选、世界轴 Gizmo、吸附和飞�
 | 固定截图 | [CaptureCamera](../../engine/framework/services/include/dk/services/CaptureService.hpp) 和 [render.capture](../commands/render.md) 已能设置透视 FOV/near/far；不支持正交 | 截图的可调 FOV 不等于交互视口已有设置；新增正交需兼容旧请求 |
 | 一致性驱动 | [ConsistencyDriver](../../engine/editor/src/ConsistencyDriver.cpp)、[PathSmoke](../../engine/editor/src/PathSmoke.cpp) 输出相机时写死 fov_y=65 | 接入真实镜头参数和已发布相机，避免比较了不同输入 |
 
-结论：当前用户界面不支持正交；底层矩阵容器可承载它，路径追踪和环境合成仍明确限制为透视。
+检查结论：用户界面不支持正交；底层矩阵容器可承载它，路径追踪和环境合成仍明确限制为透视。
 已有 [相机测试](../../tests/unit/EditorTests.cpp)、[路径相机拒绝测试](../../tests/unit/PathTraceReferenceTests.cpp)、
-[大气投影拒绝测试](../../tests/unit/RenderPipelineTests.cpp) 是扩展回归入口；本次没有运行这些测试或启动窗口。
+[大气投影拒绝测试](../../tests/unit/RenderPipelineTests.cpp) 是扩展回归入口；最初设计检查没有运行这些测试或启动窗口。
+
+### M18.1 实施契约
+
+CameraSettings 分为 CameraLensSettings 与 CameraNavigationSettings；姿态以 eye/yaw/pitch/focus_distance 表示，
+pivot 从姿态推导，不存两套眼点。set_settings 先验证完整候选与当前 aspect/光栅环境支持域，再整体发布；
+同值不改变 revision，纯导航设置不改变渲染 revision。Home/reset 仅恢复姿态，Restore defaults 恢复姿态与设置。
+光栅空气或云启用时 Auto near=1，基础光栅、模拟与路径使用 near=0.05，far=10000；
+手动参数不随渲染上下文改变，外部环境/后端变化或 resize 不适用时保留旧图并阻止新提交，面板仍可恢复。
+Camera::validate 校验实际视图；渲染入口再次执行，不依赖 UI 唯一保护。现有路径主射线支持域仍由路径模块校验。
+frame 计算所有包围盒角点的投影/近远裁剪约束，若无法在相机距离范围 0.1–3000 内完整框选，返回错误并保留姿态。
+设置面板由 Edit/Simulation 共用，草稿 Apply 成功才发布，错误保留草稿以便修正，Cancel 丢弃；Gizmo 活动时不能打开。
+移速/加速/观察灵敏度作为会话偏好可修改，UI 明示 Fly/Walk 后续接入，首期只使用 Orbit/平移/滚轮设置。
+本节不实现 Fly/Walk、正交、相对鼠标或命令 schema 扩展；Capture 只替换内部共享投影计算，保持既有参数契约。
 
 ### 功能与输入约定
 
@@ -208,7 +222,7 @@ M18.1–4 可先交付可用相机和有限正交；只有此阶段验收后才�
 
 ### 定向验收计划
 
-以下是未来实现的验收要求，不是本次已经通过的测试；不默认执行全量或双配置。
+以下覆盖整个 M18 的验收要求；M18.1 已运行项目与结果以 [0129](../development/0129-camera-settings.md) 为准，未来模式/正交项尚未运行。不默认执行全量或双配置。
 
 | 范围 | 关键可观察断言 | 现有验证入口 |
 | --- | --- | --- |

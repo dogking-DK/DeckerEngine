@@ -1,5 +1,6 @@
 #pragma once
 #include "Viewport.hpp"
+#include "CameraSettingsUi.hpp"
 #include <functional>
 #include <map>
 
@@ -8,7 +9,8 @@ class ViewportInput final {
 public:
     using Report=std::function<bool(const char*,Result<void>)>;
     explicit ViewportInput(bool fixture) : camera_(fixture),fixture_(fixture) {}
-    void toolbar(Workspace&,Viewport&,std::map<std::string,ImVec2>&);
+    void toolbar(Workspace&,Viewport&,std::map<std::string,ImVec2>&,const Report&);
+    void aspect(double value) { aspect_=value; }
     void image(Workspace&,Viewport&,std::map<std::string,ImVec2>&,const Report&);
     void cancel();
     void environment(bool enabled) { camera_.set_environment(enabled); }
@@ -19,6 +21,8 @@ public:
 private:
     enum class Mode { translate,rotate,scale };
     Camera camera_;
+    CameraSettingsUi settings_ui_;
+    double aspect_=1;
     bool fixture_;
     Mode mode_=Mode::translate;
     std::optional<TransformEdit> edit_;

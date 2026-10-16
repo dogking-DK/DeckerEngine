@@ -1,7 +1,7 @@
 ---
 module: foundation-math
 created_at: "2026-09-22T10:28:51+08:00"
-updated_at: "2026-09-28T16:00:00+08:00"
+updated_at: "2026-10-16T17:25:00+08:00"
 status: accepted
 ---
 
@@ -12,7 +12,16 @@ status: accepted
 按用户要求使用 Eigen，实施 [Roadmap](../roadmap.md) 的 M1.2–M1.3。
 M1.2 已提供类型入口、几何约定、角度和旋转；M1.3 已完成
 Transform 的 TRS、组合、逆变换及奇异缩放处理。
-本次不实现投影/相机、几何查询、公开矩阵分解接口或 GPU 数据布局。
+M18.1 补充下述纯透视计算；不实现导航控制、几何查询、公开矩阵分解接口或 GPU 数据布局。
+
+## M18.1 透视计算
+
+Projection.hpp 提供双精度 PerspectiveLens（垂直弧度 FOV、near/far）、perspective_projection 与
+perspective_ray。右手朝 -Z，Y 翻转、深度 [0,1]；ray 返回相机局部单位方向与对应裁剪面的距离区间，
+不依赖 Geometry/Scene/Vulkan。有限角度须在 (0,π)，aspect/near 正、far>near，拒绝不可表示的矩阵/射线。
+调用返回独立值或 invalid_argument，不修改输入。Editor 与 Capture 共用矩阵生成，Editor 拾取使用同一镜头的局部射线。
+应用层继续限制 FOV 为 (1°,179°)，光栅大气的更窄支持域由上层校验；数学层不硬编码渲染器限制。
+验证像素方向、不同宽高比/FOV、近远裁剪投影对应及非法/极端数值。原 target dk_math 和依赖不变，无新构建选项。
 
 ## 模块边界与依赖
 

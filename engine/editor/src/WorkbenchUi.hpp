@@ -59,6 +59,8 @@ private:
     bool simulation_panel_initialized_=false;
     SimulationState displayed_simulation_{SimulationMode::edit,{}};
     Camera simulation_camera_;
+    CameraSettingsUi simulation_settings_ui_;
+    double simulation_aspect_=1;
     std::optional<SimulationId> simulation_camera_run_;
     std::optional<ClothConfig> simulation_cloth_;
     bool simulation_visible_=true;

@@ -1,4 +1,5 @@
 #include <dk/math/Math.hpp>
+#include <dk/math/Projection.hpp>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -33,6 +34,35 @@ static_assert(dk::radians(180.0) == std::numbers::pi);
 static_assert(dk::degrees(0.0f) == 0.0f);
 
 } // namespace
+
+TEST_CASE("perspective projection and rays share pixel orientation and clipping", "[math]") {
+    for(double angle : {10.,65.,120.,178.}) for(double aspect : {.3,1.,3.}) {
+        const dk::PerspectiveLens lens{dk::radians(angle),.1,1000};
+        const auto p=dk::perspective_projection(lens,aspect); REQUIRE(p);
+        for(const dk::Vec2d uv : {dk::Vec2d{0,0},dk::Vec2d{.2,.8},dk::Vec2d{1,1}}) {
+            const auto ray=dk::perspective_ray(lens,aspect,uv); REQUIRE(ray);
+            CHECK(std::abs(ray->direction.norm()-1)<1e-12);
+            for(bool far : {false,true}) {
+                const dk::Vec3d point=ray->direction*(far ? ray->maximum : ray->minimum);
+                const dk::Vec4d clip=(*p)*dk::Vec4d{point.x(),point.y(),point.z(),1};
+                CHECK(std::abs((clip.x()/clip.w()+1)/2-uv.x())<1e-11);
+                CHECK(std::abs((clip.y()/clip.w()+1)/2-uv.y())<1e-11);
+                CHECK(std::abs(clip.z()/clip.w()-(far ? 1 : 0))<1e-11);
+            }
+        }
+    }
+}
+TEST_CASE("perspective rejects invalid and unrepresentable lens or rays", "[math]") {
+    const dk::PerspectiveLens good{dk::radians(65.),.05,10000};
+    for(double aspect : {0.,-1.,std::numeric_limits<double>::infinity(),std::numeric_limits<double>::quiet_NaN()})
+        CHECK_FALSE(dk::perspective_projection(good,aspect));
+    for(const dk::PerspectiveLens bad : {dk::PerspectiveLens{0,.1,100}, {std::numbers::pi,.1,100},
+        {1,0,100}, {1,100,100}, {1,1,1e300}, {1,1e308,1.1e308}}) {
+        CHECK_FALSE(dk::perspective_projection(bad,1));
+    }
+    CHECK_FALSE(dk::perspective_ray(good,1,{-1,.5}));
+    CHECK_FALSE(dk::perspective_ray(good,1,{std::numeric_limits<double>::quiet_NaN(),.5}));
+}
 
 TEMPLATE_TEST_CASE("angle conversion preserves sign and full turns", "[math]", float, double)
 {

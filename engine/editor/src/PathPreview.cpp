@@ -127,6 +127,7 @@ void PathPreview::run(std::stop_token stop) {
                     asset_session=active->snapshot.state.document_id; asset_reload=active->reload;
                     scene_revision=active->snapshot.state.revision; scene_preview=active->preview;
                 }
+                check(active->camera.validate(double(active->width)/active->height));
                 const auto view=take(render::RenderView::create(scene,{active->width,active->height,active->sequence,
                     active->camera.world(),active->camera.projection(double(active->width)/active->height)}));
                 render::PathTraceSettings settings; settings.seed=active->settings.seed; settings.max_bounces=active->settings.bounces;

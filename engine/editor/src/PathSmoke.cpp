@@ -29,8 +29,9 @@ std::span<const char* const> actions(std::size_t stage,bool desktop,bool media) 
     if(desktop) { if(stage==0) return desktop_path; if(stage==1) return desktop_air; if(stage==4) return desktop_clouds;
         if(stage==8) return underground; if(stage==9) return home; if(stage==10) return desktop_return;
         static constexpr std::array media_mode={"path_settings","path_media"}; if(stage==11) return media_mode; return {}; }
-    static constexpr std::array path={"path_mode","path_target",":all",":two",":enter"};
-    static constexpr std::array pause={"path_pause","path_target",":all",":three",":enter"};
+    static constexpr std::array path={"path_mode","camera_settings","camera_fov",":all",":bad_fov",":enter","camera_apply",
+        "camera_fov",":all",":fov",":enter","camera_apply","path_settings","path_target",":all",":two",":enter"};
+    static constexpr std::array pause={"path_pause","camera_settings","camera_speed",":all",":speed",":enter","camera_apply","path_settings","path_target",":all",":three",":enter"};
     static constexpr std::array resume={"path_target",":all",":two",":enter","path_pause"}; static constexpr std::array reset={"path_reset"}; static constexpr std::array exposure={"path_exposure",":all",":two",":enter"};
     static constexpr std::array orbit={":orbit",":drag",":release"}; static constexpr std::array gizmo={"viewport","gizmo_0",":drag",":release"};
     static constexpr std::array resize={":resize"},minimize={":minimize"},raster={"path_raster"},returned={"path_mode"};
@@ -84,6 +85,9 @@ void PathSmoke::input(const WorkbenchUi& ui,const Workspace& model,const Viewpor
             const auto bytes=take(read_file_bytes(directory_/"command.json")); require(bytes.size()<=8192,"console fixture exceeds limit");
             const std::string text(reinterpret_cast<const char*>(bytes.data()),bytes.size()); io.AddInputCharactersUTF8(text.c_str());
         }
+        else if(action==":bad_fov") io.AddInputCharactersUTF8("0");
+        else if(action==":fov") io.AddInputCharactersUTF8("55");
+        else if(action==":speed") io.AddInputCharactersUTF8("9");
         else if(action==":one") io.AddInputCharactersUTF8("1");
         else if(action==":two") io.AddInputCharactersUTF8("2");
         else if(action==":three") io.AddInputCharactersUTF8("3");
@@ -102,6 +106,8 @@ void PathSmoke::input(const WorkbenchUi& ui,const Workspace& model,const Viewpor
         }
     }
     io.AddMousePosEvent(pointer_.x,pointer_.y);
+    if(!desktop_ && !media_ && stage_==0 && step==6 && phase==4)
+        require(ui.input().camera().fov_y()==65 && ui.controls().contains("camera_fov"),"Invalid camera Apply changed lens or discarded its draft");
     if(phase==1) {
         if(action==":all") { io.AddKeyEvent(ImGuiKey_A,false); io.AddKeyEvent(ImGuiMod_Ctrl,false); }
         else if(action==":enter") io.AddKeyEvent(ImGuiKey_Enter,false);
@@ -160,6 +166,7 @@ void PathSmoke::presented(const Workspace& model,const WorkbenchUi& ui,Viewport&
     }
     require(stage_!=9 || (minimized_>0 && restore_==std::chrono::steady_clock::time_point{}),"minimized loop was not exercised");
     const auto& state=model.snapshot()->state;
+    if(stage_==1) require(ui.input().camera().settings().navigation.move_speed==9,"Camera speed preference was not applied");
     std::uint64_t pixels=0;
     if(stage_!=3 && stage_!=13) pixels=stage_==10 ? viewport.pixel_signature() : viewport.capture_path_pixels();
     Json report{{"checkpoint",names[stage_]},{"document_id",state.document_id.to_string()},{"revision",state.revision},
@@ -170,7 +177,7 @@ void PathSmoke::presented(const Workspace& model,const WorkbenchUi& ui,Viewport&
         const auto& camera=ui.input().camera(); const auto world=camera.world().matrix();
         const Vec3d eye=world.block<3,1>(0,3),target=eye-world.block<3,1>(0,2),up=world.block<3,1>(0,1);
         report["capture_camera"]={{"eye",{eye.x(),eye.y(),eye.z()}},{"target",{target.x(),target.y(),target.z()}},
-            {"up",{up.x(),up.y(),up.z()}},{"fov_y",65},{"near",camera.near_plane()},{"far",camera.far_plane()}};
+            {"up",{up.x(),up.y(),up.z()}},{"fov_y",camera.fov_y()},{"near",camera.near_plane()},{"far",camera.far_plane()}};
         const auto& settings=ui.path_settings();
         report["pathtrace"]={{"version",1},{"target_spp",2},{"seed",settings.seed},{"max_bounces",settings.bounces},
             {"rr_start",std::min(3u,settings.bounces)},{"environment_rgb",{settings.sky.x(),settings.sky.y(),settings.sky.z()}},
@@ -208,7 +215,7 @@ void PathSmoke::presented_media(const Workspace& model,const WorkbenchUi& ui,Vie
         {"time_seconds",used.medium ? used.medium->medium.time_seconds : 0},
         {"pixels",closing ? 0 : viewport.capture_path_pixels()},
         {"capture_camera",{{"eye",{eye.x(),eye.y(),eye.z()}},{"target",{target.x(),target.y(),target.z()}},
-            {"up",{up.x(),up.y(),up.z()}},{"fov_y",65},{"near",camera.near_plane()},{"far",camera.far_plane()}}},
+            {"up",{up.x(),up.y(),up.z()}},{"fov_y",camera.fov_y()},{"near",camera.near_plane()},{"far",camera.far_plane()}}},
         {"pathtrace",{{"version",2},{"medium_mode",settings.scene_media ? "scene_media" : "surface_only"},{"target_spp",1},
             {"seed",settings.seed},{"max_bounces",settings.bounces},{"rr_start",std::min(3u,settings.bounces)},
             {"environment_rgb",{settings.sky.x(),settings.sky.y(),settings.sky.z()}},{"sun",settings.sun},{"exposure_ev",settings.exposure}}}};
