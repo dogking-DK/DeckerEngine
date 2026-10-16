@@ -127,5 +127,6 @@
 | 0123 | [大气云路径集成规划与介质参考](0123-path-media-foundation.md) | render-pathtracing、render-atmosphere、render-clouds、editor、render-capture、architecture | completed |
 | 0124 | [M17.2 CPU体积路径参考](0124-volume-path-reference.md) | render-pathtracing、architecture | completed |
 | 0125 | [M17.3 GPU晴空与空气路径](0125-gpu-air-pathtracing.md) | render-pathtracing、architecture | completed |
+| 0126 | [M17.4 GPU云路径传输](0126-gpu-cloud-pathtracing.md) | render-pathtracing、architecture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

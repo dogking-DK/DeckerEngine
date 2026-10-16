@@ -18,14 +18,15 @@ private:
     explicit PathTraceGpuScene(std::shared_ptr<const detail::PathGpuScene> state) : state_(std::move(state)) {}
     std::shared_ptr<const detail::PathGpuScene> state_;
 };
-struct PathTraceGpuAirInfo {
+struct PathTraceGpuMediumInfo {
     EnvironmentDescription environment;
     PathMediumSettings medium;
     VolumePathSettings settings; // max_tracking_steps is per dispatch (per tile in a progressive batch).
+    std::uint64_t field_hash=0;
 };
 struct PathTraceGpuImageInfo : PathTraceImageInfo {
     std::uint64_t geometry_fingerprint=0;
-    std::optional<PathTraceGpuAirInfo> air; // Absent for the legacy surface integrator.
+    std::optional<PathTraceGpuMediumInfo> medium; // Absent for the legacy surface integrator.
     bool fixed_rays = false;
     std::uint32_t first_pixel = 0; // Counter origin for fixed-ray batches.
     // Hardware traversal counts are unavailable; statistics.triangle_tests stays zero.
@@ -113,6 +114,14 @@ public:
     [[nodiscard]] Result<PathTraceFrame> submit_air_view(graphics::SubmissionQueue&,const PathTraceGpuScene&,
         const PathMediumSnapshot&,const RenderView&,const VolumePathSettings& = {},PathTraceSamples = {},std::stop_token = {}) const;
     [[nodiscard]] Result<void> configure_air_view(graphics::SubmissionQueue&,std::uint64_t view_id,const PathTraceGpuScene&,
+        const PathMediumSnapshot&,const RenderView&,const VolumePathSettings& = {},const PathTraceSchedule& = {});
+    // Model 4 / sampler 2, including nonuniform clouds; same frozen input and history rules.
+    [[nodiscard]] Result<PathTraceFrame> submit_medium_rays(graphics::SubmissionQueue&,const PathTraceGpuScene&,
+        const PathMediumSnapshot&,std::span<const PathTraceRay>,const VolumePathSettings& = {},PathTraceSamples = {},
+        std::uint32_t first_pixel=0,std::stop_token = {}) const;
+    [[nodiscard]] Result<PathTraceFrame> submit_medium_view(graphics::SubmissionQueue&,const PathTraceGpuScene&,
+        const PathMediumSnapshot&,const RenderView&,const VolumePathSettings& = {},PathTraceSamples = {},std::stop_token = {}) const;
+    [[nodiscard]] Result<void> configure_medium_view(graphics::SubmissionQueue&,std::uint64_t view_id,const PathTraceGpuScene&,
         const PathMediumSnapshot&,const RenderView&,const VolumePathSettings& = {},const PathTraceSchedule& = {});
     // Returns true only when a tile was submitted; repeated calls while pending are no-ops.
     [[nodiscard]] Result<bool> submit_batch(graphics::SubmissionQueue&, std::uint64_t view_id, std::stop_token = {});

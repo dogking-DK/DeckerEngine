@@ -88,7 +88,7 @@ TEST_CASE("medium reversal segmentation and translation preserve RGB transmissio
     CHECK(difference(full.transmittance,integrate(snapshot(e),{start+shift,direction,distance}).transmittance)<1e-10);
 }
 TEST_CASE("medium coefficients retain scattering absorption and conservative majorants", "[pathtracing][medium]") {
-    auto e=clouds(); CloudFieldCache cache; auto field=cache.prepare(e.clouds).value(); const auto medium=snapshot(e,{},field);
+    auto e=clouds(); CloudFieldCache cache; auto field=cache.prepare(e.clouds).value(); const auto medium=snapshot(e,{},field); CHECK(medium.field()==field);
     bool saw_cloud=false;
     for(int i=0;i<1024;++i) {
         const Vec3d p{double(i%32)*713,1500.+double(i/32)*79,double(i%17)*-391};
@@ -118,7 +118,7 @@ TEST_CASE("medium vacuum and zero cloud controls need no field", "[pathtracing][
     for(unsigned mode=0;mode<4;++mode) {
         e=clouds(); if(mode==0) e.clouds.enabled=false; if(mode==1) e.clouds.coverage=0;
         if(mode==2) e.clouds.density=0; if(mode==3) e.clouds.extinction_per_m=0;
-        auto value=snapshot(e); CHECK(value.field_hash()==0);
+        auto value=snapshot(e); CHECK(value.field_hash()==0); CHECK_FALSE(value.field());
         CHECK(integrate(value,{{0,0,0},{0,1,0},10000}).transmittance==integrate(snapshot(air()),{{0,0,0},{0,1,0},10000}).transmittance);
     }
 }

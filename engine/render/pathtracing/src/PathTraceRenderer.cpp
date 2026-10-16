@@ -16,6 +16,7 @@ static_assert(sizeof(PathGpuPixel)==64);
 struct PathGpuView;
 struct PathGpuBatch;
 struct PathGpuGeometry;
+struct PathGpuCloud { CloudFieldKey key; std::uint64_t hash=0; Buffer data; };
 struct PathGpuState {
     memory::ResourceHandle heap;
     ResourceFactory factory;
@@ -34,6 +35,7 @@ struct PathGpuState {
     std::uint64_t generation = 0;
     bool terminal = false;
     std::array<std::weak_ptr<PathGpuGeometry>,2> geometry_cache;
+    std::shared_ptr<const PathGpuCloud> cloud;
 };
 struct PathGpuTexture { Image image; ImageView view; Sampler sampler; };
 struct PathGpuGeometry {
@@ -72,7 +74,8 @@ struct PathGpuView {
     RenderView view;
     PathTraceSettings settings;
     std::optional<PathMediumSnapshot> medium;
-    VolumePathSettings air_settings;
+    std::shared_ptr<const PathGpuCloud> cloud;
+    VolumePathSettings medium_settings;
     PathTraceSchedule schedule;
     std::shared_ptr<const PathGpuCompleted> completed;
 };
@@ -99,9 +102,9 @@ using namespace detail;
 template<class T> T take(Result<T> result) { if (!result) throw result.error(); return std::move(*result); }
 void check(Result<void> result) { if (!result) throw result.error(); }
 Error sample_error(std::uint32_t diagnostic) {
-    if(diagnostic&2) return {ErrorCode::invalid_argument,"GPU air tracking budget exhausted",{"render.pathtracing.tracking_budget"}};
-    if(diagnostic&4) return {ErrorCode::invalid_argument,"GPU air path exceeds numerical domain",{"render.pathtracing.air_domain"}};
-    if(diagnostic&8) return {ErrorCode::internal_error,"GPU air extinction exceeds majorant"};
+    if(diagnostic&2) return {ErrorCode::invalid_argument,"GPU medium tracking budget exhausted",{"render.pathtracing.tracking_budget"}};
+    if(diagnostic&4) return {ErrorCode::invalid_argument,"GPU medium path exceeds numerical domain",{"render.pathtracing.medium_domain"}};
+    if(diagnostic&8) return {ErrorCode::internal_error,"GPU medium extinction exceeds majorant"};
     return {ErrorCode::internal_error,"Invalid GPU path sample/history"};
 }
 void cancelled(std::stop_token stop) {
@@ -163,7 +166,7 @@ Result<void> trace_record(graph::PassContext& pass,void* context) {
         return encoder.dispatch({(c.width*c.height+63)/64,1,1});
     } catch (const Error& error) { return std::unexpected(error); }
 }
-using Parameters=std::array<Float4,22>;
+using Parameters=std::array<Float4,31>;
 Parameters parameters(const PathSceneState& scene,const PathTraceSettings& s,PathTraceSamples samples,
     std::uint32_t width,std::uint32_t height,bool rays,std::uint32_t first_pixel) {
     const auto env=scene.source.environment();
@@ -178,9 +181,9 @@ Parameters parameters(const PathSceneState& scene,const PathTraceSettings& s,Pat
     p[5]=pack(direction); p[10]=integers(first_pixel,0,0,0); return p;
 }
 std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& queue,const PathGpuScene& scene,
-    Parameters p,std::span<const Float4> rays,PathTraceGpuImageInfo info,std::stop_token stop,const Buffer* candidate=nullptr,const Buffer* completed=nullptr) {
+    Parameters p,std::span<const Float4> rays,PathTraceGpuImageInfo info,std::stop_token stop,const Buffer* candidate=nullptr,const Buffer* completed=nullptr,std::shared_ptr<const PathGpuCloud> cloud={}) {
     const bool empty=scene.source.triangle_count()==0;
-    const bool air=info.air.has_value();
+    const bool air=info.medium.has_value();
     const auto count=std::uint64_t{info.width}*info.height,bytes=count*sizeof(PathGpuPixel);
     auto frame=memory::make_shared_in<PathGpuFrame>(state.heap); frame->heap=state.heap; frame->source=scene.source; frame->info=std::move(info);
     const auto storage=vk::BufferUsageFlagBits::eStorageBuffer;
@@ -199,7 +202,8 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     frame->diagnostic_offset=candidate ? 0 : bytes;
     Vector<BindingWrite> writes(0,memory::Allocator<BindingWrite>{state.heap});
     if (!empty) { writes.push_back({0,0,AccelerationStructureBinding{&scene.geometry->tlas}}); writes.push_back({1,0,BufferBinding{&scene.geometry->triangles}}); }
-    if(!empty || air) writes.push_back({4,0,BufferBinding{&input}});
+    if(!empty || air) { writes.push_back({4,0,BufferBinding{&input}});
+        writes.push_back({9,0,BufferBinding{cloud ? &cloud->data : &uniform}}); }
     writes.push_back({2,0,BufferBinding{&uniform}}); writes.push_back({3,0,BufferBinding{&output}});
     writes.push_back({7,0,BufferBinding{&history}}); writes.push_back({8,0,BufferBinding{&status}});
     if(!empty && state.textured) for(std::uint32_t i=0;i<64;++i) {
@@ -223,11 +227,12 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     Vector<graph::ExternalBinding> imports(0,memory::Allocator<graph::ExternalBinding>{state.heap});
     imports.push_back({0,&uniform}); imports.push_back({3,&output}); imports.push_back({4,&frame->readback}); imports.push_back({5,&history}); imports.push_back({6,&status});
     if(empty && air) { uses.push_back(use(ray_input,stage,vk::AccessFlagBits2::eShaderRead)); imports.push_back({2,&input}); }
+    // Compiled Graph resources are grouped by type: buffers (including clouds), images, AS, SBT.
     for(std::size_t i=0;i<scene.geometry->texture_count;++i) {
         const auto& texture=scene.geometry->textures[i];
         auto id=take(g.declare_image("baseColor-"+std::to_string(i),texture.image.description(),graph::Lifetime::external,true));
         uses.push_back({id,{{stage,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal}}});
-        imports.push_back({7+i,nullptr,&texture.image});
+        imports.push_back({7+i+(cloud ? 1u : 0u),nullptr,&texture.image});
     }
     if (!empty) {
         const auto blas=declare(g,"BLAS",AccelerationStructureKind::bottom_level,{},true);
@@ -236,8 +241,12 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
         uses.push_back(use(geometry,stage,vk::AccessFlagBits2::eShaderRead)); uses.push_back(use(ray_input,stage,vk::AccessFlagBits2::eShaderRead));
         uses.push_back(graph::acceleration_read(blas)); uses.push_back(graph::acceleration_read(tlas)); uses.push_back(graph::shader_table_read(sbt));
         imports.push_back({1,&scene.geometry->triangles}); imports.push_back({2,&input});
-        const auto base=7+scene.geometry->texture_count;
+        const auto base=7+scene.geometry->texture_count+(cloud ? 1u : 0u);
         imports.push_back({base,nullptr,nullptr,{},&scene.geometry->blas}); imports.push_back({base+1,nullptr,nullptr,{},&scene.geometry->tlas}); imports.push_back({base+2,nullptr,nullptr,{},nullptr,&state.table});
+    }
+    if(cloud) {
+        const auto id=take(g.declare_buffer("immutable cloud fields",cloud->data.description(),graph::Lifetime::external,true));
+        uses.push_back(use(id,stage,vk::AccessFlagBits2::eShaderRead)); imports.push_back({7,&cloud->data});
     }
     add(g,empty ? "empty environment" : "surface path trace",uses);
     Vector<graph::Use> copy(0,memory::Allocator<graph::Use>{state.heap});
@@ -250,11 +259,11 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
         add(g,"path diagnostic readback",copy);
     }
     check(g.mark_output(readback)); check(g.mark_output(result));
-    auto plan=take(g.compile(stop)); TraceContext context{state,bindings,frame->info.width,frame->info.height,empty,9+scene.geometry->texture_count,candidate!=nullptr,air};
+    auto plan=take(g.compile(stop)); TraceContext context{state,bindings,frame->info.width,frame->info.height,empty,9+scene.geometry->texture_count+(cloud ? 1u : 0u),candidate!=nullptr,air};
     const std::array callbacks{graph::PassCallback{0,trace_record,&context},graph::PassCallback{1,trace_record,&context},graph::PassCallback{2,trace_record,&context}};
     const std::array final{graph::FinalAccess{4,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}}};
     cancelled(stop); auto execution=take(graph::execute(plan,queue,{imports,std::span{callbacks}.first(candidate ? 2 : 3),final}));
-    frame->ticket=execution.submission(); return frame; // No allocation/fallible work after successful submit.
+    frame->ticket=execution.submission(); if(cloud) state.cloud=std::move(cloud); return frame; // No allocation/fallible work after successful submit.
 }
 PathTraceGpuImageInfo info_for(const PathTraceScene& scene,std::uint32_t width,std::uint32_t height,
     const PathTraceSettings& settings,PathTraceSamples samples) {
@@ -268,37 +277,84 @@ PathTraceSettings common_settings(const VolumePathSettings& s) {
     r.sun=s.sun ? PathTraceSun::scene : PathTraceSun::none; r.estimator=s.estimator;
     r.max_rays=s.max_rays; r.max_triangle_tests=s.max_triangle_tests; return r;
 }
-void validate_air(const PathTraceScene& scene,const PathMediumSnapshot& m,const VolumePathSettings& s,PathTraceSamples samples,std::uint64_t pixels) {
+void validate_medium(const PathTraceScene& scene,const PathMediumSnapshot& m,const VolumePathSettings& s,PathTraceSamples samples,std::uint64_t pixels) {
     check(validate_volume_work(scene,m,s,samples,pixels,false));
-    if(m.environment().clouds.enabled) throw Error{ErrorCode::not_supported,"GPU air paths require clouds disabled; cloud transport is a separate capability"};
+    const auto& c=m.environment().clouds;
+    if(m.field() && (m.environment().atmosphere.ground_radius_m<1000 || c.weather_scale_m<100 || c.shape_scale_m<100 || c.detail_scale_m<10))
+        throw Error{ErrorCode::not_supported,"GPU cloud radius/noise scale outside supported domain"};
+    if(m.field() && (!(float(c.bottom_height_m)<float(c.top_height_m)) || float(c.coverage)==0 || float(c.density)*float(c.extinction_per_m)==0))
+        throw Error{ErrorCode::not_supported,"GPU cloud shell or positive coefficient collapses in float"};
 }
-Float4 air_origin(const PathMediumSnapshot& m,const Vec3d& origin) {
-    if(!m.environment().enabled) return {0,1,0,0};
+Float4 radial_origin(const PathMediumSnapshot& m,const Vec3d& origin) {
+    if(!m.environment().enabled && !m.environment().clouds.enabled) return {0,1,0,0};
     const Vec3d quantized=origin.cast<float>().cast<double>(); (void)take(m.sample(quantized));
     const auto& a=m.environment().atmosphere;
     const Vec3d delta=quantized-Vec3d{a.planet_center_m[0],a.planet_center_m[1],a.planet_center_m[2]};
     return pack(delta.normalized(),delta.stableNorm()-a.ground_radius_m);
 }
-void air_parameters(Parameters& p,const PathMediumSnapshot& medium,const VolumePathSettings& s) {
+void medium_parameters(Parameters& p,const PathMediumSnapshot& medium,const VolumePathSettings& s) {
     const auto& e=medium.environment(); const auto& a=e.atmosphere;
     const auto rgb=[](const EnvironmentVector& v) { return Vec3d{v[0],v[1],v[2]}; };
-    p[12]=integers(1,e.enabled ? 1u : 0u,s.max_steps_per_path,std::uint32_t(s.max_tracking_steps));
+    p[12]=integers(1,(e.enabled || e.clouds.enabled) ? 1u : 0u,s.max_steps_per_path,std::uint32_t(s.max_tracking_steps));
     p[14]={float(a.ground_radius_m),float(a.atmosphere_height_m),0,0};
     p[15]=pack(rgb(a.rayleigh_scattering_per_m),a.rayleigh_scale_height_m);
     p[16]=pack(rgb(a.mie_scattering_per_m),a.mie_scale_height_m);
     p[17]=pack(rgb(a.mie_extinction_per_m),a.mie_anisotropy);
     p[18]=pack(rgb(a.absorption_extinction_per_m),a.absorption_center_height_m);
     p[19]=pack(rgb(a.ground_albedo),a.absorption_half_width_m);
-    p[20]=pack(medium.extinction_majorant()*(1+8*std::numeric_limits<float>::epsilon()));
-    for(unsigned c=0;c<3;++c) if(p[20][c]>0) p[20][c]=std::nextafter(p[20][c],std::numeric_limits<float>::infinity());
+    const auto conservative=[](const Vec3d& value) {
+        auto result=pack(value*(1+8*std::numeric_limits<float>::epsilon()));
+        for(unsigned c=0;c<3;++c) if(result[c]>0) result[c]=std::nextafter(result[c],std::numeric_limits<float>::infinity());
+        return result;
+    };
+    auto air=e; air.clouds.enabled=false;
+    p[20]=conservative(take(PathMediumSnapshot::create(air)).extinction_majorant());
+    p[30]=conservative(medium.extinction_majorant());
+    const auto& c=e.clouds;
+    p[22]=integers(e.enabled?1u:0u,medium.field()?c.weather_resolution:0u,c.base_resolution,c.detail_resolution);
+    p[23]={float(c.bottom_height_m),float(c.top_height_m),float(c.coverage),float(c.density)};
+    p[24]={float(c.extinction_per_m),float(medium.settings().cloud_albedo),float(medium.settings().cloud_anisotropy),float(c.top_fade_fraction)};
+    p[25][3]=float(c.bottom_fade_fraction);
+    const std::array scales{c.weather_scale_m,c.shape_scale_m,c.detail_scale_m};
+    for(unsigned i=0;i<3;++i) { const double inverse=1/scales[i]; p[25][i]=float(inverse); p[29][i]=float(inverse-double(p[25][i])); }
     const double width=2*std::pow(std::sin(e.sun.angular_radius_rad/2),2),sine=std::sin(e.sun.angular_radius_rad);
     p[21]={float(width),float(1/(2*std::numbers::pi*width)),float(sine*sine),0};
-    if(s.sun) { auto disk=take(solar_disk_radiance(e.sun)); const auto values=pack(rgb(disk)); for(unsigned c=0;c<3;++c) p[4][c]=values[c]; }
+    if(s.sun) { auto disk=take(solar_disk_radiance(e.sun)); const auto values=pack(rgb(disk)); for(unsigned channel=0;channel<3;++channel) p[4][channel]=values[channel]; }
 }
-PathTraceGpuImageInfo air_info(const PathTraceScene& scene,const PathMediumSnapshot& m,const VolumePathSettings& s,
+std::array<Float4,3> cloud_origin(const PathMediumSnapshot& m,const Vec3d& origin) {
+    std::array<Float4,3> result{}; if(!m.field()) return result;
+    const auto& e=m.environment(); const auto& c=e.clouds;
+    Vec3d position=origin.cast<float>().cast<double>()-Vec3d{e.atmosphere.planet_center_m.data()};
+    position.x()-=c.wind_velocity_mps[0]*m.settings().time_seconds;
+    position.z()-=c.wind_velocity_mps[1]*m.settings().time_seconds;
+    const auto coordinate=[](double value,double scale) { const double x=value/scale; return float(x-std::floor(x)); };
+    result[0]={coordinate(position.x(),c.weather_scale_m),coordinate(position.z(),c.weather_scale_m),0,0};
+    for(unsigned i=0;i<3;++i) { result[1][i]=coordinate(position[i],c.shape_scale_m); result[2][i]=coordinate(position[i],c.detail_scale_m); }
+    return result;
+}
+void medium_origin(Parameters& p,const PathMediumSnapshot& m,const Vec3d& origin) {
+    p[13]=radial_origin(m,origin); const auto phases=cloud_origin(m,origin);
+    for(unsigned i=0;i<3;++i) p[26+i]=phases[i];
+}
+std::shared_ptr<const PathGpuCloud> prepare_cloud(PathGpuState& state,const PathMediumSnapshot& m) {
+    if(!m.field()) return {};
+    const auto matches=[&](const auto& cloud) { return cloud && cloud->key==m.field()->key() && cloud->hash==m.field_hash(); };
+    if(matches(state.cloud)) return state.cloud;
+    for(const auto& view:state.views) if(view && matches(view->cloud)) return view->cloud;
+    if(state.active && matches(state.active->owner->cloud)) return state.active->owner->cloud;
+    auto candidate=memory::make_shared_in<PathGpuCloud>(state.heap); candidate->key=m.field()->key(); candidate->hash=m.field_hash();
+    Vector<std::uint32_t> packed((m.field()->bytes()+3)/4,0,memory::Allocator<std::uint32_t>{state.heap});
+    std::size_t at=0;
+    for(auto field:{CloudField::weather,CloudField::base,CloudField::detail}) for(auto byte:m.field()->texels(field)) {
+        packed[at/4]|=std::uint32_t(byte)<<((at%4)*8); ++at;
+    }
+    candidate->data=upload(state.factory,std::as_bytes(std::span{packed}),vk::BufferUsageFlagBits::eStorageBuffer);
+    return candidate;
+}
+PathTraceGpuImageInfo medium_info(const PathTraceScene& scene,const PathMediumSnapshot& m,const VolumePathSettings& s,
     std::uint32_t width,std::uint32_t height,PathTraceSamples samples) {
     auto info=info_for(scene,width,height,common_settings(s),samples);
-    info.air=PathTraceGpuAirInfo{m.environment(),m.settings(),s}; return info;
+    info.medium=PathTraceGpuMediumInfo{m.environment(),m.settings(),s,m.field_hash()}; return info;
 }
 }
 
@@ -546,12 +602,12 @@ Result<void> PathTraceRenderer::configure_view(SubmissionQueue& queue,std::uint6
 } catch(const Error& error) { return std::unexpected(error); }
 catch(const std::exception& error) { return std::unexpected(Error{ErrorCode::internal_error,error.what()}); }
 
-Result<PathTraceFrame> PathTraceRenderer::submit_air_rays(SubmissionQueue& queue,const PathTraceGpuScene& scene,
+Result<PathTraceFrame> PathTraceRenderer::submit_medium_rays(SubmissionQueue& queue,const PathTraceGpuScene& scene,
     const PathMediumSnapshot& medium,std::span<const PathTraceRay> rays,const VolumePathSettings& settings,
     PathTraceSamples samples,std::uint32_t first_pixel,std::stop_token stop) const try {
     ready(state_,queue,stop);
     if(!scene || scene.state_->program.lock()!=state_) throw path_invalid("Path scene belongs to a different renderer");
-    validate_air(scene.source(),medium,settings,samples,rays.size());
+    validate_medium(scene.source(),medium,settings,samples,rays.size());
     if(rays.size()-1>std::numeric_limits<std::uint32_t>::max()-first_pixel) throw path_invalid("Path pixel counter overflow");
     Vector<Float4> packed(0,memory::Allocator<Float4>{state_->heap});
     for(const auto& ray:rays) {
@@ -559,59 +615,62 @@ Result<PathTraceFrame> PathTraceRenderer::submit_air_rays(SubmissionQueue& queue
         const double maximum=std::min(ray.maximum,double(std::numeric_limits<float>::max()));
         if(ray.minimum>maximum) throw path_invalid("Path ray interval exceeds float domain");
         packed.push_back(pack(ray.origin,ray.minimum)); packed.push_back(pack(ray.direction,maximum));
-        packed.push_back(air_origin(medium,ray.origin));
+        packed.push_back(radial_origin(medium,ray.origin));
+        for(const auto& phase:cloud_origin(medium,ray.origin)) packed.push_back(phase);
     }
     const auto width=std::uint32_t(rays.size());
     auto p=parameters(*PathReferenceAccess::get(scene.source()),common_settings(settings),samples,width,1,true,first_pixel);
-    air_parameters(p,medium,settings);
-    auto info=air_info(scene.source(),medium,settings,width,1,samples); info.fixed_rays=true; info.first_pixel=first_pixel;
-    return PathTraceFrame{submit(*state_,queue,*scene.state_,p,packed,std::move(info),stop)};
+    medium_parameters(p,medium,settings);
+    auto info=medium_info(scene.source(),medium,settings,width,1,samples); info.fixed_rays=true; info.first_pixel=first_pixel;
+    return PathTraceFrame{submit(*state_,queue,*scene.state_,p,packed,std::move(info),stop,nullptr,nullptr,prepare_cloud(*state_,medium))};
 } catch(const Error& error) { return std::unexpected(error); }
 catch(const std::exception& error) { return std::unexpected(Error{ErrorCode::internal_error,error.what()}); }
-Result<PathTraceFrame> PathTraceRenderer::submit_air_view(SubmissionQueue& queue,const PathTraceGpuScene& scene,
+Result<PathTraceFrame> PathTraceRenderer::submit_medium_view(SubmissionQueue& queue,const PathTraceGpuScene& scene,
     const PathMediumSnapshot& medium,const RenderView& view,const VolumePathSettings& settings,PathTraceSamples samples,std::stop_token stop) const try {
     ready(state_,queue,stop);
     if(!scene || scene.state_->program.lock()!=state_) throw path_invalid("Path scene belongs to a different renderer");
-    const auto& d=view.description(); validate_air(scene.source(),medium,settings,samples,std::uint64_t{d.width}*d.height);
+    const auto& d=view.description(); validate_medium(scene.source(),medium,settings,samples,std::uint64_t{d.width}*d.height);
     const auto& cpu=*PathReferenceAccess::get(scene.source()); check(validate_path_view(cpu,view));
-    auto p=view_parameters(cpu,view,common_settings(settings),samples); air_parameters(p,medium,settings);
-    p[13]=air_origin(medium,d.camera_world.matrix().block<3,1>(0,3));
-    auto info=air_info(scene.source(),medium,settings,d.width,d.height,samples); info.view=d;
-    const std::array<Float4,3> dummy{}; return PathTraceFrame{submit(*state_,queue,*scene.state_,p,dummy,std::move(info),stop)};
+    auto p=view_parameters(cpu,view,common_settings(settings),samples); medium_parameters(p,medium,settings);
+    medium_origin(p,medium,d.camera_world.matrix().block<3,1>(0,3));
+    auto info=medium_info(scene.source(),medium,settings,d.width,d.height,samples); info.view=d;
+    const std::array<Float4,3> dummy{}; return PathTraceFrame{submit(*state_,queue,*scene.state_,p,dummy,std::move(info),stop,nullptr,nullptr,prepare_cloud(*state_,medium))};
 } catch(const Error& error) { return std::unexpected(error); }
 catch(const std::exception& error) { return std::unexpected(Error{ErrorCode::internal_error,error.what()}); }
-Result<void> PathTraceRenderer::configure_air_view(SubmissionQueue& queue,std::uint64_t id,const PathTraceGpuScene& scene,
+Result<void> PathTraceRenderer::configure_medium_view(SubmissionQueue& queue,std::uint64_t id,const PathTraceGpuScene& scene,
     const PathMediumSnapshot& medium,const RenderView& view,const VolumePathSettings& settings,const PathTraceSchedule& schedule) try {
     ready(state_,queue,{});
     if(state_->terminal) throw Error{ErrorCode::invalid_state,"Path session device lost"};
     if(!scene || scene.state_->program.lock()!=state_) throw path_invalid("Path scene belongs to a different renderer");
     if(!schedule.target_spp || schedule.target_spp>65536 || !schedule.batch_spp || schedule.batch_spp>16 ||
         !schedule.tile_edge || schedule.tile_edge>64 || !std::isfinite(schedule.exposure) || std::abs(schedule.exposure)>32)
-        throw path_invalid("Invalid air target, batch, tile or exposure");
-    validate_air(scene.source(),medium,settings,{0,1},1);
+        throw path_invalid("Invalid medium target, batch, tile or exposure");
+    validate_medium(scene.source(),medium,settings,{0,1},1);
     const auto& cpu=*PathReferenceAccess::get(scene.source()); check(validate_path_view(cpu,view,2048));
     const auto& d=view.description();
     if(std::uint64_t{d.width}*d.height*schedule.target_spp*(2ull*settings.max_bounces+1)>(1ull<<32) ||
-        settings.max_rays<schedule.batch_spp*(2ull*settings.max_bounces+1)) throw path_invalid("Progressive air work budget exceeded");
+        settings.max_rays<schedule.batch_spp*(2ull*settings.max_bounces+1)) throw path_invalid("Progressive medium work budget exceeded");
     const auto common=common_settings(settings);
-    auto p=view_parameters(cpu,view,common,{0,1}); air_parameters(p,medium,settings);
-    p[13]=air_origin(medium,d.camera_world.matrix().block<3,1>(0,3));
+    auto p=view_parameters(cpu,view,common,{0,1}); medium_parameters(p,medium,settings);
+    medium_origin(p,medium,d.camera_world.matrix().block<3,1>(0,3));
     auto* slot=view_slot(*state_,id);
     if(slot) {
         const auto& previous=**slot; const auto& a=previous.view.description();
         if(previous.medium && previous.scene==scene.state_ && previous.medium->environment()==medium.environment() &&
-            previous.medium->settings()==medium.settings() && a.width==d.width && a.height==d.height &&
+            previous.medium->settings()==medium.settings() && previous.medium->field_hash()==medium.field_hash() && a.width==d.width && a.height==d.height &&
             a.camera_world.matrix()==d.camera_world.matrix() && a.projection==d.projection && same_integrator(previous.settings,common) &&
             previous.schedule.session==schedule.session && previous.schedule.gesture==schedule.gesture) {
-            (*slot)->settings=common; (*slot)->air_settings=settings; (*slot)->schedule=schedule; return {};
+            (*slot)->settings=common; (*slot)->medium_settings=settings; (*slot)->schedule=schedule; return {};
         }
     } else {
         for(auto& item:state_->views) if(!item) { slot=&item; break; }
         if(!slot) throw Error{ErrorCode::conflict,"Path renderer has two occupied view slots"};
     }
     auto candidate=memory::make_shared_in<PathGpuView>(state_->heap,view);
-    candidate->id=id; candidate->scene=scene.state_; candidate->medium=medium; candidate->air_settings=settings;
+    candidate->id=id; candidate->scene=scene.state_; candidate->medium=medium; candidate->medium_settings=settings;
+    candidate->cloud=prepare_cloud(*state_,medium);
     candidate->settings=common; candidate->schedule=schedule; candidate->generation=state_->generation+1;
+    if(candidate->cloud) state_->cloud=candidate->cloud;
     *slot=std::move(candidate); ++state_->generation; return {};
 } catch(const Error& error) { return std::unexpected(error); }
 catch(const std::exception& error) { return std::unexpected(Error{ErrorCode::internal_error,error.what()}); }
@@ -637,7 +696,7 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
         batch->candidate=memory::make_shared_in<PathGpuCompleted>(state_->heap);
         auto& frame=*batch->candidate; frame.heap=state_->heap; frame.factory=state_->factory; frame.source=view->scene->source;
         frame.info=info_for(frame.source,d.width,d.height,view->settings,{0,completed+batch->count}); frame.info.view=d;
-        if(view->medium) frame.info.air=PathTraceGpuAirInfo{view->medium->environment(),view->medium->settings(),view->air_settings};
+        if(view->medium) frame.info.medium=PathTraceGpuMediumInfo{view->medium->environment(),view->medium->settings(),view->medium_settings,view->medium->field_hash()};
         frame.buffer=take(state_->factory.create_buffer({std::uint64_t{d.width}*d.height*128,
             vk::BufferUsageFlagBits::eStorageBuffer|vk::BufferUsageFlagBits::eTransferSrc}));
     }
@@ -650,13 +709,13 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
     p[0]=integers(width,height,batch->first,batch->count); p[11]=integers(x,y,d.width,1);
     auto info=info_for(view->scene->source,width,height,frozen,{batch->first,batch->count});
     if(view->medium) {
-        const auto& air=*batch->candidate->info.air; air_parameters(p,*view->medium,air.settings);
-        p[13]=air_origin(*view->medium,d.camera_world.matrix().block<3,1>(0,3)); info.air=air;
+        const auto& air=*batch->candidate->info.medium; medium_parameters(p,*view->medium,air.settings);
+        medium_origin(p,*view->medium,d.camera_world.matrix().block<3,1>(0,3)); info.medium=air;
     }
     const std::array<Float4,3> dummy{};
     cancelled(batch->stop);
     auto frame=submit(*state_,queue,*view->scene,p,dummy,std::move(info),stop,&batch->candidate->buffer,
-        batch->history ? &batch->history->buffer : nullptr);
+        batch->history ? &batch->history->buffer : nullptr,view->cloud);
     batch->tile_stop=stop; batch->frame=std::move(frame); state_->active=std::move(batch); return true;
 } catch(const Error& error) {
     if(state_ && queue.stats().device_lost) state_->terminal=true;
@@ -837,4 +896,20 @@ std::span<const Vec3d> PathTraceGpuImage::linear_rgb() const noexcept { return s
 std::span<const Vec3d> PathTraceGpuImage::second_moment() const noexcept { return state_ ? std::span<const Vec3d>{state_->moments} : std::span<const Vec3d>{}; }
 std::span<const std::optional<PathTraceHit>> PathTraceGpuImage::primary_hits() const noexcept { return state_ ? std::span<const std::optional<PathTraceHit>>{state_->hits} : std::span<const std::optional<PathTraceHit>>{}; }
 const PathTraceGpuImageInfo& PathTraceGpuImage::info() const noexcept { static const PathTraceGpuImageInfo empty; return state_ ? state_->info : empty; }
+
+Result<PathTraceFrame> PathTraceRenderer::submit_air_rays(graphics::SubmissionQueue& q,const PathTraceGpuScene& scene,
+    const PathMediumSnapshot& m,std::span<const PathTraceRay> rays,const VolumePathSettings& s,PathTraceSamples samples,std::uint32_t pixel,std::stop_token stop) const {
+    if(m.environment().clouds.enabled) return std::unexpected(Error{ErrorCode::not_supported,"Air paths require clouds disabled; use medium paths"});
+    return submit_medium_rays(q,scene,m,rays,s,samples,pixel,stop);
+}
+Result<PathTraceFrame> PathTraceRenderer::submit_air_view(graphics::SubmissionQueue& q,const PathTraceGpuScene& scene,
+    const PathMediumSnapshot& m,const RenderView& view,const VolumePathSettings& s,PathTraceSamples samples,std::stop_token stop) const {
+    if(m.environment().clouds.enabled) return std::unexpected(Error{ErrorCode::not_supported,"Air paths require clouds disabled; use medium paths"});
+    return submit_medium_view(q,scene,m,view,s,samples,stop);
+}
+Result<void> PathTraceRenderer::configure_air_view(graphics::SubmissionQueue& q,std::uint64_t id,const PathTraceGpuScene& scene,
+    const PathMediumSnapshot& m,const RenderView& view,const VolumePathSettings& s,const PathTraceSchedule& schedule) {
+    if(m.environment().clouds.enabled) return std::unexpected(Error{ErrorCode::not_supported,"Air paths require clouds disabled; use medium paths"});
+    return configure_medium_view(q,id,scene,m,view,s,schedule);
+}
 } // namespace dk::render

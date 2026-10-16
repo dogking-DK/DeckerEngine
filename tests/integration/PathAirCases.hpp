@@ -21,7 +21,7 @@ void air_numeric(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueu
     auto cpu=f.scene(); auto gpu=take(r.prepare_scene(q,cpu)); auto s=air_settings(0); s.environment_rgb={.2,.4,.8};
     auto image=air_image(r,q,gpu,m,s,4096,down);
     close_color(image.linear_rgb()[0],take(estimate_volume_path_reference(cpu,m,down,s,{0,4096})).mean,1e-7);
-    require(image.info().air && image.info().settings.model_version==4 && image.info().settings.sampler_version==2,"air provenance missing");
+    require(image.info().medium && image.info().settings.model_version==4 && image.info().settings.sampler_version==2,"air provenance missing");
     require(!image.primary_hits()[0] && gpu.submission().value()==0,"empty air requires geometry");
     // A tiny solar cone must not expand to sqrt(float epsilon) on the GPU.
     e.sun.angular_radius_rad=.00001; e.sun.direction={0,1,0}; f.document->set_environment(e).value();
@@ -142,7 +142,7 @@ void air_progressive(memory::ResourceHandle heap,PathTraceRenderer& r,Submission
     m=take(PathMediumSnapshot::create(e)); view=f.view(f.source(),7);
     check(r.configure_air_view(q,11,next,m,view,s,schedule)); require(!collect(r,q),"late old atmosphere published");
     require(take(r.status(11)).generation!=generation && take(r.status(11)).completed_spp==0,"air change did not reset history");
-    auto updated=finish_view(r,q,11); require(updated.info().air->environment==e && updated.info().revision==changed.revision(),"air result provenance stale");
+    auto updated=finish_view(r,q,11); require(updated.info().medium->environment==e && updated.info().revision==changed.revision(),"air result provenance stale");
     compare_images(complete(q,take(held.read_linear(q))),old,0);
     f.asset.materials[0].base_color.x()=.9f; auto material=f.scene(); const auto before=q.stats().submitted;
     auto rebuilt=take(r.prepare_scene(q,material)); require(material.geometry_fingerprint()!=geometry && q.stats().submitted>before,"material change reused stale geometry");

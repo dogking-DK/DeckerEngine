@@ -115,7 +115,7 @@ float3 directLight(PathPayload hit,float3 position,float3 normal,PathBsdf bsdf,f
 RayDesc primaryRay(uint2 coordinate,uint pixel,uint sample) {
     RayDesc ray;
     if(asuint(parameters[2]).w!=0) {
-        uint stride=asuint(parameters[12]).x!=0 ? 3u : 2u;
+        uint stride=asuint(parameters[12]).x!=0 ? 6u : 2u;
         float4 a=inputRays[pixel*stride],b=inputRays[pixel*stride+1]; ray.Origin=a.xyz; ray.TMin=a.w; ray.Direction=normalize(b.xyz); ray.TMax=b.w;
     } else {
         uint counter=pixel+asuint(parameters[10]).x;
@@ -165,8 +165,12 @@ void runPathPixel(uint2 coordinate) {
     for(uint sample=image.z;sample<image.z+image.w;++sample) {
         float4 hit=0,n=0; float3 value=0; RayDesc ray=primaryRay(coordinate,pixel,sample);
         if(asuint(parameters[12]).x!=0) {
-            float4 initial=asuint(parameters[2]).w!=0 ? inputRays[pixel*3+2] : parameters[13];
+            float4 initial=asuint(parameters[2]).w!=0 ? inputRays[pixel*6+2] : parameters[13];
             AirLocation location; location.radial=normalize(initial.xyz); location.height=initial.w;
+            bool fixed=asuint(parameters[2]).w!=0;
+            location.weather=(fixed ? inputRays[pixel*6+3] : parameters[26]).xy;
+            location.base=(fixed ? inputRays[pixel*6+4] : parameters[27]).xyz;
+            location.detail=(fixed ? inputRays[pixel*6+5] : parameters[28]).xyz;
             value=traceAir(ray,location,pixel+asuint(parameters[10]).x,sample,a.rays,hit,n);
         }
 #if !DK_PATH_EMPTY

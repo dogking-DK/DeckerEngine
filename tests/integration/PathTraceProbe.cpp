@@ -295,6 +295,7 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
 #include "PathGgxCases.hpp"
 #include "PathProgressiveCases.hpp"
 #include "PathAirCases.hpp"
+#include "PathCloudCases.hpp"
 int main(int argc,char** argv) {
     try {
         require(argc==2,"expected analytic/statistics/images/lifetime case");
@@ -305,14 +306,19 @@ int main(int argc,char** argv) {
             memory::ThreadContext context{memory.system,memory.heap}; memory::ExecutionScope scope{context,memory.heap};
             DeviceOptions options; options.validation=ValidationMode::required; options.ray_tracing=RayTracingMode::required;
             const std::string_view requested=argv[1];
-            if((requested.starts_with("texture_") && requested!="texture_disabled") || requested=="ggx_lifetime" || requested=="air_resources") options.sampled_image_indexing=SampledImageIndexingMode::required;
+            if((requested.starts_with("texture_") && requested!="texture_disabled") || requested=="ggx_lifetime" || requested=="air_resources" || requested=="cloud_surface") options.sampled_image_indexing=SampledImageIndexingMode::required;
             options.diagnostic_sink=diagnostic; options.diagnostic_user_data=&diagnostics; auto device=take(Device::create(memory.heap,options)); auto view=take(device.share_queue(0));
             std::printf("GPU=%s validation=%d case=%s\n",device.adapter().properties.deviceName.data(),device.validation_enabled(),argv[1]);
             native_submit=reinterpret_cast<PFN_vkQueueSubmit2>(device.device_proc("vkQueueSubmit2")); native_wait=reinterpret_cast<PFN_vkWaitSemaphores>(device.device_proc("vkWaitSemaphores"));
             auto queue=take(graphics::detail::SubmissionAccess::create(memory.heap,std::move(device),3,{submit_override,nullptr,wait_override}));
             { auto renderer=take(PathTraceRenderer::create(memory.heap,queue,DK_PATH_SHADER_DIR));
               const std::string_view mode=argv[1];
-              if(mode=="air_numeric") air_numeric(memory.heap,renderer,queue);
+              if(mode=="cloud_numeric") cloud_numeric(memory.heap,renderer,queue);
+              else if(mode=="cloud_statistics") cloud_statistics(memory.heap,renderer,queue);
+              else if(mode=="cloud_surface") cloud_surface(memory.heap,renderer,queue);
+              else if(mode=="cloud_progressive") cloud_progressive(memory.heap,renderer,queue);
+              else if(mode=="cloud_failure") cloud_failure(memory.heap,queue);
+              else if(mode=="air_numeric") air_numeric(memory.heap,renderer,queue);
               else if(mode=="air_statistics") air_statistics(memory.heap,renderer,queue);
               else if(mode=="air_progressive") air_progressive(memory.heap,renderer,queue);
               else if(mode=="air_failure") air_failure(memory.heap,renderer,queue);

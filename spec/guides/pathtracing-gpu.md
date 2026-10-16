@@ -1,14 +1,14 @@
 ---
 created_at: "2026-10-14T14:37:00+08:00"
-updated_at: "2026-10-16T14:12:04+08:00"
+updated_at: "2026-10-16T14:54:53+08:00"
 ---
 
-# GPU表面、空气与渐进路径追踪
+# GPU表面、空气、云与渐进路径追踪
 
 [返回项目入口](../../README.md)。[M16.6设计](../design/render-pathtracing.md#m166-gpu无历史lambert实施契约)
 提供硬件三角形求交、NEE/MIS/RR和拥有型HDR结果，使用与[CPU参考](pathtracing-reference.md)一致的冻结输入与采样模型。
-提供≤64×64无历史参考和≤2048×2048渐进接口，支持Lambert/GGX、baseColor纹理/alpha-mask，以及显式GPU空气积分。
-[编辑器](editor.md#路径追踪预览m169)与capture当前接入表面模式，空气联合接入按M17.5推进。
+提供≤64×64无历史参考和≤2048×2048渐进接口，支持Lambert/GGX、baseColor纹理/alpha-mask，以及显式GPU空气/云积分。
+[编辑器](editor.md#路径追踪预览m169)与capture当前接入表面模式，空气/云联合接入按M17.5推进。
 
 ## 构建与验证
 
@@ -128,7 +128,7 @@ BLAS从世界顶点合并构建，尚无资产BLAS复用、UPDATE/refit、跨队
 
 `submit_air_rays`、`submit_air_view`和`configure_air_view`消费同一冻结环境的PathTraceScene与PathMediumSnapshot，
 使用VolumePathSettings（model=4、sampler=2），反弹0..32；0仅保留无散射透射和终端发光。
-接口要求clouds.enabled=false；不支持GPU云，零密度但enabled的云也明确拒绝。
+空气专用接口要求clouds.enabled=false；零密度但enabled的云也明确拒绝，含云请使用下面的通用介质接口。
 空气关闭时可验证真空退化；开启但系数为零时行星仍不透明。相机地下、环境不匹配或超出支持域明确返回错误。
 
 ```cpp
@@ -144,7 +144,7 @@ auto reference = renderer.submit_air_view(queue, scene, medium, view, air, {0, 6
 
 主网格查询遵守near/far，空气、后续反弹和阴影按物理边界继续。
 阴影同时检查几何/mask、行星及空气透射；Rayleigh/Mie真实散射、Lambert/GGX、有限太阳和面积灯共用NEE/MIS/RR。
-空气结果info.air保存完整环境、介质和体积设置；公共settings报告model=4/sampler=2及公共字段。
+空气结果info.medium保存完整环境、介质和体积设置；公共settings报告model=4/sampler=2及公共字段。
 primary_hits只记录第一个样本直接到达的网格，先发生介质事件或命中行星时为空。
 statistics.rays在空气模式计逻辑几何查询（含空几何）；triangle_tests仍不可得，不报告GPU介质事件统计。
 
@@ -154,6 +154,41 @@ tracking额度耗尽、无效系数/结果拒绝整个候选，保留旧complete
 空气参数、计数/错误缓冲、读回、纹理和AS共享renderer额度；弱缓存不延长无人持有的GPU资源寿命。
 同设备相同样本跨batch/tile保持连续累积；CPU双精度与GPU float按数值/统计门槛比较。
 此入口不依赖M14/M15的视图LUT，未接Editor/capture，也不构成Sponza交互性能承诺。
+
+## 世界空间云路径
+
+`submit_medium_rays`、`submit_medium_view`和`configure_medium_view`使用同一model=4/sampler=2积分器，
+接受空气、非均匀云及二者组合。先由CloudFieldCache生成不可变场，再创建PathMediumSnapshot；时间显式冻结。
+
+```cpp
+dk::render::CloudFieldCache fields;
+auto field = fields.prepare(environment.clouds).value();
+dk::render::PathMediumSettings physical;
+physical.time_seconds = 17;
+physical.cloud_albedo = .9;
+physical.cloud_anisotropy = .6;
+auto medium = dk::render::PathMediumSnapshot::create(environment, physical, field).value();
+dk::render::VolumePathSettings transport;
+transport.max_bounces = 8;
+renderer.configure_medium_view(queue, 1, scene, medium, view, transport, schedule).value();
+// 固定射线/无历史图像也可使用submit_medium_rays/submit_medium_view。
+// 与空气和表面模式共用submit_batch、poll、completed_frame、read_linear、display。
+```
+
+云coverage/density/extinction为0时无需field，退化为空气；clouds.enabled仍保留行星边界。
+非零云的GPU支持域：R>=1000米、weather/shape尺度>=100米、detail尺度>=10米，
+壳厚和正系数在float中不能归零；超域拒绝配置并保留旧视图。其他边界与CPU体积/空气接口相同。
+CPU用双精度去中心、扣风位移并缩为周期坐标；GPU传播相位，显式repeat线性插值读取原RG8/R8场。
+不依赖M15光照、屏幕历史或近似多散射增亮。任意主路径/反弹和NEE均查询真实消光，
+已知无云段使用空气上界、云段使用空气加云密度硬界；发生上界低估或预算耗尽会拒绝整批。
+
+最新成功使用的场保存在renderer，并可复用其他视图/在途代持有的相同场；key/hash变化才上传。
+GPU field buffer、候选及在途资源均计入同一额度；旧场可能与候选同时占用，额度不足明确失败。
+释放视图后最近的缓存场仍保活，renderer析构时释放；外部完成图保留线性结果与来源，不需要保留噪声场。
+时间/风/太阳/密度等改变重置历史但复用场；曝光/调度不重置。失败上传/提交不替换旧缓存/视图。
+结果`info.medium`包含完整环境、物理与积分设置及`field_hash`，替代M17.3的`info.air`字段。
+required GPU验收覆盖数值、遮蔽、多次散射和失败寿命；记录见[0126](../development/0126-gpu-cloud-pathtracing.md)。
+Editor与capture的Scene media选项仍在M17.5接入，当前入口是C++模块API。
 
 ## 可执行验收与报告
 
@@ -166,6 +201,7 @@ ggx_numeric/statistics/indirect/lifetime验证材质端点、白炉/面积灯、
 progressive_images/state/failure/budget/lost验证分块/65536spp一致性、重置矩阵、迟到/失败/取消、额度与终端device loss。
 air_numeric/statistics/progressive/failure/resources覆盖空气CPU对照、解析吸收/单散射、8 seed收敛、低太阳多散射、
 近地/远景、反射/mask、分批连续性、几何复用、失败与1MiB资源额度；实现及结果见[0125](../development/0125-gpu-air-pathtracing.md)。
+cloud_numeric/statistics/surface/progressive/failure覆盖云壳/透射、混合散射与白炉、几何遮蔽/反射、固定时间与场复用、额度/失败恢复。
 会话实施与实测见[0117](../development/0117-pathtracing-progressive.md)。
 材质实施与实测记录见[0115](../development/0115-pathtracing-textures.md)和[0116](../development/0116-pathtracing-ggx.md)。
 

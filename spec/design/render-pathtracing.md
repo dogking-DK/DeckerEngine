@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-16T14:12:04+08:00"
+updated_at: "2026-10-16T14:54:53+08:00"
 status: accepted
 ---
 
@@ -20,7 +20,7 @@ CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、
 
 M17补齐世界空间介质；当前Editor仍执行M16表面模式，不能把本节规划理解为已可联合渲染。
 分阶段状态统一见[Roadmap](../roadmap.md#m17大气云与路径追踪集成)，介质基础见[0123](../development/0123-path-media-foundation.md)，
-CPU体积积分与统计验收见[0124](../development/0124-volume-path-reference.md)，GPU空气与渐进验收见[0125](../development/0125-gpu-air-pathtracing.md)。
+CPU体积积分与统计验收见[0124](../development/0124-volume-path-reference.md)，GPU空气与渐进验收见[0125](../development/0125-gpu-air-pathtracing.md)，GPU云见[0126](../development/0126-gpu-cloud-pathtracing.md)。
 
 ### 模型与接入顺序
 
@@ -120,7 +120,7 @@ M17.1所有系数/密度支持域继续适用；主射线沿用表面参考的�
 在PathTraceRenderer新增submit_air_rays、submit_air_view、configure_air_view，显式消费PathMediumSnapshot和VolumePathSettings。
 复用M17.2 model=4/sampler=2的RGB通道、analog自由程、Rayleigh/Mie混合相函数、真实多次散射、有限太阳、NEE/ratio tracking/MIS/RR。
 只接受clouds.enabled=false；空气关闭可作真空对照，旧surface入口仍用model=3并保留surface-only规则。
-返回既有GPU帧类型，info.air显式记录完整环境、介质和体积设置；公共settings同步模型/采样/反弹等公共字段，不能误报表面模型。
+返回既有GPU帧类型，info.medium显式记录完整环境、介质和体积设置；公共settings同步模型/采样/反弹等公共字段，不能误报表面模型。
 空几何用空气compute入口执行相同积分，不创建虚假BLAS/TLAS；有几何复用原RT/radiance/visibility/mask/GGX与Graph。
 
 几何GPU owner与场景来源wrapper分开；prepare_scene可复用两个弱缓存中完全相同的已消费几何/材质/纹理。
@@ -144,6 +144,31 @@ GPU沿路径传播径向向量/高度，以差平方表达式求球壳交点和�
 验收：空场/有限太阳与纯吸收解析、近地/切线/行星/远景、低太阳单次散射、表面与GGX反射、几何/mask阴影，
 8 seed CPU/GPU均值与标准误差、同设备批次/tile连续样本，环境改变复用AS且重置历史，曝光保留，
 GPU额度/取消/迟到/错误候选/外部owner寿命，required RT与validation/sync零警告错误。证据见[0125](../development/0125-gpu-air-pathtracing.md)。
+
+### M17.4 GPU云实施契约
+
+新增submit_medium_rays、submit_medium_view、configure_medium_view接收同一PathMediumSnapshot，覆盖空气、云和表面。
+原air入口继续明确拒绝clouds.enabled；统一结果字段改为info.medium，记录完整环境/介质/体积设置及field_hash。
+PathMediumSnapshot只读公开已有CloudFieldData owner；不增加生成职责或GPU依赖。
+GPU把原始RG8/R8场压入一个uint storage buffer并显式执行repeat线性插值，复用CPU texel中心与密度公式。
+选择buffer是为了统一AllocationBudget及CPU/GPU插值精度，不借M15光照/重建历史，也不要求新纹理功能。
+renderer保留最近成功使用的场，并检查视图/在途owner，按不可变key及hash复用；视图持有旧场，提交由queue保活buffer。
+上传候选使用renderer工厂；成功submit/configure后才替换缓存。失败保留旧缓存/视图/完成帧，候选全部计费。
+时间、覆盖率、密度、光源改变复用同一场；seed或分辨率改变才上传新场，所有物理变化重置历史。
+
+球壳裁剪拆分最多5个有序区间；空气段用空气majorant、云段用空气加density*extinction上界并向上舍入。
+跨段延续null随机counter；云关闭或零密度/覆盖/消光退化为空气，云enabled仍保留行星边界。
+自由程和NEE均采样真实非均匀云消光；散射以Rayleigh/Mie/HG云系数混合概率和完整PDF进行，真实事件推进深度。
+密度硬界来自原云模型，禁止用采样网格最大值代替保守上界；任何低估/无效/预算耗尽仍拒绝整个候选。
+径向高度沿M17.3；初始噪声周期坐标在CPU双精度中去中心、扣固定风时间后归一化，沿每次位移传播周期相位。
+GPU非零云支持R>=1000米、weather/shape尺度>=100米、detail尺度>=10米；壳厚和正系数须在float中保持非零。超域明确拒绝，零云不受此附加限制。
+不要求shaderFloat64；倒尺度高低float及乘法余项减少长距离周期坐标舍入，不能把GPU结果声称为双精度逐位一致。
+
+验收在实现前冻结：8个seed=101+7919*i，透射对独立确定性积分，GPU/CPU汇总nRMSE<=2%，
+通道均值偏差同时<=2%（黑场绝对地板1e-4）及5倍联合标准误差+1e-4；N/4N参考集合误差需下降。
+覆盖云下/内/上、双壳/切线、零云、固定风时间/周期、近地、混合空气、多次散射/MIS/RR、表面反射与云/几何阴影。
+同GPU不同批次/tile逐值一致；场复用/更换、在途旧代、外部完成帧、额度拒绝/恢复和required validation/sync一并验证。
+本阶段保持Editor/capture与Sponza优化的M17.5/6边界，证据归[0126](../development/0126-gpu-cloud-pathtracing.md)。
 
 ### 状态、接口演进与优化约束
 

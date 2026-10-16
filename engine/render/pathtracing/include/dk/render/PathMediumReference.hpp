@@ -45,6 +45,7 @@ public:
     [[nodiscard]] const EnvironmentDescription& environment() const noexcept { return environment_; }
     [[nodiscard]] const PathMediumSettings& settings() const noexcept { return settings_; }
     [[nodiscard]] std::uint64_t field_hash() const noexcept { return field_ ? field_->hash() : 0; }
+    [[nodiscard]] const std::shared_ptr<const CloudFieldData>& field() const noexcept { return field_; }
     [[nodiscard]] Vec3d extinction_majorant() const noexcept { return majorant_; }
     [[nodiscard]] Result<PathMediumCoefficients> sample(const Vec3d& position_m) const;
     [[nodiscard]] Result<PathMediumSegments> intervals(const PathMediumRay&) const;

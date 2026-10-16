@@ -1,5 +1,6 @@
 // Model 4, sampler 2: scalar hero-RGB analog transport. No view-dependent LUTs.
-struct AirLocation { float3 radial; float height; };
+struct AirLocation { float3 radial; float height; float2 weather; float3 base,detail; };
+#include "path-cloud.slang"
 float airRandom(uint pixel,uint sample,uint event,uint stream,uint counter=0) {
     uint4 p=asuint(parameters[1]); uint h=mixBits(p.x^0x3c6ef372u);
     h=mixBits(h^p.y); h=mixBits(h^pixel); h=mixBits(h^sample); h=mixBits(h^event); h=mixBits(h^stream); h=mixBits(h^counter);
@@ -18,9 +19,14 @@ bool airStep(inout uint steps) {
     ++steps; return true;
 }
 AirLocation airMove(AirLocation a,float3 delta) {
-    if(asuint(parameters[12]).y==0) return a;
+    AirLocation b=a;
+    if(asuint(parameters[22]).y!=0) {
+        b.weather=float2(cloudShift(a.weather.x,delta.x,0),cloudShift(a.weather.y,delta.z,0));
+        [unroll] for(uint i=0;i<3;++i) { b.base[i]=cloudShift(a.base[i],delta[i],1); b.detail[i]=cloudShift(a.detail[i],delta[i],2); }
+    }
+    if(asuint(parameters[12]).y==0) return b;
     float R=parameters[14].x,r=R+a.height,change=dot(delta,delta)+2*r*dot(a.radial,delta);
-    AirLocation b; b.height=(a.height*(2*R+a.height)+change)/(sqrt(max(0.0,r*r+change))+R);
+    b.height=(a.height*(2*R+a.height)+change)/(sqrt(max(0.0,r*r+change))+R);
     b.radial=normalize(a.radial*r+delta); return b;
 }
 AirLocation airAlong(AirLocation a,float3 direction,float distance) {
@@ -51,13 +57,36 @@ float3 airSegment(AirLocation a,float3 direction,float maximum) {
     return segment;
 }
 float3 airCoefficients(float height,uint channel) {
-    if(asuint(parameters[12]).y==0 || height>=parameters[14].y) return 0;
+    if(asuint(parameters[22]).x==0 || height>=parameters[14].y) return 0;
     float ray=parameters[15][channel]*exp(-height/parameters[15].w);
     float mie=parameters[16][channel]*exp(-height/parameters[16].w);
     float extinction=ray+parameters[17][channel]*exp(-height/parameters[16].w)+
         parameters[18][channel]*max(0.0,1-abs(height-parameters[18].w)/parameters[19].w);
     if(!isfinite(extinction) || extinction<0 || extinction>parameters[20][channel]) airError(8);
     return float3(ray,mie,extinction);
+}
+struct AirIntervals { float3 segment[5]; uint count; };
+AirIntervals airIntervals(AirLocation a,float3 direction,float3 bounds) {
+    AirIntervals result=(AirIntervals)0; if(bounds.y<=bounds.x) return result;
+    float cuts[6]; uint count=2; cuts[0]=bounds.x; cuts[1]=bounds.y;
+    bool clouds=asuint(parameters[22]).y!=0;
+    if(clouds) [unroll] for(uint boundary=0;boundary<2;++boundary) {
+        float2 roots=airRoots(a,direction,parameters[23][boundary]);
+        if(roots.x<roots.y) [unroll] for(uint i=0;i<2;++i) if(roots[i]>bounds.x && roots[i]<bounds.y) cuts[count++]=roots[i];
+    }
+    for(uint i=1;i<count;++i) { float key=cuts[i]; uint j=i; while(j>0 && cuts[j-1]>key) { cuts[j]=cuts[j-1]; --j; } cuts[j]=key; }
+    for(uint i=1;i<count;++i) if(cuts[i]>cuts[i-1]) {
+        float height=airMove(a,direction*((cuts[i]+cuts[i-1])*.5)).height;
+        bool inside=clouds && height>parameters[23].x && height<parameters[23].y;
+        if(inside || asuint(parameters[22]).x!=0) result.segment[result.count++]=float3(cuts[i-1],cuts[i],inside ? 1 : 0);
+    }
+    return result;
+}
+float4 airMediumCoefficients(AirLocation a,uint channel,float rate) {
+    float3 air=airCoefficients(a.height,channel); float cloud=cloudDensity(a)*parameters[24].x;
+    float4 c=float4(air.xy,cloud*parameters[24].y,air.z+cloud);
+    if(any(!isfinite(c)) || any(c<0) || c.w>rate) airError(8);
+    return c;
 }
 float3 airTangent(float3 axis) {
     // Match the CPU reference's unitOrthogonal frame (double dummy precision 1e-12).
@@ -78,16 +107,17 @@ bool airSunHit(float3 direction) {
     float3 axis=normalize(parameters[5].xyz),crossed=cross(direction,axis);
     return dot(direction,axis)>0 && dot(crossed,crossed)<=parameters[21].z;
 }
-float airPhase(float cosine,float rayWeight) {
-    cosine=clamp(cosine,-1.0,1.0); float g=parameters[17].w;
-    return rayWeight*3*(1+cosine*cosine)/(16*pi)+(1-rayWeight)*(1-g*g)/(4*pi*pow(1+g*g-2*g*cosine,1.5));
+float airHG(float cosine,float g) { return (1-g*g)/(4*pi*pow(1+g*g-2*g*cosine,1.5)); }
+float airPhase(float cosine,float3 weights) {
+    cosine=clamp(cosine,-1.0,1.0);
+    return dot(weights,float3(3*(1+cosine*cosine)/(16*pi),airHG(cosine,parameters[17].w),airHG(cosine,parameters[24].z)));
 }
-float3 airPhaseSample(float3 incoming,float rayWeight,uint pixel,uint sample,uint event) {
-    float u=airRandom(pixel,sample,event,5),cosine;
-    if(airRandom(pixel,sample,event,4)<rayWeight) {
+float3 airPhaseSample(float3 incoming,float3 weights,uint pixel,uint sample,uint event) {
+    float u=airRandom(pixel,sample,event,5),cosine,choice=airRandom(pixel,sample,event,4);
+    if(choice<weights.x) {
         float q=4*u-2,r=pow(q+sqrt(q*q+1),1.0/3.0); cosine=r-1/r;
     } else {
-        float g=parameters[17].w;
+        float g=choice<weights.x+weights.y ? parameters[17].w : parameters[24].z;
         if(abs(g)<.001) { float w=2*u-1; cosine=(2*w+g*(w*w+3)+2*g*g*w+g*g*g*(w*w-1))/(2*(1+g*w)*(1+g*w)); }
         else { float q=(1-g*g)/(1-g+2*g*u); cosine=(1+g*g-q*q)/(2*g); }
     }
@@ -106,7 +136,7 @@ struct AirVertex {
     PathBsdf bsdf;
     uint index;
     bool volume,ground;
-    float rayWeight;
+    float3 phaseWeights;
 };
 float3 airOrigin(AirVertex vertex,float3 direction,out AirLocation location) {
     location=vertex.location; if(vertex.volume) return vertex.position;
@@ -122,27 +152,31 @@ float3 airOrigin(AirVertex vertex,float3 direction,out AirLocation location) {
 }
 // 0 endpoint, 1 scatter, 2 absorb, 3 error. Null collisions do not increment physical depth.
 uint airFlight(RayDesc ray,AirLocation location,float3 segment,uint channel,uint pixel,uint sample,uint event,inout uint steps,out AirVertex vertex) {
-    vertex=(AirVertex)0; float rate=parameters[20][channel]; if(rate==0) return 0;
-    float t=segment.x,correction=0; uint counter=0;
-    while(t<segment.y) {
-        if(!airStep(steps)) return 3;
-        uint at=counter++; float optical=airOpticalDistance(airRandom(pixel,sample,event,2,at));
-        if(optical>=(segment.y-t)*rate) break; // Do not overflow a free path beyond the shell.
-        float adjusted=optical/rate-correction,next=t+adjusted;
-        correction=(next-t)-adjusted; // Retain steps below the current distance's float ulp.
-        if(next<t || !isfinite(next)) { airError(4); return 3; }
-        t=next; if(t>=segment.y) break;
-        AirLocation point=airAlong(location,ray.Direction,t); float3 c=airCoefficients(point.height,channel);
-        if(status[0]!=0) return 3;
-        float choice=airRandom(pixel,sample,event,3,at)*rate,scattering=c.x+c.y;
-        if(choice<scattering) {
-            vertex.volume=true; vertex.position=ray.Origin+ray.Direction*t; vertex.incoming=ray.Direction;
-            vertex.location=point; vertex.rayWeight=c.x/scattering; return 1;
+    vertex=(AirVertex)0; uint counter=0; AirIntervals intervals=airIntervals(location,ray.Direction,segment);
+    for(uint k=0;k<intervals.count;++k) {
+        float3 interval=intervals.segment[k]; float rate=interval.z!=0 ? parameters[30][channel] : parameters[20][channel];
+        if(rate==0) continue;
+        float t=interval.x,correction=0;
+        while(t<interval.y) {
+            if(!airStep(steps)) return 3;
+            uint at=counter++; float optical=airOpticalDistance(airRandom(pixel,sample,event,2,at));
+            if(optical>=(interval.y-t)*rate) break;
+            float adjusted=optical/rate-correction,next=t+adjusted; correction=(next-t)-adjusted;
+            if(next<t || !isfinite(next)) { airError(4); return 3; }
+            t=next; if(t>=interval.y) break;
+            AirLocation point=airAlong(location,ray.Direction,t); float4 c=airMediumCoefficients(point,channel,rate);
+            if(status[0]!=0) return 3;
+            float choice=airRandom(pixel,sample,event,3,at)*rate,scattering=c.x+c.y+c.z;
+            if(choice<scattering) {
+                vertex.volume=true; vertex.position=ray.Origin+ray.Direction*t; vertex.incoming=ray.Direction;
+                vertex.location=point; vertex.phaseWeights=c.xyz/scattering; return 1;
+            }
+            if(choice<c.w) return 2;
         }
-        if(choice<c.z) return 2;
     }
     return 0;
 }
+
 float airVisibility(AirVertex v,float3 wi,uint light,float3 point,uint channel,uint pixel,uint sample,uint event,inout uint rays,inout uint steps) {
     RayDesc ray; AirLocation location; ray.Origin=airOrigin(v,wi,location); ray.Direction=wi; ray.TMin=0; ray.TMax=infinity;
 #if !DK_PATH_EMPTY
@@ -154,20 +188,26 @@ float airVisibility(AirVertex v,float3 wi,uint light,float3 point,uint channel,u
 #endif
     if(airNearest(ray,rays).found!=0) return 0;
     float3 segment=airSegment(location,ray.Direction,ray.TMax); if(segment.z!=0) return 0;
-    float rate=parameters[20][channel]; if(rate==0) return 1;
-    float t=segment.x,T=1,correction=0; uint counter=0;
-    while(t<segment.y) {
-        if(!airStep(steps)) return 0;
-        float optical=airOpticalDistance(airRandom(pixel,sample,event,10,counter++));
-        if(optical>=(segment.y-t)*rate) break;
-        float adjusted=optical/rate-correction,next=t+adjusted; correction=(next-t)-adjusted;
-        if(next<t || !isfinite(next)) { airError(4); return 0; }
-        t=next; if(t>=segment.y) break;
-        T*=1-airCoefficients(airAlong(location,ray.Direction,t).height,channel).z/rate;
-        if(T==0 || status[0]!=0) return 0;
+    float T=1; uint counter=0; AirIntervals intervals=airIntervals(location,ray.Direction,segment);
+    for(uint k=0;k<intervals.count;++k) {
+        float3 interval=intervals.segment[k]; float rate=interval.z!=0 ? parameters[30][channel] : parameters[20][channel];
+        if(rate==0) continue;
+        float t=interval.x,correction=0;
+        while(t<interval.y) {
+            if(!airStep(steps)) return 0;
+            float optical=airOpticalDistance(airRandom(pixel,sample,event,10,counter++));
+            if(optical>=(interval.y-t)*rate) break;
+            float adjusted=optical/rate-correction,next=t+adjusted; correction=(next-t)-adjusted;
+            if(next<t || !isfinite(next)) { airError(4); return 0; }
+            t=next; if(t>=interval.y) break;
+            float extinction=airMediumCoefficients(airAlong(location,ray.Direction,t),channel,rate).w;
+            if(status[0]!=0) return 0;
+            T*=1-extinction/rate; if(T==0) return 0;
+        }
     }
     return T;
 }
+
 float airDirect(AirVertex v,uint channel,uint pixel,uint sample,uint event,inout uint rays,inout uint steps) {
     uint4 flags=asuint(parameters[2]); float classPdf=parameters[4].w;
     if(flags.x!=0 || classPdf==0) return 0;
@@ -193,7 +233,7 @@ float airDirect(AirVertex v,uint channel,uint pixel,uint sample,uint event,inout
 #endif
     if(pdf<=0 || radiance==0) return 0;
     float factor,scatterPdf;
-    if(v.volume) { factor=airPhase(dot(v.incoming,wi),v.rayWeight); scatterPdf=factor; }
+    if(v.volume) { factor=airPhase(dot(v.incoming,wi),v.phaseWeights); scatterPdf=factor; }
     else { BsdfEval b=evalBsdf(v.bsdf,v.normal,-v.incoming,wi); factor=b.value[channel]*max(0.0,dot(v.normal,wi)); scatterPdf=b.pdf; }
     if(factor<=0) return 0;
     return radiance*factor*airVisibility(v,wi,light,point,channel,pixel,sample,event,rays,steps)*weight(pdf,scatterPdf)/pdf;
@@ -232,7 +272,7 @@ float3 traceAir(RayDesc ray,AirLocation location,uint pixel,uint sample,inout ui
         if(depth==counts.z) break;
         value+=beta*airDirect(v,channel,pixel,sample,depth,rays,steps);
         float3 wi;
-        if(v.volume) { wi=airPhaseSample(ray.Direction,v.rayWeight,pixel,sample,depth); previousPdf=airPhase(dot(ray.Direction,wi),v.rayWeight); }
+        if(v.volume) { wi=airPhaseSample(ray.Direction,v.phaseWeights,pixel,sample,depth); previousPdf=airPhase(dot(ray.Direction,wi),v.phaseWeights); }
         else {
             wi=sampleBsdf(v.bsdf,v.normal,-ray.Direction,airRandom(pixel,sample,depth,8),airRandom(pixel,sample,depth,8,1));
             BsdfEval evaluated=evalBsdf(v.bsdf,v.normal,-ray.Direction,wi); if(evaluated.pdf<=0) break;
