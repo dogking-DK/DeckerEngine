@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-15T11:35:39+08:00"
+updated_at: "2026-10-16T09:34:39+08:00"
 status: accepted
 ---
 
@@ -83,7 +83,7 @@ N/4N均值差≤0.5%，MIS/BSDF-only及RR均值与独立面积/半球积分保�
 
 纹理层支持当前CpuAsset的baseColor纹理与opaque/mask，不接受blend；Lambert模式仍拒绝metallic非零。
 冻结被引用纹理的身份、origin、RGBA8、sampler及三角形UV；纹理按资产包/纹理ID去重，
-最多64份、单边2048、总RGBA8字节64MiB，允许调用者下调额度。缺纹理、重复ID、缺失/非有限UV、
+最多64份、单边2048、默认总RGBA8字节64MiB，desktop显式配置允许128MiB；允许调用者下调额度。缺纹理、重复ID、缺失/非有限UV、
 非法sampler/数据长度/alpha cutoff在创建候选时拒绝。消费的纹理内容、采样器、UV和mask参与指纹，
 资产原始内存或文件变化不能改变旧scene/image。报告纹理数与未纳入NEE的mask发光三角形数。
 
@@ -93,7 +93,7 @@ min_filter及mip模式保留来源但在本阶段不参与采样。nearest取flo
 双线性插值，RGB每个texel先按IEC sRGB解码，alpha不解码；repeat/clamp/mirrored_repeat按各轴独立处理。
 GPU上传前解码为RGBA32F线性纹理，再用硬件过滤；这与sRGB先解码再过滤的数学语义一致。
 实测本机RGBA8-sRGB硬件解码误差超过冻结nearest门槛，故保留门槛并采用显式标准解码，
-不将近似误差吞入容差。GPU图像与上传各最多256MiB，CPU冻结仍为64MiB RGBA8；M16.8已统一显存准入。
+不将近似误差吞入容差。GPU图像与上传各为源RGBA8的四倍，desktop上限各512MiB；M16.8统一实际显存准入仍为1GiB，最大纹理与几何额度不保证同时装入。
 UV准入绝对值不超过1e6，避免整数转换溢出；CPU使用double作为数值参考，GPU使用float。
 alpha乘factor后以float比较，严格小于cutoff才剔除，等于保留；opaque忽略alpha。
 radiance和visibility使用同一mask/背面规则。mask发光面light PDF为0，BSDF命中权重1，
@@ -166,9 +166,11 @@ Geometry BVH只在测试中作为独立求交对照；CPU参考独立双精度�
 明确不使用顶点法线；纹理UV按重心插值。双面可翻转法线，单面背面被剔除，负缩放翻转绕序。退化三角形跳过并报告计数。
 场景指纹为稳定字节序FNV-1a64诊断摘要，覆盖消费的世界几何、材质、来源和冻结太阳，不作安全验证/缓存相等证明。
 
-限制固定为最多4096个输入资产/实例primitive引用及4096个展开前计数的三角形（退化也占额度），
-单primitive最多12288个顶点，位置绝对值≤1e6米；非法矩阵/不可逆实例/非有限数在候选内拒绝。
-调用者可下调额度，不能放大硬上限。创建/图像输出使用调用者Memory，预算失败不发布候选；
+默认CPU场景额度为4096个输入资产/实例primitive引用及4096个展开前计数的三角形（退化也占额度）。
+显式desktop_path_scene_limits允许100万三角形、64张纹理/128MiB RGBA8，用于编辑器硬件遍历；
+单primitive顶点受所选三角形额度的三倍约束，位置绝对值≤1e6米；非法矩阵/不可逆实例/非有限数在候选内拒绝。
+CPU逐射线/逐三角测试工作预算仍独立拒绝超额计算。调用者不能放大desktop硬上限。
+创建/图像输出使用调用者Memory，预算失败不发布候选；
 旧快照和已完成图像可在输入销毁/Memory closing后读取，新建仍要求open heap。
 
 `PathTraceSettings`固定model版本3（M16.7.2显式材质模式）/sampler版本1，seed为uint64，max_bounces=8、范围1..32；

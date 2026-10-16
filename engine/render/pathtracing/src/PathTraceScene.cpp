@@ -30,8 +30,9 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
     std::span<const CpuAsset* const> assets, const PathTraceSceneLimits& limits, PathTraceMaterialModel model) {
     if (!heap || heap.state()!=memory::ResourceState::open || !source)
         return std::unexpected(Error{ErrorCode::invalid_state,"Path scene requires an open heap and render scene"});
-    if ((model!=PathTraceMaterialModel::lambert && model!=PathTraceMaterialModel::metallic_roughness) || assets.size()>4096 || !limits.max_triangles || limits.max_triangles>4096 ||
-        !limits.max_primitive_instances || limits.max_primitive_instances>4096 || limits.max_textures>64 || limits.max_texture_bytes>64*1024*1024)
+    constexpr auto hard=desktop_path_scene_limits();
+    if ((model!=PathTraceMaterialModel::lambert && model!=PathTraceMaterialModel::metallic_roughness) || assets.size()>4096 || !limits.max_triangles || limits.max_triangles>hard.max_triangles ||
+        !limits.max_primitive_instances || limits.max_primitive_instances>hard.max_primitive_instances || limits.max_textures>hard.max_textures || limits.max_texture_bytes>hard.max_texture_bytes)
         return std::unexpected(path_invalid("Invalid path scene limits"));
     try {
         for (std::size_t i=0;i<assets.size();++i) {
@@ -71,7 +72,7 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
                 }
                 for (std::size_t pi=0;pi<asset.mesh.primitives.size();++pi) {
                     const auto& p=asset.mesh.primitives[pi];
-                    if (p.positions.size()>12288 || p.indices.size()%3 || p.indices.size()/3>limits.max_triangles-triangle_count)
+                    if (p.positions.size()>3*limits.max_triangles || p.indices.size()%3 || p.indices.size()/3>limits.max_triangles-triangle_count)
                         return std::unexpected(path_invalid("Path triangle/vertex budget or topology invalid"));
                     triangle_count+=p.indices.size()/3;
                     const MaterialData defaults;

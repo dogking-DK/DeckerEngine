@@ -132,9 +132,27 @@ TEST_CASE("empty degenerate missing duplicate inputs and lower scene limits have
     f.triangle({-1,-1,0},{1,-1,0},{0,1,0}); source=f.source();
     CHECK_FALSE(PathTraceScene::create(f.heap,source,inputs,{1,4096}));
     CHECK_FALSE(PathTraceScene::create(f.heap,source,inputs,{4096,1}));
-    CHECK_FALSE(PathTraceScene::create(f.heap,source,inputs,{4097,4096}));
+    CHECK_FALSE(PathTraceScene::create(f.heap,source,inputs,{desktop_path_scene_limits().max_triangles+1,4096}));
     CHECK_FALSE(degenerate.nearest({{0,0,0},{0,0,0}}));
     CHECK_FALSE(PathTraceScene{}.nearest(down));
+}
+TEST_CASE("desktop scene capacity keeps default and CPU work budgets bounded") {
+    Fixture f; f.triangle({-1,-1,0},{1,-1,0},{0,1,0});
+    auto& p=f.asset.mesh.primitives[0];
+    p.positions.resize(13000,Vec3f{0,0,0});
+    p.indices.clear(); for(unsigned i=0;i<5000;++i) p.indices.insert(p.indices.end(),{0,1,2});
+    const auto source=f.source(); const std::array inputs{static_cast<const CpuAsset*>(&f.asset)};
+    CHECK_FALSE(PathTraceScene::create(f.heap,source,inputs));
+    auto desktop=PathTraceScene::create(f.heap,source,inputs,desktop_path_scene_limits()); REQUIRE(desktop);
+    CHECK(desktop->triangle_count()==5000);
+    REQUIRE(desktop->nearest(down)); CHECK(desktop->nearest(down)->has_value());
+    auto work=settings(); work.max_triangle_tests=4999;
+    CHECK_FALSE(estimate_path_reference(*desktop,down,work,{0,1}));
+    auto lower=desktop_path_scene_limits(); lower.max_triangles=4999;
+    CHECK_FALSE(PathTraceScene::create(f.heap,source,inputs,lower));
+    auto oversized=desktop_path_scene_limits(); ++oversized.max_texture_bytes;
+    CHECK_FALSE(PathTraceScene::create(f.heap,source,inputs,oversized));
+    CHECK(desktop->triangle_count()==5000);
 }
 TEST_CASE("unsupported materials malformed assets and scene budgets reject before publication") {
     Fixture f; f.triangle({-1,-1,0},{1,-1,0},{0,1,0}); const auto before=f.scene();

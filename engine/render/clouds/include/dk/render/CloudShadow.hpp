@@ -15,6 +15,7 @@ struct CloudShadowSettings {
 struct CloudShadowProjection { Vec3d center_m,u,v,sun; double extent_m=0; };
 [[nodiscard]] Result<CloudShadowProjection> cloud_shadow_projection(const EnvironmentDescription&,const CloudShadowSettings&);
 [[nodiscard]] Result<CloudRay> cloud_shadow_ray(const EnvironmentDescription&,const CloudShadowSettings&,std::uint32_t x,std::uint32_t y);
-[[nodiscard]] Result<Vec2d> cloud_shadow_coordinates(const EnvironmentDescription&,const CloudShadowSettings&,const Vec3d& receiver_m);
+// ground_occluded is only valid when the final composition clips against the planet.
+[[nodiscard]] Result<Vec2d> cloud_shadow_coordinates(const EnvironmentDescription&,const CloudShadowSettings&,const Vec3d& receiver_m,bool ground_occluded=false);
 [[nodiscard]] std::size_t cloud_shadow_bytes(const CloudShadowSettings&) noexcept;
 } // namespace dk::render

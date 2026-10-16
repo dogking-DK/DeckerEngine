@@ -56,9 +56,16 @@ Windows后台运行可加 `--background`：启动及程序恢复窗口时不抢�
 切回Raster、隐藏/最小化视口或进入Simulation停止后续路径工作。Refresh重新加载资产并重试错误。
 
 路径模式目前仅支持表面照明：场景开启空气或云时，先在面板勾选 **Surface-only acknowledgement**。
-不支持的GPU/构建会显示禁用原因。继承现有路径管线限制：4096三角形、64纹理、纹理源总计64MiB、
-renderer资源额度1GiB，材质限制见[GPU路径追踪指南](pathtracing-gpu.md)。Sponza完整场景超过三角形限制；
-应使用受支持的小场景验证。固定spp路径截图和线性报告已通过[render.capture](../commands/render.md#固定-spp-路径追踪)提供；显式匹配GUI相机、尺寸和Path参数。
+可点击视口的 **Settings** 打开Path tracing面板。不支持的GPU/构建会显示禁用原因。
+编辑器额度为100万三角形、64纹理、纹理源总计128MiB及1GiB GPU实际分配，可预览默认Sponza。
+导入沿用光栅的预览配置：保留base color纹理和材质常量，省略法线/AO/金属粗糙度纹理及切线；不支持blend。
+完整大气及带云预设允许默认模型跨地面的几何，地下部分由行星遮挡，不因一个包围盒拒绝天空。
+固定spp路径截图和线性报告通过[render.capture](../commands/render.md#固定-spp-路径追踪)提供，仍使用严格导入和原小场景额度；
+不把默认Sponza视口支持视为capture能力扩展。小场景对比需显式匹配GUI相机、尺寸和Path参数。
+
+`--desktop-render-smoke --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm`使用正常相机和窗口，
+通过真实GUI依次完成路径样本、大气启用、sparse带云预设和路径往返，项目必须有`.dk-editor-smoke`标记。
+默认工程回归为`dk.editor.desktop_render_gpu_validation`，自动复制demo并使用`--background`；产物含各阶段PPM和JSON。
 
 定向验收使用真实后台窗口和外部IPC：
 

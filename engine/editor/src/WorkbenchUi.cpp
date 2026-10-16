@@ -231,6 +231,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     if(ImGui::RadioButton("Path trace",path_mode_)) { path_mode_=true; input_.cancel(); ImGui::SetWindowFocus("Path tracing"); } mark("path_mode");
     ImGui::EndDisabled();
     if(needs_surface && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("Enable Surface-only acknowledgement in the Path tracing panel.");
+    ImGui::SameLine(); if(ImGui::SmallButton("Settings")) ImGui::SetWindowFocus("Path tracing"); mark("path_settings");
     if(path_mode_ && needs_surface) { preview.suspend_path(); path_mode_=false; }
     ImGui::SameLine();
 #else

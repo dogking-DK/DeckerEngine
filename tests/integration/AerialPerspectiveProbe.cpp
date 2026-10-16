@@ -223,7 +223,19 @@ void composition(Fixture& f,SubmissionQueue& q) {
     auto no_read=take(f.pipeline.render_atmosphere(q,f.view(),f.assets,sky,settings,f.air)); require(take(no_read.wait(q)),"no read wait");
     std::vector<Pixel> sentinel(33*33,Pixel{42,42,42,42}),destination=sentinel;
     require(!no_read.read_linear_rgba32f(destination) && destination==sentinel,"unrequested diagnostic read changed output");
-    std::puts("vacuum, disabled, mask near/far, MS, HDR/exposure, lit-once, solar occlusion and sky parity passed");
+    // A real mesh can straddle the planet. Full atmosphere must keep its visible
+    // upper part and hide the underground part, rather than reject its AABB.
+    e=vacuum(); e.sun.irradiance={0,0,0};
+    f.anchor={0,1.8,0}; f.distance=5; f.near_m=1; f.far_m=100; f.place();
+    f.air.surface_lighting=true;
+    f.asset.materials[0].alpha_mode=AlphaMode::opaque;
+    f.asset.materials[0].base_color={0,0,0,1}; f.asset.materials[0].emissive={.25f,.5f,1}; f.upload(q);
+    sky=f.prepare(q,e); const auto crossing=linear(f.render(q,sky));
+    for(unsigned c=0;c<3;++c) {
+        require(std::abs(crossing[4*33+16][c]-f.asset.materials[0].emissive[c])<1e-6,"above-ground surface lost");
+        require(crossing[28*33+16][c]==0,"underground surface not occluded by planet");
+    }
+    std::puts("vacuum, disabled, mask near/far, MS, HDR/exposure, lit-once, solar occlusion, sky parity and ground crossing passed");
 }
 void failures(Fixture& f,SubmissionQueue& q,const DeviceOptions& options,memory::MemorySystem& system) {
     auto e=vacuum(); auto sky=f.prepare(q,e); auto view=f.view(); auto first=f.render(q,sky); const auto baseline=pixels(first); const auto generations=sky.generations();

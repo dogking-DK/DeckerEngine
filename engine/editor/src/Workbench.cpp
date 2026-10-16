@@ -56,7 +56,8 @@ void write_capture(const std::filesystem::path& output,const graphics::ReadbackR
     check(write_file_bytes_atomic(output,ppm));
 }
 int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory::ResourceHandle heap,Diagnostics& diagnostics) {
-    if ((options.pathtrace_smoke || options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe) && !std::filesystem::is_regular_file(options.root/".dk-editor-smoke"))
+    const bool path_acceptance=options.pathtrace_smoke || options.desktop_render_smoke;
+    if ((path_acceptance || options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe) && !std::filesystem::is_regular_file(options.root/".dk-editor-smoke"))
         throw std::runtime_error("--smoke requires a disposable project with .dk-editor-smoke marker");
     ShutdownProbe shutdown{options.simulation_response_probe};
     ShutdownPhase model_phase{shutdown,"model"};
@@ -99,13 +100,13 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
 #endif
     if (options.simulation_response_probe) std::printf("simulation_device=%s queues=%u\n",
         queue.device().queue_count()>1 ? "shared" : "independent",queue.device().queue_count());
-    if (options.frames || options.smoke || options.consistency_smoke) std::printf("GPU=%s driver=%s\n",queue.device().adapter().properties.deviceName.data(),
+    if (options.frames || options.smoke || options.consistency_smoke || path_acceptance) std::printf("GPU=%s driver=%s\n",queue.device().adapter().properties.deviceName.data(),
         queue.device().adapter().driver.driverInfo.data());
     {
     ShutdownPhase gui_phase{shutdown,"gui"};
     GuiRenderer gui{queue,window};
     ShutdownPhase viewport_phase{shutdown,"viewport"};
-    Viewport viewport{memory,heap,queue,device,options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.pathtrace_smoke};
+    Viewport viewport{memory,heap,queue,device,options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || path_acceptance};
     WorkbenchUi ui{*model,options.fixture_camera};
     SmokeDriver smoke{options.interaction_smoke,options.simulation_smoke};
     std::optional<ConsistencyDriver> consistency;
@@ -116,9 +117,9 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     if (options.simulation_consistency_smoke) simulation_consistency.emplace(options.root);
 #ifdef DK_EDITOR_PATHTRACING
     std::optional<PathSmoke> path_smoke;
-    if(options.pathtrace_smoke) path_smoke.emplace(options.root);
+    if(path_acceptance) path_smoke.emplace(options.root,options.desktop_render_smoke);
 #else
-    if(options.pathtrace_smoke) throw std::runtime_error("Path tracing module is disabled");
+    if(path_acceptance) throw std::runtime_error("Path tracing module is disabled");
 #endif
     unsigned frames=0;
     const auto start=std::chrono::steady_clock::now();
@@ -129,7 +130,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
 #ifdef DK_EDITOR_PATHTRACING
             if(path_smoke) path_smoke->poll_window(window,status.minimized);
 #endif
-            if(options.pathtrace_smoke && std::chrono::steady_clock::now()-start>std::chrono::seconds(240)) throw std::runtime_error("Path smoke timed out");
+            if(path_acceptance && std::chrono::steady_clock::now()-start>std::chrono::seconds(240)) throw std::runtime_error("Path smoke timed out");
             if (options.simulation_smoke) smoke.poll_window(window,status.minimized);
             if (status.close_requested) { check(window.clear_close_request()); ui.request_close(); }
             model->pump();

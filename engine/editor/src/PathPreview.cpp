@@ -79,7 +79,7 @@ void PathPreview::run(std::stop_token stop) {
                 const bool reload=asset_session!=active->snapshot.state.document_id || asset_reload!=active->reload;
                 if(reload) {
                     phase(active->sequence,"Loading assets");
-                    render::DiskSceneOptions options; options.stop=cancel;
+                    render::DiskSceneOptions options; options.stop=cancel; options.profile=GltfImportProfile::unlit_preview;
                     auto candidate=take(render::DiskScene::load_snapshot(heap_,active->snapshot.project,active->snapshot.scene,options));
                     std::vector<PickMesh> queries;
                     for(const auto& asset:candidate.assets()) {
@@ -87,7 +87,7 @@ void PathPreview::run(std::stop_token stop) {
                         std::vector<geometry::Triangle> triangles;
                         for(const auto& primitive:asset->mesh.primitives) for(std::size_t i=0;i+2<primitive.indices.size();i+=3)
                             triangles.push_back({primitive.positions[primitive.indices[i]].cast<double>(),primitive.positions[primitive.indices[i+1]].cast<double>(),primitive.positions[primitive.indices[i+2]].cast<double>()});
-                        if(triangles.size()>4096) throw std::runtime_error("Path preview supports at most 4096 triangles");
+                        if(triangles.size()>render::desktop_path_scene_limits().max_triangles) throw std::runtime_error("Path preview supports at most 1000000 triangles");
                         queries.push_back({asset->mesh.id,take(geometry::MeshQuery::build(triangles))});
                     }
                     disk=std::move(candidate); meshes=std::move(queries);
@@ -98,7 +98,12 @@ void PathPreview::run(std::stop_token stop) {
                     if(active->edit) transform=render::LocalTransformOverride{active->edit->entity,active->edit->value};
                     auto candidate=take(render::RenderScene::extract(heap_,active->snapshot.scene,transform));
                     std::vector<const CpuAsset*> assets; for(const auto& asset:disk.assets()) assets.push_back(asset.get());
-                    auto source=take(render::PathTraceScene::create(heap_,candidate,assets,{},render::PathTraceMaterialModel::metallic_roughness));
+                    auto source=take(render::PathTraceScene::create(heap_,candidate,assets,render::desktop_path_scene_limits(),render::PathTraceMaterialModel::metallic_roughness));
+                    // The input is valid and obsolete submissions have drained. Keep the
+                    // exported display image, but retire old tracing history/geometry before
+                    // allocating a new large scene under the same renderer budget.
+                    if(configured) { check(renderer.release_view(1)); configured=false; }
+                    gpu={};
                     gpu=take(renderer.prepare_scene(*queue,source,cancel)); scene=std::move(candidate);
                     asset_session=active->snapshot.state.document_id; asset_reload=active->reload;
                     scene_revision=active->snapshot.state.revision; scene_preview=active->preview;

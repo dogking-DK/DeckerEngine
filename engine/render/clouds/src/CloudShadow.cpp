@@ -29,13 +29,13 @@ Result<CloudRay> cloud_shadow_ray(const EnvironmentDescription& input,const Clou
     if(x>=s.resolution || y>=s.resolution) return std::unexpected(Error{ErrorCode::invalid_argument,"Cloud shadow texel outside image"});
     return detail::shadow_ray(input,s,*p,x,y);
 }
-Result<Vec2d> cloud_shadow_coordinates(const EnvironmentDescription& e,const CloudShadowSettings& s,const Vec3d& receiver) {
+Result<Vec2d> cloud_shadow_coordinates(const EnvironmentDescription& e,const CloudShadowSettings& s,const Vec3d& receiver,bool ground_occluded) {
     auto p=cloud_shadow_projection(e,s); if(!p) return std::unexpected(p.error());
     const Vec3d radial=receiver-Vec3d{e.atmosphere.planet_center_m.data()},delta=receiver-s.center_m;
     const double radius=radial.stableNorm(),inner=e.atmosphere.ground_radius_m+e.clouds.bottom_height_m;
     const Vec2d uv{.5+delta.dot(p->u)/s.extent_m,.5+delta.dot(p->v)/s.extent_m};
     const double edge=.5/s.resolution;
-    if(!receiver.allFinite() || (receiver.array().abs()>1e9).any() || radius<e.atmosphere.ground_radius_m || radius>inner ||
+    if(!receiver.allFinite() || (receiver.array().abs()>1e9).any() || (!ground_occluded && radius<e.atmosphere.ground_radius_m) || radius>inner ||
         (uv.array()<edge).any() || (uv.array()>1-edge).any())
         return std::unexpected(Error{ErrorCode::not_supported,"Cloud shadow receiver outside below-cloud covered region"});
     return uv;

@@ -340,7 +340,7 @@ void prepare_sunlight(detail::PipelineState& state) {
     state.sunlight_depth_layout=std::move(depth_layout); state.sunlight_layout=std::move(layout);
     state.sunlight_depth=std::move(depth_pipeline); state.sunlight=std::move(pipeline); state.sky_sampler=std::move(sampler);
 }
-void resolve_sunlight(Inputs& inputs,const RenderView& view,const AtmosphereSky& sky,const RenderSettings& settings,detail::PipelineState& state,const CloudShadowMap* shadow) {
+void resolve_sunlight(Inputs& inputs,const RenderView& view,const AtmosphereSky& sky,const RenderSettings& settings,detail::PipelineState& state,const CloudShadowMap* shadow,bool ground_clipped) {
     static_cast<void>(shadow); // Optional Clouds target; no resource dependency when disabled.
     const auto environment=take(sky.environment());
     if(environment!=view.scene().environment()) throw Error{ErrorCode::invalid_argument,"lighting snapshot does not match scene environment"};
@@ -375,13 +375,15 @@ void resolve_sunlight(Inputs& inputs,const RenderView& view,const AtmosphereSky&
             if((p.array().abs()>1e9).any()) throw Error{ErrorCode::not_supported,"lighting receiver exceeds world position domain"};
             low=low.cwiseMin(p); high=high.cwiseMax(p);
 #ifdef DK_RENDER_CLOUDS
-            if(shadow) take(cloud_shadow_coordinates(environment,take(shadow->settings()),p));
+            if(shadow) take(cloud_shadow_coordinates(environment,take(shadow->settings()),p,ground_clipped));
 #endif
             if((p-center).stableNorm()-a.ground_radius_m>2*a.atmosphere_height_m)
                 throw Error{ErrorCode::not_supported,"lighting receiver exceeds atmosphere height domain"};
         }
         const Vec3d nearest=center.cwiseMax(low).cwiseMin(high);
-        if((nearest-center).stableNorm()<a.ground_radius_m)
+        // Full atmosphere clips each camera ray against the planet. A mesh AABB
+        // crossing the ground must not suppress the entire sky and visible scene.
+        if(!ground_clipped && (nearest-center).stableNorm()<a.ground_radius_m)
             throw Error{ErrorCode::not_supported,"lighting receiver bounds intersect the planet"};
         Parameters p{};
         for(unsigned r=0;r<3;++r) {
@@ -881,7 +883,7 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
 #ifdef DK_RENDER_SUNLIGHT
             if(atmosphere) aerial_uniform=prepare_aerial(*state_,view,*sky,*atmosphere,clouds!=nullptr);
             if(!atmosphere || atmosphere->surface_lighting) {
-                resolve_sunlight(inputs,view,*sky,settings,*state_,shadow);
+                resolve_sunlight(inputs,view,*sky,settings,*state_,shadow,atmosphere!=nullptr);
                 prepare_sunlight(*state_);
             }
 #else

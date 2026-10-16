@@ -5,8 +5,14 @@
 namespace dk::editor::detail {
 namespace {
 constexpr std::array names={"path","paused","exposure","reset","resumed","camera","gizmo","external","resize","minimize","raster","returned","reloaded","closing"};
+constexpr std::array desktop_names={"path","atmosphere","clouds","returned"};
 void require(bool value,const char* message) { if(!value) throw std::runtime_error(std::string{"Path smoke: "}+message); }
-std::span<const char* const> actions(std::size_t stage) {
+std::span<const char* const> actions(std::size_t stage,bool desktop) {
+    static constexpr std::array desktop_path={"path_mode","path_target",":all",":one",":enter"};
+    static constexpr std::array desktop_air={"path_raster","environment_open","environment_enabled","environment_apply"};
+    static constexpr std::array desktop_clouds={"cloud_preset_sparse","environment_apply"};
+    static constexpr std::array desktop_return={"path_settings","path_surface","path_mode"};
+    if(desktop) { if(stage==0) return desktop_path; if(stage==1) return desktop_air; if(stage==2) return desktop_clouds; return desktop_return; }
     static constexpr std::array path={"path_mode","path_target",":all",":two",":enter"};
     static constexpr std::array pause={"path_pause","path_target",":all",":three",":enter"};
     static constexpr std::array resume={"path_target",":all",":two",":enter","path_pause"}; static constexpr std::array reset={"path_reset"}; static constexpr std::array exposure={"path_exposure",":all",":two",":enter"};
@@ -20,7 +26,7 @@ std::span<const char* const> actions(std::size_t stage) {
     }
 }
 }
-PathSmoke::PathSmoke(const std::filesystem::path& root):directory_(root/".dk-path") {
+PathSmoke::PathSmoke(const std::filesystem::path& root,bool desktop):directory_(root/".dk-path"),desktop_(desktop) {
     require(std::filesystem::create_directory(directory_),"checkpoint directory must be fresh");
 }
 void PathSmoke::poll_window(platform::Window& window,bool minimized) {
@@ -31,19 +37,20 @@ void PathSmoke::poll_window(platform::Window& window,bool minimized) {
 void PathSmoke::input(const WorkbenchUi& ui,const Workspace& model,const Viewport& viewport,platform::Window& window) {
     if(done_) return;
     if(waiting_) {
-        if(!std::filesystem::is_regular_file(directory_/(std::string{names[stage_]}+".continue"))) return;
+        if(!std::filesystem::is_regular_file(directory_/(std::string{desktop_ ? desktop_names[stage_] : names[stage_]}+".continue"))) return;
         waiting_=false; ready_=false; tick_=0;
-        if(++stage_==names.size()) { done_=true; return; }
+        if(++stage_==(desktop_ ? desktop_names.size() : names.size())) { done_=true; return; }
     }
     auto& io=ImGui::GetIO(); io.ConfigInputTrickleEventQueue=false;
     if(tick_++<12) return;
-    const auto sequence=actions(stage_); const auto elapsed=tick_-13,step=elapsed/8,phase=elapsed%8;
+    const auto sequence=actions(stage_,desktop_); const auto elapsed=tick_-13,step=elapsed/8,phase=elapsed%8;
     if(step>=sequence.size()) { ready_=true; return; }
     const std::string_view action=sequence[step];
     if(action=="gizmo_0" && phase==0 && (!viewport.current(model.snapshot()->state) || !viewport.camera_current(ui.input().camera()))) { --tick_; return; }
     if(phase==0) {
         io.AddFocusEvent(true);
         if(action==":all") { io.AddKeyEvent(ImGuiMod_Ctrl,true); io.AddKeyEvent(ImGuiKey_A,true); }
+        else if(action==":one") io.AddInputCharactersUTF8("1");
         else if(action==":two") io.AddInputCharactersUTF8("2");
         else if(action==":three") io.AddInputCharactersUTF8("3");
         else if(action==":many") io.AddInputCharactersUTF8("64");
@@ -67,9 +74,28 @@ void PathSmoke::input(const WorkbenchUi& ui,const Workspace& model,const Viewpor
 }
 void PathSmoke::presented(const Workspace& model,const WorkbenchUi& ui,Viewport& viewport) {
     if(done_ || waiting_ || !ready_) return;
+    require(viewport.path_unavailable().empty(),viewport.path_unavailable().c_str());
     require(viewport.error().empty(),viewport.error().c_str());
     require(ui.errors()==0,"unexpected GUI error");
     const auto progress=viewport.path_status().progress;
+    if(desktop_) {
+        const bool raster=stage_==1 || stage_==2;
+        if(!viewport.current(model.snapshot()->state) || !viewport.camera_current(ui.input().camera())) return;
+        if(!raster && (progress.completed_spp!=1 || viewport.path_samples()!=1)) return;
+        require(ui.path_mode()!=raster,"desktop render mode did not change");
+        require(stage_==0 || model.snapshot()->scene.environment().enabled,"atmosphere was not enabled through GUI");
+        require(stage_!=2 || model.snapshot()->scene.environment().clouds.enabled,"cloud preset was not applied");
+        const auto signature=raster ? viewport.pixel_signature() : viewport.capture_path_pixels();
+        const auto name=desktop_names[stage_]; const auto& info=viewport.info();
+        Json report{{"checkpoint",name},{"spp",raster ? 0 : progress.completed_spp},{"width",info.width},{"height",info.height},
+            {"pixels",signature},{"revision",info.revision},{"path_mode",ui.path_mode()}};
+        const auto bytes=viewport.retained_pixels();
+        std::string ppm="P6\n"+std::to_string(info.width)+" "+std::to_string(info.height)+"\n255\n";
+        for(std::size_t i=0;i<bytes.size();i+=4) for(unsigned c=0;c<3;++c) ppm.push_back(char(std::to_integer<unsigned char>(bytes[i+c])));
+        check(write_file_bytes_atomic(directory_/(std::string{name}+".ppm"),std::as_bytes(std::span{ppm.data(),ppm.size()})));
+        const auto text=report.dump(2); check(write_file_bytes_atomic(directory_/(std::string{name}+".json"),std::as_bytes(std::span{text.data(),text.size()})));
+        waiting_=true; return;
+    }
     if(stage_==3) { if(progress.completed_spp || !progress.paused) return; }
     else if(stage_==13) { if(!progress.pending || progress.completed_spp>=64) return; }
     else {

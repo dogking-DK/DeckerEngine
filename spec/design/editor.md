@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-15T10:16:45+08:00"
+updated_at: "2026-10-16T09:34:39+08:00"
 status: accepted
 ---
 
@@ -13,6 +13,14 @@ status: accepted
 Reset、seed、反弹、环境RGB、太阳和曝光EV。设置为会话状态，不写Scene/Undo；空气/云启用时要求显式surface-only确认。
 构建未启用或设备RT未启用时显示原因，不退回光栅冒充路径图。默认目标64spp，batch=1，tile≤64。
 窗口设备在启用模块的构建请求RT和纹理索引if_available，不切模式重建设备；windows-editor预设启用路径模块。
+
+正常启动的默认Sponza也属于预览验收范围。路径视口显式使用与光栅相同的unlit_preview导入配置，
+保留base color、mask、双面、金属度/粗糙度常量，面板说明不导入法线/AO/金属粗糙度纹理和切线。
+路径场景允许100万三角形、4096 primitive、64张纹理和128MiB RGBA8源数据，GPU仍受1GiB实际分配额度约束；
+CPU参考默认额度不变。失败不替换已显示图像；切换到大气时默认模型穿过地面的包围盒不应拒绝整帧。
+场景重建先校验CPU候选，再在旧提交排空后退休旧路径history/GPU场景，避免两套大场景同时占据预算；
+若新GPU准备失败，GUI仍保留旧显示图并标过期，Retry重新构建，不承诺恢复已退休的累积。
+验收使用正常相机、真实窗口尺寸和默认工程副本，分别实际显示路径完成样本、大气及sparse带云图像，再返回路径模式。
 
 PathPreview worker独占自己的SubmissionQueue、renderer、DiskScene和资产版本；GUI只提交拥有型快照、
 相机/尺寸/手势与设置、领取已完成图像。最多一个待处理输入、一个进行中输入和一个待领取结果；输入合并，

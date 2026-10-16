@@ -122,5 +122,6 @@
 | 0118 | [M16.9 编辑器路径追踪预览](0118-editor-pathtracing.md) | editor、render-pathtracing、graphics-resources | completed |
 | 0119 | [路径追踪capture与自动化](0119-pathtracing-capture.md) | render-capture、render-pathtracing、foundation-jobs | completed |
 | 0120 | [M16.11 路径追踪质量与性能交付](0120-pathtracing-delivery.md) | render-pathtracing、foundation-profiling | completed |
+| 0121 | [默认编辑器路径追踪与大气修复](0121-editor-default-rendering.md) | editor、render-pathtracing、render-pipeline、render-clouds | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

@@ -28,7 +28,8 @@ void WorkbenchUi::path_panel(Viewport& preview) {
     ImGui::ProgressBar(p.target_spp ? float(p.completed_spp)/float(p.target_spp) : 0,{-1,0});
     ImGui::Text("Tiles %u / %u  |  shown %u spp",p.completed_tiles,p.total_tiles,preview.path_samples());
     if(!status.error.empty()) ImGui::TextWrapped("%s",status.error.c_str());
-    ImGui::TextWrapped("Current limits: 4096 triangles, 64 textures, 1 GiB renderer budget. Unsupported materials report an error. Exposure preserves accumulated samples.");
+    ImGui::TextWrapped("Preview imports base color textures and material factors. Normal, occlusion and metallic-roughness textures and tangents are omitted.");
+    ImGui::TextWrapped("Limits: 1 million triangles, 64 textures / 128 MiB source pixels, 1 GiB GPU budget. Exposure preserves accumulated samples.");
     ImGui::End();
 }
 }

@@ -23,6 +23,10 @@ struct PathTraceSceneLimits {
     std::size_t max_triangles = 4096, max_primitive_instances = 4096;
     std::size_t max_textures = 64, max_texture_bytes = 64*1024*1024;
 };
+// Explicit desktop geometry capacity. CPU integration retains its separate work budget.
+[[nodiscard]] constexpr PathTraceSceneLimits desktop_path_scene_limits() {
+    return {1000000,4096,64,128*1024*1024};
+}
 struct PathTraceTextureInfo {
     AssetId mesh, texture;
     std::string_view origin; // Borrowed from the immutable scene.

@@ -957,5 +957,13 @@ if(TARGET dk_editor_app AND TARGET dk_render_pathtracing AND TARGET dk_ctl AND W
                 --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
         set_tests_properties(dk.editor.pathtracing_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+        if(TARGET dk_render_atmosphere AND TARGET dk_render_clouds)
+            add_test(NAME dk.editor.desktop_render_gpu_validation
+                COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/EditorDesktopRenderTest.py"
+                    --editor "$<TARGET_FILE:dk_editor_app>" --project "${PROJECT_SOURCE_DIR}/projects/demo"
+                    --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+            set_tests_properties(dk.editor.desktop_render_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
+                ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+        endif()
     endif()
 endif()

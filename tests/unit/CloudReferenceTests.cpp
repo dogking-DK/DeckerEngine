@@ -194,6 +194,10 @@ TEST_CASE("shadow projection preserves sun lines and samples the sunward cloud s
     CHECK((ray.origin_m+ray.direction*ray.max_distance_m-center).norm()==Catch::Approx(e.atmosphere.ground_radius_m+e.clouds.top_height_m));
     CHECK(ray.direction==p.sun); CHECK(ray.max_distance_m>0);
     CHECK_FALSE(cloud_shadow_coordinates(e,s,Vec3d{10000,100,0}));
+    CHECK_FALSE(cloud_shadow_coordinates(e,s,Vec3d{0,-1,0}));
+    CHECK(cloud_shadow_coordinates(e,s,Vec3d{0,-1,0},true));
+    CHECK_FALSE(cloud_shadow_coordinates(e,s,Vec3d{10000,-1,0},true));
+    CHECK_FALSE(cloud_shadow_coordinates(e,s,Vec3d{0,e.clouds.bottom_height_m+1,0},true));
     CHECK_FALSE(cloud_shadow_coordinates(e,s,Vec3d{0,e.clouds.bottom_height_m+1,0}));
     CHECK_FALSE(cloud_shadow_ray(e,s,16,0));
 }
