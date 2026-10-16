@@ -4,8 +4,8 @@
 #include <dk/render/DiskScene.hpp>
 #include <dk/memory/Context.hpp>
 namespace dk::editor::detail {
-EnvironmentPreview::EnvironmentPreview(memory::MemorySystem& memory,memory::ResourceHandle heap,const graphics::DeviceOptions& options)
-    : memory_(memory),heap_(heap),options_(options),thread_([this](std::stop_token stop) { run(stop); }) {}
+EnvironmentPreview::EnvironmentPreview(memory::MemorySystem& memory,memory::ResourceHandle heap,const graphics::DeviceOptions& options,bool profile_gpu)
+    : memory_(memory),heap_(heap),options_(options),profile_gpu_(profile_gpu),thread_([this](std::stop_token stop) { run(stop); }) {}
 EnvironmentPreview::~EnvironmentPreview() { thread_.request_stop(); condition_.notify_all(); thread_.join(); }
 void EnvironmentPreview::request(EnvironmentPreviewRequest request) {
     std::lock_guard lock(mutex_); wanted_=request.sequence; request_=std::move(request); result_.reset(); condition_.notify_all();
@@ -30,12 +30,17 @@ void EnvironmentPreview::run(std::stop_token stop) {
             if(stop.stop_requested()) break;
             request=std::exchange(request_,{}); active_=request->sequence;
         }
-        EnvironmentPreviewResult result; result.sequence=request->sequence;
+        EnvironmentPreviewResult result; result.sequence=request->sequence; bool published=false;
         try {
             if(request->snapshot.scene.logical_bytes()>32U*1024U*1024U) throw std::runtime_error("Environment preview snapshot exceeds 32 MiB");
+            const auto& atmosphere=request->snapshot.scene.environment().atmosphere;
+            const Vec3d center{atmosphere.planet_center_m[0],atmosphere.planet_center_m[1],atmosphere.planet_center_m[2]};
+            if((request->camera.world().matrix().topRightCorner<3,1>()-center).stableNorm()<atmosphere.ground_radius_m)
+                throw std::runtime_error("Camera is below the atmosphere ground. Move upward or press Home in the viewport to reset.");
             if(!ready) {
                 options_.secondary_queue=false;
                 owned_queue.emplace(take(graphics::SubmissionQueue::create(heap_,take(graphics::Device::create(heap_,options_)))));
+                if(profile_gpu_) check(owned_queue->configure_gpu_profiling({true}));
                 pipeline=take(render::ScenePipeline::create(heap_,*owned_queue,DK_EDITOR_SHADER_DIR)); ready=true;
             }
             auto& queue=*owned_queue;
@@ -66,17 +71,31 @@ void EnvironmentPreview::run(std::stop_token stop) {
                     if(stop.stop_requested() || !current(request->sequence)) break;
                     auto frame=take(pipeline.render_environment(queue,view,assets,settings,request->environment));
                     if(!take(frame.wait(queue))) throw std::runtime_error("Environment preview did not complete");
-                    if(i==result.warmup_frames) {
-                        result.info=frame.info(); result.pixels.resize(std::size_t(request->width)*request->height*4);
-                        check(frame.read_rgba8(result.pixels)); result.meshes=meshes;
-                        result.history=frame.cloud_optimization(); result.shadow_generation=frame.cloud_shadow_generation();
+                    if(i%4==0 || i==result.warmup_frames) {
+                        EnvironmentPreviewResult update; update.sequence=result.sequence; update.scene=result.scene;
+                        update.environment=request->environment; update.warmup_frames=i;
+                        update.info=frame.info(); update.pixels.resize(std::size_t(request->width)*request->height*4);
+                        check(frame.read_rgba8(update.pixels)); update.meshes=meshes;
+                        update.history=frame.cloud_optimization(); update.shadow_generation=frame.cloud_shadow_generation();
+                        if(profile_gpu_) {
+                            update.gpu_profile=frame.submission().gpu_profile();
+                            VmaTotalStatistics stats{}; vmaCalculateStatistics(queue.device().allocator(),&stats);
+                            const VkPhysicalDeviceMemoryProperties* properties=nullptr; vmaGetMemoryProperties(queue.device().allocator(),&properties);
+                            for(unsigned type=0;type<properties->memoryTypeCount;++type)
+                                if(properties->memoryTypes[type].propertyFlags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+                                    update.device_local_bytes+=stats.memoryType[type].statistics.allocationBytes;
+                        }
+                        std::lock_guard lock(mutex_);
+                        if(!stop.stop_requested() && wanted_==request->sequence) { result_=std::move(update); published=true; }
                     }
                 }
             }
         } catch(const std::exception& error) { result.error=error.what(); }
         {
             std::lock_guard lock(mutex_);
-            if(!stop.stop_requested() && wanted_==request->sequence) result_=std::move(result);
+            if(!stop.stop_requested() && wanted_==request->sequence) {
+                if(!published || !result.error.empty()) result_=std::move(result);
+            }
             else ++discarded_;
             active_=0;
         }

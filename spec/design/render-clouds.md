@@ -1,7 +1,7 @@
 ---
 module: render-clouds
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-16T09:34:39+08:00"
+updated_at: "2026-10-16T10:30:00+08:00"
 status: accepted
 ---
 
@@ -328,6 +328,8 @@ CPU参考验证均匀介质解析解、区间组合、密度范围、确定性�
 reference保持256/64/64固定采样、无历史、4096像素上限；temporal复用M15.4采样与每视图历史，最多1920×1080。共用入口按时间准备云场/云影并调用对应路径；空气关闭不施加地表直射云影。云影默认开启，固定center=0、extent=8192m、256²/256步，允许显式关闭或设置区域；超覆盖/云底接收体仍明确失败。
 CPU environment.preset查询提供version=1的clear/sparse/overcast/sunset完整v2对象，seed和generator_version显式固定；查询不修改场景。GUI以返回值替换草稿，Apply复用environment.set及guard/undo，外部变更后的旧草稿仍冲突。
 GUI区分物理云参数与会话质量、固定时间/步进、云影范围；显示已发布scene revision、实际时间、模式和历史重置原因。编辑器空气关闭但非零云时也进入后台环境路径。
+Temporal编辑器先显示完整首帧，再逐步细化至32次更新；新视角从空历史开始，实际完成次数随结果发布。
+一致性验收等待32次后对比相同capture输入，连续导航允许显示带实际相机身份的较早完成图；规则见[编辑器](editor.md)。
 
 render.capture增加显式时间/模式/云影设置；reference单帧不预热。render.sequence是同一CaptureService的有界外部作业，冻结Scene和全部相机/时间样本，独占新Pipeline从空历史开始；temporal允许0–64次首样本固定时间预热，reference必须0次。样本1–128、每帧线性读回≤65536像素、总样本像素≤262144；GPU帧必须完成后才推进历史。时间倒退、跳跃、相机cut及失败沿M15.4重置规则，不能借用GUI已有历史。
 序列原子发布单个schema_version=1 JSON文件，包含冻结环境/完整渲染设置、身份、shader指纹、设备、各帧相机/时间/历史/云影代号、RGBA8、曝光前线性RGBA及摘要。输出JSON≤64MiB；摘要Jobs≤4096字节。没有跨文件发布事务；图像提取与比较在Python用例工具进行。

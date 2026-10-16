@@ -152,6 +152,9 @@ void ConsistencyDriver::verify_environment(const Workspace& model,const Workbenc
 void ConsistencyDriver::presented(const Workspace& model,const WorkbenchUi& ui,const Viewport& viewport) {
     if (done_ || waiting_ || !ready_) return;
     if(environment_ && viewport.error().empty() && (!viewport.current(model.snapshot()->state) || !viewport.camera_current(ui.input().camera()))) return;
+    const auto& clouds=model.snapshot()->scene.environment().clouds;
+    if(environment_ && clouds.enabled && clouds.coverage>0 && clouds.density>0 && clouds.extinction_per_m>0 &&
+        viewport.environment_settings().mode==render::CloudRenderMode::temporal && viewport.environment_warmup()<32 && viewport.error().empty()) return;
     verify(model,ui,viewport);
     const auto& snapshot=*model.snapshot(); const auto& info=viewport.info();
     const auto rgba=viewport.retained_pixels();

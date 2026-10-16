@@ -1,11 +1,14 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-16T09:34:39+08:00"
+updated_at: "2026-10-16T10:30:00+08:00"
 status: accepted
 ---
 
 # 渐进式路径追踪管线设计
+
+编辑器worker在tile提交后以≤1ms的GPU完成票据等待推进，不在每块间固定sleep；GUI不等待该票据。
+更快的提交调度保持tile≤64、batch=1和原样本序号、累积、取消与1GiB预算；性能证据见[0122](../development/0122-editor-render-performance.md)。
 
 ## 目标与范围
 

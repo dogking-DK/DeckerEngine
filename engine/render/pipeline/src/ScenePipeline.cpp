@@ -8,6 +8,7 @@
 #include <bit>
 #ifdef DK_RENDER_SUNLIGHT
 #include <dk/render/Atmosphere.hpp>
+#include "SkyDiffuse.hpp"
 #endif
 #ifdef DK_RENDER_CLOUDS
 #include <dk/render/CloudReference.hpp>
@@ -57,6 +58,8 @@ struct PipelineState {
     std::filesystem::path directory;
 #ifdef DK_RENDER_SUNLIGHT
     std::optional<AtmosphereRenderer> atmosphere;
+    AtmosphereSky diffuse_sky;
+    Buffer diffuse;
 #endif
 #ifdef DK_RENDER_CLOUDS
     std::unique_ptr<CloudEnvironment> clouds;
@@ -111,6 +114,7 @@ struct Inputs {
     const Image* transmittance=nullptr;
     const Image* sky=nullptr;
     const Image* shadow=nullptr;
+    std::size_t diffuse_index=0;
 };
 void resolve(Inputs& result,const RenderView& view,const GpuAssets& assets) {
     for (std::size_t i=0;i<view.scene().entities().size();++i) {
@@ -353,6 +357,17 @@ void resolve_sunlight(Inputs& inputs,const RenderView& view,const AtmosphereSky&
     Mat3d basis; basis.row(0)=x; basis.row(1)=up; basis.row(2)=x.cross(up);
     const Vec3d local_sun=basis*sun;
     inputs.transmittance=take(sky.image(AtmosphereLut::transmittance)); inputs.sky=take(sky.image(AtmosphereLut::sky_view));
+    if(settings.sky_diffuse && (!state.diffuse_sky || take(state.diffuse_sky.image(AtmosphereLut::sky_view))!=inputs.sky)) {
+        const auto values=detail::sky_diffuse_table(state.heap,take(sky.lut(AtmosphereLut::sky_view)),a.ground_radius_m,height);
+        auto candidate=take(state.factory.create_buffer({values.size()*sizeof(values[0]),vk::BufferUsageFlagBits::eStorageBuffer,BufferMemory::upload}));
+        check(candidate.write(0,std::as_bytes(std::span{values.data(),values.size()})));
+        state.diffuse=std::move(candidate); state.diffuse_sky=sky;
+    }
+    if(!state.diffuse) {
+        auto candidate=take(state.factory.create_buffer({16,vk::BufferUsageFlagBits::eStorageBuffer,BufferMemory::upload}));
+        const std::array<float,4> zero{}; check(candidate.write(0,std::as_bytes(std::span{zero})));
+        state.diffuse=std::move(candidate);
+    }
     struct Parameters { std::array<float,4> normal[3],relative[3],geometry,sun,energy,shadow_u,shadow_v; };
     static_assert(sizeof(Parameters)==176);
 #ifdef DK_RENDER_CLOUDS
@@ -408,6 +423,7 @@ void resolve_sunlight(Inputs& inputs,const RenderView& view,const AtmosphereSky&
         check(draw.lighting.write(0,std::as_bytes(std::span{&p,1})));
     }
     for(auto& draw:inputs.draws) { inputs.buffers.push_back(&draw.lighting); draw.lighting_index=inputs.buffers.size(); }
+    inputs.buffers.push_back(&state.diffuse); inputs.diffuse_index=inputs.buffers.size();
 }
 #endif
 graph::Use use(graph::ResourceId id,vk::PipelineStageFlags2 stages,vk::AccessFlags2 access,
@@ -462,14 +478,13 @@ Result<void> geometry_pass(graph::PassContext& pass,void* pointer) {
             const auto& view = draw.texture ? draw.texture->view : white;
             const auto& sampler = draw.texture ? draw.texture->sampler : c.pipeline.white_sampler;
             std::array<BindingWrite,7> writes{BindingWrite{0,0,ImageBinding{&view}},BindingWrite{1,0,SamplerBinding{&sampler}}};
-            std::size_t count=2; ImageView transmittance,sky,shadow;
+            std::size_t count=2; ImageView transmittance,shadow;
             if(lit) {
                 writes[count++]={2,0,BufferBinding{take(pass.buffer(draw.lighting_index))}};
                 if(!depth_only) {
                     transmittance=take(c.pipeline.factory.create_view(*c.inputs.transmittance));
-                    sky=take(c.pipeline.factory.create_view(*c.inputs.sky));
                     writes[count++]={3,0,ImageBinding{&transmittance}};
-                    writes[count++]={4,0,ImageBinding{&sky}};
+                    writes[count++]={4,0,BufferBinding{take(pass.buffer(c.inputs.diffuse_index))}};
                     writes[count++]={5,0,SamplerBinding{&c.pipeline.sky_sampler}};
                     if(c.inputs.shadow) shadow=take(c.pipeline.factory.create_view(*c.inputs.shadow));
                     writes[count++]={6,0,ImageBinding{c.inputs.shadow ? &shadow : &white}};
@@ -910,9 +925,10 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             const auto id=take(graph.declare_buffer("mesh-buffer-"+std::to_string(i),buffer->description(),graph::Lifetime::external,true));
             const bool vertex=bool(buffer->description().usage & vk::BufferUsageFlagBits::eVertexBuffer);
             const bool uniform=bool(buffer->description().usage & vk::BufferUsageFlagBits::eUniformBuffer);
-            geometry.push_back(use(id,uniform ? (vk::PipelineStageFlagBits2::eVertexShader | vk::PipelineStageFlagBits2::eFragmentShader) :
+            const bool storage=bool(buffer->description().usage & vk::BufferUsageFlagBits::eStorageBuffer);
+            geometry.push_back(use(id,storage ? vk::PipelineStageFlags2{vk::PipelineStageFlagBits2::eFragmentShader} : uniform ? (vk::PipelineStageFlagBits2::eVertexShader | vk::PipelineStageFlagBits2::eFragmentShader) :
                 (vertex ? vk::PipelineStageFlagBits2::eVertexAttributeInput : vk::PipelineStageFlagBits2::eIndexInput),
-                uniform ? vk::AccessFlagBits2::eUniformRead : (vertex ? vk::AccessFlagBits2::eVertexAttributeRead : vk::AccessFlagBits2::eIndexRead)));
+                storage ? vk::AccessFlagBits2::eShaderStorageRead : uniform ? vk::AccessFlagBits2::eUniformRead : (vertex ? vk::AccessFlagBits2::eVertexAttributeRead : vk::AccessFlagBits2::eIndexRead)));
             external.push_back({i+1,buffer,nullptr,{}});
         }
         graph::ResourceId constants{},linear_readback{};

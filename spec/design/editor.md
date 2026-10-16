@@ -1,11 +1,24 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-16T09:34:39+08:00"
+updated_at: "2026-10-16T10:30:00+08:00"
 status: accepted
 ---
 
 # M8.1 编辑器工作台
+
+## Sponza 交互性能与云预览
+
+Release/RelWithDebInfo普通启动默认关闭Vulkan验证层，Debug保持if_available；显式--validation仍要求验证层，--no-validation明确关闭。
+自动化正确性测试继续显式required validation，性能采集显式关闭，不将验证层的CPU开销计作普通使用成本。
+
+环境 worker 的时域云先发布首个完整帧，再在输入不变时逐步发布至32次历史更新；每个结果携带实际更新次数。
+仍只有一个活动请求、一个可替换请求与结果槽，序列失效立即停止后续提交；GUI一致性/截图验收等待最终32次更新。
+相机变化清空旧历史，不能混入旧视角。失败保留最后图像，但仍允许相机导航恢复；拾取/变换继续要求有效且当前的画面。
+4096像素参考模式仅供小视图，正常视口在面板禁用该选项并提供可用的Temporal模式，不自动修改物理云参数。
+路径worker以在途GPU票据的有界等待推进，活动时不再逐块固定sleep；暂停/取消/请求检查保持在工作块之间，GUI线程不等待路径工作。
+Sponza worker探针分别记录首次与稳态完整帧、云首帧/收敛帧、路径逐spp耗时；性能关闭validation，正确性另跑required validation。
+这些计时包含worker提交、等待和环境读回，不等同GPU耗时或GUI帧率。具体证据见[0122](../development/0122-editor-render-performance.md)。
 
 ## M16.9 编辑器路径追踪接入契约
 
@@ -269,7 +282,9 @@ Undo/Redo/切换文档前处理任一草稿；Save先提交草稿再保存；两
 
 启用环境的Edit视口采用独立后台worker/Device/Queue，复用ScenePipeline的环境绑定入口和最近LUT。
 主线程只复制拥有型SceneReadSnapshot/相机/尺寸/曝光/preview身份；最多一个正在执行、一个合并待处理请求和一个完成结果。
-完成结果仅在document/revision/camera/size/exposure/preview序号匹配最新请求时发布；旧代丢弃，错误保留旧画面并标过期。
+worker只发布最新已提交请求的序号；GUI在首帧完成前合并相机/尺寸输入，完成后提交最新视角，避免持续输入饿死画面。
+完成图必须匹配当前document/revision/exposure/preview和渲染设置；相机/尺寸允许落后但保留真实来源，不标为当前帧，拾取/Gizmo仍要求完全匹配。
+错误保留旧画面并标过期，相机导航仍可用。
 关闭/取消清掉待处理，已提交GPU必须等待回收；worker join后释放队列。GUI不等待LUT冷编译/积分；完成RGBA8沿既有上传桥呈现。
 关闭环境保持旧同步unlit路径，并使旧大气请求失效；Simulation独立视口不接入。资产文件仍在执行时读取。
 同一Scene会话资产缓存复用；32MiB快照上限，现有1600×1200视口上限；无无界任务/结果积累。
@@ -284,5 +299,6 @@ Undo/Redo/切换文档前处理任一草稿；Save先提交草稿再保存；两
 ## M15.6 云面板与固定时间预览
 
 Environment面板提供clear/sparse/overcast/sunset版本化预设和完整云物理参数。预设查询只填草稿，Apply仍是一次environment.set，Revert/guard冲突/Undo/Redo/保存重载共用原契约。
-会话区提供reference/temporal、固定时间与单步、云影开关/固定覆盖区，不保存到Scene。后台请求携带全部设置；结果包含实际生效时间、mode、history和shadow generation，旧请求的迟到结果不能覆盖新请求。temporal每个请求显式固定时间预热32次后展示，独立重置该视图，保证与相同warmup的序列截图可比；这不是实时帧率承诺。
-空气或云启用时均走后台环境路径。UI显示当前scene revision与结果设置，reference超过4096像素明确报错；temporal供常规视口。外部环境修改、取消、退出延续单active/单replaceable队列与完整资源释放规则。
+会话区提供reference/temporal、固定时间与单步、云影开关/固定覆盖区，不保存到Scene。后台请求携带全部设置；结果包含实际生效时间、mode、history和shadow generation，旧请求的迟到结果不能覆盖新请求。
+temporal每个请求独立重置视图、固定时间；先发布首帧，再每4次更新发布一次，至32次结束。实际warmup随结果变化，一致性测试等待32次后与序列截图比较。
+空气或云启用时均走后台环境路径。UI显示当前scene revision与结果设置，常规视口禁用超过4096像素的reference选择；底层接口仍明确拒绝越界，temporal供常规视口。外部环境修改、取消、退出延续单active/单replaceable队列与完整资源释放规则。

@@ -4,7 +4,7 @@
 namespace dk::editor::detail {
 void Viewport::update_path(const SceneReadSnapshot& snapshot,std::uint32_t width,std::uint32_t height,bool srgb,const Camera& camera,
     const std::optional<TransformEdit>& edit,std::uint64_t preview,const PathPreviewSettings& settings) {
-    show_edit(); environment_.cancel();
+    show_edit(); environment_.cancel(); environment_key_.reset(); environment_has_frame_=true;
     if(!path_) { error_=path_unavailable_; return; }
     const Key key{snapshot.state.document_id,snapshot.state.revision,width,height,srgb,camera.revision(),preview,float(settings.exposure),{}};
     try {

@@ -145,7 +145,7 @@ void cpu_spots(Fixture& f,const RenderFrame& frame) {
 void numeric(Fixture& f,SubmissionQueue& q) {
     EnvironmentDescription e; e.enabled=true; e.sun.direction={.3,.15,-1}; e.sun.irradiance={2,1,.5};
     struct Case { double h,d,n,far; };
-    for(auto c : {Case{100,10,1,1000},Case{10000,5000,10,50000},Case{10000,50000,100,100000},Case{100000,50000,100,100000},Case{150000,50000,100,100000}}) {
+    for(auto c : {Case{1.8,1,.1,1000},Case{1.8,10,1,10000},Case{1.8,50,1,10000},Case{100,10,1,1000},Case{10000,5000,10,50000},Case{10000,50000,100,100000},Case{100000,50000,100,100000},Case{150000,50000,100,100000}}) {
         f.anchor.y()=c.h; f.distance=c.d; f.near_m=c.n; f.far_m=c.far; f.place(); auto sky=f.prepare(q,e);
         f.air.reference=false; const auto actual=f.render(q,sky); f.air.reference=true; const auto reference=f.render(q,sky); f.air.reference=false;
         std::printf("case height=%.0f distance=%.0f near=%.0f far=%.0f\n",c.h,c.d,c.n,c.far);

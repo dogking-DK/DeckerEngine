@@ -947,6 +947,18 @@ if(TARGET dk_render_services AND TARGET dk_render_pathtracing AND TARGET dk_run 
     endif()
 endif()
 if(TARGET dk_editor_app AND TARGET dk_render_pathtracing AND TARGET dk_ctl AND WIN32)
+    if(TARGET dk_render_atmosphere AND TARGET dk_render_clouds)
+        add_executable(dk_editor_render_benchmark EditorRenderBenchmark.cpp)
+        set_target_properties(dk_editor_render_benchmark PROPERTIES OUTPUT_NAME dk-editor-render-benchmark)
+        target_include_directories(dk_editor_render_benchmark PRIVATE "${PROJECT_SOURCE_DIR}/engine/editor/src")
+        target_link_libraries(dk_editor_render_benchmark PRIVATE dk::editor dk::editor_model dk::render_pathtracing dk::render_pipeline)
+        dk_target_defaults(dk_editor_render_benchmark)
+        dk_deploy_slang(dk_editor_render_benchmark)
+        add_test(NAME dk.editor.render_worker_gpu_validation COMMAND dk_editor_render_benchmark
+            "${PROJECT_SOURCE_DIR}/projects/demo" "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/render-worker" --validation)
+        set_tests_properties(dk.editor.render_worker_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+    endif()
     find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
         add_test(NAME dk.editor.pathtracing_gpu_validation
@@ -961,6 +973,7 @@ if(TARGET dk_editor_app AND TARGET dk_render_pathtracing AND TARGET dk_ctl AND W
             add_test(NAME dk.editor.desktop_render_gpu_validation
                 COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/EditorDesktopRenderTest.py"
                     --editor "$<TARGET_FILE:dk_editor_app>" --project "${PROJECT_SOURCE_DIR}/projects/demo"
+                    --client "$<TARGET_FILE:dk_ctl>"
                     --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
             set_tests_properties(dk.editor.desktop_render_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
                 ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")

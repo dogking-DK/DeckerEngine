@@ -44,7 +44,7 @@ float3 surface(VertexOutput input,bool front) {
 void depthMain(VertexOutput input,bool front:SV_IsFrontFace) { surface(input,front); }
 #else
 [[vk::binding(3,0)]] Texture2D<float4> transmittanceLut;
-[[vk::binding(4,0)]] Texture2D<float4> skyLut;
+[[vk::binding(4,0)]] StructuredBuffer<float4> skyDiffuse;
 [[vk::binding(5,0)]] SamplerState linearClamp;
 [[vk::binding(6,0)]] Texture2D<float> cloudShadow;
 static const float PI=3.14159265358979323846;
@@ -71,13 +71,13 @@ float3 sunlight(float h,float mu) {
     float2 uv=saturate(float2((top.y-dmin)/max(dmax-dmin,1e-8),rho/H));
     return transmittanceLut.SampleLevel(linearClamp,(uv*float2(255,63)+.5)/float2(256,64),0).rgb;
 }
-float3 sky(float3 d) {
-    float R=light.geometry.x,h=light.geometry.z;
-    float eh=asin(-sqrt(h*(2*R+h))/(R+h)),elevation=asin(clamp(d.y,-1,1)),row;
-    if(elevation<eh) row=53*(1-sqrt(saturate((eh-elevation)/(eh+PI*.5))));
-    else row=54+53*sqrt(saturate((elevation-eh)/(PI*.5-eh)));
-    float phi=atan2(d.z,d.x);
-    return skyLut.SampleLevel(linearClamp,float2(((phi/PI*.5+.5)*191+.5)/192,(row+.5)/108),0).rgb;
+float3 skyIrradiance(float3 n) {
+    if(dot(n,n)<1e-20) return 0;
+    float2 uv=float2((atan2(n.z,n.x)/(2*PI)+.5)*128,acos(clamp(n.y,-1,1))*64/PI);
+    uint2 p=min(uint2(uv),uint2(127,63)); float2 f=uv-float2(p);
+    uint i=p.y*129+p.x;
+    return lerp(lerp(skyDiffuse[i].rgb,skyDiffuse[i+1].rgb,f.x),
+        lerp(skyDiffuse[i+129].rgb,skyDiffuse[i+130].rgb,f.x),f.y);
 }
 [shader("fragment")]
 float4 fragmentMain(VertexOutput input,bool front:SV_IsFrontFace):SV_Target0 {
@@ -97,16 +97,7 @@ float4 fragmentMain(VertexOutput input,bool front:SV_IsFrontFace):SV_Target0 {
     float2 shadowUV=float2(dot(light.shadowU,float4(input.relative,1)),dot(light.shadowV,float4(input.relative,1)));
     float3 irradiance=sunlight(h,mu)*max(0,dot(n,light.sun.xyz))*cloudShadow.SampleLevel(linearClamp,shadowUV,0);
     if(light.geometry.w>0) {
-        float3 diffuse=0;
-        [loop] for(uint y=0;y<16;++y) {
-            float dy=1-2*(float(y)+.5)/16,s=sqrt(1-dy*dy);
-            [loop] for(uint x=0;x<16;++x) {
-                float phi=2*PI*(float(x)+.5)/16;
-                float3 d=float3(s*cos(phi),dy,s*sin(phi));
-                diffuse+=sky(d)*max(0,dot(n,d));
-            }
-        }
-        irradiance+=diffuse*(4*PI/256);
+        irradiance+=skyIrradiance(n);
     }
     return float4(albedo*(irradiance*light.energy.rgb/PI)+drawData.emissive.rgb,1);
 }

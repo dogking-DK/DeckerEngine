@@ -205,7 +205,8 @@ void diffuse(Fixture& f,SubmissionQueue& q) {
     for(double elevation : {.8,.04,-.05}) {
         EnvironmentDescription e; e.enabled=true; e.sun.direction={0,elevation,std::sqrt(1-elevation*elevation)};
         e.sun.irradiance={2,1,.5}; auto sky=f.prepare(q,e); f.settings.sky_diffuse=true;
-        for(Vec3d n : {Vec3d{0,1,0},Vec3d{0,0,1},Vec3d{1,1,.2}.normalized().eval(),Vec3d{0,-1,0}}) {
+        for(Vec3d n : {Vec3d{0,1,0},Vec3d{0,0,1},Vec3d{1,1,.2}.normalized().eval(),Vec3d{0,-1,0},
+            Vec3d{-.2,.8,.4}.normalized().eval(),Vec3d{1,.001,-.001}.normalized().eval(),Vec3d{1,.001,.001}.normalized().eval()}) {
             f.asset.mesh.primitives[0].normals.assign(4,n.cast<float>()); f.upload(q);
             const auto a=sky_irradiance(sky,n,64),b=sky_irradiance(sky,n,128);
             require((a-b).norm()/std::max(b.norm(),.001)<.01,"sky CPU angular reference did not converge");

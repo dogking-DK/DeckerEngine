@@ -16,6 +16,10 @@ private:
     unsigned tick_=0,minimized_=0;
     bool desktop_=false,waiting_=false,ready_=false,done_=false;
     ImVec2 pointer_{};
+    ImVec2 motion_origin_{};
     std::chrono::steady_clock::time_point restore_{};
+    std::chrono::steady_clock::time_point motion_start_{};
+    std::uint64_t motion_signature_=0;
+    unsigned motion_frames_=0,motion_updates_=0;
 };
 }

@@ -214,7 +214,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
         ImGui::SetWindowFocus("Inspector");
         layout_=true;
     }
-    hierarchy(); inspector(); environment();
+    hierarchy(); inspector(); environment(preview);
 #ifdef DK_EDITOR_PATHTRACING
     path_panel(preview);
 #endif

@@ -59,21 +59,28 @@ TEST_CASE("environment worker drops superseded resize cancels and closes active 
         const auto request=[&](std::uint64_t seq,unsigned width,unsigned height) { worker.request({*model->snapshot(),camera,width,height,{},seq,1,{}}); };
         const auto wait=[&](auto predicate) {
             const auto end=std::chrono::steady_clock::now()+90s;
-            while(!predicate() && std::chrono::steady_clock::now()<end) std::this_thread::sleep_for(1ms);
-            REQUIRE(predicate());
+            bool ready=predicate();
+            while(!ready && std::chrono::steady_clock::now()<end) { std::this_thread::sleep_for(1ms); ready=predicate(); }
+            REQUIRE(ready);
+        };
+        const auto started=[&](std::uint64_t sequence) {
+            // A tiny render may finish before the next Windows scheduler tick.
+            // Both an active request and its completed result prove it started.
+            wait([&] { if(worker.active_sequence()==sequence) return true;
+                auto r=worker.take_result(); return r && r->sequence==sequence; });
         };
         const auto result=[&](std::uint64_t sequence) {
             std::optional<EnvironmentPreviewResult> value;
             wait([&] { if(!value) value=worker.take_result(); return value.has_value(); });
             REQUIRE(value->sequence==sequence); INFO(value->error); REQUIRE(value->error.empty()); return std::move(*value);
         };
-        request(1,64,64); wait([&] { return worker.active_sequence()==1; });
+        request(1,64,64); started(1);
         request(2,96,64); request(3,80,48);
         { auto value=result(3); CHECK(value.info.width==80); CHECK(value.info.height==48); CHECK(value.pixels.size()==80*48*4); }
         CHECK(worker.discarded()>=1);
         // A frozen request survives owner-side changes; the latest generation alone publishes.
         model->environment_draft()->value["sun"]["irradiance"]={2,2,2}; model->environment_draft()->modified=true;
-        REQUIRE(model->apply_environment()); request(4,128,64); wait([&] { return worker.active_sequence()==4; });
+        REQUIRE(model->apply_environment()); request(4,128,64); started(4);
         worker.cancel(); wait([&] { return worker.active_sequence()==0; }); CHECK_FALSE(worker.take_result());
         request(5,40,32); { auto value=result(5); CHECK(value.info.revision==model->snapshot()->state.revision); }
         // A failed view must leave the worker usable.
@@ -82,7 +89,7 @@ TEST_CASE("environment worker drops superseded resize cancels and closes active 
         wait([&] { if(!failed) failed=worker.take_result(); return failed.has_value(); });
         CHECK(failed->sequence==6); CHECK_FALSE(failed->error.empty());
         camera.set_environment(true); request(7,40,32); { auto value=result(7); CHECK(value.pixels.size()==40*32*4); }
-        request(8,128,96); wait([&] { return worker.active_sequence()==8; });
+        request(8,128,96); started(8);
         // Destruction joins active work before diagnostics, heap and snapshots leave scope.
     }
     CHECK(diagnostics.load()==0); CHECK(heap.snapshot().live_allocations==0); CHECK(system.try_close().closed());

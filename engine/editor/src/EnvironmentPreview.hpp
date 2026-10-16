@@ -28,11 +28,13 @@ struct EnvironmentPreviewResult {
     render::CloudFrameInfo history;
     std::uint64_t shadow_generation=0;
     std::uint32_t warmup_frames=0;
+    graphics::GpuProfile gpu_profile;
+    std::uint64_t device_local_bytes=0;
 };
 // One active, one replaceable request, one replaceable completion. No GUI state on worker.
 class EnvironmentPreview final {
 public:
-    EnvironmentPreview(memory::MemorySystem&,memory::ResourceHandle,const graphics::DeviceOptions&);
+    EnvironmentPreview(memory::MemorySystem&,memory::ResourceHandle,const graphics::DeviceOptions&,bool profile_gpu=false);
     ~EnvironmentPreview();
     void request(EnvironmentPreviewRequest);
     void cancel();
@@ -45,6 +47,7 @@ private:
     memory::MemorySystem& memory_;
     memory::ResourceHandle heap_;
     graphics::DeviceOptions options_;
+    bool profile_gpu_=false;
     mutable std::mutex mutex_;
     std::condition_variable_any condition_;
     std::optional<EnvironmentPreviewRequest> request_;

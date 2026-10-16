@@ -71,8 +71,13 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     window_desc.background=options.background;
     auto window=take(platform::Window::create(heap,window_desc));
     graphics::DeviceOptions device;
+#ifdef NDEBUG
+    constexpr auto default_validation=graphics::ValidationMode::disabled;
+#else
+    constexpr auto default_validation=graphics::ValidationMode::if_available;
+#endif
     device.validation=options.validation ? graphics::ValidationMode::required : options.disable_validation ?
-        graphics::ValidationMode::disabled : graphics::ValidationMode::if_available;
+        graphics::ValidationMode::disabled : default_validation;
 #ifdef DK_EDITOR_PATHTRACING
     device.ray_tracing=options.pathtrace_smoke ? graphics::RayTracingMode::required : graphics::RayTracingMode::if_available;
     device.sampled_image_indexing=options.pathtrace_smoke ? graphics::SampledImageIndexingMode::required : graphics::SampledImageIndexingMode::if_available;

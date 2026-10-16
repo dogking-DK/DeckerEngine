@@ -40,7 +40,8 @@ void PathPreview::run(std::stop_token stop) {
         std::optional<PathPreviewRequest> incoming; bool enabled;
         {
             std::unique_lock lock(mutex_);
-            condition_.wait_for(lock,stop,std::chrono::milliseconds(enabled_ && busy ? 1 : 50),[&] { return request_.has_value(); });
+            if(!enabled_ || !busy)
+                condition_.wait_for(lock,stop,std::chrono::milliseconds(50),[&] { return request_.has_value(); });
             if(stop.stop_requested()) break;
             enabled=enabled_; incoming=std::exchange(request_,{});
             if(incoming) cancel=cancel_.get_token();
@@ -52,6 +53,7 @@ void PathPreview::run(std::stop_token stop) {
                 if(active && enabled && display_sequence==active->sequence && !cancel.stop_requested()) {
                     PathPreviewResult result; result.sequence=display_sequence; result.document=active->snapshot.state;
                     result.camera=active->camera; result.info=display_info; result.scene=scene; result.meshes=meshes;
+                    if(active->observe_memory) result.memory=renderer.memory_stats(*queue);
                     if(linear) {
                         auto value=take(linear->read(*queue,cancel));
                         if(!value) { busy=true; continue; }
@@ -132,6 +134,11 @@ void PathPreview::run(std::stop_token stop) {
             }
             if(!display) (void)take(renderer.submit_batch(*queue,1,cancel));
             busy=bool(display) || progress.pending || (!progress.paused && progress.completed_spp<progress.target_spp);
+            // A Windows timed sleep can round a 1 ms tile delay up to a scheduler
+            // tick. Wait for actual GPU completion instead; never hold mutex_ or
+            // the shared queue gate, and check new requests at least every 1 ms.
+            const auto ticket=linear ? linear->submission() : display ? display->submission : renderer.pending_submission();
+            if(busy && ticket.value()) (void)take(queue->wait(ticket,1000000));
         } catch(const std::exception& error) {
             busy=false; pending_config=false;
             if(queue && queue->stats().device_lost) terminal=true;

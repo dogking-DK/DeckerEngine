@@ -22,6 +22,15 @@ struct Parameters {
 [[vk::binding(8,0)]] Texture2D<float> sceneDepth;
 [[vk::binding(9,0)]] Texture2D<float4> surfaceColor;
 #endif
+uint segmentSteps(float h,float mu,float distance) {
+    float3 segment=path(h,mu);
+    float length=max(0,min(distance,segment.y)-segment.x);
+    float scale=min(p.rayleigh.w,min(p.mie.w,p.ground.w));
+    float3 bound=(p.rayleigh.rgb+p.extinction.rgb+p.absorption.rgb)*length;
+    // Only shorten smooth, optically thin local paths well above the solar
+    // horizon. Ground clipping and all long/thick/dusk segments stay unchanged.
+    return p.geometry.w>.05 && length<=.05*scale && max(bound.x,max(bound.y,bound.z))<=.25 ? 8u : 128u;
+}
 [shader("compute")]
 [numthreads(8,8,1)]
 void computeMain(uint3 id:SV_DispatchThreadID) {
@@ -31,7 +40,7 @@ void computeMain(uint3 id:SV_DispatchThreadID) {
     float3 ray=p.forward.xyz+screen.x*p.right.xyz+screen.y*p.up.xyz;
     float3 direction=normalize(ray),L,T;
     float distance=p.depth.z*pow(float(id.z)/(DK_AIR_DEPTH-1),2)*length(ray);
-    integrateSegment(p.geometry.z,direction.y,clamp(dot(direction,p.sunDirection.xyz),-1,1),p.geometry.w,128,false,distance,L,T);
+    integrateSegment(p.geometry.z,direction.y,clamp(dot(direction,p.sunDirection.xyz),-1,1),p.geometry.w,segmentSteps(p.geometry.z,direction.y,distance),false,distance,L,T);
     airLight[id]=float4(L,1); airTransmission[id]=float4(T,1);
 #else
     if(id.x>=p.frame.x || id.y>=p.frame.y) return;
@@ -48,7 +57,7 @@ void computeMain(uint3 id:SV_DispatchThreadID) {
         float depthSpan=p.depth.z*(2*fraction/(DK_AIR_DEPTH-1)+1.0/((DK_AIR_DEPTH-1)*(DK_AIR_DEPTH-1)))*length(ray);
         float angularSpan=axial*2*(length(p.right.xyz)+length(p.up.xyz))/(DK_AIR_SIDE-1);
         bool boundary=heightAt(h,mu,distance)<2*(depthSpan+angularSpan);
-        if(p.frame.z!=0 || boundary) integrateSegment(h,mu,cosine,p.geometry.w,p.frame.z!=0 ? 512 : 128,p.frame.z!=0,distance,L,T);
+        if(p.frame.z!=0 || boundary) integrateSegment(h,mu,cosine,p.geometry.w,p.frame.z!=0 ? 512 : segmentSteps(h,mu,distance),p.frame.z!=0,distance,L,T);
         else {
             float3 nodeUv=float3(screen*.5+.5,sqrt(saturate(axial/p.depth.z)));
             float3 uv=(nodeUv*float3(DK_AIR_SIDE-1,DK_AIR_SIDE-1,DK_AIR_DEPTH-1)+.5)/float3(DK_AIR_SIDE,DK_AIR_SIDE,DK_AIR_DEPTH);

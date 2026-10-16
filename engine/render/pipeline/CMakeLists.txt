@@ -3,7 +3,7 @@ if(NOT TARGET dk::render_data OR NOT TARGET dk::render_resources OR NOT TARGET d
 endif()
 add_library(dk_render_pipeline STATIC)
 add_library(dk::render_pipeline ALIAS dk_render_pipeline)
-target_sources(dk_render_pipeline PRIVATE src/ScenePipeline.cpp src/PipelinePolicy.hpp
+target_sources(dk_render_pipeline PRIVATE src/ScenePipeline.cpp src/PipelinePolicy.hpp src/SkyDiffuse.hpp
     PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/render/ScenePipeline.hpp)
 target_link_libraries(dk_render_pipeline PUBLIC dk::render_data dk::render_resources
     PRIVATE dk::graphics_graph dk::graphics_shaders dk::profiling)

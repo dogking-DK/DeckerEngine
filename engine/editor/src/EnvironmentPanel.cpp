@@ -2,7 +2,7 @@
 #include <cmath>
 #include <algorithm>
 namespace dk::editor::detail {
-void WorkbenchUi::environment() {
+void WorkbenchUi::environment(const Viewport& preview) {
     ImGui::Begin("Environment");
     auto* draft=model_.environment_draft();
     if(!draft) { ImGui::TextUnformatted("Open a scene to edit the environment."); ImGui::End(); return; }
@@ -58,15 +58,20 @@ void WorkbenchUi::environment() {
     if(!std::isfinite(exposure_) || exposure_<0) exposure_=1;
     exposure_=std::min(exposure_,1000000.f);
     if(ImGui::CollapsingHeader("Cloud render quality and time")) {
-        int mode=environment_settings_.mode==render::CloudRenderMode::temporal ? 1 : 0;
-        if(ImGui::Combo("Mode",&mode,"Reference (no history)\0Temporal (32 warmup)\0")) environment_settings_.mode=mode ? render::CloudRenderMode::temporal : render::CloudRenderMode::reference;
+        const bool reference_available=std::uint64_t{preview.info().width}*preview.info().height<=4096;
+        if(ImGui::BeginCombo("Mode",environment_settings_.mode==render::CloudRenderMode::temporal ? "Temporal (progressive)" : "Reference (small viewport)")) {
+            if(ImGui::Selectable("Temporal (progressive)",environment_settings_.mode==render::CloudRenderMode::temporal)) environment_settings_.mode=render::CloudRenderMode::temporal;
+            ImGui::BeginDisabled(!reference_available);
+            if(ImGui::Selectable("Reference (up to 4096 pixels)",environment_settings_.mode==render::CloudRenderMode::reference)) environment_settings_.mode=render::CloudRenderMode::reference;
+            ImGui::EndDisabled(); ImGui::EndCombo();
+        }
         ImGui::InputDouble("Time (s)",&environment_settings_.time_seconds,0,0,"%.6f"); mark("cloud_time");
         if(ImGui::Button("+1 second")) environment_settings_.time_seconds+=1; mark("cloud_time_step");
         ImGui::Checkbox("Cloud shadows",&environment_settings_.cloud_shadows); mark("cloud_shadow");
         ImGui::InputScalarN("Shadow center (m)",ImGuiDataType_Double,environment_settings_.shadow_center_m.data(),3);
         ImGui::InputDouble("Shadow extent (m)",&environment_settings_.shadow_extent_m);
         ImGui::InputScalar("Shadow resolution",ImGuiDataType_U32,&environment_settings_.shadow_resolution);
-        ImGui::TextWrapped("Time stays fixed until edited. Reference allows at most 4096 pixels. Settings are session-only; sky/geometry coverage errors keep the last image.");
+        ImGui::TextWrapped("Temporal shows a complete first frame, then refines while stationary. Reference requires a viewport of at most 4096 pixels. Time stays fixed until edited.");
     }
     ImGui::TextWrapped("Environment: near 1 m / far 10000 m. Disabled: near 0.05 m.");
     ImGui::End();

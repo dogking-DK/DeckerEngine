@@ -23,6 +23,9 @@ cmake --build out/build/windows-editor --config Debug --target dk_editor_app
 
 Windows后台运行可加 `--background`：启动及程序恢复窗口时不抢焦点，并放在其他窗口后方；
 仍正常渲染，用户可主动从任务栏切入。普通运行不加该参数，窗口照常自动弹出。
+
+Release/RelWithDebInfo普通启动默认关闭Vulkan验证层；Debug默认尝试启用。`--validation`显式要求验证层，
+`--no-validation`显式关闭。性能比较用优化配置且关闭验证层，正确性回归单独开启。
 所有仓库编辑器自动化测试及GUI响应基准都使用后台模式；手动限帧截图也应加上：
 
 ```powershell
@@ -63,8 +66,9 @@ Windows后台运行可加 `--background`：启动及程序恢复窗口时不抢�
 固定spp路径截图和线性报告通过[render.capture](../commands/render.md#固定-spp-路径追踪)提供，仍使用严格导入和原小场景额度；
 不把默认Sponza视口支持视为capture能力扩展。小场景对比需显式匹配GUI相机、尺寸和Path参数。
 
-`--desktop-render-smoke --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm`使用正常相机和窗口，
-通过真实GUI依次完成路径样本、大气启用、sparse带云预设和路径往返，项目必须有`.dk-editor-smoke`标记。
+`--desktop-render-smoke --root DISPOSABLE_PROJECT --pipe NAME --screenshot OUTPUT.ppm`使用正常相机和窗口，
+由EditorDesktopRenderTest.py配合真实GUI与IPC，完成路径样本、大气/云连续拖动、命令启用云、稀疏云预设、
+云影失败恢复、地下相机Home恢复和路径往返，项目必须有`.dk-editor-smoke`标记。
 默认工程回归为`dk.editor.desktop_render_gpu_validation`，自动复制demo并使用`--background`；产物含各阶段PPM和JSON。
 
 定向验收使用真实后台窗口和外部IPC：

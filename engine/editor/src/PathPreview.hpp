@@ -20,6 +20,7 @@ struct PathPreviewRequest {
     std::uint64_t preview=0,reload=0,sequence=0;
     PathPreviewSettings settings;
     bool read_linear=false; // Explicit acceptance-only readback, never normal presentation.
+    bool observe_memory=false; // Explicit benchmark-only VMA snapshot.
 };
 struct PathPreviewStatus {
     std::uint64_t sequence=0;
@@ -35,6 +36,7 @@ struct PathPreviewResult {
     std::vector<PickMesh> meshes;
     graphics::ImageTransfer image;
     render::PathTraceGpuImage linear;
+    render::PathTraceMemoryStats memory;
 };
 // One replaceable input/completion. The worker owns all rendering and asset preparation.
 class PathPreview final {

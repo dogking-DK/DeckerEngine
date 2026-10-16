@@ -86,6 +86,9 @@ private:
     std::uint32_t published_warmup_=0;
     std::optional<DocumentId> asset_session_,published_session_;
     std::optional<Key> attempted_,published_;
+    std::optional<Key> environment_key_;
+    Camera environment_camera_;
+    bool environment_has_frame_=true;
     std::optional<SimulationId> simulation_run_;
     std::optional<SimulationView> simulation_view_;
     std::uint64_t simulation_steps_=0,simulation_sequence_=0,simulation_published_=0;

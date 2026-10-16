@@ -37,21 +37,36 @@ void Viewport::update(const SceneReadSnapshot& snapshot,std::uint32_t width,std:
     const Key key{snapshot.state.document_id,snapshot.state.revision,width,height,srgb,camera.revision(),preview_revision,exposure,environment};
     if(snapshot.scene.environment().enabled || snapshot.scene.environment().clouds.enabled) {
         try {
-            if(attempted_!=key) {
+            if(auto result=environment_.take_result(); result && result->sequence==environment_sequence_) {
+                environment_has_frame_=true;
+                // A continuously moving camera must still get completed images.
+                // Keep their actual camera/key for picking; scene edits are never
+                // published against a newer document or different render settings.
+                auto compatible=key;
+                if(environment_key_) {
+                    compatible.camera=environment_key_->camera; compatible.width=environment_key_->width; compatible.height=environment_key_->height;
+                    compatible.environment.camera_revision=environment_key_->environment.camera_revision;
+                }
+                if(environment_key_ && *environment_key_==compatible) {
+                    if(!result->error.empty()) {
+                        if(*environment_key_==key) error_=result->error;
+                    } else {
+                        publish(std::move(result->pixels),result->info,std::move(result->scene),environment_camera_,*environment_key_);
+                        meshes_=std::move(result->meshes); published_environment_=result->environment; published_history_=result->history;
+                        published_warmup_=result->warmup_frames; published_shadow_=result->shadow_generation;
+                    }
+                }
+            }
+            if(attempted_!=key && environment_has_frame_) {
                 if(snapshot.scene.logical_bytes()>32U*1024U*1024U) throw std::runtime_error("Environment preview snapshot exceeds 32 MiB");
                 environment_.request({snapshot,camera,width,height,edit,++environment_sequence_,exposure,environment});
+                environment_key_=key; environment_camera_=camera; environment_has_frame_=false;
                 attempted_=key; error_.clear();
-            }
-            if(auto result=environment_.take_result(); result && result->sequence==environment_sequence_) {
-                if(!result->error.empty()) throw std::runtime_error(result->error);
-                publish(std::move(result->pixels),result->info,std::move(result->scene),camera,key);
-                meshes_=std::move(result->meshes); published_environment_=result->environment; published_history_=result->history;
-                published_warmup_=result->warmup_frames; published_shadow_=result->shadow_generation;
             }
         } catch(const std::exception& error) { error_=error.what(); }
         return;
     }
-    environment_.cancel();
+    environment_.cancel(); environment_key_.reset(); environment_has_frame_=true;
     if (attempted_==key) return;
     attempted_=key;
     try {

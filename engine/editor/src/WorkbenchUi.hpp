@@ -30,7 +30,7 @@ private:
     void hierarchy();
     void inspector();
     void assets();
-    void environment();
+    void environment(const Viewport&);
 #ifdef DK_EDITOR_PATHTRACING
     void path_panel(Viewport&);
     PathPreviewSettings path_settings_;
