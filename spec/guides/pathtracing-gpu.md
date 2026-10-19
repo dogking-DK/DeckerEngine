@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-14T14:37:00+08:00"
-updated_at: "2026-10-19T15:04:00+08:00"
+updated_at: "2026-10-19T15:29:00+08:00"
 ---
 
 # GPU表面、空气、云与渐进路径追踪
@@ -14,7 +14,8 @@ updated_at: "2026-10-19T15:04:00+08:00"
 
 M19.2 提供 C++ GPU 初始 RIS：`submit_restir_rays`、`submit_restir_view`、`configure_restir_view`。
 `RestirDiSettings` 默认 version=1、8 候选（合法 1..64），要求 MIS 和显式 Surface only；
-时间和空间复用通过下述独立可选配置启用；介质 RIS 和新的 Editor/capture 选项尚未接入。普通 `submit/configure_view` 继续原 MIS 路径。
+时间和空间复用通过下述独立可选配置启用；GPU 介质 RIS 和新的 Editor/capture 选项尚未接入。普通 `submit/configure_view` 继续原 MIS 路径。
+介质条件采样已有独立 [CPU 参考入口](pathtracing-reference.md#scene-media-首表面-ris-参考)，不能将它当作 GPU 配置选项。
 来源的 `PathTraceGpuImageInfo.restir` 保存实际配置，候选数不是额外 spp。
 无历史入口每像素每次提交的 `samples.count * initial_candidates` 不超过 2^18；
 高 spp 验证使用连续样本区间分批，再按样本数合并均值/二阶矩。渐进入口自动按单 epoch 分阶段推进。

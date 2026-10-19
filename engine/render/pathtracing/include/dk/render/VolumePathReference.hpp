@@ -1,6 +1,7 @@
 #pragma once
 #include <dk/render/PathTraceReference.hpp>
 #include <dk/render/PathMediumReference.hpp>
+#include <dk/render/RestirReference.hpp>
 
 namespace dk::render {
 namespace detail { struct VolumeImageState; struct VolumeReferenceAccess; }
@@ -16,7 +17,7 @@ struct VolumePathSettings {
 };
 enum class VolumeSampleStream : std::uint32_t {
     channel, pixel, free_path, collision, phase_component, phase_direction,
-    light_class, light_point, bsdf, roulette, shadow_path
+    light_class, light_point, bsdf, roulette, shadow_path, restir_shadow_path
 };
 // Sampler v2: stream/counter are distinct from physical event depth.
 [[nodiscard]] double volume_path_sample(std::uint64_t seed,std::uint32_t pixel,std::uint32_t sample,
@@ -30,6 +31,16 @@ struct VolumePathEstimate {
     Vec3d mean=Vec3d::Zero(), second_moment=Vec3d::Zero();
     VolumePathStatistics statistics;
 };
+struct RestirVolumeStatistics {
+    std::uint64_t prepared_mesh=0,prepared_ground=0,candidate_evaluations=0;
+    std::uint64_t applied_surface=0,selected_shadow_rays=0;
+    std::uint64_t primary_scatter=0,primary_absorption=0,continuation_scatter=0;
+};
+struct RestirVolumeEstimate : VolumePathEstimate {
+    RestirDiSettings restir;
+    PathTraceSamples samples;
+    RestirVolumeStatistics restir_statistics;
+};
 struct VolumePathImageInfo {
     SceneId scene;
     std::uint64_t revision=0, scene_fingerprint=0, field_hash=0;
@@ -40,6 +51,8 @@ struct VolumePathImageInfo {
     VolumePathSettings settings;
     PathTraceSamples samples;
     VolumePathStatistics statistics;
+    std::optional<RestirDiSettings> restir; // Absent for the original volume integrator.
+    RestirVolumeStatistics restir_statistics;
 };
 class VolumePathImage final {
 public:
@@ -57,4 +70,12 @@ private:
     const PathTraceRay&,const VolumePathSettings& = {},PathTraceSamples = {},std::uint32_t pixel=0,std::stop_token = {});
 [[nodiscard]] Result<VolumePathImage> render_volume_path_reference(memory::ResourceHandle,const PathTraceScene&,
     const PathMediumSnapshot&,const RenderView&,const VolumePathSettings& = {},PathTraceSamples = {},std::stop_token = {});
+// Full RGB initial RIS is prepared before hero/free-flight sampling. Only a primary
+// surface reached without real medium events uses it; temporal/spatial are rejected.
+[[nodiscard]] Result<RestirVolumeEstimate> estimate_restir_volume_reference(const PathTraceScene&,const PathMediumSnapshot&,
+    const PathTraceRay&,const VolumePathSettings& = {},const RestirDiSettings& = {},PathTraceSamples = {},
+    std::uint32_t pixel=0,std::stop_token = {});
+[[nodiscard]] Result<VolumePathImage> render_restir_volume_reference(memory::ResourceHandle,const PathTraceScene&,
+    const PathMediumSnapshot&,const RenderView&,const VolumePathSettings& = {},const RestirDiSettings& = {},
+    PathTraceSamples = {},std::stop_token = {});
 } // namespace dk::render

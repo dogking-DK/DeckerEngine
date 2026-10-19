@@ -52,6 +52,12 @@ struct Random {
         return volume_path_sample(seed,pixel,sample,event,stream,counter);
     }
 };
+void validate_restir_volume(const VolumePathSettings& s,const RestirDiSettings& r,PathTraceSamples samples,std::uint64_t pixels) {
+    if(s.estimator!=PathTraceEstimator::mis || r.version!=1 || r.initial_candidates<1 || r.initial_candidates>64 ||
+        r.temporal || r.spatial || !r.max_candidate_evaluations || r.max_candidate_evaluations>(1ull<<24) ||
+        pixels*samples.count*r.initial_candidates>r.max_candidate_evaluations)
+        throw path_invalid("Invalid CPU volume RIS settings, history combination or candidate budget");
+}
 struct Vertex {
     Vec3d position=Vec3d::Zero(),normal=Vec3d::Zero(),incoming=Vec3d::Zero();
     std::optional<PathTraceHit> hit;
@@ -65,13 +71,16 @@ struct Context {
     const VolumePathSettings& settings;
     VolumePathStatistics& stats;
     std::stop_token stop;
+    const RestirDiSettings* restir=nullptr;
+    RestirVolumeStatistics* restir_stats=nullptr;
     bool planet=false;
     Vec3d sun_direction,sun_radiance,majorant,air_majorant;
     double cone_width=0,sun_pdf=0,class_pdf=0;
     bool environment_light=false,sun_light=false;
     std::uint32_t steps=0;
-    Context(const PathSceneState& p,const PathMediumSnapshot& m,const VolumePathSettings& s,VolumePathStatistics& count,std::stop_token token)
-        : scene(p),medium(m),settings(s),stats(count),stop(token) {
+    Context(const PathSceneState& p,const PathMediumSnapshot& m,const VolumePathSettings& s,VolumePathStatistics& count,std::stop_token token,
+        const RestirDiSettings* ris=nullptr,RestirVolumeStatistics* ris_stats=nullptr)
+        : scene(p),medium(m),settings(s),stats(count),stop(token),restir(ris),restir_stats(ris_stats) {
         const auto& e=m.environment(); planet=e.enabled || e.clouds.enabled;
         majorant=m.extinction_majorant(); sun_direction=vector(e.sun.direction);
         auto air=e; air.clouds.enabled=false;
@@ -170,7 +179,8 @@ struct Context {
         }
         return 0;
     }
-    double visibility(const Vertex& v,const Vec3d& wi,std::optional<std::size_t> light,const Vec3d& point,unsigned channel,const Random& random) {
+    double visibility(const Vertex& v,const Vec3d& wi,std::optional<std::size_t> light,const Vec3d& point,unsigned channel,const Random& random,
+        VolumeSampleStream shadow_stream=VolumeSampleStream::shadow_path) {
         PathTraceRay ray{origin(v,wi),wi};
         if(light) {
             const Vec3d end=offset_path_origin(scene.triangles[*light],point,-wi),delta=end-ray.origin;
@@ -186,7 +196,7 @@ struct Context {
             double t=segments.segments[k].begin_m;
             while(true) {
                 tracking_step();
-                const double next=t-std::log1p(-random(VolumeSampleStream::shadow_path,counter++))/rate;
+                const double next=t-std::log1p(-random(shadow_stream,counter++))/rate;
                 if(!(next>t)) throw Error{ErrorCode::internal_error,"Nonadvancing volume shadow path"};
                 t=next; if(t>=segments.segments[k].end_m) break;
                 transmittance*=1-coefficient(ray.origin+ray.direction*t,channel,rate).extinction[channel]/rate;
@@ -224,40 +234,66 @@ struct Context {
         const auto [factor,scatter_pdf]=evaluate(v,wi,channel); if(factor<=0) return 0;
         return radiance*factor*visibility(v,wi,light,point,channel,random)*power(pdf,scatter_pdf)/pdf;
     }
+    Vertex endpoint(const PathTraceRay& ray,const std::optional<PathTraceHit>& hit,const PathMediumSegments& segments) const {
+        Vertex v; v.incoming=ray.direction;
+        v.ground=segments.ground && (!hit || segments.ground_distance_m<hit->distance);
+        if(v.ground) {
+            v.position=ray.origin+ray.direction*segments.ground_distance_m;
+            v.normal=(v.position-vector(medium.environment().atmosphere.planet_center_m)).normalized();
+            v.bsdf={vector(medium.environment().atmosphere.ground_albedo),0,1,PathTraceMaterialModel::lambert};
+        } else if(hit) {
+            v.hit=hit; v.position=hit->position; v.normal=hit->normal; const auto& t=scene.triangles[hit->index];
+            v.bsdf={path_base_color(scene,t,hit->barycentric).head<3>(),t.metallic,t.roughness,scene.material_model};
+        }
+        return v;
+    }
+#include "VolumeRestirReference.inl"
     Vec3d trace(PathTraceRay ray,std::uint32_t pixel,std::uint32_t sample) {
         cancellation(); steps=0; Random random{settings.seed,pixel,sample};
+        std::optional<PathTraceHit> primary_hit; PathMediumSegments primary_segments;
+        PreparedRestir prepared;
+        if(restir) {
+            primary_hit=nearest(ray); primary_segments=intervals(ray,primary_hit ? primary_hit->distance : infinity);
+            prepared=prepare_restir(endpoint(ray,primary_hit,primary_segments),pixel,sample);
+        }
+        // Reservoir construction above is independent of hero, analog survival and shadow tracking.
         const auto channel=unsigned(random(VolumeSampleStream::channel)*3);
         double value=0,beta=1,previous_pdf=0; Vec3d previous=Vec3d::Zero();
         const bool mis=settings.estimator==PathTraceEstimator::mis;
         unsigned medium_events=0;
+        bool suppress_emission=false;
         for(unsigned depth=0;depth<=settings.max_bounces;++depth) {
             cancellation(); random.event=depth;
-            auto hit=nearest(ray); const auto segments=intervals(ray,hit ? hit->distance : infinity);
+            auto hit=restir && depth==0 ? primary_hit : nearest(ray);
+            const auto segments=restir && depth==0 ? primary_segments : intervals(ray,hit ? hit->distance : infinity);
             Vertex v; const int event=flight(ray,segments,channel,random,v);
+            if(restir && depth==0) {
+                restir_stats->primary_scatter+=event==1; restir_stats->primary_absorption+=event==2;
+            }
             if(event==2) break;
+            if(event==1 && suppress_emission) { ++restir_stats->continuation_scatter; suppress_emission=false; }
             if(event==1 && ++medium_events==2) ++stats.multiple_scatter_paths;
             if(event==0) {
                 const bool ground=segments.ground && (!hit || segments.ground_distance_m<hit->distance);
                 if(!hit && !ground) {
-                    value+=beta*settings.environment_rgb[channel]*(depth && mis ? power(previous_pdf,class_pdf/(4*pi)) : 1);
-                    if(sun_light && 1-std::clamp(ray.direction.dot(sun_direction),-1.,1.)<=cone_width)
+                    if(!suppress_emission) value+=beta*settings.environment_rgb[channel]*(depth && mis ? power(previous_pdf,class_pdf/(4*pi)) : 1);
+                    if(!suppress_emission && sun_light && 1-std::clamp(ray.direction.dot(sun_direction),-1.,1.)<=cone_width)
                         value+=beta*sun_radiance[channel]*(depth && mis ? power(previous_pdf,class_pdf*sun_pdf) : 1);
                     break;
                 }
-                v.ground=ground; v.incoming=ray.direction;
-                if(ground) {
-                    ++stats.ground_hits;
-                    v.position=ray.origin+ray.direction*segments.ground_distance_m;
-                    v.normal=(v.position-vector(medium.environment().atmosphere.planet_center_m)).normalized();
-                    v.bsdf={vector(medium.environment().atmosphere.ground_albedo),0,1,PathTraceMaterialModel::lambert};
-                } else {
-                    v.hit=hit; v.position=hit->position; v.normal=hit->normal; const auto& t=scene.triangles[hit->index];
-                    v.bsdf={path_base_color(scene,t,hit->barycentric).head<3>(),t.metallic,t.roughness,scene.material_model};
-                    value+=beta*t.emission[channel]*(depth && mis ? power(previous_pdf,area_pdf(hit->index,previous,hit->position)) : 1);
+                v=endpoint(ray,hit,segments);
+                if(ground) ++stats.ground_hits;
+                else {
+                    const auto& t=scene.triangles[hit->index];
+                    if(!suppress_emission || t.light_weight==0)
+                        value+=beta*t.emission[channel]*(depth && mis ? power(previous_pdf,area_pdf(hit->index,previous,hit->position)) : 1);
                 }
             }
             if(depth==settings.max_bounces) break;
-            value+=beta*direct(v,channel,random);
+            const bool first_restir=restir && depth==0 && event==0 && prepared.surface;
+            if(first_restir) { ++restir_stats->applied_surface; value+=beta*shade_restir(v,prepared,channel,random); }
+            else value+=beta*direct(v,channel,random);
+            suppress_emission=first_restir; // Only the next BSDF segment belongs to primary DI.
             Vec3d wi;
             if(v.volume) {
                 wi=v.phase.sample(ray.direction,random(VolumeSampleStream::phase_component),random(VolumeSampleStream::phase_direction),random(VolumeSampleStream::phase_direction,1));
@@ -312,19 +348,33 @@ Result<VolumePathEstimate> estimate_volume_path_reference(const PathTraceScene& 
     } catch(const Error& error) { return std::unexpected(error); }
     catch(const std::bad_alloc&) { return std::unexpected(Error{ErrorCode::internal_error,"Volume reference allocation failed"}); }
 }
-Result<VolumePathImage> render_volume_path_reference(memory::ResourceHandle heap,const PathTraceScene& scene,const PathMediumSnapshot& medium,
-    const RenderView& view,const VolumePathSettings& settings,PathTraceSamples samples,std::stop_token stop) {
+Result<RestirVolumeEstimate> estimate_restir_volume_reference(const PathTraceScene& scene,const PathMediumSnapshot& medium,
+    const PathTraceRay& ray,const VolumePathSettings& settings,const RestirDiSettings& restir,PathTraceSamples samples,std::uint32_t pixel,std::stop_token stop) {
+    try {
+        const auto& input=validate(scene,medium,settings,samples,1); check(validate_path_ray(ray));
+        validate_restir_volume(settings,restir,samples,1);
+        RestirVolumeEstimate result; result.restir=restir; result.samples=samples;
+        Context context{input,medium,settings,result.statistics,stop,&restir,&result.restir_statistics}; Moments moments;
+        for(std::uint32_t s=samples.first;s<samples.first+samples.count;++s) moments.add(context.trace(ray,pixel,s));
+        context.cancellation(); result.mean=moments.sum/samples.count; result.second_moment=moments.square/samples.count; return result;
+    } catch(const Error& error) { return std::unexpected(error); }
+    catch(const std::bad_alloc&) { return std::unexpected(Error{ErrorCode::internal_error,"Volume RIS reference allocation failed"}); }
+}
+static Result<VolumePathImage> render_volume_reference_impl(memory::ResourceHandle heap,const PathTraceScene& scene,const PathMediumSnapshot& medium,
+    const RenderView& view,const VolumePathSettings& settings,PathTraceSamples samples,std::stop_token stop,const RestirDiSettings* restir) {
     try {
         const auto& d=view.description(); const auto pixels=std::uint64_t{d.width}*d.height;
         const auto& input=validate(scene,medium,settings,samples,pixels); check(validate_path_view(input,view));
+        if(restir) validate_restir_volume(settings,*restir,samples,pixels);
         if(!heap || heap.state()!=memory::ResourceState::open) throw path_invalid("Volume image requires an open heap");
         if(stop.stop_requested()) throw cancelled();
         auto image=memory::make_shared_in<detail::VolumeImageState>(heap,heap);
         image->source=scene; image->medium=medium;
         image->info={scene.id(),scene.revision(),scene.fingerprint(),medium.field_hash(),scene.material_model(),d,
             medium.environment(),medium.settings(),settings,samples,{}};
+        if(restir) image->info.restir=*restir;
         image->colors.resize(std::size_t(pixels)); image->moments.resize(std::size_t(pixels));
-        Context context{input,medium,settings,image->info.statistics,stop};
+        Context context{input,medium,settings,image->info.statistics,stop,restir,restir ? &image->info.restir_statistics : nullptr};
         for(std::uint32_t y=0;y<d.height;++y) for(std::uint32_t x=0;x<d.width;++x) {
             const auto pixel=y*d.width+x; Moments moments;
             for(std::uint32_t s=samples.first;s<samples.first+samples.count;++s) {
@@ -337,6 +387,14 @@ Result<VolumePathImage> render_volume_path_reference(memory::ResourceHandle heap
         context.cancellation(); return detail::VolumeReferenceAccess::image(std::move(image));
     } catch(const Error& error) { return std::unexpected(error); }
     catch(const std::bad_alloc&) { return std::unexpected(Error{ErrorCode::internal_error,"Volume image allocation failed"}); }
+}
+Result<VolumePathImage> render_volume_path_reference(memory::ResourceHandle heap,const PathTraceScene& scene,const PathMediumSnapshot& medium,
+    const RenderView& view,const VolumePathSettings& settings,PathTraceSamples samples,std::stop_token stop) {
+    return render_volume_reference_impl(heap,scene,medium,view,settings,samples,stop,nullptr);
+}
+Result<VolumePathImage> render_restir_volume_reference(memory::ResourceHandle heap,const PathTraceScene& scene,const PathMediumSnapshot& medium,
+    const RenderView& view,const VolumePathSettings& settings,const RestirDiSettings& restir,PathTraceSamples samples,std::stop_token stop) {
+    return render_volume_reference_impl(heap,scene,medium,view,settings,samples,stop,&restir);
 }
 std::span<const Vec3d> VolumePathImage::linear_rgb() const noexcept { return state_ ? std::span<const Vec3d>{state_->colors} : std::span<const Vec3d>{}; }
 std::span<const Vec3d> VolumePathImage::second_moments() const noexcept { return state_ ? std::span<const Vec3d>{state_->moments} : std::span<const Vec3d>{}; }

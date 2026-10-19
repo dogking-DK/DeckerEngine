@@ -1,16 +1,16 @@
 ---
 module: render-restir
 created_at: "2026-10-19T12:50:00+08:00"
-updated_at: "2026-10-19T15:04:00+08:00"
+updated_at: "2026-10-19T15:29:00+08:00"
 status: accepted
 ---
 
 # ReSTIR 光照重采样设计
 
 本文件是[路径追踪设计](render-pathtracing.md)的采样扩展设计。
-CPU 数学、GPU 初始 RIS、时间与空间复用的现行契约分别见 M19.1/M19.2/M19.3/M19.4；介质与消费者按后续阶段推进；
+CPU 数学、GPU 初始 RIS、时间与空间复用的现行契约见 M19.1–M19.4，CPU 介质条件采样见 M19.5；GPU 介质与消费者按后续阶段推进；
 状态、依赖和下一项统一见 [Roadmap M19](../roadmap.md#m19restir-直接光重采样)。
-下文明确区分现行 CPU/GPU 初始与时空采样契约和后续介质/消费者计划，不把独立接口视为编辑器已有能力。
+下文区分现行 CPU/GPU 采样契约和后续 GPU 介质/消费者计划，不把独立接口视为编辑器已有能力。
 
 ## 目标与范围
 
@@ -19,7 +19,7 @@ CPU 数学、GPU 初始 RIS、时间与空间复用的现行契约分别见 M19.
 先覆盖 Surface only，再支持 Scene media 中符合条件的首表面直接光；原 MIS/BSDF-only 路径保留作独立对照。
 
 首轮支持已有的 Lambert/GGX、baseColor/mask、单/双面、静态三角形、透视/正交相机。
-候选光源使用已有发光三角形、常量环境；表面模式的 delta 太阳单独估计，介质模式的有限太阳圆盘后续纳入。
+候选光源使用已有发光三角形、常量环境；表面模式的 delta 太阳单独估计，CPU 介质参考将有限太阳圆盘纳入候选。
 mask 发光三角形继续由 BSDF 命中估计，不扩大其 NEE 支持范围。
 移动相机可复用匹配的静态表面历史；几何、材质、光源、介质内容变化先清空采样历史，
 不承诺动态物体运动向量、跨光源重排映射或形变复用。
@@ -351,6 +351,50 @@ M19.5 若发现条件概率/支持域无法满足，先修订推导与范围，�
 
 ## 接口与消费者计划
 
+### M19.5 CPU Scene media 条件采样契约
+
+`VolumePathReference.hpp` 增加独立 `estimate_restir_volume_reference` / `render_restir_volume_reference`，
+沿用 `VolumePathSettings` model 4/sampler 2、`RestirDiSettings` version 1/初始候选 1..64。
+CPU 只实现首表面初始 RIS，拒绝 temporal/spatial 和 BSDF-only 组合，不把测试用空间参考扩展成介质历史会话。
+固定射线返回 `RestirVolumeEstimate`；图像沿用 `VolumePathImage`，来源增加可选 restir 配置与专用统计，
+旧体积入口配置为空、算法/随机序列不变。不改变 SDK 依赖、GPU/Editor/capture 或 DLSS 接口。
+
+每条抖动主射线先查询最近网格与物理行星边界，保存独立 mesh/ground 身份、接收位置/法线/BSDF/观察方向；
+在 hero 通道与 analog 自由程抽样前，用 RIS1 独立计数域生成完整 RGB 未遮挡 reservoir。
+首次几何查询和 medium segments 供原路径循环复用，不重复主射线；只有“零真实体积事件到达首表面”才消费此 reservoir。
+先散射或吸收的路径仍产生几何首表面候选（若存在且 max_bounces>0），随后丢弃；后续表面和体积顶点均沿原 MIS/RR。
+没有网格/行星终点或反弹上限为零时不生成候选。行星独立构造 Lambert 接收点，不能用伪三角形下标寻址。
+
+光域为互斥的 environment / finite-sun / non-mask-area 标签：均匀选活动种类，环境和太阳用立体角测度，
+面积灯用面积测度；每个 proposal 都包含 class probability。太阳沿已有稳定圆锥采样，L=E/(pi*sin²(alpha))，
+其与常量环境在同一方向的贡献按不同标签分别计入，不能合并 PDF。目标为完整 RGB 贡献的非负亮度，
+不含 hero、相机存活概率、网格/行星阴影或随机透射；RGB 任一通道非零时目标必须为正。
+
+条件于固定主几何接收点 x，令 C 为均匀 hero 通道，A_c 为相机到 x 无真实事件的 analog 存活事件，
+(Y,W) 是独立生成、在完整 RGB 正支持上正规化的 reservoir，T_hat_c(Y) 是新的 ratio-tracking 阴影估计。
+首表面 c 通道估计为 `3*1(C=c)*1(A_c)*W*F_c(Y)*V_mesh/planet(Y)*T_hat_c(Y)`。
+由于候选/替换与 C、A 独立，阴影随机流条件于 Y、c 独立，期望为
+`T_camera,c * integral(F_c(y)*V(y)*T_light,c(y))`，无需额外除以通道/存活概率（hero 的 3 已抵消 1/3）。
+候选的亮度目标仅影响方差，不能以随机 RGB 透射替换此确定目标或缓存它为 PDF。
+以后时空来源只有满足相同条件独立性与完整支持正规化前提才能使用 M19.3/4 合并公式，本阶段不推定 GPU 已满足。
+
+首表面直接项由 RIS 完整负责，关闭该处普通 NEE；仅其下一次 BSDF 延伸无真实介质事件直达非 mask 面积灯、
+环境或太阳时抑制对应 emission。null collision 不解除抑制；若延伸发生真实体积散射，则立即解除，
+该体积顶点及后续 MIS/emission 完整保留。相机直见发光/天空/太阳、mask 发光与第二表面反射不丢失。
+选中样本的阴影使用新增 VolumeSampleStream::restir_shadow_path（尾部追加，旧 0..10 编号冻结），
+不消耗普通 light/free_path/collision/BSDF/phase/RR/shadow_path 维度。
+
+统计区分 prepared_mesh/prepared_ground、候选评估、实际应用首表面、选中阴影查询、主段散射/吸收和延伸真实散射；
+候选数不是 spp，准备了 reservoir 不等于路径存活。候选预算预检 pixels*spp*initial_candidates，
+geometry 仍为 (2*bounces+1)*pixels*spp（复用首查询，首表面最多一次新阴影），triangle/tracking 和逐路径额度沿原契约。
+输入/环境/版本/预算先验证；失败、取消、非有限或 tracking 超限只返回错误，冻结场景/介质/已完成图像保持可用。
+图像完成所有像素后才返回 owner，保留环境全量、场 hash、风时间、采样/物理参数和 restir 来源。
+
+验收：离散可枚举的 RGB/hero/存活/随机阴影条件恒等式；8 seed 的真空 Lambert/GGX、面积灯/太阳重叠、
+纯吸收/强彩色消光、行星/网格排序、真实云阴影与固定/变化风时间；主段先散射与首表面后散射、多次散射/RR、
+mask 发光分工、无光与零目标、分批和透视/正交图像身份、预算/主动取消/分配失败和 owner 寿命。
+数值沿用 2% 与 5SE 双门槛，独立 quadrature 先检查 N/2N；GPU/性能验收由后续阶段完成。
+
 M19.1 以独立 `estimate_restir_reference` 入口和 `RestirDiSettings` 冻结 CPU 初始采样及版本；
 M19.2 的 GPU 与渐进入口沿用该配置，实际来源置于 `PathTraceGpuImageInfo.restir`。
 M19.3 以可选 temporal 配置提供时间复用与历史界限；后续消费者计划采用 `direct_lighting = classic_mis / restir_di`。
@@ -423,3 +467,4 @@ M19 验收后，再依据直接/间接/介质噪声占比决定下一步采用 R
 - [0135 GPU 初始 RIS 与 RTXDI](../development/0135-restir-gpu-initial.md)。
 - [0136 时间 reservoir 与采样历史](../development/0136-restir-temporal.md)。
 - [0137 空间 reservoir 与支持校正](../development/0137-restir-spatial.md)。
+- [0138 Scene media 首表面条件采样](../development/0138-restir-volume-reference.md)。

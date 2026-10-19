@@ -12,7 +12,7 @@ dk_target_defaults(dk_core_tests)
 
 include(Catch)
 if(TARGET dk_render_pathtracing_reference)
-    add_executable(dk_pathtracing_reference_tests PathTraceReferenceTests.cpp PathTextureTests.cpp PathBsdfTests.cpp PathMediumTests.cpp VolumePathTests.cpp RestirReferenceTests.cpp)
+    add_executable(dk_pathtracing_reference_tests PathTraceReferenceTests.cpp PathTextureTests.cpp PathBsdfTests.cpp PathMediumTests.cpp VolumePathTests.cpp RestirReferenceTests.cpp RestirVolumeTests.cpp)
     target_link_libraries(dk_pathtracing_reference_tests PRIVATE dk::render_pathtracing_reference dk::geometry Catch2::Catch2WithMain Threads::Threads)
     if(TARGET dk::render_cloud_reference)
         target_link_libraries(dk_pathtracing_reference_tests PRIVATE dk::render_cloud_reference)

@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-14T10:18:00+08:00"
-updated_at: "2026-10-16T12:14:04+08:00"
+updated_at: "2026-10-19T15:29:00+08:00"
 ---
 
 # CPU路径追踪参考
@@ -104,3 +104,30 @@ tracking可显式提高到请求2^28、每路径2^20。消光上界按已知无�
 
 夹具、独立积分、8 seed统计、收敛与实际结果见[0124](../development/0124-volume-path-reference.md)。
 原示例程序仍调用表面入口，不输出体积图；Editor/GPU/capture尚未调用此体积入口。
+
+### Scene media 首表面 RIS 参考
+
+`estimate_restir_volume_reference(scene, medium, ray, settings, restir, samples, pixel, stop)` 和
+`render_restir_volume_reference(heap, scene, medium, view, settings, restir, samples, stop)`
+使用相同冻结场景/介质，返回固定射线 `RestirVolumeEstimate` 或拥有型 `VolumePathImage`。
+`settings` 是上述 `VolumePathSettings`；`restir` 为 `RestirDiSettings`，version=1、默认 8 个候选，合法 1..64。
+仅支持初始 RIS，必须用 MIS，temporal/spatial 组合明确拒绝；GPU 介质接入见 [Roadmap](../roadmap.md#m19restir-直接光重采样)。
+
+候选使用完整 RGB 未遮挡目标，在 hero 通道和 analog 自由程之前生成。
+无真实体积事件到达几何首表面时，RIS 替换该处直接光；先散射的路径和后续反弹沿用普通体积 MIS/RR。
+环境、有限太阳圆盘和非 mask 面积灯进入各自的样本域；阴影重新查询网格/mask、行星及当前空气/云透射。
+首表面后的真实体积散射解除对应直接发光抑制；不复用体积顶点，也不缓存随机透射率。
+
+固定射线结果的 `restir_statistics` 与图像 `info().restir_statistics` 区分准备的网格/地面、
+候选评估、实际应用首表面、阴影查询和真实散射/吸收；候选数与 reservoir 数均不是额外 spp。
+图像 `info().restir` 保存实际配置，旧体积入口该字段为空；环境、风时间、云场 hash 和旧图 owner 语义保持一致。
+总候选预检 `pixels*samples.count*initial_candidates <= restir.max_candidate_evaluations`（默认及上限 2^24），
+几何/逐路径与总 tracking 额度、取消及失败不返回部分图，沿用原体积契约。
+
+```powershell
+& ./scripts/verify.ps1 -BuildDir out/build/windows-path-media-cpu -Configuration Release `
+  -Target dk_pathtracing_reference_tests -TestRegex '^dk\.pathtracing\.RESTIR volume ' `
+  -Reason 'CPU Scene media 首表面 RIS 条件采样与状态验证'
+```
+
+条件概率推导见 [M19.5 设计](../design/render-restir.md#m195-cpu-scene-media-条件采样契约)，实际验证见 [0138](../development/0138-restir-volume-reference.md)。
