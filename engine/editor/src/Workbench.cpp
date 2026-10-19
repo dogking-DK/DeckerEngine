@@ -34,10 +34,8 @@ void diagnostic(void* user,const graphics::Diagnostic& message) noexcept {
         std::fprintf(stderr,"%.*s: %.*s\n",static_cast<int>(message.name.size()),message.name.data(),static_cast<int>(message.message.size()),message.message.data());
 }
 void event_sink(const SDL_Event& event,void* user) {
-    ImGui_ImplSDL3_ProcessEvent(&event);
-    // Cancel before a minimized loop skips NewFrame; focus may return before rendering resumes.
-    if (event.type==SDL_EVENT_WINDOW_FOCUS_LOST || event.type==SDL_EVENT_WINDOW_MINIMIZED)
-        static_cast<WorkbenchUi*>(user)->cancel_interaction();
+    // Release on native cancellation before a minimized loop can skip NewFrame.
+    if(!static_cast<WorkbenchUi*>(user)->event(event)) ImGui_ImplSDL3_ProcessEvent(&event);
 }
 void write_capture(const std::filesystem::path& output,const graphics::ReadbackRequest& readback) {
     const auto desc=readback.description();
@@ -112,7 +110,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     GuiRenderer gui{queue,window};
     ShutdownPhase viewport_phase{shutdown,"viewport"};
     Viewport viewport{memory,heap,queue,device,options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || path_acceptance};
-    WorkbenchUi ui{*model,options.fixture_camera,options.media_pathtrace_smoke ? 96u : 0u};
+    WorkbenchUi ui{*model,options.fixture_camera,take(window.native_sdl_window()),options.media_pathtrace_smoke ? 96u : 0u};
     SmokeDriver smoke{options.interaction_smoke,options.simulation_smoke};
     std::optional<ConsistencyDriver> consistency;
     std::optional<SimulationConsistencyDriver> simulation_consistency;
@@ -136,7 +134,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
             if(path_smoke) path_smoke->poll_window(window,status.minimized);
 #endif
             if(path_acceptance && std::chrono::steady_clock::now()-start>std::chrono::seconds(240)) throw std::runtime_error("Path smoke timed out");
-            if (options.simulation_smoke) smoke.poll_window(window,status.minimized);
+            if (options.smoke) smoke.poll_window(window,status.minimized);
             if (status.close_requested) { check(window.clear_close_request()); ui.request_close(); }
             model->pump();
             if (ui.closing()) check(model->request_shutdown());
@@ -213,12 +211,14 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
 #endif
         // Rendering completion is sufficient for the viewport/ImGui resources.
         // Keep the swapchain and its presentation fences until after their cleanup.
+        ui.cancel_interaction();
         viewport.close_path();
         check(queue.close());
         shutdown.mark("render_closed");
         if (response) response->finish();
     } catch (...) {
         // Drain before descriptor/backend destruction, including a failed frame.
+        ui.cancel_interaction();
         viewport.close_path();
         const auto closed=presenter.close();
         if (!closed) std::fprintf(stderr,"presenter close: %s\n",closed.error().message.c_str());

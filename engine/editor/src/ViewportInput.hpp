@@ -1,6 +1,7 @@
 #pragma once
 #include "Viewport.hpp"
 #include "CameraSettingsUi.hpp"
+#include "NavigationUi.hpp"
 #include <functional>
 #include <map>
 
@@ -8,11 +9,14 @@ namespace dk::editor::detail {
 class ViewportInput final {
 public:
     using Report=std::function<bool(const char*,Result<void>)>;
-    explicit ViewportInput(bool fixture) : camera_(fixture),fixture_(fixture) {}
+    explicit ViewportInput(bool fixture,RelativeMouse& mouse) : camera_(fixture),navigation_(mouse),fixture_(fixture) {}
     void toolbar(Workspace&,Viewport&,std::map<std::string,ImVec2>&,const Report&);
     void aspect(double value) { aspect_=value; }
     void image(Workspace&,Viewport&,std::map<std::string,ImVec2>&,const Report&);
     void cancel();
+    void begin_frame() { navigation_.begin_frame(); }
+    void end_frame() { navigation_.end_frame(); }
+    [[nodiscard]] bool navigating() const { return navigation_.active(); }
     void environment(bool enabled) { camera_.set_environment(enabled); }
     [[nodiscard]] bool active() const { return bool(edit_); }
     [[nodiscard]] const Camera& camera() const { return camera_; }
@@ -22,12 +26,13 @@ private:
     enum class Mode { translate,rotate,scale };
     Camera camera_;
     CameraSettingsUi settings_ui_;
+    NavigationUi navigation_;
     double aspect_=1;
     bool fixture_;
     Mode mode_=Mode::translate;
     std::optional<TransformEdit> edit_;
     std::uint64_t revision_=0;
-    int axis_=0,navigation_=-1;
+    int axis_=0;
     Vec2d start_mouse_=Vec2d::Zero(),screen_axis_=Vec2d::Zero();
     Vec2d capture_minimum_=Vec2d::Zero(),capture_size_=Vec2d::Zero();
     Vec3d pivot_=Vec3d::Zero(),axis_world_=Vec3d::UnitX();

@@ -4,6 +4,7 @@
 #include <cmath>
 
 namespace dk::editor {
+enum class NavigationMode { orbit, fly, walk };
 struct CameraLensSettings {
     double fov_y=65;
     bool automatic_clip=true;
@@ -21,7 +22,7 @@ struct CameraSettings {
     CameraNavigationSettings navigation;
     bool operator==(const CameraSettings&) const = default;
 };
-// Session-only orbit camera. Settings never modify scene/history.
+// Session-only camera. Settings and navigation never modify scene/history.
 class Camera final {
 public:
     explicit Camera(bool fixture=false) { reset(fixture); }
@@ -32,6 +33,8 @@ public:
     [[nodiscard]] Result<void> set_settings(const CameraSettings&,double aspect);
     [[nodiscard]] Result<void> restore_defaults(bool fixture,double aspect);
     [[nodiscard]] const CameraSettings& settings() const { return settings_; }
+    [[nodiscard]] NavigationMode navigation_mode() const { return mode_; }
+    [[nodiscard]] Result<void> set_navigation_mode(NavigationMode);
     [[nodiscard]] double fov_y() const { return settings_.lens.fov_y; }
     [[nodiscard]] double near_plane() const { return settings_.lens.automatic_clip ? (environment_ ? 1.0 : .05) : settings_.lens.near_plane; }
     [[nodiscard]] double far_plane() const { return settings_.lens.automatic_clip ? 10000 : settings_.lens.far_plane; }
@@ -47,6 +50,7 @@ public:
     [[nodiscard]] double units_per_pixel(const Vec3d&,double height) const;
     [[nodiscard]] std::uint64_t revision() const { return revision_; }
 private:
+    friend class CameraNavigation;
     [[nodiscard]] PerspectiveLens lens() const { return {radians(fov_y()),near_plane(),far_plane()}; }
     [[nodiscard]] double tangent() const { return std::tan(radians(fov_y())/2); }
     [[nodiscard]] Vec3d backward() const;
@@ -54,6 +58,7 @@ private:
     Vec3d eye_=Vec3d::Zero();
     double yaw_=0,pitch_=0,distance_=2;
     CameraSettings settings_;
+    NavigationMode mode_=NavigationMode::orbit;
     std::uint64_t revision_=0;
     bool environment_=false;
 };

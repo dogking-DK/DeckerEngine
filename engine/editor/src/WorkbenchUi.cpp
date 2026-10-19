@@ -1,4 +1,5 @@
 #include "WorkbenchUi.hpp"
+#include <SDL3/SDL.h>
 #include "EditorSupport.hpp"
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
@@ -6,9 +7,9 @@
 #include <unordered_map>
 
 namespace dk::editor::detail {
-WorkbenchUi::WorkbenchUi(Workspace& model,bool fixture,unsigned acceptance_path_extent) : model_(model),input_(fixture),manifest_(take(path_to_utf8(model.manifest()))),acceptance_path_extent_(acceptance_path_extent) {
+WorkbenchUi::WorkbenchUi(Workspace& model,bool fixture,SDL_Window* window,unsigned acceptance_path_extent) : model_(model),relative_mouse_(window),input_(fixture,relative_mouse_),manifest_(take(path_to_utf8(model.manifest()))),simulation_navigation_(relative_mouse_),acceptance_path_extent_(acceptance_path_extent) {
     log_.push_back("Opened "+manifest_);
-    log_.push_back("Viewport: CPU picking / local Gizmo / orbit camera. Edits use guarded commands.");
+    log_.push_back("Viewport: CPU picking / local Gizmo / Orbit, Fly and Walk. Edits use guarded commands.");
 }
 void WorkbenchUi::mark(const char* id) {
     const auto a=ImGui::GetItemRectMin(),b=ImGui::GetItemRectMax();
@@ -37,11 +38,20 @@ void WorkbenchUi::perform() {
 }
 void WorkbenchUi::request(PendingAction action) {
     if (pending_!=PendingAction::none) return;
+    cancel_interaction();
     pending_=action;
     if (model_.dirty()) popup_=true;
     else perform();
 }
-void WorkbenchUi::request_close() { input_.cancel(); request(PendingAction::close); }
+bool WorkbenchUi::event(const SDL_Event& event) {
+    if(event.type==SDL_EVENT_QUIT || (relative_mouse_.belongs(event) &&
+       (event.type==SDL_EVENT_WINDOW_FOCUS_LOST || event.type==SDL_EVENT_WINDOW_MINIMIZED ||
+        event.type==SDL_EVENT_WINDOW_HIDDEN || event.type==SDL_EVENT_WINDOW_CLOSE_REQUESTED ||
+        event.type==SDL_EVENT_WINDOW_RESIZED || event.type==SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED ||
+        event.type==SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED))) cancel_interaction();
+    return relative_mouse_.event(event);
+}
+void WorkbenchUi::request_close() { cancel_interaction(); request(PendingAction::close); }
 void WorkbenchUi::toolbar() {
     if (!ImGui::BeginMainMenuBar()) return;
     ImGui::TextUnformatted("DECKER  /  WORKBENCH"); ImGui::Separator();
@@ -200,8 +210,9 @@ void WorkbenchUi::confirmation() {
     }
 }
 void WorkbenchUi::draw(Viewport& preview,bool srgb) {
+    input_.begin_frame(); simulation_navigation_.begin_frame();
     controls_.clear();
-    if (ImGui::GetIO().AppFocusLost || ImGui::IsKeyPressed(ImGuiKey_Escape,false)) input_.cancel();
+    if (ImGui::GetIO().AppFocusLost || ImGui::IsKeyPressed(ImGuiKey_Escape,false)) cancel_interaction();
     if (input_.edit() && (!model_.snapshot() || input_.edit()->guard.document_id!=model_.snapshot()->state.document_id ||
         input_.edit()->guard.revision!=model_.snapshot()->state.revision)) input_.cancel();
     toolbar();
@@ -300,5 +311,6 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     }
     ImGui::End();
     assets(); console(); simulation(); confirmation();
+    input_.end_frame(); simulation_navigation_.end_frame();
 }
 }

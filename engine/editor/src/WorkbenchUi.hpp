@@ -8,14 +8,16 @@ namespace dk::editor::detail {
 enum class PendingAction { none, open, close };
 class WorkbenchUi final {
 public:
-    explicit WorkbenchUi(Workspace& model,bool fixture,unsigned acceptance_path_extent=0);
+    explicit WorkbenchUi(Workspace& model,bool fixture,SDL_Window*,unsigned acceptance_path_extent=0);
     void draw(Viewport&,bool srgb);
     void request_close();
 #ifdef DK_EDITOR_PATHTRACING
     [[nodiscard]] const PathPreviewSettings& path_settings() const { return path_settings_; }
     [[nodiscard]] bool path_mode() const { return path_mode_; }
 #endif
-    void cancel_interaction() { input_.cancel(); simulation_navigation_=-1; }
+    void cancel_interaction() { input_.cancel(); simulation_navigation_.cancel(); }
+    bool event(const SDL_Event&);
+    [[nodiscard]] bool simulation_navigating() const { return simulation_navigation_.active(); }
     [[nodiscard]] bool closing() const { return closing_; }
     [[nodiscard]] const std::map<std::string,ImVec2>& controls() const { return controls_; }
     [[nodiscard]] unsigned errors() const { return errors_; }
@@ -46,6 +48,7 @@ private:
     void simulation_navigation();
     void confirmation();
     Workspace& model_;
+    RelativeMouse relative_mouse_;
     ViewportInput input_;
     std::string manifest_;
     std::array<char,8193> console_input_{};
@@ -64,7 +67,7 @@ private:
     std::optional<SimulationId> simulation_camera_run_;
     std::optional<ClothConfig> simulation_cloth_;
     bool simulation_visible_=true;
-    int simulation_navigation_=-1;
+    NavigationUi simulation_navigation_;
     PendingAction pending_ = PendingAction::none;
     bool popup_ = false,closing_ = false,layout_ = false,scroll_log_ = true;
     unsigned errors_ = 0,acceptance_path_extent_=0;

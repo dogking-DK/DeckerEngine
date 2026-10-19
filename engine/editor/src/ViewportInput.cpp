@@ -30,20 +30,21 @@ std::optional<double> angle(const geometry::Ray& ray,const Vec3d& pivot,const Ma
     return std::atan2(local[v],local[u]);
 }
 }
-void ViewportInput::cancel() { if (edit_) { edit_.reset(); ++revision_; } navigation_=-1; }
+void ViewportInput::cancel() { if (edit_) { edit_.reset(); ++revision_; } navigation_.cancel(); }
 void ViewportInput::toolbar(Workspace& model,Viewport& preview,std::map<std::string,ImVec2>& controls,const Report& report) {
     ImGui::BeginDisabled(active());
     if (ImGui::RadioButton("Move",mode_==Mode::translate)) mode_=Mode::translate; mark(controls,"mode_move"); ImGui::SameLine();
     if (ImGui::RadioButton("Rotate",mode_==Mode::rotate)) mode_=Mode::rotate; mark(controls,"mode_rotate"); ImGui::SameLine();
     if (ImGui::RadioButton("Scale",mode_==Mode::scale)) mode_=Mode::scale; mark(controls,"mode_scale"); ImGui::SameLine();
-    if (ImGui::SmallButton("Reset")) { navigation_=-1; camera_.reset(fixture_); } mark(controls,"camera_reset");
+    if (ImGui::SmallButton("Reset")) { navigation_.cancel(); camera_.reset(fixture_); } mark(controls,"camera_reset");
     ImGui::SameLine();
     ImGui::BeginDisabled(!model.selection());
-    if (ImGui::SmallButton("Frame") && model.snapshot()) report("Frame",camera_.frame(preview.bounds(*model.selection(),model.snapshot()->scene),aspect_));
+    if (ImGui::SmallButton("Frame") && model.snapshot()) { navigation_.cancel(); report("Frame",camera_.frame(preview.bounds(*model.selection(),model.snapshot()->scene),aspect_)); }
     mark(controls,"camera_frame"); ImGui::EndDisabled(); ImGui::SameLine();
-    if(settings_ui_.draw(camera_,fixture_,aspect_,controls,"camera_")) navigation_=-1;
+    if(settings_ui_.draw(camera_,fixture_,aspect_,controls,"camera_")) navigation_.cancel();
+    navigation_.toolbar(camera_,controls,"camera_");
     ImGui::EndDisabled();
-    ImGui::TextDisabled(active() ? "Transform preview | release: commit | Esc: cancel" : "Local axes | RMB: orbit | MMB: pan | wheel: zoom | F: frame | Home: reset");
+    ImGui::TextDisabled(active() ? "Transform preview | release: commit | Esc: cancel" : "Local axes | drag handles to transform");
 }
 void ViewportInput::image(Workspace& model,Viewport& preview,std::map<std::string,ImVec2>& controls,const Report& report) {
     const Vec2d minimum=vector(ImGui::GetItemRectMin()),size=vector(ImGui::GetItemRectSize());
@@ -57,18 +58,14 @@ void ViewportInput::image(Workspace& model,Viewport& preview,std::map<std::strin
     if (active() && (edit_->guard.document_id!=model.snapshot()->state.document_id || edit_->guard.revision!=model.snapshot()->state.revision)) { cancel(); return; }
     if (ImGui::IsKeyPressed(ImGuiKey_Escape,false)) { cancel(); return; }
     const bool hovered=ImGui::IsItemHovered();
-    if (!active() && !io.WantTextInput) {
-        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) navigation_=ImGuiMouseButton_Right;
-        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) navigation_=ImGuiMouseButton_Middle;
-        if (navigation_>=0 && !ImGui::IsMouseDown(navigation_)) navigation_=-1;
-        if (navigation_==ImGuiMouseButton_Right && !ImGui::IsMouseClicked(navigation_)) camera_.orbit(io.MouseDelta.x,io.MouseDelta.y);
-        if (navigation_==ImGuiMouseButton_Middle && !ImGui::IsMouseClicked(navigation_)) camera_.pan(io.MouseDelta.x,io.MouseDelta.y,size.y());
-        if (hovered && io.MouseWheel!=0) camera_.dolly(io.MouseWheel);
-        if (hovered && ImGui::IsKeyPressed(ImGuiKey_Home,false)) camera_.reset(fixture_);
-        if (hovered && ImGui::IsKeyPressed(ImGuiKey_F,false) && model.selection())
-            report("Frame",camera_.frame(preview.bounds(*model.selection(),model.snapshot()->scene),aspect));
+    navigation_.image(camera_,active());
+    if (!active() && hovered) {
+        if (ImGui::IsKeyPressed(ImGuiKey_Home,false)) { navigation_.cancel(); camera_.reset(fixture_); }
+        if (ImGui::IsKeyPressed(ImGuiKey_F,false) && model.selection()) {
+            navigation_.cancel(); report("Frame",camera_.frame(preview.bounds(*model.selection(),model.snapshot()->scene),aspect));
+        }
     }
-    if (!preview.error().empty() || (!active() && !preview.current(model.snapshot()->state)) || !preview.camera_current(camera_) || navigation_>=0) return;
+    if (!preview.error().empty() || (!active() && !preview.current(model.snapshot()->state)) || !preview.camera_current(camera_) || navigation_.active()) return;
     auto* draw=ImGui::GetWindowDrawList();
     draw->PushClipRect(point(minimum),point(minimum+size),true);
     const auto project=[&](const Vec3d& p) -> std::optional<Vec2d> {

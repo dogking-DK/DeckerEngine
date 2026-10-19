@@ -1,11 +1,13 @@
 #include "SmokeDriver.hpp"
 #include "EditorSupport.hpp"
 #include <array>
+#include <SDL3/SDL.h>
 #include <cmath>
 #include <cstdio>
 
 namespace dk::editor::detail {
 void SmokeDriver::poll_window(platform::Window& window,bool minimized) {
+    navigation_smoke_.poll(window,minimized);
     if (restore_at_==std::chrono::steady_clock::time_point{}) return;
     if (minimized) ++suspended_frames_;
     if (std::chrono::steady_clock::now()>=restore_at_) { check(window.restore()); restore_at_={}; }
@@ -15,7 +17,8 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
     auto& io=ImGui::GetIO(); io.ConfigInputTrickleEventQueue=false;
     if (tick_++<20 || done_) return;
     constexpr std::array actions{"sim_prepare",":initial","sim_sample","sim_step",":stepped","sim_sample","sim_export","sim_export_duplicate","sim_resume",":running",":orbit_running",":pan_running","sim_pause",":paused",
-        "simulation_camera_settings","simulation_camera_fov",":all",":fov",":enter","simulation_camera_apply",
+        "simulation_camera_settings","simulation_camera_fov",":all",":fov",":enter","simulation_camera_speed",":all",":nav_speed",":enter","simulation_camera_apply",
+        "simulation_camera_fly",":fly","simulation_camera_walk",":walk","simulation_camera_fly",":switch_capture","simulation_view","simulation_camera_orbit",
         ":orbit",":pan",":zoom","simulation_frame",":resize",":minimize","simulation_edit_view","simulation_view",
         "sim_cancel","sim_stop","sim_play",":running","sim_stop"};
     const bool select_gpu=simulation_backend_==1 && simulation_stage_<2;
@@ -37,8 +40,10 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
     }
     const auto phase=simulation_phase_++;
     const bool orbit=action==":orbit" || action==":orbit_running";
-    const bool navigation=orbit || action==":pan" || action==":pan_running";
-    const int button=orbit ? 1 : navigation ? 2 : 0;
+    const bool switch_capture=action==":switch_capture";
+    const bool free=action==":fly" || action==":walk";
+    const bool navigation=free || orbit || action==":pan" || action==":pan_running";
+    const int button=(orbit || free || switch_capture) ? 1 : navigation ? 2 : 0;
     const auto control=[&](const std::string& name) {
         const auto found=ui.controls().find(name); require(found!=ui.controls().end(),("Missing control: "+name).c_str()); return found->second;
     };
@@ -53,19 +58,22 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
     if (phase==0) {
         simulation_stable_=0; simulation_observed_step_=0;
         simulation_camera_revision_=ui.simulation_camera().revision();
+        navigation_pose_=ui.simulation_camera().world().matrix(); edit_pose_=ui.input().camera().world().matrix();
         if (viewport.simulation_run() && viewport.texture()) stage_pixels_=viewport.capture_simulation_pixels();
         io.AddFocusEvent(true);
         if (action=="sim_export_duplicate") { ++simulation_expected_errors_; simulation_export_bytes_=export_bytes(); }
         if(action==":all") { io.AddKeyEvent(ImGuiMod_Ctrl,true); io.AddKeyEvent(ImGuiKey_A,true); }
+        else if(action==":nav_speed") io.AddInputCharactersUTF8("0.1");
         else if(action==":fov") io.AddInputCharactersUTF8(simulation_backend_ ? "75" : "55");
         else if(action==":enter") io.AddKeyEvent(ImGuiKey_Enter,true);
         else if (action==":resize") check(window.resize(simulation_backend_ ? 1360 : 1280,simulation_backend_ ? 820 : 800));
         else if (action==":minimize") {
             suspended_frames_=0; check(window.minimize()); restore_at_=std::chrono::steady_clock::now()+std::chrono::milliseconds{150};
-        } else if (navigation || action==":zoom") {
+        } else if (navigation || action==":zoom" || switch_capture) {
             pointer_=control("simulation_viewport"); start_pointer_=pointer_;
             io.AddMousePosEvent(pointer_.x,pointer_.y);
-            if (navigation) io.AddMouseButtonEvent(button,true); else io.AddMouseWheelEvent(0,2);
+            if (navigation || switch_capture) io.AddMouseButtonEvent(button,true); else io.AddMouseWheelEvent(0,2);
+            if (free || switch_capture) { io.AddKeyEvent(ImGuiKey_W,true); if(free) io.AddKeyEvent(ImGuiKey_E,true); }
             if (navigation) {
                 const auto now=std::chrono::steady_clock::now();
                 navigation_probe_={now,now,viewport.simulation_view_sequence()};
@@ -91,11 +99,22 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
                 simulation_backend_ ? "GPU" : "CPU",action.c_str(),elapsed,navigation_probe_.updates,navigation_probe_.max_gap_ms);
             require(navigation_probe_.updates>=5 && navigation_probe_.max_gap_ms<400,"Continuous camera input starved completed images");
             navigation_probe_.finished=true; io.AddMouseButtonEvent(button,false);
+            if(free) { io.AddKeyEvent(ImGuiKey_W,false); io.AddKeyEvent(ImGuiKey_E,false); }
+        } else if (phase>=2 && free) {
+            require(SDL_GetWindowRelativeMouseMode(take(window.native_sdl_window())),"Simulation did not acquire relative mouse");
+            SDL_Event e{}; e.type=SDL_EVENT_MOUSE_MOTION; e.motion.windowID=SDL_GetWindowID(take(window.native_sdl_window())); e.motion.xrel=.2f; e.motion.yrel=-.2f;
+            require(SDL_PushEvent(&e),"Simulation motion injection failed");
         } else if (phase>=2) {
             const float angle=float(phase-1)*0.06f;
             pointer_={start_pointer_.x+36*std::sin(angle),start_pointer_.y+18*(1-std::cos(angle))};
         }
     }
+    if(switch_capture && phase==3) {
+        require(ui.simulation_navigating() && SDL_GetWindowRelativeMouseMode(take(window.native_sdl_window())),"Switch test never captured");
+        pointer_=control("simulation_edit_view"); io.AddMousePosEvent(pointer_.x,pointer_.y); io.AddMouseButtonEvent(0,true);
+    }
+    if(switch_capture && phase==4) io.AddMouseButtonEvent(0,false);
+    if(switch_capture && phase==5) navigation_pose_=ui.simulation_camera().world().matrix();
     io.AddMousePosEvent(pointer_.x,pointer_.y);
     if (phase==1 && !action.starts_with(":")) io.AddMouseButtonEvent(0,false);
     if(phase==1 && action==":all") { io.AddKeyEvent(ImGuiKey_A,false); io.AddKeyEvent(ImGuiMod_Ctrl,false); }
@@ -109,7 +128,15 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
     require(viewport.error().empty(),viewport.error().c_str());
     const bool image=state.run && viewport.simulation_run()==state.run->run_id && viewport.texture() && viewport.simulation_view_current();
     bool ready=false;
-    if(action=="simulation_camera_apply") {
+    if(switch_capture) {
+        ready=!viewport.simulation_run() && viewport.current(model.snapshot()->state);
+        if(ready) {
+            require(!ui.simulation_navigating() && !SDL_GetWindowRelativeMouseMode(take(window.native_sdl_window())),"View switch retained relative mouse");
+            require(ui.simulation_camera().world().matrix()==navigation_pose_ && ui.input().camera().world().matrix()==edit_pose_,"View switch continued movement");
+            io.AddMouseButtonEvent(1,false); io.AddKeyEvent(ImGuiKey_W,false);
+        }
+    }
+    else if(action=="simulation_camera_apply") {
         ready=image && ui.simulation_camera().fov_y()==(simulation_backend_ ? 75 : 55);
         if(ready) {
             require(ui.input().camera().fov_y()==65,"Simulation lens changed Edit lens");
@@ -117,7 +144,7 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
             require(viewport.capture_simulation_pixels()!=stage_pixels_,"Simulation FOV did not alter the image");
         }
     }
-    else if(action.starts_with("simulation_camera_") || action==":all" || action==":fov" || action==":enter") ready=image;
+    else if(action.starts_with("simulation_camera_") || action==":all" || action==":fov" || action==":nav_speed" || action==":enter") ready=image;
     else if (action=="sim_solver") ready=ui.controls().contains("sim_gpu");
     else if (action=="sim_gpu") ready=model.simulation_draft().gpu;
     else if (action=="sim_stop") ready=!state.run && !shown.run && !viewport.simulation_run() && viewport.current(model.snapshot()->state);
@@ -177,6 +204,11 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
             ready=(!navigation || navigation_probe_.finished) && image && ui.simulation_camera().revision()!=simulation_camera_revision_;
             if (ready) {
                 require(viewport.capture_simulation_pixels()!=stage_pixels_,"Camera input did not alter cloth image");
+                if(free) {
+                    require(ui.input().camera().world().matrix()==edit_pose_ && ui.input().camera().navigation_mode()==NavigationMode::orbit,"Simulation navigation changed Edit camera");
+                    require(!ui.simulation_navigating() && !SDL_GetWindowRelativeMouseMode(take(window.native_sdl_window())),"Simulation mouse release failed");
+                    if(action==":walk") require(ui.simulation_camera().world().matrix()(1,3)==navigation_pose_(1,3),"Simulation Walk changed height");
+                }
                 if (navigation) require(action.ends_with("_running") ? state.run->clock.steps>simulation_observed_step_ :
                     state.run->clock.steps==simulation_observed_step_,"Camera input changed paused steps or starved running simulation");
             }

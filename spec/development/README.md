@@ -131,5 +131,6 @@
 | 0127 | [M17.5 Editor与固定捕获统一介质](0127-editor-media-pathtracing.md) | editor、render-capture、render-pathtracing | completed |
 | 0128 | [M17.6 Sponza介质路径性能](0128-path-media-performance.md) | render-pathtracing、editor、render-capture | completed |
 | 0129 | [M18.1 相机镜头与导航设置](0129-camera-settings.md) | editor-interaction、editor、foundation-math、render-capture | completed |
+| 0130 | [M18.2 Fly 与水平 Walk](0130-camera-fly-walk.md) | editor-interaction、editor、platform | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

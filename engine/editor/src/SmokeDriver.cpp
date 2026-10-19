@@ -52,14 +52,14 @@ void SmokeDriver::input(Workspace& model,WorkbenchUi& ui,platform::Window& windo
         std::printf("UI smoke stage %u %s passed\n",stage,action.c_str());
     }
 }
-void SmokeDriver::interaction_input(Workspace& model,WorkbenchUi& ui,platform::Window& window,const Viewport& viewport) {
+void SmokeDriver::interaction_input(Workspace& model,WorkbenchUi& ui,platform::Window& window,Viewport& viewport) {
     constexpr std::array interaction_actions={"viewport_empty","viewport",":move","undo","redo",":cancel",
         "mode_rotate",":rotate","mode_scale",":scale",":orbit",":pan",":zoom","camera_reset","camera_frame","camera_reset",
         ":focus_cancel","save","reload","viewport",":resize_cancel",":minimize_cancel"};
     auto& io=ImGui::GetIO(); io.ConfigInputTrickleEventQueue=false;
     if (tick_++<12 || done_) return;
     const auto elapsed=tick_-13,stage=elapsed/12,phase=elapsed%12;
-    if (stage>=interaction_actions.size()) { done_=true; return; }
+    if (stage>=interaction_actions.size()) { done_=navigation_smoke_.input(model,ui,window,viewport); return; }
     const std::string action=interaction_actions[stage];
     const bool cancelled=action==":cancel" || action==":focus_cancel" || action==":resize_cancel" || action==":minimize_cancel";
     const bool gizmo=action==":move" || action==":rotate" || action==":scale" || cancelled;

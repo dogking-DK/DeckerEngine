@@ -43,6 +43,7 @@ Result<void> Camera::set_settings(const CameraSettings& value,double aspect) {
 Result<void> Camera::restore_defaults(bool fixture,double aspect) {
     Camera candidate=*this;
     if(auto valid=candidate.set_settings({},aspect); !valid) return valid;
+    candidate.mode_=NavigationMode::orbit;
     candidate.reset(fixture);
     const bool changed=candidate.revision_!=revision_;
     candidate.revision_=revision_+(changed ? 1 : 0); *this=candidate; return {};

@@ -2,6 +2,7 @@
 #include "EditorSupport.hpp"
 #include <dk/io/File.hpp>
 #include <array>
+#include <SDL3/SDL.h>
 #include <cmath>
 #include <format>
 namespace dk::editor::detail {
@@ -12,10 +13,10 @@ constexpr std::array desktop_names={"path","atmosphere","air_motion","clouds_ena
 void require(bool value,const char* message) { if(!value) throw std::runtime_error(std::string{"Path smoke: "}+message); }
 std::span<const char* const> actions(std::size_t stage,bool desktop,bool media) {
     static constexpr std::array desktop_path={"path_mode","path_target",":all",":one",":enter"};
-    static constexpr std::array desktop_air={"path_raster","environment_open","environment_enabled","environment_apply"};
+    static constexpr std::array desktop_air={"path_raster","environment_open","environment_enabled","environment_apply","camera_fly"};
     static constexpr std::array desktop_clouds={"cloud_preset_sparse","environment_apply"};
-    static constexpr std::array desktop_return={"path_settings","path_surface","path_mode"};
-    static constexpr std::array underground={":orbit",":down",":release"};
+    static constexpr std::array desktop_return={"path_settings","path_surface","path_mode","camera_walk"};
+    static constexpr std::array underground={"camera_orbit",":orbit",":down",":release"};
     static constexpr std::array home={":home"};
     if(media) {
         static constexpr std::array air={"path_media","environment_open","environment_enabled","environment_apply","path_settings"};
@@ -31,9 +32,9 @@ std::span<const char* const> actions(std::size_t stage,bool desktop,bool media) 
         static constexpr std::array media_mode={"path_settings","path_media"}; if(stage==11) return media_mode; return {}; }
     static constexpr std::array path={"path_mode","camera_settings","camera_fov",":all",":bad_fov",":enter","camera_apply",
         "camera_fov",":all",":fov",":enter","camera_apply","path_settings","path_target",":all",":two",":enter"};
-    static constexpr std::array pause={"path_pause","camera_settings","camera_speed",":all",":speed",":enter","camera_apply","path_settings","path_target",":all",":three",":enter"};
+    static constexpr std::array pause={"path_pause","camera_fly","camera_walk","camera_orbit","camera_settings","camera_speed",":all",":speed",":enter","camera_apply","path_settings","path_target",":all",":three",":enter"};
     static constexpr std::array resume={"path_target",":all",":two",":enter","path_pause"}; static constexpr std::array reset={"path_reset"}; static constexpr std::array exposure={"path_exposure",":all",":two",":enter"};
-    static constexpr std::array orbit={":orbit",":drag",":release"}; static constexpr std::array gizmo={"viewport","gizmo_0",":drag",":release"};
+    static constexpr std::array orbit={"camera_fly",":orbit",":forward",":release","camera_orbit"}; static constexpr std::array gizmo={"viewport","gizmo_0",":drag",":release"};
     static constexpr std::array resize={":resize"},minimize={":minimize"},raster={"path_raster"},returned={"path_mode"};
     static constexpr std::array closing={"path_target",":all",":many",":enter","path_reset"};
     switch(stage) {
@@ -70,7 +71,13 @@ void PathSmoke::input(const WorkbenchUi& ui,const Workspace& model,const Viewpor
             io.AddMousePosEvent(pointer_.x,pointer_.y); io.AddMouseButtonEvent(1,true);
         } else if(std::chrono::steady_clock::now()-motion_start_<std::chrono::seconds(2)) {
             const double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-motion_start_).count();
-            pointer_.x=motion_origin_.x+float(8*std::sin(seconds*12.566370614359)); io.AddMousePosEvent(pointer_.x,pointer_.y);
+            const float next=motion_origin_.x+float(8*std::sin(seconds*12.566370614359));
+            if(ui.input().camera().navigation_mode()!=NavigationMode::orbit) {
+                require(SDL_GetWindowRelativeMouseMode(take(window.native_sdl_window())),"Desktop navigation did not capture relative mouse");
+                SDL_Event e{}; e.type=SDL_EVENT_MOUSE_MOTION; e.motion.windowID=SDL_GetWindowID(take(window.native_sdl_window()));
+                e.motion.xrel=next-pointer_.x; require(SDL_PushEvent(&e),"Desktop relative motion injection failed");
+            } else io.AddMousePosEvent(next,pointer_.y);
+            pointer_.x=next;
         } else { io.AddMouseButtonEvent(1,false); ready_=true; }
         return;
     }
@@ -95,8 +102,11 @@ void PathSmoke::input(const WorkbenchUi& ui,const Workspace& model,const Viewpor
         else if(action==":enter") io.AddKeyEvent(ImGuiKey_Enter,true);
         else if(action==":home") io.AddKeyEvent(ImGuiKey_Home,true);
         else if(action==":down") pointer_.y-=80;
+        else if(action==":forward") { motion_start_=std::chrono::steady_clock::now(); motion_signature_=viewport.published_camera().revision();
+            io.AddKeyEvent(ImGuiMod_Ctrl,true); io.AddKeyEvent(ImGuiKey_W,true);
+            SDL_Event e{}; e.type=SDL_EVENT_MOUSE_MOTION; e.motion.windowID=SDL_GetWindowID(take(window.native_sdl_window())); e.motion.xrel=2; require(SDL_PushEvent(&e),"relative injection failed"); }
         else if(action==":drag") { pointer_.x+=40; pointer_.y+=stage_==5 ? 15 : 0; }
-        else if(action==":release") { io.AddMouseButtonEvent(0,false); io.AddMouseButtonEvent(1,false); }
+        else if(action==":release") { io.AddMouseButtonEvent(0,false); io.AddMouseButtonEvent(1,false); io.AddKeyEvent(ImGuiKey_W,false); io.AddKeyEvent(ImGuiKey_S,false); io.AddKeyEvent(ImGuiMod_Ctrl,false); }
         else if(action==":resize") check(window.resize(1280,800));
         else if(action==":minimize") { check(window.minimize()); restore_=std::chrono::steady_clock::now()+std::chrono::milliseconds(150); }
         else {
@@ -104,6 +114,11 @@ void PathSmoke::input(const WorkbenchUi& ui,const Workspace& model,const Viewpor
             require(control!=ui.controls().end(),"missing GUI control"); pointer_=control->second;
             io.AddMousePosEvent(pointer_.x,pointer_.y); io.AddMouseButtonEvent(action==":orbit" ? 1 : 0,true);
         }
+    }
+    if(action==":forward" && phase==1) {
+        const auto ms=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-motion_start_).count();
+        if(ms<800) { const bool forward=(ms/80)%2==0; io.AddKeyEvent(ImGuiKey_W,forward); io.AddKeyEvent(ImGuiKey_S,!forward); --tick_; }
+        else { io.AddKeyEvent(ImGuiKey_W,false); io.AddKeyEvent(ImGuiKey_S,false); }
     }
     io.AddMousePosEvent(pointer_.x,pointer_.y);
     if(!desktop_ && !media_ && stage_==0 && step==6 && phase==4)
@@ -116,6 +131,10 @@ void PathSmoke::input(const WorkbenchUi& ui,const Workspace& model,const Viewpor
     }
 }
 void PathSmoke::presented(const Workspace& model,const WorkbenchUi& ui,Viewport& viewport) {
+    if(!desktop_ && !media_ && stage_==5 && !waiting_ && motion_start_!=std::chrono::steady_clock::time_point{}) {
+        const auto revision=viewport.published_camera().revision();
+        if(revision!=motion_signature_) { motion_signature_=revision; ++motion_updates_; }
+    }
     if(media_) { presented_media(model,ui,viewport); return; }
     if(desktop_ && !waiting_ && !ready_ && motion_start_!=std::chrono::steady_clock::time_point{}) {
         ++motion_frames_;
@@ -166,13 +185,14 @@ void PathSmoke::presented(const Workspace& model,const WorkbenchUi& ui,Viewport&
     }
     require(stage_!=9 || (minimized_>0 && restore_==std::chrono::steady_clock::time_point{}),"minimized loop was not exercised");
     const auto& state=model.snapshot()->state;
+    if(stage_==5) require(motion_updates_>=2,"Fly motion starved completed path images");
     if(stage_==1) require(ui.input().camera().settings().navigation.move_speed==9,"Camera speed preference was not applied");
     std::uint64_t pixels=0;
     if(stage_!=3 && stage_!=13) pixels=stage_==10 ? viewport.pixel_signature() : viewport.capture_path_pixels();
     Json report{{"checkpoint",names[stage_]},{"document_id",state.document_id.to_string()},{"revision",state.revision},
         {"generation",progress.generation},{"target",progress.target_spp},{"spp",progress.completed_spp},{"paused",progress.paused},{"pending",progress.pending},
         {"exposure",ui.path_settings().exposure},{"pixels",pixels},{"width",viewport.info().width},{"height",viewport.info().height},
-        {"camera",ui.input().camera().revision()},{"undo",model.history().undo_count},{"path_mode",ui.path_mode()}};
+        {"navigation_updates",motion_updates_},{"camera",ui.input().camera().revision()},{"undo",model.history().undo_count},{"path_mode",ui.path_mode()}};
     if(stage_==0 || stage_==4 || stage_==5) {
         const auto& camera=ui.input().camera(); const auto world=camera.world().matrix();
         const Vec3d eye=world.block<3,1>(0,3),target=eye-world.block<3,1>(0,2),up=world.block<3,1>(0,1);

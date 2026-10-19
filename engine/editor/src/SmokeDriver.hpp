@@ -1,5 +1,6 @@
 #pragma once
 #include "WorkbenchUi.hpp"
+#include "NavigationSmoke.hpp"
 #include <dk/platform/Window.hpp>
 #include <dk/io/File.hpp>
 namespace dk::editor::detail {
@@ -10,7 +11,7 @@ public:
     void poll_window(platform::Window&,bool minimized);
     [[nodiscard]] bool done() const { return done_; }
 private:
-    void interaction_input(Workspace&,WorkbenchUi&,platform::Window&,const Viewport&);
+    void interaction_input(Workspace&,WorkbenchUi&,platform::Window&,Viewport&);
     void simulation_input(Workspace&,WorkbenchUi&,platform::Window&,Viewport&);
     void verify(Workspace&,WorkbenchUi&,const Viewport&,unsigned stage);
     ImVec2 pointer_{-10000,-10000};
@@ -22,6 +23,8 @@ private:
     std::string name_;
     double translation_ = 0;
     std::uint64_t pixels_ = 0;
+    NavigationSmoke navigation_smoke_;
+    Mat4d navigation_pose_=Mat4d::Identity(),edit_pose_=Mat4d::Identity();
     bool interaction_ = false;
     bool simulation_ = false;
     unsigned simulation_stage_=0,simulation_phase_=0;

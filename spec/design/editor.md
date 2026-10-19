@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-16T17:25:00+08:00"
+updated_at: "2026-10-19T09:48:00+08:00"
 status: accepted
 ---
 
@@ -102,7 +102,8 @@ CPU布片上传当前位置后绘制；GPU布片通过零步Graph直接读取求
 GPU图像通过[已完成图像交接](graphics-resources.md)转入呈现队列，ImGui直接采样。
 图像/描述符仅在前一GUI提交完成后替换；窗口缩放保留旧图直至新尺寸完成，最小化不新增预览请求；
 Stop/关闭不丢弃在途GPU所有权，worker排空，图像可独立保活至GUI完成。
-模拟相机与编辑相机独立；首次运行自动取景，Frame/F/Home重置取景，RMB环绕/MMB平移/滚轮缩放。
+模拟相机与编辑相机独立；首次运行自动取景，Frame/F/Home重新取景并保留模式/设置。
+两视口共用 NavigationUi/CameraNavigation，提供 Orbit、Fly、固定世界 Y 的 Walk，输入和鼠标释放约定见[交互设计](editor-interaction.md)。
 模拟图像禁用实体拾取/Gizmo，Inspector仍可编辑EditWorld。相机取景按布片输入包围范围，不隐式回读GPU粒子。
 无共享双队列设备时明确显示实时预览不可用；不偷偷使用CPU图像回传。CPU-only模型不增加Vulkan依赖。
 验收覆盖CPU/GPU连续变化、精确暂停图像稳定、运行及暂停中持续环绕/平移期间实际视图序号前进、停止输入后收敛、缩放/最小化恢复、Stop新run隔离、带活动预览关闭及同步/寿命。
@@ -288,6 +289,8 @@ Undo/Redo/切换文档前处理任一草稿；Save先提交草稿再保存；两
 未应用草稿不渲染。面板使用原子完整Apply，不每次拖动重建LUT。
 
 启用环境的Edit视口采用独立后台worker/Device/Queue，复用ScenePipeline的环境绑定入口和最近LUT。
+Surface only 的连续相机输入等待当前完整图像发布后再提交最新姿态，避免每帧取消导致显示饥饿；
+暂停、worker 失败、物理/设置/尺寸变化仍立即接纳。Scene media 继续使用既有低分辨率/100ms替换策略。
 主线程只复制拥有型SceneReadSnapshot/相机/尺寸/曝光/preview身份；最多一个正在执行、一个合并待处理请求和一个完成结果。
 worker只发布最新已提交请求的序号；GUI在首帧完成前合并相机/尺寸输入，完成后提交最新视角，避免持续输入饿死画面。
 完成图必须匹配当前document/revision/exposure/preview和渲染设置；相机/尺寸允许落后但保留真实来源，不标为当前帧，拾取/Gizmo仍要求完全匹配。

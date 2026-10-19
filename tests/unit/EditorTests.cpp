@@ -1,6 +1,7 @@
 #include "SceneTestFiles.hpp"
 #include <dk/editor/Workspace.hpp>
 #include <dk/editor/Camera.hpp>
+#include <dk/editor/CameraNavigation.hpp>
 #include <dk/scene/SceneDocument.hpp>
 #include <catch2/catch_approx.hpp>
 #include <algorithm>
@@ -358,4 +359,85 @@ TEST_CASE("workspace console shares explicit guards and protects drafts without 
     CHECK(model.snapshot()->state.revision==before.revision+1); CHECK(model.history().undo_count==1);
     CHECK_FALSE(model.execute_console(command)); // stale explicit guard
     REQUIRE(model.undo()); CHECK(model.snapshot()->scene.entities().size()==query->at("entities").size());
+}
+
+TEST_CASE("camera navigation is frame rate independent normalized and uses speed modifiers") {
+    for(auto mode : {NavigationMode::fly,NavigationMode::walk}) for(int hz : {30,60,144}) {
+        for(auto axes : {Vec3d{0,0,1},Vec3d{1,0,1},Vec3d{1,1,1}}) for(int modifier : {0,1,2,3}) {
+            Camera camera{true}; REQUIRE(camera.set_navigation_mode(mode));
+            CameraNavigation nav; nav.begin(); NavigationInput input;
+            input.move=axes; input.seconds=1./hz; input.fast=modifier&1; input.slow=modifier&2;
+            const Vec3d start=camera.world().matrix().block<3,1>(0,3);
+            REQUIRE(nav.update(camera,input)); CHECK(camera.world().matrix().block<3,1>(0,3)==start);
+            for(int i=0;i<hz;++i) REQUIRE(nav.update(camera,input));
+            const Vec3d delta=camera.world().matrix().block<3,1>(0,3)-start;
+            CHECK(delta.norm()==Catch::Approx(3*(input.slow ? .25 : input.fast ? 4 : 1)).margin(1e-10));
+            if(mode==NavigationMode::walk) CHECK(delta.y()==0);
+        }
+    }
+}
+TEST_CASE("camera navigation preserves mode transition pose and walk height through look and frame") {
+    Camera camera{true}; camera.orbit(43,250);
+    for(auto mode : {NavigationMode::fly,NavigationMode::walk,NavigationMode::orbit}) {
+        const auto pose=camera.world().matrix(); const auto revision=camera.revision();
+        REQUIRE(camera.set_navigation_mode(mode)); CHECK(camera.world().matrix()==pose); CHECK(camera.revision()==revision);
+    }
+    REQUIRE(camera.set_navigation_mode(NavigationMode::walk)); CameraNavigation nav; nav.begin(); REQUIRE(nav.update(camera,{}));
+    const double height=camera.world().matrix()(1,3);
+    NavigationInput input; input.seconds=.05; input.move={1,1,1}; input.look={150,1e8};
+    for(int i=0;i<10;++i) { REQUIRE(nav.update(camera,input)); CHECK(camera.world().matrix()(1,3)==height); }
+    const auto held=camera.world().matrix(); input.move={0,1,0}; input.look.setZero(); REQUIRE(nav.update(camera,input)); CHECK(camera.world().matrix()==held);
+    REQUIRE(camera.frame({{-1,4,-1},{1,6,1}},1)); const double framed=camera.world().matrix()(1,3);
+    input.move={0,0,1}; REQUIRE(nav.update(camera,input)); CHECK(camera.world().matrix()(1,3)==framed);
+    camera.reset(true); REQUIRE(nav.update(camera,input)); CHECK(camera.world().matrix()(1,3)==0);
+    REQUIRE(camera.restore_defaults(true,1)); CHECK(camera.navigation_mode()==NavigationMode::orbit);
+}
+TEST_CASE("camera navigation clamps stalls cancels and rejects invalid input atomically") {
+    Camera camera{true}; REQUIRE(camera.set_navigation_mode(NavigationMode::fly)); CameraNavigation nav;
+    NavigationInput input; input.move={0,0,1}; input.seconds=100;
+    const auto initial=camera.world().matrix(); REQUIRE(nav.update(camera,input)); CHECK(camera.world().matrix()==initial);
+    nav.begin(); REQUIRE(nav.update(camera,input)); REQUIRE(nav.update(camera,input));
+    CHECK(Vec3d{camera.world().matrix().block<3,1>(0,3)-initial.block<3,1>(0,3)}.norm()==Catch::Approx(.15));
+    const auto revision=camera.revision(); const auto pose=camera.world().matrix(); const auto settings=camera.settings();
+    for(int field=0;field<4;++field) {
+        auto bad=input; bad.wheel=2;
+        if(field==0) bad.seconds=-1;
+        if(field==1) bad.move.x()=2;
+        if(field==2) bad.look.x()=std::numeric_limits<double>::infinity();
+        if(field==3) bad.wheel=std::numeric_limits<double>::quiet_NaN();
+        CHECK_FALSE(nav.update(camera,bad)); CHECK(camera.world().matrix()==pose); CHECK(camera.revision()==revision); CHECK(camera.settings()==settings);
+    }
+    REQUIRE(nav.update(camera,{})); CHECK(camera.revision()==revision);
+    nav.cancel(); REQUIRE(nav.update(camera,input)); CHECK(camera.world().matrix()==pose);
+    nav.begin(); REQUIRE(nav.update(camera,input)); CHECK(camera.world().matrix()==pose);
+    CHECK_FALSE(camera.set_navigation_mode(static_cast<NavigationMode>(99))); CHECK(camera.navigation_mode()==NavigationMode::fly);
+}
+TEST_CASE("camera navigation mouse ignores dt and wheel changes only preference") {
+    Camera a{true},b{true}; REQUIRE(a.set_navigation_mode(NavigationMode::fly)); REQUIRE(b.set_navigation_mode(NavigationMode::fly));
+    CameraNavigation x,y; x.begin(); y.begin(); REQUIRE(x.update(a,{})); REQUIRE(y.update(b,{}));
+    NavigationInput input; input.look={30,15}; input.seconds=1./144; REQUIRE(x.update(a,input));
+    input.seconds=1./30; REQUIRE(y.update(b,input)); CHECK(a.world().matrix().isApprox(b.world().matrix()));
+    const auto revision=a.revision(); input={}; input.wheel=1; REQUIRE(x.update(a,input));
+    CHECK(a.settings().navigation.move_speed==Catch::Approx(3*std::exp(.15))); CHECK(a.revision()==revision);
+    input.wheel=1e8; REQUIRE(x.update(a,input)); CHECK(a.settings().navigation.move_speed==1000); REQUIRE(x.update(a,input)); CHECK(a.revision()==revision);
+    auto settings=b.settings(); settings.navigation.invert_y=true; REQUIRE(b.set_settings(settings,1)); b.reset(true);
+    input={}; input.look={30,15}; REQUIRE(y.update(b,input));
+    CHECK(b.world().matrix()(1,2)==Catch::Approx(-a.world().matrix()(1,2)));
+}
+
+TEST_CASE("camera navigation follows viewing axes independently of lens") {
+    for(double fov : {30.,100.}) for(int axis=0;axis<3;++axis) {
+        Camera camera{true}; camera.orbit(80,40); auto settings=camera.settings(); settings.lens.fov_y=fov;
+        REQUIRE(camera.set_settings(settings,1)); REQUIRE(camera.set_navigation_mode(NavigationMode::fly));
+        const auto before=camera.world().matrix(); CameraNavigation nav; nav.begin(); REQUIRE(nav.update(camera,{}));
+        NavigationInput input; input.move[axis]=1; input.seconds=.04;
+        REQUIRE(nav.update(camera,input));
+        const Vec3d expected=axis==0 ? Vec3d{before.block<3,1>(0,0)} : axis==1 ? Vec3d{0,1,0} : Vec3d{-before.block<3,1>(0,2)};
+        const Vec3d delta=camera.world().matrix().block<3,1>(0,3)-before.block<3,1>(0,3);
+        CHECK(delta.isApprox(expected*.12,1e-10));
+        REQUIRE(camera.set_navigation_mode(NavigationMode::walk)); const Vec3d start=camera.world().matrix().block<3,1>(0,3);
+        input.move={0,0,1}; REQUIRE(nav.update(camera,input));
+        const Vec3d horizontal=Vec3d{-before(0,2),0,-before(2,2)}.normalized();
+        CHECK(Vec3d{camera.world().matrix().block<3,1>(0,3)-start}.isApprox(horizontal*.12,1e-10));
+    }
 }

@@ -178,6 +178,7 @@ def main():
                 compare_capture(resumed)
                 advance("resumed")
                 camera = checkpoint("camera")
+                assert camera["navigation_updates"] >= 2
                 assert camera["camera"] != resumed["camera"] and camera["generation"] > resumed["generation"]
                 assert camera["pixels"] != resumed["pixels"] and camera["revision"] == resumed["revision"]
                 compare_capture(camera)

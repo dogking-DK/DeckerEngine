@@ -1,7 +1,7 @@
 ---
 module: platform
 created_at: "2026-10-02T21:40:00+08:00"
-updated_at: "2026-10-10T14:49:00+08:00"
+updated_at: "2026-10-19T09:48:00+08:00"
 status: accepted
 ---
 
@@ -35,6 +35,9 @@ SDL video 子系统按共享 lease 成对 InitSubSystem/QuitSubSystem；最后�
 公开头只前向声明 SDL_Window/SDL_Event，不需要包含 SDL 或 Vulkan。
 poll_events 可接受同步 EventSink，在处理事件时转发借用事件，不允许回调抛异常或重入事件泵。
 clear_close_request 用于编辑器取消关闭；三者沿用空对象/主线程校验，不转移 SDL 所有权。
+编辑器的 RelativeMouse 通过此借用入口管理 SDL_SetWindowRelativeMouseMode；Platform 不拥有相机或 ImGui 状态。
+一个 GUI 主线程 owner 管理两视口的相对鼠标租用，失焦/最小化/隐藏/关闭在事件转发时先释放；普通导航增量由 UI 私有适配消费。
+后台自动化只注入窗口事件/ImGui 输入并验证 SDL 相对开关，不将 SDL 的配置状态当作前台 OS 指针锁定已验收。
 控制块使用调用者 Memory；SDL 内部临时/系统分配沿用 SDL 默认分配器。
 
 ## 状态与失败

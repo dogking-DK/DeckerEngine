@@ -12,7 +12,7 @@ bool CameraSettingsUi::draw(Camera& camera,bool fixture,double aspect,std::map<s
     ImGui::SetNextWindowSize({460,0},ImGuiCond_Appearing);
     const bool open=ImGui::BeginPopup("Camera settings");
     if(open) {
-        ImGui::TextUnformatted("Orbit / Perspective");
+        ImGui::Text("%s / Perspective",camera.navigation_mode()==NavigationMode::orbit ? "Orbit" : camera.navigation_mode()==NavigationMode::fly ? "Fly" : "Walk");
         ImGui::TextDisabled("Session settings for this viewport");
         ImGui::SetNextItemWidth(255);
         constexpr double minimum=10,maximum=120;
@@ -30,7 +30,6 @@ bool CameraSettingsUi::draw(Camera& camera,bool fixture,double aspect,std::map<s
         ImGui::InputDouble("Wheel sensitivity",&draft_.navigation.wheel_sensitivity,0,0,"%.3f");
         ImGui::Checkbox("Invert mouse Y",&draft_.navigation.invert_y);
         ImGui::InputDouble("Move speed (m/s)",&draft_.navigation.move_speed,0,0,"%.3f"); mark("speed");
-        ImGui::TextDisabled("Saved for future Fly/Walk navigation.");
         if(ImGui::TreeNode("Fly/Walk preferences")) {
             ImGui::InputDouble("Fast multiplier",&draft_.navigation.fast_multiplier,0,0,"%.3f");
             ImGui::InputDouble("Slow multiplier",&draft_.navigation.slow_multiplier,0,0,"%.3f");

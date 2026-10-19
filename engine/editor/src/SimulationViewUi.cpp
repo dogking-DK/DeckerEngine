@@ -3,6 +3,7 @@
 
 namespace dk::editor::detail {
 void WorkbenchUi::frame_simulation(const ClothConfig& cloth,double aspect) {
+    simulation_navigation_.cancel();
     geometry::Bounds bounds;
     const double half=(cloth.columns-1)*cloth.spacing/2.0,depth=(cloth.rows-1)*cloth.spacing;
     bounds.include({-half,std::min(double(cloth.physics.floor_y),double(cloth.height)),0});
@@ -18,25 +19,20 @@ void WorkbenchUi::frame_simulation(const ClothConfig& cloth,double aspect) {
     if(report("Frame cloth",candidate.frame(bounds,aspect))) simulation_camera_=candidate;
 }
 void WorkbenchUi::simulation_navigation() {
-    auto& io=ImGui::GetIO();
     mark("simulation_viewport");
-    const bool modal=ImGui::IsPopupOpen(nullptr,ImGuiPopupFlags_AnyPopupId|ImGuiPopupFlags_AnyPopupLevel);
-    if (io.AppFocusLost || modal || io.WantTextInput || ImGui::IsKeyPressed(ImGuiKey_Escape,false)) { simulation_navigation_=-1; return; }
-    const auto size=ImGui::GetItemRectSize();
-    const bool hovered=ImGui::IsItemHovered();
-    if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) simulation_navigation_=ImGuiMouseButton_Right;
-    if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) simulation_navigation_=ImGuiMouseButton_Middle;
-    if (simulation_navigation_>=0 && !ImGui::IsMouseDown(simulation_navigation_)) simulation_navigation_=-1;
-    if (simulation_navigation_==ImGuiMouseButton_Right && !ImGui::IsMouseClicked(simulation_navigation_)) simulation_camera_.orbit(io.MouseDelta.x,io.MouseDelta.y);
-    if (simulation_navigation_==ImGuiMouseButton_Middle && !ImGui::IsMouseClicked(simulation_navigation_)) simulation_camera_.pan(io.MouseDelta.x,io.MouseDelta.y,size.y);
-    if (hovered && io.MouseWheel!=0) simulation_camera_.dolly(io.MouseWheel);
-    if (hovered && simulation_cloth_ && (ImGui::IsKeyPressed(ImGuiKey_F,false) || ImGui::IsKeyPressed(ImGuiKey_Home,false)))
-        frame_simulation(*simulation_cloth_,size.x/size.y);
+    simulation_navigation_.image(simulation_camera_,false);
+    auto& io=ImGui::GetIO();
+    const bool popup=ImGui::IsPopupOpen(nullptr,ImGuiPopupFlags_AnyPopupId|ImGuiPopupFlags_AnyPopupLevel);
+    if (!io.AppFocusLost && !io.WantTextInput && !popup && ImGui::IsItemHovered() && simulation_cloth_ &&
+        (ImGui::IsKeyPressed(ImGuiKey_F,false) || ImGui::IsKeyPressed(ImGuiKey_Home,false))) {
+        const auto size=ImGui::GetItemRectSize(); frame_simulation(*simulation_cloth_,size.x/size.y);
+    }
 }
+
 bool WorkbenchUi::simulation_view(Viewport& preview,bool visible) {
     const auto state=model_.simulation_state();
     const bool active=state.run && state.run->cloth && state.mode!=SimulationMode::stopping;
-    if (!active) { simulation_camera_run_.reset(); simulation_navigation_=-1; return false; }
+    if (!active) { simulation_camera_run_.reset(); simulation_navigation_.cancel(); return false; }
     if (simulation_camera_run_!=state.run->run_id) {
         simulation_camera_run_=state.run->run_id; simulation_cloth_=state.run->cloth;
         simulation_visible_=true; input_.cancel();
@@ -46,11 +42,11 @@ bool WorkbenchUi::simulation_view(Viewport& preview,bool visible) {
     ImGui::BeginDisabled(input_.active());
     if (ImGui::RadioButton("Simulation view",simulation_visible_)) { simulation_visible_=true; input_.cancel(); }
     mark("simulation_view"); ImGui::SameLine();
-    if (ImGui::RadioButton("Edit view",!simulation_visible_)) { simulation_visible_=false; simulation_navigation_=-1; }
+    if (ImGui::RadioButton("Edit view",!simulation_visible_)) { simulation_visible_=false; simulation_navigation_.cancel(); }
     mark("simulation_edit_view"); ImGui::EndDisabled();
     if (!simulation_visible_) return false;
     input_.cancel();
-    if (!visible) { simulation_navigation_=-1; return true; }
+    if (!visible) { simulation_navigation_.cancel(); return true; }
     if (ImGui::SmallButton("Frame cloth")) {
         const auto available=ImGui::GetContentRegionAvail();
         frame_simulation(*simulation_cloth_,available.x/std::max(32.0f,available.y-60));
@@ -58,8 +54,8 @@ bool WorkbenchUi::simulation_view(Viewport& preview,bool visible) {
     mark("simulation_frame"); ImGui::SameLine();
     if (ImGui::SmallButton("Retry preview")) preview.retry_simulation();
     ImGui::SameLine();
-    if(simulation_settings_ui_.draw(simulation_camera_,true,simulation_aspect_,controls_,"simulation_camera_")) simulation_navigation_=-1;
-    ImGui::TextDisabled("RMB: orbit | MMB: pan | wheel: zoom | F/Home: frame");
+    if(simulation_settings_ui_.draw(simulation_camera_,true,simulation_aspect_,controls_,"simulation_camera_")) simulation_navigation_.cancel();
+    simulation_navigation_.toolbar(simulation_camera_,controls_,"simulation_camera_");
     if (preview.texture() && preview.simulation_run()==state.run->run_id)
         ImGui::Text("%s cloth | displayed step %llu | %s",state.run->gpu ? "GPU" : "CPU",
             static_cast<unsigned long long>(preview.simulation_steps()),preview.simulation_view_current() ? "Completed image" : "Updating view...");
@@ -77,7 +73,7 @@ bool WorkbenchUi::simulation_view(Viewport& preview,bool visible) {
             ImGui::Image(preview.texture(),{info.width*scale,info.height*scale});
             simulation_navigation();
         }
-    } else simulation_navigation_=-1;
+    } else simulation_navigation_.cancel();
     return true;
 }
 }
