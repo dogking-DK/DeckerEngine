@@ -180,7 +180,7 @@ if(DK_BUILD_RENDER_PIPELINE)
             DK_ATMOSPHERE_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/atmosphere/shaders")
         dk_target_defaults(dk_aerial_perspective_probe)
         dk_deploy_slang(dk_aerial_perspective_probe)
-        foreach(case IN ITEMS numeric composition failures)
+        foreach(case IN ITEMS numeric composition failures orthographic)
             add_test(NAME dk.render.aerial_${case}_gpu_validation COMMAND dk_aerial_perspective_probe ${case})
             set_tests_properties(dk.render.aerial_${case}_gpu_validation PROPERTIES TIMEOUT 240 LABELS "gpu" RUN_SERIAL TRUE
                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
@@ -882,7 +882,7 @@ if(TARGET dk_render_clouds AND TARGET dk_render_pipeline AND TARGET dk_render_at
         DK_ATMOSPHERE_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/atmosphere/shaders")
     dk_target_defaults(dk_cloud_composition_probe)
     dk_deploy_slang(dk_cloud_composition_probe)
-    foreach(case IN ITEMS numeric composition failures optimization optimization_switches optimization_boundaries temporal history shadow_numeric shadow_surface shadow_failures)
+    foreach(case IN ITEMS numeric composition failures orthographic orthographic_shadow optimization optimization_switches optimization_boundaries temporal history shadow_numeric shadow_surface shadow_failures)
         add_test(NAME dk.clouds.${case}_gpu_composition COMMAND dk_cloud_composition_probe ${case})
         set_tests_properties(dk.clouds.${case}_gpu_composition PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")

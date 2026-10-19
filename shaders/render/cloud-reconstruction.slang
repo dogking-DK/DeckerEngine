@@ -1,18 +1,21 @@
 // Three graph stages: half-size transport, completed-history reprojection, depth-aware reconstruction.
 struct Parameters {
     float4 geometry,rayleigh,mie,extinction,absorption,ground,sun,forward,right,up,sunDirection;
-    uint4 frame; float4 depth;
+    uint4 frame; float4 depth,origin;
 };
 [[vk::binding(0,0)]] ConstantBuffer<Parameters> p;
+#include "RasterCamera.slang"
 #include "../../engine/render/clouds/shaders/CloudTypes.slang"
 struct CloudFrameParameters { CloudParameters model; CloudRayData origin; float4 forward,right,up,clear; };
 [[vk::binding(10,0)]] ConstantBuffer<CloudFrameParameters> cloudFrame;
 #define cp cloudFrame.model
+#include "CloudCamera.slang"
 struct ReconstructionParameters {
     uint4 size; // half width/height, valid completed history, empty-space skipping
     float4 controls; // termination T, history weight, unused, unused
     float4 previousClip[4]; // Current anchor-relative point, wind compensated, to previous clip.
     float4 cameraDelta; // Current minus previous anchor, without wind compensation.
+    float4 previousForward; // Previous world forward and near distance.
 };
 [[vk::binding(16,0)]] ConstantBuffer<ReconstructionParameters> reconstruction;
 [[vk::binding(15,0)]] RWStructuredBuffer<uint> statistics;
@@ -46,7 +49,7 @@ struct ReconstructionParameters {
 #endif
 float3 worldRay(float2 pixel) {
     float2 screen=(pixel+.5)/float2(p.frame.xy)*2-1;
-    return normalize(cloudFrame.forward.xyz+screen.x*cloudFrame.right.xyz+screen.y*cloudFrame.up.xyz);
+    return cloudCameraDirection(screen);
 }
 bool matchingDepth(float a,float b) {
     return (a<0 && b<0) || (a>=0 && b>=0 && abs(a-b)<=max(2,.02*max(a,b)));
@@ -54,11 +57,11 @@ bool matchingDepth(float a,float b) {
 #if DK_CLOUD_STAGE != 1
 float3 localRay(float2 pixel) {
     float2 screen=(pixel+.5)/float2(p.frame.xy)*2-1;
-    return p.forward.xyz+screen.x*p.right.xyz+screen.y*p.up.xyz;
+    return cameraRay(screen);
 }
 float geometryDistance(uint2 pixel) {
     float depth=sceneDepth.Load(int3(pixel,0));
-    return depth<1 ? p.depth.y/(depth+p.depth.x)*length(localRay(pixel))*1000 : -1;
+    return depth<1 ? cameraDistance(depth,localRay(pixel))*1000 : -1;
 }
 float cellExit(float3 lattice,float3 velocity) {
     float3 fraction=frac(lattice),extent=select(velocity>=0,1-fraction,fraction);
@@ -85,11 +88,12 @@ float emptyDistance(CloudRayData ray,float t) {
 }
 struct Medium { float4 L,T,cloud; };
 Medium trace(uint2 pixel) {
-    float3 viewRay=localRay(pixel),direction=normalize(viewRay);
-    CloudRayData ray=cloudFrame.origin; ray.direction.xyz=worldRay(pixel);
-    float mu=direction.y,cosine=clamp(dot(direction,p.sunDirection.xyz),-1,1);
-    ray.geometry.y=mu; ray.geometry.w=cosine;
-    float geometry=geometryDistance(pixel); float3 segment=path(p.geometry.z,mu);
+    float2 screen=(float2(pixel)+.5)/float2(p.frame.xy)*2-1;
+    CameraMediumRay camera=mediumRay(screen); float3 direction=camera.direction;
+    CloudRayData ray=cloudCameraRay(screen,camera);
+    float mu=camera.mu,cosine=camera.cosine,geometry=geometryDistance(pixel);
+    if(camera.height<0) { Medium value; value.L=float4(0,0,0,geometry); value.T=0; value.cloud=float4(0,0,0,1); return value; }
+    float3 segment=path(camera.height,mu);
     float distance=geometry>=0 ? geometry : max(0,segment.y*1000);
     float begin=max(0,segment.x*1000),end=min(distance,segment.y*1000);
     float4 shell; bool ground; uint shellCount=cloudShell(ray.geometry.x,mu,shell,ground);
@@ -177,15 +181,21 @@ void computeMain(uint3 id:SV_DispatchThreadID) {
         edge=edge || !matchingDepth(L.a,nL.a);
         lowL=min(lowL,nL.rgb); highL=max(highL,nL.rgb); lowT=min(lowT,nT.rgb); highT=max(highT,nT.rgb); lowC=min(lowC,nC); highC=max(highC,nC);
     }
-    float3 direction=worldRay(min(id.xy*2,p.frame.xy-1)); float4 position=float4(direction*T.a,1);
+    float2 pixel=min(id.xy*2,p.frame.xy-1);
+    float3 origin=cloudCameraOrigin((pixel+.5)/float2(p.frame.xy)*2-1);
+    float3 direction=worldRay(pixel); float4 position=float4(origin+direction*T.a,1);
     float4 clip=float4(dot(reconstruction.previousClip[0],position),dot(reconstruction.previousClip[1],position),
         dot(reconstruction.previousClip[2],position),dot(reconstruction.previousClip[3],position));
     float2 oldPixel=(clip.xy/max(clip.w,1e-8)*.5+.5)*float2(p.frame.xy)-.5;
     float2 old=oldPixel*.5; int2 base=int2(floor(old)); float2 fraction=frac(old);
-    bool accepted=reconstruction.size.z!=0 && !edge && T.a>0 && C.a<.999 && clip.w>0 && all(old>=0) && all(old<=float2(reconstruction.size.xy)-1);
+    bool accepted=reconstruction.size.z!=0 && !edge && T.a>0 && C.a<.999 && clip.w>0 &&
+        (p.origin.w==0 || clip.z>=0) && all(old>=0) && all(old<=float2(reconstruction.size.xy)-1);
     float4 priorL=0,priorT=0,priorC=0;
     if(accepted) {
-        float predicted=L.a<0 ? -1 : length(reconstruction.cameraDelta.xyz+direction*L.a);
+        float3 oldPoint=reconstruction.cameraDelta.xyz+origin+direction*L.a;
+        float predicted=L.a<0 ? -1 : (p.origin.w!=0 ? dot(oldPoint,reconstruction.previousForward.xyz)-reconstruction.previousForward.w : length(oldPoint));
+        // Negative orthographic distance is behind the old near plane, not sky.
+        accepted=accepted && (L.a<0 || predicted>=0);
         for(int y=0;y<2;++y) for(int x=0;x<2;++x) {
             int2 point=min(base+int2(x,y),int2(reconstruction.size.xy)-1);
             float4 a=previousL.Load(int3(point,0)),b=previousT.Load(int3(point,0)),c=previousCloud.Load(int3(point,0));
@@ -221,13 +231,15 @@ void computeMain(uint3 id:SV_DispatchThreadID) {
         if(!matchingDepth(geometry,a.a)) total=0;
         minT=min(minT,b.rgb); maxT=max(maxT,b.rgb); minC=min(minC,c.a); maxC=max(maxC,c.a);
     }
-    float3 direction=normalize(localRay(id.xy)),sunDelta=direction-p.sunDirection.xyz;
+    CameraMediumRay camera=mediumRay((float2(id.xy)+.5)/float2(p.frame.xy)*2-1);
+    if(camera.height<0) { outputL[id.xy]=float4(0,0,0,1); outputT[id.xy]=float4(0,0,0,1); outputCloud[id.xy]=0; return; }
+    float3 direction=camera.direction,sunDelta=direction-p.sunDirection.xyz;
     bool solar=p.frame.w!=0 && dot(sunDelta,sunDelta)<=p.sunDirection.w;
     if(total<.999 || solar || max(maxC-minC,max(maxT.x-minT.x,max(maxT.y-minT.y,maxT.z-minT.z)))>.02) {
         Medium value=trace(id.xy); L=value.L.rgb; T=value.T.rgb; C=value.cloud; representative=value.T.a;
         InterlockedAdd(statistics[5],1);
     } else { L/=total; T/=total; C/=total; representative/=total; InterlockedAdd(statistics[4],1); }
-    float3 segment=path(p.geometry.z,direction.y),terminal=0;
+    float3 segment=path(camera.height,camera.mu),terminal=0;
     float distance=geometry>=0 ? geometry : max(0,segment.y*1000);
     if(!(segment.z>0 && distance>=segment.y*1000)) {
         if(geometry>=0) terminal=surfaceColor.Load(int3(id.xy,0)).rgb;

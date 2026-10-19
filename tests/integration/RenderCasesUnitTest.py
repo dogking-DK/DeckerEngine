@@ -33,6 +33,29 @@ def fixture():
 
 
 class RenderCasesTests(unittest.TestCase):
+    def test_orthographic_sources_match_effective_lens_and_reject_ambiguous_inputs(self):
+        raw = dict(eye=[0, 0, -2], target=[0, 0, 0], projection="orthographic", ortho_height=3)
+        expected = dict(raw, up=[0, 1, 0], near=.05, far=100, primary_ray_origin="near_plane")
+        self.assertEqual(camera(raw), expected)
+        for bad in (dict(raw, fov_y=65), dict(raw, ortho_height=0), dict(raw, ortho_height=float("nan")),
+                    dict(raw, projection="perspective"), dict(raw, projection="unknown"),
+                    dict(raw, primary_ray_origin="eye"), dict(raw, near=0)):
+            with self.assertRaises(ValueError):
+                camera(bad)
+        manifest, ticket, result, report = fixture()
+        samples = [dict(camera=raw, time_seconds=0, camera_cut=False)]
+        manifest["cases"][0]["samples"] = samples
+        validate_manifest(manifest)
+        for value in (ticket, result, report):
+            value["provenance"]["camera"] = copy.deepcopy(expected)
+        report["frames"][0]["camera"] = copy.deepcopy(expected)
+        verify_sequence(report, ticket, result, samples)
+        for field, value in (("primary_ray_origin", "eye"), ("ortho_height", 4), ("projection", "perspective")):
+            bad = copy.deepcopy(report)
+            bad["frames"][0]["camera"][field] = value
+            with self.assertRaises(ValueError):
+                verify_sequence(bad, ticket, result, samples)
+
     def test_manifest_requires_explicit_bounded_replay_inputs(self):
         manifest, _, _, _ = fixture()
         validate_manifest(manifest)

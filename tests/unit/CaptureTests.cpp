@@ -157,17 +157,23 @@ TEST_CASE("capture orthographic discovery rejects ambiguous lenses before jobs a
     }
 }
 
-TEST_CASE("capture orthographic raster environment and late sequence lens reject without publication") {
-    CaptureCommands c; c.value("scene.new"); c.files.write("old.ppm","previous"); c.files.write("old.json","previous");
+TEST_CASE("capture orthographic raster environment accepts jobs and late invalid sequence preserves publication") {
+    CaptureCommands c; std::filesystem::copy(DK_CAPTURE_FIXTURE_DIR,c.files.root,std::filesystem::copy_options::recursive);
+    std::filesystem::remove(c.files.root/"assets/mask.png"); c.value("scene.load",{{"manifest","project.json"}});
+    c.files.write("old.ppm","previous"); c.files.write("old.json","previous");
     auto environment=c.value("environment.query")["environment"]; environment["enabled"]=true;
     c.value("environment.set",{{"environment",environment}},true);
     const auto state=c.value("scene.query")["state"],history=c.value("history.status");
     const Json lens={{"eye",{0,10,2}},{"target",{0,10,0}},{"projection","orthographic"},{"ortho_height",3}};
     auto result=c.call("render.capture",{{"camera",lens},{"output","old.ppm"}},true);
-    REQUIRE_FALSE(result); CHECK(result.error().code==ErrorCode::not_supported);
+    REQUIRE(result); const auto first_ticket=*result;
+    const auto failed=c.value("jobs.wait",{{"id",first_ticket["job_id"]},{"timeout_ms",1000}});
+    CHECK_FALSE(failed["timed_out"].get<bool>()); CHECK(failed["job"]["state"]=="failed");
     result=c.call("render.sequence",{{"width",16},{"height",16},{"samples",Json::array({{{"camera",{{"eye",{0,10,2}},{"target",{0,10,0}}}},{"time_seconds",0}},
         {{"camera",lens},{"time_seconds",1}}})},{"output","old.json"}},true);
-    REQUIRE_FALSE(result); CHECK(result.error().code==ErrorCode::not_supported);
+    REQUIRE(result);
+    const auto sequence=c.value("jobs.wait",{{"id",(*result)["job_id"]},{"timeout_ms",1000}});
+    CHECK_FALSE(sequence["timed_out"].get<bool>()); CHECK(sequence["job"]["state"]=="failed");
     auto bad=lens; bad["fov_y"]=65;
     result=c.call("render.sequence",{{"width",16},{"height",16},{"samples",Json::array({{{"camera",lens},{"time_seconds",0}},{{"camera",bad},{"time_seconds",1}}})},{"output","old.json"}},true);
     REQUIRE_FALSE(result); CHECK(result.error().code==ErrorCode::invalid_argument);

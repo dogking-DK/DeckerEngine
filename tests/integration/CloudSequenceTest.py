@@ -95,7 +95,30 @@ def main():
             assert resets[2:4] == ["time", "time"] and resets[4] == "camera", resets
             assert images(finish(submit("temporal-repeat.json", temporal_samples, temporal_options, 2), temporal_samples)) == images(temporal)
             evidence["checks"].append("explicit time, isolated temporal warmup, rewind/jump/cut and deterministic replay")
+            orthographic = dict(camera, projection="orthographic", ortho_height=3)
+            orthographic.pop("fov_y")
+            ortho_samples = [dict(camera=orthographic, time_seconds=t, camera_cut=False) for t in (0, .03)]
+            ortho_reference = finish(submit("ortho-reference.json", ortho_samples), ortho_samples)
+            ortho_capture = client.capture(dict(guard=guard(call("scene.query")["state"]), output="ortho.ppm", width=16, height=16,
+                                               camera=orthographic, render_options=options, validation="required"), timeout=150)
+            rgba = ortho_reference["frames"][0]["rgba8"]
+            assert (root / "ortho.ppm").read_bytes() == b"P6\n16 16\n255\n"+bytes(v for i, v in enumerate(rgba) if i % 4 != 3)
+            assert ortho_capture.job["result"]["provenance"]["camera"]["primary_ray_origin"] == "near_plane"
+            mixed = [ortho_samples[0], ortho_samples[1], dict(camera=dict(orthographic, ortho_height=4), time_seconds=.03),
+                     dict(camera=camera, time_seconds=.03), ortho_samples[1]]
+            ortho_temporal = finish(submit("ortho-temporal.json", mixed, temporal_options, 2), mixed)
+            assert [f["history"]["reset"] for f in ortho_temporal["frames"]][2:] == ["projection"]*3
+            assert images(finish(submit("ortho-repeat.json", mixed, temporal_options, 2), mixed)) == images(ortho_temporal)
+            assert len({f["shadow_generation"] for f in ortho_temporal["frames"][1:]}) == 1
+            evidence["checks"].append("orthographic reference capture parity, temporal replay, projection/height reset and world shadow stability")
             (root / "old.json").write_text("previous")
+            invalid_domain = [dict(camera=dict(orthographic, ortho_height=100001), time_seconds=0)]
+            try:
+                finish(submit("old.json", invalid_domain), invalid_domain)
+                raise AssertionError("Unsupported orthographic span succeeded")
+            except JobError as error:
+                assert error.job["state"] == "failed"
+            assert (root / "old.json").read_text() == "previous"
             failed = submit("old.json", render_options=dict(options, shadow_extent_m=16, shadow_center_m=[100000, 0, 0]))
             try:
                 finish(failed)

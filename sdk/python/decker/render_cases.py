@@ -32,14 +32,26 @@ def finite(value):
 
 
 def camera(value):
-    if not isinstance(value, dict) or set(value) - {"eye", "target", "up", "fov_y", "near", "far"}:
+    if not isinstance(value, dict) or set(value) - {"eye", "target", "up", "fov_y", "near", "far", "projection", "ortho_height"}:
         raise ValueError("Invalid camera fields")
-    result = dict(up=[0, 1, 0], fov_y=65, near=.05, far=100) | value
+    result = dict(up=[0, 1, 0], near=.05, far=100, projection="perspective") | value
+    if result["projection"] == "orthographic":
+        if "fov_y" in value or not finite(value.get("ortho_height")) or value["ortho_height"] <= 0:
+            raise ValueError("Orthographic requires positive ortho_height and forbids fov_y")
+        result["primary_ray_origin"] = "near_plane"
+    elif result["projection"] == "perspective":
+        if "ortho_height" in value:
+            raise ValueError("Perspective forbids ortho_height")
+        result.setdefault("fov_y", 65)
+        if not finite(result["fov_y"]) or not 1 < result["fov_y"] < 179:
+            raise ValueError("Perspective requires 1 < fov_y < 179")
+    else:
+        raise ValueError("Invalid camera projection")
     for key in ("eye", "target", "up"):
         if key not in result or not isinstance(result[key], list) or len(result[key]) != 3 or not all(map(finite, result[key])):
             raise ValueError("Camera vectors require three finite numbers")
-    if not all(finite(result[k]) for k in ("fov_y", "near", "far")):
-        raise ValueError("Camera scalar must be finite")
+    if not all(finite(result[k]) for k in ("near", "far")) or not 0 < result["near"] < result["far"]:
+        raise ValueError("Camera requires finite 0 < near < far")
     return result
 
 

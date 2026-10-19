@@ -1,7 +1,7 @@
 ---
 module: editor-interaction
 created_at: "2026-10-08T11:35:00+08:00"
-updated_at: "2026-10-19T11:42:00+08:00"
+updated_at: "2026-10-19T12:40:31+08:00"
 status: accepted
 ---
 
@@ -167,13 +167,13 @@ Camera 增加独立 ProjectionMode、正交可见高度与 StandardView；投影
 
 Edit 的 Unlit inspection 为显式会话选项，基础管线直接消费原 Scene 快照和无光照材质，
 仅跳过环境渲染，不修改 Scene.environment/revision/dirty/history。预览 key 包含此选项，防止发布旧环境结果。
-Path trace 与启用环境的 Raster 禁用正交入口；正交时禁用 Path trace 和不兼容的环境显示切换，
-始终提供可见原因和回到 Perspective 的入口。外部环境变化后在实际提交处再次拒绝，保留旧图并禁用拾取。
+当前 Path trace 与启用环境的 Raster 均允许正交入口及后端/显示切换，
+实际提交再次校验后端镜头域；外部变化导致不合法时保留旧图并禁用拾取，显示原因及参数恢复入口。
 模拟持有独立相机，正交 Frame cloth 保留当前视向，CPU/GPU 布片共用矩阵与最近完成图发布规则。
-不扩展 capture/sequence schema；路径/光栅环境的投影校验保持不变。
+Capture/sequence 的正交字段见下述兼容契约；路径/光栅环境各自验证支持域。
 
 验证覆盖数学裁剪与平行射线、焦平面往返/失败原子性、六视图/取景、深度无关尺度、真实窗口拾取/三种Gizmo、
-正交平移/缩放/Orbit、Unlit与环境/路径拒绝及两视口独立；证据汇入 [0131](../development/0131-camera-orthographic.md)。
+正交平移/缩放/Orbit、Unlit切换与两视口独立；M18.3 当时的后端限制和历史证据汇入 [0131](../development/0131-camera-orthographic.md)。
 
 ### 数据模型、共享计算与切换
 
@@ -230,7 +230,7 @@ Gizmo 期间禁用相机/镜头修改，导航期间禁止拾取和 Gizmo；恢�
 M18.3 首先验收基础光栅、模拟、拾取/Gizmo 与正交取景。编辑器增加显式的会话级 Unlit inspection 视图选项，
 让带环境的场景也能检查正交几何；该选项选择基础光栅入口，不改 Scene.environment，面板明确显示未渲染环境。
 切换正交前必须选择支持它的后端/显示组合；不自动关环境或悄悄切换渲染器。
-若外部修改使当前组合不再支持，保留最后完成图并说明恢复方式。M18.4 已开放 Path trace 正交；光栅环境正交在 M18.5 完成前保持禁用。
+若外部修改使当前组合不再支持，保留最后完成图并说明恢复方式。Path trace 与光栅环境均开放正交，仍按后端镜头域校验候选。
 模拟不使用场景空气/云合成，仍需独立验证矩阵、裁剪和发布序号，不能由 Edit 的成功推定。
 
 M18.4 扩展路径 CPU/GPU（Surface only 和 Scene media）的正交主射线；平行方向与像素相关起点必须共同进入 GPU 参数。
@@ -247,15 +247,15 @@ provenance 表达实际生效的投影字段；同步 [RenderOperations](../../e
 M18.1 就消除一致性驱动中的固定 65°，无需等正交 schema 才保证可调透视 FOV 的 GUI/capture 一致。
 首期不增加控制 UI 相机的 Runtime 命令；需要该能力时先设计 Editor owner 服务/能力发现，不能让无窗口 runner 持有虚构相机。
 
-M18.5 为独立的光栅环境正交扩展：先更新 [管线设计](render-pipeline.md)、[大气](render-atmosphere.md) 与 [云](render-clouds.md)，
-建立逐像素起点/平行方向和正交线性深度的 CPU 参考，明确从哪里开始介质积分、天空锚点近似适用域，
-再修改天空查询、AP 体积/深度重建、云射线/保边上采样/时域重投影与云影接入。
-仅放宽 `perspective_depth` 校验不构成支持；若暂不能保证误差，保持显式不支持，不以共用天空眼点伪装全正交环境。
-M18.1–4 可先交付可用相机和有限正交；只有此阶段验收后才宣称光栅环境支持正交。
+光栅环境按[管线](render-pipeline.md)、[大气](render-atmosphere.md)与[云](render-clouds.md)的当前正交契约实现：
+每像素近面起点、平行方向和线性深度同时进入 AP、天空、云和历史；天空从各自起点积分，
+保留既有表面天空漫射闭合近似。眼点须在地面以上，近面位于行星内的像素不透光。
+正交高度及宽度各≤100000m、far≤1000000m；相机设置/切换先验证候选，失败保持姿态/投影/revision。
+独立 CPU 数值、required GPU 与 GUI/capture 的验收证据见 [0133](../development/0133-raster-orthographic-environment.md)。
 
 ### 定向验收计划
 
-以下覆盖整个 M18 的验收要求；M18.1 项目见 [0129](../development/0129-camera-settings.md)，M18.2 见 [0130](../development/0130-camera-fly-walk.md)，基础正交 M18.3 见 [0131](../development/0131-camera-orthographic.md)；路径/捕获 M18.4 见 [0132](../development/0132-pathtrace-orthographic-capture.md)，光栅环境正交留待 M18.5。不默认执行全量或双配置。
+以下覆盖整个 M18 的验收要求；M18.1 项目见 [0129](../development/0129-camera-settings.md)，M18.2 见 [0130](../development/0130-camera-fly-walk.md)，基础正交 M18.3 见 [0131](../development/0131-camera-orthographic.md)；路径/捕获 M18.4 见 [0132](../development/0132-pathtrace-orthographic-capture.md)，光栅环境正交见 [0133](../development/0133-raster-orthographic-environment.md)。不默认执行全量或双配置。
 
 | 范围 | 关键可观察断言 | 现有验证入口 |
 | --- | --- | --- |

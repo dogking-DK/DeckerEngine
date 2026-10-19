@@ -1,7 +1,7 @@
 ---
 module: render-capture
 created_at: "2026-10-03T21:21:47+08:00"
-updated_at: "2026-10-19T11:42:00+08:00"
+updated_at: "2026-10-19T12:40:31+08:00"
 status: accepted
 ---
 
@@ -79,7 +79,7 @@ M15.3补充：非零云由共用环境入口选择混合介质参考，默认qua
 指纹覆盖云/空气共享传输与合成shader，ticket/result schema增加该quality值，命令参数/effect/guard/发布流程不变。
 
 render.capture按接受时SceneSnapshot的空气/云开关和非零云参数选择环境合成或原unlit，profile仍仅为资产导入策略。
-新增有限非负exposure（默认1）；相机仍完整显式输入，环境启用时遵循M14.5透视域，不自动改near/far。
+新增有限非负exposure（默认1）；相机仍完整显式输入，环境启用时遵循管线的有限透视/正交支持域，不自动改near/far。
 worker创建ScenePipeline后调用共用render_environment：冷准备与GPU等待在worker，原取消/原子单文件发布契约保持。
 未构建大气时enabled请求明确失败；disabled保持旧unlit；CPU-only不装配CaptureService，环境命令仍不初始化GPU。
 
@@ -139,5 +139,6 @@ render.capture 和 render.sequence 每个 sample 的 camera 接受 projection（
 透视禁止 ortho_height。Operations 保留字段是否提供，由 Service 校验完整相机后构建 Math 投影；schema 只描述字段和枚举。
 来源 camera 总含 projection、eye/target/up/near/far，仅写实际生效的 fov_y 或 ortho_height，
 正交额外写 primary_ray_origin=near_plane（近面前几何和介质不计入）；此只读字段不作为请求参数。
-基础光栅、表面路径和 Scene media 支持正交；光栅环境仍拒绝，序列任何非法 sample 都在入队前失败。
+基础光栅、光栅环境、表面路径和 Scene media 支持正交；序列任何非法镜头 sample 都在入队前失败。
+光栅环境支持域按管线设计检查，GPU/域错误保留旧输出；正交背景积分到物理边界，far 仅裁剪几何。
 不改变 external/不可撤销、guard、Jobs 取消/关闭、owner 单文件原子发布或旧文件保护。

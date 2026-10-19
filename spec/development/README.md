@@ -134,5 +134,6 @@
 | 0130 | [M18.2 Fly 与水平 Walk](0130-camera-fly-walk.md) | editor-interaction、editor、platform | completed |
 | 0131 | [M18.3 基础正交视口](0131-camera-orthographic.md) | editor-interaction、foundation-math、editor、render-pipeline、render-simulation | completed |
 | 0132 | [M18.4 路径追踪与捕获正交](0132-pathtrace-orthographic-capture.md) | render-pathtracing、render-capture、editor-interaction、editor | completed |
+| 0133 | [M18.5 光栅大气与云正交](0133-raster-orthographic-environment.md) | render-pipeline、render-atmosphere、render-clouds、render-capture、editor-interaction、editor | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

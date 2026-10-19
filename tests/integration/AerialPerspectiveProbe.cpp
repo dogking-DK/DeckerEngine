@@ -1,5 +1,6 @@
 #include "../RenderAssetSupport.hpp"
 #include <dk/render/ScenePipeline.hpp>
+#include <dk/math/Projection.hpp>
 #include <dk/render/Atmosphere.hpp>
 #include <dk/scene/SceneDocument.hpp>
 #include "SubmissionInternal.hpp"
@@ -50,7 +51,7 @@ struct Fixture {
     EntityId entity=take(EntityId::generate());
     GpuAssets assets; ScenePipeline pipeline; AtmosphereRenderer atmosphere;
     Vec3d anchor{0,10000,0}; double distance=5000,near_m=10,far_m=50000;
-    double offset_x=0,offset_y=0;
+    double offset_x=0,offset_y=0,ortho_height=0;
     Quatd rotation=Quatd::Identity();
     RenderSettings settings{{.01f,.02f,.03f},1,true,false,true};
     AtmosphereSettings air{false,false,false};
@@ -64,13 +65,14 @@ struct Fixture {
         p.material=m.id; asset.materials.push_back(m); asset.mesh.primitives.push_back(p);
         check(scene->create_entity(entity)); check(scene->set_asset_references(entity,{{asset.mesh.id,AssetKind::mesh}})); place(); upload(q);
     }
-    void place() { Trsd t; t.translation=anchor+rotation*Vec3d{0,0,-distance}; t.rotation=rotation; t.scale=Vec3d::Constant(distance); check(scene->set_local_transform(entity,t)); }
+    void place() { Trsd t; t.translation=anchor+rotation*Vec3d{0,0,-distance}; t.rotation=rotation; t.scale=Vec3d::Constant(ortho_height>0 ? ortho_height*.5 : distance); check(scene->set_local_transform(entity,t)); }
     void upload(SubmissionQueue& q) { auto a=take(assets.upload(q,asset)); require(take(a.wait(q)),"upload wait"); }
     RenderView view() {
         ViewDescription d{33,33}; Trsd camera; camera.translation=anchor; camera.rotation=rotation;
         d.camera_world=take(Transformd::from_trs(camera)); d.projection=Mat4d::Zero();
         d.projection(0,0)=1; d.projection(1,1)=-1; d.projection(0,2)=offset_x; d.projection(1,2)=offset_y;
         d.projection(2,2)=far_m/(near_m-far_m); d.projection(2,3)=near_m*far_m/(near_m-far_m); d.projection(3,2)=-1;
+        if(ortho_height>0) d.projection=take(orthographic_projection({ortho_height,near_m,far_m},1));
         return take(RenderView::create(take(RenderScene::extract(heap,take(scene->snapshot()))),d));
     }
     AtmosphereSky prepare(SubmissionQueue& q,EnvironmentDescription e,bool multiple=false) {
@@ -142,6 +144,7 @@ void cpu_spots(Fixture& f,const RenderFrame& frame) {
         require(error<=.03,"CPU finite segment composition differs");
     }
 }
+#include "AerialOrthographicCases.hpp"
 void numeric(Fixture& f,SubmissionQueue& q) {
     EnvironmentDescription e; e.enabled=true; e.sun.direction={.3,.15,-1}; e.sun.irradiance={2,1,.5};
     struct Case { double h,d,n,far; };
@@ -247,7 +250,7 @@ void failures(Fixture& f,SubmissionQueue& q,const DeviceOptions& options,memory:
     auto shifted=view.description(); Trsd camera; camera.translation=f.anchor+Vec3d{1,0,0}; shifted.camera_world=take(Transformd::from_trs(camera));
     require(!f.pipeline.render_atmosphere(q,take(RenderView::create(view.scene(),shifted)),f.assets,sky,f.settings,f.air),"wrong anchor accepted"); unchanged();
     auto invalid=view.description(); invalid.projection=Mat4d::Identity();
-    require(!f.pipeline.render_atmosphere(q,take(RenderView::create(view.scene(),invalid)),f.assets,sky,f.settings,f.air),"orthographic accepted");
+    require(!f.pipeline.render_atmosphere(q,take(RenderView::create(view.scene(),invalid)),f.assets,sky,f.settings,f.air),"invalid identity projection accepted");
     graphics::detail::ObjectAccess::fail_creation(q.resources(),VK_ERROR_OUT_OF_HOST_MEMORY);
     require(!f.pipeline.render_atmosphere(q,view,f.assets,sky,f.settings,f.air),"object failure ignored"); unchanged();
     fail_submit=true; require(!f.pipeline.render_atmosphere(q,view,f.assets,sky,f.settings,f.air),"submit failure ignored"); unchanged();
@@ -315,7 +318,7 @@ int main(int argc,char** argv) {
             auto q=take(graphics::detail::SubmissionAccess::create(heap,std::move(device),3,{submit}));
             std::printf("GPU=%s driver=%s\n",q.device().adapter().properties.deviceName.data(),q.device().adapter().driver.driverInfo.data());
             { Fixture f{heap,q};
-                if(mode=="numeric") numeric(f,q); else if(mode=="composition") composition(f,q);
+                if(mode=="orthographic") orthographic(f,q); else if(mode=="numeric") numeric(f,q); else if(mode=="composition") composition(f,q);
                 else if(mode=="failures") failures(f,q,options,system); else throw std::runtime_error("unknown mode");
             }
             check(q.close()); require(allocations(q)==0,"GPU allocation leak");

@@ -1,7 +1,7 @@
 ---
 module: render-atmosphere
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-16T11:29:51+08:00"
+updated_at: "2026-10-19T12:40:31+08:00"
 status: accepted
 ---
 
@@ -289,3 +289,12 @@ Edit视口通过独立有界worker冻结环境/相机并绑定ScenePipeline；En
 Capture按冻结环境选择旧unlit或完整大气合成，结果含参数、静态时间、固定质量与shader来源。
 Python/Luau、真实GUI/IPC、保存重载和错误/取消/在途关闭已验收，详见[0099](../development/0099-environment-integration.md)、
 [编辑器设计](editor.md)、[截图设计](render-capture.md)与[指南](../guides/atmosphere.md)。性能采集入口见[基准指南](../guides/atmosphere-benchmark.md)。
+
+## 正交场景传输
+
+ScenePipeline 的正交支持域、近面起点与线性深度见[管线设计](render-pipeline.md#m145-空气透视与线性合成实施契约)。
+AtmosphereSky 仍以眼点准备不可变 T/MS/Sky View 缓存和表面漫射近似；正交背景和 AP 不使用眼点的 Sky View 值，
+每个像素/体素计算实际起点高度、径向和太阳夹角，共享的仅是位置参数化 T/MS 表。
+表面天空漫射保留原有眼点锚定的半球闭合近似，不能据此声称宽正交视野下表面间接光的全局精确性。
+诊断关闭该闭合项，以独立 double CPU 有限段/天空参考验证正交近面、旋转/平移、地平线和地面遮挡。
+沿用 AP 的 T<=.002、HDR nRMSE<=3%/p99<=8% 阈值；近面跨地面像素按不透明行星处理。

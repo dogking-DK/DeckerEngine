@@ -21,7 +21,7 @@ std::span<const char* const> actions(std::size_t stage,bool desktop,bool media) 
     static constexpr std::array orthographic={"camera_orthographic"}, perspective={"camera_perspective"};
     static constexpr std::array height={"camera_settings","camera_ortho_height",":all",":three",":enter","camera_apply","path_settings"};
     if(media) {
-        static constexpr std::array media_orthographic={"camera_orthographic","path_raster"};
+        static constexpr std::array media_orthographic={"camera_orthographic","path_raster","path_mode"};
         static constexpr std::array air={"path_media","environment_open","environment_enabled","environment_apply","path_settings"};
         static constexpr std::array time={"path_time",":all",":two",":enter"}, exposure={"path_exposure",":all",":two",":enter"};
         static constexpr std::array surface={"path_surface"}, medium={"path_media"};

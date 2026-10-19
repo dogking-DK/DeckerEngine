@@ -1,5 +1,6 @@
 #include "../RenderAssetSupport.hpp"
 #include <dk/render/ScenePipeline.hpp>
+#include <dk/math/Projection.hpp>
 #include <dk/render/Atmosphere.hpp>
 #include <dk/render/CloudReference.hpp>
 #include <dk/render/CloudTextures.hpp>
@@ -56,7 +57,7 @@ struct Fixture {
     std::unique_ptr<CloudTextureCache> textures; std::shared_ptr<const CloudTextures> texture;
     CloudCompositionSettings clouds; unsigned side=33;
     Vec3d anchor{0,10000,0}; double distance=5000,near_m=10,far_m=50000;
-    double offset_x=0,offset_y=0;
+    double offset_x=0,offset_y=0,ortho_height=0;
     Quatd rotation=Quatd::Identity();
     RenderSettings settings{{.01f,.02f,.03f},1,true,false,true};
     AtmosphereSettings air{false,false,false};
@@ -72,13 +73,14 @@ struct Fixture {
         p.material=m.id; asset.materials.push_back(m); asset.mesh.primitives.push_back(p);
         check(scene->create_entity(entity)); check(scene->set_asset_references(entity,{{asset.mesh.id,AssetKind::mesh}})); place(); upload(q);
     }
-    void place() { Trsd t; t.translation=anchor+rotation*Vec3d{0,0,-distance}; t.rotation=rotation; t.scale=Vec3d::Constant(distance); check(scene->set_local_transform(entity,t)); }
+    void place() { Trsd t; t.translation=anchor+rotation*Vec3d{0,0,-distance}; t.rotation=rotation; t.scale=Vec3d::Constant(ortho_height>0 ? ortho_height*.5 : distance); check(scene->set_local_transform(entity,t)); }
     void upload(SubmissionQueue& q) { auto a=take(assets.upload(q,asset)); require(take(a.wait(q)),"upload wait"); }
     RenderView view() {
         ViewDescription d{side,side}; Trsd camera; camera.translation=anchor; camera.rotation=rotation;
         d.camera_world=take(Transformd::from_trs(camera)); d.projection=Mat4d::Zero();
         d.projection(0,0)=1; d.projection(1,1)=-1; d.projection(0,2)=offset_x; d.projection(1,2)=offset_y;
         d.projection(2,2)=far_m/(near_m-far_m); d.projection(2,3)=near_m*far_m/(near_m-far_m); d.projection(3,2)=-1;
+        if(ortho_height>0) d.projection=take(orthographic_projection({ortho_height,near_m,far_m},1));
         return take(RenderView::create(take(RenderScene::extract(heap,take(scene->snapshot()))),d));
     }
     AtmosphereSky prepare(SubmissionQueue& q,EnvironmentDescription e,bool multiple=false) {
@@ -106,7 +108,11 @@ void save(const RenderFrame& f,const std::string& name) {
 }
 
 Vec3d ray(const Fixture& f,unsigned x,unsigned y) {
+    if(f.ortho_height>0) return f.rotation*Vec3d{0,0,-1};
     return f.rotation*Vec3d{(x+.5)/f.side*2-1+f.offset_x,-((y+.5)/f.side*2-1+f.offset_y),-1};
+}
+Vec3d origin(const Fixture& f,unsigned x,unsigned y) {
+    return f.ortho_height>0 ? (f.anchor+f.rotation*Vec3d{((x+.5)/f.side-.5)*f.ortho_height,(.5-(y+.5)/f.side)*f.ortho_height,-f.near_m}).eval() : f.anchor;
 }
 void compare(const std::vector<Pixel>& actual,const std::vector<Pixel>& expected,const char* name,double rms_limit=.03,double tail_limit=.08) {
     std::vector<double> luminance,errors; double squares=0,maximum=0,edge=0;
@@ -171,7 +177,7 @@ void cpu_image(Fixture& f,const RenderFrame& frame,const char* name) {
         const auto direction=ray(f,x,y);
         const bool geometry=std::abs((x+.5)/f.side*2-1+f.offset_x)<.8 && std::abs((y+.5)/f.side*2-1+f.offset_y)<.8;
         const auto value=take(integrate_cloud_medium_reference(f.scene->environment(),*f.data,
-            {f.anchor,direction,geometry ? f.distance*direction.norm() : 2e7},f.clouds.reference));
+            {origin(f,x,y),direction,geometry ? (f.distance-(f.ortho_height>0 ? f.near_m : 0))*direction.norm() : 2e7},f.clouds.reference));
         Vec3d rgb=value.radiance;
         if(geometry && !value.ground) rgb+=value.transmittance.cwiseProduct(surface);
         expected.push_back({float(rgb.x()),float(rgb.y()),float(rgb.z()),1});
@@ -262,7 +268,8 @@ void composition(Fixture& f,SubmissionQueue& q) {
     f.settings.exposure=1;
     // The shared environment entry must also render nonzero clouds, with the same default model.
     f.clouds.surface_lighting=true; f.clouds.sun_disk=true;
-    const auto explicit_frame=f.render(q,sky); auto common=take(f.pipeline.render_environment(q,f.view(),f.assets,f.settings)); require(take(common.wait(q)),"common environment wait");
+    EnvironmentRenderSettings common_settings; common_settings.cloud_shadows=false; // Match the explicit unshadowed composition.
+    const auto explicit_frame=f.render(q,sky); auto common=take(f.pipeline.render_environment(q,f.view(),f.assets,f.settings,common_settings)); require(take(common.wait(q)),"common environment wait");
     require(linear(common)==linear(explicit_frame),"common environment diverged from explicit cloud composition");
     require(common.plan_text().find("joint cloud air geometry composition")!=std::string_view::npos && common.plan_text().find("aerial perspective volume")==std::string_view::npos,"cloud path still applied full AP");
     std::puts("mixed analytic, foreground/mask, solar boundary, zero M14, single exposure and common environment passed");
@@ -274,7 +281,7 @@ void failures(Fixture& f,SubmissionQueue& q,const DeviceOptions& options,memory:
     auto bad=f.clouds; bad.max_work=1; require(!f.pipeline.render_clouds(q,view,f.assets,sky,*f.texture,bad,f.settings),"budget accepted"); unchanged();
     auto desc=view.description(); desc.width=desc.height=65;
     require(!f.pipeline.render_clouds(q,take(RenderView::create(view.scene(),desc)),f.assets,sky,*f.texture,f.clouds,f.settings),"reference extent accepted"); unchanged();
-    desc=view.description(); desc.projection=Mat4d::Identity(); require(!f.pipeline.render_clouds(q,take(RenderView::create(view.scene(),desc)),f.assets,sky,*f.texture,f.clouds,f.settings),"orthographic accepted"); unchanged();
+    desc=view.description(); desc.projection=Mat4d::Identity(); require(!f.pipeline.render_clouds(q,take(RenderView::create(view.scene(),desc)),f.assets,sky,*f.texture,f.clouds,f.settings),"invalid identity projection accepted"); unchanged();
     auto mismatch=e; mismatch.sun.irradiance[0]=2; check(f.scene->set_environment(mismatch));
     require(!f.pipeline.render_clouds(q,f.view(),f.assets,sky,*f.texture,f.clouds,f.settings),"mismatched sky accepted"); unchanged(); check(f.scene->set_environment(e));
     graphics::detail::ObjectAccess::fail_creation(q.resources(),VK_ERROR_OUT_OF_HOST_MEMORY);
@@ -329,6 +336,7 @@ void optimization(Fixture& f,SubmissionQueue& q) {
 }
 #include "CloudReconstructionCases.hpp"
 #include "CloudShadowCases.hpp"
+#include "CloudOrthographicCases.hpp"
 }
 int main(int argc,char** argv) {
     Diagnostics d;
@@ -346,8 +354,10 @@ int main(int argc,char** argv) {
                 else if(mode=="optimization_boundaries") optimization_boundaries(f,q);
                 else if(mode=="optimization_switches") optimization_switches(f,q); else if(mode=="temporal") temporal(f,q);
                 else if(mode=="history") history_lifecycle(f,q,options,system);
+                else if(mode=="orthographic") orthographic(f,q);
                 else if(mode=="shadow_numeric") shadow_numeric(f,q);
                 else if(mode=="shadow_surface") shadow_surface(f,q);
+                else if(mode=="orthographic_shadow") { f.ortho_height=800; shadow_surface(f,q); }
                 else if(mode=="shadow_failures") shadow_failures(f,q,options,system);
                 else throw std::runtime_error("unknown mode"); }
             require(!q.stats().pending_slots && !q.stats().recording_slots && allocations(q)==0,"cloud GPU resources leaked"); check(q.close());

@@ -33,7 +33,6 @@ public:
     // Context changes may make a manual lens unsupported; validate reports it without changing that lens.
     void set_environment(bool enabled);
     void set_pathtracing(bool enabled) { pathtracing_=enabled; }
-    [[nodiscard]] bool orthographic_supported() const { return !environment_; }
     [[nodiscard]] ProjectionMode projection_mode() const { return projection_; }
     [[nodiscard]] StandardView standard_view() const { return standard_view_; }
     [[nodiscard]] Result<void> set_projection_mode(ProjectionMode,double aspect);

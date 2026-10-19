@@ -98,7 +98,10 @@ def main():
             assert re.fullmatch(r"fnv1a64:[0-9a-f]{16}", expected["shader_fingerprint"])
             assert expected["time_seconds"] == 0 and expected["exposure"] == 1
             assert expected["environment"] == point["environment_draft"]
-            assert expected["camera"] == point["viewport"]["camera"]
+            camera = copy.deepcopy(point["viewport"]["camera"])
+            if camera["projection"] == "orthographic":
+                camera["primary_ray_origin"] = "near_plane"
+            assert expected["camera"] == camera
             for key in ("document_id", "scene_id", "revision", "width", "height", "frame", "output"):
                 assert result[key] == ticket[key]
             assert (root / result["output"]).read_bytes() == (root / point["viewport"]["image"]).read_bytes(), point["checkpoint"]
@@ -148,6 +151,11 @@ def main():
             capture = client.capture(params(gizmo, "gizmo-capture"), timeout=120)
             validate_capture(gizmo, capture.submission.value, capture.job)
             advance("gizmo")
+            for name in ("orthographic", "ortho_height", "perspective"):
+                point = checkpoint(name)
+                capture = client.capture(params(point, name+"-capture"), timeout=120)
+                validate_capture(point, capture.submission.value, capture.job)
+                advance(name)
             assert process.wait(timeout=60) == 0, (directory / "stderr.log").read_text()
             log = (directory / "stdout.log").read_text()
             assert "validation errors=0 warnings=0 liveAllocations=0" in log, log

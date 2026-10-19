@@ -72,15 +72,14 @@ bool CameraSettingsUi::draw(Camera& camera,bool fixture,double aspect,std::map<s
         error_=result ? "" : result.error().message;
     }
     mark("perspective"); next("Orthographic");
-    ImGui::BeginDisabled(!camera.orthographic_supported());
     if(button("Orthographic",camera.projection_mode()==ProjectionMode::orthographic)) {
         const auto result=camera.set_projection_mode(ProjectionMode::orthographic,aspect);
         error_=result ? "" : result.error().message;
     }
-    mark("orthographic"); ImGui::EndDisabled();
+    mark("orthographic");
     constexpr const char* names[]={"Front","Back","Left","Right","Top","Bottom"};
     constexpr const char* keys[]={"front","back","left","right","top","bottom"};
-    ImGui::BeginDisabled(camera.projection_mode()!=ProjectionMode::orthographic || !camera.orthographic_supported());
+    ImGui::BeginDisabled(camera.projection_mode()!=ProjectionMode::orthographic);
     for(int i=0;i<6;++i) {
         next(names[i]);
         const auto view=static_cast<StandardView>(i+1);

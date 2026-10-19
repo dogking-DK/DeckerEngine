@@ -19,7 +19,7 @@ private:
     bool environment_ = false,clouds_=false;
     bool ready_ = false,waiting_ = false,done_ = false;
     ImVec2 pointer_{};
-    std::array<Json,10> checkpoints_;
+    std::array<Json,13> checkpoints_;
     std::uint64_t gizmo_revision_=0;
 };
 }

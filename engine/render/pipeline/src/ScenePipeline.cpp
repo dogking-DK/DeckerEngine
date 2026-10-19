@@ -162,11 +162,11 @@ void resolve(Inputs& result,const RenderView& view,const GpuAssets& assets) {
 struct AerialParameters {
     std::array<float,4> geometry,rayleigh,mie,extinction,absorption,ground,sun,forward,right,up,sun_direction;
     std::array<std::uint32_t,4> frame;
-    std::array<float,4> depth;
+    std::array<float,4> depth,origin;
 };
-static_assert(sizeof(AerialParameters)==208);
+static_assert(sizeof(AerialParameters)==224);
 Buffer prepare_aerial(detail::PipelineState& state,const RenderView& view,const AtmosphereSky& sky,const AtmosphereSettings& settings,bool clouds=false) {
-    const auto projection=take(detail::perspective_depth(view.description()));
+    const auto projection=take(detail::environment_depth(view.description()));
     const auto environment=take(sky.environment());
     const Vec3d anchor=take(sky.position_m());
     if(environment!=view.scene().environment() || anchor!=view.description().camera_world.matrix().topRightCorner<3,1>())
@@ -193,10 +193,11 @@ Buffer prepare_aerial(detail::PipelineState& state,const RenderView& view,const 
     p.sun=pack(sun.irradiance,1/(std::numbers::pi*sine*sine));
     p.sun_direction=pack((basis*direction).eval(),4*half_sine*half_sine);
     p.forward=pack((camera*Vec3d{projection_matrix(0,2)/projection_matrix(0,0),projection_matrix(1,2)/projection_matrix(1,1),-1}).eval(),0);
-    p.right=pack((camera.col(0)/projection_matrix(0,0)).eval(),0);
-    p.up=pack((camera.col(1)/projection_matrix(1,1)).eval(),take(sky.multiple_scattering_enabled()) ? 1 : 0);
+    p.right=pack((camera.col(0)/projection_matrix(0,0)).eval(),0,projection.orthographic ? .001 : 1);
+    p.up=pack((camera.col(1)/projection_matrix(1,1)).eval(),take(sky.multiple_scattering_enabled()) ? 1 : 0,projection.orthographic ? .001 : 1);
     p.frame={view.description().width,view.description().height,settings.reference ? 1u : 0u,settings.sun_disk ? 1u : 0u};
-    p.depth={float(projection_matrix(2,2)),float(projection_matrix(2,3)*.001),float(projection.far_m*.001),0};
+    p.depth={float(projection_matrix(2,2)),float(projection_matrix(2,3)*.001),float((projection.far_m-(projection.orthographic ? projection.near_m : 0))*.001),0};
+    p.origin=pack((-camera.col(2)*projection.near_m).eval(),projection.orthographic ? 1 : 0,.001);
     auto uniform=take(state.factory.create_buffer({sizeof(p),vk::BufferUsageFlagBits::eUniformBuffer,BufferMemory::upload}));
     check(uniform.write(0,std::as_bytes(std::span{&p,1})));
     if(!clouds && !state.aerial[0].pipeline) {
@@ -247,7 +248,7 @@ Buffer prepare_clouds(detail::PipelineState& state,const RenderView& view,const 
     p.weather={coordinate(origin.x(),c.weather_scale_m),coordinate(origin.z(),c.weather_scale_m),0,0};
     for(unsigned i=0;i<3;++i) { p.base[i]=coordinate(origin[i],c.shape_scale_m); p.detail[i]=coordinate(origin[i],c.detail_scale_m); }
     const Mat3d camera=view.description().camera_world.matrix().topLeftCorner<3,3>(); const auto& projection=view.description().projection;
-    p.forward=pack((camera*Vec3d{projection(0,2)/projection(0,0),projection(1,2)/projection(1,1),-1}).eval());
+    p.forward=pack((camera*Vec3d{projection(0,2)/projection(0,0),projection(1,2)/projection(1,1),-1}).eval(),take(detail::environment_depth(view.description())).near_m);
     p.right=pack((camera.col(0)/projection(0,0)).eval()); p.up=pack((camera.col(1)/projection(1,1)).eval()); p.clear=pack(render.clear_rgb);
     if(!optimized && !state.cloud_program.pipeline) {
         auto code=take(compile_shader({state.directory/"cloud-composition.slang","computeMain",ShaderStage::compute},state.heap));
@@ -294,8 +295,8 @@ Buffer prepare_reconstruction(detail::PipelineState& state,const RenderView& vie
         SamplerDesc desc; desc.address_u=desc.address_v=desc.address_w=vk::SamplerAddressMode::eClampToEdge;
         auto sampler=take(state.factory.create_sampler(desc)); state.cloud_optimized=std::move(candidate); state.aerial_sampler=std::move(sampler);
     }
-    struct Parameters { std::array<std::uint32_t,4> size; std::array<float,4> controls,previous_clip[4],camera_delta; };
-    static_assert(sizeof(Parameters)==112);
+    struct Parameters { std::array<std::uint32_t,4> size; std::array<float,4> controls,previous_clip[4],camera_delta,previous_forward; };
+    static_assert(sizeof(Parameters)==128);
     Parameters p{}; const auto& v=view.description();
     p.size={(v.width+1)/2,(v.height+1)/2,previous ? 1u : 0u,settings.empty_space_skipping ? 1u : 0u};
     p.controls={settings.termination_transmittance,settings.history_weight,0,0};
@@ -307,7 +308,8 @@ Buffer prepare_reconstruction(detail::PipelineState& state,const RenderView& vie
         Mat4d relative=Mat4d::Identity(); relative.topLeftCorner<3,3>()=old.camera_world.matrix().topLeftCorner<3,3>().transpose();
         relative.topRightCorner<3,1>()=relative.topLeftCorner<3,3>()*(delta-wind); const Mat4d clip=old.projection*relative;
         for(unsigned row=0;row<4;++row) for(unsigned column=0;column<4;++column) p.previous_clip[row][column]=float(clip(row,column));
-        for(unsigned i=0;i<3;++i) p.camera_delta[i]=float(delta[i]);
+        for(unsigned i=0;i<3;++i) { p.camera_delta[i]=float(delta[i]); p.previous_forward[i]=float(-old.camera_world.matrix()(i,2)); }
+        p.previous_forward[3]=float(take(detail::environment_depth(old)).near_m);
     }
     auto buffer=take(state.factory.create_buffer({sizeof(p),vk::BufferUsageFlagBits::eUniformBuffer,BufferMemory::upload}));
     check(buffer.write(0,std::as_bytes(std::span{&p,1}))); return buffer;
@@ -689,7 +691,7 @@ Result<RenderFrame> ScenePipeline::render_environment(SubmissionQueue& queue,con
 #ifdef DK_RENDER_SUNLIGHT
     if(!state_ || state_->heap.state()!=memory::ResourceState::open) return std::unexpected(Error{ErrorCode::invalid_state,"empty or closed scene pipeline"});
     try {
-        check(validate_render_settings(view,settings)); take(detail::perspective_depth(view.description()));
+        check(validate_render_settings(view,settings)); take(detail::environment_depth(view.description()));
         { auto guard=take(queue.begin()); check(guard.retain(state_->identity)); }
 #ifdef DK_RENDER_CLOUDS
         CloudCompositionSettings composition; composition.reference.time_seconds=environment.time_seconds;
@@ -810,7 +812,7 @@ Result<void> ScenePipeline::release_cloud_history(SubmissionQueue& queue,std::ui
     return std::unexpected(Error{ErrorCode::not_found,"Cloud history view not found"});
 }
 Result<std::string> shader_fingerprint(const std::filesystem::path& directory,bool environment) {
-    const std::array files{"scene.slang","tone.slang","sunlight.slang","aerial.slang",
+    const std::array files{"scene.slang","tone.slang","sunlight.slang","aerial.slang","RasterCamera.slang","CloudCamera.slang",
         "../../engine/render/atmosphere/shaders/atmosphere.slang","../../engine/render/atmosphere/shaders/AtmosphereTransport.slang",
         "cloud-composition.slang","cloud-reconstruction.slang","../../engine/render/clouds/shaders/cloud-shadow.slang","../../engine/render/clouds/shaders/CloudTypes.slang","../../engine/render/clouds/shaders/CloudTransport.slang"};
     std::uint64_t hash=14695981039346656037ULL;

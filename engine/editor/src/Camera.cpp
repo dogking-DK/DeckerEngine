@@ -20,12 +20,11 @@ void Camera::set_environment(bool enabled) {
     if(near_plane()!=before) ++revision_;
 }
 Result<void> Camera::validate(double aspect) const {
-    if(projection_==ProjectionMode::orthographic && !orthographic_supported())
-        return std::unexpected(Error{ErrorCode::not_supported,"Orthographic needs Path trace, Unlit inspection or Raster without atmosphere/clouds."});
     auto p=projection_result(aspect);
     if(!p) return std::unexpected(p.error());
-    if(environment_ && (far_plane()>1e6 || far_plane()/near_plane()>10000 || (*p)(0,0)<.1 || -(*p)(1,1)<.1))
-        return std::unexpected(invalid("Raster atmosphere/clouds require far <= 1e6, far/near <= 10000 and projection scales >= 0.1. Adjust FOV/clipping or use Auto."));
+    if(environment_ && (far_plane()>1e6 || (projection_==ProjectionMode::orthographic ?
+        settings_.lens.ortho_height*aspect>100000 : far_plane()/near_plane()>10000 || (*p)(0,0)<.1 || -(*p)(1,1)<.1)))
+        return std::unexpected(invalid("Raster atmosphere/clouds require far <= 1e6 m; orthographic width/height <= 100000 m, or perspective far/near <= 10000 and projection scales >= 0.1."));
     return {};
 }
 Result<void> Camera::set_settings(const CameraSettings& value,double aspect) {

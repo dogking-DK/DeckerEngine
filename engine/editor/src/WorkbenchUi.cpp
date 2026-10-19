@@ -248,10 +248,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     preview.show_edit();
 #ifdef DK_EDITOR_PATHTRACING
     ImGui::BeginDisabled(input_.active());
-    const bool raster_unsupported=input_.camera().projection_mode()==ProjectionMode::orthographic && !unlit_inspection_ && model_.snapshot() &&
-        (model_.snapshot()->scene.environment().enabled || model_.snapshot()->scene.environment().clouds.enabled);
-    ImGui::BeginDisabled(raster_unsupported);
-    if(ImGui::RadioButton("Raster",!path_mode_)) { path_mode_=false; input_.cancel(); preview.suspend_path(); } mark("path_raster"); ImGui::EndDisabled(); ImGui::SameLine();
+    if(ImGui::RadioButton("Raster",!path_mode_)) { path_mode_=false; input_.cancel(); preview.suspend_path(); } mark("path_raster"); ImGui::SameLine();
     ImGui::BeginDisabled(!preview.path_unavailable().empty());
     if(ImGui::RadioButton("Path trace",path_mode_)) { path_mode_=true; input_.cancel(); ImGui::SetWindowFocus("Path tracing"); } mark("path_mode");
     ImGui::EndDisabled();
@@ -271,15 +268,14 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
 #ifdef DK_EDITOR_PATHTRACING
     path_projection=path_mode_;
 #endif
-    ImGui::BeginDisabled(input_.active() || path_projection || (unlit_inspection_ && environment_projection && input_.camera().projection_mode()==ProjectionMode::orthographic));
+    ImGui::BeginDisabled(input_.active() || path_projection);
     if(ImGui::Checkbox("Unlit inspection",&unlit_inspection_)) input_.cancel();
     mark("unlit_inspection"); ImGui::EndDisabled();
     input_.pathtracing(path_projection);
     input_.environment(environment_projection && !path_projection && !unlit_inspection_);
     // Keep one line in all modes so toggling a preference does not resize the image.
     ImGui::TextDisabled(path_projection ? "Path trace supports Perspective and Orthographic" :
-        environment_projection && !unlit_inspection_ ? "Orthographic needs Unlit inspection or environment disabled" :
-        input_.camera().projection_mode()==ProjectionMode::orthographic ? "Orthographic: raster atmosphere needs Perspective" :
+        environment_projection && !unlit_inspection_ ? "Atmosphere and clouds support Perspective and Orthographic" :
         "Unlit inspection skips scene lighting for this viewport");
     input_.toolbar(model_,preview,controls_,[&](const char* action,Result<void> result) { return report(action,std::move(result)); });
     if (const auto* s=model_.snapshot(); s && visible) {

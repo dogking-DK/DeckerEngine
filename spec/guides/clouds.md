@@ -58,7 +58,7 @@ python -m decker.render_cases --manifest examples/automation/cloud-cases.json `
 CLI 启动自己的隐藏 runner，加载清单的 project，串行修改内存环境并提交序列，完成后关闭 runner；不保存 Scene。
 Windows GPU 验证要求 Khronos validation，可按[构建指南](build.md)处理本机隐式层问题。
 每例必填唯一 id、完整环境或已知 preset、width/height、exposure、完整 render_options、warmup_frames 和 samples。
-samples 每项显式提供 camera、time_seconds、camera_cut。相机 up/fov_y/near/far 可采用命令默认值，报告会记录完整值。
+samples 每项显式提供 camera、time_seconds、camera_cut。相机 up/near/far 可采用命令默认值；projection 缺省 perspective，fov_y 缺省65。正交显式给 projection=orthographic、ortho_height，不提供 fov_y；报告记录生效字段和近面起点约定。
 清单最多 32 例、64 个比较；每序列 1–128 样本，单帧最多 65536 像素、总计最多 262144 像素，非零云参考单帧仍最多 4096 像素。
 
 产物位于 `out/cloud-cases-demo/reports`：

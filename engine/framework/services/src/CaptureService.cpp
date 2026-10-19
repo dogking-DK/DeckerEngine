@@ -278,10 +278,6 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
         require(relative.extension()==(request.samples.empty() && !request.linear_json ? ".ppm" : ".json"),"Output extension must match ppm or linear_json/sequence format");
         auto snapshot=take(scene.read_snapshot(guard));
         const auto& clouds=snapshot.scene.environment().clouds;
-        if(!request.pathtrace && (snapshot.scene.environment().enabled || clouds.enabled)) {
-            require(!request.camera.orthographic,"Orthographic raster atmosphere/clouds are not supported",ErrorCode::not_supported);
-            for(const auto& sample:request.samples) require(!sample.camera.orthographic,"Orthographic raster atmosphere/clouds are not supported",ErrorCode::not_supported);
-        }
         if(!request.samples.empty() && request.environment.mode==render::CloudRenderMode::reference && clouds.enabled && clouds.coverage>0 && clouds.density>0 && clouds.extinction_per_m>0)
             require(std::size_t{request.width}*request.height<=4096,"Reference cloud sequence allows at most 4096 pixels");
         const auto output=take(snapshot.project.paths().resolve(relative));

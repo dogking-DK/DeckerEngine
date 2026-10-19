@@ -1,7 +1,7 @@
 ---
 module: render-clouds
 created_at: "2026-10-12T14:38:00+08:00"
-updated_at: "2026-10-16T14:55:32+08:00"
+updated_at: "2026-10-19T12:40:31+08:00"
 status: accepted
 ---
 
@@ -343,6 +343,7 @@ Temporal编辑器先显示完整首帧，再逐步细化至32次更新；新视�
 render.capture增加显式时间/模式/云影设置；reference单帧不预热。render.sequence是同一CaptureService的有界外部作业，冻结Scene和全部相机/时间样本，独占新Pipeline从空历史开始；temporal允许0–64次首样本固定时间预热，reference必须0次。样本1–128、每帧线性读回≤65536像素、总样本像素≤262144；GPU帧必须完成后才推进历史。时间倒退、跳跃、相机cut及失败沿M15.4重置规则，不能借用GUI已有历史。
 序列原子发布单个schema_version=1 JSON文件，包含冻结环境/完整渲染设置、身份、shader指纹、设备、各帧相机/时间/历史/云影代号、RGBA8、曝光前线性RGBA及摘要。输出JSON≤64MiB；摘要Jobs≤4096字节。没有跨文件发布事务；图像提取与比较在Python用例工具进行。
 
+Python render-case 相机接受 perspective/orthographic 与对应 fov_y/ortho_height；缺省透视来源规范化包含 projection，正交来源额外含只读 primary_ray_origin=near_plane。输入禁止该只读字段及含糊镜头组合，比较冻结来源时核对实际生效字段。
 Python独立版本化render-case清单显式记录工程、环境或预设、尺寸、曝光、采样模式、预热、固定相机/时间列表和云影区域。使用现有Client/guard/jobs调用；每例记录scene/document/revision、seed/generator、规范化输入SHA256、runner和shader摘要、PPM/线性数据摘要与比较结果。必须核对成功result/序列报告来源，失败/取消/缺失保留错误，不生成伪造图像或零耗时。比较只接受相同冻结物理输入、相机、时间、曝光与尺寸，reference和temporal质量模式可不同；报告线性RGB nRMSE/p99和静态帧差，不以sRGB截图代替数值。耗时标注端到端wall，不称GPU pass耗时；M15.7另验收正式性能。
 
 冻结验收：CPU预设/参数/预算/guard与旧文件保护；真实后台GUI preset/apply/undo/redo/IPC冲突/保存重载和相同参数capture像素一致；真实Python/Luau调用；reference及temporal序列可重放、空历史/预热来源明确、云影实际接入；清单摘要和失败/缺失/不兼容比较拒绝。GPU要求required同步validation，不允许跳过。
@@ -376,3 +377,17 @@ GPU总量逐样本相加不重叠的LUT更新、云影提交和整帧Submission�
 JSON先标failed，只有完整采集/验证/关闭后标passed；驱动只写新目录，保留失败日志和manifest，不自动重试或丢弃轮次。
 
 M15.7日落四预设验收发现非太阳像素最大误差超过.12；低角度自遮蔽细化至32步，预算同步按最坏工作上调并如实计入性能，不降低质量阈值。修正证据见[0107](../development/0107-cloud-delivery.md)，复现见[指南](../guides/cloud-benchmark.md)，本机结果见[联合报告](../benchmarks/2026-10-13-clouds.md)。
+
+## 正交射线、重建与历史
+
+光栅环境使用[管线投影域](render-pipeline.md#m145-空气透视与线性合成实施契约)。每像素近面起点同时进入球壳求交、
+径向/太阳夹角和天气/base/detail 周期纹理坐标；风时间先在 double 眼点坐标归一，再加像素相对位移。
+场景深度重建为 depth*(far-near)，云/空气联合积分从近面开始；背景仍到物理边界。行星内起点不透光。
+半尺寸、保边上采样和完整回退使用同一射线定义；禁止把平行方向的相同值当作相同起点。
+历史代表点为当前近面位移 + direction*mean_distance，使用旧 view/projection 和世界风位移重投影。
+正交几何一致性使用旧相机前向轴投影减旧 near，不能使用到旧眼点的欧氏距离；透视保留径向距离。
+代表点在旧正交近面之前时拒绝历史；当前几何投到旧近面前的负距离不能冒充背景深度标记。
+投影类型、ortho_height、near/far 改变重置历史；普通平移/旋转沿用有界接受检查，失败保留旧完成代次。
+固定世界太阳云影不依赖相机投影，无需改变缓存键；正交表面仅在原直射项采样云影。
+验收使用独立 CPU 球壳/混合介质参考（包括云内外、非均匀纹理/风时间、近面跳过介质）、几何/alpha 边缘，
+并检查静态历史、平移/旋转反遮挡、投影与高度重置、提交失败保护及相机变化下云影稳定。沿用 M15 的误差阈值。

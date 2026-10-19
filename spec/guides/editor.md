@@ -129,7 +129,7 @@ Edit 和 Simulation 视口工具栏均有 **Camera** 按钮，各自保存独立
 - **Home / Reset** 只恢复视角、保留设置；**Restore defaults** 恢复默认相机、Orbit 模式和设置。模拟 **Frame cloth / F / Home** 按当前镜头重新取景。
 
 镜头改变同步影响绘制、拾取、Gizmo 尺寸与聚焦；调移速或切导航模式不重置路径累积。相机设置不写入 Scene、Undo 或项目文件，退出后不保留。
-光栅环境还受 far/near≤10000、far≤1e6 和投影尺度限制；窗口变得过宽或外部启用环境后不兼容时，保留旧图并显示错误，可用 Camera 修改 FOV/裁剪或恢复默认值。
+光栅环境要求 far≤1e6；透视另要求 far/near≤10000 和投影尺度范围，正交要求可见宽高各≤100000m；窗口变得过宽或外部启用环境后不兼容时，保留旧图并显示错误，可用 Camera 修改 FOV/裁剪或恢复默认值。
 导航只能从实际图像内开始；文本输入、弹层、失焦、最小化、隐藏、切视图或关闭均释放鼠标，恢复后需重新按右键。
 F 显式框选并更新 Walk 高度；Home 保留当前模式。
 
@@ -142,14 +142,13 @@ Camera 中可输入 **Orthographic height (m)**，范围 0.01–100000m。返回
 前后左右上方为 +Y，Top 上方为 -Z，Bottom 上方为 +Z。右键环绕退出固定视向。
 正交拾取、框选、Move/Rotate/Scale Gizmo 使用同一投影；模拟 **Frame cloth** 保留所选正交视向，两个视口互不影响。
 
-带大气/云的 Edit 场景可以选择 **Path trace**，或 **Raster → Unlit inspection** 后选择正交。
-Unlit inspection 仅跳过当前视口的环境光照，不改 Scene 或 Undo。Path trace 的 Surface only 与 Scene media 均支持正交；
-投影或高度变化重置路径累积。Scene media 从每个像素的近裁剪面开始，近面图像区域须在地面以上。
-光栅环境组合仍不支持正交，因此会禁用不兼容的 Raster 切换或取消 Unlit inspection；先回到 Perspective 可恢复。
-外部命令启用环境导致当前正交光栅组合无效时，保留最后图像、停止拾取并提示恢复方法。
+带大气/云的 Edit 场景可直接选择 **Orthographic**，支持 Raster 与 Path trace（Surface only / Scene media）。
+**Unlit inspection** 仅跳过当前视口的环境光照，不改 Scene 或 Undo；正交下也能切换该选项或渲染器。
+投影或高度变化重置累积/云历史。正交介质从每个像素的近裁剪面开始；光栅眼点须在地面以上，
+近面跨入行星内部的像素不透光。路径 Scene media 仍要求整个近面区域在其支持域内。
+外部环境或窗口尺寸变化导致镜头超出支持范围时，保留最后图像、停止拾取并提示恢复方法。
 固定 `render.capture` / `render.sequence` 可用 camera.projection=orthographic 和正数 ortho_height；省略投影仍为透视，
-正交不能同时提供 fov_y。完整参数见[捕获命令](../commands/render.md)。光栅大气/云正交属于 M18.5，
-见 [相机设计](../design/editor-interaction.md#m18-相机扩展计划)。
+正交不能同时提供 fov_y。完整参数见[捕获命令](../commands/render.md)，相机约定见[相机设计](../design/editor-interaction.md#m18-相机扩展计划)。
 
 ## 编辑预览与外部命令
 

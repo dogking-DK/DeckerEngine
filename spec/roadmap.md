@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-19T11:51:29+08:00"
+updated_at: "2026-10-19T12:40:31+08:00"
 status: accepted
 ---
 
@@ -76,7 +76,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M14 大气渲染 | 物理天空、太阳漫反射、空气透视及编辑器/截图一致性 | M7、M8/M9、M11 | 已完成，见0094–0100；保留性能目标实测差距 |
 | M15 体积云 | 可复现云场、光照/合成、时域重建、云影及质量性能验收 | M14；自动化复用M9/M13原则 | 已完成质量/性能基线；非零云GPU与在途峰值候选未达 |
 | M16 渐进式路径追踪 | CPU参考、Vulkan RT表面积分、每视图累积、编辑器与固定spp截图 | M5/M6/M7；集成需M8/M9，观测复用M11 | 已完成质量与基线交付；CPU参考、RT/GGX、渐进视口和固定capture，见[0120](development/0120-pathtracing-delivery.md)；实时性能候选未达 |
-| M18 相机模式与投影 | Orbit/Fly/Walk、可调镜头/移速、分层正交与截图一致性 | M8/M12；路径与环境需M14–M17 | M18.1 完成；Fly/Walk 与正交尚未实现，分期范围见下表 |
+| M18 相机模式与投影 | Orbit/Fly/Walk、可调镜头/移速、分层正交与截图一致性 | M8/M12；路径与环境需M14–M17 | 已完成 M18.1–5；Fly/Walk、基础/路径/光栅环境正交及捕获，见[0133](development/0133-raster-orthographic-environment.md) |
 
 默认执行表中顺序。M5 在 Foundation 补充完成后具备独立探索条件，
 M9 的 Luau 命令绑定在 M3 后可提前做；若调整次序，仍需满足对应集成验收依赖。
@@ -750,9 +750,9 @@ CPU参考收敛后、GPU优化前冻结；CPU-only、required RT/同步验证及
 ## M18：相机操作模式与投影扩展
 
 **目标：** 扩展编辑/模拟视口的会话相机，提供 Orbit、Fly、水平 Walk 与可调 FOV/移速，逐层支持正交。
-当前支持可调镜头的透视 Orbit/Fly/水平 Walk，以及基础光栅/模拟的正交 Orbit、六视图和 Unlit inspection；编辑/模拟分别保存会话设置。截图、路径与光栅环境仍只支持透视。
+当前支持可调镜头的透视 Orbit/Fly/水平 Walk、正交 Orbit/六视图和 Unlit inspection；编辑/模拟分别保存会话设置。基础光栅/模拟、路径、光栅大气/云与固定捕获均支持各自域内的正交。
 检查依据、数据/输入/状态与兼容设计见 [编辑器交互 M18](design/editor-interaction.md#m18-相机扩展计划)。
-M18.1–4 已完成，记录见 [0129](development/0129-camera-settings.md)、[0130](development/0130-camera-fly-walk.md)、[0131](development/0131-camera-orthographic.md)、[0132](development/0132-pathtrace-orthographic-capture.md)；下一阶段为 M18.5。
+M18.1–5 已完成，记录见 [0129](development/0129-camera-settings.md)、[0130](development/0130-camera-fly-walk.md)、[0131](development/0131-camera-orthographic.md)、[0132](development/0132-pathtrace-orthographic-capture.md)、[0133](development/0133-raster-orthographic-environment.md)。
 
 | 子阶段 | 范围与交付物 | 前置 | 独立验收条件 | 状态 |
 | --- | --- | --- | --- | --- |
@@ -760,9 +760,9 @@ M18.1–4 已完成，记录见 [0129](development/0129-camera-settings.md)、[0
 | M18.2 | Fly / 水平 Walk、连续键盘移动、相对鼠标、Edit/Simulation 共用控制器 | M18.1 | 10项CPU相机与5项真实窗口通过；固高/帧率/切换/释放、持续图像与无Scene/Undo副作用 | 已完成，见[0130](development/0130-camera-fly-walk.md) |
 | M18.3 | 正交 Orbit/Pan/缩放、六视图、基础光栅与模拟、显式 Unlit inspection、拾取/Gizmo | M18.2 | 22 项 CPU 与 5 项 GPU/窗口通过（含 CPU-only 18 项）；焦平面/平行射线/深度尺寸/裁剪、双视口、Gizmo/历史、显式禁用及旧图恢复 | 已完成，见[0131](development/0131-camera-orthographic.md) |
 | M18.4 | CPU/GPU Surface only 与 Scene media 正交主射线；固定截图/序列 projection 与 ortho_height、来源与示例 | M18.3、M17.5 | CPU/GPU 正交近面起点与介质、历史失效、旧透视请求、schema/来源与序列失败保护通过；required GPU、16 个 GUI/capture 对照点一致，见 [0132](development/0132-pathtrace-orthographic-capture.md) | 已完成 |
-| M18.5 | 光栅大气/云正交参考与合成、深度/AP/天空/云时域适配 | M18.4、M14/M15 | 先形成明确支持域和独立 CPU 数值参考，再验收正交光程、天空/云/遮挡/时域和 GUI/capture；通过前保持不支持 | 后续扩展，待细化专项设计 |
+| M18.5 | 光栅大气/云正交参考与合成、深度/AP/天空/云时域适配 | M18.4、M14/M15 | 44项定向验证通过；独立CPU参考、正交光程/天空/云/遮挡/时域/云影、GUI/capture一致与失败保护，见[0133](development/0133-raster-orthographic-environment.md) | 已完成 |
 
-推荐先交付 M18.1–2，再交付 M18.3–4 的有限正交；M18.5 不阻塞 Fly/Walk 和基础正交的分期交付。
+M18 各阶段已分别完成定向验收与本地提交。
 Walk 首期为固定世界 Y 的水平漫游，无重力/地形碰撞/台阶/跳跃；完整角色控制器另行立项。
 会话偏好不写 Scene/历史，跨启动保存和场景 Camera 组件也不隐含包含在本轮。
 每个实现小阶段开始时更新直接相关模块设计、创建实际开发记录，按范围定向验证并独立提交；本表不预分配开发编号。
@@ -829,7 +829,7 @@ M16.9编辑器模式、后台渐进预览、GPU显示交接与共享队列同步
 M16.10固定spp路径capture、Job进度/取消、输入摘要和线性报告完成；Python/Luau、GUI逐像素一致与CPU-only边界见[0119](development/0119-pathtracing-capture.md)。
 **M16.11及交付F完成：三个输入/8 seed固定质量与参考收敛、50项定向检查及三轮性能/显存基线通过，见[0120](development/0120-pathtracing-delivery.md)。1080p整批16.67ms候选、GGX在1024 spp达到2%误差候选未达。M17.1–M17.6及交付G完成：介质CPU/GPU、Editor/Console/IPC/capture与Sponza缓存/计数/调度验收完成，见[0128](development/0128-path-media-performance.md)。实测热GUI预览p95约61ms，三轮额度内；8个Sponza高质量候选仍未达，完整体积路径不承诺60fps。**
 编辑器 Play 视口已在 M12 验收，批量实验在 M13 验收；检查点、其他平台与发布打包仍未纳入本轮扩展。
-M18.1 镜头与导航设置、共享透视和 GUI/capture 一致性已完成，见[0129](development/0129-camera-settings.md)；M18.2 Fly/水平 Walk、共享控制器与连续渲染验收完成，见[0130](development/0130-camera-fly-walk.md)；M18.3 基础正交、六视图、Unlit inspection 及双视口交互完成，见[0131](development/0131-camera-orthographic.md)。M18.4 路径与固定捕获正交已完成，见[0132](development/0132-pathtrace-orthographic-capture.md)。下一实现阶段为 M18.5 光栅大气/云正交。M18 整体尚未完成。
+M18.1 镜头与导航设置、共享透视和 GUI/capture 一致性已完成，见[0129](development/0129-camera-settings.md)；M18.2 Fly/水平 Walk、共享控制器与连续渲染验收完成，见[0130](development/0130-camera-fly-walk.md)；M18.3 基础正交、六视图、Unlit inspection 及双视口交互完成，见[0131](development/0131-camera-orthographic.md)。M18.4 路径与固定捕获正交已完成，见[0132](development/0132-pathtrace-orthographic-capture.md)。M18.5 光栅大气/云正交已完成，见[0133](development/0133-raster-orthographic-environment.md)；M18 整体验收完成，后续里程碑范围另行确定。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 

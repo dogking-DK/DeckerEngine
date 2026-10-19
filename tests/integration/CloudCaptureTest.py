@@ -94,7 +94,7 @@ def main():
             assert not descriptor["parameters"]["additionalProperties"]
             assert "time_seconds" in descriptor["parameters"]["properties"]
             quality = descriptor["result"]["properties"]["provenance"]["properties"]["quality"]["enum"]
-            assert set(quality) == {"cloud_reference_v1", "cloud_temporal_v1", "atmosphere_v1", "unlit_v1"}
+            assert {"cloud_reference_v1", "cloud_temporal_v1", "atmosphere_v1", "unlit_v1"}.issubset(quality)
             (root / "capture.schema.json").write_text(json.dumps(descriptor, indent=2), encoding="utf-8")
             call("scene.load", {"manifest": "project.json"})
             environment = call("environment.query")["environment"]

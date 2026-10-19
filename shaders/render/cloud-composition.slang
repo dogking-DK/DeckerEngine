@@ -3,7 +3,7 @@ struct Parameters {
     float4 geometry, rayleigh, mie, extinction, absorption, ground, sun;
     float4 forward, right, up, sunDirection;
     uint4 frame;
-    float4 depth;
+    float4 depth,origin;
 };
 [[vk::binding(0,0)]] ConstantBuffer<Parameters> p;
 [[vk::binding(1,0)]] [[vk::image_format("rgba32f")]] RWTexture2D<float4> outputImage;
@@ -14,6 +14,7 @@ struct Parameters {
 [[vk::binding(7,0)]] [[vk::image_format("rgba32f")]] RWTexture2D<float4> mediumDiagnostic;
 [[vk::binding(8,0)]] Texture2D<float> sceneDepth;
 [[vk::binding(9,0)]] Texture2D<float4> surfaceColor;
+#include "RasterCamera.slang"
 #define DK_STAGE 3
 #include "../../engine/render/atmosphere/shaders/AtmosphereTransport.slang"
 #include "../../engine/render/clouds/shaders/CloudTypes.slang"
@@ -28,20 +29,20 @@ struct CloudFrameParameters {
 [[vk::binding(13,0)]] Texture3D<float> detailField;
 [[vk::binding(14,0)]] SamplerState linearRepeat;
 #define cp cloudFrame.model
+#include "CloudCamera.slang"
 #include "../../engine/render/clouds/shaders/CloudTransport.slang"
 [numthreads(8,8,1)]
 void computeMain(uint3 id:SV_DispatchThreadID) {
     if(id.x>=p.frame.x || id.y>=p.frame.y) return;
     float2 screen=(float2(id.xy)+.5)/float2(p.frame.xy)*2-1;
-    float3 viewRay=p.forward.xyz+screen.x*p.right.xyz+screen.y*p.up.xyz;
-    float3 direction=normalize(viewRay);
-    CloudRayData ray=cloudFrame.origin;
-    ray.direction.xyz=normalize(cloudFrame.forward.xyz+screen.x*cloudFrame.right.xyz+screen.y*cloudFrame.up.xyz);
-    float mu=direction.y,cosine=clamp(dot(direction,p.sunDirection.xyz),-1,1);
-    ray.geometry.y=mu; ray.geometry.w=cosine;
+    float3 viewRay=cameraRay(screen); CameraMediumRay camera=mediumRay(screen);
+    float3 direction=camera.direction;
+    CloudRayData ray=cloudCameraRay(screen,camera);
+    if(camera.height<0) { outputImage[id.xy]=float4(0,0,0,1); cloudDiagnostic[id.xy]=float4(0,0,0,1); mediumDiagnostic[id.xy]=0; return; }
+    float mu=camera.mu,cosine=camera.cosine;
     float depth=sceneDepth.Load(int3(id.xy,0));
-    float3 atmospherePath=path(p.geometry.z,mu);
-    float distance=depth<1 ? p.depth.y/(depth+p.depth.x)*length(viewRay)*1000 : max(0,atmospherePath.y*1000);
+    float3 atmospherePath=path(camera.height,mu);
+    float distance=depth<1 ? cameraDistance(depth,viewRay)*1000 : max(0,atmospherePath.y*1000);
     bool blocked=atmospherePath.z>0 && distance>=atmospherePath.y*1000;
     float begin=max(0,atmospherePath.x*1000),end=min(distance,atmospherePath.y*1000);
     float4 shell; bool ground; uint shellCount=cloudShell(ray.geometry.x,mu,shell,ground);

@@ -6,7 +6,7 @@
 
 namespace dk::editor::detail {
 namespace {
-constexpr std::array names={"initial","gui","external","draft","conflict","undo","redo","saved","reloaded","gizmo"};
+constexpr std::array names={"initial","gui","external","draft","conflict","undo","redo","saved","reloaded","gizmo","orthographic","ortho_height","perspective"};
 void require(bool value,const char* message) {
     if (!value) throw std::runtime_error{std::string{"Consistency smoke: "}+message};
 }
@@ -18,6 +18,9 @@ std::span<const char* const> actions(std::size_t stage,bool environment,bool clo
     static constexpr std::array conflict={"apply","revert"};
     static constexpr std::array undo={"undo"},redo={"redo"},save={"save"},reload={"reload"};
     if(environment) {
+        static constexpr std::array ortho={"camera_orthographic"},perspective={"camera_perspective"};
+        static constexpr std::array height={"camera_settings","camera_ortho_height",":all",":height",":enter","camera_apply"};
+        if(stage==10) return ortho; if(stage==11) return height; if(stage==12) return perspective;
         static constexpr std::array env_gui={"environment_open","environment_enabled","environment_apply"};
         static constexpr std::array env_draft={"environment_open","environment_enabled"};
         static constexpr std::array env_conflict={"environment_apply","environment_revert"};
@@ -65,7 +68,7 @@ void ConsistencyDriver::input(WorkbenchUi& ui,const Workspace& model,const Viewp
     if (waiting_) {
         if (!std::filesystem::is_regular_file(directory_/(std::string{names[stage_]}+".continue"))) return;
         waiting_=false; ready_=false; tick_=0;
-        if (++stage_==(environment_ ? names.size() : names.size()-1)) { done_=true; return; }
+        if (++stage_==(environment_ ? names.size() : 9)) { done_=true; return; }
     }
     if(environment_ && stage_==9 && tick_==0) {
         if(viewport.error().empty() && !viewport.current(model.snapshot()->state)) return;
@@ -85,6 +88,7 @@ void ConsistencyDriver::input(WorkbenchUi& ui,const Workspace& model,const Viewp
         else if (action==":drag") pointer_.x+=40;
         else if (action==":release") io.AddMouseButtonEvent(0,false);
         else if (action==":name") io.AddInputCharactersUTF8("GUI consistency");
+        else if (action==":height") io.AddInputCharactersUTF8("3");
         else if (action==":fov") io.AddInputCharactersUTF8("55");
         else if (action==":enter") io.AddKeyEvent(ImGuiKey_Enter,true);
         else if (action==":translation") io.AddInputCharactersUTF8("0.25");
@@ -153,6 +157,11 @@ void ConsistencyDriver::verify_environment(const Workspace& model,const Workbenc
     case 5: require(revision==rev(4)+1 && history.undo_count==2 && history.redo_count==1 && pixels==sig(2),"environment Undo failed"); break;
     case 6: require(revision==rev(5)+1 && history.undo_count==3 && history.redo_count==0 && pixels==sig(4),"environment Redo failed"); break;
     case 7: require(!model.dirty() && revision==rev(6) && pixels==sig(6),"environment Save failed"); break;
+    case 10: case 11: case 12:
+        require(revision==rev(stage_-1) && pixels!=sig(stage_-1),"projection/height did not change only image");
+        require(ui.input().camera().projection_mode()==(stage_==12 ? ProjectionMode::perspective : ProjectionMode::orthographic),"environment projection control failed");
+        if(stage_==11) require(ui.input().camera().settings().lens.ortho_height==3,"environment orthographic height failed");
+        break;
     case 9: require(revision==gizmo_revision_+1 && !model.pending() && model.draft() && model.draft()->entity.local.translation.x()!=0,"asynchronous environment Gizmo did not commit"); break;
     case 8: require(snapshot->state.document_id.to_string()!=checkpoints_[7]["state"]["document_id"].get<std::string>() && !model.dirty() && !model.pending() && history.undo_count==0 && revision==rev(7) && pixels==sig(7),"environment Reload failed"); break;
     }

@@ -78,7 +78,7 @@ void shadow_surface(Fixture& f,SubmissionQueue& q) {
         auto map=take(owner.prepare(q,e,*f.texture,real)); const auto shaded=surface_shadow(f,q,sky,&map),plain=surface_shadow(f,q,sky,nullptr);
         const auto a=linear(shaded),b=linear(plain); double maximum=0;
         for(unsigned y=6;y<=26;y+=5) for(unsigned x=6;x<=26;x+=5) {
-            const Vec3d point=f.anchor+ray(f,x,y)*f.distance;
+            const Vec3d point=origin(f,x,y)+ray(f,x,y)*(f.distance-(f.ortho_height>0 ? f.near_m : 0));
             const double expected=shadow_reference(f,e,{point,Vec3d{e.sun.direction.data()},200000},real,4096);
             const auto i=y*33+x; const double observed=(a[i][0]-.01)/(b[i][0]-.01);
             maximum=std::max(maximum,std::abs(observed-expected));

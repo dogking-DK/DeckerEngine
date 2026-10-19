@@ -213,9 +213,9 @@ TEST_CASE("camera returning from orthographic pole preserves pose until actual l
     NavigationInput input; input.look={1,1}; REQUIRE(navigation.update(camera,input));
     CHECK(camera.standard_view()==StandardView::none); CHECK(camera.world().matrix().allFinite()); CHECK(camera.revision()==revision+1);
 }
-TEST_CASE("camera orthographic rejects unsupported context and impossible framing without partial changes") {
+TEST_CASE("camera orthographic environment validates bounded spans and framing without partial changes") {
     Camera camera{true}; camera.set_environment(true); const auto before=camera.world().matrix(); const auto rev=camera.revision();
-    CHECK_FALSE(camera.set_projection_mode(ProjectionMode::orthographic,1)); CHECK(camera.world().matrix()==before); CHECK(camera.revision()==rev);
+    REQUIRE(camera.set_projection_mode(ProjectionMode::orthographic,1)); CHECK(camera.world().matrix()==before); CHECK(camera.revision()==rev+1);
     camera.set_environment(false); camera.set_pathtracing(true); REQUIRE(camera.set_projection_mode(ProjectionMode::orthographic,1));
     camera.set_pathtracing(false); REQUIRE(camera.set_projection_mode(ProjectionMode::orthographic,1));
     const auto settings=camera.settings(); const auto stable=camera.revision();
@@ -225,7 +225,10 @@ TEST_CASE("camera orthographic rejects unsupported context and impossible framin
     CHECK_FALSE(camera.frame({{-1e6,-1e6,-1e6},{1e6,1e6,1e6}},1)); CHECK(camera.revision()==stable); CHECK(camera.world().matrix()==before);
     auto narrow=settings; narrow.lens.automatic_clip=false; narrow.lens.near_plane=1; narrow.lens.far_plane=2; REQUIRE(camera.set_settings(narrow,1));
     const auto clipped=camera.revision(); CHECK_FALSE(camera.frame({{-1,-1,-3},{1,1,3}},1)); CHECK(camera.revision()==clipped);
-    camera.set_environment(true); CHECK_FALSE(camera.validate(1)); CHECK(camera.projection_mode()==ProjectionMode::orthographic);
+    camera.set_environment(true); REQUIRE(camera.validate(1)); CHECK(camera.projection_mode()==ProjectionMode::orthographic);
+    auto wide=camera.settings(); wide.lens.ortho_height=60000; const auto stable_settings=camera.settings();
+    CHECK_FALSE(camera.set_settings(wide,2)); CHECK(camera.settings()==stable_settings);
+    REQUIRE(camera.set_settings(wide,1)); CHECK_FALSE(camera.validate(2));
     camera.set_environment(false); REQUIRE(camera.validate(1));
 }
 TEST_CASE("camera projected positions match rays across resize orbit pan and focus") {

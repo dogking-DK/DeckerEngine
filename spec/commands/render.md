@@ -1,7 +1,7 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-10-19T11:42:00+08:00"
+updated_at: "2026-10-19T12:40:31+08:00"
 status: accepted
 ---
 
@@ -33,9 +33,9 @@ status: accepted
 
 camera 可选 projection=perspective、up=[0,1,0]、near=0.05、far=100。
 透视可选 fov_y=65（度，1&lt;值&lt;179），禁止 ortho_height；orthographic 必须给正有限 ortho_height（世界米），禁止显式 fov_y。
-正交支持基础光栅和 Surface only / Scene media 路径；启用空气或云的光栅请求返回 not_supported。
-正交主射线从各抖动像素的近裁剪面开始，近面前的几何和介质不计入；far 只裁剪主网格查询，介质仍到物理边界。
-Scene media 的整个近面图像区域须处于既有介质支持域（不可在地下），无隐式改相机或关闭环境。
+正交支持基础光栅、空气/云光栅和 Surface only / Scene media 路径。光栅环境要求 far≤1000000 m、可见宽高各≤100000 m，眼点位于地面以上；不支持的域返回 not_supported/invalid_argument，保留旧输出。
+正交主射线从各像素的近裁剪面开始（路径追踪含像素抖动），近面前的几何和介质不计入；far 只裁剪主网格查询，介质仍到物理边界。
+路径 Scene media 的整个近面图像区域须处于既有介质支持域（不可在地下）；光栅环境允许近面跨地面，行星内起点像素不透光。无隐式改相机或关闭环境。
 必须有限、near&gt;0、far&gt;near，eye 与 target 不同，up 不能平行于观察方向。
 默认 eye=[8,1.8,0]、target=[-4,2,0]。坐标为世界空间，使用右手坐标、顶部第一行。
 
