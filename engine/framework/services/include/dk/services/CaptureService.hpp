@@ -16,6 +16,21 @@ struct CaptureSample {
     double time_seconds=0;
     bool camera_cut=false;
 };
+// Command values only; no renderer or third-party SDK ABI in the service interface.
+struct CaptureRestirTemporal {
+    std::uint32_t version=1,max_history_candidates=64,max_history_age=8;
+    double position_tolerance=.1,normal_cosine=.95;
+};
+struct CaptureRestirSpatial {
+    std::uint32_t version=1,neighbor_count=4,radius=2,max_source_candidates=64;
+    double position_tolerance=1,normal_cosine=.9;
+};
+struct CaptureRestir {
+    std::uint32_t version=1,initial_candidates=8;
+    std::uint64_t max_candidate_evaluations=1ull<<24;
+    std::optional<CaptureRestirTemporal> temporal;
+    std::optional<CaptureRestirSpatial> spatial;
+};
 struct CapturePathTrace {
     std::uint32_t version=1,target_spp=256,max_bounces=8,rr_start=3;
     std::uint64_t seed=1;
@@ -26,6 +41,8 @@ struct CapturePathTrace {
     double time_seconds=0,cloud_albedo=.9,cloud_anisotropy=.6;
     std::uint64_t max_tracking_steps=1ull<<26;
     std::uint32_t max_steps_per_path=1u<<16;
+    bool restir_di=false; // v3; classic MIS remains the default for old clients.
+    std::optional<CaptureRestir> restir;
 };
 struct CaptureRequest {
     std::string output;

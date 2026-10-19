@@ -10,6 +10,7 @@
 #include <chrono>
 #include <algorithm>
 #include "CaptureInternal.hpp"
+#include "CaptureRestir.hpp"
 
 namespace dk {
 namespace {
@@ -108,11 +109,11 @@ std::string provenance(const CaptureRequest& r,const EnvironmentDescription& env
     value["pathtrace"]=nullptr;
     if(r.pathtrace) {
         const auto& p=*r.path;
-        value["quality"]=p.version==2 ? "pathtrace_v2" : "pathtrace_v1";
+        value["quality"]=p.version==3 ? "pathtrace_v3" : p.version==2 ? "pathtrace_v2" : "pathtrace_v1";
         value["pathtrace"]={{"version",p.version},{"target_spp",p.target_spp},{"seed",p.seed},{"max_bounces",p.max_bounces},
             {"rr_start",p.rr_start},{"environment_rgb",{p.environment_rgb.x(),p.environment_rgb.y(),p.environment_rgb.z()}},
             {"sun",p.sun},{"surface_only",p.surface_only},{"exposure_ev",p.exposure_ev}};
-        if(p.version==2) {
+        if(p.version>=2) {
             auto& path=value["pathtrace"]; path.erase("surface_only"); path["medium_mode"]=p.scene_media ? "scene_media" : "surface_only";
             value["geometry_fingerprint"]=nullptr;
             if(p.scene_media) {
@@ -124,6 +125,15 @@ std::string provenance(const CaptureRequest& r,const EnvironmentDescription& env
         value["model_version"]=p.scene_media ? 4 : 3; value["sampler_version"]=p.scene_media ? 2 : 1; value["material_model"]="metallic_roughness";
         value["estimator"]="mis"; value["actual_spp"]=0; value["input_fingerprint"]=nullptr;
         value["input_fingerprint_version"]=3;
+        if(p.version==3) {
+            value["provenance_version"]=1;
+            auto& path=value["pathtrace"]; path["direct_lighting"]=p.restir_di ? "restir_di" : "classic_mis";
+            if(p.restir) path["restir"]=capture_detail::restir_json(*p.restir);
+            value["history"]={{"start","empty"},{"sample_first",0},{"epoch_first",0},{"temporal_history_epoch",nullptr}};
+            value["restir_sampler_version"]=p.restir_di ? 1 : 0;
+            value["rtxdi_version"]=p.restir_di ? nlohmann::json("3.1.0") : nlohmann::json(nullptr);
+            value["reuse"]=nullptr;
+        }
     }
     return value.dump();
 }
@@ -250,14 +260,16 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
             const auto& p=*request.path;
             require(request.samples.empty() && request.profile==GltfImportProfile::unlit_preview && request.exposure==1 &&
                 request.warmup_frames==0 && request.environment==render::EnvironmentRenderSettings{},"Path capture requires unlit_preview and no raster sequence/exposure/warmup/options");
-            require((p.version==1 || p.version==2) && p.target_spp>=1 && p.target_spp<=65536 && p.max_bounces>=1 && p.max_bounces<=16 &&
+            require((p.version>=1 && p.version<=3) && p.target_spp>=1 && p.target_spp<=65536 && p.max_bounces>=1 && p.max_bounces<=16 &&
                 p.rr_start<=p.max_bounces && p.environment_rgb.allFinite() && p.environment_rgb.minCoeff()>=0 && p.environment_rgb.maxCoeff()<=1e6 &&
                 std::isfinite(p.exposure_ev) && std::abs(p.exposure_ev)<=32,"Invalid pathtrace settings");
-            require((p.version==2 || !p.scene_media) && std::isfinite(p.time_seconds) && std::abs(p.time_seconds)<=1e9 &&
+            require((p.version>=2 || !p.scene_media) && std::isfinite(p.time_seconds) && std::abs(p.time_seconds)<=1e9 &&
                 std::isfinite(p.cloud_albedo) && p.cloud_albedo>=0 && p.cloud_albedo<=1 &&
                 std::isfinite(p.cloud_anisotropy) && std::abs(p.cloud_anisotropy)<=.95 &&
                 p.max_tracking_steps>=1 && p.max_tracking_steps<=(1ull<<28) && p.max_steps_per_path>=1 && p.max_steps_per_path<=(1u<<20),
                 "Invalid pathtrace media settings");
+            require((p.version==3 || (!p.restir_di && !p.restir)) && p.restir_di==p.restir.has_value(),"ReSTIR requires pathtrace v3 and matching direct_lighting/restir settings");
+            require(!p.restir || capture_detail::valid_restir(*p.restir),"Invalid ReSTIR settings");
             require(!request.linear_json || std::size_t{request.width}*request.height<=524288,"Path linear report allows at most 524288 pixels");
         }
         check(render::validate_environment_render_settings(request.environment));

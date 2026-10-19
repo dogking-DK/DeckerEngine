@@ -1,7 +1,7 @@
 ---
 module: render-capture
 created_at: "2026-10-03T21:21:47+08:00"
-updated_at: "2026-10-19T12:40:31+08:00"
+updated_at: "2026-10-19T17:07:00+08:00"
 status: accepted
 ---
 
@@ -142,3 +142,9 @@ render.capture 和 render.sequence 每个 sample 的 camera 接受 projection（
 基础光栅、光栅环境、表面路径和 Scene media 支持正交；序列任何非法镜头 sample 都在入队前失败。
 光栅环境支持域按管线设计检查，GPU/域错误保留旧输出；正交背景积分到物理边界，far 仅裁剪几何。
 不改变 external/不可撤销、guard、Jobs 取消/关闭、owner 单文件原子发布或旧文件保护。
+
+## ReSTIR 捕获（M19.7）
+
+`CapturePathTrace` v3 在 v2 介质选择上增加直接光照选择和引擎自有 ReSTIR 值配置；公共服务头不依赖 GPU 或 SDK。Operations 对版本/字段组合做拒绝式校验，Service 校验数值边界，worker 私有转换到已有 progressive renderer。旧 v1/v2 默认经典 MIS。
+
+每个捕获独立创建 view，从 sample/epoch 0 和空历史运行；禁止外部历史与非零起点。v3 使用 linear schema 2 和版本化 provenance，完整记录有效配置、源内容、shader/SDK 来源与已完成复用统计。ticket 的未完成统计为 null，成功结果与文件一致。原子文件提交仍是唯一外部提交点；失败、预算超限与取消保持旧文件。render.sequence 不扩展。详见 [ReSTIR 消费契约](render-restir.md#m197-消费端实施契约)。

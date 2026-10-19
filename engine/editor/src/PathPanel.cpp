@@ -8,6 +8,15 @@ void WorkbenchUi::path_panel(Viewport& preview) {
     if(ImGui::RadioButton("Surface only",!path_settings_.scene_media)) path_settings_.scene_media=false; mark("path_surface");
     ImGui::SameLine(); if(ImGui::RadioButton("Scene media",path_settings_.scene_media)) path_settings_.scene_media=true; mark("path_media");
     ImGui::TextWrapped(path_settings_.scene_media ? "Trace scene air, clouds and surfaces at a fixed time." : "Trace surface lighting; omit scene air and clouds.");
+    if(ImGui::RadioButton("Classic MIS",!path_settings_.restir_di)) path_settings_.restir_di=false; mark("path_classic");
+    ImGui::SameLine(); if(ImGui::RadioButton("ReSTIR DI",path_settings_.restir_di)) path_settings_.restir_di=true; mark("path_restir");
+    if(path_settings_.restir_di) {
+        int candidates=int(path_settings_.restir_candidates); ImGui::SetNextItemWidth(125);
+        if(ImGui::InputInt("Initial candidates",&candidates)) path_settings_.restir_candidates=std::uint32_t(std::clamp(candidates,1,64)); mark("path_candidates");
+        controls_["path_candidates"].x=ImGui::GetItemRectMin().x+30;
+        ImGui::Checkbox("Temporal reuse",&path_settings_.restir_temporal); mark("path_temporal");
+        ImGui::Checkbox("Spatial reuse",&path_settings_.restir_spatial); mark("path_spatial");
+    }
     int target=int(path_settings_.target),seed=int(path_settings_.seed),bounces=int(path_settings_.bounces);
     ImGui::SetNextItemWidth(125);
     if(ImGui::InputInt("Target spp",&target)) path_settings_.target=std::uint32_t(std::clamp(target,1,65536)); mark("path_target"); controls_["path_target"].x=ImGui::GetItemRectMin().x+30;
@@ -40,9 +49,19 @@ void WorkbenchUi::path_panel(Viewport& preview) {
             used.medium ? used.medium->settings.sampler_version : used.settings.sampler_version);
         if(used.medium) ImGui::Text("t %.3f / field %016llx",used.medium->medium.time_seconds,static_cast<unsigned long long>(used.medium->field_hash));
         ImGui::Text("Shown size: %u x %u",used.width,used.height);
+        ImGui::TextWrapped("Shown lighting: %s",used.restir ? "ReSTIR DI (RTXDI 3.1.0)" : "Classic MIS");
+        if(used.restir) {
+            ImGui::TextWrapped("Candidates %u / temporal %s / spatial %s",used.restir->initial_candidates,used.restir->temporal ? "on" : "off",used.restir->spatial ? "on" : "off");
+            ImGui::TextWrapped("Epoch start %u / history %s",used.sampling_first_epoch,used.temporal_history_epoch ? "reprojected" : "empty");
+            const auto& t=used.temporal_statistics; const auto& s=used.spatial_statistics;
+            ImGui::TextWrapped("Temporal: reuse %llu / reject %llu / expired %llu",static_cast<unsigned long long>(t.reused),static_cast<unsigned long long>(t.rejected),static_cast<unsigned long long>(t.expired));
+            ImGui::TextWrapped("Spatial: reuse %llu / reject %llu",static_cast<unsigned long long>(s.reused),static_cast<unsigned long long>(s.rejected));
+            ImGui::TextWrapped("History age %u / effective M %u (not spp)",std::max(t.max_age,s.max_age),std::max(t.max_candidates,s.max_candidates));
+        }
     }
     if(preview.path_interactive()) ImGui::TextWrapped("Motion preview. Full size resumes after the camera stops.");
     const auto status=preview.path_status(); const auto& p=status.progress;
+    ImGui::TextWrapped("Latest reset: %s",status.reset_reason.c_str());
     ImGui::Text("%s: %u / %u spp",status.phase.c_str(),p.completed_spp,p.target_spp);
     ImGui::ProgressBar(p.target_spp ? float(p.completed_spp)/float(p.target_spp) : 0,{-1,0});
     ImGui::Text("Tiles %u / %u  |  shown %u spp",p.completed_tiles,p.total_tiles,preview.path_samples());

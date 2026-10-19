@@ -10,12 +10,18 @@ def main():
     parser.add_argument("--ctl", default="dk-ctl")
     parser.add_argument("--media", action="store_true", help="Trace scene air/clouds at fixed time zero (v2)")
     parser.add_argument("--orthographic", action="store_true", help="Parallel rays from a 3 m high near plane")
+    parser.add_argument("--restir", choices=("initial", "temporal", "spatial", "joint"), help="Use independent v3 ReSTIR DI capture")
     args = parser.parse_args()
     client = Client(args.pipe, args.ctl, timeout=30)
     state = client.call("scene.query").value["state"]
     path = dict(version=1, target_spp=3, seed=7, max_bounces=4, environment_rgb=[.3, .4, .6])
     if args.media:
         path.update(version=2, medium_mode="scene_media", time_seconds=0, cloud_albedo=.9, cloud_anisotropy=.6)
+    if args.restir:
+        reuse = dict(initial_candidates=8)
+        if args.restir in ("temporal", "joint"): reuse["temporal"] = {}
+        if args.restir in ("spatial", "joint"): reuse["spatial"] = {}
+        path.update(version=3, medium_mode="scene_media" if args.media else "surface_only", direct_lighting="restir_di", restir=reuse)
     camera = {"eye": [0, 0, -2], "target": [0, 0, 0], "near": .05, "far": 10000}
     if args.orthographic:
         camera.update(projection="orthographic", ortho_height=3)

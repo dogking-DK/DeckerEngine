@@ -93,7 +93,7 @@ def main():
                 if name == "render.capture":
                     assert descriptor["parameters"]["properties"]["renderer"]["enum"] == ["raster", "pathtrace"]
                     fields = descriptor["parameters"]["properties"]["pathtrace"]["properties"]
-                    assert fields["version"]["maximum"] == 2 and fields["medium_mode"]["enum"] == ["surface_only", "scene_media"]
+                    assert fields["version"]["maximum"] == 3 and fields["medium_mode"]["enum"] == ["surface_only", "scene_media"]
                     assert fields["max_tracking_steps"]["maximum"] == 268435456
                     fingerprint = descriptor["result"]["properties"]["provenance"]["properties"]["input_fingerprint_version"]
                     assert fingerprint["minimum"] == fingerprint["maximum"] == 3

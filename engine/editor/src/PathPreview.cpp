@@ -37,6 +37,9 @@ void PathPreview::run(std::stop_token stop) {
     std::uint32_t displayed_spp=0;
     double displayed_exposure=0;
     std::stop_token cancel;
+    std::optional<PathPreviewSettings> applied_settings;
+    std::uint32_t applied_width=0,applied_height=0;
+    Camera applied_camera;
     for(;;) {
         std::optional<PathPreviewRequest> incoming; bool enabled;
         {
@@ -88,6 +91,16 @@ void PathPreview::run(std::stop_token stop) {
                     phase(active->sequence,"Compiling");
                     renderer=take(render::PathTraceRenderer::create(heap_,*queue,DK_EDITOR_PATH_SHADER_DIR,cancel)); initialized=true;
                 }
+                const auto old_generation=configured ? take(renderer.status(1)).generation : 0;
+                std::string reset_reason=!configured ? "New view" : asset_session!=active->snapshot.state.document_id ? "Document changed" :
+                    asset_reload!=active->reload ? "Assets refreshed" : scene_preview!=active->preview ? "Edit gesture" :
+                    scene_revision!=active->snapshot.state.revision ? "Scene changed" :
+                    applied_width!=active->width || applied_height!=active->height ? "View size changed" :
+                    applied_reset!=active->settings.reset ? "Manual reset" :
+                    applied_settings && (applied_settings->restir_di!=active->settings.restir_di || applied_settings->scene_media!=active->settings.scene_media) ? "Algorithm or medium changed" :
+                    applied_settings && (applied_settings->restir_candidates!=active->settings.restir_candidates || applied_settings->restir_temporal!=active->settings.restir_temporal || applied_settings->restir_spatial!=active->settings.restir_spatial) ? "ReSTIR configuration changed" :
+                    applied_camera.projection_mode()!=active->camera.projection_mode() || applied_camera.settings().lens!=active->camera.settings().lens ? "Projection changed" :
+                    applied_camera.world().matrix()!=active->camera.world().matrix() ? "Camera pose changed" : "Transport settings or resumed view";
                 const bool reload=asset_session!=active->snapshot.state.document_id || asset_reload!=active->reload;
                 if(reload) {
                     phase(active->sequence,"Loading assets");
@@ -136,6 +149,9 @@ void PathPreview::run(std::stop_token stop) {
                 settings.surface_only=active->settings.surface_only;
                 render::PathTraceSchedule schedule; schedule.session=session; schedule.target_spp=active->settings.target; schedule.gesture=active->preview;
                 schedule.paused=active->settings.paused; schedule.exposure=active->settings.exposure;
+                render::RestirDiSettings restir; restir.initial_candidates=active->settings.restir_candidates;
+                if(active->settings.restir_temporal) restir.temporal.emplace();
+                if(active->settings.restir_spatial) restir.spatial.emplace();
                 if(active->settings.scene_media) {
                     const auto& environment=active->snapshot.scene.environment(); const auto& clouds=environment.clouds;
                     std::shared_ptr<const render::CloudFieldData> candidate;
@@ -152,10 +168,16 @@ void PathPreview::run(std::stop_token stop) {
                         {1,active->settings.time_seconds,active->settings.cloud_albedo,active->settings.cloud_anisotropy},candidate));
                     render::VolumePathSettings volume; volume.seed=settings.seed; volume.max_bounces=settings.max_bounces;
                     volume.rr_start=settings.rr_start; volume.environment_rgb=settings.environment_rgb; volume.sun=active->settings.sun;
-                    check(renderer.configure_medium_view(*queue,1,gpu,medium,view,volume,schedule));
+                    check(active->settings.restir_di ? renderer.configure_restir_medium_view(*queue,1,gpu,medium,view,volume,restir,schedule) :
+                        renderer.configure_medium_view(*queue,1,gpu,medium,view,volume,schedule));
                     cloud_field=std::move(candidate);
-                } else { check(renderer.configure_view(*queue,1,gpu,view,settings,schedule)); cloud_field.reset(); }
+                } else { check(active->settings.restir_di ? renderer.configure_restir_view(*queue,1,gpu,view,settings,restir,schedule) :
+                    renderer.configure_view(*queue,1,gpu,view,settings,schedule)); cloud_field.reset(); }
                 if(configured && applied_reset!=active->settings.reset) check(renderer.reset(1));
+                if(!configured || take(renderer.status(1)).generation!=old_generation) {
+                    std::lock_guard lock(mutex_); if(wanted_==active->sequence) status_.reset_reason=std::move(reset_reason);
+                }
+                applied_settings=active->settings; applied_camera=active->camera; applied_width=active->width; applied_height=active->height;
                 configured=true; applied_reset=active->settings.reset; pending_config=false;
             }
             if(!active || !configured || cancel.stop_requested()) continue;

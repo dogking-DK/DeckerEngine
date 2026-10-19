@@ -20,15 +20,17 @@ void ppm(const std::filesystem::path& path,const EnvironmentPreviewResult& r) {
     require(bool(f),"Cannot write pixels");
 }
 }
+#include "RestirWorker.inl"
 int main(int argc,char** argv) {
     if(argc<3) return 2;
-    bool validation=false,profile=false,media=false;
+    bool validation=false,profile=false,media=false,restir=false;
     for(int i=3;i<argc;++i) {
         const std::string_view option=argv[i];
         if(option=="--validation") validation=true; else if(option=="--profile") profile=true;
-        else if(option=="--media") media=true; else return 2;
+        else if(option=="--media") media=true; else if(option=="--restir") restir=true; else return 2;
     }
     const std::filesystem::path output=argv[2]; std::filesystem::create_directories(output);
+    if(restir) return restir_worker(argv[1],output);
     Json report={{"status","failed"},{"validation",validation},{"profile",profile},{"environment",Json::array()},{"path",Json::array()}};
     int code=1;
     try {

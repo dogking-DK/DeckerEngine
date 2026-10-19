@@ -28,6 +28,7 @@ int main(int argc,char** argv) {
             else if (arg=="--validation") options.validation=true;
             else if (arg=="--no-validation") options.disable_validation=true;
             else if (arg=="--background") options.background=true;
+            else if (arg=="--restir-pathtrace-smoke") { options.restir_pathtrace_smoke=true; options.media_pathtrace_smoke=true; options.pathtrace_smoke=true; }
             else if (arg=="--media-pathtrace-smoke") { options.media_pathtrace_smoke=true; options.pathtrace_smoke=true; }
             else if (arg=="--pathtrace-smoke") options.pathtrace_smoke=true;
             else if (arg=="--desktop-render-smoke") options.desktop_render_smoke=true;
@@ -55,7 +56,7 @@ int main(int argc,char** argv) {
                     "            --environment-consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --simulation-consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
-                    "            --pathtrace-smoke/--media-pathtrace-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
+                    "            --pathtrace-smoke/--media-pathtrace-smoke/--restir-pathtrace-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --simulation-response-probe --pipe NAME --root DISPOSABLE_PROJECT");
                 return 0;
             } else throw std::runtime_error("Unknown dk-editor option");

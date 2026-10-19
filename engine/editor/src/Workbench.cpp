@@ -121,7 +121,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     if (options.simulation_consistency_smoke) simulation_consistency.emplace(options.root);
 #ifdef DK_EDITOR_PATHTRACING
     std::optional<PathSmoke> path_smoke;
-    if(path_acceptance) path_smoke.emplace(options.root,options.desktop_render_smoke,options.media_pathtrace_smoke);
+    if(path_acceptance) path_smoke.emplace(options.root,options.desktop_render_smoke,options.media_pathtrace_smoke,options.restir_pathtrace_smoke);
 #else
     if(path_acceptance) throw std::runtime_error("Path tracing module is disabled");
 #endif

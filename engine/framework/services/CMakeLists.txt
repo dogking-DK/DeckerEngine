@@ -46,7 +46,7 @@ if(DK_BUILD_RENDER_CAPTURE)
     dk_target_defaults(dk_render_services)
     if(TARGET dk_render_pathtracing)
         target_sources(dk_render_services PRIVATE src/PathCapture.cpp)
-        target_link_libraries(dk_render_services PRIVATE dk::render_pathtracing)
+        target_link_libraries(dk_render_services PRIVATE dk::render_pathtracing dk::rtxdi_shaders)
         target_compile_definitions(dk_render_services PUBLIC DK_CAPTURE_PATHTRACING=1 PRIVATE
             DK_CAPTURE_PATH_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/pathtracing/shaders"
             DK_CAPTURE_BUILD="$<CONFIG>/${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}")

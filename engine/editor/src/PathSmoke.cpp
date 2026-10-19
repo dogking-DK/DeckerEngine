@@ -11,7 +11,7 @@ constexpr std::array names={"path","paused","exposure","reset","resumed","camera
 constexpr std::array media_names={"surface","air","cloud","time","exposure","rejected","rejected_again","recovered","surface_again","media_again","reloaded","console","orthographic","ortho_height","perspective","closing"};
 constexpr std::array desktop_names={"path","atmosphere","air_motion","clouds_enabled","clouds","cloud_motion","rejected","recovered","underground","camera_recovered","returned","media_air","media_air_motion","media_cloud","media_cloud_motion"};
 void require(bool value,const char* message) { if(!value) throw std::runtime_error(std::string{"Path smoke: "}+message); }
-std::span<const char* const> actions(std::size_t stage,bool desktop,bool media) {
+std::span<const char* const> actions(std::size_t stage,bool desktop,bool media,bool restir) {
     static constexpr std::array desktop_path={"path_mode","path_target",":all",":one",":enter"};
     static constexpr std::array desktop_air={"path_raster","environment_open","environment_enabled","environment_apply","camera_fly"};
     static constexpr std::array desktop_clouds={"cloud_preset_sparse","environment_apply"};
@@ -20,6 +20,14 @@ std::span<const char* const> actions(std::size_t stage,bool desktop,bool media) 
     static constexpr std::array home={":home"};
     static constexpr std::array orthographic={"camera_orthographic"}, perspective={"camera_perspective"};
     static constexpr std::array height={"camera_settings","camera_ortho_height",":all",":three",":enter","camera_apply","path_settings"};
+    if(media && restir) {
+        static constexpr std::array initial={"path_mode","path_restir","path_target",":all",":two",":enter"};
+        static constexpr std::array air={"path_media","path_temporal","environment_open","environment_enabled","environment_apply","path_settings"};
+        static constexpr std::array joint={"path_spatial"};
+        static constexpr std::array time={"path_time",":all",":two",":enter","path_temporal"};
+        static constexpr std::array classic={"path_surface","path_classic"}, medium={"path_media","path_restir"};
+        switch(stage) { case 0:return initial; case 1:return air; case 2:return joint; case 3:return time; case 8:return classic; case 9:return medium; default:break; }
+    }
     if(media) {
         static constexpr std::array media_orthographic={"camera_orthographic","path_raster","path_mode"};
         static constexpr std::array air={"path_media","environment_open","environment_enabled","environment_apply","path_settings"};
@@ -47,7 +55,7 @@ std::span<const char* const> actions(std::size_t stage,bool desktop,bool media) 
     }
 }
 }
-PathSmoke::PathSmoke(const std::filesystem::path& root,bool desktop,bool media):directory_(root/".dk-path"),desktop_(desktop),media_(media) {
+PathSmoke::PathSmoke(const std::filesystem::path& root,bool desktop,bool media,bool restir):directory_(root/".dk-path"),desktop_(desktop),media_(media),restir_(restir) {
     require(std::filesystem::create_directory(directory_),"checkpoint directory must be fresh");
 }
 void PathSmoke::poll_window(platform::Window& window,bool minimized) {
@@ -84,7 +92,7 @@ void PathSmoke::input(const WorkbenchUi& ui,const Workspace& model,const Viewpor
         } else { io.AddMouseButtonEvent(1,false); ready_=true; }
         return;
     }
-    const auto sequence=actions(stage_,desktop_,media_); const auto elapsed=tick_-13,step=elapsed/8,phase=elapsed%8;
+    const auto sequence=actions(stage_,desktop_,media_,restir_); const auto elapsed=tick_-13,step=elapsed/8,phase=elapsed%8;
     if(step>=sequence.size()) { ready_=true; return; }
     const std::string_view action=sequence[step];
     if(action=="gizmo_0" && phase==0 && (!viewport.current(model.snapshot()->state) || !viewport.camera_current(ui.input().camera()))) { --tick_; return; }
@@ -159,7 +167,7 @@ void PathSmoke::presented(const Workspace& model,const WorkbenchUi& ui,Viewport&
         const bool raster=stage_>0 && stage_<10;
         if(!rejected && (!viewport.current(model.snapshot()->state) || !viewport.camera_current(ui.input().camera()))) return;
         if(stage_>=3 && stage_<10 && !rejected && viewport.environment_warmup()<32) return;
-        if(!raster && (progress.completed_spp!=1 || viewport.path_samples()!=1)) return;
+        if(!raster && (progress.completed_spp!=(restir_ ? 2u : 1u) || viewport.path_samples()!=(restir_ ? 2u : 1u))) return;
         require(ui.path_mode()!=raster,"desktop render mode did not change");
         require(stage_==0 || model.snapshot()->scene.environment().enabled,"atmosphere was not enabled through GUI");
         require(stage_<3 || stage_==11 || stage_==12 || model.snapshot()->scene.environment().clouds.enabled,"clouds were not enabled");
@@ -228,7 +236,7 @@ void PathSmoke::presented_media(const Workspace& model,const WorkbenchUi& ui,Vie
     const auto progress=viewport.path_status().progress;
     if(closing) { if(!progress.pending || progress.completed_spp>=64) return; }
     else if(!rejected && (!viewport.current(model.snapshot()->state) || !viewport.camera_current(ui.input().camera()) ||
-        progress.completed_spp!=1 || viewport.path_samples()!=1)) return;
+        progress.completed_spp!=(restir_ ? 2u : 1u) || viewport.path_samples()!=(restir_ ? 2u : 1u))) return;
     const auto& state=model.snapshot()->state; const auto& used=viewport.path_info(); const auto& settings=ui.path_settings();
     const auto& camera=viewport.published_camera(); const auto world=camera.world().matrix();
     const Vec3d eye=world.block<3,1>(0,3),target=eye-world.block<3,1>(0,2),up=world.block<3,1>(0,1);
@@ -244,13 +252,28 @@ void PathSmoke::presented_media(const Workspace& model,const WorkbenchUi& ui,Vie
         {"pixels",closing ? 0 : viewport.capture_path_pixels()},
         {"capture_camera",{{"eye",{eye.x(),eye.y(),eye.z()}},{"target",{target.x(),target.y(),target.z()}},
             {"up",{up.x(),up.y(),up.z()}},{"fov_y",camera.fov_y()},{"near",camera.near_plane()},{"far",camera.far_plane()}}},
-        {"pathtrace",{{"version",2},{"medium_mode",settings.scene_media ? "scene_media" : "surface_only"},{"target_spp",1},
+        {"pathtrace",{{"version",2},{"medium_mode",settings.scene_media ? "scene_media" : "surface_only"},{"target_spp",restir_ ? 2 : 1},
             {"seed",settings.seed},{"max_bounces",settings.bounces},{"rr_start",std::min(3u,settings.bounces)},
             {"environment_rgb",{settings.sky.x(),settings.sky.y(),settings.sky.z()}},{"sun",settings.sun},{"exposure_ev",settings.exposure}}}};
     if(camera.projection_mode()==ProjectionMode::orthographic) {
         report["capture_camera"].erase("fov_y"); report["capture_camera"]["projection"]="orthographic";
         report["capture_camera"]["ortho_height"]=camera.settings().lens.ortho_height;
     } else report["capture_camera"]["projection"]="perspective";
+    if(restir_) {
+        auto& path=report["pathtrace"]; path["version"]=3; path["direct_lighting"]=used.restir ? "restir_di" : "classic_mis";
+        if(used.restir) {
+            Json config={{"initial_candidates",used.restir->initial_candidates}};
+            if(used.restir->temporal) config["temporal"]=Json::object();
+            if(used.restir->spatial) config["spatial"]=Json::object();
+            path["restir"]=std::move(config);
+        }
+        report["epoch_first"]=used.sampling_first_epoch;
+        report["history_empty"]=!used.temporal_history_epoch;
+        report["temporal_reused"]=used.temporal_statistics.reused;
+        report["spatial_reused"]=used.spatial_statistics.reused;
+        report["history_age"]=used.temporal_statistics.max_age;
+        report["reset_reason"]=viewport.path_status().reset_reason;
+    }
     if(settings.scene_media) report["pathtrace"].update({{"time_seconds",settings.time_seconds},{"cloud_albedo",settings.cloud_albedo},{"cloud_anisotropy",settings.cloud_anisotropy}});
     if(!closing) {
         Json linear=Json::array(); for(const auto& v:viewport.path_linear()) linear.push_back({v.x(),v.y(),v.z()});

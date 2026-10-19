@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-19T12:40:31+08:00"
+updated_at: "2026-10-19T17:07:00+08:00"
 status: accepted
 ---
 
@@ -342,3 +342,9 @@ Scene media 相机移动期间长边192像素，面板显示 Motion preview 和�
 性能观测使用独立开关，GPU时间戳/VMA读取只在测量时启用；所有阶段遵守原1GiB renderer预算，取消返回与GPU回收分别记录。
 
 Suspend 通知立即唤醒 worker；排空在途提交后才报告 Suspended，不将 cancel 调用返回作为 GPU 回收完成。
+
+## ReSTIR 直接光照选择（M19.7）
+
+Path tracing 面板将 Classic MIS / ReSTIR DI 与 Surface only / Scene media 分开，提供候选数和 temporal/spatial 开关，保留可切回经典路径的会话配置。worker 选择相应 renderer 配置入口，不持久化到 Scene/Undo。配置变化沿已有历史契约失效；曝光/暂停/target 保留累计，姿态变化仅在时间复用有效时保留采样历史。
+
+面板从实际完成帧显示算法、候选/复用配置、采样 epoch 起点、历史年龄、有效 M 与复用统计，并单列 worker 最近重置原因。完整 epoch 才推进 spp；旧帧在错误时继续显示其实际来源。验证使用后台窗口与同配置独立 capture 对照，详见 [0140](../development/0140-editor-restir-capture.md)。

@@ -180,3 +180,29 @@ TEST_CASE("capture orthographic raster environment accepts jobs and late invalid
     CHECK(c.value("scene.query")["state"]==state); CHECK(c.value("history.status")==history);
     CHECK(read_file_bytes(c.files.root/"old.ppm")->size()==8); CHECK(read_file_bytes(c.files.root/"old.json")->size()==8);
 }
+
+TEST_CASE("capture restir v3 discovery and invalid combinations preserve old files") {
+    CaptureCommands c; const auto state=c.value("scene.new"),history=c.value("history.status"); c.files.write("old.json","previous");
+    const auto descriptor=c.value("commands.describe",{{"name","render.capture"}});
+    const auto fields=descriptor["parameters"]["properties"]["pathtrace"]["properties"];
+    CHECK(fields["version"]["maximum"]==3); CHECK(fields["direct_lighting"]["enum"]==Json{"classic_mis","restir_di"});
+    CHECK(fields["restir"]["properties"].contains("temporal")); CHECK(fields["restir"]["properties"].contains("spatial"));
+    CHECK_FALSE(c.value("commands.describe",{{"name","render.sequence"}})["parameters"]["properties"].contains("pathtrace"));
+    const Json good={{"version",3},{"medium_mode","surface_only"},{"direct_lighting","restir_di"},{"target_spp",2},{"restir",Json::object()}};
+    for(const Json patch:{Json{{"version",1}},Json{{"version",2}},Json{{"version",4}},Json{{"direct_lighting","classic_mis"}},
+        Json{{"direct_lighting","unknown"}},Json{{"surface_only",true}},Json{{"estimator","bsdf_only"}},Json{{"first_sample",1}},Json{{"history","editor"}},
+        Json{{"restir",{{"version",2}}}},Json{{"restir",{{"initial_candidates",0}}}},Json{{"restir",{{"initial_candidates",65}}}},
+        Json{{"restir",{{"max_candidate_evaluations",0}}}},Json{{"restir",{{"temporal",true}}}},Json{{"restir",{{"temporal",{{"max_history_age",33}}}}}},
+        Json{{"restir",{{"temporal",{{"normal_cosine",-.1}}}}}},Json{{"restir",{{"temporal",{{"position_tolerance",0}}}}}},
+        Json{{"restir",{{"spatial",{{"neighbor_count",9}}}}}},Json{{"restir",{{"spatial",{{"radius",33}}}}}},
+        Json{{"restir",{{"spatial",{{"position_tolerance",1e-300}}}}}}}) {
+        auto path=good; path.update(patch);
+        CHECK_FALSE(c.call("render.capture",{{"renderer","pathtrace"},{"format","linear_json"},{"output","old.json"},{"pathtrace",path}},true));
+    }
+    for(const char* field:{"direct_lighting","restir","medium_mode"}) {
+        auto path=good; path.erase(field);
+        CHECK_FALSE(c.call("render.capture",{{"renderer","pathtrace"},{"format","linear_json"},{"output","old.json"},{"pathtrace",path}},true));
+    }
+    CHECK(c.value("scene.query")["state"]==state); CHECK(c.value("history.status")==history);
+    CHECK(read_file_bytes(c.files.root/"old.json")->size()==8);
+}

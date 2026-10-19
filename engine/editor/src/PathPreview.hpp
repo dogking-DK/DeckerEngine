@@ -9,6 +9,8 @@ struct PathPreviewSettings {
     double exposure=0;
     bool paused=false,sun=true,surface_only=true,scene_media=false;
     double time_seconds=0,cloud_albedo=.9,cloud_anisotropy=.6;
+    bool restir_di=false,restir_temporal=false,restir_spatial=false;
+    std::uint32_t restir_candidates=8;
     std::uint64_t reset=0;
     bool operator==(const PathPreviewSettings&) const = default;
 };
@@ -26,7 +28,7 @@ struct PathPreviewRequest {
 struct PathPreviewStatus {
     std::uint64_t sequence=0;
     render::PathTraceProgress progress;
-    std::string phase="Idle",error;
+    std::string phase="Idle",error,reset_reason="No completed configuration";
 };
 struct PathPreviewResult {
     std::uint64_t sequence=0;

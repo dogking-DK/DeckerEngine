@@ -1,7 +1,7 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-10-19T12:40:31+08:00"
+updated_at: "2026-10-19T17:07:00+08:00"
 status: accepted
 ---
 
@@ -243,3 +243,63 @@ Editor Console 使用同一 method/params 对象（不带 jsonrpc/id）；先 sc
 [Python](../../examples/automation/pathtrace_capture.py) 增加 --media，对活动 Scene 固定时间零捕获；
 [Luau](../../examples/scripting/pathtrace-media-capture.luau) 从 project.json 加载已保存 Scene，使用 3 m 正交高度输出 path-luau.json；按场景地面高度设置相机，保证近面在地面以上。
 两者不隐式启用空气/云；先通过环境面板或 environment.set 配置，需要跨进程一致时显式 scene.save。
+
+## ReSTIR 直接光照（v3）
+
+`pathtrace.version=3` 在 v2 基础上必填 `medium_mode` 和 `direct_lighting`。后者为 `classic_mis` 或 `restir_di`，
+与 `surface_only` / `scene_media` 正交。classic_mis 禁止 `restir`；restir_di 必须提供 `restir` 对象（可为空使用默认初始 RIS）。
+v1/v2 不接受 direct_lighting/restir，继续原经典 MIS；v3 禁止旧布尔 surface_only。
+不提供 BSDF-only、外部 history、first_sample、RTXDI 原始对象或 DLSS 参数；未知字段拒绝。render.sequence 仍为光栅。
+
+restir 中字段均可省略，成功来源返回全部有效值；缺少 temporal/spatial 表示关闭，对象 `{}` 表示按默认开启。
+
+| 字段 | 默认 | 合法范围 / 含义 |
+| --- | --- | --- |
+| version | 1 | 仅 1 |
+| initial_candidates | 8 | 整数 1..64，每像素/epoch 新候选数，不是 spp |
+| max_candidate_evaluations | 16777216 | 整数 1..16777216，GPU 调度候选评估额度；不足时 Job 失败 |
+| temporal | 无 | 可选对象，开启上一完整 epoch 重投影 |
+| temporal.version | 1 | 仅 1 |
+| temporal.max_history_candidates | 64 | 整数 1..4096，有效历史 M 上限 |
+| temporal.max_history_age | 8 | 整数 1..32 |
+| temporal.position_tolerance | 0.1 | 有限 (0,1000000] 米，转换到 float 后必须非零 |
+| temporal.normal_cosine | 0.95 | 有限 [0,1] |
+| spatial | 无 | 可选对象，开启冻结输入平面的邻域复用 |
+| spatial.version | 1 | 仅 1 |
+| spatial.neighbor_count | 4 | 整数 1..8 次尝试 |
+| spatial.radius | 2 | 整数 1..32 像素 |
+| spatial.max_source_candidates | 64 | 整数 1..4096 |
+| spatial.position_tolerance | 1 | 有限 (0,1000000] 米，转换到 float 后必须非零 |
+| spatial.normal_cosine | 0.9 | 有限 [-1,1] |
+
+新捕获总是创建独立完整视图，从 sample/epoch 0 和空历史逐 epoch 渲染；GUI 当前历史不参与。
+时间/空间阶段只增加内部工作，Job.progress.completed 和 actual_spp 仍只计完成全图的 spp。
+若要逐像素对照 GUI，先 Reset accumulation，再匹配算法、候选/复用、介质和全部相机/物理设置。
+相机移动后的 GUI 可携带历史，因此不能直接当成空历史捕获基准。
+
+v3 的 linear JSON 为 schema_version=2（v1/v2 仍为 1），provenance.quality=pathtrace_v3，新增：
+
+- provenance_version=1；pathtrace 含 direct_lighting 和完整有效 restir（仅 ReSTIR）。
+- history={start:"empty",sample_first:0,epoch_first:0,temporal_history_epoch:null}。
+- restir_sampler_version=1、rtxdi_version="3.1.0"；classic_mis 对应 0/null。物理 model/sampler 沿 v2。
+- reuse 提交时为 null；ReSTIR 成功后含 temporal 的 reused/rejected/expired/support_corrected/max_age/max_candidates，spatial 的 reused/rejected/support_corrected/current_visibility_rays/max_age/max_candidates，以及 prepared_surfaces/applied_surfaces（介质完整 epoch 准备/实际到面数，表面模式为 0）。classic_mis 仍为 null。
+- shader_fingerprint 对 ReSTIR 覆盖本地 Slang 入口/bridge/共享文件与固定 RTXDI Include 文件内容；不含机器绝对路径。
+
+复用计数是完整 epoch 诊断，M/age 不是已完成 spp，也不是质量或性能结论。其余指纹、guard、尺寸、Job 额度、
+错误/取消与原子发布契约不变，配置错误先于入队拒绝，执行额度耗尽保留旧文件。
+
+```json
+{"jsonrpc":"2.0","id":4,"method":"render.capture","params":{
+  "guard":{"document_id":"<当前 document_id>","revision":1},
+  "renderer":"pathtrace","format":"linear_json","output":"restir.json","width":48,"height":32,
+  "camera":{"eye":[0,1,-2],"target":[0,1,0],"near":0.05,"far":10000},
+  "pathtrace":{"version":3,"medium_mode":"scene_media","direct_lighting":"restir_di",
+    "target_spp":3,"seed":7,"max_bounces":4,"environment_rgb":[0.3,0.4,0.6],
+    "restir":{"initial_candidates":8,"temporal":{},"spatial":{}}},
+  "validation":"required"
+}}
+```
+
+[Python](../../examples/automation/pathtrace_capture.py) 支持 `--restir initial|temporal|spatial|joint`，
+可组合 `--media --orthographic`；[Luau](../../examples/scripting/pathtrace-restir-capture.luau) 是固定正交 Scene media 联合复用示例。
+两者从空历史渲染 3 spp，分别输出 path-python.json/path-luau.json；环境仍由已有场景决定。

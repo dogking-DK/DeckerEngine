@@ -67,6 +67,9 @@
 | GUI/IPC 指定 revision、视口/截图像素与保存后 runner 重现（M8.4） | dk_editor_app、dk_run、dk_ctl | `^dk\.editor\.consistency_gpu_validation$`（gpu label） |
 | 截图 schema/guard、取消关闭、导入失败（无需 GPU） | dk_protocol_tests | `^dk\.protocol\.capture ` |
 | 路径capture固定spp、介质v2、Job进度/取消、来源与Python/Luau（required RT） | dk_run、dk_ctl | `^dk\.pathtracing\.(media_)?capture_gpu_required$`；GUI线性一致另跑dk_editor_app与`^dk\.editor\.(media_)?pathtracing_gpu_validation$` |
+| ReSTIR v3 四种复用/两种介质、独立历史/来源、取消失败与 Python/Luau | dk_run、dk_ctl | `^dk\.pathtracing\.restir_capture_gpu_required$`（required RT/validation/sync） |
+| ReSTIR 实际 GUI 算法切换与同配置 capture 对照 | dk_editor_app、dk_ctl | `^dk\.editor\.restir_pathtracing_gpu_validation$`（后台窗口、required RT/validation/sync） |
+| ReSTIR worker 暂停/曝光/相机历史、刷新/尺寸/算法、配置失败与取消关闭 | dk_editor_render_benchmark | `^dk\.editor\.restir_worker_gpu_validation$`（required RT/validation/sync） |
 | Runtime 截图、版本/像素、原子发布和退出 | dk_run | `^dk\.runtime\.capture_gpu_validation$`（gpu label；77 为跳过） |
 | Runtime 的 batch/stdio 进程行为 | dk_run | `^dk\.runtime\.` |
 | 编辑器选择/草稿、相机、Gizmo 事务/撤销、保存重载与失败保护（无需 GPU） | dk_editor_tests | `^dk\.editor\.(workspace \|runtime \|camera \|interaction )` |
@@ -80,7 +83,7 @@
 | ReSTIR CPU Scene media 首表面条件 RIS、hero/存活/阴影、云/行星/有限太阳与失败保护 | dk_pathtracing_reference_tests | `^dk\.pathtracing\.RESTIR volume `（CPU-only 初始 RIS，无介质时空会话） |
 | ReSTIR CPU 单灯/100灯/1000灯基准入口与工作量 | dk_restir_reference_benchmark | `^dk\.pathtracing\.restir_reference_benchmark_cpu$`；正式基线用 `--samples 1024 --output <json>`，不作为 GPU 性能结论 |
 | ReSTIR GPU Scene media 首表面 DI、当前空气/云透射、时空支持、调度/风时间/场与 AS、tracking/取消/额度保护 | dk_pathtracing_probe | `^dk\.pathtracing\.restir_medium_.*_gpu_required$`（required RT/validation/sync；CPU oracle 用 `^dk\.pathtracing\.RESTIR volume `） |
-| ReSTIR GPU 初始 RIS/RTXDI、CPU 数值、材质与光能、两阶段 epoch/tile、失败与额度 | dk_pathtracing_probe | `^dk\.pathtracing\.restir_.*_gpu_required$`（required RT/validation/sync；CPU-only 不下载 RTXDI） |
+| ReSTIR GPU 初始 RIS/RTXDI、CPU 数值、材质与光能、两阶段 epoch/tile、失败与额度 | dk_pathtracing_probe | `^dk\.pathtracing\.restir_(numeric\|materials\|textures\|schedule\|state)_gpu_required$`（required RT/validation/sync；CPU-only 不下载 RTXDI） |
 | ReSTIR 时间复用、独立链均值/收敛、GGX/支持校正、重投影/重置与阶段失败/额度 | dk_pathtracing_probe | `^dk\.pathtracing\.restir_temporal_.*_gpu_required$`（required GPU；CPU 递归数学仍用 `^dk\.pathtracing\.RESTIR `） |
 | ReSTIR 空间复用、CPU 空间参考、支持/薄墙/法线/材质边界、时空链均值、独立平面与额度/失败 | dk_pathtracing_probe | `^dk\.pathtracing\.restir_spatial_.*_gpu_required$`；CPU 空间参考/相关来源枚举使用 `dk_pathtracing_reference_tests` / `^dk\.pathtracing\.RESTIR ` |
 | CPU路径追踪示例、线性/PPM产物、重复样本与非法输入保护 | dk_pathtracing_reference_demo | `^dk\.pathtracing\.demo_cpu$`（Python 3.11+，CPU-only） |

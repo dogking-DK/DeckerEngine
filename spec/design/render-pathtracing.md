@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-19T16:00:53+08:00"
+updated_at: "2026-10-19T17:07:00+08:00"
 status: accepted
 ---
 
@@ -37,7 +37,7 @@ M19.6 增加 GPU `submit_restir_medium_rays/view` 和 `configure_restir_medium_v
 完整 RGB 候选先于 hero/存活产生，当前着色再求阴影透射；渐进可选时空复用，固定入口仅初始 RIS。
 风时间/介质变化清空历史，不变 AS/云场仍可复用；tracking/额度失败保留完整 owner，见 [M19.6 契约](render-restir.md#m196-gpu-scene-media-实施契约)。
 沿用 model 4/sampler 2，CPU 介质参考拒绝 temporal/spatial，图像来源记录配置与候选/存活/阴影统计。
-旧 MIS 和介质入口不变；目前没有 ReSTIR 的 Editor/capture 新模式。
+旧 MIS 和介质入口不变；Editor 与 pathtrace v3 捕获的算法选择见 [ReSTIR 消费契约](render-restir.md#m197-消费端实施契约)。
 固定射线上传统一将合法的 -0 TMin 转成 +0，避免硬件遍历漏命中；其他裁剪语义不变，三个入口均有回归。
 后续 DLSS 由独立重建适配层消费线性结果，SDK 类型不进入 CPU oracle 或 Scene。
 阶段与验收见 [Roadmap M19](../roadmap.md#m19restir-直接光重采样)。

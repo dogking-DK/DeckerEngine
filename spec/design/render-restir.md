@@ -1,16 +1,16 @@
 ---
 module: render-restir
 created_at: "2026-10-19T12:50:00+08:00"
-updated_at: "2026-10-19T16:35:55+08:00"
+updated_at: "2026-10-19T17:07:00+08:00"
 status: accepted
 ---
 
 # ReSTIR 光照重采样设计
 
 本文件是[路径追踪设计](render-pathtracing.md)的采样扩展设计。
-CPU 数学、GPU 初始 RIS、时间与空间复用的现行契约见 M19.1–M19.4，CPU 介质条件采样见 M19.5，GPU 空气/云接入见 M19.6；
+CPU 数学、GPU 初始 RIS、时间与空间复用的现行契约见 M19.1–M19.4，CPU 介质条件采样见 M19.5，GPU 空气/云接入见 M19.6，Editor/独立捕获见 M19.7；
 状态、依赖和下一项统一见 [Roadmap M19](../roadmap.md#m19restir-直接光重采样)。
-下文区分现行 CPU/GPU 采样契约和后续消费者计划，不把独立接口视为编辑器已有能力。
+下文记录现行采样与消费者契约，性能和默认策略仍由 M19.8 验收。
 
 ## 目标与范围
 
@@ -434,7 +434,7 @@ mask 发光分工、无光与零目标、分批和透视/正交图像身份、�
 
 M19.1 以独立 `estimate_restir_reference` 入口和 `RestirDiSettings` 冻结 CPU 初始采样及版本；
 M19.2 的 GPU 与渐进入口沿用该配置，实际来源置于 `PathTraceGpuImageInfo.restir`。
-M19.3 以可选 temporal 配置提供时间复用与历史界限；后续消费者计划采用 `direct_lighting = classic_mis / restir_di`。
+M19.3 以可选 temporal 配置提供时间复用与历史界限；消费者采用 `direct_lighting = classic_mis / restir_di`。
 M19.4 以可选 spatial 配置提供空间复用与有界邻域。RTXDI backend 及 DLSS reconstruction 分别适配。
 与 Surface only/Scene media 正交，不复用介质模式开关表达算法；旧请求默认保持原行为。
 BSDF-only 对照与 ReSTIR 同时请求的非法组合显式拒绝。设置不进入 Scene 文件/Undo。
@@ -445,6 +445,14 @@ M19.7 扩展 Editor、worker、独立 `render.capture` 请求/来源与版本化
 暂不提供从任意 first sample 随机跳到一个有历史结果的语义；续算必须拥有完整会话状态或从起点重放。
 固定射线列表入口可验证无复用 RIS；请求时空复用必须提供完整视图/像素对应关系，否则明确拒绝。
 时间复用相机序列先由专用测试夹具重放。现有 `render.sequence` 是光栅入口，M19 不默认为它增加路径后端。
+
+## M19.7 消费端实施契约
+
+直接光照选择 `classic_mis` / `restir_di`，与介质模式、后续重建器分离。Editor 使用独立开关选择时间/空间复用和候选数，默认经典 MIS；显示已完成帧的配置、epoch 起点、历史年龄/候选数/接受拒绝统计及 worker 最近重置原因。设置仅属于当前会话。
+
+捕获通过 pathtrace v3 显式指定 `medium_mode`、`direct_lighting`；ReSTIR 必填 `restir` 对象，包含有效初始候选/预算及可选 temporal/spatial 子配置，缺省字段补全。v1/v2 维持原契约，不接受这些字段。v3 linear report 的 schema_version 为 2，provenance_version 为 1，记录配置、RTXDI 版本、源指纹、sample/epoch 0 与空历史起点，完成后添加复用统计。捕获不接收 first sample/history 输入；由新的完整视图逐 epoch 运行，与 GUI 空历史同配置对照。
+
+shader 指纹对 ReSTIR 覆盖本地 Slang 和固定 SDK Include 内容，在编译前后及交付前校验。保持 bounded jobs、取消/失败不发布、旧文件原子保护和 render.sequence 的 raster 边界。实施与证据见 [0140](../development/0140-editor-restir-capture.md)。
 
 ## 验证与测量计划
 

@@ -15,8 +15,10 @@ def main():
     for name in ("editor", "client", "fixtures", "work-dir"):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--media", action="store_true")
+    parser.add_argument("--restir", action="store_true")
     args = parser.parse_args()
-    directory = args.work_dir / (("media-pathtrace-" if args.media else "pathtrace-") + uuid4().hex)
+    if args.restir: args.media = True
+    directory = args.work_dir / (("restir-pathtrace-" if args.restir else "media-pathtrace-" if args.media else "pathtrace-") + uuid4().hex)
     root = directory / "project"
     shutil.copytree(args.fixtures, root)
     for asset in (root / "assets").glob("*.gltf"):
@@ -28,7 +30,7 @@ def main():
     endpoint = "dk-path-" + uuid4().hex
     report = {"status": "failed", "checkpoints": [], "ipc_seconds": []}
     command = [args.editor, "--background", "--root", root, "--pipe", endpoint, "--fixture-camera",
-               "--validation", "--media-pathtrace-smoke" if args.media else "--pathtrace-smoke", "--screenshot", directory / "workbench.ppm"]
+               "--validation", "--restir-pathtrace-smoke" if args.restir else "--media-pathtrace-smoke" if args.media else "--pathtrace-smoke", "--screenshot", directory / "workbench.ppm"]
     with (directory / "stdout.log").open("wb") as out, (directory / "stderr.log").open("wb") as err:
         process = subprocess.Popen([str(x) for x in command], stdin=subprocess.DEVNULL, stdout=out, stderr=err,
                                    creationflags=subprocess.CREATE_NO_WINDOW)
@@ -73,6 +75,14 @@ def main():
                 assert source["input_fingerprint"] == value["input_fingerprint"]
                 if value["mode"] == "scene_media":
                     assert source["cloud_field_hash"] == value["field_hash"] and source["time_seconds"] == value["time_seconds"]
+            if args.restir:
+                source = image["provenance"]
+                assert source["history"]["start"] == "empty" and source["history"]["epoch_first"] == 0
+                assert value["epoch_first"] == 0 and value["history_empty"] and value["reset_reason"]
+                assert source["pathtrace"]["direct_lighting"] == value["pathtrace"]["direct_lighting"]
+                if source["reuse"]:
+                    assert source["reuse"]["temporal"]["reused"] == value["temporal_reused"]
+                    assert source["reuse"]["spatial"]["reused"] == value["spatial_reused"]
             report.setdefault("linear_comparisons", []).append(dict(checkpoint=name, max_abs=error, pixels=len(gui)))
 
         def compare_projections(previous):
@@ -100,6 +110,7 @@ def main():
             assert air["mode"] == "scene_media" and air["generation"] > first["generation"]
             assert air["pixels"] != first["pixels"] and air["field_hash"] == "fnv1a64:0000000000000000"
             compare_capture(air)
+            if args.restir: assert air["temporal_reused"] > 0 and air["history_age"] > 0
             env = call("environment.query")["environment"]
             assert env["enabled"]  # enabled through the actual Environment panel
             env["atmosphere"]["planet_center_m"][1] -= 10
@@ -109,11 +120,15 @@ def main():
             cloud = checkpoint("cloud")
             assert cloud["field_hash"] != air["field_hash"] and cloud["geometry_fingerprint"] == air["geometry_fingerprint"]
             assert cloud["generation"] > air["generation"] and cloud["pixels"] != air["pixels"]
-            compare_capture(cloud); advance("cloud")
+            compare_capture(cloud)
+            if args.restir: assert cloud["spatial_reused"] > 0 and cloud["temporal_reused"] > 0
+            advance("cloud")
             shifted = checkpoint("time")
             assert shifted["time_seconds"] == 2 and shifted["generation"] > cloud["generation"]
             assert shifted["field_hash"] == cloud["field_hash"] and shifted["pixels"] != cloud["pixels"]
-            compare_capture(shifted); advance("time")
+            compare_capture(shifted)
+            if args.restir: assert shifted["spatial_reused"] > 0 and shifted["temporal_reused"] == 0
+            advance("time")
             exposure = checkpoint("exposure")
             assert exposure["exposure"] == 2 and exposure["generation"] == shifted["generation"]
             assert exposure["pixels"] != shifted["pixels"]

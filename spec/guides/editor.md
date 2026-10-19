@@ -244,3 +244,19 @@ Console 输入 `{"method":"scene.query","params":{}}` 后按 Enter 或 Run，取
 `dk.editor.media_pathtracing_gpu_validation` 使用独立夹具、--background 和 --media-pathtrace-smoke：真实点击模式/环境/时间/曝光、Console 输入，
 与 IPC capture 比较冻结线性结果，连续错误恢复和换会话检查。该验收将路径画面固定为至多 96×96 以控制同步验证成本；
 正常 Editor 分辨率不变，原路径验收继续覆盖正常视口、resize/minimize 与相机/实体编辑。不得把验收尺寸作为 Sponza 性能证据。
+
+## ReSTIR 直接光照
+
+Path tracing 面板默认 **Classic MIS**。切到 **ReSTIR DI** 后，可以设置 **Initial candidates**（1–64），
+并分别勾选 **Temporal reuse** 和 **Spatial reuse**。两个都关闭是初始 RIS；此选择与 Surface only / Scene media 独立。
+设置只影响当前预览会话，不修改 Scene 或撤销历史；也不代表启用了 DLSS。
+
+**Shown lighting** 与候选/复用信息来自实际已完成图像。面板同时显示采样 epoch 起点、历史年龄、有效 M 和复用/拒绝计数，
+**Latest reset** 标出 worker 最近清空图像历史的原因。spp 只统计全图完成的样本，不把候选或内部 pass 当作 spp。
+曝光、Pause/Resume 和目标 spp 不改变已有线性样本；Reset accumulation、算法/物理配置、尺寸/投影、Refresh 和文档变化会重置。
+时间复用开启时，相机姿态变化可保留可重投影的采样历史；Scene media 的交互分辨率切换仍重置历史。
+错误时保留旧图像及其来源，修正参数后可恢复。
+
+使用 [pathtrace v3](../commands/render.md#restir-直接光照v3) 获取独立、可复现的固定 spp 捕获。
+若要逐像素对照 GUI，先手动 Reset accumulation，再匹配尺寸/相机/seed/反弹/环境/介质/候选/复用和曝光。
+捕获永远从空历史开始，不继承正在浏览的 GUI 历史。质量/性能与默认策略结论留待 M19.8。
