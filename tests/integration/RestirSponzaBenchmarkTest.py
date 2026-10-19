@@ -149,6 +149,14 @@ class Evidence(unittest.TestCase):
             if change == 'validation': p[0]['validation'] = True
             with self.subTest(change=change), self.assertRaises(ValueError): m.performance(p, 'spatial')
 
+    def test_device_budget_above_one_gib_is_accepted(self):
+        p = performance('spatial')
+        for report in p:
+            for case in report['cases']:
+                case['memory']['limit'] = 12 << 30
+                for frame in case['frames']: frame['memory']['limit'] = 12 << 30
+        m.performance(p, 'spatial')
+
     def test_full_image_hash_extent_and_finite_values(self):
         data = array.array('f', [1.]*(640*360*3)).tobytes()
         row = dict(linear_sha256=hashlib.sha256(data).hexdigest(), linear_extent=[640, 360])

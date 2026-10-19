@@ -114,7 +114,7 @@ def performance(report, reference, smoke=False):
             ids = [t["gpu"]["submission"] for t in frame["tiles"]]
             need(len(ids) == len(set(ids)), "Duplicated tile submission")
             gpu.append(sum(profile(t["gpu"]) for t in frame["tiles"]))
-            need(frame["memory"]["current"] <= frame["memory"]["peak"] <= frame["memory"]["limit"] == 2**30, "Budget violation")
+            need(0 < frame["memory"]["limit"] and 0 <= frame["memory"]["current"] <= frame["memory"]["peak"] <= frame["memory"]["limit"], "Budget violation")
         for name in ("tone", "linear_readback"):
             profile(case[name]["gpu"])
         profile(case["upload_build_gpu"])

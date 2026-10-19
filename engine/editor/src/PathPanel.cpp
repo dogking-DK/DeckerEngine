@@ -17,13 +17,13 @@ void WorkbenchUi::path_panel(Viewport& preview) {
         ImGui::Checkbox("Temporal reuse",&path_settings_.restir_temporal); mark("path_temporal");
         ImGui::Checkbox("Spatial reuse",&path_settings_.restir_spatial); mark("path_spatial");
     }
-    int target=int(path_settings_.target),seed=int(path_settings_.seed),bounces=int(path_settings_.bounces);
+    auto target=path_settings_.target; int seed=int(path_settings_.seed),bounces=int(path_settings_.bounces);
     ImGui::SetNextItemWidth(125);
-    if(ImGui::InputInt("Target spp",&target)) path_settings_.target=std::uint32_t(std::clamp(target,1,65536)); mark("path_target"); controls_["path_target"].x=ImGui::GetItemRectMin().x+30;
+    if(ImGui::InputScalar("Target spp",ImGuiDataType_U32,&target)) path_settings_.target=std::max(target,1u); mark("path_target"); controls_["path_target"].x=ImGui::GetItemRectMin().x+30;
     ImGui::SetNextItemWidth(125);
     if(ImGui::InputInt("Seed",&seed)) path_settings_.seed=std::uint32_t(std::max(0,seed)); mark("path_seed"); controls_["path_seed"].x=ImGui::GetItemRectMin().x+30;
     ImGui::SetNextItemWidth(125);
-    if(ImGui::InputInt("Bounces",&bounces)) path_settings_.bounces=std::uint32_t(std::clamp(bounces,1,16)); mark("path_bounces"); controls_["path_bounces"].x=ImGui::GetItemRectMin().x+30;
+    if(ImGui::InputInt("Bounces",&bounces)) path_settings_.bounces=std::uint32_t(std::clamp(bounces,1,32)); mark("path_bounces"); controls_["path_bounces"].x=ImGui::GetItemRectMin().x+30;
     float sky[3]={float(path_settings_.sky.x()),float(path_settings_.sky.y()),float(path_settings_.sky.z())};
     ImGui::SetNextItemWidth(160);
     if(ImGui::ColorEdit3("Environment",sky,ImGuiColorEditFlags_Float|ImGuiColorEditFlags_HDR))
@@ -68,7 +68,7 @@ void WorkbenchUi::path_panel(Viewport& preview) {
     if(!status.error.empty()) ImGui::TextWrapped("%s",status.error.c_str());
     ImGui::TextWrapped("Preview imports base color textures and material factors. Normal, occlusion and metallic-roughness textures and tangents are omitted.");
     if(status.gpu_memory_limit) ImGui::Text("GPU budget: %.2f GiB",double(status.gpu_memory_limit)/(1ull<<30));
-    ImGui::TextWrapped("Limits: 1 million triangles, 64 textures / 128 MiB source pixels. GPU budget follows device capacity. Exposure preserves accumulated samples.");
+    ImGui::TextWrapped("Capacity follows available GPU memory and device limits. Exposure preserves accumulated samples.");
     ImGui::End();
 }
 }

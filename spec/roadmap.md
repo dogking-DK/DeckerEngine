@@ -862,6 +862,8 @@ M19.5 CPU Scene media 首表面条件 RIS、完整 RGB/hero/存活独立性、�
 M19.6 GPU 空气/云首表面 DI 与当前透射评估完成，19 个 GPU 与 10 个 CPU 定向用例通过，见[0139](development/0139-restir-gpu-media.md)。
 M19.7 Editor/worker 算法选项、诊断和 v3 独立捕获已完成，16 个定向用例通过，见[0140](development/0140-editor-restir-capture.md)。M19.8 已完成新机完整测量与归档复算，见[0141](development/0141-restir-sponza-acceptance.md)及[报告](benchmarks/2026-10-19-restir-sponza.md)；ReSTIR 未达 2× 等误差收益，默认保持 Classic MIS。
 后续默认场景可用性与提交成本优化已完成，见[0142](development/0142-path-preview-throughput.md)：设备显存额度、表面tile256与非时间复用平面回收，16项定向验收及两项最终复验通过；1600×1200/2048²四模式可用，同输入三轮热吞吐提高1.28–2.77倍，未改变图像采样。
+
+容量与Scene media后续优化见[0143](development/0143-path-capacity-media-throughput.md)：默认使用当前可用显存，路径视口/几何/纹理取消人为容量封顶，介质tile256；35项定向检查通过，Luau示例因模块未构建未运行。三轮同输入吞吐提高1.43–2.40倍，GPU区间覆盖率提高；两个ReSTIR模式tile p95略高于历史8ms候选，高分辨率复用仍非实时收敛。
 下一步优先提升未认证参考的收敛并定位temporal/spatial内部GPU成本及冷启动，再决定新的采样扩展；DLSS 尚未接入。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。

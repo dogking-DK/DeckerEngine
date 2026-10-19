@@ -132,6 +132,26 @@ void restir_medium_schedule(memory::ResourceHandle heap,PathTraceRenderer& r,Sub
             if(mode==0) compare_images(base,complete(q,take(r.submit_restir_medium_view(q,gpu,m,view,s,{}, {0,19}))),0);
         }
     }
+    // Larger media tiles must preserve every sample, including short edge tiles.
+    auto gpu=take(r.prepare_scene(q,f.scene()));
+    auto d=medium_down_view(f,257,true,2000).description(); d.height=129;
+    auto view=take(RenderView::create(f.source(),d));
+    for(unsigned mode=0;mode<5;++mode) {
+        RestirDiSettings ris; if(mode==2 || mode==4) ris.temporal.emplace(); if(mode>=3) ris.spatial.emplace();
+        PathTraceGpuImage reference;
+        for(unsigned edge:{64u,256u}) {
+            PathTraceSchedule schedule; schedule.tile_edge=edge; schedule.target_spp=2; schedule.reverse_tiles=edge==256;
+            if(mode) check(r.configure_restir_medium_view(q,121,gpu,m,view,s,ris,schedule));
+            else check(r.configure_medium_view(q,121,gpu,m,view,s,schedule));
+            auto image=finish_view(r,q,121);
+            if(reference) compare_images(image,reference,0); else reference=image;
+            schedule.target_spp=1000000;
+            if(mode) check(r.configure_restir_medium_view(q,121,gpu,m,view,s,ris,schedule));
+            else check(r.configure_medium_view(q,121,gpu,m,view,s,schedule));
+            require(take(r.status(121)).completed_spp==2,"high target erased media image");
+            check(r.release_view(121));
+        }
+    }
     std::puts("medium RIS empty/RT/cloud/textured/perspective/ortho/all passes/batch/tile replay=pass");
 }
 void restir_medium_reuse(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q) {

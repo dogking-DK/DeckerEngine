@@ -1,0 +1,77 @@
+{
+  "modes": {
+    "classic": {
+      "before": {
+        "wall_ms": 47.5213,
+        "gpu_ms": 23.483104,
+        "record_ms": 10.1733,
+        "gpu_interval_percent": 49.40790496409471,
+        "submissions": 60,
+        "tile_p95_ms": 0.490944,
+        "cancel_p95_ms": 0.7032
+      },
+      "after": {
+        "wall_ms": 19.82,
+        "gpu_ms": 17.228256,
+        "record_ms": 1.4910999999999999,
+        "gpu_interval_percent": 86.12277998389253,
+        "submissions": 6,
+        "tile_p95_ms": 5.370912,
+        "cancel_p95_ms": 4.9873
+      },
+      "speedup": 2.3976437941473256
+    },
+    "initial": {
+      "before": {
+        "wall_ms": 69.1635,
+        "gpu_ms": 31.578944,
+        "record_ms": 21.6344,
+        "gpu_interval_percent": 45.518488934830614,
+        "submissions": 120,
+        "tile_p95_ms": 0.595552,
+        "cancel_p95_ms": 6.7304
+      },
+      "after": {
+        "wall_ms": 48.5051,
+        "gpu_ms": 30.522496,
+        "record_ms": 3.1245000000000003,
+        "gpu_interval_percent": 63.61364524773822,
+        "submissions": 12,
+        "tile_p95_ms": 8.230112,
+        "cancel_p95_ms": 5.2785
+      },
+      "speedup": 1.425901606222851
+    },
+    "spatial": {
+      "before": {
+        "wall_ms": 141.679,
+        "gpu_ms": 81.671776,
+        "record_ms": 40.478699999999996,
+        "gpu_interval_percent": 56.795767591691074,
+        "submissions": 240,
+        "tile_p95_ms": 0.548704,
+        "cancel_p95_ms": 2.5708
+      },
+      "after": {
+        "wall_ms": 83.3247,
+        "gpu_ms": 76.49952,
+        "record_ms": 4.4117999999999995,
+        "gpu_interval_percent": 92.59726267981662,
+        "submissions": 24,
+        "tile_p95_ms": 8.626144,
+        "cancel_p95_ms": 2.8175
+      },
+      "speedup": 1.700324153582311
+    }
+  },
+  "desktop_warm_ms": {
+    "1600x1200-mode0": 45.6671,
+    "1600x1200-mode1": 137.1022,
+    "1600x1200-mode2": 319.4459,
+    "1600x1200-mode3": 558.8373,
+    "2560x1440-mode0": 49.157,
+    "2560x1440-mode1": 246.4969,
+    "2560x1440-mode2": 589.3574,
+    "2560x1440-mode3": 1061.3299
+  }
+}

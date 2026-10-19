@@ -81,7 +81,7 @@ TEST_CASE("texture CPU rejects malformed data and enforces count and byte capaci
         f.asset.textures.push_back(std::move(image)); f.asset.materials.push_back(m); f.asset.mesh.primitives.push_back(std::move(p));
         if(i==63) CHECK(f.scene()->texture_count()==64);
     }
-    CHECK_FALSE(f.scene()); CHECK(old.texture_count()==1); CHECK(old.nearest(down)->has_value());
+    CHECK_FALSE(f.scene()); CHECK(f.scene(desktop_path_scene_limits())->texture_count()==65); CHECK(old.texture_count()==1); CHECK(old.nearest(down)->has_value());
 }
 
 TEST_CASE("texture CPU allocation failure unwinds copied bytes and preserves old scene") {

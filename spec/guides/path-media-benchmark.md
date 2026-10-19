@@ -12,8 +12,9 @@
 0142 的表面预览调度对照允许显式 `--tile 256`；历史 M17/M19.8 固定基准仍用64，不能混合聚合。
 例如 `dk-pathmedia-benchmark --root projects/demo --case surface --algorithm initial --tile 256 --full-preview --output out/preview/initial.json`。
 默认场景实际 worker 入口为 `dk-editor-render-benchmark projects/demo out/preview/desktop --desktop-path`，
-在1600×1200和2048²下依次切换 Classic/initial/temporal/spatial，记录连续采样、显存和取消恢复。
+在1600×1200和2560×1440下依次切换 Classic/initial/temporal/spatial，记录连续采样、显存和取消恢复。
 加 `--validation` 启用 required validation；对应 CTest 为 `dk.editor.restir_desktop_gpu_validation`，需要 demo 素材和足够的设备额度。
+改用`--desktop-media`覆盖Scene media四模式，对应`dk.editor.media_desktop_gpu_validation`。0143允许介质`--tile 256`并使用设备可用额度，汇总按报告中的实际额度检查；历史1GiB记录保持原始身份。
 该 worker 使用真实默认相机与 Editor 预算/调度，但没有窗口合成，不作为 GUI 帧率；有验证层的结果不作为关闭验证层的性能数据。
 
 冻结4反弹/RR3、model4/sampler2、时间17、曝光0、种子101+7919*i（i=0..7）；surface是model3/sampler1的独立开销对照。

@@ -300,8 +300,11 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
         }
         const auto available=ImGui::GetContentRegionAvail();
         if (available.x>=32 && available.y>=32) {
-            const auto width=static_cast<std::uint32_t>(std::clamp(available.x,32.0f,1600.0f));
-            const auto height=static_cast<std::uint32_t>(std::clamp(available.y,32.0f,1200.0f));
+            auto width=static_cast<std::uint32_t>(std::clamp(available.x,32.0f,1600.0f));
+            auto height=static_cast<std::uint32_t>(std::clamp(available.y,32.0f,1200.0f));
+#ifdef DK_EDITOR_PATHTRACING
+            if(path_mode_) { width=static_cast<std::uint32_t>(available.x); height=static_cast<std::uint32_t>(available.y); }
+#endif
             input_.aspect(double(width)/height);
             environment_settings_.camera_revision=input_.camera().revision();
 #ifdef DK_EDITOR_PATHTRACING

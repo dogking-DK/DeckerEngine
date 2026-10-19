@@ -11,6 +11,7 @@ struct DiskSceneOptions {
     std::size_t max_assets = 64;
     std::size_t cpu_bytes = 512U * 1024U * 1024U;
     std::stop_token stop;
+    ImportLimits import_limits; // Explicit caller capacity; defaults keep offline limits.
 };
 // Read-only CPU candidate. Requires a bound ThreadContext with scratch.
 // No meta/cache/project writes; loading again never mutates an existing candidate.

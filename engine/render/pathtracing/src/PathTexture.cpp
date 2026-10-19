@@ -27,7 +27,7 @@ Vec4d texel(const PathTexture& t,int x,int y) {
 }
 }
 Result<void> validate_path_texture(const TextureData& t) {
-    if(t.id.is_nil() || !t.width || !t.height || t.width>2048 || t.height>2048 || t.rgba8.size()!=std::uint64_t(t.width)*t.height*4 ||
+    if(t.id.is_nil() || !t.width || !t.height || t.width>std::uint32_t(std::numeric_limits<int>::max()/2) || t.height>std::uint32_t(std::numeric_limits<int>::max()/2) || t.rgba8.size()!=std::uint64_t(t.width)*t.height*4 ||
        !wrap_valid(t.sampler.wrap_s) || !wrap_valid(t.sampler.wrap_t) ||
        (t.sampler.min_filter && !filter_valid(*t.sampler.min_filter)) ||
        (t.sampler.mag_filter && *t.sampler.mag_filter!=TextureFilter::nearest && *t.sampler.mag_filter!=TextureFilter::linear))
@@ -38,7 +38,13 @@ Vec4d path_base_color(const PathSceneState& scene,const PathTriangle& triangle,c
     Vec4d result{triangle.albedo.x(),triangle.albedo.y(),triangle.albedo.z(),triangle.alpha};
     if(triangle.texture==0xffffffffu) return result;
     const auto& t=scene.textures[triangle.texture];
-    const Vec2d uv=triangle.uv_a*barycentric.x()+triangle.uv_b*barycentric.y()+triangle.uv_c*barycentric.z();
+    Vec2d uv=triangle.uv_a*barycentric.x()+triangle.uv_b*barycentric.y()+triangle.uv_c*barycentric.z();
+    const auto reduce=[](double x,TextureWrap wrap) {
+        if(wrap==TextureWrap::clamp) return std::clamp(x,0.,1.);
+        const double period=wrap==TextureWrap::repeat ? 1. : 2.;
+        x=std::fmod(x,period); if(x<0) x+=period; return x>1 ? 2-x : x;
+    };
+    uv.x()=reduce(uv.x(),t.sampler.wrap_s); uv.y()=reduce(uv.y(),t.sampler.wrap_t);
     Vec4d color;
     if(t.sampler.mag_filter==TextureFilter::nearest) color=texel(t,int(std::floor(uv.x()*t.width)),int(std::floor(uv.y()*t.height)));
     else {

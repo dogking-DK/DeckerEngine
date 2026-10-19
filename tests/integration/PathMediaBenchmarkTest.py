@@ -77,6 +77,13 @@ class Evidence(unittest.TestCase):
         b = performance(); b['cases'][0]['memory']['peak'] = (1 << 30)+1
         with self.assertRaises(ValueError): m.performance(rounds(b, b, b))
 
+    def test_device_capacity_is_not_a_fixed_gibibyte(self):
+        b = performance()
+        b['cases'][0]['memory'].update(current=2 << 30, peak=3 << 30, limit=12 << 30)
+        m.performance(rounds(b, b, b))
+        b['cases'][0]['memory']['peak'] = (12 << 30)+1
+        with self.assertRaises(ValueError): m.performance(rounds(b, b, b))
+
     def test_unconverged_reference_cannot_certify_time(self):
         value = quality()
         self.assertEqual(m.quality(value)['sponza'][0]['quality_spp'], 64)

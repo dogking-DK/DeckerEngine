@@ -39,7 +39,7 @@ Result<PathTraceFrame> PathTraceRenderer::submit_restir_rays(SubmissionQueue& qu
     PathTraceSamples samples,std::uint32_t first_pixel,std::stop_token stop) const try {
     ready(state_,queue,stop);
     if(!scene || scene.state_->program.lock()!=state_) throw path_invalid("Path scene belongs to a different renderer");
-    const auto& cpu=*PathReferenceAccess::get(scene.source()); check(validate_path_work(cpu,rays.size(),settings,samples));
+    const auto& cpu=*PathReferenceAccess::get(scene.source()); check(validate_path_work(cpu,rays.size(),settings,samples,false));
     validate_restir(settings,restir,rays.size(),samples,true);
     if(rays.size()-1>std::numeric_limits<std::uint32_t>::max()-first_pixel) throw path_invalid("Path pixel counter overflow");
     Vector<Float4> packed(0,memory::Allocator<Float4>{state_->heap});
@@ -62,7 +62,7 @@ Result<PathTraceFrame> PathTraceRenderer::submit_restir_view(SubmissionQueue& qu
     ready(state_,queue,stop);
     if(!scene || scene.state_->program.lock()!=state_) throw path_invalid("Path scene belongs to a different renderer");
     const auto& cpu=*PathReferenceAccess::get(scene.source()); check(validate_path_view(cpu,view));
-    const auto& d=view.description(); check(validate_path_work(cpu,std::uint64_t{d.width}*d.height,settings,samples));
+    const auto& d=view.description(); check(validate_path_work(cpu,std::uint64_t{d.width}*d.height,settings,samples,false));
     validate_restir(settings,restir,std::uint64_t{d.width}*d.height,samples,true);
     auto p=view_parameters(cpu,view,settings,samples); p[32]=integers(restir.initial_candidates,2,0,0);
     auto info=info_for(scene.source(),d.width,d.height,settings,samples); info.view=d; info.restir=restir;
@@ -79,14 +79,13 @@ Result<void> PathTraceRenderer::configure_restir_view(SubmissionQueue& queue,std
     if(!scene || scene.state_->program.lock()!=state_) throw path_invalid("Path scene belongs to a different renderer");
     if(!schedule.batch_spp || schedule.batch_spp>16) throw path_invalid("Invalid RIS batch size");
     auto validation_schedule=schedule; validation_schedule.batch_spp=1;
-    validate_progressive(*PathReferenceAccess::get(scene.source()),view,settings,validation_schedule);
+    validate_progressive(queue.device(),*PathReferenceAccess::get(scene.source()),view,settings,validation_schedule);
     validate_restir(settings,restir,1,{0,1});
     const auto& d=view.description(); const auto pixels=std::uint64_t{d.width}*d.height;
     if(restir.temporal) {
         const Mat4d clip=d.projection*d.camera_world.matrix().inverse();
         for(unsigned row=0;row<4;++row) (void)pack(clip.block<1,3>(row,0).transpose(),clip(row,3));
     }
-    if(pixels*schedule.target_spp*(2ull*settings.max_bounces+2)>(1ull<<32)) throw path_invalid("GPU RIS progressive target exceeds ray budget");
     auto* slot=view_slot(*state_,id);
     std::shared_ptr<const PathGpuCompleted> sampling_history;
     std::uint32_t epoch_origin=0;

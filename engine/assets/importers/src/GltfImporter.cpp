@@ -88,11 +88,12 @@ Json parse(std::string_view text)
 }
 void limits(const ImportLimits& value)
 {
-    const ImportLimits hard;
     const std::size_t ImportLimits::* fields[]{&ImportLimits::source_bytes, &ImportLimits::dependency_bytes, &ImportLimits::input_bytes,
         &ImportLimits::output_bytes, &ImportLimits::vertices, &ImportLimits::indices, &ImportLimits::primitives,
         &ImportLimits::image_dimension, &ImportLimits::image_bytes, &ImportLimits::texture_bytes};
-    for (const auto field : fields) { require(value.*field > 0 && value.*field <= hard.*field, "Invalid import limit"); }
+    for (const auto field : fields) { require(value.*field > 0, "Invalid import limit"); }
+    require(value.vertices<=std::numeric_limits<std::uint32_t>::max() && value.indices<=std::numeric_limits<std::uint32_t>::max() &&
+        value.primitives<=std::numeric_limits<std::uint32_t>::max() && value.image_dimension<=std::size_t(std::numeric_limits<int>::max()/4), "Import limits exceed addressable range");
 }
 class Importer {
 public:

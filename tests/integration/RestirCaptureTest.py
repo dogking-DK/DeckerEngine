@@ -15,6 +15,7 @@ def main():
     parser = argparse.ArgumentParser()
     for name in ("runner", "client", "fixtures", "work-dir", "python-example", "luau-example"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--skip-luau", action="store_true", help="Runner was built without Luau")
     args = parser.parse_args()
     root = args.work_dir / ("restir-capture-" + uuid4().hex)
     shutil.copytree(args.fixtures, root)
@@ -138,11 +139,14 @@ def main():
             call("runtime.shutdown")
             assert process.wait(timeout=30) == 0 and not (root / "stderr.log").read_bytes()
             assert (root / "old.json").read_text() == "previous"
-            script = subprocess.run([str(args.runner), "--project-root", str(root), "--script", str(args.luau_example),
-                                     "--script-timeout-ms", "150000"], capture_output=True, text=True, timeout=160,
-                                    creationflags=subprocess.CREATE_NO_WINDOW)
-            assert script.returncode == 0 and not script.stderr, (script.stdout, script.stderr)
-            equal(json.loads((root / "path-luau.json").read_text()), orthographic)
+            if not args.skip_luau:
+                script = subprocess.run([str(args.runner), "--project-root", str(root), "--script", str(args.luau_example),
+                                         "--script-timeout-ms", "150000"], capture_output=True, text=True, timeout=160,
+                                        creationflags=subprocess.CREATE_NO_WINDOW)
+                assert script.returncode == 0 and not script.stderr, (script.stdout, script.stderr)
+                equal(json.loads((root / "path-luau.json").read_text()), orthographic)
+            else:
+                evidence["luau"] = "not built; example not run"
             evidence["status"] = "passed"
         finally:
             if process.poll() is None:

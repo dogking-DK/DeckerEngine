@@ -25,7 +25,8 @@ struct PathTraceSceneLimits {
 };
 // Explicit desktop geometry capacity. CPU integration retains its separate work budget.
 [[nodiscard]] constexpr PathTraceSceneLimits desktop_path_scene_limits() {
-    return {1000000,4096,64,128*1024*1024};
+    return {std::numeric_limits<std::uint32_t>::max()/9, std::numeric_limits<std::size_t>::max(),
+        std::numeric_limits<std::uint32_t>::max(), std::numeric_limits<std::size_t>::max()};
 }
 struct PathTraceTextureInfo {
     AssetId mesh, texture;

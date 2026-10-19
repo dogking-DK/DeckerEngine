@@ -1,5 +1,5 @@
 // Real default-project, default-camera acceptance at desktop extents. No GUI focus needed.
-int desktop_path_worker(const std::filesystem::path& root,const std::filesystem::path& output,bool validation) {
+int desktop_path_worker(const std::filesystem::path& root,const std::filesystem::path& output,bool validation,bool scene_media=false) {
     Json report={{"status","failed"},{"validation",validation},{"samples",Json::array()},{"cancel_ms",Json::array()}};
     try {
         auto model=take(Workspace::create(root)); check(model->open("project.json"));
@@ -20,7 +20,7 @@ int desktop_path_worker(const std::filesystem::path& root,const std::filesystem:
             report["memory_budget_extension"]=device.adapter().memory_budget;
             PathPreview worker{system,heap,std::move(device)};
             Camera camera; camera.set_pathtracing(true);
-            PathPreviewRequest request{*model->snapshot(),camera}; request.observe_memory=true;
+            PathPreviewRequest request{*model->snapshot(),camera}; request.observe_memory=true; request.settings.scene_media=scene_media;
             auto send=[&] { ++request.sequence; worker.request(request); };
             auto drain=[&] {
                 const auto start=Clock::now(); worker.suspend();
@@ -31,14 +31,15 @@ int desktop_path_worker(const std::filesystem::path& root,const std::filesystem:
             };
             // Both continuation and algorithm changes must fit alongside the last displayed image.
             std::optional<PathPreviewResult> displayed;
-            for(const unsigned width:{1600u,2048u}) for(unsigned mode=0;mode<4;++mode) {
-                request.width=width; request.height=width==1600 ? 1200 : 2048;
+            for(const unsigned width:{1600u,2560u}) for(unsigned mode=0;mode<4;++mode) {
+                request.width=width; request.height=width==1600 ? 1200 : 1440;
                 request.settings.target=width==1600 ? 4 : 2;
                 request.settings.restir_di=mode!=0; request.settings.restir_temporal=mode>=2; request.settings.restir_spatial=mode==3;
                 const auto start=Clock::now(); auto last=start; unsigned spp=0; send();
                 while(spp<request.settings.target) {
                     if(auto result=worker.take_result()) {
                         require(result->sequence==request.sequence && result->info.width==request.width && result->info.height==request.height,"Wrong desktop image identity/extent");
+                        require(bool(result->info.medium)==scene_media,"Wrong desktop medium");
                         require(bool(result->info.restir)==request.settings.restir_di,"Wrong desktop lighting algorithm");
                         if(result->info.restir) require(bool(result->info.restir->temporal)==request.settings.restir_temporal &&
                             bool(result->info.restir->spatial)==request.settings.restir_spatial,"Wrong desktop reuse settings");
@@ -54,7 +55,7 @@ int desktop_path_worker(const std::filesystem::path& root,const std::filesystem:
                     require(elapsed(start)<120000,"Desktop path timed out"); std::this_thread::sleep_for(1ms);
                 }
                 // Cancel an actual in-flight batch and resume from committed samples.
-                const auto start_pending=Clock::now(); request.settings.target=64; send();
+                const auto start_pending=Clock::now(); request.settings.target=1000000; send();
                 while(!worker.status().progress.pending) {
                     require(worker.status().error.empty(),"Desktop continuation failed");
                     require(elapsed(start_pending)<30000,"Desktop pending tile missing"); std::this_thread::sleep_for(1ms);

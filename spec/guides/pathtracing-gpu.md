@@ -117,7 +117,7 @@ GPU renderer读取冻结的世界三角形，保留完整仿射结果、几何�
 带纹理设备在DeviceOptions中设置`sampled_image_indexing=SampledImageIndexingMode::required`（或if_available），
 并另设`ray_tracing=RayTracingMode::required`。renderer根据实际启用状态选择固定64槽纹理变体；
 未启用纹理能力时prepare_scene明确拒绝贴图，原无纹理路径仍可用。Shader和布局分别检查能力及设备descriptor limits。
-最多64张、单边2048、总64MiB RGBA8；使用标准sRGB解码后上传RGBA32F，图像与staging各最多256MiB。
+CPU场景默认64张、总64MiB RGBA8；desktop取消人为数量/源字节封顶，GPU按设备尺寸与descriptor能力检查并扩容。标准sRGB解码后上传RGBA32F，图像和staging各为源字节四倍，计入实际额度。
 LOD=0使用mag_filter，支持nearest/linear与repeat/clamp/mirrored_repeat；UV不翻转，alpha不做sRGB解码。
 mask同时作用于radiance与visibility，发光mask不进入NEE灯分布，仍可被BSDF命中。
 
@@ -177,7 +177,7 @@ if (completed) {
 }
 ```
 
-target为1..65536，batch为1..16，tile边长1..64；max_rays使tile进一步缩小，目标总工作量≤2^32。
+target为非零uint32，batch为1..16，tile边长1..256；max_rays使单提交进一步分块，不限制整个目标的总工作量。
 已完成样本可能大于降低后的目标，此时暂停新提交并报告实际计数。暂停不取消当前tile，恢复后继续当前批次。
 曝光/批量/tile/目标/帧序号不重置；场景版本、相机/投影/尺寸、积分参数、session/gesture变化重置。
 资产或手势更新应先冻结并prepare新场景，再配置匹配的RenderView，不能复用旧资产快照。
@@ -185,7 +185,7 @@ reset清空当前完成历史；cancel丢弃在途批次但保留已完成历史
 这些操作不硬抢占GPU，调用者仍须poll回收迟到票据；不能将旧代结果发布到重用的view_id。
 提交或tile诊断失败保留已完成图像；重试从原completed_spp开始。device_lost终止会话，不自动重试。
 
-create末参数memory_limit默认1GiB，可收紧到至少1MiB；memory_stats报告自有分配和全设备VMA池统计。
+create末参数memory_limit默认0，自动选择设备当前可用显存；也可显式指定至少1MiB。memory_stats报告自有分配和全设备VMA池统计。
 预算跟随GPU资源owner，在途工作、外部保留的completed及显式读回也占额度；丢弃不用的帧后可重试。
 历史128字节/像素，2048²单张为512MiB，两张加场景超过默认额度，因此尺寸上限不保证所有组合可运行。
 驱动隐藏分配不计入额度；host-visible与device-local可能重叠，VMA block是全设备共享池。
@@ -277,7 +277,7 @@ Editor 的 Scene media 与 capture v2 调用同一 GPU 积分器；用法见 [Ed
 解析/几何/跨尺度阴影、8 seed光照统计、完整图像与分段、失败/在途寿命、内存分配失败和恢复。
 CPU oracle使用独立双精度暴力求交，面积灯再用独立二维积分校核；参考先验证N/4N收敛再对比GPU。
 新增texture_numeric/mask/lifetime/disabled/allocations，以及启用Assets时的texture_assets组；
-覆盖64张发散访问、过滤/UV/wrap、双面/mask发光、能力拒绝、失败寿命，以及glTF导入/产物重载到GPU。
+覆盖65张发散访问及管线容量增长、过滤/UV/wrap、双面/mask发光、能力拒绝、失败寿命，以及glTF导入/产物重载到GPU。
 ggx_numeric/statistics/indirect/lifetime验证材质端点、白炉/面积灯、多次反弹、MIS/RR及纹理组合与在途寿命。
 progressive_images/state/failure/budget/lost验证分块/65536spp一致性、重置矩阵、迟到/失败/取消、额度与终端device loss。
 air_numeric/statistics/progressive/failure/resources覆盖空气CPU对照、解析吸收/单散射、8 seed收敛、低太阳多散射、

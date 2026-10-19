@@ -1,10 +1,14 @@
 ---
 module: render-disk
 created_at: "2026-10-03T17:17:15+08:00"
-updated_at: "2026-10-03T21:50:44+08:00"
+updated_at: "2026-10-20T01:21:06+08:00"
 status: accepted
 ---
 
+
+显式容量扩展见[0143](../development/0143-path-capacity-media-throughput.md)：ImportLimits和DiskSceneOptions允许调用者选择高于默认的容量。
+路径预览用设备可用显存预算和image尺寸设置源glTF导入限额，去掉百万顶点/128 MiB硬封顶。
+默认离线导入和CPU artifact解码契约不变；所有累计字节/元素仍在分配前检查，保留uint32计数和解码器表示范围。
 # 磁盘场景与资产集成
 
 ## 边界与依赖
@@ -23,8 +27,8 @@ artifact 使用 load_cpu_artifact，校验产物 mesh ID 与 Project 对应；�
 非 mesh 实体引用仍由 M2 验证登记，保持 M7.2 不推断 material override 的约定。
 
 DiskScene 共享拥有不可变 RenderScene 和 CpuAsset 候选，asset span 随所有者存活。
-每次 load 独立，不替换先前候选。最多 64 个 mesh 包、累计 CPU 数值/纹理载荷 512 MiB；
-options 只能降低限额，单次导入继续使用 M4 硬上限。跨文件外部并发改写不承诺原子快照。
+每次load独立，不替换先前候选。默认64个mesh包、CPU数值/纹理载荷512 MiB；
+options可显式选择更大容量及import_limits。路径预览采用设备容量，跨文件外部并发改写不承诺原子快照。
 调用方绑定带 scratch 的 ThreadContext；load 临时切入传入 heap，恢复原路由。
 
 upload(queue) 创建全新的 GpuAssets，逐包上传并等待完成后返回。发布点为全部成功返回；

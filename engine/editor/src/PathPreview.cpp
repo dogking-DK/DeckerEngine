@@ -107,6 +107,13 @@ void PathPreview::run(std::stop_token stop) {
                 if(reload) {
                     phase(active->sequence,"Loading assets");
                     render::DiskSceneOptions options; options.stop=cancel; options.profile=GltfImportProfile::unlit_preview;
+                    const auto capacity=std::size_t(renderer.memory_stats(*queue).owned.limit);
+                    options.max_assets=std::numeric_limits<std::uint32_t>::max(); options.cpu_bytes=capacity;
+                    auto& limits=options.import_limits;
+                    limits.source_bytes=limits.dependency_bytes=limits.input_bytes=limits.output_bytes=capacity;
+                    limits.image_bytes=limits.texture_bytes=capacity;
+                    limits.vertices=limits.indices=limits.primitives=std::numeric_limits<std::uint32_t>::max();
+                    limits.image_dimension=queue->device().adapter().properties.limits.maxImageDimension2D;
                     auto candidate=take(render::DiskScene::load_snapshot(heap_,active->snapshot.project,active->snapshot.scene,options));
                     std::vector<PickMesh> queries;
                     for(const auto& asset:candidate.assets()) {
@@ -114,7 +121,7 @@ void PathPreview::run(std::stop_token stop) {
                         std::vector<geometry::Triangle> triangles;
                         for(const auto& primitive:asset->mesh.primitives) for(std::size_t i=0;i+2<primitive.indices.size();i+=3)
                             triangles.push_back({primitive.positions[primitive.indices[i]].cast<double>(),primitive.positions[primitive.indices[i+1]].cast<double>(),primitive.positions[primitive.indices[i+2]].cast<double>()});
-                        if(triangles.size()>render::desktop_path_scene_limits().max_triangles) throw std::runtime_error("Path preview supports at most 1000000 triangles");
+                        if(triangles.size()>render::desktop_path_scene_limits().max_triangles) throw std::runtime_error("Path geometry exceeds shader address capacity");
                         queries.push_back({asset->mesh.id,take(geometry::MeshQuery::build(triangles))});
                     }
                     disk=std::move(candidate); meshes=std::move(queries);
@@ -150,7 +157,7 @@ void PathPreview::run(std::stop_token stop) {
                 settings.sun=active->settings.sun ? render::PathTraceSun::scene : render::PathTraceSun::none;
                 settings.surface_only=active->settings.surface_only;
                 render::PathTraceSchedule schedule; schedule.session=session; schedule.target_spp=active->settings.target; schedule.gesture=active->preview;
-                schedule.tile_edge=active->settings.scene_media ? 64u : 256u;
+                schedule.tile_edge=256;
                 schedule.paused=active->settings.paused; schedule.exposure=active->settings.exposure;
                 render::RestirDiSettings restir; restir.initial_candidates=active->settings.restir_candidates;
                 if(active->settings.restir_temporal) restir.temporal.emplace();

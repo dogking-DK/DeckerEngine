@@ -1,10 +1,14 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-10-03T17:17:15+08:00"
+updated_at: "2026-10-20T01:21:06+08:00"
 status: accepted
 ---
 
+
+显式容量扩展见[0143](../development/0143-path-capacity-media-throughput.md)：ImportLimits和DiskSceneOptions允许调用者选择高于默认的容量。
+路径预览用设备可用显存预算和image尺寸设置源glTF导入限额，去掉百万顶点/128 MiB硬封顶。
+默认离线导入和CPU artifact解码契约不变；所有累计字节/元素仍在分配前检查，保留uint32计数和解码器表示范围。
 # M4 静态 glTF 导入与 assetc 设计
 
 ## 范围和依赖
@@ -116,9 +120,9 @@ NORMAL 缺失时保留缺失标记，首版不生成平滑法线；baseColorText
 不会把旧 ID 指向其他 selector。默认材质使用内置数值，无 nil 资产引用。
 M4.2.1 最初拒绝 baseColorTexture；M4.2.2 已完成关联和解码。
 
-默认硬上限：源 16 MiB、单依赖 64 MiB、全部输入 128 MiB、CPU 数值载荷输出 256 MiB（不含容器/JSON 管理开销），
+默认容量：源16 MiB、单依赖64 MiB、全部输入128 MiB、CPU数值载荷输出256 MiB（不含容器/JSON管理开销），
 累计顶点 1000000、索引 3000000、primitive 4096、材质/纹理及 output 总数 10000；
-图片每边 8192、单图 64 MiB RGBA、累计 RGBA 128 MiB。可通过 ImportLimits 降低，不允许提高硬上限。
+图片每边8192、单图64 MiB RGBA、累计RGBA128 MiB。可通过ImportLimits显式调整容量，受计数表示和解码器自身范围限制。
 读取/解析前限制源与依赖，算术先除法检查再相乘；顶点/索引/解码预算在分配前扣除。
 UTF-8 JSON 先做结构/重复键/深度（64）检查，拒绝所有扩展、稀疏、skin/animation/morph；
 手动解码和约束 URI 后由 IO 读取，fastgltf 不启用自动外部 IO，不解析 data URI。

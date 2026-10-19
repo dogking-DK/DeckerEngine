@@ -5,6 +5,7 @@
 #include <dk/graphics/ShaderCompiler.hpp>
 #include <dk/graphics/GpuObjects.hpp>
 #include <dk/graphics/Transfer.hpp>
+#include <dk/graphics/GraphExecution.hpp>
 #ifdef DK_PATH_ASSET_DIR
 #include <dk/assets/AssetCompiler.hpp>
 #include <dk/assets/CpuArtifact.hpp>

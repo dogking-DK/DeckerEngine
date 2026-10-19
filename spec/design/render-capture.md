@@ -1,7 +1,7 @@
 ---
 module: render-capture
 created_at: "2026-10-03T21:21:47+08:00"
-updated_at: "2026-10-19T17:07:00+08:00"
+updated_at: "2026-10-20T01:21:06+08:00"
 status: accepted
 ---
 
@@ -114,7 +114,7 @@ worker 每 tile 轮询取消，关闭/取消必须收完在途 GPU；owner drain
 PPM 的 Job 摘要含上述来源和实际 spp；linear_json 是单独任务的唯一输出，包含完整 provenance、线性RGB、sRGB RGBA8、
 尺寸/身份、device/driver/build、显存额度/峰值及worker开始到报告组装的 wall_ms（不含序列化/owner发布，GPU分项未测为null）。不做多文件事务。
 源 shader 在编译前后和发布准备前比较，变化失败；资产摘要来自不可变 PathTraceScene，执行期不再重读资产。
-路径支持域沿4096三角形/64纹理/源纹理64MiB/1GiB GPU额度，空气云只允许显式 surface_only 忽略体积。
+路径捕获输入仍沿4096三角形/64纹理/源纹理64MiB；GPU额度按设备当前可用预算自动选择并报告，见[0143](../development/0143-path-capacity-media-throughput.md)。空气云只允许显式surface_only忽略体积。
 
 验收新增真实RT capture任务、单文件保护、输入冻结、进度和Python/Luau；GUI验收显式打开测试专用线性读回，
 通过真实呈现的完成帧与同相机/seed/spp capture报告逐像素比较，正常GUI不启用CPU读回。

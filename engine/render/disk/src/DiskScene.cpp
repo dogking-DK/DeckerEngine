@@ -63,7 +63,7 @@ CpuAsset load_asset(const Project& project,AssetReference reference,const DiskSc
         require(mesh!=identities.end() && mesh->id==reference.id && mesh->kind==AssetKind::mesh,
             "source metadata mesh/0 ID differs from Project",ErrorCode::conflict);
     } else identities.push_back({String{"mesh/0"},reference.id,AssetKind::mesh});
-    GltfImportRequest request{relative,identities,scale}; request.profile=options.profile; request.stop=options.stop;
+    GltfImportRequest request{relative,identities,scale}; request.profile=options.profile; request.stop=options.stop; request.limits=options.import_limits;
     auto imported=take(import_gltf(project.paths(),request));
     return std::move(static_cast<CpuAsset&>(imported));
 }
@@ -77,8 +77,7 @@ Result<DiskScene> DiskScene::load_snapshot(memory::ResourceHandle heap,const Pro
     DK_PROFILE_ZONE("render.load_disk_scene");
     if (!heap || heap.state()!=memory::ResourceState::open)
         return std::unexpected(Error{ErrorCode::invalid_state,"disk scene requires open memory"});
-    const DiskSceneOptions hard;
-    if (!options.max_assets || options.max_assets>hard.max_assets || !options.cpu_bytes || options.cpu_bytes>hard.cpu_bytes ||
+    if (!options.max_assets || !options.cpu_bytes ||
         (options.profile!=GltfImportProfile::strict && options.profile!=GltfImportProfile::unlit_preview))
         return std::unexpected(Error{ErrorCode::invalid_argument,"invalid disk scene limits/profile"});
     try {

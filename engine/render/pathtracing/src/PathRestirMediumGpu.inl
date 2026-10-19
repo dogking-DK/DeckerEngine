@@ -46,14 +46,13 @@ Result<void> PathTraceRenderer::configure_restir_medium_view(SubmissionQueue& qu
     ready(state_,queue,{});
     if(state_->terminal) throw Error{ErrorCode::invalid_state,"Path session device lost"};
     if(!scene || scene.state_->program.lock()!=state_) throw path_invalid("Path scene belongs to a different renderer");
-    if(!schedule.target_spp || schedule.target_spp>65536 || !schedule.batch_spp || schedule.batch_spp>16 ||
-        !schedule.tile_edge || schedule.tile_edge>64 || !std::isfinite(schedule.exposure) || std::abs(schedule.exposure)>32)
+    if(!schedule.target_spp || !schedule.batch_spp || schedule.batch_spp>16 ||
+        !schedule.tile_edge || schedule.tile_edge>256 || !std::isfinite(schedule.exposure) || std::abs(schedule.exposure)>32)
         throw path_invalid("Invalid medium RIS target, batch, tile or exposure");
     validate_medium(scene.source(),medium,settings,{0,1},1);
     const auto common=common_settings(settings); validate_restir(common,restir,1,{0,1},false,true);
-    const auto& cpu=*PathReferenceAccess::get(scene.source()); check(validate_path_view(cpu,view,2048));
+    const auto& cpu=*PathReferenceAccess::get(scene.source()); validate_gpu_view(queue.device(),cpu,view);
     const auto& d=view.description(); const auto pixels=std::uint64_t{d.width}*d.height;
-    if(pixels*schedule.target_spp*(2ull*settings.max_bounces+1)>(1ull<<32)) throw path_invalid("Progressive medium RIS ray budget exceeded");
     auto p=view_parameters(cpu,view,common,{0,1}); medium_parameters(p,medium,settings);
     medium_origin(p,medium,{p[6][0],p[6][1],p[6][2]});
     if(restir.temporal) {

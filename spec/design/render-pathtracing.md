@@ -1,15 +1,23 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-20T00:19:43+08:00"
+updated_at: "2026-10-20T01:21:06+08:00"
 status: accepted
 ---
 
+
+当前GPU渐进容量政策（0143）：自动预算使用device-local heap当前可用额度，不再固定比例折扣或8 GiB封顶。
+尺寸按设备maxImageDimension2D、maxStorageBufferRange与32位shader寻址检查；目标spp使用32位编号，不预限整个目标的射线总量。
+每次dispatch继续有界分块以维持取消和计数正确性；CPU参考/固定射线数值接口、物理模型参数与数值合法域保持独立。
+渐进射线统计在历史平面预留w分量中以两个uint32累计，避免大目标下float整数失真或32位回绕；无需shaderInt64，不增加每像素显存。固定工作接口保持原布局。
+desktop场景取消100万三角形、4096个primitive、64张纹理及128 MiB源字节的容量封顶；保留表示范围与显式调用者额度。
+GPU场景检查设备AS、buffer、image和descriptor限制；纹理数组按需增长，先创建所有候选管线再替换，旧绑定和在途命令继续拥有旧管线。
+真实owner计费继续包含外持完成帧和在途资源；OOM或失败不发布部分图像，不破坏已完成图像。
 # 渐进式路径追踪管线设计
 
 编辑器worker在tile提交后以≤1ms的GPU完成票据等待推进，不在每块间固定sleep；GUI不等待该票据。
-batch=1，表面预览tile≤256、介质预览tile≤64，保留原样本序号、累积与取消约定；
-预算按设备留余量，早期等待优化见[0122](../development/0122-editor-render-performance.md)，桌面吞吐与预算调整见[0142](../development/0142-path-preview-throughput.md)。
+batch=1，表面与介质预览统一使用256 tile，保留原样本序号、累积与取消约定；
+预算使用设备当前可用额度，早期等待优化见[0122](../development/0122-editor-render-performance.md)，桌面吞吐与预算调整见[0142](../development/0142-path-preview-throughput.md)。
 
 ## 目标与范围
 
@@ -166,7 +174,7 @@ GPU沿路径传播径向向量/高度，以差平方表达式求球壳交点和�
 
 每路径tracking上限沿VolumePathSettings；max_tracking_steps在GPU按一次dispatch计费（渐进时为单tile）。
 原子计数及错误标志由本次提交独占，候选超限或出现无效值就整体失败；不会用截断后的样本推进completed_spp。
-无历史读回也携带错误诊断；渐进延续既有4字节状态读回、整批发布、generation、取消、迟到丢弃及1GiB预算机制。
+无历史读回也携带错误诊断；渐进延续既有4字节状态读回、整批发布、generation、取消、迟到丢弃及实际owner预算机制。
 空气参数上传/状态/读回等资源沿同一AllocationBudget计费，GPU在途与外部完成图继续保活。
 空气物理内容、算法/采样设置进入历史身份；曝光/调度不重采样，预算变动仅影响下一批，非法配置不替换旧视图。
 本阶段不接Editor/capture schema；GPU代码与CPU参考通过后才推进后续上层集成。
@@ -253,11 +261,11 @@ shader以全局xy/pixel及连续sample采样，tile仅改变调度，不改变�
 completed_frame返回拥有型只读GPU缓冲，显示无需读回；显式read_linear才提交全帧读回。
 poll仅读4字节tile错误标志，非有限/负辐射或历史样本计数不一致均拒绝发布。
 
-冻结尺寸1..2048、batch 1..16、target 1..65536，tile边长1..256（默认64）；
+尺寸按设备image/buffer容量检查；batch 1..16、target为非零uint32，tile边长1..256（调用默认64）；
 按max_rays及保守visibility上界自动缩小tile，每次提交不超过2^24射线；
-整个目标的保守工作量不超过2^32，超限拒绝，无静默降低spp/反弹/尺寸。
+整个目标通过独立提交渐进完成，不以总射线乘积拒绝，无静默降低spp/反弹/尺寸。
 CPU参考仍限制64²，GPU不以CPU暴力三角测试额度限制硬件遍历。
-renderer自有VMA分配默认上限1GiB，create允许显式1MiB..8GiB；Editor按设备推荐政策选择；
+renderer自有VMA分配默认按设备当前可用额度，也允许显式指定至少1MiB的额度；Editor使用自动政策；
 资源工厂共享额度按驱动memory requirements先预留、分配失败回滚，实际owner销毁后释放；
 几何、纹理、AS storage/scratch、SBT、候选/历史、读回、在途及外部旧帧全部计入。
 统计报告额度当前/峰值及host-visible/device-local分配字节；VMA全设备block/allocation统计单列，
@@ -297,7 +305,7 @@ N/4N均值差≤0.5%，MIS/BSDF-only及RR均值与独立面积/半球积分保�
 
 纹理层支持当前CpuAsset的baseColor纹理与opaque/mask，不接受blend；Lambert模式仍拒绝metallic非零。
 冻结被引用纹理的身份、origin、RGBA8、sampler及三角形UV；纹理按资产包/纹理ID去重，
-最多64份、单边2048、默认总RGBA8字节64MiB，desktop显式配置允许128MiB；允许调用者下调额度。缺纹理、重复ID、缺失/非有限UV、
+CPU参考默认64份、总RGBA8字节64MiB；desktop取消数量/源字节人为封顶，GPU尺寸按设备检查；允许调用者下调额度。缺纹理、重复ID、缺失/非有限UV、
 非法sampler/数据长度/alpha cutoff在创建候选时拒绝。消费的纹理内容、采样器、UV和mask参与指纹，
 资产原始内存或文件变化不能改变旧scene/image。报告纹理数与未纳入NEE的mask发光三角形数。
 
@@ -307,7 +315,7 @@ min_filter及mip模式保留来源但在本阶段不参与采样。nearest取flo
 双线性插值，RGB每个texel先按IEC sRGB解码，alpha不解码；repeat/clamp/mirrored_repeat按各轴独立处理。
 GPU上传前解码为RGBA32F线性纹理，再用硬件过滤；这与sRGB先解码再过滤的数学语义一致。
 实测本机RGBA8-sRGB硬件解码误差超过冻结nearest门槛，故保留门槛并采用显式标准解码，
-不将近似误差吞入容差。GPU图像与上传各为源RGBA8的四倍，desktop上限各512MiB；统一实际显存准入默认1GiB，Editor按设备选择额度，最大纹理与几何额度不保证同时装入。
+不将近似误差吞入容差。GPU图像与上传各为源RGBA8的四倍，按实际分配及设备可用额度准入，纹理与几何不保证同时装入。
 UV准入绝对值不超过1e6，避免整数转换溢出；CPU使用double作为数值参考，GPU使用float。
 alpha乘factor后以float比较，严格小于cutoff才剔除，等于保留；opaque忽略alpha。
 radiance和visibility使用同一mask/背面规则。mask发光面light PDF为0，BSDF命中权重1，
@@ -316,7 +324,7 @@ radiance和visibility使用同一mask/背面规则。mask发光面light PDF为0�
 Device增加独立SampledImageIndexingMode的disabled/if_available/required请求及支持/启用查询，
 只启用shaderSampledImageArrayNonUniformIndexing，不要求runtimeDescriptorArray、partiallyBound或updateAfterBind。
 shader产物从实际SPIR-V反射ShaderNonUniform和SampledImageArrayNonUniformIndexing需求，
-设备未启用时在创建shader前拒绝。renderer按已启用能力编译64个image与sampler固定数组变体，
+设备未启用时在创建shader前拒绝。renderer按已启用能力先编译64个image与sampler的数组变体，超过时按实际数量创建更大候选管线，成功后替换，
 布局沿现有Device逐set/per-stage limits检查；全部槽绑定有效实际或默认白纹理。
 无能力时仍可创建无纹理renderer，prepare_scene拒绝纹理输入，不静默丢失贴图。
 Slang使用NonUniformResourceIndex；纹理upload与AS BUILD在同一Graph提交，trace声明全部可能采样图像，
@@ -381,9 +389,9 @@ Geometry BVH只在测试中作为独立求交对照；CPU参考独立双精度�
 场景指纹为稳定字节序FNV-1a64诊断摘要，覆盖消费的世界几何、材质、来源和冻结太阳，不作安全验证/缓存相等证明。
 
 默认CPU场景额度为4096个输入资产/实例primitive引用及4096个展开前计数的三角形（退化也占额度）。
-显式desktop_path_scene_limits允许100万三角形、64张纹理/128MiB RGBA8，用于编辑器硬件遍历；
+显式desktop_path_scene_limits取消人为容量封顶，用于编辑器硬件遍历；GPU按设备AS/buffer/image/descriptor能力与真实显存准入；
 单primitive顶点受所选三角形额度的三倍约束，位置绝对值≤1e6米；非法矩阵/不可逆实例/非有限数在候选内拒绝。
-CPU逐射线/逐三角测试工作预算仍独立拒绝超额计算。调用者不能放大desktop硬上限。
+CPU逐射线/逐三角测试工作预算仍独立拒绝超额计算。几何与纹理下标仍受shader表示范围限制。
 创建/图像输出使用调用者Memory，预算失败不发布候选；
 旧快照和已完成图像可在输入销毁/Memory closing后读取，新建仍要求open heap。
 
@@ -466,7 +474,7 @@ RT 场景键须含资产内容/缓存身份与代次，不能只用 Scene revisi
 PathTraceSettings包含 model/sampler 版本、seed、max_bounces、rr_start、预算、
 constant_rgb/sun_mode；material_mode随scene冻结，目标/批次/tile/session/gesture/暂停/曝光属于PathTraceSchedule。
 renderer默认max_bounces=8、rr_start=3、每批1 spp、目标256 spp；capture要求显式目标spp。
-允许范围为 max_bounces 1..32、目标 spp 1..65536，rr_start 不超过 max_bounces。
+允许范围为max_bounces 1..32、渐进目标spp为非零uint32，rr_start不超过max_bounces；无历史固定工作样本接口仍限制65536。
 工作预算不能仅看这些单项上限；所有乘积预检，总路径段/候选 GPU 内存超额则入队/提交前拒绝。
 
 | 操作 | 成功与失败语义 |
@@ -568,18 +576,18 @@ CPU 接受新配置只发布新 generation；GPU 完成后 owner 复核 generati
 
 ## 预算、取消与交互
 
-M16.8冻结限制：GPU渐进图像≤2048²，CPU 参考≤64²；每批 1..16 spp，但默认 1；
+GPU渐进图像按设备最大image extent、storage buffer range和shader地址范围准入；CPU参考≤64²；每批1..16 spp，默认1；
 单提交路径段上界按像素数×batch_spp×max_bounces，并保守增加每次表面的一条 visibility ray。
-默认单提交上限2^24条射线，整个目标上限2^32；超限先分 tile/批次或拒绝，
+默认单提交上限2^24条射线，整个目标不再有总射线额度；通过tile/批次分割，
 不自动降低 spp、反弹数或尺寸。单条 trace 的实际耗时仍与几何/any-hit 数有关，不能将计数预算视为毫秒硬上限。
-固定descriptor数组容量64，受实际设备 limits 限制，超出资产须明确拒绝，不截断纹理。
+descriptor数组初始容量64，按实际纹理数增长，受实际设备limits限制；超出设备能力明确拒绝，不截断纹理。
 
-renderer自有GPU分配预算默认1GiB，允许显式1MiB..8GiB，包含几何复制、AS、scratch、纹理、历史/候选/读回及在途旧代。
-Editor创建worker时使用推荐额度：最大device-local heap容量的四分之一、该heap当前可用预算的一半、8GiB三者取小；
-VMA预算不可用时按heap容量扣除已知usage计算，结果至少1MiB。额度冻结到renderer销毁，不随空闲量变化扩大。
-每像素历史128字节，单张2048²为512MiB；默认1GiB仍可能拒绝续批。不能保证所有尺寸、场景和外部持有组合均可用。
+renderer自有GPU分配预算默认自动选择，允许显式至少1MiB，包含几何复制、AS、scratch、纹理、历史/候选/读回及在途旧代。
+Editor创建worker时使用最大device-local heap当前预算减usage，不固定比例折扣或人为GiB封顶；
+VMA预算不可用时按heap容量扣除已知usage计算；可用不足1MiB则拒绝创建。额度冻结到renderer销毁，实际驱动分配仍可能失败。
+每像素历史128字节，单张2048²为512MiB；不能保证所有尺寸、场景和外部持有组合均可用。
 GPU显示图像与参数沿同一额度，外部显示owner也继续计费。推荐额度是应用准入政策，不是驱动分配成功保证。
-Surface only编辑器tile上限256以减少每tile资源准备、Graph编译和同步等待；Scene media保持64。
+Surface only与Scene media编辑器统一256 tile，减少每tile资源准备、Graph编译和同步等待。
 射线/候选工作上界仍进一步拆分，随机计数器、完整帧提交点、单在途票据和取消保护不变。
 记录owned allocation当前/峰值及host-visible/device-local（可重叠）；全设备VMA allocation/block单列。
 CPU输入沿资产/Memory额度；driver隐藏pipeline/descriptor开销不可观测。额度是准入上限，未证明交互性能。
@@ -684,7 +692,7 @@ reset及pending取消之后重采样与新视图逐像素一致。性能/质量�
 GPU trace与accumulate在同shader中，明确联合计时，不能拆出虚构耗时；另报tone和显式readback。
 只读pending_submission返回当前tile票据供显式观测，默认不启用profiling、不改变调度/发布/取消。
 热负载1920×1080、8反弹、1 spp/批，首帧与后续至少6批；测在途旧图保活峰值、稳态、取消调用/最终回收与释放后VMA。
-默认1GiB额度保持，拒绝即记拒绝，不自动降分辨率。16.67ms/1spp只作对照候选，不构成既定实时承诺。
+早期基线使用1GiB；当前采用设备可用额度并报告实际值，拒绝即记拒绝，不自动降分辨率。16.67ms/1spp只作对照候选，不构成既定实时承诺。
 达到固定质量的时间在上述4×4/4反弹/8seed负载实测，不能外推1080p收敛；原始样本和未达状态一起保存。
 CPU所有者与GPU worker角色同现有独占队列，此独立探针的CPU时间属于worker；不冒充GUI owner延迟，后者保留IPC验收结果。
 汇总器拒绝缺失/重复轮次、缺像素/非有限值、验证层误开、输入/hash不一致、丢失timestamp、泄漏和失败文件；保留失败原因与原始报告。
@@ -706,7 +714,7 @@ Editor Scene media 与固定 capture 直接调用 configure_medium_view，表面
 候选优化：局部追踪计数合并，保持随机维度和消光/majorant 不变；CPU 几何拥有型快照复用，源几何逐项验证后重绑版本/环境；按实测 GPU tile 时间选择工作粒度。
 计数合并仍检查每路径硬界，tile 总计超限使整个候选失败、无部分发布；首次超额必须在无整数溢出的范围被检测并置不可清除错误位；已失败候选的计数不作有效统计。错误候选不更换完整历史。
 源重绑必须保持旧owner可读，资产刷新强制重建；诊断输入hash改为v3（源元数据+完整环境+既有几何hash）以避免重新遍历纹理，GPU物理模型和采样版本不变。
-三轮记录冷初始化、首完整新视角、每spp、tile GPU p50/p95、取消到回收p50/p95、VMA与1GiB自有额度峰值；GUI使用真实后台窗口补充输入/显示/停动恢复。
+三轮记录冷初始化、首完整新视角、每spp、tile GPU p50/p95、取消到回收p50/p95、VMA与当次自有额度峰值；GUI使用真实后台窗口补充输入/显示/停动恢复。
 当前候选目标仍为预览/取消p95<=100ms、tile p95<=8ms。未达时保留具体缺口与测量尺度，不能以旧图呈现冒充新视角完成。
 
 复现入口见[介质性能指南](../guides/path-media-benchmark.md)。

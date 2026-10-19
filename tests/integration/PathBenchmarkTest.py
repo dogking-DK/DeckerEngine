@@ -108,6 +108,12 @@ class Acceptance(unittest.TestCase):
         with self.assertRaises(ValueError):
             benchmark.performance(performance_report(), truth)
 
+    def test_device_budget_can_exceed_the_old_fixed_limit(self):
+        report = performance_report()
+        for case in report['cases']:
+            for frame in case['frames']: frame['memory'].update(peak=2 << 30, limit=12 << 30)
+        self.assertEqual(len(benchmark.performance(report, benchmark.quality(quality_report()), smoke=True)), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

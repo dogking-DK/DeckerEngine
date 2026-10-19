@@ -1,5 +1,47 @@
 #pragma once
 namespace {
+void progressive_counter(memory::ResourceHandle heap,SubmissionQueue& q) {
+    const std::array<std::filesystem::path,1> includes{DK_PATH_SHADER_DIR};
+    auto compiled=take(compile_shader({std::filesystem::path(DK_PATH_SHADER_DIR)/"../../../../tests/fixtures/shaders/path-counter.slang",
+        "counterMain",ShaderStage::compute,includes,{},true},heap));
+    auto factory=q.resources(); auto shader=take(factory.create_shader(compiled));
+    const std::array<const ShaderModule*,1> entries{&shader}; auto layout=take(factory.create_pipeline_layout(entries));
+    auto pipeline=take(factory.create_compute_pipeline({&shader,&layout}));
+    using F4=std::array<float,4>;
+    std::array<F4,12> params{}; params[0]={std::bit_cast<float>(1u),std::bit_cast<float>(1u),std::bit_cast<float>(40u),std::bit_cast<float>(1u)};
+    params[11][3]=std::bit_cast<float>(1u);
+    std::array<F4,8> history{}; history[4][3]=std::bit_cast<float>(40u);
+    history[5][3]=std::bit_cast<float>(0xfffffffeu); history[6][3]=std::bit_cast<float>(7u);
+    auto input=take(factory.create_buffer({sizeof(params),vk::BufferUsageFlagBits::eStorageBuffer,BufferMemory::upload}));
+    auto old=take(factory.create_buffer({sizeof(history),vk::BufferUsageFlagBits::eStorageBuffer,BufferMemory::upload}));
+    auto output=take(factory.create_buffer({sizeof(history),vk::BufferUsageFlagBits::eStorageBuffer,BufferMemory::readback}));
+    auto status=take(factory.create_buffer({4,vk::BufferUsageFlagBits::eStorageBuffer,BufferMemory::upload}));
+    check(input.write(0,std::as_bytes(std::span{params}))); check(old.write(0,std::as_bytes(std::span{history})));
+    const std::uint32_t zero=0; check(status.write(0,std::as_bytes(std::span{&zero,1})));
+    const std::array writes{BindingWrite{2,0,BufferBinding{&input}},BindingWrite{3,0,BufferBinding{&output}},
+        BindingWrite{7,0,BufferBinding{&old}},BindingWrite{8,0,BufferBinding{&status}}};
+    auto bindings=take(factory.create_bindings(layout,0,writes)); auto graph=take(graphics::graph::Graph::create(heap));
+    const std::array buffers{&input,&old,&output,&status}; std::array<graphics::graph::Use,4> uses;
+    std::array<graphics::graph::ExternalBinding,4> imports;
+    for(unsigned i=0;i<4;++i) {
+        const auto id=take(graph.declare_buffer(std::to_string(i),buffers[i]->description(),graphics::graph::Lifetime::external,i!=2));
+        const auto access=i==2 ? vk::AccessFlagBits2::eShaderWrite : i==3 ? vk::AccessFlagBits2::eShaderRead|vk::AccessFlagBits2::eShaderWrite : vk::AccessFlagBits2::eShaderRead;
+        uses[i]={id,{{vk::PipelineStageFlagBits2::eComputeShader,access},0,VK_WHOLE_SIZE,{},i==2}}; imports[i]={i,buffers[i]};
+        if(i==2) check(graph.mark_output(id));
+    }
+    take(graph.add_pass({"counter carry",uses})); auto plan=take(graph.compile());
+    struct Context { ComputePipeline* pipeline; BindingSet* bindings; } context{&pipeline,&bindings};
+    const auto record=[](graphics::graph::PassContext& pass,void* ptr)->Result<void> {
+        auto& c=*static_cast<Context*>(ptr); auto encoder=take(pass.compute()); check(encoder.bind_pipeline(*c.pipeline));
+        const std::array<const BindingSet*,1> sets{c.bindings}; check(encoder.bind_sets(sets)); return encoder.dispatch({1,1,1});
+    };
+    const std::array callbacks{graphics::graph::PassCallback{0,record,&context}};
+    const std::array final{graphics::graph::FinalAccess{2,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}}};
+    auto execution=take(graphics::graph::execute(plan,q,{imports,callbacks,final})); require(take(q.wait(execution.submission())),"counter wait");
+    check(output.read(0,std::as_writable_bytes(std::span{history})));
+    require(std::bit_cast<std::uint32_t>(history[5][3])==2 && std::bit_cast<std::uint32_t>(history[6][3])==8,"progressive uint64 ray counter lost carry");
+    require(std::bit_cast<std::uint32_t>(history[4][3])==41 && history[1][3]==0,"counter test corrupted sample state");
+}
 bool collect(PathTraceRenderer& r,SubmissionQueue& q) {
     q.device().logical_device().waitIdle(); return take(r.poll(q));
 }
@@ -71,10 +113,10 @@ void progressive_images(memory::ResourceHandle heap,PathTraceRenderer& r,Submiss
     schedule.tile_edge=257; require(!r.configure_view(q,11,gpu,large,s,schedule),"oversize dispatch accepted");
     require(take(r.status(11)).completed_spp==2,"invalid tile replaced completed frame"); schedule.reverse_tiles=false;
     // Extent boundary beyond the CPU oracle limit, including a short final tile.
-    Fixture empty{heap}; auto sky=take(r.prepare_scene(q,empty.scene())); auto d=empty.view(empty.source()).description(); d.width=2048; d.height=2;
+    Fixture empty{heap}; auto sky=take(r.prepare_scene(q,empty.scene())); auto d=empty.view(empty.source()).description(); d.width=4097; d.height=2;
     auto wide=take(RenderView::create(empty.source(),d)); schedule.target_spp=2; schedule.batch_spp=2; schedule.tile_edge=63;
     check(r.configure_view(q,11,sky,wide,s,schedule)); auto wide_image=finish_view(r,q,11);
-    require(wide_image.linear_rgb().size()==4096,"2048 extent rejected or truncated");
+    require(wide_image.linear_rgb().size()==8194,"4097 extent rejected or truncated");
     for(const auto& color:wide_image.linear_rgb()) close_color(color,s.environment_rgb,1e-7);
     check(r.release_view(11));
     for(auto& material:f.asset.materials) { material.metallic=.7f; material.roughness=.35f; }
@@ -85,7 +127,9 @@ void progressive_images(memory::ResourceHandle heap,PathTraceRenderer& r,Submiss
     schedule.target_spp=65536; schedule.batch_spp=16; schedule.tile_edge=1;
     auto single=empty.view(empty.source(),1); check(r.configure_view(q,11,sky,single,s,schedule));
     compare_images(finish_view(r,q,11),complete(q,take(r.submit_view(q,sky,single,s,{0,65536}))),0);
-    std::puts("progressive unequal batches/tiles/global jitter/CPU/2048 boundary=pass");
+    schedule.target_spp=1000000; check(r.configure_view(q,11,sky,single,s,schedule));
+    require(take(r.status(11)).completed_spp==65536,"large target reset accumulation");
+    std::puts("progressive unequal batches/tiles/global jitter/CPU/device extent=pass");
 }
 void progressive_state(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q) {
     Fixture f{heap}; f.quad(-1,1,0,{.5f,.5f,.5f}); auto cpu=f.scene(); auto gpu=take(r.prepare_scene(q,cpu));
@@ -155,9 +199,10 @@ void progressive_failure(memory::ResourceHandle heap,PathTraceRenderer& r,Submis
     std::puts("progressive later-tile failure/retry/timeout/cancel/late release/config protection=pass");
 }
 void progressive_budget(memory::ResourceHandle heap,PathTraceRenderer&,SubmissionQueue& q) {
+    progressive_counter(heap,q);
     const auto recommended=PathTraceRenderer::recommended_memory_limit(q.device());
     require(recommended>=(1ull<<20) && recommended<=PathTraceRenderer::max_memory_limit,"invalid device budget recommendation");
-    require(!PathTraceRenderer::create(heap,q,DK_PATH_SHADER_DIR,{},PathTraceRenderer::max_memory_limit+1),"oversize GPU budget accepted");
+    require(!PathTraceRenderer::create(heap,q,DK_PATH_SHADER_DIR,{},(1ull<<20)-1),"undersize GPU budget accepted");
     // Generic budget survives wrapper destruction until pending uses retire, including AS scratch.
     auto budget=memory::make_shared_in<AllocationBudget>(heap,1ull<<20); auto factory=q.resources().with_budget(budget);
     auto source=take(factory.create_buffer({4096,vk::BufferUsageFlagBits::eTransferSrc,BufferMemory::upload}));
@@ -189,7 +234,7 @@ void progressive_budget(memory::ResourceHandle heap,PathTraceRenderer&,Submissio
     held={}; second={}; require(r.memory_stats(q).owned.current<2*48*48*128,"external owners did not release budget");
     finish_view(r,q,1);
     auto huge=schedule; huge.target_spp=65536; auto d=view.description(); d.width=d.height=2048;
-    require(!r.configure_view(q,1,gpu,take(RenderView::create(f.source(),d)),s,huge),"target work overflow accepted");
+    require(!r.configure_view(q,1,gpu,take(RenderView::create(f.source(),d)),s,huge),"candidate beyond explicit memory budget accepted");
     auto throttled=s; throttled.max_rays=12; schedule.target_spp=2; schedule.batch_spp=2; schedule.tile_edge=64;
     check(r.configure_view(q,2,gpu,f.view(f.source(),5),throttled,schedule)); take(r.submit_batch(q,2));
     require(take(r.status(2)).total_tiles==25,"work budget did not subdivide tiles");

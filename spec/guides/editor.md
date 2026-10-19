@@ -60,7 +60,7 @@ Release/RelWithDebInfo普通启动默认关闭Vulkan验证层；Debug默认尝�
 
 路径模式默认 **Surface only**；联合渲染场景空气/云时，在面板选择 **Scene media**，设置见下文。
 可点击视口的 **Settings** 打开Path tracing面板。不支持的GPU/构建会显示禁用原因。
-编辑器额度为100万三角形、64纹理、纹理源总计128MiB及1GiB GPU实际分配，可预览默认Sponza。
+路径预览按设备可用显存、AS/纹理/缓冲能力准入；不再固定百万三角形、64纹理、128MiB源像素或1GiB额度。路径视口使用实际面板尺寸。
 导入沿用光栅的预览配置：保留base color纹理和材质常量，省略法线/AO/金属粗糙度纹理及切线；不支持blend。
 完整大气及带云预设允许默认模型跨地面的几何，地下部分由行星遮挡，不因一个包围盒拒绝天空。
 固定spp路径截图和线性报告通过[render.capture](../commands/render.md#固定-spp-路径追踪)提供，仍使用严格导入和原小场景额度；

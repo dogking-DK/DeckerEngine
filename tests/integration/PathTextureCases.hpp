@@ -29,19 +29,25 @@ void texture_numeric(memory::ResourceHandle heap,PathTraceRenderer& renderer,Sub
     }
     // Every lane selects a different descriptor, including the last valid slot.
     Fixture f{heap}; std::vector<PathTraceRay> rays;
-    for(unsigned i=0;i<64;++i) {
+    for(unsigned i=0;i<65;++i) {
         const auto x=float(i)*4; f.triangle({x-1,-1,0},{x+1,-1,0},{x,1,0},{1,1,1}); add_texture(f,i,{.75,.75});
         auto& t=f.asset.textures.back(); t.width=t.height=1;
         t.rgba8={std::byte(i*4),std::byte(255-i*3),std::byte(i*2),std::byte(i%2 ? 255 : 0)};
+        if(i==63) {
+            const auto pixel=t.rgba8; t.width=4097; t.rgba8.resize(4*t.width);
+            for(unsigned x=0;x<t.width;++x) std::copy(pixel.begin(),pixel.end(),t.rgba8.begin()+4*x);
+        }
         f.asset.materials[i].alpha_mode=AlphaMode::mask; rays.push_back({{x,0,1},{0,0,-1}});
     }
-    const auto source=f.scene(); require(source.texture_count()==64,"texture boundary not exercised");
+    const std::array assets{&f.asset};
+    const auto source=take(PathTraceScene::create(heap,f.source(),assets,desktop_path_scene_limits()));
+    require(source.texture_count()==65,"texture growth not exercised");
     auto scene=take(renderer.prepare_scene(queue,source)); const auto gpu=complete(queue,take(renderer.submit_rays(queue,scene,rays,s,{0,4})));
     for(std::size_t i=0;i<rays.size();++i) {
         close_color(gpu.linear_rgb()[i],take(estimate_path_reference(source,rays[i],s,{0,4})).mean,.003);
         require(gpu.primary_hits()[i].has_value()==bool(i%2),"divergent mask sampled wrong descriptor");
     }
-    std::printf("texture RGB max_abs=%.9g filters/wrap/divergent64=pass\n",worst);
+    std::printf("texture RGB max_abs=%.9g filters/wrap/divergent65=pass\n",worst);
 }
 void texture_mask(memory::ResourceHandle heap,PathTraceRenderer& renderer,SubmissionQueue& queue) {
     Fixture f{heap}; f.quad(-2,2,0,{1,1,1}); f.quad(-2,2,.5,{0,0,0},{0,0,0},true);

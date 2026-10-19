@@ -133,6 +133,6 @@ stdio 在 EOF/shutdown 正常退出时为 0，先前可恢复的请求错误不�
 设计原因见 [命令层](../design/commands.md)、[应用服务](../design/application-services.md)、
 [Runtime](../design/runtime.md) 和 [自动化协议](../design/automation-protocol.md)。
 
-路径截图参数/线性报告见[render.capture](render.md#固定-spp-路径追踪)，采样进度通过[jobs](jobs.md)返回。
+路径截图参数/线性报告见[render.capture](render.md#固定-spp-路径追踪)，GPU预算按设备当前可用显存选择；采样进度通过[jobs](jobs.md)返回。
 
 render.capture / render.sequence 支持光栅空气/云正交及 projection 与 ortho_height；默认仍为透视，正交拒绝显式 fov_y，来源只报告生效镜头。render.capture 的固定路径设置兼容 v1 表面和 v2 显式 Surface only / Scene media；v3 增加 Classic MIS / ReSTIR DI 和独立空历史捕获，见 [ReSTIR 参数与来源](render.md#restir-直接光照v3)。

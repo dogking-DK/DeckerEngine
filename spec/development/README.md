@@ -144,5 +144,6 @@
 | 0140 | [Editor 与独立 ReSTIR 捕获](0140-editor-restir-capture.md) | render-restir、render-pathtracing、render-capture、editor | completed |
 | 0141 | [M19.8 Sponza 质量、性能与默认策略](0141-restir-sponza-acceptance.md) | render-restir、render-pathtracing | completed |
 | 0142 | [默认场景路径预览显存与吞吐优化](0142-path-preview-throughput.md) | render-pathtracing、render-restir、editor、graphics-device | completed |
+| 0143 | [路径预览按设备容量准入与介质吞吐](0143-path-capacity-media-throughput.md) | render-pathtracing、render-restir、editor、assets-importers、render-disk、render-capture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

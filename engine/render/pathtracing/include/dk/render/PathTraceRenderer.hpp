@@ -119,13 +119,13 @@ struct PathTraceMemoryStats {
 class PathTraceRenderer final {
 public:
     static constexpr std::uint32_t restir_max_candidates_per_invocation = 1u << 18;
-    static constexpr std::uint64_t max_memory_limit = std::uint64_t{8} << 30;
-    // Conservative startup policy; includes headroom for other users of the device.
+    static constexpr std::uint64_t max_memory_limit = std::numeric_limits<std::uint64_t>::max();
+    // Current device-local budget minus existing use; zero default selects this policy.
     [[nodiscard]] static std::uint64_t recommended_memory_limit(const graphics::Device&);
     PathTraceRenderer() = default;
     [[nodiscard]] static Result<PathTraceRenderer> create(memory::ResourceHandle, graphics::SubmissionQueue&,
         const std::filesystem::path& shader_directory, std::stop_token = {},
-        std::uint64_t memory_limit = std::uint64_t{1} << 30);
+        std::uint64_t memory_limit = 0);
     [[nodiscard]] Result<PathTraceGpuScene> prepare_scene(graphics::SubmissionQueue&, const PathTraceScene&, std::stop_token = {}) const;
     [[nodiscard]] Result<PathTraceFrame> submit_view(graphics::SubmissionQueue&, const PathTraceGpuScene&, const RenderView&,
         const PathTraceSettings& = {}, PathTraceSamples = {}, std::stop_token = {}) const;

@@ -5,7 +5,7 @@
 #include <stop_token>
 
 namespace dk {
-// Callers may lower, but not raise, these hard limits. All byte counts are aggregate.
+// Caller-selected capacity; defaults bound ordinary imports. All byte counts are aggregate.
 struct ImportLimits {
     std::size_t source_bytes = 16 * 1024 * 1024, dependency_bytes = 64 * 1024 * 1024;
     std::size_t input_bytes = 128 * 1024 * 1024, output_bytes = 256 * 1024 * 1024;

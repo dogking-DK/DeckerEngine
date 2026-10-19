@@ -3,6 +3,7 @@
 struct Accumulation {
     float3 sum, moment, correction, momentCorrection;
     uint rays;
+    uint2 previousRays;
     float invalid;
     float4 hit, normal;
 };
@@ -18,7 +19,7 @@ Accumulation beginAccumulation(uint pixel) {
         uint at=pixel*8;
         a.sum=history[at+4].xyz; a.correction=history[at+5].xyz;
         a.moment=history[at+6].xyz; a.momentCorrection=history[at+7].xyz;
-        a.rays=uint(history[at].w); a.invalid=history[at+1].w;
+        a.previousRays=uint2(asuint(history[at+5].w),asuint(history[at+6].w)); a.invalid=history[at+1].w;
         a.hit=history[at+2]; a.normal=history[at+3];
         if(asuint(history[at+4].w)!=image.z) a.invalid=1;
     }
@@ -37,8 +38,10 @@ void finishAccumulation(Accumulation a,uint pixel,uint localPixel) {
     output[at]=float4(a.sum/count,float(a.rays)); output[at+1]=float4(a.moment/count,a.invalid);
     output[at+2]=a.hit; output[at+3]=a.normal;
     if(progressive) {
-        output[at+4]=float4(a.sum,asfloat(count)); output[at+5]=float4(a.correction,0);
-        output[at+6]=float4(a.moment,0); output[at+7]=float4(a.momentCorrection,0);
+        uint low=a.previousRays.x+a.rays;
+        uint high=a.previousRays.y+uint(low<a.previousRays.x);
+        output[at+4]=float4(a.sum,asfloat(count)); output[at+5]=float4(a.correction,asfloat(low));
+        output[at+6]=float4(a.moment,asfloat(high)); output[at+7]=float4(a.momentCorrection,0);
     }
     if(a.invalid!=0) { uint ignored; InterlockedOr(status[0],1,ignored); }
 }

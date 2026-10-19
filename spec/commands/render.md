@@ -1,7 +1,7 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-10-19T17:07:00+08:00"
+updated_at: "2026-10-20T01:07:00+08:00"
 status: accepted
 ---
 
@@ -168,7 +168,7 @@ pathtrace对象禁止未知字段：
 | exposure_ev | 0 | [-32,32]，显示曝光乘2^EV；不影响线性样本 |
 
 固定metallic_roughness/model_version=3/sampler_version=1/MIS、1spp批次和64像素tile，与GUI共用渐进renderer。
-支持上限4096三角形、64纹理/源纹理64MiB、renderer自有GPU分配1GiB；完整Sponza通常超出范围。
+捕获输入仍支持4096三角形、64纹理/源纹理64MiB；renderer自有GPU额度自动采用设备当前可用显存，报告返回实际limit_bytes。完整Sponza通常超出捕获输入范围；Editor路径预览使用更大的设备容量策略。
 路径后端只接受profile=unlit_preview；显式传入顶层exposure/time_seconds/render_options/warmup_frames均拒绝，
 这些字段属于光栅配置；render.sequence仍只支持原后端。宽高≤2048，全部样本的保守射线预算≤2^32。
 

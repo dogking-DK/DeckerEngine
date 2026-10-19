@@ -15,15 +15,15 @@ struct PathPayload { float distance; float2 barycentric; uint index; uint found;
 #include "path-accumulate.slang"
 #if !DK_PATH_EMPTY
 #if DK_PATH_TEXTURES
-[[vk::binding(5,0)]] Texture2D<float4> baseTextures[64];
-[[vk::binding(6,0)]] SamplerState baseSamplers[64];
+[[vk::binding(5,0)]] Texture2D<float4> baseTextures[DK_PATH_TEXTURE_CAPACITY];
+[[vk::binding(6,0)]] SamplerState baseSamplers[DK_PATH_TEXTURE_CAPACITY];
 #endif
 float4 baseColor(uint index,float2 barycentric) {
     float4 factor=triangles[index*9+4];
 #if DK_PATH_TEXTURES
     float4 a=triangles[index*9+6],b=triangles[index*9+7]; uint texture=asuint(b.z);
     if(texture!=0xffffffffu) {
-        if(texture>=64) return asfloat(0x7fc00000u).xxxx;
+        if(texture>=DK_PATH_TEXTURE_CAPACITY) return asfloat(0x7fc00000u).xxxx;
         float2 uv=a.xy*(1-barycentric.x-barycentric.y)+a.zw*barycentric.x+b.xy*barycentric.y;
         uint resource=NonUniformResourceIndex(texture);
         factor*=baseTextures[resource].SampleLevel(baseSamplers[resource],uv,0);

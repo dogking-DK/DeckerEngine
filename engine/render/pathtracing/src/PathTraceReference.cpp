@@ -12,7 +12,7 @@ std::uint32_t mix(std::uint32_t x) noexcept {
     x^=x>>16; x*=0x7feb352du; x^=x>>15; x*=0x846ca68bu; return x^(x>>16);
 }
 bool color_valid(const Vec3d& c) { return c.allFinite() && (c.array()>=0).all() && (c.array()<=1e6).all(); }
-Result<void> work_valid(const PathSceneState& scene,std::uint64_t pixels,const PathTraceSettings& s,PathTraceSamples range) {
+Result<void> work_valid(const PathSceneState& scene,std::uint64_t pixels,const PathTraceSettings& s,PathTraceSamples range,bool cpu_geometry=true) {
     if (s.model_version!=3 || s.sampler_version!=1 || !s.max_bounces || s.max_bounces>32 || s.rr_start>s.max_bounces ||
         !color_valid(s.environment_rgb) || (s.sun!=PathTraceSun::none && s.sun!=PathTraceSun::scene) ||
         (s.estimator!=PathTraceEstimator::mis && s.estimator!=PathTraceEstimator::bsdf_only) ||
@@ -29,7 +29,7 @@ Result<void> work_valid(const PathSceneState& scene,std::uint64_t pixels,const P
         return std::unexpected(path_invalid("Invalid frozen path sun"));
     // All factors have bounded ranges before multiplication.
     const auto rays=pixels*range.count*(2ull*s.max_bounces+1);
-    if (rays>s.max_rays || rays>s.max_triangle_tests/std::max<std::uint64_t>(1,scene.triangles.size()))
+    if (rays>s.max_rays || (cpu_geometry && rays>s.max_triangle_tests/std::max<std::uint64_t>(1,scene.triangles.size())))
         return std::unexpected(path_invalid("CPU path reference work budget exceeded"));
     return {};
 }
@@ -195,8 +195,8 @@ bool same_source(const RenderScene& a,const RenderScene& b) {
     return true;
 }
 }
-Result<void> detail::validate_path_work(const PathSceneState& scene,std::uint64_t pixels,const PathTraceSettings& settings,PathTraceSamples samples) {
-    return work_valid(scene,pixels,settings,samples);
+Result<void> detail::validate_path_work(const PathSceneState& scene,std::uint64_t pixels,const PathTraceSettings& settings,PathTraceSamples samples,bool cpu_geometry) {
+    return work_valid(scene,pixels,settings,samples,cpu_geometry);
 }
 bool detail::path_visible(const PathSceneState& scene,const PathTraceHit& hit,const Vec3d& direction,
     PathTraceStatistics& stats,const PathTriangle* light,const Vec3d& point) {
@@ -220,7 +220,7 @@ Result<PathTraceRay> path_trace_camera_ray(const RenderView& view,std::uint32_t 
     return ray;
 }
 Result<PathTraceRay> detail::gpu_path_camera_ray(const RenderView& view,std::uint32_t x,std::uint32_t y,const Vec2d& subpixel) {
-    auto camera=camera_for(view,2048); if(!camera) return std::unexpected(camera.error());
+    auto camera=camera_for(view,std::numeric_limits<std::uint32_t>::max()); if(!camera) return std::unexpected(camera.error());
     auto ray=camera->ray(x,y,subpixel); if(auto valid=validate_path_ray(ray);!valid) return std::unexpected(valid.error());
     return ray;
 }

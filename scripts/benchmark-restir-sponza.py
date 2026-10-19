@@ -202,7 +202,7 @@ def performance(rounds, mode):
                         stats([zone['gpu_ms']])
                         passes.setdefault(zone['name'], []).append(zone['gpu_ms'])
                 gpu_frames.append(frame_gpu)
-        need(all(0 <= m['current'] <= m['peak'] <= m['limit'] == 1 << 30 for m in memory), 'GPU budget exceeded')
+        need(all(0 < m['limit'] and 0 <= m['current'] <= m['peak'] <= m['limit'] for m in memory), 'GPU budget exceeded')
         result = dict(name=name, spp_wall_ms=stats(frames), spp_gpu_ms=stats(gpu_frames), tile_gpu_ms=stats(tiles),
                       preview_ms=stats(preview), cancel_ms=stats(cancel),
                       cold_cpu_scene_ms=stats([c['cpu_scene_ms'] for c in cases]),

@@ -69,6 +69,12 @@ TEST_CASE("gltf enforces all byte and element budgets before producing data", "[
     }
     REQUIRE_FALSE(dk::import_gltf(f.paths,request));
 }
+TEST_CASE("gltf permits explicit desktop capacity above offline defaults", "[import]") {
+    GltfFixture f; f.save(); dk::GltfImportRequest request{"assets/模型.gltf"};
+    request.limits.vertices=2000000; request.limits.indices=6000000;
+    request.limits.primitives=8192; request.limits.texture_bytes=512*1024*1024;
+    REQUIRE(dk::import_gltf(f.paths,request));
+}
 TEST_CASE("gltf rejects network data absolute and escaping URIs", "[import]")
 {
     const auto uri = GENERATE("https://host/data.bin","data:application/octet-stream;base64,AA==","../../../outside.bin","%2e%2e/%2e%2e/outside.bin","%00.bin","%ff.bin","/absolute.bin","C%3a/file.bin","bad%xy.bin");

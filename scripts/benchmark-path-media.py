@@ -132,7 +132,7 @@ def performance(rounds):
                     need(gpu['period_ns'] > 0 and gpu['valid_bits'] > 0 and gpu['zones'], 'Invalid GPU timestamp')
                     tiles.append(gpu['submission_ms'])
             memory.append(case['memory'])
-        need(all(0 <= m['current'] <= m['peak'] <= m['limit'] == 1 << 30 for m in memory), 'GPU budget exceeded')
+        need(all(0 < m['limit'] and 0 <= m['current'] <= m['peak'] <= m['limit'] for m in memory), 'GPU budget exceeded')
         results.append(dict(name=name, cpu_scene_ms=stats([c['cpu_scene_ms'] for c in cases]),
                             gpu_prepare_ms=stats([c['gpu_prepare_ms'] for c in cases]), spp_ms=stats(frames),
                             first_complete_ms=stats([c['frames'][0]['wall_ms'] for c in cases]),
@@ -236,7 +236,7 @@ def verify_archive(directory):
             for case in worker['media']:
                 need(len(case['camera_ms']) == 12 and len(case['cancel_ms']) == 13, 'Missing worker trials')
                 need(stats(case['camera_ms'])['p95'] <= 100 and stats(case['cancel_ms'])['p95'] <= 100, 'Worker latency candidate not met')
-                need(case['owned_peak'] <= 1 << 30, 'Worker memory exceeded')
+                need(case['owned_peak'] <= case.get('owned_limit', 1 << 30), 'Worker memory exceeded')
         for gui in (editor['gui_validation'], editor['gui_performance']):
             need(gui['status'] == 'passed', 'GUI failed')
             need(stats(gui['media_latency_ms'])['p95'] <= 100, 'GUI latency candidate not met')

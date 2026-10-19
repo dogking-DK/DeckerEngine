@@ -48,7 +48,7 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
     if (!heap || heap.state()!=memory::ResourceState::open || !source)
         return std::unexpected(Error{ErrorCode::invalid_state,"Path scene requires an open heap and render scene"});
     constexpr auto hard=desktop_path_scene_limits();
-    if ((model!=PathTraceMaterialModel::lambert && model!=PathTraceMaterialModel::metallic_roughness) || assets.size()>4096 || !limits.max_triangles || limits.max_triangles>hard.max_triangles ||
+    if ((model!=PathTraceMaterialModel::lambert && model!=PathTraceMaterialModel::metallic_roughness) || !limits.max_triangles || limits.max_triangles>hard.max_triangles ||
         !limits.max_primitive_instances || limits.max_primitive_instances>hard.max_primitive_instances || limits.max_textures>hard.max_textures || limits.max_texture_bytes>hard.max_texture_bytes)
         return std::unexpected(path_invalid("Invalid path scene limits"));
     try {
@@ -70,7 +70,7 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
                 if (found==assets.end()) return std::unexpected(Error{ErrorCode::not_found,"Path scene mesh missing"});
                 const auto& asset=**found;
                 if (!entity.world.inverse()) return std::unexpected(path_invalid("Path instance transform is singular"));
-                if (asset.mesh.primitives.size()>limits.max_primitive_instances-primitive_count || asset.materials.size()>4096 || asset.textures.size()>4096)
+                if (asset.mesh.primitives.size()>limits.max_primitive_instances-primitive_count)
                     return std::unexpected(path_invalid("Path scene primitive/material budget exceeded"));
                 primitive_count+=asset.mesh.primitives.size();
                 for (std::size_t i=0;i<asset.materials.size();++i) {

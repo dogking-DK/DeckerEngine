@@ -57,7 +57,7 @@ GGX使用alpha=max(roughness²,0.0025)、单次散射/Smith/Schlick和双向Fres
 使用世界三角形平面法线，忽略顶点法线；纹理UV按重心插值，单面背面剔除，双面翻转几何法线。
 LOD=0采用mag_filter（缺省linear），RGB按sRGB逐texel解码、alpha保持线性，支持repeat/clamp/mirrored_repeat。
 mask在alpha×factor小于cutoff时拒绝主/阴影命中；发光mask面仅由BSDF命中提供光照。
-最多64张、单边2048、总64MiB RGBA8；PathTraceScene的texture_info可查询被冻结的资产身份、origin及尺寸。
+CPU默认最多64张、总64MiB RGBA8，可显式选择其他容量；GPU尺寸由设备检查。PathTraceScene的texture_info可查询被冻结的资产身份、origin及尺寸。
 上述PathTraceReference入口是表面参考，不积分空气或云；场景启用介质时必须显式设置surface_only，报告此范围。
 
 最多64×64、4096个计入预算的三角形；样本区间在[0,65536)，相机为刚体透视针孔、

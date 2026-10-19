@@ -24,16 +24,17 @@ void ppm(const std::filesystem::path& path,const EnvironmentPreviewResult& r) {
 #include "PathDesktopWorker.inl"
 int main(int argc,char** argv) {
     if(argc<3) return 2;
-    bool validation=false,profile=false,media=false,restir=false,desktop_path=false;
+    bool validation=false,profile=false,media=false,restir=false,desktop_path=false,desktop_media=false;
     for(int i=3;i<argc;++i) {
         const std::string_view option=argv[i];
         if(option=="--validation") validation=true; else if(option=="--profile") profile=true;
         else if(option=="--media") media=true; else if(option=="--restir") restir=true;
-        else if(option=="--desktop-path") desktop_path=true; else return 2;
+        else if(option=="--desktop-path") desktop_path=true;
+        else if(option=="--desktop-media") { desktop_path=true; desktop_media=true; } else return 2;
     }
     const std::filesystem::path output=argv[2]; std::filesystem::create_directories(output);
     if(restir) return restir_worker(argv[1],output);
-    if(desktop_path) return desktop_path_worker(argv[1],output,validation);
+    if(desktop_path) return desktop_path_worker(argv[1],output,validation,desktop_media);
     Json report={{"status","failed"},{"validation",validation},{"profile",profile},{"environment",Json::array()},{"path",Json::array()}};
     int code=1;
     try {
@@ -155,6 +156,7 @@ int main(int argc,char** argv) {
                                 require(result->info.medium && result->info.width==192 && result->info.height==108,"Wrong media input");
                                 require(result->memory.owned.peak<=result->memory.owned.limit,"Worker GPU budget exceeded");
                                 item["owned_peak"]=result->memory.owned.peak;
+                                item["owned_limit"]=result->memory.owned.limit;
                                 if(i) item["camera_ms"].push_back(elapsed(start)); else item["first_ms"]=elapsed(start);
                                 break;
                             }

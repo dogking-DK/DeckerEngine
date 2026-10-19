@@ -55,7 +55,7 @@ inline Error path_invalid(std::string message) { return {ErrorCode::invalid_argu
 inline Error path_cancelled() { return {ErrorCode::invalid_state, "CPU path tracing cancelled", {"render.pathtracing.reference.cancelled"}}; }
 inline double luminance(const Vec3d& c) { return c.dot(Vec3d{.2126,.7152,.0722}); }
 [[nodiscard]] Result<void> validate_path_ray(const PathTraceRay&);
-[[nodiscard]] Result<void> validate_path_work(const PathSceneState&, std::uint64_t pixels, const PathTraceSettings&, PathTraceSamples);
+[[nodiscard]] Result<void> validate_path_work(const PathSceneState&, std::uint64_t pixels, const PathTraceSettings&, PathTraceSamples, bool cpu_geometry=true);
 [[nodiscard]] Result<void> validate_path_view(const PathSceneState&, const RenderView&, std::uint32_t maximum_extent = 64);
 [[nodiscard]] Result<PathTraceRay> gpu_path_camera_ray(const RenderView&, std::uint32_t, std::uint32_t, const Vec2d&);
 [[nodiscard]] std::optional<PathTraceHit> nearest_path(const PathSceneState&, const PathTraceRay&, PathTraceStatistics&);

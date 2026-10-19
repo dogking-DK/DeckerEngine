@@ -1,10 +1,14 @@
 ---
 module: render-restir
 created_at: "2026-10-19T12:50:00+08:00"
-updated_at: "2026-10-20T00:19:43+08:00"
+updated_at: "2026-10-20T01:21:06+08:00"
 status: accepted
 ---
 
+
+当前容量扩展见[0143](../development/0143-path-capacity-media-throughput.md)：渐进介质与表面统一256 tile，不限制完整目标的射线总量。
+目标采样编号可使用uint32范围；每个epoch/pass仍完整完成后发布。候选、历史与数值算法参数合法域不变。
+自动显存额度改为设备当前可用预算，所有真实owner继续计费；失败/取消不更改已完成帧。
 # ReSTIR 光照重采样设计
 
 本文件是[路径追踪设计](render-pathtracing.md)的采样扩展设计。
@@ -136,7 +140,7 @@ GPU target 私有使用 RTXDI v3.1.0 对应 RTXDI-Library commit `f12037fa8e97eb
 固定射线批次还持有 32 bytes/ray 输入、64 bytes/pixel GPU 输出及同尺寸读回（加 4 bytes 诊断），
 以及参数 672、占位采样面 96、零历史 128、诊断 64 bytes；上述均为 payload，实际分配需对齐。
 实际 Vulkan memory requirements（含对齐）由同一 AllocationBudget 准入，payload 预检不替代实际额度；不包括 driver 隐藏管线开销。
-每路径最多 `2*max_bounces+2` 射线，候选数乘 tile 像素数/样本数受 2^24 预算限制；渐进全目标射线上限保持 2^32。
+每路径最多 `2*max_bounces+2` 射线，候选数乘 tile 像素数/样本数受 2^24 预算限制；渐进目标通过多次提交完成，不设总射线额度。
 tile 1..256（调用默认64），候选和射线预算共同限宽。状态报告区分阶段和 epoch；只在完整批次发布时推进完成计数。
 每次 submit/poll 检查取消与 generation；阶段中途失败/迟到结果丢弃整批，已完成 owner 及其采样平面不可变。
 每阶段通过 Graph 声明访问，使跨提交的写入到读取、下一 epoch 的覆盖均有显式同步。
@@ -327,7 +331,7 @@ Renderer 拥有当前/前一完整表面及 reservoir、候选输出、工作计
 配置拒绝、分配失败、任一 tile/pass 故障、取消或迟到结果均保留上一完整状态，不推进计数；device lost 沿现有终态处理。
 重投影允许相机间复用不意味着允许旧代在途工作发布。
 
-继续遵守实际 owner 计费的 1 GiB 默认额度：旧完成帧、候选、首表面、所有 reservoir 面、AS/纹理、读回及仍在途资源都纳入。
+继续遵守实际owner计费，默认自动使用设备可用显存额度：旧完成帧、候选、首表面、所有 reservoir 面、AS/纹理、读回及仍在途资源都纳入。
 M19.2 给出精确 bytes/pixel 和两视图/外持旧帧的峰值公式，预检所有尺寸与乘法溢出；
 不得沿用旧分辨率上限就推定新模式有足够显存，也不静默降分辨率或关闭校正。
 最坏射线预算覆盖初始查询、最终阴影、校正射线与路径尾部，介质接入后还包括 tracking；

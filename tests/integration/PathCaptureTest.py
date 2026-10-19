@@ -16,6 +16,7 @@ def main():
     for name in ("runner", "client", "fixtures", "work-dir", "python-example", "luau-example"):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--media", action="store_true")
+    parser.add_argument("--skip-luau", action="store_true", help="Runner was built without Luau")
     args = parser.parse_args()
     root = args.work_dir / (("media-capture-" if args.media else "path-capture-") + uuid4().hex)
     shutil.copytree(args.fixtures, root)
@@ -65,7 +66,8 @@ def main():
             assert report["provenance"]["actual_spp"] == report["sample_count"]
             assert report["provenance"]["input_fingerprint_version"] == 3
             assert report["gpu_ms"] is None and report["wall_ms"] > 0 and report["device"]["name"]
-            assert report["memory"]["peak_bytes"] <= report["memory"]["limit_bytes"] == 1073741824
+            assert 1 << 20 <= report["memory"]["limit_bytes"]
+            assert report["memory"]["peak_bytes"] <= report["memory"]["limit_bytes"]
             return report
         try:
             deadline = time.monotonic() + 30
@@ -232,13 +234,17 @@ def main():
             call("runtime.shutdown")
             assert process.wait(timeout=30) == 0 and not (root / "stderr.log").read_bytes()
             assert (root / "shutdown.json").read_text() == "previous"
-            script = subprocess.run([str(args.runner), "--project-root", str(root), "--script", str(args.luau_example), "--script-timeout-ms", "150000"],
-                                    capture_output=True, text=True, timeout=160, creationflags=subprocess.CREATE_NO_WINDOW)
-            assert script.returncode == 0 and not script.stderr, (script.stdout, script.stderr)
-            luau = json.loads((root / "path-luau.json").read_text())
-            assert python["linear_rgb"] == luau["linear_rgb"] == orthographic["linear_rgb"]
-            assert python["rgba8"] == luau["rgba8"]
-            evidence["checks"].append("real Python and Luau examples match linear pixels")
+            assert python["linear_rgb"] == orthographic["linear_rgb"]
+            if not args.skip_luau:
+                script = subprocess.run([str(args.runner), "--project-root", str(root), "--script", str(args.luau_example), "--script-timeout-ms", "150000"],
+                                        capture_output=True, text=True, timeout=160, creationflags=subprocess.CREATE_NO_WINDOW)
+                assert script.returncode == 0 and not script.stderr, (script.stdout, script.stderr)
+                luau = json.loads((root / "path-luau.json").read_text())
+                assert python["linear_rgb"] == luau["linear_rgb"] == orthographic["linear_rgb"]
+                assert python["rgba8"] == luau["rgba8"]
+                evidence["checks"].append("real Python and Luau examples match linear pixels")
+            else:
+                evidence["luau"] = "not built; example not run"
             evidence["status"] = "passed"
         finally:
             if process.poll() is None:

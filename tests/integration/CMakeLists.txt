@@ -22,7 +22,7 @@ if(TARGET dk_render_pathtracing)
         endif()
     endif()
     add_executable(dk_pathtracing_probe PathTraceProbe.cpp)
-    target_link_libraries(dk_pathtracing_probe PRIVATE dk::render_pathtracing dk::graphics_shaders)
+    target_link_libraries(dk_pathtracing_probe PRIVATE dk::render_pathtracing dk::graphics_shaders dk::graphics_graph)
     target_include_directories(dk_pathtracing_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
     target_compile_definitions(dk_pathtracing_probe PRIVATE DK_PATH_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/pathtracing/shaders")
     dk_target_defaults(dk_pathtracing_probe)
@@ -946,6 +946,10 @@ endif()
 if(TARGET dk_render_services AND TARGET dk_render_pathtracing AND TARGET dk_run AND TARGET dk_ctl AND WIN32)
     find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
+        set(_dk_path_capture_script_args)
+        if(NOT DK_BUILD_SCRIPTING_LUAU)
+            list(APPEND _dk_path_capture_script_args --skip-luau)
+        endif()
         add_test(NAME dk.pathtracing.capture_gpu_required
             COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python" "PYTHONDONTWRITEBYTECODE=1"
                 "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/PathCaptureTest.py"
@@ -953,7 +957,7 @@ if(TARGET dk_render_services AND TARGET dk_render_pathtracing AND TARGET dk_run 
                 --fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
                 --python-example "${PROJECT_SOURCE_DIR}/examples/automation/pathtrace_capture.py"
                 --luau-example "${PROJECT_SOURCE_DIR}/examples/scripting/pathtrace-capture.luau"
-                --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+                --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>" ${_dk_path_capture_script_args})
         add_test(NAME dk.pathtracing.media_capture_gpu_required
             COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python" "PYTHONDONTWRITEBYTECODE=1"
                 "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/PathCaptureTest.py" --media
@@ -961,7 +965,7 @@ if(TARGET dk_render_services AND TARGET dk_render_pathtracing AND TARGET dk_run 
                 --fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
                 --python-example "${PROJECT_SOURCE_DIR}/examples/automation/pathtrace_capture.py"
                 --luau-example "${PROJECT_SOURCE_DIR}/examples/scripting/pathtrace-media-capture.luau"
-                --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+                --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>" ${_dk_path_capture_script_args})
         add_test(NAME dk.pathtracing.restir_capture_gpu_required
             COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python" "PYTHONDONTWRITEBYTECODE=1"
                 "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/RestirCaptureTest.py"
@@ -969,7 +973,7 @@ if(TARGET dk_render_services AND TARGET dk_render_pathtracing AND TARGET dk_run 
                 --fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
                 --python-example "${PROJECT_SOURCE_DIR}/examples/automation/pathtrace_capture.py"
                 --luau-example "${PROJECT_SOURCE_DIR}/examples/scripting/pathtrace-restir-capture.luau"
-                --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+                --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>" ${_dk_path_capture_script_args})
         set_tests_properties(dk.pathtracing.restir_capture_gpu_required PROPERTIES TIMEOUT 600 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
         set_tests_properties(dk.pathtracing.media_capture_gpu_required PROPERTIES TIMEOUT 480 RUN_SERIAL TRUE LABELS "gpu"
@@ -996,7 +1000,9 @@ if(TARGET dk_editor_app AND TARGET dk_render_pathtracing AND TARGET dk_ctl AND W
             "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk" "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/restir-worker" --restir --validation)
         add_test(NAME dk.editor.restir_desktop_gpu_validation COMMAND dk_editor_render_benchmark
             "${PROJECT_SOURCE_DIR}/projects/demo" "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/restir-desktop" --desktop-path --validation)
-        set_tests_properties(dk.editor.restir_desktop_gpu_validation PROPERTIES TIMEOUT 600 RUN_SERIAL TRUE LABELS "gpu"
+        add_test(NAME dk.editor.media_desktop_gpu_validation COMMAND dk_editor_render_benchmark
+            "${PROJECT_SOURCE_DIR}/projects/demo" "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/media-desktop" --desktop-media --validation)
+        set_tests_properties(dk.editor.media_desktop_gpu_validation dk.editor.restir_desktop_gpu_validation PROPERTIES TIMEOUT 600 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
         set_tests_properties(dk.editor.restir_worker_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
