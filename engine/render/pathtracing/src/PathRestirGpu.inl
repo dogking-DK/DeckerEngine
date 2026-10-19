@@ -1,6 +1,6 @@
 // Kept with the renderer's private scene/resource owners; no SDK types in this API.
 namespace {
-void validate_restir(const PathTraceSettings& path,const RestirDiSettings& r,std::uint64_t pixels,PathTraceSamples samples,bool fixed_work=false) {
+void validate_restir(const PathTraceSettings& path,const RestirDiSettings& r,std::uint64_t pixels,PathTraceSamples samples,bool fixed_work=false,bool medium=false) {
     if(r.version!=1 || r.initial_candidates<1 || r.initial_candidates>64 ||
         !r.max_candidate_evaluations || r.max_candidate_evaluations>(1ull<<24) || path.estimator!=PathTraceEstimator::mis)
         throw path_invalid("Invalid GPU initial RIS settings or estimator combination");
@@ -21,7 +21,7 @@ void validate_restir(const PathTraceSettings& path,const RestirDiSettings& r,std
             throw path_invalid("Invalid spatial RIS settings or missing progressive view");
     }
     if(pixels*samples.count*restir_evaluations(r)>r.max_candidate_evaluations ||
-        pixels*samples.count*(2ull*path.max_bounces+2)>path.max_rays ||
+        pixels*samples.count*(2ull*path.max_bounces+(medium ? 1 : 2))>path.max_rays ||
         (fixed_work && std::uint64_t(samples.count)*r.initial_candidates>PathTraceRenderer::restir_max_candidates_per_invocation))
         throw path_invalid("GPU initial RIS candidate or ray budget exceeded");
 }

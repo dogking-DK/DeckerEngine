@@ -33,6 +33,9 @@ struct RestirSpatialStatistics {
     std::uint64_t reused = 0, rejected = 0, support_corrected = 0, current_visibility_rays = 0;
     std::uint32_t max_candidates = 0, max_age = 0;
 };
+struct RestirMediumStatistics {
+    std::uint64_t prepared_surfaces=0, applied_surfaces=0; // Complete progressive epochs only.
+};
 struct PathTraceGpuImageInfo : PathTraceImageInfo {
     std::uint64_t geometry_fingerprint=0;
     std::optional<PathTraceGpuMediumInfo> medium; // Absent for the legacy surface integrator.
@@ -41,6 +44,7 @@ struct PathTraceGpuImageInfo : PathTraceImageInfo {
     std::optional<std::uint32_t> temporal_history_epoch; // History at this image's start, if any.
     RestirTemporalStatistics temporal_statistics;
     RestirSpatialStatistics spatial_statistics;
+    RestirMediumStatistics restir_medium_statistics;
     bool fixed_rays = false;
     std::uint32_t first_pixel = 0; // Counter origin for fixed-ray batches.
     // Hardware traversal counts are unavailable; statistics.triangle_tests stays zero.
@@ -150,6 +154,16 @@ public:
         const PathMediumSnapshot&,const RenderView&,const VolumePathSettings& = {},PathTraceSamples = {},std::stop_token = {}) const;
     [[nodiscard]] Result<void> configure_medium_view(graphics::SubmissionQueue&,std::uint64_t view_id,const PathTraceGpuScene&,
         const PathMediumSnapshot&,const RenderView&,const VolumePathSettings& = {},const PathTraceSchedule& = {});
+    // Model 4/sampler 2. Full RGB reservoirs are independent of hero/free-flight survival.
+    // Fixed work is initial RIS only; progressive views optionally reuse time/space.
+    [[nodiscard]] Result<PathTraceFrame> submit_restir_medium_rays(graphics::SubmissionQueue&,const PathTraceGpuScene&,
+        const PathMediumSnapshot&,std::span<const PathTraceRay>,const VolumePathSettings& = {},const RestirDiSettings& = {},
+        PathTraceSamples = {},std::uint32_t first_pixel=0,std::stop_token = {}) const;
+    [[nodiscard]] Result<PathTraceFrame> submit_restir_medium_view(graphics::SubmissionQueue&,const PathTraceGpuScene&,
+        const PathMediumSnapshot&,const RenderView&,const VolumePathSettings& = {},const RestirDiSettings& = {},
+        PathTraceSamples = {},std::stop_token = {}) const;
+    [[nodiscard]] Result<void> configure_restir_medium_view(graphics::SubmissionQueue&,std::uint64_t view_id,const PathTraceGpuScene&,
+        const PathMediumSnapshot&,const RenderView&,const VolumePathSettings& = {},const RestirDiSettings& = {},const PathTraceSchedule& = {});
     // Returns true only when a tile was submitted; repeated calls while pending are no-ops.
     [[nodiscard]] Result<bool> submit_batch(graphics::SubmissionQueue&, std::uint64_t view_id, std::stop_token = {});
     // Collects one tile without submitting more work. True only when a whole batch is published.

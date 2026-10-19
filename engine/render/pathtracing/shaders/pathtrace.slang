@@ -114,6 +114,11 @@ float3 directLight(PathPayload hit,float3 position,float3 normal,PathBsdf bsdf,f
     return evaluated.value*radiance*(cosine*(delta ? 1 : weight(pdf,evaluated.pdf))/pdf);
 }
 #endif
+#if DK_PATH_RESTIR
+float3 airDirection(float3 axis,float cosine,float azimuth);
+float3 airSunDirection(float u,float v);
+#include "path-restir-bridge.slang"
+#endif
 #include "path-air.slang"
 RayDesc primaryRay(uint2 coordinate,uint pixel,uint sample,out float3 originOffset) {
     RayDesc ray; originOffset=0;
@@ -134,9 +139,19 @@ RayDesc primaryRay(uint2 coordinate,uint pixel,uint sample,out float3 originOffs
     }
     return ray;
 }
-#if DK_PATH_RESTIR
-#include "path-restir-bridge.slang"
-#endif
+AirLocation primaryLocation(uint pixel,float3 offset) {
+    bool fixed=asuint(parameters[2]).w!=0;
+    float4 initial=fixed ? inputRays[pixel*6+2] : parameters[13];
+    AirLocation location; location.radial=normalize(initial.xyz); location.height=initial.w;
+    location.weather=(fixed ? inputRays[pixel*6+3] : parameters[26]).xy;
+    location.base=(fixed ? inputRays[pixel*6+4] : parameters[27]).xyz;
+    location.detail=(fixed ? inputRays[pixel*6+5] : parameters[28]).xyz;
+    if(!fixed && parameters[6].w!=0) {
+        location=airMove(location,offset);
+        if(asuint(parameters[12]).y!=0 && location.height<0) airError(4);
+    }
+    return location;
+}
 #if !DK_PATH_EMPTY
 float3 tracePath(RayDesc ray,uint pixel,uint sample,inout uint rays,out float4 firstHit,out float4 firstNormal,uint restirPixel=0) {
     uint4 counts=asuint(parameters[1]),flags=asuint(parameters[2]);
@@ -198,6 +213,19 @@ void runRestirPixel(uint2 coordinate) {
         float3 offset; RayDesc ray=primaryRay(coordinate,pixel,epoch,offset);
         float4 record=float4(-1,0,0,0),normal=0,position=0;
         RestirSample reservoir=emptyRestir();
+        if(asuint(parameters[12]).x!=0) {
+            uint rays=0; PathPayload hit=airNearest(ray,rays);
+            AirLocation location=primaryLocation(pixel,offset);
+            float3 segment=airSegment(location,ray.Direction,hit.found!=0 ? hit.distance : infinity);
+            AirVertex v=airEndpoint(ray,location,segment,hit);
+            if(v.ground || hit.found!=0) {
+                record=float4(v.ground ? segment.y : hit.distance,hit.barycentric,v.ground ? -1.0 : float(hit.index+1));
+                normal=float4(v.normal,1); position=float4(v.position,1);
+                if(asuint(parameters[1]).z!=0) {
+                    reservoir=initialRestir(hit,v.position,v.normal,v.bsdf,-ray.Direction,counter,epoch); temporalStat(14);
+                }
+            }
+        } else {
 #if !DK_PATH_EMPTY
         PathPayload hit={}; TraceRay(scene,RAY_FLAG_NONE,255,0,2,0,ray,hit);
         if(hit.found!=0) {
@@ -208,6 +236,7 @@ void runRestirPixel(uint2 coordinate) {
                 reservoir=initialRestir(hit,position.xyz,normal.xyz,bsdf,-ray.Direction,counter,epoch);
         }
 #endif
+        }
         if(!all(isfinite(record)) || !all(isfinite(normal)) || !all(isfinite(position)) || !all(isfinite(ray.Direction))) restirError();
         restirSurfaces[pixel*4]=record; restirSurfaces[pixel*4+1]=normal;
         restirSurfaces[pixel*4+2]=position; restirSurfaces[pixel*4+3]=float4(-ray.Direction,asfloat(epoch));
@@ -218,9 +247,13 @@ void runRestirPixel(uint2 coordinate) {
         float4 hit=float4(-1,0,0,0),n=0; float3 offset;
         RayDesc ray=primaryRay(coordinate,pixel,sample+epochOffset,offset);
         float3 value=parameters[3].xyz;
+        if(asuint(parameters[12]).x!=0)
+            value=traceAir(ray,primaryLocation(pixel,offset),counter,sample+epochOffset,a.rays,hit,n,pixel);
+        else {
 #if !DK_PATH_EMPTY
         value=tracePath(ray,counter,sample+epochOffset,a.rays,hit,n,pixel);
 #endif
+        }
         addSample(a,value,sample,hit,n);
     }
     finishAccumulation(a,pixel,localPixel);
@@ -245,17 +278,7 @@ void runPathPixel(uint2 coordinate) {
     for(uint sample=image.z;sample<image.z+image.w;++sample) {
         float4 hit=0,n=0; float3 value=0,originOffset; RayDesc ray=primaryRay(coordinate,pixel,sample,originOffset);
         if(asuint(parameters[12]).x!=0) {
-            float4 initial=asuint(parameters[2]).w!=0 ? inputRays[pixel*6+2] : parameters[13];
-            AirLocation location; location.radial=normalize(initial.xyz); location.height=initial.w;
-            bool fixed=asuint(parameters[2]).w!=0;
-            location.weather=(fixed ? inputRays[pixel*6+3] : parameters[26]).xy;
-            location.base=(fixed ? inputRays[pixel*6+4] : parameters[27]).xyz;
-            location.detail=(fixed ? inputRays[pixel*6+5] : parameters[28]).xyz;
-            if(!fixed && parameters[6].w!=0) {
-                location=airMove(location,originOffset);
-                if(asuint(parameters[12]).y!=0 && location.height<0) airError(4);
-            }
-            value=traceAir(ray,location,pixel+asuint(parameters[10]).x,sample,a.rays,hit,n);
+            value=traceAir(ray,primaryLocation(pixel,originOffset),pixel+asuint(parameters[10]).x,sample,a.rays,hit,n);
         }
 #if !DK_PATH_EMPTY
         else value=tracePath(ray,pixel+asuint(parameters[10]).x,sample,a.rays,hit,n);

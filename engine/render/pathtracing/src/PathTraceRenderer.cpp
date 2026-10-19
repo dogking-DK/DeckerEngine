@@ -306,7 +306,7 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     }
     if(cloud) {
         const auto id=take(g.declare_buffer("immutable cloud fields",cloud->data.description(),graph::Lifetime::external,true));
-        uses.push_back(use(id,stage,vk::AccessFlagBits2::eShaderRead)); imports.push_back({7,&cloud->data});
+        uses.push_back(use(id,stage,vk::AccessFlagBits2::eShaderRead)); imports.push_back({7+restir_buffers,&cloud->data});
     }
     add(g,empty ? "empty environment" : "surface path trace",uses);
     Vector<graph::Use> copy(0,memory::Allocator<graph::Use>{state.heap});
@@ -719,7 +719,7 @@ Result<void> PathTraceRenderer::configure_medium_view(SubmissionQueue& queue,std
     auto* slot=view_slot(*state_,id);
     if(slot) {
         const auto& previous=**slot; const auto& a=previous.view.description();
-        if(previous.medium && previous.scene==scene.state_ && previous.medium->environment()==medium.environment() &&
+        if(previous.medium && !previous.restir && previous.scene==scene.state_ && previous.medium->environment()==medium.environment() &&
             previous.medium->settings()==medium.settings() && previous.medium->field_hash()==medium.field_hash() && a.width==d.width && a.height==d.height &&
             a.camera_world.matrix()==d.camera_world.matrix() && a.projection==d.projection && same_integrator(previous.settings,common) &&
             previous.schedule.session==schedule.session && previous.schedule.gesture==schedule.gesture) {
@@ -755,7 +755,7 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
         batch->sampling_history=view->sampling_history;
         batch->count=std::min(view->schedule.batch_spp,view->schedule.target_spp-completed); batch->stop=stop;
         batch->reverse_tiles=view->schedule.reverse_tiles;
-        auto pixels=view->settings.max_rays/((view->restir ? 1 : batch->count)*(2ull*view->settings.max_bounces+(view->restir ? 2 : 1)));
+        auto pixels=view->settings.max_rays/((view->restir ? 1 : batch->count)*(2ull*view->settings.max_bounces+(view->restir && !view->medium ? 2 : 1)));
         if(view->restir) pixels=std::min(pixels,view->restir->max_candidate_evaluations/restir_evaluations(*view->restir));
         batch->edge=std::min(view->schedule.tile_edge,std::uint32_t(std::sqrt(double(pixels))));
         const auto& d=view->view.description(); batch->columns=(d.width+batch->edge-1)/batch->edge; batch->rows=(d.height+batch->edge-1)/batch->edge;
@@ -768,6 +768,7 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
         if(batch->history) {
             frame.info.temporal_statistics=batch->history->info.temporal_statistics;
             frame.info.spatial_statistics=batch->history->info.spatial_statistics;
+            frame.info.restir_medium_statistics=batch->history->info.restir_medium_statistics;
             frame.info.temporal_history_epoch=batch->history->info.temporal_history_epoch;
         } else if(batch->sampling_history) frame.info.temporal_history_epoch=view->epoch_origin-1;
         if(view->medium) frame.info.medium=PathTraceGpuMediumInfo{view->medium->environment(),view->medium->settings(),view->medium_settings,view->medium->field_hash()};
@@ -871,6 +872,8 @@ Result<bool> PathTraceRenderer::poll(SubmissionQueue& queue,std::stop_token stop
     spatial.reused+=diagnostic[8]; spatial.rejected+=diagnostic[9]; spatial.support_corrected+=diagnostic[10];
     spatial.max_candidates=std::max(spatial.max_candidates,diagnostic[11]); spatial.max_age=std::max(spatial.max_age,diagnostic[12]);
     spatial.current_visibility_rays+=diagnostic[13];
+    auto& media=batch->candidate->info.restir_medium_statistics;
+    media.prepared_surfaces+=diagnostic[14]; media.applied_surfaces+=diagnostic[15];
     ++batch->next_tile;
     if(batch->next_tile!=batch->columns*batch->rows) return false;
     if(batch->candidate->info.restir) {
@@ -1012,7 +1015,7 @@ Result<std::optional<PathTraceGpuImage>> PathTraceFrame::read(SubmissionQueue& q
         for (const auto& block:{pixel.mean,pixel.second,pixel.hit,pixel.normal}) for (const auto value:block)
             if (!std::isfinite(value)) return std::unexpected(Error{ErrorCode::internal_error,"Nonfinite GPU path result"});
         const Vec3d color{pixel.mean[0],pixel.mean[1],pixel.mean[2]},moment{pixel.second[0],pixel.second[1],pixel.second[2]};
-        const double rays=pixel.mean[3],bound=double(image->info.samples.count)*(2*image->info.settings.max_bounces+(image->info.restir ? 2 : 1));
+        const double rays=pixel.mean[3],bound=double(image->info.samples.count)*(2*image->info.settings.max_bounces+(image->info.restir && !image->info.medium ? 2 : 1));
         if ((color.array()<0).any() || (moment.array()<0).any() || pixel.second[3]!=0 || rays<0 || rays>bound || rays!=std::floor(rays))
             return std::unexpected(Error{ErrorCode::internal_error,"Invalid GPU path HDR/statistics"});
         image->info.statistics.rays+=std::uint64_t(rays); image->colors.push_back(color); image->moments.push_back(moment);
@@ -1057,4 +1060,5 @@ Result<void> PathTraceRenderer::configure_air_view(graphics::SubmissionQueue& q,
     return configure_medium_view(q,id,scene,m,view,s,schedule);
 }
 #include "PathRestirGpu.inl"
+#include "PathRestirMediumGpu.inl"
 } // namespace dk::render

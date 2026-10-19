@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-19T15:31:00+08:00"
+updated_at: "2026-10-19T16:35:55+08:00"
 status: accepted
 ---
 
@@ -77,7 +77,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M15 体积云 | 可复现云场、光照/合成、时域重建、云影及质量性能验收 | M14；自动化复用M9/M13原则 | 已完成质量/性能基线；非零云GPU与在途峰值候选未达 |
 | M16 渐进式路径追踪 | CPU参考、Vulkan RT表面积分、每视图累积、编辑器与固定spp截图 | M5/M6/M7；集成需M8/M9，观测复用M11 | 已完成质量与基线交付；CPU参考、RT/GGX、渐进视口和固定capture，见[0120](development/0120-pathtracing-delivery.md)；实时性能候选未达 |
 | M18 相机模式与投影 | Orbit/Fly/Walk、可调镜头/移速、分层正交与截图一致性 | M8/M12；路径与环境需M14–M17 | 已完成 M18.1–5；Fly/Walk、基础/路径/光栅环境正交及捕获，见[0133](development/0133-raster-orthographic-environment.md) |
-| M19 ReSTIR 直接光重采样 | 首表面 DI、时空复用、Scene media 适配与 Editor/capture、固定质量测量 | M16–M18 | M19.1–5 已完成，其余未开始；见[设计](design/render-restir.md) |
+| M19 ReSTIR 直接光重采样 | 首表面 DI、时空复用、Scene media 适配与 Editor/capture、固定质量测量 | M16–M18 | M19.1–6 已完成，其余未开始；见[设计](design/render-restir.md) |
 
 默认执行表中顺序。M5 在 Foundation 补充完成后具备独立探索条件，
 M9 的 Luau 命令绑定在 M3 后可提前做；若调整次序，仍需满足对应集成验收依赖。
@@ -783,7 +783,7 @@ DLSS 单独设计重建输入/能力，不改变本阶段原始线性质量验�
 | M19.3 | 时间 reservoir、静态表面重投影、图像与采样历史分离 | M19.2 | 相机平移旋转/停动、disocclusion、GGX 视角变化；投影/尺寸/物理输入变化清空，曝光保留；支持校正/历史界限与长链均值、双视图及失败发布通过 | 已完成：21 GPU 与 20 CPU 定向测试通过，见[0136](development/0136-restir-temporal.md) |
 | M19.4 | 空间复用、独立输入/输出平面、来源支持归一化与可见性校正 | M19.3 | CPU 空间参考与 GPU 对照；轮廓/薄墙/法线/材质突变无系统性漏光或变暗；邻接/遍历不受 tile 顺序影响，校正射线和峰值额度有界 | 已完成：24 GPU 与 22 CPU 定向测试通过，见[0137](development/0137-restir-spatial.md) |
 | M19.5 | Scene media 首表面 DI 的 CPU 条件采样参考 | M19.4、M17.2 | hero 通道/自由程/阴影随机流与 reservoir 支持一致；真空、纯吸收/彩色消光、有限太阳/行星/云阴影及先体积散射分支均值通过；不复用体积散射点 | 已完成：10 个新用例与 36 个直接回归用例通过，完整 RGB 条件推导、云/行星/散射及图像失败保护见[0138](development/0138-restir-volume-reference.md) |
-| M19.6 | GPU 空气/云首表面 DI、当前透射评估与介质预算/失效 | M19.5、M17.4 | 独立 CPU/常规体积路径对照，透视/正交、多次散射与遮蔽成立；固定/变化风时间、场/AS 复用、tracking 超限及取消不发布候选 | 未开始 |
+| M19.6 | GPU 空气/云首表面 DI、当前透射评估与介质预算/失效 | M19.5、M17.4 | 独立 CPU/常规体积路径对照，透视/正交、多次散射与遮蔽成立；固定/变化风时间、场/AS 复用、tracking 超限及取消不发布候选 | 已完成：19 个 GPU 与 10 个 CPU 定向用例通过；介质初始/时空 DI、当前透射、地面/网格支持与失效/额度证据见[0139](development/0139-restir-gpu-media.md) |
 | M19.7 | Editor/worker 算法选项、诊断与独立固定捕获、版本化来源和命令文档 | M19.4、M19.6、M17.5/18.4 | 旧请求兼容；新捕获从空历史可重放、来源完整且与 GUI 同模式一致；非法组合拒绝、旧文件保护、后台窗口/取消/关闭通过；不扩展光栅 render.sequence | 未开始 |
 | M19.8 | 质量/性能、相机运动与资源验收，默认策略结论 | M19.7 | 独立历史链均值/长链收敛；单灯/多灯/Sponza/天空/厚云等时间与等误差、三轮计时/峰值资源/热交互报告；收益未达明确记录，不能用降质关闭指标 | 未开始 |
 
@@ -859,7 +859,8 @@ M19.1 CPU reservoir/RIS 与首表面光能契约已完成，48 个唯一定向�
 M19.2 GPU 初始 RIS、RTXDI v3.1.0 shader 接入与整批调度/额度已完成，17 GPU 与 18 CPU 定向测试通过，见[0135](development/0135-restir-gpu-initial.md)。
 M19.4 空间复用、冻结输入/独立输出、来源支持分母、当前可见性和有界工作/额度完成，24 GPU 与 22 CPU 定向测试通过，见[0137](development/0137-restir-spatial.md)。
 M19.5 CPU Scene media 首表面条件 RIS、完整 RGB/hero/存活独立性、有限太阳/云/行星与散射光能分工完成，46 个唯一定向 CPU 用例通过，见[0138](development/0138-restir-volume-reference.md)。
-GPU 介质 RIS、Editor/capture 切换和 DLSS 尚未开始；下一阶段为 M19.6 GPU 空气/云首表面 DI 与当前透射评估。
+M19.6 GPU 空气/云首表面 DI 与当前透射评估完成，19 个 GPU 与 10 个 CPU 定向用例通过，见[0139](development/0139-restir-gpu-media.md)。
+Editor/capture 的 ReSTIR 切换与 DLSS 尚未开始；下一阶段为 M19.7 Editor/worker 算法选项、诊断和固定捕获来源。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 

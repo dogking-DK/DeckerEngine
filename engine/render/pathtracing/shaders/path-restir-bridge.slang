@@ -14,15 +14,19 @@ float restirRandom(uint pixel,uint sample,uint candidate,uint purpose) {
     return min((float(h>>8)+.5)/16777216.0,asfloat(0x3f7fffff));
 }
 void restirError() { uint ignored; InterlockedOr(status[0],1,ignored); }
-#if !DK_PATH_EMPTY
 float3 restirEvaluate(uint light,float2 uv,float3 position,float3 normal,PathBsdf bsdf,float3 wo,
     out float3 wi,out float3 point,out float pdf) {
-    float classes=float((largest(parameters[3].xyz)>0 ? 1 : 0)+(parameters[3].w>0 ? 1 : 0));
+    bool medium=asuint(parameters[12]).x!=0;
+    float classes=float((largest(parameters[3].xyz)>0 ? 1 : 0)+(parameters[3].w>0 ? 1 : 0)+(medium && asuint(parameters[2]).y!=0 ? 1 : 0));
     float3 emission; float geometry=1; point=0; wi=0; pdf=0;
     if(light==asuint(parameters[2]).z) {
         float z=1-2*uv.x,r=sqrt(max(0.0,1-z*z)),phi=2*pi*uv.y;
-        wi=float3(r*cos(phi),r*sin(phi),z); emission=parameters[3].xyz; pdf=1/(classes*4*pi);
+        wi=medium ? airDirection(float3(0,1,0),z,uv.y) : float3(r*cos(phi),r*sin(phi),z);
+        emission=parameters[3].xyz; pdf=1/(classes*4*pi);
+    } else if(medium && light==asuint(parameters[2]).z+1) {
+        wi=airSunDirection(uv.x,uv.y); emission=parameters[4].xyz; pdf=parameters[21].y/classes;
     } else {
+#if !DK_PATH_EMPTY
         float4 a=triangles[light*9],b=triangles[light*9+1],c=triangles[light*9+2],n=triangles[light*9+3];
         float root=sqrt(uv.x); point=a.xyz*(1-root)+b.xyz*(root*(1-uv.y))+c.xyz*(root*uv.y);
         float3 delta=point-position; float d2=dot(delta,delta);
@@ -30,21 +34,33 @@ float3 restirEvaluate(uint light,float2 uv,float3 position,float3 normal,PathBsd
         if(d2==0) return 0;
         wi=delta/sqrt(d2); float cosine=-dot(normalize(n.xyz),wi); if(n.w!=0) cosine=abs(cosine);
         geometry=max(0.0,cosine)/d2; emission=triangles[light*9+5].xyz;
+#else
+        restirError(); return 0;
+#endif
     }
     return evalBsdf(bsdf,normal,wo,wi).value*emission*(max(0.0,dot(normal,wi))*geometry);
 }
 RestirSample initialRestir(PathPayload hit,float3 position,float3 normal,PathBsdf bsdf,float3 wo,uint pixel,uint sample) {
     RestirSample chosen=emptyRestir();
     bool environment=largest(parameters[3].xyz)>0,area=parameters[3].w>0;
-    if(!environment && !area) return chosen;
+    bool sun=asuint(parameters[12]).x!=0 && asuint(parameters[2]).y!=0;
+    uint classes=(environment ? 1u : 0u)+(sun ? 1u : 0u)+(area ? 1u : 0u);
+    if(classes==0) return chosen;
     RTXDI_DIReservoir reservoir=RTXDI_EmptyDIReservoir();
     uint count=asuint(parameters[32]).x,triCount=asuint(parameters[2]).z;
     for(uint i=0;i<count;++i) {
         uint light=triCount;
-        if(!environment || restirRandom(pixel,sample,i,0)>=1.0/(1+(area ? 1 : 0))) {
+        int selected=int(restirRandom(pixel,sample,i,0)*float(classes));
+        if(environment && selected--==0) light=triCount;
+        else if(sun && selected--==0) light=triCount+1;
+        else {
+#if !DK_PATH_EMPTY
             float target=restirRandom(pixel,sample,i,1)*parameters[3].w; uint lo=0,hi=triCount;
             while(lo<hi) { uint mid=(lo+hi)/2; if(target<triangles[mid*9+2].w) hi=mid; else lo=mid+1; }
             if(lo==triCount) { restirError(); return chosen; } light=lo;
+#else
+            restirError(); return chosen;
+#endif
         }
         float2 uv=float2(restirRandom(pixel,sample,i,2),restirRandom(pixel,sample,i,3));
         float3 wi,point; float pdf;
@@ -61,6 +77,7 @@ RestirSample initialRestir(PathPayload hit,float3 position,float3 normal,PathBsd
     if(!isfinite(chosen.W) || chosen.W<0 || (chosen.target>0 && chosen.W==0)) restirError();
     return chosen;
 }
+#if !DK_PATH_EMPTY
 float3 shadeRestir(RestirSample s,PathPayload hit,float3 position,float3 normal,PathBsdf bsdf,float3 wo,inout uint rays) {
     float3 value=0;
     if(s.light!=0xffffffffu) {
@@ -110,11 +127,17 @@ bool temporalReceiver(uint pixel,out uint previousPixel) {
     if(asuint(previousSurfaces[previousPixel*4+3].w)!=asuint(parameters[34]).w) { restirError(); return false; }
     return true;
 }
+PathBsdf restirMaterial(float4 hit) {
+    PathBsdf result; result.color=parameters[19].xyz; result.metallic=0; result.roughness=1; result.ggx=false;
 #if !DK_PATH_EMPTY
+    if(hit.w>0) result=materialAt(uint(hit.w)-1,hit.yz);
+#endif
+    return result;
+}
 float temporalTarget(RestirSample s,float4 hit,float3 position,float3 normal,float3 wo) {
-    if(s.light==0xffffffffu) return 0;
+    if(s.light==0xffffffffu || hit.w==0) return 0;
     float3 wi,point; float pdf;
-    float3 value=restirEvaluate(s.light,s.uv,position,normal,materialAt(uint(hit.w)-1,hit.yz),wo,wi,point,pdf);
+    float3 value=restirEvaluate(s.light,s.uv,position,normal,restirMaterial(hit),wo,wi,point,pdf);
     float result=dot(value,float3(.2126,.7152,.0722));
     if(!isfinite(result) || result<0) restirError();
     return result;
@@ -125,7 +148,6 @@ RTXDI_DIReservoir sdkReservoir(RestirSample s,float M) {
     if(s.light!=0xffffffffu) r.lightData=s.light|RTXDI_DIReservoir_LightValidBit;
     return r;
 }
-#endif
 void temporalRestir(uint pixel,uint epoch) {
     RestirSample fresh=loadRestir(pixel,epoch),result=fresh;
     uint oldPixel;
@@ -134,7 +156,6 @@ void temporalRestir(uint pixel,uint epoch) {
         if(asuint(b.z)!=asuint(parameters[34]).w) restirError();
         if(asuint(b.w)>=asuint(parameters[33]).w) temporalStat(4);
         else {
-#if !DK_PATH_EMPTY
             RestirSample old; old.light=asuint(a.x); old.uv=a.yz; old.W=a.w; old.target=b.x; old.M=min(b.y,float(asuint(parameters[34]).z)); old.age=asuint(b.w);
             float4 hit=restirSurfaces[pixel*4];
             float3 position=restirSurfaces[pixel*4+2].xyz,normal=restirSurfaces[pixel*4+1].xyz,wo=restirSurfaces[pixel*4+3].xyz;
@@ -149,7 +170,6 @@ void temporalRestir(uint pixel,uint epoch) {
             result.age=old.age+1; // Ancestry of ALL sources, never the age of the selected sample.
             if(combined.weightSum==0) result.light=0xffffffffu;
             temporalStat(2); if(support==0 && old.M>0) temporalStat(7);
-#endif
         }
     } else temporalStat(3);
     if(!isfinite(result.W) || result.W<0 || !isfinite(result.M) || (result.target>0 && result.W==0)) restirError();
@@ -164,7 +184,6 @@ RestirSample loadSpatial(uint pixel,uint epoch) {
 }
 void spatialRestir(uint pixel,uint epoch) {
     RestirSample own=loadSpatial(pixel,epoch),result=own;
-#if !DK_PATH_EMPTY
     float4 hit=restirSurfaces[pixel*4];
     if(hit.w!=0) {
         float3 position=restirSurfaces[pixel*4+2].xyz,normal=restirSurfaces[pixel*4+1].xyz,wo=restirSurfaces[pixel*4+3].xyz;
@@ -204,7 +223,6 @@ void spatialRestir(uint pixel,uint epoch) {
         if(result.W==0) result.light=0xffffffffu;
         if(support<combined.M && result.W>0) temporalStat(10);
     }
-#endif
     if(!isfinite(result.W) || result.W<0 || !isfinite(result.M) || (result.target>0 && result.W==0)) restirError();
     uint ignored; InterlockedMax(status[11],uint(result.M),ignored); InterlockedMax(status[12],result.age,ignored);
     storeRestir(pixel,result,epoch);

@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-19T15:29:00+08:00"
+updated_at: "2026-10-19T16:00:53+08:00"
 status: accepted
 ---
 
@@ -18,7 +18,7 @@ CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、
 
 ## M19 ReSTIR 采样扩展
 
-采用显式可选的 ReSTIR DI，表面 GPU 路径和 Scene media 的 CPU 首表面参考使用独立入口；
+采用显式可选的 ReSTIR DI，表面 GPU 路径和 Scene media 的 CPU/GPU 首表面采样使用独立入口；
 独立的[ReSTIR 设计](render-restir.md)负责估计器、光能分工、完整 epoch、时空历史与介质接入。
 M19.1 在 CPU reference target 中增加独立 `estimate_restir_reference`：首表面初始 RIS、独立 delta 太阳、
 后续普通 MIS/RR，以及支持域校正的 reservoir 合并数学；旧入口和 model=3/sampler=1 保持原行为。
@@ -33,6 +33,9 @@ M19.4 增加独立可选 spatial 配置：冻结输入、独立输出、完整�
 M19.5 在 `VolumePathReference.hpp` 增加独立 CPU `estimate/render_restir_volume_reference`，
 先生成完整 RGB 首表面 reservoir，再进行 hero/自由程采样；无真实事件到达首表面时应用，先散射分支沿原体积路径。
 有限太阳/环境/面积灯的域分离、当前阴影透射及散射后光能分工见 [M19.5 契约](render-restir.md#m195-cpu-scene-media-条件采样契约)。
+M19.6 增加 GPU `submit_restir_medium_rays/view` 和 `configure_restir_medium_view`，支持空气/云和地面/网格。
+完整 RGB 候选先于 hero/存活产生，当前着色再求阴影透射；渐进可选时空复用，固定入口仅初始 RIS。
+风时间/介质变化清空历史，不变 AS/云场仍可复用；tracking/额度失败保留完整 owner，见 [M19.6 契约](render-restir.md#m196-gpu-scene-media-实施契约)。
 沿用 model 4/sampler 2，CPU 介质参考拒绝 temporal/spatial，图像来源记录配置与候选/存活/阴影统计。
 旧 MIS 和介质入口不变；目前没有 ReSTIR 的 Editor/capture 新模式。
 固定射线上传统一将合法的 -0 TMin 转成 +0，避免硬件遍历漏命中；其他裁剪语义不变，三个入口均有回归。

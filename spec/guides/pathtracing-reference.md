@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-14T10:18:00+08:00"
-updated_at: "2026-10-19T15:29:00+08:00"
+updated_at: "2026-10-19T16:00:53+08:00"
 ---
 
 # CPU路径追踪参考
@@ -111,7 +111,7 @@ tracking可显式提高到请求2^28、每路径2^20。消光上界按已知无�
 `render_restir_volume_reference(heap, scene, medium, view, settings, restir, samples, stop)`
 使用相同冻结场景/介质，返回固定射线 `RestirVolumeEstimate` 或拥有型 `VolumePathImage`。
 `settings` 是上述 `VolumePathSettings`；`restir` 为 `RestirDiSettings`，version=1、默认 8 个候选，合法 1..64。
-仅支持初始 RIS，必须用 MIS，temporal/spatial 组合明确拒绝；GPU 介质接入见 [Roadmap](../roadmap.md#m19restir-直接光重采样)。
+仅支持初始 RIS，必须用 MIS，temporal/spatial 组合明确拒绝；GPU 独立介质入口和渐进复用见 [GPU 指南](pathtracing-gpu.md#scene-media-首表面-di)。
 
 候选使用完整 RGB 未遮挡目标，在 hero 通道和 analog 自由程之前生成。
 无真实体积事件到达几何首表面时，RIS 替换该处直接光；先散射的路径和后续反弹沿用普通体积 MIS/RR。

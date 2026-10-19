@@ -1,16 +1,16 @@
 ---
 module: render-restir
 created_at: "2026-10-19T12:50:00+08:00"
-updated_at: "2026-10-19T15:29:00+08:00"
+updated_at: "2026-10-19T16:35:55+08:00"
 status: accepted
 ---
 
 # ReSTIR 光照重采样设计
 
 本文件是[路径追踪设计](render-pathtracing.md)的采样扩展设计。
-CPU 数学、GPU 初始 RIS、时间与空间复用的现行契约见 M19.1–M19.4，CPU 介质条件采样见 M19.5；GPU 介质与消费者按后续阶段推进；
+CPU 数学、GPU 初始 RIS、时间与空间复用的现行契约见 M19.1–M19.4，CPU 介质条件采样见 M19.5，GPU 空气/云接入见 M19.6；
 状态、依赖和下一项统一见 [Roadmap M19](../roadmap.md#m19restir-直接光重采样)。
-下文区分现行 CPU/GPU 采样契约和后续 GPU 介质/消费者计划，不把独立接口视为编辑器已有能力。
+下文区分现行 CPU/GPU 采样契约和后续消费者计划，不把独立接口视为编辑器已有能力。
 
 ## 目标与范围
 
@@ -351,6 +351,43 @@ M19.5 若发现条件概率/支持域无法满足，先修订推导与范围，�
 
 ## 接口与消费者计划
 
+### M19.6 GPU Scene media 实施契约
+
+独立 `submit_restir_medium_rays/view` 和 `configure_restir_medium_view` 消费 `PathMediumSnapshot`、
+`VolumePathSettings` 与 `RestirDiSettings`，支持空气/云/零介质；不改变普通 medium/air 或 surface-only 入口。
+固定射线/无历史图像只允许初始 RIS；完整渐进视图可选时间和空间，沿用完整 epoch、支持分母与祖先 age。
+CPU 继续作为独立无 SDK oracle，RTXDI 固定版本和 PRIVATE shader 适配边界不变。
+
+每个 epoch 在 hero、自由程和阴影前生成几何接收面及完整 RGB 未遮挡 reservoir；允许直接光估计的首表面均准备，
+真实散射/吸收仅决定本次是否着色，不决定采样历史是否存在。历史目标与当前/过去 hero 和 analog 存活独立，
+因此 M19.5 条件期望与 M19.3/4 完整支持合并可组合；不将随机透射率或遮挡写入历史权重。
+首次网格查询复用，行星用独立负数身份（record.w=-1），mesh 用 primitive+1，miss 为零；
+支持查询从对应 mesh 材质或地面 Lambert 构造 BSDF，不用 ground 索引访问三角形。
+有限太阳为 triangle_count+1 标签，环境为 triangle_count，面积灯为实际索引；保持原表面模式的 delta 太阳分工。
+空几何 compute 管线也支持地面、云和复用，保留相同绑定和资源预算。
+
+最终路径仅在无真实事件到达首表面时消费 reservoir，独立阴影 stream 11 重新评估当前 mesh/mask、
+行星和空气/云 ratio tracking；首表面延伸发生真实散射时解除 emission 抑制，其他路径沿原体积 MIS/RR。
+时间/空间 pass 不做 tracking。逐路径和每次 shade dispatch 的 tracking 限额沿现有 VolumePathSettings，
+超限/取消/迟到任意阶段均丢弃整批候选，最后完整图像/采样历史不变。
+诊断沿 64-byte status，14/15 分别记录准备和实际应用的首表面数，仅渐进已完成图像累计发布；
+现有 spatial 当前阴影计数记录选中样本真实查询，不计可选表面 delta。
+
+保持 672-byte 参数、64-byte surface、32-byte reservoir、128-byte 累积图和原 ping-pong/空间平面额度。
+介质每条路径射线界为 `2*bounces+1`（无独立 delta 阴影），候选预检含复用评估，
+无历史单 invocation 仍限制 spp*I<=2^18。云场缓冲同时计入共享额度，Graph 单独声明 cloud 和 RIS 平面，
+不能让两者的导入编号重叠。批次参数冻结，预算/暂停/曝光/遍历变化只影响后续批次。
+
+同一视图相机姿态变化清空图像，可保留静态匹配的采样历史；介质环境、参数、时间/场 hash、
+几何/材质/光源、投影/尺寸、seed/采样配置与 session/gesture 变化清空两种历史。
+切回普通 medium 同样清除 RIS 状态，不能因物理参数相同误保留算法；曝光/暂停/预算不改变积分身份。
+风时间/照明变化仍可复用不变 AS 和云场资源，场内容变化按既有 key/hash 更换；配置失败不替换旧视图。
+
+定向验收：8 seeds 的 CPU RIS/普通体积和解析/收敛积分对照；零介质、彩色消光、太阳/面积/环境、
+地面/mesh、先散射与延伸散射、多次散射/RR/云阴影、固定与变化风时间、mask/材质；
+时间/空间单开及联合的均值/支持，透视/正交、tile/reverse/batch 重放、双视图/失效/资源复用，
+tracking/候选/内存额度和阶段取消不发布失败候选。GPU required + validation/sync；不包含 Editor/capture 或 DLSS。
+
 ### M19.5 CPU Scene media 条件采样契约
 
 `VolumePathReference.hpp` 增加独立 `estimate_restir_volume_reference` / `render_restir_volume_reference`，
@@ -468,3 +505,4 @@ M19 验收后，再依据直接/间接/介质噪声占比决定下一步采用 R
 - [0136 时间 reservoir 与采样历史](../development/0136-restir-temporal.md)。
 - [0137 空间 reservoir 与支持校正](../development/0137-restir-spatial.md)。
 - [0138 Scene media 首表面条件采样](../development/0138-restir-volume-reference.md)。
+- [0139 GPU Scene media 首表面 DI](../development/0139-restir-gpu-media.md)。

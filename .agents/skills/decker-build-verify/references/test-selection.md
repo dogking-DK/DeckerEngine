@@ -79,6 +79,7 @@
 | ReSTIR CPU reservoir/RIS、支持校正合并数学、首表面光能与状态 | dk_pathtracing_reference_tests | `^dk\.pathtracing\.RESTIR `（CPU-only；不表示 GPU/时空/RTXDI 已接入） |
 | ReSTIR CPU Scene media 首表面条件 RIS、hero/存活/阴影、云/行星/有限太阳与失败保护 | dk_pathtracing_reference_tests | `^dk\.pathtracing\.RESTIR volume `（CPU-only 初始 RIS，无介质时空会话） |
 | ReSTIR CPU 单灯/100灯/1000灯基准入口与工作量 | dk_restir_reference_benchmark | `^dk\.pathtracing\.restir_reference_benchmark_cpu$`；正式基线用 `--samples 1024 --output <json>`，不作为 GPU 性能结论 |
+| ReSTIR GPU Scene media 首表面 DI、当前空气/云透射、时空支持、调度/风时间/场与 AS、tracking/取消/额度保护 | dk_pathtracing_probe | `^dk\.pathtracing\.restir_medium_.*_gpu_required$`（required RT/validation/sync；CPU oracle 用 `^dk\.pathtracing\.RESTIR volume `） |
 | ReSTIR GPU 初始 RIS/RTXDI、CPU 数值、材质与光能、两阶段 epoch/tile、失败与额度 | dk_pathtracing_probe | `^dk\.pathtracing\.restir_.*_gpu_required$`（required RT/validation/sync；CPU-only 不下载 RTXDI） |
 | ReSTIR 时间复用、独立链均值/收敛、GGX/支持校正、重投影/重置与阶段失败/额度 | dk_pathtracing_probe | `^dk\.pathtracing\.restir_temporal_.*_gpu_required$`（required GPU；CPU 递归数学仍用 `^dk\.pathtracing\.RESTIR `） |
 | ReSTIR 空间复用、CPU 空间参考、支持/薄墙/法线/材质边界、时空链均值、独立平面与额度/失败 | dk_pathtracing_probe | `^dk\.pathtracing\.restir_spatial_.*_gpu_required$`；CPU 空间参考/相关来源枚举使用 `dk_pathtracing_reference_tests` / `^dk\.pathtracing\.RESTIR ` |

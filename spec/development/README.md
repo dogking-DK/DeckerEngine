@@ -140,5 +140,6 @@
 | 0136 | [M19.3 时间 reservoir 与采样历史](0136-restir-temporal.md) | render-restir、render-pathtracing | completed |
 | 0137 | [M19.4 空间 reservoir 与支持校正](0137-restir-spatial.md) | render-restir、render-pathtracing | completed |
 | 0138 | [M19.5 Scene media 首表面 RIS 条件参考](0138-restir-volume-reference.md) | render-restir、render-pathtracing | completed |
+| 0139 | [M19.6 GPU Scene media 首表面 DI](0139-restir-gpu-media.md) | render-restir、render-pathtracing | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

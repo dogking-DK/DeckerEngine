@@ -301,6 +301,8 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
 #include "PathRestirCases.hpp"
 #include "PathTemporalCases.hpp"
 #include "PathSpatialCases.hpp"
+#include "PathRestirMediumCases.hpp"
+#include "PathRestirMediumSupportCases.hpp"
 int main(int argc,char** argv) {
     try {
         require(argc==2,"expected analytic/statistics/images/lifetime case");
@@ -311,14 +313,23 @@ int main(int argc,char** argv) {
             memory::ThreadContext context{memory.system,memory.heap}; memory::ExecutionScope scope{context,memory.heap};
             DeviceOptions options; options.validation=ValidationMode::required; options.ray_tracing=RayTracingMode::required;
             const std::string_view requested=argv[1];
-            if((requested.starts_with("texture_") && requested!="texture_disabled") || requested=="ggx_lifetime" || requested=="air_resources" || requested=="cloud_surface" || requested=="restir_textures" || requested=="restir_temporal_schedule" || requested=="restir_spatial_schedule") options.sampled_image_indexing=SampledImageIndexingMode::required;
+            if((requested.starts_with("texture_") && requested!="texture_disabled") || requested=="ggx_lifetime" || requested=="air_resources" || requested=="cloud_surface" || requested=="restir_textures" || requested=="restir_temporal_schedule" || requested=="restir_spatial_schedule" || requested=="restir_medium_lights" || requested=="restir_medium_schedule") options.sampled_image_indexing=SampledImageIndexingMode::required;
             options.diagnostic_sink=diagnostic; options.diagnostic_user_data=&diagnostics; auto device=take(Device::create(memory.heap,options)); auto view=take(device.share_queue(0));
             std::printf("GPU=%s validation=%d case=%s\n",device.adapter().properties.deviceName.data(),device.validation_enabled(),argv[1]);
             native_submit=reinterpret_cast<PFN_vkQueueSubmit2>(device.device_proc("vkQueueSubmit2")); native_wait=reinterpret_cast<PFN_vkWaitSemaphores>(device.device_proc("vkWaitSemaphores"));
             auto queue=take(graphics::detail::SubmissionAccess::create(memory.heap,std::move(device),3,{submit_override,nullptr,wait_override}));
             { auto renderer=take(PathTraceRenderer::create(memory.heap,queue,DK_PATH_SHADER_DIR));
               const std::string_view mode=argv[1];
-              if(mode=="restir_spatial_numeric") spatial_numeric(memory.heap,renderer,queue);
+              if(mode=="restir_medium_numeric") restir_medium_numeric(memory.heap,renderer,queue);
+              else if(mode=="restir_medium_lights") restir_medium_lights(memory.heap,renderer,queue);
+              else if(mode=="restir_medium_cloud") restir_medium_cloud(memory.heap,renderer,queue);
+              else if(mode=="restir_medium_reuse") restir_medium_reuse(memory.heap,renderer,queue);
+              else if(mode=="restir_medium_schedule") restir_medium_schedule(memory.heap,renderer,queue);
+              else if(mode=="restir_medium_state") restir_medium_state(memory.heap,renderer,queue);
+              else if(mode=="restir_medium_failure") restir_medium_failure(memory.heap,queue);
+              else if(mode=="restir_medium_support") restir_medium_support(memory.heap,renderer,queue);
+              else if(mode=="restir_medium_support_initial") restir_medium_support(memory.heap,renderer,queue,true);
+              else if(mode=="restir_spatial_numeric") spatial_numeric(memory.heap,renderer,queue);
               else if(mode=="restir_spatial_schedule") spatial_schedule(memory.heap,renderer,queue);
               else if(mode=="restir_spatial_state") spatial_state(memory.heap,renderer,queue);
               else if(mode=="restir_spatial_support") spatial_support(memory.heap,renderer,queue,false);

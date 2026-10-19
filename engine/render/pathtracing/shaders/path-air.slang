@@ -186,7 +186,7 @@ uint airFlight(RayDesc ray,AirLocation location,float3 segment,uint channel,uint
     return 0;
 }
 
-float airVisibility(AirVertex v,float3 wi,uint light,float3 point,uint channel,uint pixel,uint sample,uint event,inout uint rays,inout uint steps) {
+float airVisibility(AirVertex v,float3 wi,uint light,float3 point,uint channel,uint pixel,uint sample,uint event,inout uint rays,inout uint steps,uint stream=10) {
     RayDesc ray; AirLocation location; ray.Origin=airOrigin(v,wi,location); ray.Direction=wi; ray.TMin=0; ray.TMax=infinity;
 #if !DK_PATH_EMPTY
     if(light!=0xffffffffu) {
@@ -204,7 +204,7 @@ float airVisibility(AirVertex v,float3 wi,uint light,float3 point,uint channel,u
         float t=interval.x,correction=0;
         while(t<interval.y) {
             if(!airStep(steps)) return 0;
-            float optical=airOpticalDistance(airRandom(pixel,sample,event,10,counter++));
+            float optical=airOpticalDistance(airRandom(pixel,sample,event,stream,counter++));
             if(optical>=(interval.y-t)*rate) break;
             float adjusted=optical/rate-correction,next=t+adjusted; correction=(next-t)-adjusted;
             if(next<t || !isfinite(next)) { airError(4); return 0; }
@@ -247,39 +247,94 @@ float airDirect(AirVertex v,uint channel,uint pixel,uint sample,uint event,inout
     if(factor<=0) return 0;
     return radiance*factor*airVisibility(v,wi,light,point,channel,pixel,sample,event,rays,steps)*weight(pdf,scatterPdf)/pdf;
 }
-float3 traceAir(RayDesc ray,AirLocation location,uint pixel,uint sample,inout uint rays,out float4 firstHit,out float4 firstNormal) {
-    uint4 counts=asuint(parameters[1]),flags=asuint(parameters[2]); uint channel=min(2u,uint(airRandom(pixel,sample,0,0)*3)),steps=0;
+AirVertex airEndpoint(RayDesc ray,AirLocation location,float3 segment,PathPayload hit) {
+    AirVertex v=(AirVertex)0; v.incoming=ray.Direction;
+    v.ground=segment.z!=0 && (hit.found==0 || segment.y<hit.distance);
+    if(v.ground) {
+        v.position=ray.Origin+ray.Direction*segment.y; v.location=airMove(location,ray.Direction*segment.y); v.location.height=0;
+        v.normal=v.location.radial; v.bsdf.color=parameters[19].xyz; v.bsdf.metallic=0; v.bsdf.roughness=1; v.bsdf.ggx=false;
+    }
+#if !DK_PATH_EMPTY
+    else if(hit.found!=0) {
+        v.index=hit.index; v.position=positionOf(hit); v.normal=normalOf(hit,ray.Direction); v.bsdf=materialAt(hit.index,hit.barycentric);
+        v.location=airAlong(location,ray.Direction,hit.distance);
+    }
+#endif
+    return v;
+}
+#if DK_PATH_RESTIR
+float shadeAirRestir(RestirSample s,AirVertex v,uint channel,uint pixel,uint sample,inout uint rays,inout uint steps) {
+    if(s.light==0xffffffffu || s.W==0) return 0;
+    float3 wi,point; float pdf;
+    float3 contribution=restirEvaluate(s.light,s.uv,v.position,v.normal,v.bsdf,-v.incoming,wi,point,pdf);
+    if(contribution[channel]==0) return 0;
+    uint light=s.light<asuint(parameters[2]).z ? s.light : 0xffffffffu,before=rays;
+    float T=airVisibility(v,wi,light,point,channel,pixel,sample,0,rays,steps,11);
+    if(asuint(parameters[40]).w!=0) { uint ignored; InterlockedAdd(status[13],rays-before,ignored); }
+    return contribution[channel]*s.W*T;
+}
+#endif
+float3 traceAir(RayDesc ray,AirLocation location,uint pixel,uint sample,inout uint rays,out float4 firstHit,out float4 firstNormal,uint restirPixel=0) {
+    uint4 counts=asuint(parameters[1]),flags=asuint(parameters[2]); uint steps=0;
+#if DK_PATH_RESTIR
+    PathPayload primary={};
+    bool saved=asuint(parameters[32]).y==1;
+    if(saved) {
+        float4 record=restirSurfaces[restirPixel*4]; primary.distance=record.x; primary.barycentric=record.yz;
+        primary.found=record.w>0 ? 1u : 0u; primary.index=primary.found!=0 ? uint(record.w)-1 : 0; ++rays;
+    } else primary=airNearest(ray,rays);
+    float3 primarySegment=airSegment(location,ray.Direction,primary.found!=0 ? primary.distance : infinity);
+    AirVertex receiver=airEndpoint(ray,location,primarySegment,primary);
+    bool prepared=counts.z!=0 && (receiver.ground || primary.found!=0);
+    RestirSample reservoir=emptyRestir();
+    if(saved) reservoir=loadRestir(restirPixel,sample);
+    else if(prepared) { reservoir=initialRestir(primary,receiver.position,receiver.normal,receiver.bsdf,-ray.Direction,pixel,sample); temporalStat(14); }
+#endif
+    // Every RGB reservoir, including history, is fixed independently of this hero and flight.
+    uint channel=min(2u,uint(airRandom(pixel,sample,0,0)*3));
     float value=0,beta=1,previousPdf=0; float3 previous=0;
+    bool suppressEmission=false;
     firstHit=float4(-1,0,0,0); firstNormal=0;
     for(uint depth=0;depth<=counts.z;++depth) {
         if(status[0]!=0) break;
-        PathPayload hit=airNearest(ray,rays);
-        float3 segment=airSegment(location,ray.Direction,hit.found!=0 ? hit.distance : infinity);
+        PathPayload hit; float3 segment;
+#if DK_PATH_RESTIR
+        if(depth==0) { hit=primary; segment=primarySegment; }
+        else {
+#endif
+            hit=airNearest(ray,rays); segment=airSegment(location,ray.Direction,hit.found!=0 ? hit.distance : infinity);
+#if DK_PATH_RESTIR
+        }
+#endif
         AirVertex v; uint event=airFlight(ray,location,segment,channel,pixel,sample,depth,steps,v);
         if(event==2 || event==3) break;
+        if(event==1) suppressEmission=false;
         if(event==0) {
             bool ground=segment.z!=0 && (hit.found==0 || segment.y<hit.distance);
             if(!ground && hit.found==0) {
-                value+=beta*parameters[3][channel]*(depth!=0 && flags.x==0 ? weight(previousPdf,parameters[4].w/(4*pi)) : 1);
-                if(flags.y!=0 && airSunHit(ray.Direction)) value+=beta*parameters[4][channel]*(depth!=0 && flags.x==0 ? weight(previousPdf,parameters[4].w*parameters[21].y) : 1);
+                if(!suppressEmission) value+=beta*parameters[3][channel]*(depth!=0 && flags.x==0 ? weight(previousPdf,parameters[4].w/(4*pi)) : 1);
+                if(!suppressEmission && flags.y!=0 && airSunHit(ray.Direction)) value+=beta*parameters[4][channel]*(depth!=0 && flags.x==0 ? weight(previousPdf,parameters[4].w*parameters[21].y) : 1);
                 break;
             }
-            v.ground=ground; v.incoming=ray.Direction;
-            if(ground) {
-                v.position=ray.Origin+ray.Direction*segment.y; v.location=airMove(location,ray.Direction*segment.y); v.location.height=0;
-                v.normal=v.location.radial; v.bsdf.color=parameters[19].xyz; v.bsdf.metallic=0; v.bsdf.roughness=1; v.bsdf.ggx=false;
-            }
+            v=airEndpoint(ray,location,segment,hit);
 #if !DK_PATH_EMPTY
-            else {
-                v.index=hit.index; v.position=positionOf(hit); v.normal=normalOf(hit,ray.Direction); v.bsdf=materialAt(hit.index,hit.barycentric);
-                v.location=airAlong(location,ray.Direction,hit.distance);
-                value+=beta*triangles[hit.index*9+5][channel]*(depth!=0 && flags.x==0 ? weight(previousPdf,areaPdf(hit.index,previous,v.position)) : 1);
+            if(!ground) {
+                if(!suppressEmission || triangles[hit.index*9+1].w==0)
+                    value+=beta*triangles[hit.index*9+5][channel]*(depth!=0 && flags.x==0 ? weight(previousPdf,areaPdf(hit.index,previous,v.position)) : 1);
                 if(depth==0) { firstHit=float4(hit.distance,hit.barycentric,float(hit.index+1)); firstNormal=float4(v.normal,dot(ray.Direction,triangles[hit.index*9+3].xyz)<0 ? 1 : -1); }
             }
 #endif
         }
         if(depth==counts.z) break;
+#if DK_PATH_RESTIR
+        bool firstRestir=depth==0 && event==0 && prepared;
+        if(firstRestir) { temporalStat(15); value+=beta*shadeAirRestir(reservoir,v,channel,pixel,sample,rays,steps); }
+        else
+#endif
         value+=beta*airDirect(v,channel,pixel,sample,depth,rays,steps);
+#if DK_PATH_RESTIR
+        suppressEmission=firstRestir;
+#endif
         float3 wi;
         if(v.volume) { wi=airPhaseSample(ray.Direction,v.phaseWeights,pixel,sample,depth); previousPdf=airPhase(dot(ray.Direction,wi),v.phaseWeights); }
         else {
