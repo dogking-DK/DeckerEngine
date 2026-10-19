@@ -1,7 +1,7 @@
 ---
 module: foundation-math
 created_at: "2026-09-22T10:28:51+08:00"
-updated_at: "2026-10-16T17:25:00+08:00"
+updated_at: "2026-10-19T11:24:37+08:00"
 status: accepted
 ---
 
@@ -12,7 +12,7 @@ status: accepted
 按用户要求使用 Eigen，实施 [Roadmap](../roadmap.md) 的 M1.2–M1.3。
 M1.2 已提供类型入口、几何约定、角度和旋转；M1.3 已完成
 Transform 的 TRS、组合、逆变换及奇异缩放处理。
-M18.1 补充下述纯透视计算；不实现导航控制、几何查询、公开矩阵分解接口或 GPU 数据布局。
+M18.1/M18.3 补充下述纯透视/正交计算；不实现导航控制、几何查询、公开矩阵分解接口或 GPU 数据布局。
 
 ## M18.1 透视计算
 
@@ -22,6 +22,13 @@ perspective_ray。右手朝 -Z，Y 翻转、深度 [0,1]；ray 返回相机局�
 调用返回独立值或 invalid_argument，不修改输入。Editor 与 Capture 共用矩阵生成，Editor 拾取使用同一镜头的局部射线。
 应用层继续限制 FOV 为 (1°,179°)，光栅大气的更窄支持域由上层校验；数学层不硬编码渲染器限制。
 验证像素方向、不同宽高比/FOV、近远裁剪投影对应及非法/极端数值。原 target dk_math 和依赖不变，无新构建选项。
+
+## M18.3 正交计算
+
+Projection.hpp 增加 OrthographicLens（完整可见高度、near/far）、orthographic_projection 和 orthographic_ray。
+沿用右手 -Z、Y 翻转、深度 [0,1]，宽度为 height × aspect；射线从每像素近裁剪面起点出发，
+方向恒为 -Z、距离区间 [0,far-near]。所有参数有限，height/aspect/near 正、far>near；
+矩阵尺度/深度不可表示或射线起点溢出时返回 invalid_argument，不修改输入，无新依赖。
 
 ## 模块边界与依赖
 

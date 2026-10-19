@@ -19,7 +19,8 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
     constexpr std::array actions{"sim_prepare",":initial","sim_sample","sim_step",":stepped","sim_sample","sim_export","sim_export_duplicate","sim_resume",":running",":orbit_running",":pan_running","sim_pause",":paused",
         "simulation_camera_settings","simulation_camera_fov",":all",":fov",":enter","simulation_camera_speed",":all",":nav_speed",":enter","simulation_camera_apply",
         "simulation_camera_fly",":fly","simulation_camera_walk",":walk","simulation_camera_fly",":switch_capture","simulation_view","simulation_camera_orbit",
-        ":orbit",":pan",":zoom","simulation_frame",":resize",":minimize","simulation_edit_view","simulation_view",
+        ":orbit",":pan",":zoom","simulation_frame","simulation_camera_orthographic","simulation_camera_top","simulation_frame",
+        ":orbit",":pan",":zoom","simulation_edit_view","simulation_view","simulation_camera_perspective",":resize",":minimize","simulation_edit_view","simulation_view",
         "sim_cancel","sim_stop","sim_play",":running","sim_stop"};
     const bool select_gpu=simulation_backend_==1 && simulation_stage_<2;
     const unsigned offset=simulation_backend_==1 ? 2 : 0;
@@ -144,7 +145,16 @@ void SmokeDriver::simulation_input(Workspace& model,WorkbenchUi& ui,platform::Wi
             require(viewport.capture_simulation_pixels()!=stage_pixels_,"Simulation FOV did not alter the image");
         }
     }
-    else if(action.starts_with("simulation_camera_") || action==":all" || action==":fov" || action==":nav_speed" || action==":enter") ready=image;
+    else if(action.starts_with("simulation_camera_") || action==":all" || action==":fov" || action==":nav_speed" || action==":enter") {
+        ready=image;
+        if(ready && (action=="simulation_camera_orthographic" || action=="simulation_camera_perspective" || action=="simulation_camera_top")) {
+            const auto& camera=ui.simulation_camera();
+            require(camera.projection_mode()==(action=="simulation_camera_perspective" ? ProjectionMode::perspective : ProjectionMode::orthographic),"Simulation projection switch failed");
+            if(action=="simulation_camera_top") require(camera.standard_view()==StandardView::top,"Simulation Top view failed");
+            require(ui.input().camera().projection_mode()==ProjectionMode::perspective && ui.input().camera().world().matrix()==edit_pose_,"Simulation projection modified Edit camera");
+            require(viewport.capture_simulation_pixels()!=stage_pixels_ || action=="simulation_camera_orthographic","Simulation view did not change image");
+        }
+    }
     else if (action=="sim_solver") ready=ui.controls().contains("sim_gpu");
     else if (action=="sim_gpu") ready=model.simulation_draft().gpu;
     else if (action=="sim_stop") ready=!state.run && !shown.run && !viewport.simulation_run() && viewport.current(model.snapshot()->state);

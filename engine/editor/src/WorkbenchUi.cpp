@@ -247,9 +247,11 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     if (!simulation_view(preview,visible)) {
     preview.show_edit();
 #ifdef DK_EDITOR_PATHTRACING
+    ImGui::BeginDisabled(input_.active());
     if(ImGui::RadioButton("Raster",!path_mode_)) { path_mode_=false; input_.cancel(); preview.suspend_path(); } mark("path_raster"); ImGui::SameLine();
-    ImGui::BeginDisabled(!preview.path_unavailable().empty());
+    ImGui::BeginDisabled(!preview.path_unavailable().empty() || input_.camera().projection_mode()==ProjectionMode::orthographic);
     if(ImGui::RadioButton("Path trace",path_mode_)) { path_mode_=true; input_.cancel(); ImGui::SetWindowFocus("Path tracing"); } mark("path_mode");
+    ImGui::EndDisabled();
     ImGui::EndDisabled();
     ImGui::SameLine(); if(ImGui::SmallButton("Settings")) ImGui::SetWindowFocus("Path tracing"); mark("path_settings");
     ImGui::SameLine();
@@ -259,11 +261,23 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     ImGui::BeginDisabled(input_.active());
     if (ImGui::SmallButton("Refresh")) preview.retry(); mark("path_refresh");
     ImGui::EndDisabled();
+    if(ImGui::GetItemRectMax().x+ImGui::CalcTextSize("Unlit inspection").x+50<ImGui::GetWindowPos().x+ImGui::GetWindowContentRegionMax().x)
+        ImGui::SameLine();
     bool environment_projection=model_.snapshot() && (model_.snapshot()->scene.environment().enabled || model_.snapshot()->scene.environment().clouds.enabled);
+    bool path_projection=false;
 #ifdef DK_EDITOR_PATHTRACING
-    environment_projection=environment_projection && !path_mode_;
+    path_projection=path_mode_;
 #endif
-    input_.environment(environment_projection);
+    ImGui::BeginDisabled(input_.active() || path_projection || (unlit_inspection_ && environment_projection && input_.camera().projection_mode()==ProjectionMode::orthographic));
+    if(ImGui::Checkbox("Unlit inspection",&unlit_inspection_)) input_.cancel();
+    mark("unlit_inspection"); ImGui::EndDisabled();
+    input_.pathtracing(path_projection);
+    input_.environment(environment_projection && !path_projection && !unlit_inspection_);
+    // Keep one line in all modes so toggling a preference does not resize the image.
+    ImGui::TextDisabled(path_projection ? "Orthographic unavailable: Path trace requires Perspective" :
+        environment_projection && !unlit_inspection_ ? "Orthographic needs Unlit inspection or environment disabled" :
+        input_.camera().projection_mode()==ProjectionMode::orthographic ? "Orthographic: Path trace / atmosphere need Perspective" :
+        "Unlit inspection skips scene lighting for this viewport");
     input_.toolbar(model_,preview,controls_,[&](const char* action,Result<void> result) { return report(action,std::move(result)); });
     if (const auto* s=model_.snapshot(); s && visible) {
         if (preview.texture()) {
@@ -275,7 +289,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
             ImGui::Text("rev %llu  /  %zu draws  /  %s",static_cast<unsigned long long>(preview.info().revision),preview.info().draw_count,
                 preview.current(s->state) ? "Current scene" : "STALE PREVIEW");
         } else ImGui::TextUnformatted("Preparing scene...");
-        if(preview.texture() && (s->scene.environment().enabled || s->scene.environment().clouds.enabled)
+        if(preview.texture() && !unlit_inspection_ && (s->scene.environment().enabled || s->scene.environment().clouds.enabled)
 #ifdef DK_EDITOR_PATHTRACING
             && !path_mode_
 #endif
@@ -295,7 +309,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
             if(path_mode_) preview.update_path(*s,acceptance_path_extent_ ? std::min(width,acceptance_path_extent_) : width,acceptance_path_extent_ ? std::min(height,acceptance_path_extent_) : height,srgb,input_.camera(),input_.edit(),input_.revision(),path_settings_);
             else
 #endif
-            preview.update(*s,width,height,srgb,input_.camera(),input_.edit(),input_.revision(),exposure_,environment_settings_);
+            preview.update(*s,width,height,srgb,input_.camera(),input_.edit(),input_.revision(),exposure_,environment_settings_,unlit_inspection_);
             if (preview.texture()) {
                 const auto& info=preview.info();
                 const float scale=std::min(available.x/static_cast<float>(info.width),available.y/static_cast<float>(info.height));

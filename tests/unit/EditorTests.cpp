@@ -152,6 +152,82 @@ TEST_CASE("workspace simulation draft and controls preserve Edit and reject inva
     REQUIRE(model.snapshot()->scene.same_content(original)); REQUIRE(model.snapshot()->state.revision==revision);
     REQUIRE(model.snapshot()->state.dirty==dirty); REQUIRE(model.history().undo_count==0);
 }
+TEST_CASE("camera orthographic switch preserves focus scale and restores navigation atomically") {
+    Camera camera{true}; REQUIRE(camera.set_navigation_mode(NavigationMode::walk));
+    const auto pose=camera.world().matrix();
+    const auto uv=camera.project({.3,.4,0},1.7).value();
+    REQUIRE(camera.set_projection_mode(ProjectionMode::orthographic,1.7));
+    CHECK(camera.navigation_mode()==NavigationMode::orbit); CHECK(camera.world().matrix()==pose);
+    CHECK(camera.project({.3,.4,0},1.7)->isApprox(uv,1e-12));
+    CHECK_FALSE(camera.set_navigation_mode(NavigationMode::fly));
+    auto revision=camera.revision(); REQUIRE(camera.set_projection_mode(ProjectionMode::orthographic,1.7)); CHECK(camera.revision()==revision);
+    camera.dolly(2); const auto zoom=camera.project({.3,.4,0},1.7).value();
+    CHECK(camera.world().matrix()==pose);
+    REQUIRE(camera.set_projection_mode(ProjectionMode::perspective,1.7));
+    CHECK(camera.navigation_mode()==NavigationMode::walk); CHECK(camera.project({.3,.4,0},1.7)->isApprox(zoom,1e-12));
+    REQUIRE(camera.set_projection_mode(ProjectionMode::orthographic,1.7));
+    auto settings=camera.settings(); settings.lens.ortho_height=100000; REQUIRE(camera.set_settings(settings,1.7));
+    revision=camera.revision(); const auto before=camera.world().matrix();
+    CHECK_FALSE(camera.set_projection_mode(ProjectionMode::perspective,1.7));
+    CHECK(camera.revision()==revision); CHECK(camera.settings()==settings); CHECK(camera.world().matrix()==before);
+    CHECK(camera.projection_mode()==ProjectionMode::orthographic); CHECK(camera.navigation_mode()==NavigationMode::orbit);
+    REQUIRE(camera.restore_defaults(true,1.7)); CHECK(camera.projection_mode()==ProjectionMode::perspective);
+}
+TEST_CASE("camera orthographic six views frame clipping parallel picking and depth independent scale") {
+    Camera camera{true}; REQUIRE(camera.set_projection_mode(ProjectionMode::orthographic,1));
+    const std::array<Vec3d,6> back={Vec3d{0,0,1},{0,0,-1},{-1,0,0},{1,0,0},{0,1,0},{0,-1,0}};
+    for(int view=0;view<6;++view) for(double aspect : {.4,2.4}) {
+        REQUIRE(camera.set_standard_view(static_cast<StandardView>(view+1),aspect));
+        const auto fixed=camera.revision(); REQUIRE(camera.set_standard_view(static_cast<StandardView>(view+1),aspect)); CHECK(camera.revision()==fixed);
+        auto m=camera.world().matrix(); CHECK(m.block<3,1>(0,2).isApprox(back[view],1e-12));
+        CHECK((m.topLeftCorner<3,3>().transpose()*m.topLeftCorner<3,3>()).isIdentity(1e-12));
+        if(view==4) CHECK(m.block<3,1>(0,1)==Vec3d{0,0,-1});
+        if(view==5) CHECK(m.block<3,1>(0,1)==Vec3d{0,0,1});
+        const geometry::Bounds bounds{{-3,-2,-1},{4,5,6}};
+        REQUIRE(camera.frame(bounds,aspect));
+        for(int i=0;i<8;++i) {
+            auto uv=camera.project({i&1 ? 4.:-3.,i&2 ? 5.:-2.,i&4 ? 6.:-1.},aspect); REQUIRE(uv);
+            CHECK((uv->array()>=0).all()); CHECK((uv->array()<=1).all());
+        }
+        const auto a=camera.ray({.2,.3},aspect).value(),b=camera.ray({.8,.9},aspect).value();
+        CHECK(a.direction==b.direction); CHECK(a.origin!=b.origin); CHECK(a.minimum==0);
+        for(double distance : {1.,17.,100.}) {
+            const Vec3d point=a.origin+a.direction*distance;
+            CHECK(camera.project(point,aspect)->isApprox(Vec2d{.2,.3},1e-10));
+            CHECK(camera.units_per_pixel(point,600)==camera.settings().lens.ortho_height/600);
+        }
+        CHECK_FALSE(camera.project(a.origin-a.direction*.01,aspect));
+        CHECK_FALSE(camera.project(a.origin+a.direction*(a.maximum+.01),aspect));
+        const Vec3d point=a.origin+a.direction*10;
+        const auto uv=camera.project(point,aspect).value(); camera.pan(12,-7,600);
+        CHECK(camera.project(point,aspect)->isApprox(uv+Vec2d{12/(600*aspect),-7./600},1e-10));
+    }
+    camera.orbit(1,1); CHECK(camera.standard_view()==StandardView::none); CHECK(camera.world().matrix().allFinite());
+}
+TEST_CASE("camera returning from orthographic pole preserves pose until actual look input") {
+    Camera camera{true}; REQUIRE(camera.set_navigation_mode(NavigationMode::fly));
+    REQUIRE(camera.set_projection_mode(ProjectionMode::orthographic,1)); REQUIRE(camera.set_standard_view(StandardView::top,1));
+    REQUIRE(camera.set_projection_mode(ProjectionMode::perspective,1)); const auto pose=camera.world().matrix(); const auto revision=camera.revision();
+    CameraNavigation navigation; navigation.begin(); REQUIRE(navigation.update(camera,{})); REQUIRE(navigation.update(camera,{}));
+    CHECK(camera.world().matrix()==pose); CHECK(camera.revision()==revision);
+    NavigationInput input; input.look={1,1}; REQUIRE(navigation.update(camera,input));
+    CHECK(camera.standard_view()==StandardView::none); CHECK(camera.world().matrix().allFinite()); CHECK(camera.revision()==revision+1);
+}
+TEST_CASE("camera orthographic rejects unsupported context and impossible framing without partial changes") {
+    Camera camera{true}; camera.set_environment(true); const auto before=camera.world().matrix(); const auto rev=camera.revision();
+    CHECK_FALSE(camera.set_projection_mode(ProjectionMode::orthographic,1)); CHECK(camera.world().matrix()==before); CHECK(camera.revision()==rev);
+    camera.set_environment(false); camera.set_pathtracing(true); CHECK_FALSE(camera.set_projection_mode(ProjectionMode::orthographic,1));
+    camera.set_pathtracing(false); REQUIRE(camera.set_projection_mode(ProjectionMode::orthographic,1));
+    const auto settings=camera.settings(); const auto stable=camera.revision();
+    for(double height : {0.,-1.,100001.,std::numeric_limits<double>::quiet_NaN()}) {
+        auto bad=settings; bad.lens.ortho_height=height; CHECK_FALSE(camera.set_settings(bad,1)); CHECK(camera.settings()==settings); CHECK(camera.revision()==stable);
+    }
+    CHECK_FALSE(camera.frame({{-1e6,-1e6,-1e6},{1e6,1e6,1e6}},1)); CHECK(camera.revision()==stable); CHECK(camera.world().matrix()==before);
+    auto narrow=settings; narrow.lens.automatic_clip=false; narrow.lens.near_plane=1; narrow.lens.far_plane=2; REQUIRE(camera.set_settings(narrow,1));
+    const auto clipped=camera.revision(); CHECK_FALSE(camera.frame({{-1,-1,-3},{1,1,3}},1)); CHECK(camera.revision()==clipped);
+    camera.set_environment(true); CHECK_FALSE(camera.validate(1)); CHECK(camera.projection_mode()==ProjectionMode::orthographic);
+    camera.set_environment(false); REQUIRE(camera.validate(1));
+}
 TEST_CASE("camera projected positions match rays across resize orbit pan and focus") {
     Camera camera{true};
     for (double aspect:{0.5,1.0,2.3}) {

@@ -9,12 +9,12 @@ void WorkbenchUi::frame_simulation(const ClothConfig& cloth,double aspect) {
     bounds.include({-half,std::min(double(cloth.physics.floor_y),double(cloth.height)),0});
     bounds.include({half,cloth.height,depth});
     Camera candidate=simulation_camera_;
-    candidate.reset(true);
+    if(candidate.projection_mode()==ProjectionMode::perspective) candidate.reset(true);
     // Framing orientation is independent of the user's navigation sensitivity/invert preference.
     auto settings=candidate.settings(),orientation=settings;
     orientation.navigation.orbit_sensitivity=.006; orientation.navigation.invert_y=false;
     if(!report("Frame cloth",candidate.set_settings(orientation,aspect))) return;
-    candidate.orbit(65,70);
+    if(candidate.projection_mode()==ProjectionMode::perspective) candidate.orbit(65,70);
     if(!report("Frame cloth",candidate.set_settings(settings,aspect))) return;
     if(report("Frame cloth",candidate.frame(bounds,aspect))) simulation_camera_=candidate;
 }
@@ -54,7 +54,8 @@ bool WorkbenchUi::simulation_view(Viewport& preview,bool visible) {
     mark("simulation_frame"); ImGui::SameLine();
     if (ImGui::SmallButton("Retry preview")) preview.retry_simulation();
     ImGui::SameLine();
-    if(simulation_settings_ui_.draw(simulation_camera_,true,simulation_aspect_,controls_,"simulation_camera_")) simulation_navigation_.cancel();
+    const auto camera_revision=simulation_camera_.revision();
+    if(simulation_settings_ui_.draw(simulation_camera_,true,simulation_aspect_,controls_,"simulation_camera_") || simulation_camera_.revision()!=camera_revision) simulation_navigation_.cancel();
     simulation_navigation_.toolbar(simulation_camera_,controls_,"simulation_camera_");
     if (preview.texture() && preview.simulation_run()==state.run->run_id)
         ImGui::Text("%s cloth | displayed step %llu | %s",state.run->gpu ? "GPU" : "CPU",

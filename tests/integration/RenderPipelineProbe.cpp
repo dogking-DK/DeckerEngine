@@ -1,6 +1,7 @@
 #include "../RenderAssetSupport.hpp"
 #include <dk/render/ScenePipeline.hpp>
 #include <dk/scene/SceneDocument.hpp>
+#include <dk/math/Projection.hpp>
 #include <dk/graphics/GraphExecution.hpp>
 #include <dk/graphics/Transfer.hpp>
 #include "SubmissionInternal.hpp"
@@ -189,6 +190,36 @@ void render_scenes(memory::ResourceHandle heap,SubmissionQueue& queue,const Devi
     require(allocations(queue)==2,"non-output GPU assets survived completion");
     last={}; require(allocations(queue)==0,"frame outputs leaked"); require(take(queue.wait(ticket)),"completed ticket not repeatable");
 }
+void orthographic_raster(memory::ResourceHandle heap,SubmissionQueue& queue) {
+    auto source=take(SceneDocument::create()); const auto asset=quad(false);
+    auto cache=take(GpuAssets::create(heap)); static_cast<void>(take(cache.upload(queue,asset)));
+    const auto left=take(EntityId::generate()),right=take(EntityId::generate());
+    for(auto id : {left,right}) { check(source->create_entity(id)); check(source->set_asset_references(id,{{asset.mesh.id,AssetKind::mesh}})); }
+    const auto pose=[&](EntityId id,double x,double z) { Trsd t; t.translation={x,0,z}; t.scale={.3,.3,1}; check(source->set_local_transform(id,t)); };
+    auto pipeline=take(ScenePipeline::create(heap,queue,DK_RENDER_SHADER_DIR));
+    const auto render=[&](double zleft,double zright) {
+        pose(left,-.8,zleft); pose(right,.8,zright);
+        ViewDescription desc{128,64}; desc.projection=take(orthographic_projection({2,.1,10},2));
+        auto view=take(RenderView::create(take(RenderScene::extract(heap,take(source->snapshot()))),desc));
+        auto frame=take(pipeline.render(queue,view,cache)); require(take(frame.wait(queue)),"orthographic wait failed");
+        const auto data=pixels(frame); unsigned counts[2]{};
+        for(unsigned y=0;y<64;++y) for(unsigned x=0;x<128;++x) {
+            const double wx=4*(x+.5)/128-2,wy=1-2*(y+.5)/64;
+            const bool visible_left=zleft<=-.1 && zleft>=-10 && std::abs(wx+.8)<.3;
+            const bool visible_right=zright<=-.1 && zright>=-10 && std::abs(wx-.8)<.3;
+            const bool lit=std::abs(wy)<.3 && (visible_left || visible_right);
+            const auto offset=(y*128+x)*4;
+            require(std::abs(std::to_integer<int>(data[offset])-(lit ? output_byte(4,1) : 0))<=1,"orthographic pixel/clip mismatch");
+            require(data[offset+1]==std::byte{0} && data[offset+2]==std::byte{0} && data[offset+3]==std::byte{255},"orthographic channel mismatch");
+            if(lit) ++counts[x>=64];
+        }
+        if(zleft<=-.1 && zleft>=-10 && zright<=-.1 && zright>=-10) require(counts[0]>0 && counts[0]==counts[1],"equal world sizes differ with depth");
+        return data;
+    };
+    const auto reference=render(-1,-6); require(render(-3,-9)==reference,"depth changed orthographic size");
+    static_cast<void>(render(-.05,-6)); static_cast<void>(render(-1,-11));
+    std::printf("orthographic raster: parallel sizes, near/far clipping, 4 full-image references passed\n");
+}
 void hdr_transfers(memory::ResourceHandle heap,SubmissionQueue& queue) {
     auto image=take(queue.create_image({3,2,vk::Format::eR32G32B32A32Sfloat}));
     std::array<float,24> values{}; for (std::size_t i=0;i<values.size();++i) values[i]=static_cast<float>(i)-5;
@@ -267,7 +298,7 @@ int main() {
             auto queue=take(graphics::detail::SubmissionAccess::create(heap,std::move(*device),3,{submit_override,nullptr,wait_override}));
             std::printf("GPU=%s driver=%s\n",queue.device().adapter().properties.deviceName.data(),queue.device().adapter().driver.driverInfo.data());
             hdr_transfers(heap,queue); require(allocations(queue)==0,"HDR tests leaked");
-            render_scenes(heap,queue,options); budget(system,heap,queue);
+            render_scenes(heap,queue,options); orthographic_raster(heap,queue); budget(system,heap,queue);
             // Dropping every public owner before completion leaves pending command retention in charge.
             Program program; auto cache=take(GpuAssets::create(heap)); program.upload(cache,queue);
             auto pipeline=take(ScenePipeline::create(heap,queue,DK_RENDER_SHADER_DIR));

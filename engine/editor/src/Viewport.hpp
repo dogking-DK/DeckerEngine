@@ -18,7 +18,7 @@ public:
     ~Viewport();
     // Previous GUI submission must be complete. Backend must be initialized.
     void update(const SceneReadSnapshot&,std::uint32_t width,std::uint32_t height,bool srgb,const Camera&,
-        const std::optional<TransformEdit>&,std::uint64_t preview_revision,float exposure=1,const render::EnvironmentRenderSettings& environment = {});
+        const std::optional<TransformEdit>&,std::uint64_t preview_revision,float exposure=1,const render::EnvironmentRenderSettings& environment = {},bool unlit_inspection=false);
     void update_simulation(Workspace&,const SimulationRunState&,std::uint32_t width,std::uint32_t height,const Camera&);
     void show_edit();
     void suspend_path();
@@ -70,6 +70,7 @@ private:
         std::uint64_t camera,preview;
         float exposure;
         render::EnvironmentRenderSettings environment;
+        bool unlit_inspection=false;
         bool operator==(const Key&) const = default;
     };
     void publish(std::vector<std::byte>,const render::FrameInfo&,render::RenderScene,const Camera&,const Key&);

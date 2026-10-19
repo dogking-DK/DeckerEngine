@@ -5,8 +5,11 @@
 
 namespace dk::editor {
 enum class NavigationMode { orbit, fly, walk };
+enum class ProjectionMode { perspective, orthographic };
+enum class StandardView { none, front, back, left, right, top, bottom };
 struct CameraLensSettings {
     double fov_y=65;
+    double ortho_height=2;
     bool automatic_clip=true;
     double near_plane=.05,far_plane=10000;
     bool operator==(const CameraLensSettings&) const = default;
@@ -29,6 +32,12 @@ public:
     void reset(bool fixture=false);
     // Context changes may make a manual lens unsupported; validate reports it without changing that lens.
     void set_environment(bool enabled);
+    void set_pathtracing(bool enabled) { pathtracing_=enabled; }
+    [[nodiscard]] bool orthographic_supported() const { return !environment_ && !pathtracing_; }
+    [[nodiscard]] ProjectionMode projection_mode() const { return projection_; }
+    [[nodiscard]] StandardView standard_view() const { return standard_view_; }
+    [[nodiscard]] Result<void> set_projection_mode(ProjectionMode,double aspect);
+    [[nodiscard]] Result<void> set_standard_view(StandardView,double aspect);
     [[nodiscard]] Result<void> validate(double aspect) const;
     [[nodiscard]] Result<void> set_settings(const CameraSettings&,double aspect);
     [[nodiscard]] Result<void> restore_defaults(bool fixture,double aspect);
@@ -52,6 +61,8 @@ public:
 private:
     friend class CameraNavigation;
     [[nodiscard]] PerspectiveLens lens() const { return {radians(fov_y()),near_plane(),far_plane()}; }
+    [[nodiscard]] OrthographicLens ortho_lens() const { return {settings_.lens.ortho_height,near_plane(),far_plane()}; }
+    [[nodiscard]] Result<Mat4d> projection_result(double aspect) const;
     [[nodiscard]] double tangent() const { return std::tan(radians(fov_y())/2); }
     [[nodiscard]] Vec3d backward() const;
     [[nodiscard]] Vec3d pivot() const { return eye_-backward()*distance_; }
@@ -59,7 +70,10 @@ private:
     double yaw_=0,pitch_=0,distance_=2;
     CameraSettings settings_;
     NavigationMode mode_=NavigationMode::orbit;
+    NavigationMode perspective_mode_=NavigationMode::orbit;
+    ProjectionMode projection_=ProjectionMode::perspective;
+    StandardView standard_view_=StandardView::none;
     std::uint64_t revision_=0;
-    bool environment_=false;
+    bool environment_=false,pathtracing_=false;
 };
 }

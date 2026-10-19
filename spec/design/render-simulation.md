@@ -1,7 +1,7 @@
 ---
 module: render-simulation
 created_at: "2026-10-09T10:59:13+08:00"
-updated_at: "2026-10-10T14:11:00+08:00"
+updated_at: "2026-10-19T11:24:37+08:00"
 status: accepted
 ---
 
@@ -12,6 +12,8 @@ status: accepted
 ClothRenderer增加CPU位置绘制入口：Graph上传连续ParticlePosition并复用相同布片pass，不创建CPU结果的GPU求解器。
 GPU继续零步render，不推进物理、不回读。CPU帧使用独立Graph Execution而无物理帧；统一提供submission/wait/color。
 视图矩阵由编辑器Camera产生；输出图像保持ShaderReadOnlyOptimal。普通预览image_readback=false。
+M18.3 编辑器可提供正交矩阵；CPU/GPU 均消费同一 view-projection，独立相机支持六视图及
+按当前正交视向 Frame cloth。投影切换更新视图序号，不推进暂停物理步数、不修改 Edit 相机或 Scene。
 后台完成输出后封装可移动ImageTransfer交接给同设备同族呈现队列，保留信号timeline和图像至消费者GPU完成。
 旧导出/示例的显式粒子和图像读回语义保持不变。
 M12.4在真实GUI/IPC交替运行中验证暂停时预览步数与完成步数一致，跨呈现帧像素不变。

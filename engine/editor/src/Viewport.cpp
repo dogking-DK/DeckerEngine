@@ -32,14 +32,16 @@ void Viewport::release_texture() {
     simulation_view_.reset();
 }
 void Viewport::update(const SceneReadSnapshot& snapshot,std::uint32_t width,std::uint32_t height,bool srgb,const Camera& camera,
-    const std::optional<TransformEdit>& edit,std::uint64_t preview_revision,float exposure,const render::EnvironmentRenderSettings& environment) {
+    const std::optional<TransformEdit>& edit,std::uint64_t preview_revision,float exposure,const render::EnvironmentRenderSettings& environment,bool unlit_inspection) {
     suspend_path(); show_edit();
-    if(auto valid=camera.validate(double(width)/height); !valid) {
+    Camera checked=camera; checked.set_pathtracing(false);
+    checked.set_environment(!unlit_inspection && (snapshot.scene.environment().enabled || snapshot.scene.environment().clouds.enabled));
+    if(auto valid=checked.validate(double(width)/height); !valid) {
         environment_.cancel(); environment_key_.reset(); environment_has_frame_=true;
         attempted_.reset(); published_.reset(); error_=valid.error().message; return;
     }
-    const Key key{snapshot.state.document_id,snapshot.state.revision,width,height,srgb,camera.revision(),preview_revision,exposure,environment};
-    if(snapshot.scene.environment().enabled || snapshot.scene.environment().clouds.enabled) {
+    const Key key{snapshot.state.document_id,snapshot.state.revision,width,height,srgb,camera.revision(),preview_revision,exposure,environment,unlit_inspection};
+    if(!unlit_inspection && (snapshot.scene.environment().enabled || snapshot.scene.environment().clouds.enabled)) {
         try {
             if(auto result=environment_.take_result(); result && result->sequence==environment_sequence_) {
                 environment_has_frame_=true;

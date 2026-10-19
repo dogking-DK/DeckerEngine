@@ -1,6 +1,7 @@
 #include "PipelinePolicy.hpp"
 #include <dk/scene/SceneDocument.hpp>
 #include <dk/memory/MemorySystem.hpp>
+#include <dk/math/Projection.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <limits>
 using namespace dk;
@@ -38,6 +39,14 @@ TEST_CASE("pipeline push transform rows preserve affine camera composition and r
 TEST_CASE("empty render frame exposes no owners or pixels") {
     RenderFrame frame; CHECK_FALSE(frame); CHECK(frame.info().scene.is_nil()); CHECK(frame.info().draw_count==0);
     CHECK(frame.plan_text().empty()); CHECK_FALSE(frame.color()); CHECK_FALSE(frame.read_rgba8({}));
+}
+TEST_CASE("orthographic basic pipeline accepts matrices while atmosphere remains unsupported") {
+    Fixture f; ViewDescription d{128,64}; d.projection=orthographic_projection({3,.1,100},2).value();
+    auto view=RenderView::create(f.scene,d); REQUIRE(view);
+    CHECK(validate_render_settings(*view,unlit_preview_settings()));
+    CHECK_FALSE(dk::render::detail::perspective_depth(d));
+    const auto rows=dk::render::detail::clip_rows(*view,Transformd{}); REQUIRE(rows);
+    CHECK((*rows)[15]==1); CHECK((*rows)[14]==0);
 }
 TEST_CASE("Lambert normal matrix preserves tangent orthogonality under shear and reflection") {
     Mat4d m=Mat4d::Identity(); m.topLeftCorner<3,3>() << -2,1,.3, 0,3,.5, 0,0,.7;

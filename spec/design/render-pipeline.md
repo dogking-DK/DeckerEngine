@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-10-16T10:30:00+08:00"
+updated_at: "2026-10-19T11:24:37+08:00"
 status: accepted
 ---
 
@@ -75,6 +75,9 @@ color() 的 Image 借用 Frame；跨帧使用者可显式 share。每帧独立�
 每个 Pass 使用 device typed API，Render 不调用裸 Vulkan；Graph 管理初始内容、顺序和同步。
 RGBA32F、D32、目标尺寸须满足实际设备能力；无替代格式或隐式降级。
 投影继续由 RenderView 调用方提供（Vulkan z=[0,1]），不新增 Camera 持久组件。
+M18.3 基础 unlit 入口支持 Math 提供的正交矩阵，depth/opaque 使用相同裁剪变换，
+相同世界尺寸不随深度改变。以两个不同深度方片的全图数值、近远裁剪及相机测试验收；
+render_sunlight/大气/云组合的透视校验仍保留，不由基础正交支持推导环境支持。
 
 ## 提交与失败
 

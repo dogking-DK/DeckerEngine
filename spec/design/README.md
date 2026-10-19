@@ -17,7 +17,7 @@
 | automation-transport | [Named Pipe 与 owner 分派](automation-transport.md) | accepted | 帧、队列、去重、断连与关闭 | [automation](../../engine/automation) | [集成](../../tests/integration/CMakeLists.txt) |
 | automation-client | [dk-ctl 客户端](automation-client.md) | accepted | 轻量调用、超时和显式重试 | [apps](../../apps)、[automation](../../engine/automation) | [集成](../../tests/integration/CMakeLists.txt) |
 | geometry-query | [CPU 几何查询](geometry-query.md) | accepted | AABB、三角形 BVH 与仿射实例射线 | [geometry](../../engine/geometry) | [单元](../../tests/unit/CMakeLists.txt) |
-| editor-interaction | [编辑器交互](editor-interaction.md) | accepted | CPU 拾取、Gizmo、会话 Orbit/Fly/固定高度 Walk、可调镜头与导航、相对鼠标；正交扩展规划 | [editor](../../engine/editor) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
+| editor-interaction | [编辑器交互](editor-interaction.md) | accepted | CPU 拾取/Gizmo、Orbit/Fly/固高 Walk、可调镜头/相对鼠标；基础正交六视图与独立模拟相机 | [editor](../../engine/editor) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | architecture | [整体架构](architecture.md) | accepted | 长期模块边界和依赖方向 | [模块目录](../../engine) | [流程/检查](../README.md) |
 | editor | [编辑器工作台](editor.md) | accepted | 面板、命令编辑、后台大气/云/路径预览、模式/采样控制、预设和 GUI/IPC/截图一致性 | [editor](../../engine/editor) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | render-disk | [磁盘场景与资产集成](render-disk.md) | accepted | M2 场景、M4 导入/产物与 GPU 资源加载 | [disk](../../engine/render/disk) | [集成](../../tests/integration/CMakeLists.txt) |
@@ -34,7 +34,7 @@
 | graphics-vulkan | [Vulkan 使用层封装](graphics-vulkan.md) | accepted | M5.5 对象/管线/绑定/录制/同步/传输与离屏迁移契约；实现进度见 Roadmap | [device](../../engine/graphics/device)、[offscreen](../../engine/graphics/offscreen) | [单元](../../tests/unit/CMakeLists.txt)、[集成](../../tests/integration/CMakeLists.txt) |
 | project-foundation | [工程基础](project-foundation.md) | accepted | Git、目录、CMake、vcpkg、构建探针与留档 | [CMake/构建](../../cmake) | [文档脚本回归](../../scripts/test-check-spec.ps1) |
 | foundation-core | [Core 基础](foundation-core.md) | accepted | 错误、日志、stduuid 稳定 ID 与验证 | [Core](../../engine/foundation/core) | [core / log_probe](../../tests/unit/CMakeLists.txt) |
-| foundation-math | [Eigen 数学与 Transform](foundation-math.md) | accepted | 基础数学、TRS/仿射组合/逆变换、共享透视矩阵与裁剪射线 | [Math](../../engine/foundation/math) | [math](../../tests/unit/CMakeLists.txt) |
+| foundation-math | [Eigen 数学与 Transform](foundation-math.md) | accepted | 基础数学、TRS/仿射组合/逆变换、共享透视/正交矩阵与裁剪射线 | [Math](../../engine/foundation/math) | [math](../../tests/unit/CMakeLists.txt) |
 | foundation-io | [工程路径与文件 IO](foundation-io.md) | accepted | M1.4 路径/字节 IO；M1.5 同目录临时文件与安全替换 | [IO](../../engine/foundation/io) | [io](../../tests/unit/CMakeLists.txt) |
 | foundation-integration | [Foundation 集成验收](foundation-integration.md) | accepted | M1.6 独立 CPU 示例、ID/变换/安全保存和跨进程重载 | [CPU 示例](../../examples/foundation) | [foundation](../../tests/integration/CMakeLists.txt) |
 | foundation-memory | [Memory System](foundation-memory.md) | accepted | M1.7.2–7 heap、拥有型接口、scratch/pool、context/token、关闭集成及重复工作负载基线已完成 | [Memory](../../engine/foundation/memory) | [memory / probes](../../engine/foundation/memory/tests) |

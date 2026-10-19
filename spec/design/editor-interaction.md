@@ -1,7 +1,7 @@
 ---
 module: editor-interaction
 created_at: "2026-10-08T11:35:00+08:00"
-updated_at: "2026-10-19T09:48:00+08:00"
+updated_at: "2026-10-19T11:24:37+08:00"
 status: accepted
 ---
 
@@ -67,7 +67,7 @@ M8.3 IPC、纹理 alpha 精确拾取、多选、世界轴 Gizmo、吸附和飞�
 ## M18 相机扩展计划
 
 本节以 2026-10-16 的源码检查为起点；阶段状态与执行顺序由 [Roadmap M18](../roadmap.md#m18相机操作模式与投影扩展) 维护。
-M18.1 已实现镜头与导航设置；M18.2 接入 Fly/Walk，正交仍为规划。历史检查结果见下表，实际变更和验证见 [0129](../development/0129-camera-settings.md)。
+M18.1 已实现镜头与导航设置；M18.2 接入 Fly/Walk；M18.3 按下述契约接入基础正交。历史检查结果见下表，实际变更和验证见 [0129](../development/0129-camera-settings.md)。
 首期 Walk 按水平漫游设计；没有地面碰撞、重力、台阶或跳跃，不作为角色行走模拟。
 
 ### 扩展前能力与缺口（M18 检查基线）
@@ -83,7 +83,7 @@ M18.1 已实现镜头与导航设置；M18.2 接入 Fly/Walk，正交仍为规�
 | 固定截图 | [CaptureCamera](../../engine/framework/services/include/dk/services/CaptureService.hpp) 和 [render.capture](../commands/render.md) 已能设置透视 FOV/near/far；不支持正交 | 截图的可调 FOV 不等于交互视口已有设置；新增正交需兼容旧请求 |
 | 一致性驱动 | [ConsistencyDriver](../../engine/editor/src/ConsistencyDriver.cpp)、[PathSmoke](../../engine/editor/src/PathSmoke.cpp) 输出相机时写死 fov_y=65 | 接入真实镜头参数和已发布相机，避免比较了不同输入 |
 
-检查结论：用户界面不支持正交；底层矩阵容器可承载它，路径追踪和环境合成仍明确限制为透视。
+扩展前检查结论：用户界面不支持正交；底层矩阵容器可承载它，路径追踪和环境合成明确限制为透视。
 已有 [相机测试](../../tests/unit/EditorTests.cpp)、[路径相机拒绝测试](../../tests/unit/PathTraceReferenceTests.cpp)、
 [大气投影拒绝测试](../../tests/unit/RenderPipelineTests.cpp) 是扩展回归入口；最初设计检查没有运行这些测试或启动窗口。
 
@@ -155,6 +155,25 @@ Auto 应由实际渲染路径决定裁剪，覆盖 cloud-only 情况，而非只
 因此宽高比也参与 FOV 校验，不能宣称 1–179° 在任意环境视口都可用。resize 使设置不再适用时停止提交、
 保留旧图并显示原因，允许调参/恢复 Auto；不能污染场景设置或悄悄更改 FOV。
 后端/环境切换和外部 IPC 修改也触发能力复查；UI 禁用不是唯一校验层。
+
+### M18.3 实施契约
+
+Camera 增加独立 ProjectionMode、正交可见高度与 StandardView；投影切换使用独立候选操作，
+按焦平面公式换算尺度并验证后一次发布，记住透视导航模式，正交只允许 Orbit。
+高度范围固定为 [0.01,100000] m；返回透视距离仍须处于 [0.1,3000] m，否则拒绝且保留全部状态。
+六视向定义为眼点位于 pivot 的 +Z/-Z/-X/+X/+Y/-Y（Front/Back/Left/Right/Top/Bottom）；
+前后左右屏幕上方为 +Y，Top 为 -Z，Bottom 为 +Z。固定基向量支持精确极点，拖动退出视向高亮。
+正交缩放只修改高度、平移保持高度与方向，取景同时满足宽高比及近远裁剪，不截断无法容纳的边界。
+
+Edit 的 Unlit inspection 为显式会话选项，基础管线直接消费原 Scene 快照和无光照材质，
+仅跳过环境渲染，不修改 Scene.environment/revision/dirty/history。预览 key 包含此选项，防止发布旧环境结果。
+Path trace 与启用环境的 Raster 禁用正交入口；正交时禁用 Path trace 和不兼容的环境显示切换，
+始终提供可见原因和回到 Perspective 的入口。外部环境变化后在实际提交处再次拒绝，保留旧图并禁用拾取。
+模拟持有独立相机，正交 Frame cloth 保留当前视向，CPU/GPU 布片共用矩阵与最近完成图发布规则。
+不扩展 capture/sequence schema；路径/光栅环境的投影校验保持不变。
+
+验证覆盖数学裁剪与平行射线、焦平面往返/失败原子性、六视图/取景、深度无关尺度、真实窗口拾取/三种Gizmo、
+正交平移/缩放/Orbit、Unlit与环境/路径拒绝及两视口独立；证据汇入 [0131](../development/0131-camera-orthographic.md)。
 
 ### 数据模型、共享计算与切换
 
@@ -236,7 +255,7 @@ M18.1–4 可先交付可用相机和有限正交；只有此阶段验收后才�
 
 ### 定向验收计划
 
-以下覆盖整个 M18 的验收要求；M18.1 项目见 [0129](../development/0129-camera-settings.md)，M18.2 见 [0130](../development/0130-camera-fly-walk.md)；正交项尚未运行。不默认执行全量或双配置。
+以下覆盖整个 M18 的验收要求；M18.1 项目见 [0129](../development/0129-camera-settings.md)，M18.2 见 [0130](../development/0130-camera-fly-walk.md)，基础正交 M18.3 见 [0131](../development/0131-camera-orthographic.md)；路径/捕获及光栅环境正交留待后续。不默认执行全量或双配置。
 
 | 范围 | 关键可观察断言 | 现有验证入口 |
 | --- | --- | --- |

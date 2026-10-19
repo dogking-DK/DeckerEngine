@@ -6,6 +6,8 @@ namespace dk::editor {
 Result<void> Camera::set_navigation_mode(NavigationMode mode) {
     if(mode!=NavigationMode::orbit && mode!=NavigationMode::fly && mode!=NavigationMode::walk)
         return std::unexpected(Error{ErrorCode::invalid_argument,"Unknown navigation mode"});
+    if(projection_==ProjectionMode::orthographic && mode!=NavigationMode::orbit)
+        return std::unexpected(Error{ErrorCode::not_supported,"Orthographic supports Orbit only; return to Perspective for Fly/Walk"});
     mode_=mode; return {};
 }
 Result<void> CameraNavigation::update(Camera& camera,const NavigationInput& input) {
@@ -17,8 +19,11 @@ Result<void> CameraNavigation::update(Camera& camera,const NavigationInput& inpu
     auto& n=candidate.settings_.navigation;
     n.move_speed=std::clamp(n.move_speed*std::exp(std::clamp(input.wheel*n.wheel_sensitivity,-20.0,20.0)),.01,1000.0);
     if(!first_) {
-        candidate.yaw_=std::remainder(camera.yaw_-input.look.x()*n.look_sensitivity,2*std::numbers::pi);
-        candidate.pitch_=std::clamp(camera.pitch_+input.look.y()*n.look_sensitivity*(n.invert_y ? -1 : 1),-1.55,1.55);
+        if(!input.look.isZero()) {
+            candidate.standard_view_=StandardView::none;
+            candidate.yaw_=std::remainder(camera.yaw_-input.look.x()*n.look_sensitivity,2*std::numbers::pi);
+            candidate.pitch_=std::clamp(camera.pitch_+input.look.y()*n.look_sensitivity*(n.invert_y ? -1 : 1),-1.55,1.55);
+        }
         if(!std::isfinite(candidate.yaw_) || !std::isfinite(candidate.pitch_)) return invalid();
         const Vec3d right{std::cos(candidate.yaw_),0,-std::sin(candidate.yaw_)};
         const Vec3d forward=candidate.mode_==NavigationMode::walk ?

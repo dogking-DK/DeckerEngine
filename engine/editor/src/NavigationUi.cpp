@@ -41,12 +41,14 @@ void NavigationUi::toolbar(Camera& camera,std::map<std::string,ImVec2>& controls
     const char* keys[]={"orbit","fly","walk"};
     for(int i=0;i<3;++i) {
         const auto mode=static_cast<NavigationMode>(i);
+        ImGui::BeginDisabled(camera.projection_mode()==ProjectionMode::orthographic && mode!=NavigationMode::orbit);
         if(ImGui::RadioButton(names[i],camera.navigation_mode()==mode)) {
             cancel(); const auto result=camera.set_navigation_mode(mode);
             if(!result) error_=result.error().message;
         }
         const auto a=ImGui::GetItemRectMin(),b=ImGui::GetItemRectMax();
         controls[std::string(prefix)+keys[i]]={(a.x+b.x)/2,(a.y+b.y)/2};
+        ImGui::EndDisabled();
         if(i<2) ImGui::SameLine();
     }
     if(camera.navigation_mode()==NavigationMode::orbit) {

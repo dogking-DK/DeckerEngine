@@ -6,7 +6,8 @@ void Viewport::update_path(const SceneReadSnapshot& snapshot,std::uint32_t width
     const std::optional<TransformEdit>& edit,std::uint64_t preview,const PathPreviewSettings& settings) {
     show_edit(); environment_.cancel(); environment_key_.reset(); environment_has_frame_=true;
     if(!path_) { error_=path_unavailable_; return; }
-    if(auto valid=camera.validate(double(width)/height); !valid) {
+    Camera checked=camera; checked.set_pathtracing(true);
+    if(auto valid=checked.validate(double(width)/height); !valid) {
         suspend_path(); published_.reset(); error_=valid.error().message; return;
     }
     const auto now=std::chrono::steady_clock::now();

@@ -35,6 +35,34 @@ static_assert(dk::degrees(0.0f) == 0.0f);
 
 } // namespace
 
+TEST_CASE("orthographic projection has parallel rays and exact clipping planes", "[math]") {
+    for(double aspect : {.3,1.,2.4}) for(double height : {.01,2.,100000.}) {
+        const dk::OrthographicLens lens{height,.1,200};
+        const auto p=dk::orthographic_projection(lens,aspect); REQUIRE(p);
+        for(const dk::Vec2d uv : {dk::Vec2d{0,0},dk::Vec2d{.23,.81},dk::Vec2d{1,1}}) {
+            const auto ray=dk::orthographic_ray(lens,aspect,uv); REQUIRE(ray);
+            CHECK(ray->direction==dk::Vec3d{0,0,-1}); CHECK(ray->minimum==0);
+            for(double t : {0.,37.,199.9}) {
+                const dk::Vec3d point=ray->origin+ray->direction*t;
+                const dk::Vec4d clip=(*p)*dk::Vec4d{point.x(),point.y(),point.z(),1};
+                CHECK(clip.w()==1);
+                CHECK(std::abs(clip.x()-(2*uv.x()-1))<1e-12);
+                CHECK(std::abs(clip.y()-(2*uv.y()-1))<1e-12);
+                CHECK(std::abs(clip.z()-t/199.9)<1e-12);
+            }
+        }
+    }
+}
+TEST_CASE("orthographic rejects invalid and unrepresentable lenses and rays", "[math]") {
+    for(double bad : {0.,-1.,std::numeric_limits<double>::infinity(),std::numeric_limits<double>::quiet_NaN()}) {
+        CHECK_FALSE(dk::orthographic_projection({bad,.1,100},1));
+        CHECK_FALSE(dk::orthographic_projection({2,.1,100},bad));
+        CHECK_FALSE(dk::orthographic_projection({2,bad,100},1));
+    }
+    CHECK_FALSE(dk::orthographic_projection({2,2,1},1));
+    CHECK_FALSE(dk::orthographic_projection({1e-308,.1,100},1e-308));
+    CHECK_FALSE(dk::orthographic_ray({2,.1,100},1,{-1,.5}));
+}
 TEST_CASE("perspective projection and rays share pixel orientation and clipping", "[math]") {
     for(double angle : {10.,65.,120.,178.}) for(double aspect : {.3,1.,3.}) {
         const dk::PerspectiveLens lens{dk::radians(angle),.1,1000};

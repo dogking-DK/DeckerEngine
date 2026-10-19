@@ -41,7 +41,8 @@ void ViewportInput::toolbar(Workspace& model,Viewport& preview,std::map<std::str
     ImGui::BeginDisabled(!model.selection());
     if (ImGui::SmallButton("Frame") && model.snapshot()) { navigation_.cancel(); report("Frame",camera_.frame(preview.bounds(*model.selection(),model.snapshot()->scene),aspect_)); }
     mark(controls,"camera_frame"); ImGui::EndDisabled(); ImGui::SameLine();
-    if(settings_ui_.draw(camera_,fixture_,aspect_,controls,"camera_")) navigation_.cancel();
+    const auto camera_revision=camera_.revision();
+    if(settings_ui_.draw(camera_,fixture_,aspect_,controls,"camera_") || camera_.revision()!=camera_revision) navigation_.cancel();
     navigation_.toolbar(camera_,controls,"camera_");
     ImGui::EndDisabled();
     ImGui::TextDisabled(active() ? "Transform preview | release: commit | Esc: cancel" : "Local axes | drag handles to transform");
@@ -118,7 +119,11 @@ void ViewportInput::image(Workspace& model,Viewport& preview,std::map<std::strin
                             const double distance=segment_distance(mouse,*previous,*p);
                             if (distance<closest) { closest=distance; hovered_axis=axis; }
                         }
-                        if (p && i==8) controls["gizmo_"+std::to_string(axis)]=point(*p);
+                        // Acceptance input must target a visible arc, including in a short orthographic viewport.
+                        const auto key="gizmo_"+std::to_string(axis);
+                        if(p && i%16==8 && !controls.contains(key) &&
+                           (p->array()>(minimum+Vec2d::Constant(6)).array()).all() &&
+                           (p->array()<(minimum+size-Vec2d::Constant(6)).array()).all()) controls[key]=point(*p);
                         previous=p;
                     }
                 }

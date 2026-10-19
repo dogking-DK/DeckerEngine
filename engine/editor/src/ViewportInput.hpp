@@ -18,6 +18,7 @@ public:
     void end_frame() { navigation_.end_frame(); }
     [[nodiscard]] bool navigating() const { return navigation_.active(); }
     void environment(bool enabled) { camera_.set_environment(enabled); }
+    void pathtracing(bool enabled) { camera_.set_pathtracing(enabled); }
     [[nodiscard]] bool active() const { return bool(edit_); }
     [[nodiscard]] const Camera& camera() const { return camera_; }
     [[nodiscard]] const std::optional<TransformEdit>& edit() const { return edit_; }

@@ -54,6 +54,7 @@ void write_capture(const std::filesystem::path& output,const graphics::ReadbackR
     check(write_file_bytes_atomic(output,ppm));
 }
 int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory::ResourceHandle heap,Diagnostics& diagnostics) {
+    if(options.smoke) std::setvbuf(stdout,nullptr,_IONBF,0); // Preserve the last acceptance stage on native crashes.
     const bool path_acceptance=options.pathtrace_smoke || options.desktop_render_smoke;
     if ((path_acceptance || options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe) && !std::filesystem::is_regular_file(options.root/".dk-editor-smoke"))
         throw std::runtime_error("--smoke requires a disposable project with .dk-editor-smoke marker");

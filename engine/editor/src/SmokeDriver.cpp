@@ -59,7 +59,10 @@ void SmokeDriver::interaction_input(Workspace& model,WorkbenchUi& ui,platform::W
     auto& io=ImGui::GetIO(); io.ConfigInputTrickleEventQueue=false;
     if (tick_++<12 || done_) return;
     const auto elapsed=tick_-13,stage=elapsed/12,phase=elapsed%12;
-    if (stage>=interaction_actions.size()) { done_=navigation_smoke_.input(model,ui,window,viewport); return; }
+    if (stage>=interaction_actions.size()) {
+        if(navigation_smoke_.input(model,ui,window,viewport)) done_=orthographic_input(model,ui,viewport);
+        return;
+    }
     const std::string action=interaction_actions[stage];
     const bool cancelled=action==":cancel" || action==":focus_cancel" || action==":resize_cancel" || action==":minimize_cancel";
     const bool gizmo=action==":move" || action==":rotate" || action==":scale" || cancelled;
@@ -74,6 +77,13 @@ void SmokeDriver::interaction_input(Workspace& model,WorkbenchUi& ui,platform::W
         if (gizmo) pointer_=control(action==":rotate" ? "gizmo_2":"gizmo_0");
         else if (navigation || action==":zoom") pointer_=control("viewport_empty");
         else pointer_=control(action);
+        if(stage==19 && entity_) {
+            const auto world=take(entity_world(model.snapshot()->scene,*entity_));
+            const auto uv=ui.input().camera().project(world.matrix().block<3,1>(0,3),double(viewport.info().width)/viewport.info().height);
+            require(uv.has_value(),"reloaded entity is outside camera clipping");
+            const auto center=control("viewport"),empty=control("viewport_empty");
+            pointer_={center.x+float(uv->x()-.5)*(center.x-empty.x)/.47f,center.y+float(uv->y()-.5)*(center.y-empty.y)/.47f};
+        }
         start_pointer_=pointer_;
         io.AddMousePosEvent(pointer_.x,pointer_.y);
         if (action==":zoom") io.AddMouseWheelEvent(0,2);

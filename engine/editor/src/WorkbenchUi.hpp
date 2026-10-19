@@ -72,6 +72,7 @@ private:
     bool popup_ = false,closing_ = false,layout_ = false,scroll_log_ = true;
     unsigned errors_ = 0,acceptance_path_extent_=0;
     float exposure_=1;
+    bool unlit_inspection_=false;
     render::EnvironmentRenderSettings environment_settings_=[] { render::EnvironmentRenderSettings s; s.mode=render::CloudRenderMode::temporal; return s; }();
 };
 }

@@ -132,7 +132,22 @@ Edit 和 Simulation 视口工具栏均有 **Camera** 按钮，各自保存独立
 光栅环境还受 far/near≤10000、far≤1e6 和投影尺度限制；窗口变得过宽或外部启用环境后不兼容时，保留旧图并显示错误，可用 Camera 修改 FOV/裁剪或恢复默认值。
 导航只能从实际图像内开始；文本输入、弹层、失焦、最小化、隐藏、切视图或关闭均释放鼠标，恢复后需重新按右键。
 F 显式框选并更新 Walk 高度；Home 保留当前模式。
-正交仍未提供；其分期范围见 [相机设计](../design/editor-interaction.md#m18-相机扩展计划)。
+
+**Orthographic** 切换正交并保持当前焦平面尺度；从 Fly/Walk 切入时同时进入 Orbit，
+回到 **Perspective** 恢复之前的导航模式。正交滚轮改变可见高度，不前后移动眼点；中键平移、右键自由环绕。
+Camera 中可输入 **Orthographic height (m)**，范围 0.01–100000m。返回透视需要焦距落在 0.1–3000m，
+越界会保留当前相机并报错，可先缩放或重新 Frame。Home/Reset 保留投影和高度，Restore defaults 恢复透视。
+
+**Front / Back / Left / Right / Top / Bottom** 分别从世界 +Z/-Z/-X/+X/+Y/-Y 看向焦点；
+前后左右上方为 +Y，Top 上方为 -Z，Bottom 上方为 +Z。右键环绕退出固定视向。
+正交拾取、框选、Move/Rotate/Scale Gizmo 使用同一投影；模拟 **Frame cloth** 保留所选正交视向，两个视口互不影响。
+
+带大气/云的 Edit 场景先选择 **Raster → Unlit inspection**，再选择正交。
+该选项仅跳过当前视口的环境光照，不改 Scene 或 Undo。正交下无法切入 Path trace，
+也无法取消会导致环境组合不受支持的 Unlit inspection；先回到 Perspective 即可恢复这些显示方式。
+外部命令启用环境导致当前正交组合无效时，保留最后图像、停止拾取并提示恢复方法。
+固定 `render.capture` / 序列和路径模式的正交支持属于后续 M18.4；光栅大气/云正交属于 M18.5，
+见 [相机设计](../design/editor-interaction.md#m18-相机扩展计划)。
 
 ## 编辑预览与外部命令
 
