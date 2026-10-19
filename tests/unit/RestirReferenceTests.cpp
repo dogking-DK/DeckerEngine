@@ -7,6 +7,7 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
+#include <vector>
 
 using namespace restir_test;
 namespace {
@@ -63,6 +64,46 @@ TEST_CASE("RESTIR reservoir enumerated expectation and selection frequencies") {
         selected+=r.selected()==1;
     }
     CHECK(double(selected)/65536==Catch::Approx(.75).margin(.006));
+}
+TEST_CASE("RESTIR temporal recursive support clipping and whole ancestry refresh preserve expectation") {
+    struct State { double probability=1,weight=0; unsigned light=3,M=0,age=0,mask=0; };
+    // Exhaust every fresh proposal and replacement outcome, including zero reservoirs,
+    // changing/partly disjoint supports and unequal clipped effective counts.
+    for(unsigned cap:{1u,4u}) for(unsigned limit:{2u,5u}) {
+        std::vector<State> states(1);
+        for(unsigned epoch=0;epoch<6;++epoch) {
+            const unsigned mask=std::array{3u,6u,5u}[epoch%3]; std::vector<State> next; double mean=0,probability=0;
+            for(const auto& old:states) for(unsigned draw=0;draw<3;++draw) {
+                const bool live=(mask&(1u<<draw))!=0;
+                const unsigned light=live ? draw : 3,oldM=old.age<limit ? std::min(old.M,cap) : 0;
+                const auto supports=[](unsigned domain,unsigned sample) { return sample<3 && (domain&(1u<<sample))!=0; };
+                const std::array<RisReuseSource,2> sources{{{live ? 1. : 0.,live ? 3. : 0.,1},
+                    {supports(mask,old.light) ? 1. : 0.,old.weight,oldM}}};
+                auto adjusted=sources; if(!oldM) adjusted[1]={};
+                const std::array<std::uint8_t,4> support{std::uint8_t(live),std::uint8_t(supports(mask,old.light)),
+                    std::uint8_t(supports(old.mask,light)),std::uint8_t(supports(old.mask,old.light))};
+                const double a=adjusted[0].target*adjusted[0].weight,b=adjusted[1].target*adjusted[1].weight*oldM,sum=a+b;
+                for(unsigned choice=0;choice<2;++choice) {
+                    const double p=sum>0 ? (choice ? b : a)/sum : (choice ? 0 : 1); if(p==0) continue;
+                    auto r=resample_ris_sources(adjusted,support,std::array{.5,choice ? 0. : std::nextafter(1.,0.)}); REQUIRE(r);
+                    State s; s.probability=old.probability*p/3; s.weight=r->normalization;
+                    s.light=r->selected==RisReservoir::invalid_sample ? 3 : (r->selected ? old.light : light);
+                    s.M=unsigned(r->candidates); s.age=oldM ? old.age+1 : 0; s.mask=mask;
+                    REQUIRE(s.age<=limit); REQUIRE(s.M<=cap+1);
+                    mean+=s.probability*s.weight; probability+=s.probability; next.push_back(s);
+                }
+            }
+            INFO("epoch="<<epoch<<" cap="<<cap<<" age="<<limit);
+            CHECK(mean==Catch::Approx(2).margin(1e-10)); CHECK(probability==Catch::Approx(1).margin(1e-10));
+            states=std::move(next);
+        }
+    }
+}
+TEST_CASE("RESTIR CPU initial oracle rejects temporal history requests") {
+    Fixture f; f.quad(-4,4,0,{.5f,.5f,.5f}); auto scene=f.scene();
+    auto r=RestirDiSettings{}; r.temporal.emplace();
+    CHECK_FALSE(estimate_restir_reference(scene,down,settings(),r,{0,8}));
+    r.temporal.reset(); CHECK(estimate_restir_reference(scene,down,settings(),r,{0,8}));
 }
 TEST_CASE("RESTIR reservoir M one zero draws and extreme weights") {
     RisReservoir empty; CHECK(empty.normalization()==0); CHECK(empty.selected()==RisReservoir::invalid_sample);

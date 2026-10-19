@@ -137,5 +137,6 @@
 | 0133 | [M18.5 光栅大气与云正交](0133-raster-orthographic-environment.md) | render-pipeline、render-atmosphere、render-clouds、render-capture、editor-interaction、editor | completed |
 | 0134 | [M19.1 ReSTIR CPU 参考](0134-restir-reference.md) | render-restir、render-pathtracing | completed |
 | 0135 | [M19.2 GPU 初始 RIS 与 RTXDI](0135-restir-gpu-initial.md) | render-restir、render-pathtracing | completed |
+| 0136 | [M19.3 时间 reservoir 与采样历史](0136-restir-temporal.md) | render-restir、render-pathtracing | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

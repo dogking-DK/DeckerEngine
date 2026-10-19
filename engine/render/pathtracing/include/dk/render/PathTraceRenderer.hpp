@@ -25,10 +25,17 @@ struct PathTraceGpuMediumInfo {
     VolumePathSettings settings; // max_tracking_steps is per dispatch (per tile in a progressive batch).
     std::uint64_t field_hash=0;
 };
+struct RestirTemporalStatistics {
+    std::uint64_t reused=0, rejected=0, expired=0, support_corrected=0;
+    std::uint32_t max_age=0, max_candidates=0;
+};
 struct PathTraceGpuImageInfo : PathTraceImageInfo {
     std::uint64_t geometry_fingerprint=0;
     std::optional<PathTraceGpuMediumInfo> medium; // Absent for the legacy surface integrator.
-    std::optional<RestirDiSettings> restir; // Initial RIS v1, RTXDI 3.1.0; absent for classic paths.
+    std::optional<RestirDiSettings> restir; // RTXDI 3.1.0; absent for classic paths.
+    std::uint32_t sampling_first_epoch=0; // Random-stream origin of this image, distinct from spp.
+    std::optional<std::uint32_t> temporal_history_epoch; // History at this image's start, if any.
+    RestirTemporalStatistics temporal_statistics;
     bool fixed_rays = false;
     std::uint32_t first_pixel = 0; // Counter origin for fixed-ray batches.
     // Hardware traversal counts are unavailable; statistics.triangle_tests stays zero.
@@ -73,7 +80,7 @@ struct PathTraceProgress {
     std::uint32_t completed_tiles = 0, total_tiles = 0;
     bool pending = false, paused = false, device_lost = false;
     double exposure = 0;
-    // Initial RIS only: current private epoch and pass (0 surface/RIS, 1 shade).
+    // RIS: current private epoch and pass (0 surface/RIS, 3 temporal, 1 shade).
     // completed_spp still advances only after the entire batch succeeds.
     std::uint32_t sampling_epoch = 0, sampling_pass = 0;
 };

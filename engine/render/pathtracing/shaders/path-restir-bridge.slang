@@ -3,7 +3,9 @@
 #include "Rtxdi/DI/Reservoir.hlsli"
 [[vk::binding(10,0)]] RWStructuredBuffer<float4> restirSurfaces;
 [[vk::binding(11,0)]] RWStructuredBuffer<float4> restirReservoirs;
-struct RestirSample { uint light; float2 uv; float W, target, M; };
+[[vk::binding(12,0)]] StructuredBuffer<float4> previousSurfaces;
+[[vk::binding(13,0)]] StructuredBuffer<float4> previousReservoirs;
+struct RestirSample { uint light; float2 uv; float W, target, M; uint age; };
 RestirSample emptyRestir() { RestirSample s={}; s.light=0xffffffffu; return s; }
 float restirRandom(uint pixel,uint sample,uint candidate,uint purpose) {
     uint4 p=asuint(parameters[1]); uint h=mixBits(p.x^0x52495331u);
@@ -75,10 +77,79 @@ float3 shadeRestir(RestirSample s,PathPayload hit,float3 position,float3 normal,
 #endif
 void storeRestir(uint pixel,RestirSample s,uint epoch) {
     restirReservoirs[pixel*2]=float4(asfloat(s.light),s.uv,s.W);
-    restirReservoirs[pixel*2+1]=float4(s.target,s.M,asfloat(epoch),0);
+    restirReservoirs[pixel*2+1]=float4(s.target,s.M,asfloat(epoch),asfloat(s.age));
 }
 RestirSample loadRestir(uint pixel,uint epoch) {
     float4 a=restirReservoirs[pixel*2],b=restirReservoirs[pixel*2+1];
     if(asuint(b.z)!=epoch) restirError();
-    RestirSample s; s.light=asuint(a.x); s.uv=a.yz; s.W=a.w; s.target=b.x; s.M=b.y; return s;
+    RestirSample s; s.light=asuint(a.x); s.uv=a.yz; s.W=a.w; s.target=b.x; s.M=b.y; s.age=asuint(b.w); return s;
+}
+void temporalStat(uint at) { uint ignored; InterlockedAdd(status[at],1,ignored); }
+float4 previousClip(float3 p) {
+    float4 v=float4(p,1);
+    return float4(dot(parameters[35],v),dot(parameters[36],v),dot(parameters[37],v),dot(parameters[38],v));
+}
+bool temporalReceiver(uint pixel,out uint previousPixel) {
+    previousPixel=0; float4 hit=restirSurfaces[pixel*4];
+    if(hit.w==0 || asuint(parameters[33]).z==0) return false;
+    float3 position=restirSurfaces[pixel*4+2].xyz;
+    float4 clip=previousClip(position);
+    if(!all(isfinite(clip)) || clip.w<=0 || clip.z<0 || clip.z>clip.w) return false;
+    float2 uv=clip.xy/clip.w*.5+.5;
+    if(any(uv<0) || any(uv>=1)) return false;
+    uint2 size=asuint(parameters[39]).xy,xy=uint2(uv*float2(size));
+    previousPixel=xy.y*size.x+xy.x;
+    float4 oldHit=previousSurfaces[previousPixel*4];
+    if(oldHit.w!=hit.w) return false; // Primitive also fixes material identity in the frozen scene.
+    float3 oldPosition=previousSurfaces[previousPixel*4+2].xyz;
+    if(distance(oldPosition,position)>parameters[34].x ||
+        dot(previousSurfaces[previousPixel*4+1].xyz,restirSurfaces[pixel*4+1].xyz)<parameters[34].y) return false;
+    if(asuint(previousSurfaces[previousPixel*4+3].w)!=asuint(parameters[34]).w) { restirError(); return false; }
+    return true;
+}
+#if !DK_PATH_EMPTY
+float temporalTarget(RestirSample s,float4 hit,float3 position,float3 normal,float3 wo) {
+    if(s.light==0xffffffffu) return 0;
+    float3 wi,point; float pdf;
+    float3 value=restirEvaluate(s.light,s.uv,position,normal,materialAt(uint(hit.w)-1,hit.yz),wo,wi,point,pdf);
+    float result=dot(value,float3(.2126,.7152,.0722));
+    if(!isfinite(result) || result<0) restirError();
+    return result;
+}
+RTXDI_DIReservoir sdkReservoir(RestirSample s,float M) {
+    RTXDI_DIReservoir r=RTXDI_EmptyDIReservoir();
+    r.M=M; r.weightSum=s.W; r.targetPdf=s.target;
+    if(s.light!=0xffffffffu) r.lightData=s.light|RTXDI_DIReservoir_LightValidBit;
+    return r;
+}
+#endif
+void temporalRestir(uint pixel,uint epoch) {
+    RestirSample fresh=loadRestir(pixel,epoch),result=fresh;
+    uint oldPixel;
+    if(temporalReceiver(pixel,oldPixel)) {
+        float4 a=previousReservoirs[oldPixel*2],b=previousReservoirs[oldPixel*2+1];
+        if(asuint(b.z)!=asuint(parameters[34]).w) restirError();
+        if(asuint(b.w)>=asuint(parameters[33]).w) temporalStat(4);
+        else {
+#if !DK_PATH_EMPTY
+            RestirSample old; old.light=asuint(a.x); old.uv=a.yz; old.W=a.w; old.target=b.x; old.M=min(b.y,float(asuint(parameters[34]).z)); old.age=asuint(b.w);
+            float4 hit=restirSurfaces[pixel*4];
+            float3 position=restirSurfaces[pixel*4+2].xyz,normal=restirSurfaces[pixel*4+1].xyz,wo=restirSurfaces[pixel*4+3].xyz;
+            RTXDI_DIReservoir combined=RTXDI_EmptyDIReservoir();
+            RTXDI_CombineDIReservoirs(combined,sdkReservoir(fresh,fresh.M),0,fresh.target);
+            float target=temporalTarget(old,hit,position,normal,wo);
+            if(RTXDI_CombineDIReservoirs(combined,sdkReservoir(old,old.M),restirRandom(pixel,epoch,0,5),target)) result=old;
+            float support=temporalTarget(result,previousSurfaces[oldPixel*4],previousSurfaces[oldPixel*4+2].xyz,
+                previousSurfaces[oldPixel*4+1].xyz,previousSurfaces[oldPixel*4+3].xyz)>0 ? old.M : 0;
+            RTXDI_FinalizeResampling(combined,1,fresh.M+support);
+            result.W=combined.weightSum; result.target=combined.targetPdf; result.M=combined.M;
+            result.age=old.age+1; // Ancestry of ALL sources, never the age of the selected sample.
+            if(combined.weightSum==0) result.light=0xffffffffu;
+            temporalStat(2); if(support==0 && old.M>0) temporalStat(7);
+#endif
+        }
+    } else temporalStat(3);
+    if(!isfinite(result.W) || result.W<0 || !isfinite(result.M) || (result.target>0 && result.W==0)) restirError();
+    uint ignored; InterlockedMax(status[5],result.age,ignored); InterlockedMax(status[6],uint(result.M),ignored);
+    storeRestir(pixel,result,epoch);
 }

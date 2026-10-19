@@ -190,8 +190,11 @@ void runRestirPixel(uint2 coordinate) {
     if(tile.w!=0) coordinate+=tile.xy;
     uint pixel=tile.w!=0 ? coordinate.y*tile.z+coordinate.x : localPixel;
     uint counter=pixel+asuint(parameters[10]).x;
+    uint epochOffset=asuint(parameters[33]).x;
+    if(asuint(parameters[32]).y==3) { temporalRestir(pixel,image.z+epochOffset); return; }
     if(asuint(parameters[32]).y==0) {
-        float3 offset; RayDesc ray=primaryRay(coordinate,pixel,image.z,offset);
+        uint epoch=image.z+epochOffset;
+        float3 offset; RayDesc ray=primaryRay(coordinate,pixel,epoch,offset);
         float4 record=float4(-1,0,0,0),normal=0,position=0;
         RestirSample reservoir=emptyRestir();
 #if !DK_PATH_EMPTY
@@ -201,21 +204,21 @@ void runRestirPixel(uint2 coordinate) {
             normal=float4(normalOf(hit,ray.Direction),dot(ray.Direction,triangles[hit.index*9+3].xyz)<0 ? 1 : -1);
             position=float4(positionOf(hit),1); PathBsdf bsdf=materialAt(hit.index,hit.barycentric);
             if(asuint(parameters[1]).z!=0 && (bsdf.ggx || largest(bsdf.color)>0))
-                reservoir=initialRestir(hit,position.xyz,normal.xyz,bsdf,-ray.Direction,counter,image.z);
+                reservoir=initialRestir(hit,position.xyz,normal.xyz,bsdf,-ray.Direction,counter,epoch);
         }
 #endif
         if(!all(isfinite(record)) || !all(isfinite(normal)) || !all(isfinite(position)) || !all(isfinite(ray.Direction))) restirError();
         restirSurfaces[pixel*4]=record; restirSurfaces[pixel*4+1]=normal;
-        restirSurfaces[pixel*4+2]=position; restirSurfaces[pixel*4+3]=float4(-ray.Direction,asfloat(image.z));
-        storeRestir(pixel,reservoir,image.z); return;
+        restirSurfaces[pixel*4+2]=position; restirSurfaces[pixel*4+3]=float4(-ray.Direction,asfloat(epoch));
+        storeRestir(pixel,reservoir,epoch); return;
     }
     Accumulation a=beginAccumulation(pixel);
     for(uint sample=image.z;sample<image.z+image.w;++sample) {
         float4 hit=float4(-1,0,0,0),n=0; float3 offset;
-        RayDesc ray=primaryRay(coordinate,pixel,sample,offset);
+        RayDesc ray=primaryRay(coordinate,pixel,sample+epochOffset,offset);
         float3 value=parameters[3].xyz;
 #if !DK_PATH_EMPTY
-        value=tracePath(ray,counter,sample,a.rays,hit,n,pixel);
+        value=tracePath(ray,counter,sample+epochOffset,a.rays,hit,n,pixel);
 #endif
         addSample(a,value,sample,hit,n);
     }

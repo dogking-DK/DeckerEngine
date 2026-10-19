@@ -1,16 +1,16 @@
 ---
 module: render-restir
 created_at: "2026-10-19T12:50:00+08:00"
-updated_at: "2026-10-19T14:18:00+08:00"
+updated_at: "2026-10-19T14:45:00+08:00"
 status: accepted
 ---
 
 # ReSTIR 光照重采样设计
 
 本文件是[路径追踪设计](render-pathtracing.md)的采样扩展设计。
-CPU 数学/首表面 RIS 与 GPU 初始 RIS 的现行契约分别见 M19.1/M19.2；时空会话与消费者按后续阶段推进；
+CPU 数学、GPU 初始 RIS、时间复用的现行契约分别见 M19.1/M19.2/M19.3；空间复用与消费者按后续阶段推进；
 状态、依赖和下一项统一见 [Roadmap M19](../roadmap.md#m19restir-直接光重采样)。
-下文明确区分现行 CPU/GPU 初始采样契约和后续时空复用计划，不把独立接口视为编辑器已有能力。
+下文明确区分现行 CPU/GPU 初始与时间采样契约和后续空间复用计划，不把独立接口视为编辑器已有能力。
 
 ## 目标与范围
 
@@ -130,9 +130,9 @@ GPU target 私有使用 RTXDI v3.1.0 对应 RTXDI-Library commit `f12037fa8e97eb
 当前批次候选 224 bytes/pixel，batch>1 另需 128 bytes/pixel 的私有累积 ping-pong。两视图/外持旧帧按真实 owner 另计。
 峰值 payload 为 `224*sum(held_complete_pixels) + (224 + (batch>1 ? 128 : 0))*candidate_pixels`，
 再加场景/纹理/AS/SBT、每 tile 参数/诊断和显式读回；读回单独为 128 bytes/pixel，固定射线结果为 64 bytes/pixel。
-渐进 tile 临时 payload 为参数 528、dummy ray 48、诊断 8、诊断读回 4 bytes，首次无历史时另有 128 bytes 零输入。
+渐进 RIS tile 临时 payload 现为参数 640、dummy ray 48、诊断 32、诊断读回 32 bytes，首次无历史时另有 128 bytes 零输入。
 固定射线批次还持有 32 bytes/ray 输入、64 bytes/pixel GPU 输出及同尺寸读回（加 4 bytes 诊断），
-以及参数 528、占位采样面 96、零历史 128、诊断 8 bytes；上述均为 payload，实际分配需对齐。
+以及参数 640、占位采样面 96、零历史 128、诊断 32 bytes；上述均为 payload，实际分配需对齐。
 实际 Vulkan memory requirements（含对齐）由同一 AllocationBudget 准入，payload 预检不替代实际额度；不包括 driver 隐藏管线开销。
 每路径最多 `2*max_bounces+2` 射线，候选数乘 tile 像素数/样本数受 2^24 预算限制；渐进全目标射线上限保持 2^32。
 tile 1..64，候选和射线预算共同限宽。状态报告区分阶段和 epoch；只在完整批次发布时推进完成计数。
@@ -147,6 +147,48 @@ tile 1..64，候选和射线预算共同限宽。状态报告区分阶段和 epo
 这是分离确定性硬件过滤误差和采样误差，不放宽 RIS 统计门槛；非纹理和独立积分协议不变。
 固定射线上传将 TMin 的有符号零规范成 +0，保留其他裁剪值；实测 RTX 4070 Laptop 对 -0 TMin 漏命中，
 对照只改变 TMin 符号即可恢复。该修正同步普通/介质固定射线入口，避免相机生成的合法 -0 经接口传递后改变可见性。
+
+## M19.3 时间复用实施契约
+
+`RestirDiSettings.temporal` 为可选的 `RestirTemporalSettings`（version 1）；默认关闭，保持 M19.2 结果。
+时间模式只允许完整渐进视图，CPU 初始参考和无历史 rays/view 请求显式拒绝该配置。
+默认历史有效 M 上限 64、祖先年龄上限 8，合法范围分别 1..4096、1..32；
+位置绝对容差默认 .1 米（0..1e6，转换为 float 后仍必须大于 0），法线余弦阈值默认 .95（0..1）。所有数值必须有限。
+设置变化清空线性图像与采样历史，预算/显示/调度变化不改变已冻结批次。
+
+每 epoch 按全图初始 RIS → 全图 temporal（pass=3）→ 全图着色（pass=1）推进。
+temporal 只改本像素 reservoir，读取独立冻结的前一 epoch 表面/reservoir；不读相邻当前输出。
+当前命中投影到前来源视图，先校验 clip w/depth、屏幕边界、primitive、位置距离与法线；
+失配/显露使用新候选。静态 primitive 身份同时约束材质，当前遮挡始终重新发阴影射线。
+前源保存自己的位置、重心/材质、法线和观察方向；GGX 在当前/前观察方向分别重算目标。
+
+合并使用 RTXDI_CombineDIReservoirs 流数学，并使用 M19.1 的支持校正：
+fresh 与 history 的流权重为 `p_current(Y_i)*W_i*m_i`，选中 Y 后
+`W=sum_weights/(p_current(Y)*(m_fresh+m_history*indicator(p_previous(Y)>0)))`。
+fresh 覆盖当前正支持，history 是前接收点正支持上的正规化样本；由两来源期望的分区恒等式，结果在当前支持上正规化。
+递归保持这一性质，前提是几何来源筛选、m 和祖先年龄不依赖选中的光样本。
+零权重来源保留 M；history 的正规化 W 不随 M 截断改变，截断后的 M 同时用于流权重与分母。
+age=全部参与来源的最大祖先年龄+1，与最终选中哪个来源无关；到上限整体丢弃历史，回到 age=0 的新候选。
+不复用/烘焙可见性，不套 SDK 默认总 M 归一化，也不把 SDK 中所选样本的 age 当祖先年龄。
+
+采样序号与图像 spp 分离。相机姿态变化保留最近完整采样 owner/来源视图，清空图像并从其下一 epoch 继续随机流；
+投影/尺寸、冻结场景/物理设置、seed/算法/复用配置、session/gesture 或显式 reset 清空两者。
+曝光/暂停/目标 spp/tile/batch 保留；cancel 丢弃私有工作且保留最后完整采样状态。
+采样序号为 uint32，预检图像目标与起点之和，拒绝溢出，不回绕随机流。
+来源报告记录图像的 sampling_first_epoch、开始时的历史 epoch、累计复用/失配/过期次数和最大 age/M；
+这些只在整批成功时发布，链内二阶矩不是独立样本误差估计。reused 指通过几何/age 校验参与合并，
+不等于最终选中旧样本；rejected 包含无历史、未命中和重投影失配。
+
+完成 owner 仍为 224 bytes/pixel。时间模式多 epoch 批次增加表面/reservoir 的 96 bytes/pixel ping-pong，
+峰值候选为 `224+(batch>1 ? 224 : 0)` bytes/pixel；所有旧 owner（包括相机移动保留的采样 owner）独立计费。
+参数增至 40 float4（640 bytes），RIS tile 状态/读回各 32 bytes；无历史前源绑定已初始化参数缓冲作占位，has_history=0 禁止读取。
+每像素最多两次额外目标评估（history 在当前、最终样本在前源），候选工作预算按 `initial_candidates+2` 预检；
+不增加校正射线，因为支持使用未遮挡目标；射线界仍 `2*bounces+2`。
+首次配置或 batch 准入失败不覆盖旧图/历史。批内交换均为私有缓冲，GPU 完成、诊断有效且 generation 匹配后同时提交。
+
+验收包含支持域变化/零来源/截断/刷新递归数学、至少 8 条独立 seed 链的均值和 N/4N 趋势、
+透视/正交移动与旋转/停动、显露/GGX、重置矩阵、batch/tile 重放、双视图/外持 owner、各阶段失败和取消恢复。
+时间模式默认不开启，空间/介质/消费者/DLSS 不在本阶段实施。
 
 ## 估计器与光能分工
 
@@ -198,7 +240,7 @@ flowchart LR
     G --> H
 ```
 
-M19.2 已实施首表面/初始 RIS 与最终着色两个阶段；图中的时间、空间复用留给 M19.3/4。
+M19.2 实施首表面/初始 RIS 与最终着色，M19.3 增加可选时间阶段；图中的空间复用留给 M19.4。
 各阶段仍可按 tile 提交，跨阶段必须有完整输入面及 Graph 依赖/屏障。
 空间 pass 从冻结的输入 reservoir 平面读，向独立平面写，不能原地读取邻居刚更新的数据。
 旧完整历史、当前初始/时间结果与空间输出的活跃期分别计入内存；M19.2 冻结初始采样布局，新增复用平面在 M19.3/4 分别确立。
@@ -273,8 +315,8 @@ M19.5 若发现条件概率/支持域无法满足，先修订推导与范围，�
 
 M19.1 以独立 `estimate_restir_reference` 入口和 `RestirDiSettings` 冻结 CPU 初始采样及版本；
 M19.2 的 GPU 与渐进入口沿用该配置，实际来源置于 `PathTraceGpuImageInfo.restir`。
-后续消费者计划采用 `direct_lighting = classic_mis / restir_di`；时间/空间开关、邻居配置、历史界限
-按各实施阶段扩展，不提前把未支持的字段放进当前接口。RTXDI backend 及 DLSS reconstruction 分别适配。
+M19.3 以可选 temporal 配置提供时间复用与历史界限；后续消费者计划采用 `direct_lighting = classic_mis / restir_di`。
+空间开关和邻居配置按 M19.4 扩展，不提前把未支持的字段放进当前接口。RTXDI backend 及 DLSS reconstruction 分别适配。
 与 Surface only/Scene media 正交，不复用介质模式开关表达算法；旧请求默认保持原行为。
 BSDF-only 对照与 ReSTIR 同时请求的非法组合显式拒绝。设置不进入 Scene 文件/Undo。
 
@@ -330,7 +372,7 @@ M19.8 至少三轮独立计时，不能验收时降低目标。单灯、天空�
   核对目标支持、复用归一化和可见性复用的偏差风险，不将基本归一化等同完整校正。
 
 M19.1 的首表面光能分工、合并数学及有限历史的约束见 CPU 实施契约；窄高光保留 light-only proposal 的高方差限制。
-M19.2 的 RTXDI/GPU 布局、容量与路径状态保存方式见实施契约；M19.3/4 验证实际屏幕支持与有限历史，
+M19.2/3 的 RTXDI/GPU 布局、容量、时间复用支持校正和有限历史见实施契约；M19.4 增加屏幕邻域支持与空间平面，
 M19.5 单独解决介质条件采样，DLSS 的 SR/RR/FG 范围与能力协商另行设计。
 M19 验收后，再依据直接/间接/介质噪声占比决定下一步采用 ReSTIR GI/PT、ReGIR 或体积重要性采样。
 
@@ -341,3 +383,4 @@ M19 验收后，再依据直接/间接/介质噪声占比决定下一步采用 R
   [0132 路径正交与捕获](../development/0132-pathtrace-orthographic-capture.md)。
 - [0134 CPU 参考实施记录](../development/0134-restir-reference.md)；各后续 M19.x 分别留档、验证并本地提交。
 - [0135 GPU 初始 RIS 与 RTXDI](../development/0135-restir-gpu-initial.md)。
+- [0136 时间 reservoir 与采样历史](../development/0136-restir-temporal.md)。

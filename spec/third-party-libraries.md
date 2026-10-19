@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-10-19T13:54:00+08:00"
+updated_at: "2026-10-19T14:45:00+08:00"
 status: accepted
 ---
 
@@ -226,7 +226,7 @@ DLSS 尚未选定/下载 SDK 版本，其接入时再按 registry/固定上游�
 
 | SDK | 用途与边界 | 接入顺序与当前状态 |
 | --- | --- | --- |
-| RTXDI-Library v3.1.0 对应固定库提交 | GPU 初始 RIS 的 StreamSample/FinalizeResampling shader 数学；引擎桥接光表/BSDF/可见性并保留 float UV。SDK 类型 PRIVATE，CPU oracle 独立，GPU 资源仍由引擎/Graph 管理 | M19.2 接入与定向验证，证据见 [0135](development/0135-restir-gpu-initial.md)；不代表时间/空间/介质复用已接入 |
+| RTXDI-Library v3.1.0 对应固定库提交 | GPU 初始/时间 RIS 的 StreamSample/CombineDIReservoirs/FinalizeResampling shader 数学；引擎桥接光表/BSDF/可见性、重投影/支持分母/祖先年龄并保留 float UV。SDK 类型 PRIVATE，CPU oracle 独立，GPU 资源仍由引擎/Graph 管理 | 初始与时间复用接入和定向验证见 [0135](development/0135-restir-gpu-initial.md)、[0136](development/0136-restir-temporal.md)；空间/介质复用尚未接入 |
 | DLSS / Streamline 或 NGX | 独立图像重建适配；区分 SR、RR、FG 的功能/能力与输入，不以算法采样模式替代重建模式 | 后续单独设计接入；保留线性颜色、render/output 尺寸、depth/motion/jitter/exposure/reset 的语义边界，尚无 SDK 或 UI 开关 |
 
 依据：[RTXDI 集成说明](https://github.com/NVIDIA-RTX/RTXDI/blob/main/Doc/Integration.md)、

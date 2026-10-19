@@ -62,6 +62,7 @@ void restir_numeric(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQ
         complete(q,take(r.submit_medium_rays(q,gpu,medium,std::span{&down,1},volume,{0,16}))),0);
     const std::array rays{down,negative_zero};
     const auto batch=complete(q,take(r.submit_restir_rays(q,gpu,rays,s,{}, {11,1024},17)));
+    require(batch.info().sampling_first_epoch==11,"fixed RIS source omitted sampling origin");
     for(unsigned i=0;i<2;++i) close_color(batch.linear_rgb()[i],take(estimate_restir_reference(gpu.source(),rays[i],s,{}, {11,1024},17+i)).mean,1e-5);
     require(before.info().restir->version==1,"RIS version missing");
 }
@@ -184,7 +185,10 @@ void restir_state(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQue
     check(r.release_view(81)); check(r.release_view(82));
     compare_images(complete(q,take(held.read_linear(q))),original,0);
     auto bounded=take(PathTraceRenderer::create(heap,q,DK_PATH_SHADER_DIR,{},1ull<<20)); auto small=take(bounded.prepare_scene(q,f.scene()));
-    auto large=f.view(f.source(),64); require(!bounded.configure_restir_view(q,1,small,large,s,{},schedule),"RIS planes bypass memory limit");
+    // A one-epoch tail allocates no ping-pong buffer even if batch_spp is larger.
+    auto tail=f.view(f.source(),64); check(bounded.configure_restir_view(q,1,small,tail,s,{},schedule));
+    advance_view(bounded,q,1); require(bounded.completed_frame(1).info().samples.count==1,"bounded tail did not complete"); check(bounded.release_view(1));
+    auto large=f.view(f.source(),72); require(!bounded.configure_restir_view(q,1,small,large,s,{},schedule),"RIS planes bypass memory limit");
     check(bounded.configure_restir_view(q,1,small,view,s,{},schedule)); finish_view(bounded,q,1); auto old=bounded.completed_frame(1);
     const auto owned=bounded.memory_stats(q).owned.current; check(bounded.release_view(1));
     require(bounded.memory_stats(q).owned.current==owned,"external completed owner not charged"); old={};

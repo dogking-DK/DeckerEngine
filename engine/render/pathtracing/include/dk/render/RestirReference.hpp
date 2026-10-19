@@ -38,16 +38,22 @@ struct RisReuseSelection {
 [[nodiscard]] Result<RisReuseSelection> resample_ris_sources(std::span<const RisReuseSource>,
     std::span<const std::uint8_t> support, std::span<const double> uniforms);
 
+struct RestirTemporalSettings {
+    std::uint32_t version = 1, max_history_candidates = 64, max_history_age = 8;
+    double position_tolerance = .1, normal_cosine = .95;
+    bool operator==(const RestirTemporalSettings&) const = default;
+};
 struct RestirDiSettings {
-    std::uint32_t version = 1, initial_candidates = 8; // Initial RIS only; 1..64.
+    std::uint32_t version = 1, initial_candidates = 8; // 1..64 fresh candidates per epoch.
     std::uint64_t max_candidate_evaluations = std::uint64_t{1} << 24;
+    std::optional<RestirTemporalSettings> temporal; // Full progressive GPU view only.
 };
 struct RestirReferenceEstimate : PathTraceEstimate {
     RestirDiSettings restir;
     PathTraceSamples samples;
     std::uint64_t candidate_evaluations = 0, selected_shadow_rays = 0;
 };
-enum class RestirRandomPurpose : std::uint32_t { light_class, light_index, light_u, light_v, replacement };
+enum class RestirRandomPurpose : std::uint32_t { light_class, light_index, light_u, light_v, replacement, temporal_replacement };
 // Version 1 independent counter domain; BSDF/RR/camera retain path sampler v1.
 [[nodiscard]] double restir_reference_sample(std::uint64_t seed, std::uint32_t pixel, std::uint32_t epoch,
     std::uint32_t candidate, RestirRandomPurpose) noexcept;

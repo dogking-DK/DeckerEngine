@@ -248,7 +248,7 @@ Result<RestirReferenceEstimate> estimate_restir_reference(const PathTraceScene& 
     if(!state) return std::unexpected(Error{ErrorCode::invalid_state,"Empty RIS path scene"});
     if(auto valid=validate_path_ray(ray);!valid) return std::unexpected(valid.error());
     if(auto valid=work_valid(*state,1,s,samples);!valid) return std::unexpected(valid.error());
-    if(r.version!=1 || r.initial_candidates<1 || r.initial_candidates>64 ||
+    if(r.temporal || r.version!=1 || r.initial_candidates<1 || r.initial_candidates>64 ||
         s.estimator!=PathTraceEstimator::mis || !r.max_candidate_evaluations || r.max_candidate_evaluations>(1ull<<24))
         return std::unexpected(path_invalid("Invalid CPU initial RIS settings or estimator combination"));
     const auto candidates=std::uint64_t(samples.count)*r.initial_candidates;
