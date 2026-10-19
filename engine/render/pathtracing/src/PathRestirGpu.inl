@@ -12,17 +12,25 @@ void validate_restir(const PathTraceSettings& path,const RestirDiSettings& r,std
             !std::isfinite(t.normal_cosine) || t.normal_cosine<0 || t.normal_cosine>1)
             throw path_invalid("Invalid temporal RIS settings or missing progressive view");
     }
-    if(pixels*samples.count*(r.initial_candidates+(r.temporal ? 2 : 0))>r.max_candidate_evaluations ||
+    if(r.spatial) {
+        const auto& s=*r.spatial;
+        if(fixed_work || s.version!=1 || !s.neighbor_count || s.neighbor_count>8 || !s.radius || s.radius>32 ||
+            !s.max_source_candidates || s.max_source_candidates>4096 || !std::isfinite(s.position_tolerance) ||
+            s.position_tolerance<=0 || s.position_tolerance>1e6 || float(s.position_tolerance)==0 ||
+            !std::isfinite(s.normal_cosine) || s.normal_cosine< -1 || s.normal_cosine>1)
+            throw path_invalid("Invalid spatial RIS settings or missing progressive view");
+    }
+    if(pixels*samples.count*restir_evaluations(r)>r.max_candidate_evaluations ||
         pixels*samples.count*(2ull*path.max_bounces+2)>path.max_rays ||
         (fixed_work && std::uint64_t(samples.count)*r.initial_candidates>PathTraceRenderer::restir_max_candidates_per_invocation))
         throw path_invalid("GPU initial RIS candidate or ray budget exceeded");
 }
 bool same_restir(const std::optional<RestirDiSettings>& a,const RestirDiSettings& b) {
-    return a && a->version==b.version && a->initial_candidates==b.initial_candidates && a->temporal==b.temporal;
+    return a && a->version==b.version && a->initial_candidates==b.initial_candidates && a->temporal==b.temporal && a->spatial==b.spatial;
 }
-void restir_memory(const PathGpuState& state,std::uint64_t pixels,std::uint32_t batch_spp,bool temporal) {
+void restir_memory(const PathGpuState& state,std::uint64_t pixels,std::uint32_t batch_spp,const RestirDiSettings& r) {
     const auto stats=state.budget->stats();
-    const auto payload=pixels*(224ull+(batch_spp>1 ? (temporal ? 224ull : 128ull) : 0ull));
+    const auto payload=pixels*(224ull+(r.spatial ? 32ull : 0ull)+(batch_spp>1 ? (r.temporal ? 224ull : 128ull) : 0ull));
     if(payload>stats.limit-stats.current) throw path_invalid("GPU RIS candidate planes exceed available memory budget");
 }
 }
@@ -102,7 +110,7 @@ Result<void> PathTraceRenderer::configure_restir_view(SubmissionQueue& queue,std
         if(!slot) throw Error{ErrorCode::conflict,"Path renderer has two occupied view slots"};
     }
     if(std::uint64_t(epoch_origin)+schedule.target_spp>std::numeric_limits<std::uint32_t>::max()) throw path_invalid("Temporal RIS epoch counter overflow");
-    restir_memory(*state_,pixels,std::min(schedule.batch_spp,schedule.target_spp),restir.temporal.has_value());
+    restir_memory(*state_,pixels,std::min(schedule.batch_spp,schedule.target_spp),restir);
     auto candidate=memory::make_shared_in<PathGpuView>(state_->heap,view);
     candidate->id=id; candidate->scene=scene.state_; candidate->settings=settings; candidate->restir=restir; candidate->schedule=schedule;
     candidate->sampling_history=std::move(sampling_history); candidate->epoch_origin=epoch_origin;

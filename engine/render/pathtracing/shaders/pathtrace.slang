@@ -192,6 +192,7 @@ void runRestirPixel(uint2 coordinate) {
     uint counter=pixel+asuint(parameters[10]).x;
     uint epochOffset=asuint(parameters[33]).x;
     if(asuint(parameters[32]).y==3) { temporalRestir(pixel,image.z+epochOffset); return; }
+    if(asuint(parameters[32]).y==4) { spatialRestir(pixel,image.z+epochOffset); return; }
     if(asuint(parameters[32]).y==0) {
         uint epoch=image.z+epochOffset;
         float3 offset; RayDesc ray=primaryRay(coordinate,pixel,epoch,offset);

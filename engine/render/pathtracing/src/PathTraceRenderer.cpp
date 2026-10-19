@@ -96,7 +96,7 @@ struct PathGpuBatch {
     std::shared_ptr<const PathGpuFrame> frame;
     std::uint32_t first=0,count=0,edge=0,next_tile=0,columns=0,rows=0;
     std::uint32_t epoch=0,phase=0;
-    Buffer scratch,scratch_surface,scratch_reservoir;
+    Buffer scratch,scratch_surface,scratch_reservoir,spatial_output;
     std::stop_token stop, tile_stop;
     bool discarded=false,reverse_tiles=false;
 };
@@ -168,7 +168,7 @@ Result<void> trace_record(graph::PassContext& pass,void* context) {
     const auto& c=*static_cast<TraceContext*>(context);
     try {
         if (pass.pass_index()!=0) {
-            if(c.progressive) return pass.copy_buffer(6,4,c.restir ? 32 : 4);
+            if(c.progressive) return pass.copy_buffer(6,4,c.restir ? 64 : 4);
             const auto bytes=std::uint64_t{c.width}*c.height*sizeof(PathGpuPixel);
             return pass.pass_index()==1 ? pass.copy_buffer(3,4,bytes) : pass.copy_buffer(6,4,4,0,bytes);
         }
@@ -178,8 +178,11 @@ Result<void> trace_record(graph::PassContext& pass,void* context) {
         return encoder.dispatch({(c.width*c.height+63)/64,1,1});
     } catch (const Error& error) { return std::unexpected(error); }
 }
-using Parameters=std::array<Float4,40>;
-void restir_memory(const PathGpuState&,std::uint64_t,std::uint32_t,bool);
+using Parameters=std::array<Float4,42>;
+void restir_memory(const PathGpuState&,std::uint64_t,std::uint32_t,const RestirDiSettings&);
+std::uint64_t restir_evaluations(const RestirDiSettings& r) {
+    return r.initial_candidates+(r.temporal ? 2 : 0)+(r.spatial ? 2*r.spatial->neighbor_count+1 : 0);
+}
 Parameters view_parameters(const PathSceneState&,const RenderView&,const PathTraceSettings&,PathTraceSamples);
 Parameters parameters(const PathSceneState& scene,const PathTraceSettings& s,PathTraceSamples samples,
     std::uint32_t width,std::uint32_t height,bool rays,std::uint32_t first_pixel) {
@@ -196,7 +199,8 @@ Parameters parameters(const PathSceneState& scene,const PathTraceSettings& s,Pat
 }
 std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& queue,const PathGpuScene& scene,
     Parameters p,std::span<const Float4> rays,PathTraceGpuImageInfo info,std::stop_token stop,const Buffer* candidate=nullptr,const Buffer* completed=nullptr,std::shared_ptr<const PathGpuCloud> cloud={},
-    const Buffer* surface=nullptr,const Buffer* reservoir=nullptr,const Buffer* old_surface=nullptr,const Buffer* old_reservoir=nullptr) {
+    const Buffer* surface=nullptr,const Buffer* reservoir=nullptr,const Buffer* old_surface=nullptr,const Buffer* old_reservoir=nullptr,
+    const Buffer* spatial_input=nullptr) {
     const bool empty=scene.source.triangle_count()==0;
     const bool air=info.medium.has_value();
     const bool restir=info.restir.has_value();
@@ -219,9 +223,11 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     // Unused previous planes bind a real, initialized buffer and are never indexed.
     if(!old_surface) old_surface=&uniform;
     if(!old_reservoir) old_reservoir=&uniform;
-    const std::array<std::uint32_t,8> clean{};
+    const bool spatial_pass=restir && std::bit_cast<std::uint32_t>(p[32][1])==4;
+    if(!spatial_input) spatial_input=&uniform;
+    const std::array<std::uint32_t,16> clean{};
     auto status=upload(state.factory,std::as_bytes(std::span{clean}),storage|vk::BufferUsageFlagBits::eTransferSrc);
-    frame->readback=take(state.factory.create_buffer({candidate ? (restir ? 32ull : 4ull) : bytes+4,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
+    frame->readback=take(state.factory.create_buffer({candidate ? (restir ? 64ull : 4ull) : bytes+4,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
     frame->diagnostic_offset=candidate ? 0 : bytes;
     Vector<BindingWrite> writes(0,memory::Allocator<BindingWrite>{state.heap});
     if (!empty) { writes.push_back({0,0,AccelerationStructureBinding{&scene.geometry->tlas}}); writes.push_back({1,0,BufferBinding{&scene.geometry->triangles}}); }
@@ -232,6 +238,7 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     if(restir) {
         writes.push_back({10,0,BufferBinding{surface}}); writes.push_back({11,0,BufferBinding{reservoir}});
         writes.push_back({12,0,BufferBinding{old_surface}}); writes.push_back({13,0,BufferBinding{old_reservoir}});
+        writes.push_back({14,0,BufferBinding{spatial_input}});
     }
     if(!empty && state.textured) for(std::uint32_t i=0;i<64;++i) {
         const auto& texture=scene.geometry->textures[std::min<std::size_t>(i,scene.geometry->texture_count-1)];
@@ -256,14 +263,14 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     imports.push_back({0,&uniform}); imports.push_back({3,&output}); imports.push_back({4,&frame->readback}); imports.push_back({5,&history}); imports.push_back({6,&status});
     if(restir) {
         const auto phase=std::bit_cast<std::uint32_t>(p[32][1]);
-        const bool reading=phase==1 || phase==3;
+        const bool reading=phase==1 || phase==3 || spatial_pass;
         const auto access=reading ? vk::AccessFlagBits2::eShaderRead : vk::AccessFlagBits2::eShaderWrite;
         const auto a=take(g.declare_buffer("RIS surface",surface->description(),graph::Lifetime::external,reading));
-        const auto b=take(g.declare_buffer("RIS reservoir",reservoir->description(),graph::Lifetime::external,reading));
+        const auto b=take(g.declare_buffer("RIS reservoir",reservoir->description(),graph::Lifetime::external,reading && !spatial_pass));
         // As with the candidate image, tile writes are discard writes: no previous contents
         // are consumed. The scheduler gates every reader on completion of the whole plane.
         uses.push_back(use(a,stage,access,!reading));
-        uses.push_back(use(b,stage,phase==3 ? access|vk::AccessFlagBits2::eShaderWrite : access,!reading));
+        uses.push_back(use(b,stage,spatial_pass ? vk::AccessFlagBits2::eShaderWrite : (phase==3 ? access|vk::AccessFlagBits2::eShaderWrite : access),!reading || spatial_pass));
         imports.push_back({7,surface}); imports.push_back({8,reservoir});
         // Only declare previous planes when they are used: dummy bindings alias parameters.
         if(std::bit_cast<std::uint32_t>(p[33][2])!=0) {
@@ -272,8 +279,13 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
             uses.push_back(use(old_a,stage,vk::AccessFlagBits2::eShaderRead)); uses.push_back(use(old_b,stage,vk::AccessFlagBits2::eShaderRead));
             imports.push_back({9,old_surface}); imports.push_back({10,old_reservoir});
         }
+        if(spatial_pass) {
+            const auto input_plane=take(g.declare_buffer("frozen spatial RIS input",spatial_input->description(),graph::Lifetime::external,true));
+            uses.push_back(use(input_plane,stage,vk::AccessFlagBits2::eShaderRead));
+            imports.push_back({std::bit_cast<std::uint32_t>(p[33][2])!=0 ? 11u : 9u,spatial_input});
+        }
     }
-    const auto restir_buffers=restir ? (std::bit_cast<std::uint32_t>(p[33][2])!=0 ? 4u : 2u) : 0u;
+    const auto restir_buffers=restir ? (std::bit_cast<std::uint32_t>(p[33][2])!=0 ? 4u : 2u)+(spatial_pass ? 1u : 0u) : 0u;
     if(empty && (air || restir)) { uses.push_back(use(ray_input,stage,vk::AccessFlagBits2::eShaderRead)); imports.push_back({2,&input}); }
     // Compiled Graph resources are grouped by type: buffers (including clouds), images, AS, SBT.
     for(std::size_t i=0;i<scene.geometry->texture_count;++i) {
@@ -744,10 +756,10 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
         batch->count=std::min(view->schedule.batch_spp,view->schedule.target_spp-completed); batch->stop=stop;
         batch->reverse_tiles=view->schedule.reverse_tiles;
         auto pixels=view->settings.max_rays/((view->restir ? 1 : batch->count)*(2ull*view->settings.max_bounces+(view->restir ? 2 : 1)));
-        if(view->restir) pixels=std::min(pixels,view->restir->max_candidate_evaluations/(view->restir->initial_candidates+(view->restir->temporal ? 2 : 0)));
+        if(view->restir) pixels=std::min(pixels,view->restir->max_candidate_evaluations/restir_evaluations(*view->restir));
         batch->edge=std::min(view->schedule.tile_edge,std::uint32_t(std::sqrt(double(pixels))));
         const auto& d=view->view.description(); batch->columns=(d.width+batch->edge-1)/batch->edge; batch->rows=(d.height+batch->edge-1)/batch->edge;
-        if(view->restir) restir_memory(*state_,std::uint64_t{d.width}*d.height,batch->count,view->restir->temporal.has_value());
+        if(view->restir) restir_memory(*state_,std::uint64_t{d.width}*d.height,batch->count,*view->restir);
         batch->candidate=memory::make_shared_in<PathGpuCompleted>(state_->heap);
         auto& frame=*batch->candidate; frame.heap=state_->heap; frame.factory=state_->factory; frame.source=view->scene->source;
         frame.info=info_for(frame.source,d.width,d.height,view->settings,{0,completed+batch->count}); frame.info.view=d;
@@ -755,6 +767,7 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
         frame.info.sampling_first_epoch=view->epoch_origin;
         if(batch->history) {
             frame.info.temporal_statistics=batch->history->info.temporal_statistics;
+            frame.info.spatial_statistics=batch->history->info.spatial_statistics;
             frame.info.temporal_history_epoch=batch->history->info.temporal_history_epoch;
         } else if(batch->sampling_history) frame.info.temporal_history_epoch=view->epoch_origin-1;
         if(view->medium) frame.info.medium=PathTraceGpuMediumInfo{view->medium->environment(),view->medium->settings(),view->medium_settings,view->medium->field_hash()};
@@ -764,6 +777,7 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
             const auto n=std::uint64_t{d.width}*d.height;
             frame.surface=take(state_->factory.create_buffer({n*64,vk::BufferUsageFlagBits::eStorageBuffer}));
             frame.reservoir=take(state_->factory.create_buffer({n*32,vk::BufferUsageFlagBits::eStorageBuffer}));
+            if(view->restir->spatial) batch->spatial_output=take(state_->factory.create_buffer({n*32,vk::BufferUsageFlagBits::eStorageBuffer}));
             if(batch->count>1) batch->scratch=take(state_->factory.create_buffer({n*128,vk::BufferUsageFlagBits::eStorageBuffer|vk::BufferUsageFlagBits::eTransferSrc}));
             if(batch->count>1 && view->restir->temporal) {
                 batch->scratch_surface=take(state_->factory.create_buffer({n*64,vk::BufferUsageFlagBits::eStorageBuffer}));
@@ -786,6 +800,12 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
         p[0]=integers(width,height,batch->first+batch->epoch,1); p[32]=integers(info.restir->initial_candidates,batch->phase,0,0);
         info.samples={batch->first+batch->epoch,1};
         p[33]=integers(view->epoch_origin,0,0,0);
+        p[39]=integers(d.width,d.height,0,0);
+        if(info.restir->spatial) {
+            const auto& spatial=*info.restir->spatial;
+            p[40]=integers(spatial.neighbor_count,spatial.radius,spatial.max_source_candidates,1);
+            p[41]={float(spatial.position_tolerance),float(spatial.normal_cosine),0,0};
+        }
         if(info.restir->temporal) {
             const auto& t=*info.restir->temporal;
             const bool previous=batch->epoch || bool(batch->sampling_history);
@@ -810,7 +830,9 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
     cancelled(batch->stop);
     auto frame=submit(*state_,queue,*view->scene,p,dummy,std::move(info),stop,&batch->candidate->buffer,
         view->restir && batch->epoch ? &batch->scratch : (batch->history ? &batch->history->buffer : nullptr),view->cloud,
-        view->restir ? &batch->candidate->surface : nullptr,view->restir ? &batch->candidate->reservoir : nullptr,old_surface,old_reservoir);
+        view->restir ? &batch->candidate->surface : nullptr,
+        view->restir ? (batch->phase==4 ? &batch->spatial_output : &batch->candidate->reservoir) : nullptr,old_surface,old_reservoir,
+        batch->phase==4 ? &batch->candidate->reservoir : nullptr);
     batch->tile_stop=stop; batch->frame=std::move(frame); state_->active=std::move(batch); return true;
 } catch(const Error& error) {
     if(state_ && queue.stats().device_lost) state_->terminal=true;
@@ -837,19 +859,28 @@ Result<bool> PathTraceRenderer::poll(SubmissionQueue& queue,std::stop_token stop
     }
     if(!*waited) return false;
     if(!current(*state_,*batch)) { state_->active.reset(); return false; }
-    std::array<std::uint32_t,8> diagnostic{};
-    check(batch->frame->readback.read(0,std::as_writable_bytes(std::span{diagnostic}).first(batch->candidate->info.restir ? 32 : 4)));
+    std::array<std::uint32_t,16> diagnostic{};
+    check(batch->frame->readback.read(0,std::as_writable_bytes(std::span{diagnostic}).first(batch->candidate->info.restir ? 64 : 4)));
     batch->frame.reset();
     if(diagnostic[0]) { state_->active.reset(); return std::unexpected(sample_error(diagnostic[0])); }
     if(!current(*state_,*batch)) { state_->active.reset(); return false; }
     auto& stats=batch->candidate->info.temporal_statistics;
     stats.reused+=diagnostic[2]; stats.rejected+=diagnostic[3]; stats.expired+=diagnostic[4];
     stats.max_age=std::max(stats.max_age,diagnostic[5]); stats.max_candidates=std::max(stats.max_candidates,diagnostic[6]); stats.support_corrected+=diagnostic[7];
+    auto& spatial=batch->candidate->info.spatial_statistics;
+    spatial.reused+=diagnostic[8]; spatial.rejected+=diagnostic[9]; spatial.support_corrected+=diagnostic[10];
+    spatial.max_candidates=std::max(spatial.max_candidates,diagnostic[11]); spatial.max_age=std::max(spatial.max_age,diagnostic[12]);
+    spatial.current_visibility_rays+=diagnostic[13];
     ++batch->next_tile;
     if(batch->next_tile!=batch->columns*batch->rows) return false;
     if(batch->candidate->info.restir) {
-        if(batch->phase==0) { batch->phase=batch->candidate->info.restir->temporal ? 3 : 1; batch->next_tile=0; return false; }
-        if(batch->phase==3) { batch->phase=1; batch->next_tile=0; return false; }
+        const auto after_temporal=batch->candidate->info.restir->spatial ? 4u : 1u;
+        if(batch->phase==0) { batch->phase=batch->candidate->info.restir->temporal ? 3 : after_temporal; batch->next_tile=0; return false; }
+        if(batch->phase==3) { batch->phase=after_temporal; batch->next_tile=0; return false; }
+        if(batch->phase==4) {
+            std::swap(batch->candidate->reservoir,batch->spatial_output);
+            batch->phase=1; batch->next_tile=0; return false;
+        }
         if(++batch->epoch<batch->count) {
             if(batch->candidate->info.restir->temporal) {
                 std::swap(batch->candidate->surface,batch->scratch_surface);

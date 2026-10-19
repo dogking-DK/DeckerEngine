@@ -1,5 +1,6 @@
 #include "../RestirTestSupport.hpp"
 #include "../PathBsdfOracle.hpp"
+#include "../RestirSpatialOracle.hpp"
 #include "../../engine/render/pathtracing/src/RestirReferenceInternal.hpp"
 #include <dk/math/Projection.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -104,6 +105,72 @@ TEST_CASE("RESTIR CPU initial oracle rejects temporal history requests") {
     auto r=RestirDiSettings{}; r.temporal.emplace();
     CHECK_FALSE(estimate_restir_reference(scene,down,settings(),r,{0,8}));
     r.temporal.reset(); CHECK(estimate_restir_reference(scene,down,settings(),r,{0,8}));
+    r.spatial.emplace(); CHECK_FALSE(estimate_restir_reference(scene,down,settings(),r,{0,8}));
+}
+TEST_CASE("RESTIR spatial correlated planes preserve support and current visibility through two passes") {
+    struct Reservoir { unsigned light=3,M=1; double W=0; };
+    struct Plane { std::array<Reservoir,3> reservoirs; double probability=1; };
+    const std::array masks{3u,6u,5u}; const std::array energy{1.,4.,9.};
+    const std::array visibility{1u,6u,4u}; // Receiver-specific occlusion never changes reservoir support.
+    const auto supports=[](unsigned mask,unsigned light) { return light<3 && (mask&(1u<<light))!=0; };
+    for(unsigned cap:{1u,3u}) {
+        std::vector<Plane> planes;
+        for(unsigned draw=0;draw<3;++draw) {
+            Plane p; p.probability=1./3;
+            for(unsigned i=0;i<3;++i) if(supports(masks[i],draw)) p.reservoirs[i]={draw,1,3};
+            planes.push_back(p);
+        }
+        for(unsigned pass=0;pass<2;++pass) {
+            std::vector<Plane> next; std::array<double,3> mean{}; double mass=0;
+            for(const auto& plane:planes) {
+                std::array<std::vector<std::pair<Reservoir,double>>,3> outcomes;
+                for(unsigned pixel=0;pixel<3;++pixel) {
+                    std::array<RisReuseSource,3> sources; std::array<std::uint8_t,9> support; double sum=0;
+                    for(unsigned i=0;i<3;++i) {
+                        const auto& r=plane.reservoirs[i];
+                        sources[i]={supports(masks[pixel],r.light) ? 1. : 0.,r.W,std::min(r.M,cap)};
+                        sum+=sources[i].target*r.W*sources[i].candidates;
+                        for(unsigned j=0;j<3;++j) support[i*3+j]=std::uint8_t(supports(masks[i],plane.reservoirs[j].light));
+                    }
+                    for(unsigned selected=0;selected<3;++selected) {
+                        const double probability=sum>0 ? sources[selected].target*sources[selected].weight*sources[selected].candidates/sum : (selected==0 ? 1. : 0.);
+                        if(probability==0) continue;
+                        std::array<double,3> u; u.fill(std::nextafter(1.,0.)); u[selected]=0;
+                        auto r=resample_ris_sources(sources,support,u); REQUIRE(r);
+                        const unsigned light=r->selected==RisReservoir::invalid_sample ? 3 : plane.reservoirs[r->selected].light;
+                        outcomes[pixel].push_back({{light,unsigned(r->candidates),r->normalization},probability});
+                    }
+                }
+                for(const auto& a:outcomes[0]) for(const auto& b:outcomes[1]) for(const auto& c:outcomes[2])
+                    next.push_back({{a.first,b.first,c.first},plane.probability*a.second*b.second*c.second});
+            }
+            for(const auto& plane:next) {
+                mass+=plane.probability;
+                for(unsigned i=0;i<3;++i) {
+                    const auto& r=plane.reservoirs[i];
+                    if(supports(visibility[i],r.light)) mean[i]+=plane.probability*energy[r.light]*r.W;
+                }
+            }
+            CHECK(mass==Catch::Approx(1).margin(1e-11));
+            CHECK(mean[0]==Catch::Approx(1).margin(1e-11)); CHECK(mean[1]==Catch::Approx(13).margin(1e-11)); CHECK(mean[2]==Catch::Approx(9).margin(1e-11));
+            planes=std::move(next);
+        }
+    }
+}
+TEST_CASE("RESTIR CPU spatial screen reference converges to analytic furnace") {
+    Fixture f; f.quad(-8,8,0,{.6f,.4f,.2f}); auto scene=f.scene(); auto s=settings(); s.environment_rgb=Vec3d::Ones();
+    ViewDescription d{3,3}; Trsd camera; camera.translation={.3,.1,1}; d.camera_world=Transformd::from_trs(camera).value();
+    d.projection=orthographic_projection({.4,.1,10},1).value(); auto view=RenderView::create(f.source(),d).value();
+    RestirDiSettings r; r.spatial.emplace(); r.spatial->neighbor_count=8; r.spatial->radius=1; r.spatial->max_source_candidates=3;
+    const Vec3d expected=Vec3f{.6f,.4f,.2f}.cast<double>(); Population population;
+    std::array<Vec3d,8> observations;
+    for(unsigned chain=0;chain<8;++chain) {
+        s.seed=101+7919*chain; const auto image=restir_spatial_oracle::render(scene,view,s,r,1024);
+        observations[chain]=Vec3d::Zero(); for(const auto& c:image) observations[chain]+=c/9;
+        population.mean+=observations[chain]/8;
+    }
+    for(const auto& value:observations) population.se+=(value-population.mean).cwiseAbs2()/56;
+    population.se=population.se.cwiseSqrt(); check_mean(population,expected);
 }
 TEST_CASE("RESTIR reservoir M one zero draws and extreme weights") {
     RisReservoir empty; CHECK(empty.normalization()==0); CHECK(empty.selected()==RisReservoir::invalid_sample);

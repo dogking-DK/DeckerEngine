@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-19T14:46:00+08:00"
+updated_at: "2026-10-19T15:10:00+08:00"
 status: accepted
 ---
 
@@ -781,7 +781,7 @@ DLSS 单独设计重建输入/能力，不改变本阶段原始线性质量验�
 | M19.1 | CPU reservoir/RIS 参考、光样本/PDF/目标/随机维度、首表面光路分工及基准协议 | M16.1/7、M18.4 | 离散可枚举期望、M=1/全零/极值、支持域/合并校正推导；独立直接积分及 Lambert/GGX、mask/delta/环境光能不重漏；冻结均值、收敛与性能协议；CPU-only | 已完成：48 个唯一定向测试及单灯/100灯/1000灯 CPU 基线通过，见[0134](development/0134-restir-reference.md) |
 | M19.2 | 优先核验 RTXDI-Library 适配；GPU 首表面记录与初始 RIS、分阶段 tile/epoch 调度、精确内存/工作预算 | M19.1、M16.5/8 | SDK 版本/许可、Slang/SPIR-V/桥接验证；无时空复用 CPU/GPU 均值通过；透视/正交、首表面/间接光分工一致；不同 tile/批次重放一致，跨 pass 同步、超额/取消/迟到保留旧帧 | 已完成：固定 RTXDI v3.1.0、17 GPU 与 18 CPU 定向测试通过，见[0135](development/0135-restir-gpu-initial.md) |
 | M19.3 | 时间 reservoir、静态表面重投影、图像与采样历史分离 | M19.2 | 相机平移旋转/停动、disocclusion、GGX 视角变化；投影/尺寸/物理输入变化清空，曝光保留；支持校正/历史界限与长链均值、双视图及失败发布通过 | 已完成：21 GPU 与 20 CPU 定向测试通过，见[0136](development/0136-restir-temporal.md) |
-| M19.4 | 空间复用、独立输入/输出平面、来源支持归一化与可见性校正 | M19.3 | CPU 空间参考与 GPU 对照；轮廓/薄墙/法线/材质突变无系统性漏光或变暗；邻接/遍历不受 tile 顺序影响，校正射线和峰值额度有界 | 未开始 |
+| M19.4 | 空间复用、独立输入/输出平面、来源支持归一化与可见性校正 | M19.3 | CPU 空间参考与 GPU 对照；轮廓/薄墙/法线/材质突变无系统性漏光或变暗；邻接/遍历不受 tile 顺序影响，校正射线和峰值额度有界 | 已完成：24 GPU 与 22 CPU 定向测试通过，见[0137](development/0137-restir-spatial.md) |
 | M19.5 | Scene media 首表面 DI 的 CPU 条件采样参考 | M19.4、M17.2 | hero 通道/自由程/阴影随机流与 reservoir 支持一致；真空、纯吸收/彩色消光、有限太阳/行星/云阴影及先体积散射分支均值通过；不复用体积散射点 | 未开始 |
 | M19.6 | GPU 空气/云首表面 DI、当前透射评估与介质预算/失效 | M19.5、M17.4 | 独立 CPU/常规体积路径对照，透视/正交、多次散射与遮蔽成立；固定/变化风时间、场/AS 复用、tracking 超限及取消不发布候选 | 未开始 |
 | M19.7 | Editor/worker 算法选项、诊断与独立固定捕获、版本化来源和命令文档 | M19.4、M19.6、M17.5/18.4 | 旧请求兼容；新捕获从空历史可重放、来源完整且与 GUI 同模式一致；非法组合拒绝、旧文件保护、后台窗口/取消/关闭通过；不扩展光栅 render.sequence | 未开始 |
@@ -857,8 +857,8 @@ M16.10固定spp路径capture、Job进度/取消、输入摘要和线性报告完
 M18.1 镜头与导航设置、共享透视和 GUI/capture 一致性已完成，见[0129](development/0129-camera-settings.md)；M18.2 Fly/水平 Walk、共享控制器与连续渲染验收完成，见[0130](development/0130-camera-fly-walk.md)；M18.3 基础正交、六视图、Unlit inspection 及双视口交互完成，见[0131](development/0131-camera-orthographic.md)。M18.4 路径与固定捕获正交已完成，见[0132](development/0132-pathtrace-orthographic-capture.md)。M18.5 光栅大气/云正交已完成，见[0133](development/0133-raster-orthographic-environment.md)；M18 整体验收完成。
 M19.1 CPU reservoir/RIS 与首表面光能契约已完成，48 个唯一定向测试及固定 CPU 基线通过，见[0134](development/0134-restir-reference.md)；
 M19.2 GPU 初始 RIS、RTXDI v3.1.0 shader 接入与整批调度/额度已完成，17 GPU 与 18 CPU 定向测试通过，见[0135](development/0135-restir-gpu-initial.md)。
-M19.3 时间重投影、支持校正、有限祖先历史与图像/采样身份分离完成，21 GPU 与 20 CPU 定向测试通过，见[0136](development/0136-restir-temporal.md)。
-空间复用、介质 RIS、Editor/capture 切换和 DLSS 尚未开始；下一阶段为 M19.4。
+M19.4 空间复用、冻结输入/独立输出、来源支持分母、当前可见性和有界工作/额度完成，24 GPU 与 22 CPU 定向测试通过，见[0137](development/0137-restir-spatial.md)。
+介质 RIS、Editor/capture 切换和 DLSS 尚未开始；下一阶段为 M19.5 Scene media 首表面 DI 的 CPU 条件采样参考。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 

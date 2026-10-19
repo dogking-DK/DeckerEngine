@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-14T14:37:00+08:00"
-updated_at: "2026-10-19T14:38:00+08:00"
+updated_at: "2026-10-19T15:04:00+08:00"
 ---
 
 # GPU表面、空气、云与渐进路径追踪
@@ -14,7 +14,7 @@ updated_at: "2026-10-19T14:38:00+08:00"
 
 M19.2 提供 C++ GPU 初始 RIS：`submit_restir_rays`、`submit_restir_view`、`configure_restir_view`。
 `RestirDiSettings` 默认 version=1、8 候选（合法 1..64），要求 MIS 和显式 Surface only；
-时间复用通过下述可选配置启用；空间复用、介质 RIS 和新的 Editor/capture 选项尚未接入。普通 `submit/configure_view` 继续原 MIS 路径。
+时间和空间复用通过下述独立可选配置启用；介质 RIS 和新的 Editor/capture 选项尚未接入。普通 `submit/configure_view` 继续原 MIS 路径。
 来源的 `PathTraceGpuImageInfo.restir` 保存实际配置，候选数不是额外 spp。
 无历史入口每像素每次提交的 `samples.count * initial_candidates` 不超过 2^18；
 高 spp 验证使用连续样本区间分批，再按样本数合并均值/二阶矩。渐进入口自动按单 epoch 分阶段推进。
@@ -42,6 +42,21 @@ GPU target 首次配置下载固定 RTXDI-Library archive 并校验 SHA256，源
 `temporal_statistics` 报告已提交图像的复用、失配、过期、支持校正次数与最大 age/M；二阶矩不表示历史链的独立标准误差。
 默认仍关闭时间模式；调用方需要持有会话并顺序推进，无法从任意 first sample 跳入有历史结果。
 内存和重置契约见 [M19.3 设计](../design/render-restir.md#m193-时间复用实施契约)，实测与定向入口见 [0136](../development/0136-restir-temporal.md)。
+
+### 空间复用
+
+在 `RestirDiSettings` 上调用 `settings.spatial.emplace()`，传给 `configure_restir_view`；
+可以单独启用，也可以同时启用 temporal。默认尝试 4 个邻居、半径 2 像素、来源 M 上限 64，
+位置距离阈值 1、法线 cosine 阈值 .9；完整合法范围见 [M19.4 契约](../design/render-restir.md#m194-空间复用实施契约)。
+CPU 初始参考和无历史 `submit_restir_rays/view` 拒绝空间配置。
+
+全图初始 → 可选时间 → 可选空间 → 着色，空间 `sampling_pass=4` 读取冻结输入，写独立输出；
+改变 tile/遍历/批次不改变邻接或结果。来源支持校正重算 BSDF/几何目标，最终着色重算当前 mask/几何可见性。
+空间自身不会增加祖先 age，但保留全部来源的最大 age；与时间阶段联合后仍受历史界限约束。
+`spatial_statistics` 报告已提交图像的邻居参与/拒绝、支持校正、最大 M/age 和当前连续灯阴影查询数。
+一次空间 pass 最多增加 `2*neighbor_count+1` 次目标评估和 32 bytes/pixel 私有平面，不额外发支持校正射线。
+版本、邻域、阈值或计数上限变化清空两种历史；空间默认关闭，不新增 Editor/capture 开关。
+定向入口为 `dk_pathtracing_probe` / `^dk\.pathtracing\.restir_spatial_.*_gpu_required$`，证据见 [0137](../development/0137-restir-spatial.md)。
 
 ## 构建与验证
 

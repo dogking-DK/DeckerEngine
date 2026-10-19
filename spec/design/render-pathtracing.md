@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-19T14:38:00+08:00"
+updated_at: "2026-10-19T15:04:00+08:00"
 status: accepted
 ---
 
@@ -28,7 +28,9 @@ M19.2 增加 GPU 独立 `submit_restir_rays/view`、`configure_restir_view`，�
 详细光能/接口/精确预算和失败行为见 [M19.2 契约](render-restir.md#m192-gpu-初始-ris-实施契约)。
 M19.3 通过可选 temporal 配置增加静态表面重投影、支持校正和有限祖先历史；相机姿态变化只清空图像并继续采样序号。
 初始/时间/着色按完整平面推进，旧 owner、当前候选和时间 ping-pong 独立计费；失败保持最后完整图像和采样状态。
-旧 MIS 和介质入口不变；目前没有空间复用或 Editor/capture 新模式。
+M19.4 增加独立可选 spatial 配置：冻结输入、独立输出、完整来源支持分母与当前可见性；可单开或与时间同开。
+每批额外 32 bytes/pixel 空间平面，诊断/历史与图像整批发布；预算和 ancestry age 见 [M19.4 契约](render-restir.md#m194-空间复用实施契约)。
+旧 MIS 和介质入口不变；目前没有 ReSTIR 的 Editor/capture 新模式。
 固定射线上传统一将合法的 -0 TMin 转成 +0，避免硬件遍历漏命中；其他裁剪语义不变，三个入口均有回归。
 后续 DLSS 由独立重建适配层消费线性结果，SDK 类型不进入 CPU oracle 或 Scene。
 阶段与验收见 [Roadmap M19](../roadmap.md#m19restir-直接光重采样)。

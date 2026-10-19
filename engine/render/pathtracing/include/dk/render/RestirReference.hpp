@@ -43,17 +43,25 @@ struct RestirTemporalSettings {
     double position_tolerance = .1, normal_cosine = .95;
     bool operator==(const RestirTemporalSettings&) const = default;
 };
+struct RestirSpatialSettings {
+    std::uint32_t version = 1, neighbor_count = 4, radius = 2, max_source_candidates = 64;
+    double position_tolerance = 1, normal_cosine = .9;
+    bool operator==(const RestirSpatialSettings&) const = default;
+};
 struct RestirDiSettings {
     std::uint32_t version = 1, initial_candidates = 8; // 1..64 fresh candidates per epoch.
     std::uint64_t max_candidate_evaluations = std::uint64_t{1} << 24;
     std::optional<RestirTemporalSettings> temporal; // Full progressive GPU view only.
+    std::optional<RestirSpatialSettings> spatial; // Independent frozen-input spatial pass.
 };
 struct RestirReferenceEstimate : PathTraceEstimate {
     RestirDiSettings restir;
     PathTraceSamples samples;
     std::uint64_t candidate_evaluations = 0, selected_shadow_rays = 0;
 };
-enum class RestirRandomPurpose : std::uint32_t { light_class, light_index, light_u, light_v, replacement, temporal_replacement };
+enum class RestirRandomPurpose : std::uint32_t {
+    light_class, light_index, light_u, light_v, replacement, temporal_replacement, spatial_neighbor, spatial_replacement
+};
 // Version 1 independent counter domain; BSDF/RR/camera retain path sampler v1.
 [[nodiscard]] double restir_reference_sample(std::uint64_t seed, std::uint32_t pixel, std::uint32_t epoch,
     std::uint32_t candidate, RestirRandomPurpose) noexcept;

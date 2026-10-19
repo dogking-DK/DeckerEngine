@@ -80,6 +80,7 @@
 | ReSTIR CPU 单灯/100灯/1000灯基准入口与工作量 | dk_restir_reference_benchmark | `^dk\.pathtracing\.restir_reference_benchmark_cpu$`；正式基线用 `--samples 1024 --output <json>`，不作为 GPU 性能结论 |
 | ReSTIR GPU 初始 RIS/RTXDI、CPU 数值、材质与光能、两阶段 epoch/tile、失败与额度 | dk_pathtracing_probe | `^dk\.pathtracing\.restir_.*_gpu_required$`（required RT/validation/sync；CPU-only 不下载 RTXDI） |
 | ReSTIR 时间复用、独立链均值/收敛、GGX/支持校正、重投影/重置与阶段失败/额度 | dk_pathtracing_probe | `^dk\.pathtracing\.restir_temporal_.*_gpu_required$`（required GPU；CPU 递归数学仍用 `^dk\.pathtracing\.RESTIR `） |
+| ReSTIR 空间复用、CPU 空间参考、支持/薄墙/法线/材质边界、时空链均值、独立平面与额度/失败 | dk_pathtracing_probe | `^dk\.pathtracing\.restir_spatial_.*_gpu_required$`；CPU 空间参考/相关来源枚举使用 `dk_pathtracing_reference_tests` / `^dk\.pathtracing\.RESTIR ` |
 | CPU路径追踪示例、线性/PPM产物、重复样本与非法输入保护 | dk_pathtracing_reference_demo | `^dk\.pathtracing\.demo_cpu$`（Python 3.11+，CPU-only） |
 | GPU 资产输入校验、缓存空/关闭状态（无需 GPU） | dk_gpu_asset_tests | `^dk\.render\.assets\.` |
 | GpuMesh/纹理 Graph 上传、字节读回、缓存与在途卸载 | dk_render_resources_probe | `^dk\.render\.gpu_`（gpu label；77 为跳过） |
