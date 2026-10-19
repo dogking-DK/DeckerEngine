@@ -1,10 +1,10 @@
 if(NOT TARGET dk::render_data OR NOT TARGET dk::asset_data)
     message(FATAL_ERROR "Path tracing reference requires RenderData, Scene, Math and Memory")
 endif()
-add_library(dk_render_pathtracing_reference STATIC src/PathTraceScene.cpp src/PathTraceReference.cpp src/PathTexture.cpp src/PathBsdf.cpp src/PathMediumReference.cpp src/VolumePathReference.cpp)
+add_library(dk_render_pathtracing_reference STATIC src/PathTraceScene.cpp src/PathTraceReference.cpp src/PathTexture.cpp src/PathBsdf.cpp src/PathMediumReference.cpp src/VolumePathReference.cpp src/RestirReference.cpp)
 add_library(dk::render_pathtracing_reference ALIAS dk_render_pathtracing_reference)
 target_sources(dk_render_pathtracing_reference PUBLIC FILE_SET HEADERS BASE_DIRS include
-    FILES include/dk/render/PathTraceReference.hpp include/dk/render/PathMediumReference.hpp include/dk/render/VolumePathReference.hpp)
+    FILES include/dk/render/PathTraceReference.hpp include/dk/render/PathMediumReference.hpp include/dk/render/VolumePathReference.hpp include/dk/render/RestirReference.hpp)
 target_link_libraries(dk_render_pathtracing_reference PUBLIC dk::render_data dk::asset_data dk::render_cloud_fields)
 dk_target_defaults(dk_render_pathtracing_reference)
 if(DK_BUILD_RENDER_PATHTRACING)

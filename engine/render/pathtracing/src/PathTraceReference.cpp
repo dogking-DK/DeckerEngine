@@ -1,5 +1,6 @@
 #include "PathReferenceInternal.hpp"
 #include "PathBsdf.hpp"
+#include "RestirReferenceInternal.hpp"
 #include <Eigen/LU>
 #include <algorithm>
 #include <cmath>
@@ -109,25 +110,33 @@ Vec3d direct(const PathSceneState& scene,const PathTraceHit& hit,const PathBsdf&
     return evaluated.value.cwiseProduct(radiance)*(cosine*weight/pdf);
 }
 Result<Vec3d> trace_one(const PathSceneState& scene,PathTraceRay ray,const PathTraceSettings& s,const Lights& lights,
-    std::uint32_t pixel,std::uint32_t sample,PathTraceStatistics& stats,std::stop_token cancel) {
+    std::uint32_t pixel,std::uint32_t sample,PathTraceStatistics& stats,std::stop_token cancel,
+    RestirReferenceEstimate* restir=nullptr) {
     Vec3d radiance=Vec3d::Zero(),throughput=Vec3d::Ones(),previous=Vec3d::Zero();
     double bsdf_pdf=0;
     for (std::uint32_t depth=0;depth<=s.max_bounces;++depth) {
         if (cancel.stop_requested()) return std::unexpected(path_cancelled());
         const auto hit=nearest_path(scene,ray,stats);
         if (!hit) {
-            const double weight=depth && s.estimator==PathTraceEstimator::mis ? power_weight(bsdf_pdf,lights.class_pdf/(4*path_pi)) : 1;
+            const double weight=restir && depth==1 ? 0 :
+                (depth && s.estimator==PathTraceEstimator::mis ? power_weight(bsdf_pdf,lights.class_pdf/(4*path_pi)) : 1);
             radiance+=throughput.cwiseProduct(s.environment_rgb)*weight;
             break;
         }
         const auto& t=scene.triangles[hit->index];
         const Vec3d albedo=path_base_color(scene,t,hit->barycentric).head<3>();
         const PathBsdf bsdf{albedo,t.metallic,t.roughness,scene.material_model};
-        const double weight=depth && s.estimator==PathTraceEstimator::mis ?
-            power_weight(bsdf_pdf,area_pdf(scene,t,previous,hit->position,lights.class_pdf)) : 1;
+        const double weight=restir && depth==1 ? (t.light_weight>0 ? 0 : 1) :
+            (depth && s.estimator==PathTraceEstimator::mis ? power_weight(bsdf_pdf,area_pdf(scene,t,previous,hit->position,lights.class_pdf)) : 1);
         radiance+=throughput.cwiseProduct(t.emission)*weight;
         if (depth==s.max_bounces || (scene.material_model==PathTraceMaterialModel::lambert && albedo.maxCoeff()==0)) break;
-        radiance+=throughput.cwiseProduct(direct(scene,*hit,bsdf,-ray.direction,lights,s,pixel,sample,depth,stats));
+        if(restir && depth==0) {
+            auto value=restir_direct(scene,*hit,bsdf,-ray.direction,s,restir->restir,pixel,sample,*restir,cancel);
+            if(!value) return std::unexpected(value.error());
+            // bsdf_only's direct estimator handles the delta sun with weight one.
+            auto solar=s; solar.estimator=PathTraceEstimator::bsdf_only;
+            radiance+=throughput.cwiseProduct(*value+direct(scene,*hit,bsdf,-ray.direction,lights,solar,pixel,sample,depth,stats));
+        } else radiance+=throughput.cwiseProduct(direct(scene,*hit,bsdf,-ray.direction,lights,s,pixel,sample,depth,stats));
         const auto sampled=sample_path_bsdf(bsdf,hit->normal,-ray.direction,path_trace_sample(s.seed,pixel,sample,depth,6),path_trace_sample(s.seed,pixel,sample,depth,7));
         if(sampled.evaluated.pdf<=0) break;
         const Vec3d wi=sampled.direction;
@@ -189,6 +198,10 @@ bool same_source(const RenderScene& a,const RenderScene& b) {
 Result<void> detail::validate_path_work(const PathSceneState& scene,std::uint64_t pixels,const PathTraceSettings& settings,PathTraceSamples samples) {
     return work_valid(scene,pixels,settings,samples);
 }
+bool detail::path_visible(const PathSceneState& scene,const PathTraceHit& hit,const Vec3d& direction,
+    PathTraceStatistics& stats,const PathTriangle* light,const Vec3d& point) {
+    return visible(scene,hit,direction,stats,light,point);
+}
 Result<void> detail::validate_path_view(const PathSceneState& scene,const RenderView& view,std::uint32_t maximum_extent) {
     if (!same_source(scene.source,view.scene())) return std::unexpected(path_invalid("Path scene/view snapshot mismatch"));
     auto camera=camera_for(view,maximum_extent); if (!camera) return std::unexpected(camera.error()); return {};
@@ -227,6 +240,33 @@ Result<PathTraceEstimate> estimate_path_reference(const PathTraceScene& scene,co
     if (!result.mean.allFinite() || !result.second_moment.allFinite())
         return std::unexpected(Error{ErrorCode::internal_error,"Nonfinite path estimate moments"});
     if (cancel.stop_requested()) return std::unexpected(path_cancelled());
+    return result;
+}
+Result<RestirReferenceEstimate> estimate_restir_reference(const PathTraceScene& scene,const PathTraceRay& ray,
+    const PathTraceSettings& s,const RestirDiSettings& r,PathTraceSamples samples,std::uint32_t pixel,std::stop_token cancel) {
+    const auto* state=detail::PathReferenceAccess::get(scene);
+    if(!state) return std::unexpected(Error{ErrorCode::invalid_state,"Empty RIS path scene"});
+    if(auto valid=validate_path_ray(ray);!valid) return std::unexpected(valid.error());
+    if(auto valid=work_valid(*state,1,s,samples);!valid) return std::unexpected(valid.error());
+    if(r.version!=1 || r.initial_candidates<1 || r.initial_candidates>64 ||
+        s.estimator!=PathTraceEstimator::mis || !r.max_candidate_evaluations || r.max_candidate_evaluations>(1ull<<24))
+        return std::unexpected(path_invalid("Invalid CPU initial RIS settings or estimator combination"));
+    const auto candidates=std::uint64_t(samples.count)*r.initial_candidates;
+    const auto rays=std::uint64_t(samples.count)*(2ull*s.max_bounces+2);
+    if(candidates>r.max_candidate_evaluations || rays>s.max_rays ||
+        rays>s.max_triangle_tests/std::max<std::uint64_t>(1,state->triangles.size()))
+        return std::unexpected(path_invalid("CPU RIS candidate or geometry work budget exceeded"));
+    RestirReferenceEstimate result; result.restir=r; result.samples=samples;
+    const auto lights=lights_for(*state,s);
+    for(std::uint32_t i=samples.first;i<samples.first+samples.count;++i) {
+        auto value=trace_one(*state,ray,s,lights,pixel,i,result.statistics,cancel,&result);
+        if(!value) return std::unexpected(value.error());
+        result.mean+=*value; result.second_moment+=value->cwiseProduct(*value);
+    }
+    result.mean/=samples.count; result.second_moment/=samples.count;
+    if(!result.mean.allFinite() || !result.second_moment.allFinite())
+        return std::unexpected(Error{ErrorCode::internal_error,"Nonfinite RIS estimate moments"});
+    if(cancel.stop_requested()) return std::unexpected(path_cancelled());
     return result;
 }
 Result<PathTraceImage> render_path_reference(memory::ResourceHandle heap,const PathTraceScene& scene,const RenderView& view,

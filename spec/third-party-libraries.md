@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-10-10T15:51:00+08:00"
+updated_at: "2026-10-19T13:03:00+08:00"
 status: accepted
 ---
 
@@ -212,6 +212,22 @@ M9.1 使用 `find_package(unofficial-luau CONFIG REQUIRED)` 与导出 target
 | `ppqsort` | 1.0.6#1 | Tracy 工具的排序依赖，独立工具清单已安装 |
 
 传递依赖随所选 feature/平台变化，以实际 vcpkg 解析计划为准；上述版本不是独立手工 pin。
+
+## 已确定的后续渲染 SDK 接入
+
+以下为用户指定的后续接入方向，尚未下载、加入清单或链接；没有当前已固定/已验收的 SDK 版本。
+开始接入时按上文规则查询 vcpkg 官方 registry；若无合适 port，再记录上游固定 release/commit、来源哈希、
+许可/分发条件和适配方式，不把浮动分支加入日常构建。
+
+| SDK | 用途与边界 | 接入顺序与当前状态 |
+| --- | --- | --- |
+| RTXDI-Library | ReSTIR 采样后端；通过应用桥接访问引擎光表、BSDF、接收面和可见性。SDK 类型 PRIVATE，CPU oracle 不依赖 SDK，GPU 资源仍由引擎/Graph 管理 | M19.2 优先进行 Slang/SPIR-V/桥接可行性与版本核验；M19.1 仅独立 CPU 参考，无 SDK 接入 |
+| DLSS / Streamline 或 NGX | 独立图像重建适配；区分 SR、RR、FG 的功能/能力与输入，不以算法采样模式替代重建模式 | 后续单独设计接入；保留线性颜色、render/output 尺寸、depth/motion/jitter/exposure/reset 的语义边界，尚无 SDK 或 UI 开关 |
+
+依据：[RTXDI 集成说明](https://github.com/NVIDIA-RTX/RTXDI/blob/main/Doc/Integration.md)、
+[Streamline DLSS 指南](https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideDLSS.md)，2026-10-19 核对。
+具体契约与切换关系见 [ReSTIR 设计](design/render-restir.md)；选择 RTXDI 不隐含导入其示例框架、NRD 或 DLSS，
+选择 DLSS 也不改变原始线性光照的数值验收。未支持能力应明确报告，不能静默替换模式。
 
 ## 后续维护
 

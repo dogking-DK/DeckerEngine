@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-19T12:50:00+08:00"
+updated_at: "2026-10-19T13:06:00+08:00"
 status: accepted
 ---
 
@@ -16,12 +16,15 @@ status: accepted
 CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、确定性样本编号、每视图累积、
 后台交互预览和固定 spp 截图。M16.1、M16.6、M16.7.1/2、M16.8、M16.9和M16.10实施契约见下文；capture集成契约见M16.10，阶段状态见[Roadmap](../roadmap.md)。
 
-## M19 ReSTIR 采样扩展计划
+## M19 ReSTIR 采样扩展
 
 后续采用显式可选的 ReSTIR DI，先验证首表面直接光，再支持 Scene media 的首表面分支；
-独立的[ReSTIR 草案](render-restir.md)负责估计器、光能分工、完整 epoch、时空历史与介质接入计划。
-当前 NEE/MIS、样本编号、模型、接口与发布行为仍为已实现基线；ReSTIR 尚未实现，
-不会因规划存在就替换现有路径。阶段与验收见 [Roadmap M19](../roadmap.md#m19restir-直接光重采样)。
+独立的[ReSTIR 设计](render-restir.md)负责估计器、光能分工、完整 epoch、时空历史与介质接入。
+M19.1 在 CPU reference target 中增加独立 `estimate_restir_reference`：首表面初始 RIS、独立 delta 太阳、
+后续普通 MIS/RR，以及支持域校正的 reservoir 合并数学；旧入口和 model=3/sampler=1 保持原行为。
+CPU 参考不提供 GPU/时空会话或 Editor/capture 新模式。GPU 阶段优先核验 RTXDI-Library；
+后续 DLSS 由独立重建适配层消费线性结果，SDK 类型不进入 CPU oracle 或 Scene。
+阶段与验收见 [Roadmap M19](../roadmap.md#m19restir-直接光重采样)。
 原 M16 范围不包含 ReSTIR 的说明仅描述该阶段边界；GI/PT、介质散射顶点复用和去噪不由 M19 DI 隐含引入。
 
 ## M17 大气、云与表面路径的统一传输

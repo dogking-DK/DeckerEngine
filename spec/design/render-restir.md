@@ -1,15 +1,16 @@
 ---
 module: render-restir
 created_at: "2026-10-19T12:50:00+08:00"
-updated_at: "2026-10-19T12:50:00+08:00"
-status: draft
+updated_at: "2026-10-19T13:12:00+08:00"
+status: accepted
 ---
 
-# ReSTIR 光照重采样接入计划
+# ReSTIR 光照重采样设计
 
-本文件是[路径追踪设计](render-pathtracing.md)的采样扩展草案。当前代码尚未实现 ReSTIR；
-本次只规划，阶段状态、依赖和下一项统一见 [Roadmap M19](../roadmap.md#m19restir-直接光重采样)。
-数值公式、数据布局与资源上限在对应阶段的 CPU 参考或接入验证完成后冻结，不把候选参数视为既有接口。
+本文件是[路径追踪设计](render-pathtracing.md)的采样扩展设计。
+M19.1 已完成 CPU 数学/首表面 RIS 参考，其余 GPU/时空会话与消费者按后续阶段推进；
+状态、依赖和下一项统一见 [Roadmap M19](../roadmap.md#m19restir-直接光重采样)。
+下文明确区分本阶段 CPU 契约和后续 GPU 计划，不把参考实现视为编辑器已有能力。
 
 ## 目标与范围
 
@@ -42,15 +43,77 @@ GPU passes 与会话进入 `dk::render_pathtracing`，公开接口置于 `includ
 Graphics 仅提供资源、RT、Graph 与同步，不承载 reservoir/BSDF/光源策略；Render 不反向依赖 Editor/Framework。
 沿用现有 BLAS/TLAS、单队列和 Slang，不创建另一套设备所有者。
 
-优先用项目内 C++ 参考和 Slang 实现小范围 DI，RTXDI 用于算法与集成核对。
-本计划不新增依赖。若实施时改用 RTXDI-Library，先验证 Slang/SPIR-V、桥接、许可与 CPU 对照，
-按三方库规则核验接入方式并固定版本/commit；不顺带导入示例框架、DLSS 或 NRD。
+用户明确要求后续接入 RTXDI、DLSS。CPU 参考保持独立且无 SDK 依赖，作为未来后端的 oracle；
+M19.2 优先验证 RTXDI-Library 的 Slang/SPIR-V、应用桥接与资源适配，再决定 GPU 实现细节，
+不把自有 reservoir 的内存布局或随机序列强加给 SDK。接入时按三方库规则核验并固定版本/commit，
+本阶段不下载或链接 SDK，不改变 vcpkg baseline。计划状态见[三方库说明](../third-party-libraries.md)。
+
+对用户分别提供光照采样（普通 MIS / ReSTIR DI）、介质（Surface only / Scene media）和重建（原生 / DLSS）选择；
+RTXDI 是采样算法后端，不是与 ReSTIR 并列的物理模型。SDK 实现类型保持 PRIVATE，不泄漏到 Scene、CPU 参考或捕获持久格式。
+后续 DLSS 适配层独立消费线性颜色、渲染/输出尺寸、深度、运动矢量、抖动、曝光与 reset/视图身份；
+按所选 SR/RR/FG 功能分别核验所需输入，不将首表面 reservoir 当作运动矢量或重建历史。
+本阶段只确立边界；不添加空 SDK 后端或尚不可用的 UI 开关，采样质量验收始终保留重建前线性输出。
+
+## M19.1 CPU 实施契约
+
+新增独立 `RestirReference.hpp`：`RisReservoir` 流式初始采样、`resample_ris_sources` 支持校正合并数学、
+`RestirDiSettings` 与 `estimate_restir_reference` 固定射线参考；旧 `PathTraceSettings`/GPU/命令保持兼容。
+首版 `version=1`、候选数默认 8，合法 1..64；CPU 入口仅支持初始 RIS，无时间/空间会话或介质。
+`PathTraceSettings.estimator` 必须为 MIS，Scene media 仍须显式 surface_only；非法组合不静默降级。
+独立候选评估预算默认 2^24，并预检总样本数乘候选数；几何射线保守界在原路径上增加一次首表面阴影。
+错误/取消返回失败，流式 reservoir 先计算校验再提交，输入场景与旧结果保持不变。
+
+候选表的三角形密度为 `class_probability * light_weight / total_weight / area`，
+其中光类只包含非零环境/面积灯；delta 太阳从候选分布移出，以独立权重 1 的估计相加。
+三角形贡献包含接收余弦、光源余弦及距离平方倒数，环境贡献按立体角；最终可见性单独查询。
+内部光样本携带冻结光表身份、种类、三角形/重心或单位方向与原始 proposal 密度，不能把 GPU packed 数据作为 CPU ABI。
+随机维度用独立域标签加 seed/pixel/epoch/candidate/purpose 的计数 hash，原 BSDF/RR/相机序列不变。
+
+| 光路分量 | 首表面采用 RIS 时的估计责任 |
+| --- | --- |
+| 相机直接看见发光面/环境 | 保留完整发光 |
+| 首表面到非 mask 面积灯/环境 | RIS 完整直接项；关闭旧 NEE 及这一次 BSDF 延伸对应发光 |
+| 首表面 delta 太阳 | 独立 NEE、权重 1；不进入连续 reservoir |
+| 首表面 BSDF 延伸命中 mask 发光面 | 完整发光，灯 proposal 为 0，不被 RIS 抑制 |
+| 第二表面的反射与后续路径 | 原 NEE/MIS/RR；只抑制前一段已估计的发光，不抑制反射 |
+
+### 支持校正的参考推导
+
+每个来源 i 提供正规化样本 `(Y_i, W_i)`，满足 `E[W_i f(Y_i)] = integral(S_i, f)`。
+`S_i` 是其目标的正支持域，不能用“本次选中样本是否可见”代替；未选中任何样本的零 reservoir 也保留来源和 M。
+对固定接收点和预先确定的来源集合，取有效计数 `m_i > 0`，流权重为 `p_hat_x(Y_i) * W_i * m_i`。
+选中 Y 后，计算 `Z(Y) = sum_i(m_i * indicator(Y in S_i))`，输出权重 `sum_weights / (p_hat_x(Y) * Z(Y))`。
+条件于来源候选，抽签期望是各来源项之和；再对来源取期望得到
+`sum_i integral(S_i, F_x(y) * m_i / Z(y)) = integral(union(S_i), F_x)`。
+因此须有新的完整支持候选覆盖接收点非零贡献，来源筛选不得依赖已抽到的光样本；相关来源也不能绕过正规化前提。
+数学接口明确接受来源样本在所有来源上的支持矩阵，重算完整 Z；朴素总 M 在支持不相交时会系统性变暗。
+本阶段用离散可枚举案例验证期望、空来源和相关来源；实际屏幕支持查询及可见性校正留给 M19.3/4。
+
+计数压缩时，已经正规化的 W 不变，有效 m 一致用于流权重与 Z；若储存未正规化 sum，则须同步缩放。
+有限历史按全部参与来源的最大 ancestry age 加一计龄，整体淘汰并注入新候选，不能按所选光样本的年龄、亮度或遮挡丢弃；
+避免无限祖先传播的 age 规则在时域阶段实施。上述证明条件于预先确定的有效 m/来源支持域，不能用于任意数据相关的历史筛选。
+不把有穷样本均值测试当作任意递归复用的收敛证明。CPU 初始 RIS 没有历史，参考 spp 仅为新路径数。
+
+### 冻结的正确性与性能协议
+
+数值测试使用 8 个 seed（101 + 7919*i），每通道同时要求绝对偏差不超过 `2%*abs(reference)+1e-4`
+且不超过 `5*combined_standard_error+1e-4`；参考 quadrature 的 N/2N 差需小于 `0.5%*abs(reference)+1e-5`。
+相互独立的 seed/历史链才可计算标准误差。初始 RIS 用 1024/4096 样本比较跨 seed MSE，面积/环境/GGX 高样本用 16384 起。
+极窄高光单列方差限制；不为了通过而改变物理 BSDF、裁掉高权重或放宽阈值。
+性能基准固定单灯/100灯/1000灯程序输入、相同总发光功率和接收材质，记录输入指纹、seed、反弹、候选数和射线/候选工作量。
+先测 CPU 普通 MIS 与 RIS 的线性均值/误差/耗时基线；其结果不用于声称 GPU 加速。
+后续 GPU 等误差门槛为 2% 线性归一化 RMSE，参考认证为 0.5%，三轮关闭 validation 计时；
+多灯目标耗时不超过普通 MIS 的 50%，固定相机/尺寸/输入/硬件/驱动对照，不因 RTXDI/DLSS 接入改用重建后误差验收。
+GPU 程序灯基线使用同一输入、640×360、eye=(0,0,1)、朝 -Z、60 度垂直 FOV、near=.1/far=10、
+max_bounces=8/rr_start=3、seed 集合不变，64/256/1024/4096/16384 spp 阶梯；目标设备为已有 RTX 4070 Laptop，
+驱动版本与运行时 SDK 版本必须在测量时记录。参考先用 CPU 选定接收点认证，再由高样本 GPU 图像验证全屏收敛。
+独立 CPU 单接收点基线的原始结果与命令见[测量记录](../benchmarks/2026-10-19-restir-reference.md)，不将其外推成全屏速度。
 
 ## 估计器与光能分工
 
 ### 初始 RIS 与样本域
 
-M19.1 先冻结以下契约并以双精度参考验证：
+CPU 参考采用以下初始 RIS 契约：
 
 - 光样本含光源种类、冻结光表身份、三角形及重心坐标或世界方向；不能只存一个跨版本可能变化的 GPU 下标。
   三角形采用面积测度，环境/有限太阳采用立体角测度，种类标签组成互斥的积分分量；PDF 含种类和光源选择概率。
@@ -168,8 +231,9 @@ M19.5 若发现条件概率/支持域无法满足，先修订推导与范围，�
 
 ## 接口与消费者计划
 
-候选接口为独立的 `direct_lighting = classic_mis / restir_di` 设置及 `RestirDiSettings`，
-包含初始候选数、时间/空间开关、邻居配置、历史界限和算法版本；具体名称与合法组合在 M19.1 冻结。
+M19.1 以独立 `estimate_restir_reference` 入口和 `RestirDiSettings` 冻结 CPU 初始采样及版本。
+后续消费者计划采用 `direct_lighting = classic_mis / restir_di`；时间/空间开关、邻居配置、历史界限
+按各实施阶段扩展，不提前把未支持的字段放进当前接口。RTXDI backend 及 DLSS reconstruction 分别适配。
 与 Surface only/Scene media 正交，不复用介质模式开关表达算法；旧请求默认保持原行为。
 BSDF-only 对照与 ReSTIR 同时请求的非法组合显式拒绝。设置不进入 Scene 文件/Undo。
 
@@ -193,7 +257,8 @@ M19.7 扩展 Editor、worker、独立 `render.capture` 请求/来源与版本化
 | 端到端 | 同设备相同历史起点下改变 tile/遍历/批次结果一致；GUI/capture 同模式来源一致；后台窗口、取消/退出、非法请求不覆盖旧图/旧文件 |
 
 至少 8 条独立 seed/历史链进行均值验证，以链为统计单位；复用链内部的相关样本不能充当独立观测。
-沿用现有 `max(2% 相对误差, 5 标准误差 + 暗部绝对项)` 类型门槛，具体暗部界、像素/ROI 与收敛阶梯在 M19.1 预先冻结。
+CPU 数值验证同时满足 `2%*abs(reference)+1e-4` 和 `5*combined_standard_error+1e-4` 两项偏差上界，
+参考认证、样本阶梯与后续 GPU 固定画幅协议见 M19.1 CPU 实施契约。
 统计误差检查配合解析/可枚举的期望与支持域反例；仅“落在误差条内”不能代替估计器推导。
 增加长链、有限历史刷新、N/4N 的多链误差趋势及镜头停动后恢复，避免短期低噪声掩盖能量偏差或样本停滞。
 
@@ -204,7 +269,8 @@ M19.7 扩展 Editor、worker、独立 `render.capture` 请求/来源与版本化
 不加去噪，报告等时间线性误差及达到同误差的 wall/GPU 时间，单列冷准备、热交互、校正射线数、tracking 和峰值显存。
 同 spp 只作诊断，不能代表相同成本；CPU/GPU 未收敛参考不认证为真值，达不到阈值的时间记未达。
 
-多灯表面场景的候选收益目标为等误差耗时至少降低一半；M19.1 测定基线后冻结场景/阈值/设备协议，
+多灯表面场景的候选收益目标为等误差耗时至少降低一半；M19.1 已冻结场景/阈值/设备协议，
+其 [CPU 基线](../benchmarks/2026-10-19-restir-reference.md)仅证明当前质量与成本，不是 GPU 收益验收。
 M19.8 至少三轮独立计时，不能验收时降低目标。单灯、天空和厚云允许无收益，但必须公开结果，
 未达收益目标时保持显式可选并记录未达，不能据此宣布实时或替代默认 MIS。
 沿用热相机首个完整预览/取消 p95 ≤100ms、tile GPU p95 ≤8ms 作为交互候选目标，额外 pass 成本一并计算。
@@ -222,9 +288,9 @@ M19.8 至少三轮独立计时，不能验收时降低目标。单灯、天空�
 - [RTXDI 噪声与偏差说明](https://github.com/NVIDIA-RTX/RTXDI/blob/main/Doc/NoiseAndBias.md)：
   核对目标支持、复用归一化和可见性复用的偏差风险，不将基本归一化等同完整校正。
 
-M19.1 需解决首表面光能分工、跨接收点支持校正、有限历史的估计器约束及窄高光 proposal 选择；
-M19.2 冻结布局/容量、路径状态保存方式；M19.5 单独解决介质条件采样。
-这些是实现阶段的明确产物，不在本规划中伪称已有证明或实测结论。
+M19.1 的首表面光能分工、合并数学及有限历史的约束见 CPU 实施契约；窄高光保留 light-only proposal 的高方差限制。
+M19.2 核验 RTXDI 并冻结 GPU 布局/容量、路径状态保存方式；M19.3/4 验证实际屏幕支持与有限历史，
+M19.5 单独解决介质条件采样，DLSS 的 SR/RR/FG 范围与能力协商另行设计。
 M19 验收后，再依据直接/间接/介质噪声占比决定下一步采用 ReSTIR GI/PT、ReGIR 或体积重要性采样。
 
 ## 相关设计与已有证据
@@ -232,4 +298,4 @@ M19 验收后，再依据直接/间接/介质噪声占比决定下一步采用 R
 - [路径追踪](render-pathtracing.md)、[Vulkan RT](graphics-raytracing.md)、[Graph](graphics-graph.md)、[相机交互](editor-interaction.md)。
 - [0117 渐进状态与额度](../development/0117-pathtracing-progressive.md)、[0128 介质性能](../development/0128-path-media-performance.md)、
   [0132 路径正交与捕获](../development/0132-pathtrace-orthographic-capture.md)。
-- 本轮仅检查规划文档；实施时各 M19.x 分别创建开发记录、验证并本地提交。
+- [0134 CPU 参考实施记录](../development/0134-restir-reference.md)；各后续 M19.x 分别留档、验证并本地提交。
