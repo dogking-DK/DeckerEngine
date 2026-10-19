@@ -1046,11 +1046,26 @@ if(TARGET dk_editor_model AND TARGET dk_render_pathtracing AND TARGET dk_render_
         DK_PATH_DISK_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk" DK_BENCH_CONFIG="$<CONFIG>")
     dk_target_defaults(dk_pathmedia_benchmark)
     dk_deploy_slang(dk_pathmedia_benchmark)
+    foreach(mode IN ITEMS initial temporal spatial)
+        add_test(NAME dk.pathtracing.restir_sponza_${mode}_gpu_validation COMMAND dk_pathmedia_benchmark --smoke
+            --algorithm ${mode} --case courtyard-sparse --full-preview --root "${PROJECT_SOURCE_DIR}/projects/demo"
+            --output "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/restir-sponza/${mode}-smoke.json")
+        set_tests_properties(dk.pathtracing.restir_sponza_${mode}_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+    endforeach()
+    add_test(NAME dk.pathtracing.restir_sponza_quality_gpu_validation COMMAND dk_pathmedia_benchmark --quality
+        --algorithm spatial --case courtyard-sparse --quality-limit 64 --skip-reference
+        --root "${PROJECT_SOURCE_DIR}/projects/demo"
+        --output "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/restir-sponza/quality-smoke.json")
+    set_tests_properties(dk.pathtracing.restir_sponza_quality_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
+        ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
     add_test(NAME dk.pathtracing.media_benchmark_gpu_validation COMMAND dk_pathmedia_benchmark --smoke
         --root "${PROJECT_SOURCE_DIR}/projects/demo" --output "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/media-benchmark/smoke.json")
     set_tests_properties(dk.pathtracing.media_benchmark_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
         ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
     if(Python3_Interpreter_FOUND)
+        add_test(NAME dk.pathtracing.restir_sponza_aggregation COMMAND "${CMAKE_COMMAND}" -E env "PYTHONDONTWRITEBYTECODE=1"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/RestirSponzaBenchmarkTest.py")
         add_test(NAME dk.pathtracing.media_benchmark_aggregation COMMAND "${CMAKE_COMMAND}" -E env "PYTHONDONTWRITEBYTECODE=1"
             "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/PathMediaBenchmarkTest.py")
     endif()
