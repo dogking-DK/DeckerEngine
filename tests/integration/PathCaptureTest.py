@@ -78,10 +78,18 @@ def main():
                     time.sleep(.05)
             assert call("runtime.capabilities")["pathtrace_capture"]
             names = {x["name"]: x for x in call("commands.list")}
-            assert names["render.capture"]["effect"] == "external" and not names["render.capture"]["undoable"]
-            for name in ("render.capture", "jobs.get", "jobs.wait", "jobs.cancel", "runtime.capabilities"):
+            for name in ("render.capture", "render.sequence"):
+                assert names[name]["effect"] == "external" and not names[name]["undoable"]
+            for name in ("render.capture", "render.sequence", "jobs.get", "jobs.wait", "jobs.cancel", "runtime.capabilities"):
                 descriptor = call("commands.describe", dict(name=name))
                 (root / (name + ".schema.json")).write_text(json.dumps(descriptor, indent=2), encoding="utf-8")
+                if name in ("render.capture", "render.sequence"):
+                    fields = descriptor["parameters"]["properties"]
+                    lens = fields["camera"] if name == "render.capture" else fields["samples"]["items"]["properties"]["camera"]
+                    assert lens["properties"]["projection"]["enum"] == ["perspective", "orthographic"] and "ortho_height" in lens["properties"]
+                    result_lens = descriptor["result"]["properties"]["provenance"]["properties"]["camera"]
+                    assert "projection" in result_lens["required"] and "fov_y" not in result_lens["required"]
+                    assert result_lens["properties"]["primary_ray_origin"]["enum"] == ["near_plane"]
                 if name == "render.capture":
                     assert descriptor["parameters"]["properties"]["renderer"]["enum"] == ["raster", "pathtrace"]
                     fields = descriptor["parameters"]["properties"]["pathtrace"]["properties"]
@@ -93,6 +101,7 @@ def main():
             if args.media:
                 env = call("environment.query")["environment"]
                 env["enabled"] = True
+                env["atmosphere"]["planet_center_m"][1] -= 10
                 env["clouds"].update(enabled=True, coverage=1, extinction_per_m=.00005,
                                      weather_resolution=16, base_resolution=16, detail_resolution=16,
                                      wind_velocity_mps=[1000, 0])
@@ -102,6 +111,38 @@ def main():
             history = call("history.status")
             first = read(submit("first.json"))
             assert call("scene.query")["state"] == state and call("history.status") == history
+            ortho_camera = dict(eye=[0, 0, -2], target=[0, 0, 0], projection="orthographic", ortho_height=3, near=.05, far=10000)
+            if args.media:
+                ortho_camera.update(eye=[0, 2, -2], target=[0, 2, 0])
+            orthographic = read(submit("orthographic.json", camera=ortho_camera))
+            effective = orthographic["provenance"]["camera"]
+            assert effective == dict(ortho_camera, up=[0, 1, 0], primary_ray_origin="near_plane")
+            assert first["provenance"]["camera"]["projection"] == "perspective" and first["provenance"]["camera"]["fov_y"] == 65
+            assert orthographic["linear_rgb"] != first["linear_rgb"]
+            (root / "lens-old.json").write_text("previous")
+            for camera in (dict(ortho_camera, fov_y=65), dict(ortho_camera, ortho_height=0), dict(ortho_camera, projection="perspective"),
+                           {k:v for k,v in ortho_camera.items() if k != "ortho_height"}):
+                try:
+                    submit("lens-old.json", camera=camera)
+                except Exception:
+                    pass
+                else:
+                    raise AssertionError("Invalid lens was accepted")
+                assert (root / "lens-old.json").read_text() == "previous"
+            assert call("scene.query")["state"] == state and call("history.status") == history
+            if not args.media:
+                samples = [dict(camera=ortho_camera, time_seconds=0), dict(camera=dict(ortho_camera, ortho_height=4), time_seconds=1)]
+                ticket = call("render.sequence", dict(guard=guard(state), output="ortho-sequence.json", width=16, height=16, samples=samples, validation="required"))
+                while True:
+                    job = call("jobs.wait", dict(id=ticket["job_id"], timeout_ms=1000))["job"]
+                    if job["state"] in ("succeeded", "failed", "cancelled"): break
+                assert job["state"] == "succeeded", job
+                sequence = json.loads((root / "ortho-sequence.json").read_text())
+                assert [frame["camera"]["ortho_height"] for frame in sequence["frames"]] == [3, 4]
+                assert all(frame["camera"]["primary_ray_origin"] == "near_plane" for frame in sequence["frames"])
+            evidence["checks"].append("perspective compatibility, orthographic provenance, invalid lenses and raster sequence")
+            defaults = read(submit("defaults.json", width=1, height=1, camera=dict(eye=[0, 0, -2], target=[0, 0, 0])))
+            assert defaults["provenance"]["camera"] == dict(eye=[0, 0, -2], target=[0, 0, 0], up=[0, 1, 0], projection="perspective", fov_y=65, near=.05, far=100)
             frozen = submit("frozen.json")
             assert frozen["provenance"]["actual_spp"] == 0 and frozen["provenance"]["input_fingerprint"] is None
             query = call("scene.query")
@@ -179,7 +220,7 @@ def main():
             assert (root / "old.json").read_text() == "previous"
             assert not call("jobs.cancel", dict(id=ppm["job_id"]))["accepted"]
             evidence["checks"].append("observable completed/submitted progress, running cancellation and failed task preserve old file")
-            script = subprocess.run([sys.executable, str(args.python_example), "--pipe", endpoint, "--ctl", str(args.client)] + (["--media"] if args.media else []),
+            script = subprocess.run([sys.executable, str(args.python_example), "--pipe", endpoint, "--ctl", str(args.client), "--orthographic"] + (["--media"] if args.media else []),
                                     capture_output=True, text=True, timeout=160, creationflags=subprocess.CREATE_NO_WINDOW)
             assert script.returncode == 0, (script.stdout, script.stderr)
             python = json.loads((root / "path-python.json").read_text())
@@ -195,7 +236,7 @@ def main():
                                     capture_output=True, text=True, timeout=160, creationflags=subprocess.CREATE_NO_WINDOW)
             assert script.returncode == 0 and not script.stderr, (script.stdout, script.stderr)
             luau = json.loads((root / "path-luau.json").read_text())
-            assert python["linear_rgb"] == luau["linear_rgb"] == first["linear_rgb"]
+            assert python["linear_rgb"] == luau["linear_rgb"] == orthographic["linear_rgb"]
             assert python["rgba8"] == luau["rgba8"]
             evidence["checks"].append("real Python and Luau examples match linear pixels")
             evidence["status"] = "passed"

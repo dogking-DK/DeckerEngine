@@ -1,7 +1,7 @@
 ---
 module: editor-interaction
 created_at: "2026-10-08T11:35:00+08:00"
-updated_at: "2026-10-19T11:24:37+08:00"
+updated_at: "2026-10-19T11:42:00+08:00"
 status: accepted
 ---
 
@@ -230,7 +230,7 @@ Gizmo 期间禁用相机/镜头修改，导航期间禁止拾取和 Gizmo；恢�
 M18.3 首先验收基础光栅、模拟、拾取/Gizmo 与正交取景。编辑器增加显式的会话级 Unlit inspection 视图选项，
 让带环境的场景也能检查正交几何；该选项选择基础光栅入口，不改 Scene.environment，面板明确显示未渲染环境。
 切换正交前必须选择支持它的后端/显示组合；不自动关环境或悄悄切换渲染器。
-若外部修改使当前组合不再支持，保留最后完成图并说明恢复方式。Path trace 和光栅环境正交在对应阶段完成前保持禁用。
+若外部修改使当前组合不再支持，保留最后完成图并说明恢复方式。M18.4 已开放 Path trace 正交；光栅环境正交在 M18.5 完成前保持禁用。
 模拟不使用场景空气/云合成，仍需独立验证矩阵、裁剪和发布序号，不能由 Edit 的成功推定。
 
 M18.4 扩展路径 CPU/GPU（Surface only 和 Scene media）的正交主射线；平行方向与像素相关起点必须共同进入 GPU 参数。
@@ -238,7 +238,7 @@ M18.4 扩展路径 CPU/GPU（Surface only 和 Scene media）的正交主射线�
 像素抖动移动正交起点，不能修改平行方向；介质从每条射线的起点计算行星坐标/云采样，不复用透视共用眼点的径向/相位量。
 CPU/GPU 共用相机语义，保留主射线裁剪与反弹射线裁剪分离；比较解析几何、不同深度等尺寸物体、CPU/GPU及历史重置。
 
-同阶段规划 `render.capture` / `render.capture_sequence` 的 camera 增加可选 `projection` 与 `ortho_height`：
+同阶段 `render.capture` / `render.sequence` 的 camera 增加可选 `projection` 与 `ortho_height`：
 缺省仍为 perspective，旧 eye/target/up/fov_y/near/far 请求及默认 far=100 保持；orthographic 必须给正高度。
 正交分支拒绝显式 fov_y，透视分支拒绝 ortho_height，避免无效设置被当作生效；schema 支持字段发现，跨字段规则由服务校验。
 provenance 表达实际生效的投影字段；同步 [RenderOperations](../../engine/framework/operations/src/RenderOperations.cpp) 的请求和结果 schema、
@@ -255,7 +255,7 @@ M18.1–4 可先交付可用相机和有限正交；只有此阶段验收后才�
 
 ### 定向验收计划
 
-以下覆盖整个 M18 的验收要求；M18.1 项目见 [0129](../development/0129-camera-settings.md)，M18.2 见 [0130](../development/0130-camera-fly-walk.md)，基础正交 M18.3 见 [0131](../development/0131-camera-orthographic.md)；路径/捕获及光栅环境正交留待后续。不默认执行全量或双配置。
+以下覆盖整个 M18 的验收要求；M18.1 项目见 [0129](../development/0129-camera-settings.md)，M18.2 见 [0130](../development/0130-camera-fly-walk.md)，基础正交 M18.3 见 [0131](../development/0131-camera-orthographic.md)；路径/捕获 M18.4 见 [0132](../development/0132-pathtrace-orthographic-capture.md)，光栅环境正交留待 M18.5。不默认执行全量或双配置。
 
 | 范围 | 关键可观察断言 | 现有验证入口 |
 | --- | --- | --- |

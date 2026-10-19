@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-19T11:24:37+08:00"
+updated_at: "2026-10-19T11:42:00+08:00"
 status: accepted
 ---
 
@@ -12,7 +12,7 @@ status: accepted
 Edit/Simulation 的独立会话相机提供 Perspective / Orthographic Orbit 和六视图，
 投影/导航/取景状态契约见[交互设计](editor-interaction.md#m183-实施契约)。
 Edit 显式选择 Unlit inspection 后用基础光栅渲染原始快照，不改环境文档；预览 key 包含该显示选项，
-切换时取消环境请求，迟到的旧结果不得覆盖基础图像。Path trace 只支持透视，光栅环境也保持透视限制。
+切换时取消环境请求，迟到的旧结果不得覆盖基础图像。M18.4 Path trace 支持透视/正交及 Surface only/Scene media；光栅环境仍保持透视限制。正交路径加场景环境时禁用不兼容的 Raster 切换，可先回透视恢复；不自动改 Scene。
 UI 禁用不支持的组合并说明原因；提交入口按实际场景和渲染模式复查，失败保留最后图像并禁止旧图拾取。
 相机和 Unlit 操作不进入 Scene/历史。模拟正交不使用场景空气/云，维持独立镜头与最近完成图发布。
 

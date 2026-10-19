@@ -75,6 +75,19 @@ def main():
                     assert source["cloud_field_hash"] == value["field_hash"] and source["time_seconds"] == value["time_seconds"]
             report.setdefault("linear_comparisons", []).append(dict(checkpoint=name, max_abs=error, pixels=len(gui)))
 
+        def compare_projections(previous):
+            for name in ("orthographic", "ortho_height", "perspective"):
+                value = checkpoint(name)
+                camera = value["capture_camera"]
+                assert camera["projection"] == ("perspective" if name == "perspective" else "orthographic")
+                assert value["generation"] > previous["generation"] and value["revision"] == previous["revision"]
+                if name == "ortho_height":
+                    assert camera["ortho_height"] == 3
+                if args.media:
+                    assert value["geometry_fingerprint"] == previous["geometry_fingerprint"]
+                compare_capture(value); advance(name)
+                previous = value
+
         def run_media():
             def call(method, params=None):
                 return client.call(method, params).value
@@ -89,6 +102,7 @@ def main():
             compare_capture(air)
             env = call("environment.query")["environment"]
             assert env["enabled"]  # enabled through the actual Environment panel
+            env["atmosphere"]["planet_center_m"][1] -= 10
             env["clouds"].update(enabled=True, coverage=1, extinction_per_m=.00005,
                                  weather_resolution=16, base_resolution=16, detail_resolution=16, wind_velocity_mps=[1000, 0])
             set_environment(env); advance("air")
@@ -146,6 +160,7 @@ def main():
             error = max(abs(a-b) for left, right in zip(linear, image["linear_rgb"]) for a,b in zip(left,right))
             assert error <= 1e-5 and image["provenance"]["cloud_field_hash"] == console["field_hash"]
             report["console_capture_max_abs"] = error; advance("console")
+            compare_projections(console)
             closing = checkpoint("closing")
             assert closing["pending"] and closing["spp"] < 64
             for _ in range(6):
@@ -215,6 +230,7 @@ def main():
                 assert reloaded["document_id"] != returned["document_id"] and reloaded["undo"] == 0
                 assert reloaded["pixels"] == returned["pixels"] and reloaded["generation"] > returned["generation"]
                 advance("reloaded")
+                compare_projections(reloaded)
                 closing = checkpoint("closing")
                 assert closing["pending"] and closing["spp"] < 64
                 for _ in range(12):

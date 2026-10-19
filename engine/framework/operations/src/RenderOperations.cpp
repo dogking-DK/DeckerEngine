@@ -21,9 +21,11 @@ Json path_schema(bool complete=false) {
 }
 Json camera_schema(bool complete=false) {
     const auto vec=vector_schema();
-    return schema::object({{"eye",vec},{"target",vec},{"up",vec},{"fov_y",schema::number()},
-        {"near",schema::number()},{"far",schema::number()}},
-        complete ? Json{"eye","target","up","fov_y","near","far"} : Json{"eye","target"});
+    Json fields={{"eye",vec},{"target",vec},{"up",vec},{"fov_y",schema::number()},
+        {"projection",{{"type","string"},{"enum",{"perspective","orthographic"}}}},
+        {"ortho_height",schema::number()},{"near",schema::number()},{"far",schema::number()}};
+    if(complete) fields["primary_ray_origin"]={{"type","string"},{"enum",{"near_plane"}}};
+    return schema::object(std::move(fields),complete ? Json{"eye","target","up","projection","near","far"} : Json{"eye","target"});
 }
 Json render_options_schema(bool complete=false) {
     return schema::object({{"mode",{{"type","string"},{"enum",{"reference","temporal"}}}},
@@ -53,6 +55,8 @@ Vec3d vector(const Json& value) { return {value[0].get<double>(),value[1].get<do
 CaptureCamera camera(const Json& c) {
     CaptureCamera value; value.eye=vector(c["eye"]); value.target=vector(c["target"]);
     if(c.contains("up")) value.up=vector(c["up"]);
+    value.orthographic=c.value("projection",std::string{"perspective"})=="orthographic";
+    value.explicit_fov_y=c.contains("fov_y"); if(c.contains("ortho_height")) value.ortho_height=c["ortho_height"].get<double>();
     value.fov_y=c.value("fov_y",65.0); value.near_plane=c.value("near",.05); value.far_plane=c.value("far",100.0); return value;
 }
 CaptureRequest request(const Json& p,bool sequence) {

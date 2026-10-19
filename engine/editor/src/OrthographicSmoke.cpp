@@ -8,9 +8,6 @@ bool SmokeDriver::orthographic_input(Workspace& model,WorkbenchUi& ui,Viewport& 
     constexpr std::array actions={"camera_orthographic","camera_front","camera_back","camera_left","camera_right","camera_top","camera_bottom",
         "camera_reset","camera_frame","viewport_empty","viewport","mode_move",":move","undo","redo",":cancel","mode_rotate",":rotate","mode_scale",":scale",
         ":orbit",":pan",":zoom","camera_frame",":external_environment","unlit_inspection",":disable_unlit",
-#ifdef DK_EDITOR_PATHTRACING
-        ":path_disabled",
-#endif
         "camera_perspective",":restore_environment","unlit_inspection"};
     if(ortho_stage_>=actions.size()) return true;
     const std::string_view action=actions[ortho_stage_]; const auto phase=ortho_phase_++;
@@ -31,7 +28,7 @@ bool SmokeDriver::orthographic_input(Workspace& model,WorkbenchUi& ui,Viewport& 
         } else if(action==":restore_environment") { check(model.undo()); }
         else {
             pointer_=control(gizmo ? (action==":rotate" ? "gizmo_2" : "gizmo_0") : navigation || action==":zoom" ? "viewport_empty" :
-                action==":disable_unlit" ? "unlit_inspection" : action==":path_disabled" ? "path_mode" : actions[ortho_stage_]);
+                action==":disable_unlit" ? "unlit_inspection" : actions[ortho_stage_]);
             start_pointer_=pointer_; io.AddMousePosEvent(pointer_.x,pointer_.y);
             if(action==":zoom") io.AddMouseWheelEvent(0,2); else io.AddMouseButtonEvent(button,true);
         }
@@ -81,10 +78,10 @@ bool SmokeDriver::orthographic_input(Workspace& model,WorkbenchUi& ui,Viewport& 
     }
     if(!gizmo && action!="undo" && action!="redo" && action!=":external_environment" && action!=":restore_environment")
         require(model.snapshot()->state.revision==stage_revision_ && model.history().undo_count==history_,"display controls changed scene/history");
-    if(action==":disable_unlit" || action==":path_disabled") {
+    if(action==":disable_unlit") {
         require(viewport.pixel_signature()==stage_pixels_ && camera.projection_mode()==ProjectionMode::orthographic,"unsupported display selection changed view");
 #ifdef DK_EDITOR_PATHTRACING
-        require(!ui.path_mode(),"orthographic enabled path tracing");
+        require(!ui.path_mode(),"disabled unlit control changed render mode");
 #endif
     }
     if(action=="camera_perspective") require(camera.projection_mode()==ProjectionMode::perspective,"perspective recovery failed");

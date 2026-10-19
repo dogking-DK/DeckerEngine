@@ -11,7 +11,7 @@ local ticket = call("render.capture", {
     guard = {document_id = state.document_id, revision = state.revision},
     renderer = "pathtrace", format = "linear_json", output = "path-luau.json",
     width = 48, height = 32, validation = "required",
-    camera = {eye = {0, 0, -2}, target = {0, 0, 0}, near = 0.05, far = 10000},
+    camera = {projection = "orthographic", ortho_height = 3, eye = {0, 2, -2}, target = {0, 2, 0}, near = 0.05, far = 10000},
     pathtrace = {version = 2, medium_mode = "scene_media", time_seconds = 0, cloud_albedo = 0.9, cloud_anisotropy = 0.6, target_spp = 3, seed = 7, max_bounces = 4, environment_rgb = {0.3, 0.4, 0.6}}
 })
 assert(ticket.provenance.actual_spp == 0 and ticket.provenance.input_fingerprint == dk.null)

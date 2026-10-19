@@ -2,6 +2,7 @@
 #include <dk/render/PathTraceReference.hpp>
 #include <dk/scene/SceneDocument.hpp>
 #include <dk/geometry/Query.hpp>
+#include <dk/math/Projection.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -216,6 +217,9 @@ TEST_CASE("camera rays preserve Vulkan pixel orientation clipping and reject uns
     CHECK_FALSE(path_trace_camera_ray(view,2,0,{.5,.5})); CHECK_FALSE(path_trace_camera_ray(view,0,0,{1,.5}));
     auto d=view.description(); d.projection.setIdentity(); CHECK_FALSE(path_trace_camera_ray(RenderView::create(source,d).value(),0,0,{.5,.5}));
     d=view.description(); d.projection(0,2)=.2; CHECK(path_trace_camera_ray(RenderView::create(source,d).value(),0,0,{.5,.5}));
+    d=view.description(); d.projection=perspective_projection({radians(60.),1,10},1).value();
+    const auto unit_near=path_trace_camera_ray(RenderView::create(source,d).value(),0,0,{.5,.5}).value();
+    CHECK(unit_near.origin==Vec3d(0,0,1)); CHECK(unit_near.minimum>1); CHECK(unit_near.direction.x()<0);
     d=view.description(); Trsd scaled; scaled.scale={2,1,1}; d.camera_world=Transformd::from_trs(scaled).value();
     CHECK_FALSE(path_trace_camera_ray(RenderView::create(source,d).value(),0,0,{.5,.5}));
 }
@@ -355,4 +359,26 @@ TEST_CASE("active reference cancellation discards partial image and leaves scene
     REQUIRE_FALSE(result); CHECK(result.error().context==std::vector<std::string>{"render.pathtracing.reference.cancelled"});
     CHECK(f.heap.snapshot().live_allocations==before.live_allocations);
     REQUIRE(render_path_reference(f.heap,scene,view,settings(),{0,1}));
+}
+
+TEST_CASE("camera orthographic rays jitter origins preserve parallelism and clip near far") {
+    Fixture f; f.quad(-.5f,.5f,0,{0,0,0},{2,3,4}); auto source=f.source(); auto scene=f.scene();
+    auto d=f.view(source,8).description(); d.projection=orthographic_projection({2,.25,2},1).value();
+    const auto view=RenderView::create(source,d).value();
+    const auto a=path_trace_camera_ray(view,0,0,{.5,.5}).value();
+    const auto b=path_trace_camera_ray(view,7,7,{.25,.75}).value();
+    CHECK(a.origin.isApprox(Vec3d{-.875,.875,.75})); CHECK(a.direction==Vec3d(0,0,-1));
+    CHECK(a.direction==b.direction); CHECK(a.origin!=b.origin); CHECK(a.minimum==0); CHECK(a.maximum==1.75);
+    auto settings=PathTraceSettings{}; settings.max_bounces=1; settings.rr_start=0;
+    auto image=render_path_reference(f.heap,scene,view,settings,{0,4}).value();
+    unsigned hits=0; for(const auto& pixel:image.linear_rgb()) if(pixel.norm()>0) { ++hits; CHECK(pixel==Vec3d(2,3,4)); }
+    CHECK(hits==16);
+    // Shift geometry in depth: same coverage, before-near and beyond-far excluded.
+    for(double z : {-.5,.9,-1.5}) {
+        Trsd transform; transform.translation.z()=z; f.document->set_local_transform(f.entity,transform).value();
+        auto shifted=f.source(); auto v=RenderView::create(shifted,d).value();
+        auto candidate=render_path_reference(f.heap,f.scene(),v,settings,{0,4}).value();
+        for(std::size_t i=0;i<image.linear_rgb().size();++i) CHECK(candidate.linear_rgb()[i]==(z==-.5 ? image.linear_rgb()[i] : Vec3d::Zero()));
+    }
+    d.projection(2,2)*=-1; CHECK_FALSE(path_trace_camera_ray(RenderView::create(source,d).value(),0,0,{.5,.5}));
 }

@@ -9,15 +9,21 @@ def main():
     parser.add_argument("--pipe", required=True)
     parser.add_argument("--ctl", default="dk-ctl")
     parser.add_argument("--media", action="store_true", help="Trace scene air/clouds at fixed time zero (v2)")
+    parser.add_argument("--orthographic", action="store_true", help="Parallel rays from a 3 m high near plane")
     args = parser.parse_args()
     client = Client(args.pipe, args.ctl, timeout=30)
     state = client.call("scene.query").value["state"]
     path = dict(version=1, target_spp=3, seed=7, max_bounces=4, environment_rgb=[.3, .4, .6])
     if args.media:
         path.update(version=2, medium_mode="scene_media", time_seconds=0, cloud_albedo=.9, cloud_anisotropy=.6)
+    camera = {"eye": [0, 0, -2], "target": [0, 0, 0], "near": .05, "far": 10000}
+    if args.orthographic:
+        camera.update(projection="orthographic", ortho_height=3)
+        if args.media:
+            camera.update(eye=[0, 2, -2], target=[0, 2, 0])
     capture = client.capture({"guard": guard(state), "renderer": "pathtrace", "format": "linear_json",
                               "output": "path-python.json", "width": 48, "height": 32, "validation": "required",
-                              "camera": {"eye": [0, 0, -2], "target": [0, 0, 0], "near": .05, "far": 10000},
+                              "camera": camera,
                               "pathtrace": path}, timeout=150)
     assert capture.job["progress"]["completed"] == 3
     print(json.dumps(capture.job, ensure_ascii=True))

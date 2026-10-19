@@ -1,7 +1,7 @@
 ---
 module: render-capture
 created_at: "2026-10-03T21:21:47+08:00"
-updated_at: "2026-10-16T17:25:00+08:00"
+updated_at: "2026-10-19T11:42:00+08:00"
 status: accepted
 ---
 
@@ -60,7 +60,7 @@ Runtime idle pump 同时消费资产与截图；`jobs.*` 通过 JobId 路由到�
 ## 限制与验证
 
 只输出 PPM（顶部第一行、sRGB RGB8），父目录必须存在；路径在工程根内，输出扩展名 .ppm。
-相机使用 eye/target/up、透视 fov_y/near/far，默认采用 Sponza 示例相机；
+相机使用 eye/target/up、projection 与对应透视 fov_y 或正交 ortho_height、near/far，默认采用透视 Sponza 示例相机；
 M18.1 的投影生成复用 [Math 透视计算](foundation-math.md#m181-透视计算)，FOV 校验、默认值和命令 schema 不变。
 默认 unlit_preview，支持 opaque/mask，不新增 PBR/透明/天空盒/HDR 照明。
 M8.4 与编辑器共用 Render 的 unlit_preview_settings。比较视口和截图必须显式匹配尺寸与相机，
@@ -131,3 +131,13 @@ GUI 与命令使用相同默认批次/tile；线性 JSON 做逐像素对照，�
 新增命令字段仍由 Operations 解码、Service 校验；Console/IPC/Python/Luau 共享注册表，无新协议分支。
 
 M17.6 将 input_fingerprint_version 升为3：几何内容hash与源身份/revision、完整环境组合。资产刷新仍重新生成几何；模型4/采样2及capture参数版本不变。
+
+## M18.4 投影与有效相机来源
+
+render.capture 和 render.sequence 每个 sample 的 camera 接受 projection（缺省 perspective）及 ortho_height。
+旧 eye/target/up、fov_y=65、near=.05、far=100 不变。正交必须显式给正有限 ortho_height 且禁止显式 fov_y；
+透视禁止 ortho_height。Operations 保留字段是否提供，由 Service 校验完整相机后构建 Math 投影；schema 只描述字段和枚举。
+来源 camera 总含 projection、eye/target/up/near/far，仅写实际生效的 fov_y 或 ortho_height，
+正交额外写 primary_ray_origin=near_plane（近面前几何和介质不计入）；此只读字段不作为请求参数。
+基础光栅、表面路径和 Scene media 支持正交；光栅环境仍拒绝，序列任何非法 sample 都在入队前失败。
+不改变 external/不可撤销、guard、Jobs 取消/关闭、owner 单文件原子发布或旧文件保护。

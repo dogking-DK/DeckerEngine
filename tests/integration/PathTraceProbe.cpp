@@ -1,5 +1,6 @@
 #include "../RenderAssetSupport.hpp"
 #include <dk/render/PathTraceRenderer.hpp>
+#include <dk/math/Projection.hpp>
 #include <dk/scene/SceneDocument.hpp>
 #include <dk/graphics/ShaderCompiler.hpp>
 #include <dk/graphics/GpuObjects.hpp>
@@ -296,6 +297,7 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
 #include "PathProgressiveCases.hpp"
 #include "PathAirCases.hpp"
 #include "PathCloudCases.hpp"
+#include "PathOrthographicCases.hpp"
 int main(int argc,char** argv) {
     try {
         require(argc==2,"expected analytic/statistics/images/lifetime case");
@@ -313,7 +315,9 @@ int main(int argc,char** argv) {
             auto queue=take(graphics::detail::SubmissionAccess::create(memory.heap,std::move(device),3,{submit_override,nullptr,wait_override}));
             { auto renderer=take(PathTraceRenderer::create(memory.heap,queue,DK_PATH_SHADER_DIR));
               const std::string_view mode=argv[1];
-              if(mode=="cloud_numeric") cloud_numeric(memory.heap,renderer,queue);
+              if(mode=="orthographic") orthographic(memory.heap,renderer,queue);
+              else if(mode=="orthographic_medium") orthographic_medium(memory.heap,renderer,queue);
+              else if(mode=="cloud_numeric") cloud_numeric(memory.heap,renderer,queue);
               else if(mode=="cloud_statistics") cloud_statistics(memory.heap,renderer,queue);
               else if(mode=="cloud_surface") cloud_surface(memory.heap,renderer,queue);
               else if(mode=="cloud_progressive") cloud_progressive(memory.heap,renderer,queue);

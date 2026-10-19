@@ -135,3 +135,42 @@ TEST_CASE("capture media v2 rejects ambiguous modes and invalid work before publ
     CHECK(c.value("scene.query")["state"]==state); CHECK(c.value("history.status")==history);
     CHECK(read_file_bytes(c.files.root/"old.json")->size()==8);
 }
+
+TEST_CASE("capture orthographic discovery rejects ambiguous lenses before jobs and preserves state") {
+    CaptureCommands c; auto state=c.value("scene.new"); const auto history=c.value("history.status");
+    const Json guard={{"document_id",state["document_id"]},{"revision",state["revision"]}};
+    for(const char* method:{"render.capture","render.sequence"}) {
+        const auto schema=c.value("commands.describe",{{"name",method}});
+        auto fields=schema["parameters"]["properties"];
+        auto camera=(std::string_view(method)=="render.capture" ? fields["camera"] : fields["samples"]["items"]["properties"]["camera"])["properties"];
+        CHECK(camera.contains("projection")); CHECK(camera.contains("ortho_height")); CHECK_FALSE(camera.contains("primary_ray_origin"));
+        for(const Json bad:{Json{{"projection","orthographic"}},Json{{"projection","orthographic"},{"ortho_height",0}},
+            Json{{"projection","orthographic"},{"ortho_height",-1}},Json{{"projection","orthographic"},{"ortho_height",2},{"fov_y",65}},
+            Json{{"ortho_height",2}},Json{{"projection","unknown"},{"ortho_height",2}}}) {
+            Json lens={{"eye",{0,0,2}},{"target",{0,0,0}}}; lens.update(bad);
+            Json request={{"guard",guard},{"width",16},{"height",16},{"output",std::string_view(method)=="render.capture" ? "old.ppm" : "old.json"}};
+            if(std::string_view(method)=="render.capture") request["camera"]=lens;
+            else request["samples"]=Json::array({{{"camera",{{"eye",{0,0,2}},{"target",{0,0,0}}}},{"time_seconds",0}},{{"camera",lens},{"time_seconds",1}}});
+            auto result=c.call(method,request); REQUIRE_FALSE(result); CHECK(result.error().code==ErrorCode::invalid_argument);
+            CHECK(c.value("scene.query")["state"]==state); CHECK(c.value("history.status")==history);
+        }
+    }
+}
+
+TEST_CASE("capture orthographic raster environment and late sequence lens reject without publication") {
+    CaptureCommands c; c.value("scene.new"); c.files.write("old.ppm","previous"); c.files.write("old.json","previous");
+    auto environment=c.value("environment.query")["environment"]; environment["enabled"]=true;
+    c.value("environment.set",{{"environment",environment}},true);
+    const auto state=c.value("scene.query")["state"],history=c.value("history.status");
+    const Json lens={{"eye",{0,10,2}},{"target",{0,10,0}},{"projection","orthographic"},{"ortho_height",3}};
+    auto result=c.call("render.capture",{{"camera",lens},{"output","old.ppm"}},true);
+    REQUIRE_FALSE(result); CHECK(result.error().code==ErrorCode::not_supported);
+    result=c.call("render.sequence",{{"width",16},{"height",16},{"samples",Json::array({{{"camera",{{"eye",{0,10,2}},{"target",{0,10,0}}}},{"time_seconds",0}},
+        {{"camera",lens},{"time_seconds",1}}})},{"output","old.json"}},true);
+    REQUIRE_FALSE(result); CHECK(result.error().code==ErrorCode::not_supported);
+    auto bad=lens; bad["fov_y"]=65;
+    result=c.call("render.sequence",{{"width",16},{"height",16},{"samples",Json::array({{{"camera",lens},{"time_seconds",0}},{{"camera",bad},{"time_seconds",1}}})},{"output","old.json"}},true);
+    REQUIRE_FALSE(result); CHECK(result.error().code==ErrorCode::invalid_argument);
+    CHECK(c.value("scene.query")["state"]==state); CHECK(c.value("history.status")==history);
+    CHECK(read_file_bytes(c.files.root/"old.ppm")->size()==8); CHECK(read_file_bytes(c.files.root/"old.json")->size()==8);
+}

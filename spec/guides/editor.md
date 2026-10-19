@@ -142,11 +142,13 @@ Camera 中可输入 **Orthographic height (m)**，范围 0.01–100000m。返回
 前后左右上方为 +Y，Top 上方为 -Z，Bottom 上方为 +Z。右键环绕退出固定视向。
 正交拾取、框选、Move/Rotate/Scale Gizmo 使用同一投影；模拟 **Frame cloth** 保留所选正交视向，两个视口互不影响。
 
-带大气/云的 Edit 场景先选择 **Raster → Unlit inspection**，再选择正交。
-该选项仅跳过当前视口的环境光照，不改 Scene 或 Undo。正交下无法切入 Path trace，
-也无法取消会导致环境组合不受支持的 Unlit inspection；先回到 Perspective 即可恢复这些显示方式。
-外部命令启用环境导致当前正交组合无效时，保留最后图像、停止拾取并提示恢复方法。
-固定 `render.capture` / 序列和路径模式的正交支持属于后续 M18.4；光栅大气/云正交属于 M18.5，
+带大气/云的 Edit 场景可以选择 **Path trace**，或 **Raster → Unlit inspection** 后选择正交。
+Unlit inspection 仅跳过当前视口的环境光照，不改 Scene 或 Undo。Path trace 的 Surface only 与 Scene media 均支持正交；
+投影或高度变化重置路径累积。Scene media 从每个像素的近裁剪面开始，近面图像区域须在地面以上。
+光栅环境组合仍不支持正交，因此会禁用不兼容的 Raster 切换或取消 Unlit inspection；先回到 Perspective 可恢复。
+外部命令启用环境导致当前正交光栅组合无效时，保留最后图像、停止拾取并提示恢复方法。
+固定 `render.capture` / `render.sequence` 可用 camera.projection=orthographic 和正数 ortho_height；省略投影仍为透视，
+正交不能同时提供 fov_y。完整参数见[捕获命令](../commands/render.md)。光栅大气/云正交属于 M18.5，
 见 [相机设计](../design/editor-interaction.md#m18-相机扩展计划)。
 
 ## 编辑预览与外部命令

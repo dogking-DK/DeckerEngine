@@ -248,8 +248,11 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     preview.show_edit();
 #ifdef DK_EDITOR_PATHTRACING
     ImGui::BeginDisabled(input_.active());
-    if(ImGui::RadioButton("Raster",!path_mode_)) { path_mode_=false; input_.cancel(); preview.suspend_path(); } mark("path_raster"); ImGui::SameLine();
-    ImGui::BeginDisabled(!preview.path_unavailable().empty() || input_.camera().projection_mode()==ProjectionMode::orthographic);
+    const bool raster_unsupported=input_.camera().projection_mode()==ProjectionMode::orthographic && !unlit_inspection_ && model_.snapshot() &&
+        (model_.snapshot()->scene.environment().enabled || model_.snapshot()->scene.environment().clouds.enabled);
+    ImGui::BeginDisabled(raster_unsupported);
+    if(ImGui::RadioButton("Raster",!path_mode_)) { path_mode_=false; input_.cancel(); preview.suspend_path(); } mark("path_raster"); ImGui::EndDisabled(); ImGui::SameLine();
+    ImGui::BeginDisabled(!preview.path_unavailable().empty());
     if(ImGui::RadioButton("Path trace",path_mode_)) { path_mode_=true; input_.cancel(); ImGui::SetWindowFocus("Path tracing"); } mark("path_mode");
     ImGui::EndDisabled();
     ImGui::EndDisabled();
@@ -274,9 +277,9 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     input_.pathtracing(path_projection);
     input_.environment(environment_projection && !path_projection && !unlit_inspection_);
     // Keep one line in all modes so toggling a preference does not resize the image.
-    ImGui::TextDisabled(path_projection ? "Orthographic unavailable: Path trace requires Perspective" :
+    ImGui::TextDisabled(path_projection ? "Path trace supports Perspective and Orthographic" :
         environment_projection && !unlit_inspection_ ? "Orthographic needs Unlit inspection or environment disabled" :
-        input_.camera().projection_mode()==ProjectionMode::orthographic ? "Orthographic: Path trace / atmosphere need Perspective" :
+        input_.camera().projection_mode()==ProjectionMode::orthographic ? "Orthographic: raster atmosphere needs Perspective" :
         "Unlit inspection skips scene lighting for this viewport");
     input_.toolbar(model_,preview,controls_,[&](const char* action,Result<void> result) { return report(action,std::move(result)); });
     if (const auto* s=model_.snapshot(); s && visible) {

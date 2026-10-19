@@ -166,7 +166,8 @@ Result<void> trace_record(graph::PassContext& pass,void* context) {
         return encoder.dispatch({(c.width*c.height+63)/64,1,1});
     } catch (const Error& error) { return std::unexpected(error); }
 }
-using Parameters=std::array<Float4,31>;
+using Parameters=std::array<Float4,32>;
+Parameters view_parameters(const PathSceneState&,const RenderView&,const PathTraceSettings&,PathTraceSamples);
 Parameters parameters(const PathSceneState& scene,const PathTraceSettings& s,PathTraceSamples samples,
     std::uint32_t width,std::uint32_t height,bool rays,std::uint32_t first_pixel) {
     const auto env=scene.source.environment();
@@ -516,18 +517,7 @@ Result<PathTraceFrame> PathTraceRenderer::submit_view(SubmissionQueue& queue,con
     if (!scene || scene.state_->program.lock()!=state_) return std::unexpected(path_invalid("Path scene belongs to a different renderer"));
     const auto& cpu=*PathReferenceAccess::get(scene.source()); check(validate_path_view(cpu,view));
     const auto& d=view.description(); check(validate_path_work(cpu,std::uint64_t{d.width}*d.height,settings,samples));
-    for (const bool right:{false,true}) for (const bool bottom:{false,true}) {
-        const auto corner=take(path_trace_camera_ray(view,right ? d.width-1 : 0,bottom ? d.height-1 : 0,
-            {right ? std::nextafter(1.0,0.0) : 0,bottom ? std::nextafter(1.0,0.0) : 0}));
-        if (corner.minimum<std::numeric_limits<float>::min() || corner.maximum>std::numeric_limits<float>::max())
-            return std::unexpected(path_invalid("Path camera clipping interval exceeds normal float domain"));
-    }
-    auto p=parameters(cpu,settings,samples,d.width,d.height,false,0);
-    const Mat4d inverse=d.projection.inverse(),world=d.camera_world.matrix(); const Vec3d origin=world.block<3,1>(0,3);
-    const auto near_point=[&](double x,double y) -> Vec3d { Vec4d v=inverse*Vec4d{x,y,0,1}; v/=v.w(); return (world*v).head<3>()-origin; };
-    const Vec3d base=near_point(-1,-1); p[6]=pack(origin); p[7]=pack(base);
-    p[8]=pack((near_point(1,-1)-base)/d.width); p[9]=pack((near_point(-1,1)-base)/d.height);
-    const auto center=take(path_trace_camera_ray(view,0,0,{.5,.5})); p[5][3]=float(center.maximum/center.minimum);
+    auto p=view_parameters(cpu,view,settings,samples);
     auto info=info_for(scene.source(),d.width,d.height,settings,samples); info.view=d;
     const std::array<Float4,2> dummy{}; return PathTraceFrame{submit(*state_,queue,*scene.state_,p,dummy,std::move(info),stop)};
 } catch (const Error& error) { return std::unexpected(error); }
@@ -552,15 +542,19 @@ Parameters view_parameters(const PathSceneState& cpu,const RenderView& view,cons
     for(const bool right:{false,true}) for(const bool bottom:{false,true}) {
         const auto corner=take(gpu_path_camera_ray(view,right ? d.width-1 : 0,bottom ? d.height-1 : 0,
             {right ? std::nextafter(1.0,0.0) : 0,bottom ? std::nextafter(1.0,0.0) : 0}));
-        if(corner.minimum<std::numeric_limits<float>::min() || corner.maximum>std::numeric_limits<float>::max())
+        if((corner.minimum!=0 && corner.minimum<std::numeric_limits<float>::min()) || corner.maximum>std::numeric_limits<float>::max() || corner.maximum<std::numeric_limits<float>::min())
             throw path_invalid("Path camera clipping interval exceeds normal float domain");
     }
     auto p=parameters(cpu,settings,samples,d.width,d.height,false,0);
     const Mat4d inverse=d.projection.inverse(),world=d.camera_world.matrix(); const Vec3d origin=world.block<3,1>(0,3);
-    const auto near_point=[&](double x,double y) -> Vec3d { Vec4d v=inverse*Vec4d{x,y,0,1}; v/=v.w(); return (world*v).head<3>()-origin; };
-    const Vec3d base=near_point(-1,-1); p[6]=pack(origin); p[7]=pack(base);
-    p[8]=pack((near_point(1,-1)-base)/d.width); p[9]=pack((near_point(-1,1)-base)/d.height);
-    const auto center=take(gpu_path_camera_ray(view,0,0,{.5,.5})); p[5][3]=float(center.maximum/center.minimum);
+    const bool ortho=d.projection(3,3)==1;
+    const auto near_point=[&](double x,double y) -> Vec3d { Vec4d v=inverse*Vec4d{x,y,0,1}; v/=v.w(); return world.block<3,3>(0,0)*v.head<3>(); };
+    const Vec3d anchor=ortho ? near_point(0,0) : Vec3d::Zero();
+    const Vec3d base=near_point(-1,-1)-anchor; p[6]=pack(origin+anchor,ortho ? 1 : 0); p[7]=pack(base);
+    p[8]=pack((near_point(1,-1)-anchor-base)/d.width); p[9]=pack((near_point(-1,1)-anchor-base)/d.height);
+    const auto center=take(gpu_path_camera_ray(view,0,0,{.5,.5}));
+    if(ortho) p[31]=pack(center.direction,center.maximum);
+    else p[5][3]=float(center.maximum/center.minimum);
     return p;
 }
 void validate_progressive(const PathSceneState& cpu,const RenderView& view,const PathTraceSettings& settings,const PathTraceSchedule& schedule) {
@@ -632,7 +626,7 @@ Result<PathTraceFrame> PathTraceRenderer::submit_medium_view(SubmissionQueue& qu
     const auto& d=view.description(); validate_medium(scene.source(),medium,settings,samples,std::uint64_t{d.width}*d.height);
     const auto& cpu=*PathReferenceAccess::get(scene.source()); check(validate_path_view(cpu,view));
     auto p=view_parameters(cpu,view,common_settings(settings),samples); medium_parameters(p,medium,settings);
-    medium_origin(p,medium,d.camera_world.matrix().block<3,1>(0,3));
+    medium_origin(p,medium,{p[6][0],p[6][1],p[6][2]});
     auto info=medium_info(scene.source(),medium,settings,d.width,d.height,samples); info.view=d;
     const std::array<Float4,3> dummy{}; return PathTraceFrame{submit(*state_,queue,*scene.state_,p,dummy,std::move(info),stop,nullptr,nullptr,prepare_cloud(*state_,medium))};
 } catch(const Error& error) { return std::unexpected(error); }
@@ -652,7 +646,7 @@ Result<void> PathTraceRenderer::configure_medium_view(SubmissionQueue& queue,std
         settings.max_rays<schedule.batch_spp*(2ull*settings.max_bounces+1)) throw path_invalid("Progressive medium work budget exceeded");
     const auto common=common_settings(settings);
     auto p=view_parameters(cpu,view,common,{0,1}); medium_parameters(p,medium,settings);
-    medium_origin(p,medium,d.camera_world.matrix().block<3,1>(0,3));
+    medium_origin(p,medium,{p[6][0],p[6][1],p[6][2]});
     auto* slot=view_slot(*state_,id);
     if(slot) {
         const auto& previous=**slot; const auto& a=previous.view.description();
@@ -710,7 +704,7 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
     auto info=info_for(view->scene->source,width,height,frozen,{batch->first,batch->count});
     if(view->medium) {
         const auto& air=*batch->candidate->info.medium; medium_parameters(p,*view->medium,air.settings);
-        medium_origin(p,*view->medium,d.camera_world.matrix().block<3,1>(0,3)); info.medium=air;
+        medium_origin(p,*view->medium,{p[6][0],p[6][1],p[6][2]}); info.medium=air;
     }
     const std::array<Float4,3> dummy{};
     cancelled(batch->stop);

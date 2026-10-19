@@ -1,7 +1,7 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-10-16T16:28:00+08:00"
+updated_at: "2026-10-19T11:42:00+08:00"
 status: accepted
 ---
 
@@ -31,9 +31,13 @@ status: accepted
 | warmup_frames | 0 | 0–64整数，仅temporal允许非零；首样本固定时间预热，从空历史开始 |
 | validation | if_available | if_available 或 required；required 缺少验证层时 Job 失败 |
 
-camera 可选 up=[0,1,0]、fov_y=65（度，1&lt;值&lt;179）、near=0.05、far=100。
+camera 可选 projection=perspective、up=[0,1,0]、near=0.05、far=100。
+透视可选 fov_y=65（度，1&lt;值&lt;179），禁止 ortho_height；orthographic 必须给正有限 ortho_height（世界米），禁止显式 fov_y。
+正交支持基础光栅和 Surface only / Scene media 路径；启用空气或云的光栅请求返回 not_supported。
+正交主射线从各抖动像素的近裁剪面开始，近面前的几何和介质不计入；far 只裁剪主网格查询，介质仍到物理边界。
+Scene media 的整个近面图像区域须处于既有介质支持域（不可在地下），无隐式改相机或关闭环境。
 必须有限、near&gt;0、far&gt;near，eye 与 target 不同，up 不能平行于观察方向。
-默认 eye=[8,1.8,0]、target=[-4,2,0]。坐标为世界空间，使用右手透视、顶部第一行。
+默认 eye=[8,1.8,0]、target=[-4,2,0]。坐标为世界空间，使用右手坐标、顶部第一行。
 
 关闭环境时与编辑器共用线性背景色 (0.04,0.08,0.16)；启用时按冻结环境执行天空、Lambert日光/天空漫射和空气透视。
 需要 DK_BUILD_RENDER_ATMOSPHERE，否则启用环境的 Job 返回 not_supported。
@@ -80,7 +84,7 @@ succeeded 的 result 为 `{kind:"capture",document_id,scene_id,revision,frame,wi
 该示例使用默认 Sponza 工程，创建输出父目录，自动取得 guard、等待终态并关闭 runner。
 光栅截图不支持PBR；路径追踪材质沿下节。两者均不支持PNG、透明混合、HDR环境贴图采样或天空盒。
 
-`provenance`包含完整环境（与environment.query同结构）、camera（含缺省up/fov_y/near/far）、
+`provenance`包含完整环境（与environment.query同结构）、camera（含 projection、up/near/far 及生效的 fov_y 或 ortho_height；正交还含 primary_ray_origin=near_plane）、
 exposure、profile、time_seconds、render_options、warmup_frames、sample_count及shader_fingerprint。
 quality反映实际路径：atmosphere_v1、unlit_v1、cloud_reference_v1或cloud_temporal_v1。
 atmosphere_v1固定LUT和64×64×128空气透视网格；cloud_reference_v1为256/64/64步，无历史；
@@ -113,7 +117,7 @@ cloud_temporal_v1使用M15.4的96到256自适应主步、8云太阳步、保边�
 effect=external、undoable=false；需要活动场景和guard，不允许scene.transaction，不修改revision/dirty/历史、不隐式保存。
 与capture共用有界Jobs队列、取消和原子单文件发布契约。output须为工程相对`.json`；父目录须存在。
 参数沿用width/height/exposure/profile/validation/render_options/warmup_frames；不接受顶层camera或time_seconds。
-另需`samples`数组（1–128），每项`{camera,time_seconds,camera_cut?}`；camera字段/缺省与capture相同，时间必填有限[-1e9,1e9]，camera_cut默认false。
+另需`samples`数组（1–128），每项`{camera,time_seconds,camera_cut?}`；camera字段/缺省与capture相同，允许各样本不同投影/高度，任何非法样本在入队前拒绝；时间必填有限[-1e9,1e9]，camera_cut默认false。
 连续样本保留稳定视图身份，true明确重置相机历史；回退/大时间跳跃沿M15.4重置。预热只重复首样本的相机/时间，不隐式推进风。
 
 每样本≤65536像素、全部样本合计≤262144像素；非零云reference仍≤4096像素。宽高/模式/时间/相机/序列预算先验证，非法请求不消耗frame或创建Job。
@@ -191,14 +195,14 @@ seed/目标/反弹/RR/环境/太阳/surface_only；GUI默认环境[.3,.4,.6]、�
 {"jsonrpc":"2.0","id":2,"method":"render.capture","params":{
   "guard":{"document_id":"<当前 document_id>","revision":1},
   "renderer":"pathtrace","format":"linear_json","output":"path.json","width":48,"height":32,
-  "camera":{"eye":[0,0,-2],"target":[0,0,0],"near":0.05,"far":10000},
+  "camera":{"eye":[0,0,-2],"target":[0,0,0],"projection":"orthographic","ortho_height":3,"near":0.05,"far":10000},
   "pathtrace":{"version":1,"target_spp":3,"seed":7,"max_bounces":4,"environment_rgb":[0.3,0.4,0.6]},
   "validation":"required"
 }}
 ```
 
 可执行[Python](../../examples/automation/pathtrace_capture.py)通过IPC渲染活动场景；[Luau](../../examples/scripting/pathtrace-capture.luau)加载project.json。
-先将tests/fixtures/render-disk复制到独立工程；Python示例：`python examples/automation/pathtrace_capture.py --pipe <endpoint> --ctl <dk-ctl路径>`。
+先将tests/fixtures/render-disk复制到独立工程；Python正交示例：`python examples/automation/pathtrace_capture.py --pipe <endpoint> --ctl <dk-ctl路径> --orthographic`（省略该选项保留透视）。
 两者输出path-python.json/path-luau.json；使用小型受支持场景，v1 若空气/云开启须明确 surface_only；联合介质使用下节 v2。
 
 ## 统一介质路径（v2）
@@ -237,5 +241,5 @@ pathtrace 对象返回全部实际参数，顶层 time_seconds 同步固定时�
 
 Editor Console 使用同一 method/params 对象（不带 jsonrpc/id）；先 scene.query 获取 guard。
 [Python](../../examples/automation/pathtrace_capture.py) 增加 --media，对活动 Scene 固定时间零捕获；
-[Luau](../../examples/scripting/pathtrace-media-capture.luau) 从 project.json 加载已保存 Scene，输出 path-luau.json。
+[Luau](../../examples/scripting/pathtrace-media-capture.luau) 从 project.json 加载已保存 Scene，使用 3 m 正交高度输出 path-luau.json；按场景地面高度设置相机，保证近面在地面以上。
 两者不隐式启用空气/云；先通过环境面板或 environment.set 配置，需要跨进程一致时显式 scene.save。

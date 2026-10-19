@@ -148,26 +148,28 @@ Result<Vec3d> trace_one(const PathSceneState& scene,PathTraceRay ray,const PathT
 struct Camera {
     Mat4d inverse_projection,world;
     std::uint32_t width=0,height=0;
+    bool orthographic=false;
     PathTraceRay ray(std::uint32_t x,std::uint32_t y,const Vec2d& subpixel) const {
         const double px=2*(double(x)+subpixel.x())/width-1,py=2*(double(y)+subpixel.y())/height-1;
         Vec4d near=inverse_projection*Vec4d{px,py,0,1},far=inverse_projection*Vec4d{px,py,1,1};
         near/=near.w(); far/=far.w();
-        const Vec3d origin=world.block<3,1>(0,3);
+        const Vec3d origin=orthographic ? (world*near).head<3>().eval() : world.block<3,1>(0,3).eval();
         const Vec3d near_world=(world*near).head<3>(),far_world=(world*far).head<3>();
-        const Vec3d direction=(near_world-origin).normalized();
+        const Vec3d direction=orthographic ? (-world.block<3,1>(0,2)).eval() : (near_world-origin).normalized().eval();
         return {origin,direction,(near_world-origin).dot(direction),(far_world-origin).dot(direction)};
     }
 };
 Result<Camera> camera_for(const RenderView& view,std::uint32_t maximum_extent=64) {
     const auto& d=view.description(); const Mat4d& p=d.projection;
     const Mat3d rotation=d.camera_world.matrix().block<3,3>(0,0);
+    const bool perspective=p(3,2)==-1 && p(3,3)==0 && p(0,3)==0 && p(1,3)==0 && p(2,2)<-1;
+    const bool orthographic=p(3,2)==0 && p(3,3)==1 && p(0,2)==0 && p(1,2)==0 && p(2,2)<0;
     if (!d.width || !d.height || d.width>maximum_extent || d.height>maximum_extent ||
         !(rotation.transpose()*rotation).isApprox(Mat3d::Identity(),1e-10) || std::abs(rotation.determinant()-1)>1e-10 ||
-        p(3,0)!=0 || p(3,1)!=0 || p(3,2)!=-1 || p(3,3)!=0 || p(0,0)<=0 || p(1,1)==0 ||
-        p(0,1)!=0 || p(0,3)!=0 || p(1,0)!=0 || p(1,3)!=0 || p(2,0)!=0 || p(2,1)!=0 ||
-        p(2,2)>=-1 || p(2,3)>=0)
-        return std::unexpected(path_invalid("Path camera extent or rigid finite forward-Z-depth perspective is invalid"));
-    Camera camera{p.inverse(),d.camera_world.matrix(),d.width,d.height};
+        p(3,0)!=0 || p(3,1)!=0 || (!perspective && !orthographic) || p(0,0)<=0 || p(1,1)==0 ||
+        p(0,1)!=0 || p(1,0)!=0 || p(2,0)!=0 || p(2,1)!=0 || p(2,3)>=0)
+        return std::unexpected(path_invalid("Path camera extent or rigid finite forward-Z-depth perspective/orthographic projection is invalid"));
+    Camera camera{p.inverse(),d.camera_world.matrix(),d.width,d.height,orthographic};
     for (const Vec2d corner: {Vec2d{0,0},Vec2d{1,1}}) {
         auto ray=camera.ray(corner.x()==0 ? 0 : d.width-1,corner.y()==0 ? 0 : d.height-1,corner);
         if (auto valid=validate_path_ray(ray);!valid) return std::unexpected(valid.error());

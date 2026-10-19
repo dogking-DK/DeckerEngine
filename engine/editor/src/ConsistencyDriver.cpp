@@ -51,7 +51,10 @@ Json entity(const EntityData& value) {
 Json camera(const Camera& value) {
     const Mat4d world=value.world().matrix();
     const Vec3d eye=world.block<3,1>(0,3),target=eye-world.block<3,1>(0,2),up=world.block<3,1>(0,1);
-    return {{"eye",vector(eye)},{"target",vector(target)},{"up",vector(up)},{"fov_y",value.fov_y()},{"near",value.near_plane()},{"far",value.far_plane()}};
+    Json result={{"eye",vector(eye)},{"target",vector(target)},{"up",vector(up)},{"near",value.near_plane()},{"far",value.far_plane()}};
+    const bool ortho=value.projection_mode()==ProjectionMode::orthographic; result["projection"]=ortho ? "orthographic" : "perspective";
+    if(ortho) result["ortho_height"]=value.settings().lens.ortho_height; else result["fov_y"]=value.fov_y();
+    return result;
 }
 }
 ConsistencyDriver::ConsistencyDriver(const std::filesystem::path& root,bool environment) : directory_(root/(environment ? ".dk-environment" : ".dk-consistency")),environment_(environment),clouds_(std::filesystem::is_regular_file(root/".dk-cloud-integration")) {

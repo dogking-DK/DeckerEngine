@@ -8,6 +8,8 @@ namespace dk {
 struct CaptureCamera {
     Vec3d eye{8,1.8,0}, target{-4,2,0}, up{0,1,0};
     double fov_y=65, near_plane=0.05, far_plane=100;
+    bool orthographic=false, explicit_fov_y=false;
+    std::optional<double> ortho_height;
 };
 struct CaptureSample {
     CaptureCamera camera;

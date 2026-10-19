@@ -3,6 +3,7 @@
 #include "../../engine/render/pathtracing/src/VolumePhase.hpp"
 #include <dk/render/VolumePathReference.hpp>
 #include <dk/scene/SceneDocument.hpp>
+#include <dk/math/Projection.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include <array>
@@ -365,4 +366,22 @@ TEST_CASE("volume frozen cloud image owners budgets and tracking cancellation re
     field.reset(); cache.reset(); m={}; CHECK_FALSE(weak.expired());
     CHECK(old.info().field_hash!=0); CHECK(old.info().medium.time_seconds==23); CHECK(old.info().environment.clouds.seed==1);
     CHECK(old.linear_rgb()[0]==color); old={}; CHECK(weak.expired());
+}
+
+TEST_CASE("volume orthographic camera integrates from each jittered near plane origin") {
+    Fixture f; auto e=air(.0001,0); f.document->set_environment(e).value();
+    const auto scene=f.scene(); const auto m=medium(e); auto s=settings(0); s.environment_rgb=Vec3d::Ones();
+    auto d=f.view(f.source(),4).description(); Trsd pose; pose.translation={0,2500,0};
+    d.camera_world=Transformd::from_trs(pose).value(); d.projection=orthographic_projection({2000,1000,1010},1).value();
+    auto image=render_volume_path_reference(f.heap,scene,m,RenderView::create(f.source(),d).value(),s,{0,32}).value();
+    for(unsigned y=0;y<4;++y) for(unsigned x=0;x<4;++x) {
+        const auto pixel=y*4+x; Vec3d sum=Vec3d::Zero();
+        for(unsigned sample=0;sample<32;++sample) {
+            const auto u=volume_path_sample(s.seed,pixel,sample,0,VolumeSampleStream::pixel);
+            const auto v=volume_path_sample(s.seed,pixel,sample,0,VolumeSampleStream::pixel,1);
+            const PathTraceRay ray{{-1000+(x+u)*500,3500-(y+v)*500,-1000},{0,0,-1},0,10};
+            sum+=estimate_volume_path_reference(scene,m,ray,s,{sample,1},pixel).value().mean;
+        }
+        CHECK(image.linear_rgb()[pixel]==sum/32);
+    }
 }

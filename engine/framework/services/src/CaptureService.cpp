@@ -27,6 +27,8 @@ memory::ResourceHandle heap(memory::MemorySystem& m,const char* name,memory::Dom
 render::ViewDescription view_description(const CaptureRequest& r) {
     require(r.width && r.height && r.width<=2048 && r.height<=2048,"Capture extent must be 1..2048");
     const auto& c=r.camera;
+    require(c.orthographic ? (c.ortho_height && !c.explicit_fov_y) : !c.ortho_height,
+        "Orthographic requires ortho_height and forbids fov_y; perspective forbids ortho_height");
     require(c.eye.allFinite() && c.target.allFinite() && c.up.allFinite() &&
         std::isfinite(c.fov_y) && c.fov_y>1 && c.fov_y<179 && std::isfinite(c.near_plane) &&
         std::isfinite(c.far_plane) && c.near_plane>0 && c.far_plane>c.near_plane,"Invalid capture camera");
@@ -39,7 +41,9 @@ render::ViewDescription view_description(const CaptureRequest& r) {
     Mat4d world=Mat4d::Identity(); world.block<3,1>(0,0)=right; world.block<3,1>(0,1)=up;
     world.block<3,1>(0,2)=-forward; world.block<3,1>(0,3)=c.eye;
     render::ViewDescription v{r.width,r.height,0}; v.camera_world=take(Transformd::from_matrix(world));
-    v.projection=take(perspective_projection({radians(c.fov_y),c.near_plane,c.far_plane},static_cast<double>(r.width)/r.height));
+    const double aspect=static_cast<double>(r.width)/r.height;
+    v.projection=c.orthographic ? take(orthographic_projection({*c.ortho_height,c.near_plane,c.far_plane},aspect)) :
+        take(perspective_projection({radians(c.fov_y),c.near_plane,c.far_plane},aspect));
     return v;
 }
 nlohmann::json environment_json(const EnvironmentDescription& e) {
@@ -80,8 +84,11 @@ nlohmann::json environment_json(const EnvironmentDescription& e) {
 }
 nlohmann::json camera_json(const CaptureCamera& c) {
     auto vector=[](const Vec3d& v) { return nlohmann::json::array({v.x(),v.y(),v.z()}); };
-    return {{"eye",vector(c.eye)},{"target",vector(c.target)},{"up",vector(c.up)},
-        {"fov_y",c.fov_y},{"near",c.near_plane},{"far",c.far_plane}};
+    nlohmann::json value={{"eye",vector(c.eye)},{"target",vector(c.target)},{"up",vector(c.up)},
+        {"projection",c.orthographic ? "orthographic" : "perspective"},{"near",c.near_plane},{"far",c.far_plane}};
+    if(c.orthographic) { value["ortho_height"]=*c.ortho_height; value["primary_ray_origin"]="near_plane"; }
+    else value["fov_y"]=c.fov_y;
+    return value;
 }
 nlohmann::json settings_json(const render::EnvironmentRenderSettings& s) {
     return {{"mode",s.mode==render::CloudRenderMode::reference ? "reference" : "temporal"},
@@ -271,6 +278,10 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
         require(relative.extension()==(request.samples.empty() && !request.linear_json ? ".ppm" : ".json"),"Output extension must match ppm or linear_json/sequence format");
         auto snapshot=take(scene.read_snapshot(guard));
         const auto& clouds=snapshot.scene.environment().clouds;
+        if(!request.pathtrace && (snapshot.scene.environment().enabled || clouds.enabled)) {
+            require(!request.camera.orthographic,"Orthographic raster atmosphere/clouds are not supported",ErrorCode::not_supported);
+            for(const auto& sample:request.samples) require(!sample.camera.orthographic,"Orthographic raster atmosphere/clouds are not supported",ErrorCode::not_supported);
+        }
         if(!request.samples.empty() && request.environment.mode==render::CloudRenderMode::reference && clouds.enabled && clouds.coverage>0 && clouds.density>0 && clouds.extinction_per_m>0)
             require(std::size_t{request.width}*request.height<=4096,"Reference cloud sequence allows at most 4096 pixels");
         const auto output=take(snapshot.project.paths().resolve(relative));

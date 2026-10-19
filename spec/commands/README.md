@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-10-16T15:16:16+08:00"
+updated_at: "2026-10-19T11:42:00+08:00"
 status: accepted
 ---
 
@@ -135,4 +135,4 @@ stdio 在 EOF/shutdown 正常退出时为 0，先前可恢复的请求错误不�
 
 路径截图参数/线性报告见[render.capture](render.md#固定-spp-路径追踪)，采样进度通过[jobs](jobs.md)返回。
 
-render.capture 的固定路径设置兼容 v1 表面和 v2 显式 Surface only / Scene media；参数、来源与错误见[统一介质路径](render.md#统一介质路径v2)。
+render.capture / render.sequence 支持 projection 与 ortho_height；默认仍为透视，正交拒绝显式 fov_y，来源只报告生效镜头。render.capture 的固定路径设置兼容 v1 表面和 v2 显式 Surface only / Scene media；参数、来源与错误见[统一介质路径](render.md#统一介质路径v2)。

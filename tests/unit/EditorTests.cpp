@@ -216,7 +216,7 @@ TEST_CASE("camera returning from orthographic pole preserves pose until actual l
 TEST_CASE("camera orthographic rejects unsupported context and impossible framing without partial changes") {
     Camera camera{true}; camera.set_environment(true); const auto before=camera.world().matrix(); const auto rev=camera.revision();
     CHECK_FALSE(camera.set_projection_mode(ProjectionMode::orthographic,1)); CHECK(camera.world().matrix()==before); CHECK(camera.revision()==rev);
-    camera.set_environment(false); camera.set_pathtracing(true); CHECK_FALSE(camera.set_projection_mode(ProjectionMode::orthographic,1));
+    camera.set_environment(false); camera.set_pathtracing(true); REQUIRE(camera.set_projection_mode(ProjectionMode::orthographic,1));
     camera.set_pathtracing(false); REQUIRE(camera.set_projection_mode(ProjectionMode::orthographic,1));
     const auto settings=camera.settings(); const auto stable=camera.revision();
     for(double height : {0.,-1.,100001.,std::numeric_limits<double>::quiet_NaN()}) {
