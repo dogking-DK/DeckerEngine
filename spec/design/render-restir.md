@@ -1,16 +1,16 @@
 ---
 module: render-restir
 created_at: "2026-10-19T12:50:00+08:00"
-updated_at: "2026-10-19T13:12:00+08:00"
+updated_at: "2026-10-19T14:18:00+08:00"
 status: accepted
 ---
 
 # ReSTIR 光照重采样设计
 
 本文件是[路径追踪设计](render-pathtracing.md)的采样扩展设计。
-M19.1 已完成 CPU 数学/首表面 RIS 参考，其余 GPU/时空会话与消费者按后续阶段推进；
+CPU 数学/首表面 RIS 与 GPU 初始 RIS 的现行契约分别见 M19.1/M19.2；时空会话与消费者按后续阶段推进；
 状态、依赖和下一项统一见 [Roadmap M19](../roadmap.md#m19restir-直接光重采样)。
-下文明确区分本阶段 CPU 契约和后续 GPU 计划，不把参考实现视为编辑器已有能力。
+下文明确区分现行 CPU/GPU 初始采样契约和后续时空复用计划，不把独立接口视为编辑器已有能力。
 
 ## 目标与范围
 
@@ -44,15 +44,15 @@ Graphics 仅提供资源、RT、Graph 与同步，不承载 reservoir/BSDF/光�
 沿用现有 BLAS/TLAS、单队列和 Slang，不创建另一套设备所有者。
 
 用户明确要求后续接入 RTXDI、DLSS。CPU 参考保持独立且无 SDK 依赖，作为未来后端的 oracle；
-M19.2 优先验证 RTXDI-Library 的 Slang/SPIR-V、应用桥接与资源适配，再决定 GPU 实现细节，
+M19.2 使用 RTXDI-Library 的初始 reservoir shader 数学，并验证 Slang/SPIR-V、应用桥接与资源适配，
 不把自有 reservoir 的内存布局或随机序列强加给 SDK。接入时按三方库规则核验并固定版本/commit，
-本阶段不下载或链接 SDK，不改变 vcpkg baseline。计划状态见[三方库说明](../third-party-libraries.md)。
+M19.1 不下载或链接 SDK；M19.2 的固定来源和实际接入见下述契约及[三方库说明](../third-party-libraries.md)。
 
 对用户分别提供光照采样（普通 MIS / ReSTIR DI）、介质（Surface only / Scene media）和重建（原生 / DLSS）选择；
 RTXDI 是采样算法后端，不是与 ReSTIR 并列的物理模型。SDK 实现类型保持 PRIVATE，不泄漏到 Scene、CPU 参考或捕获持久格式。
 后续 DLSS 适配层独立消费线性颜色、渲染/输出尺寸、深度、运动矢量、抖动、曝光与 reset/视图身份；
 按所选 SR/RR/FG 功能分别核验所需输入，不将首表面 reservoir 当作运动矢量或重建历史。
-本阶段只确立边界；不添加空 SDK 后端或尚不可用的 UI 开关，采样质量验收始终保留重建前线性输出。
+当前 RTXDI 仅使用 shader 采样数学，DLSS 仍只确立边界；不添加尚不可用的 UI 开关，采样质量验收始终保留重建前线性输出。
 
 ## M19.1 CPU 实施契约
 
@@ -109,6 +109,45 @@ max_bounces=8/rr_start=3、seed 集合不变，64/256/1024/4096/16384 spp 阶梯
 驱动版本与运行时 SDK 版本必须在测量时记录。参考先用 CPU 选定接收点认证，再由高样本 GPU 图像验证全屏收敛。
 独立 CPU 单接收点基线的原始结果与命令见[测量记录](../benchmarks/2026-10-19-restir-reference.md)，不将其外推成全屏速度。
 
+## M19.2 GPU 初始 RIS 实施契约
+
+GPU target 私有使用 RTXDI v3.1.0 对应 RTXDI-Library commit `f12037fa8e97ebc08e9e3edfd2de528ed1772a4b`。
+2026-10-19 查询官方 vcpkg registry `664933b8d385dfc01f4e0cdff4c7c74e71f6a740` 的完整树，没有 RTXDI port；
+改用固定上游 archive + SHA256，CPU-only 配置不下载。保留 NVIDIA RTX SDKs LICENSE，SDK 源码不复制进仓库。
+应用桥接负责面积/环境 proposal、BSDF 目标、完整 float UV 与当前可见性；SDK 负责 StreamSample/FinalizeResampling。
+不使用 SDK 16-bit UV 重新构建已选样本，避免目标与着色坐标不一致；不引入其示例框架或 C++ 资源管理器。
+
+新增 `submit_restir_rays/view` 和 `configure_restir_view`，沿用 `RestirDiSettings`；图像来源显式记录该配置。
+旧调用不变，不扩展 Editor/capture schema。仅 Surface only + MIS；候选数 1..64/version 1，非法组合拒绝。
+固定射线/小图无复用入口逐样本在 invocation 内完成 RIS，作为批量数值对照；渐进入口按全图两阶段调度：
+无历史入口每像素每次提交最多 2^18 次候选评估，超过时显式拒绝；高 spp 参考按连续 `PathTraceSamples` 区间分批。
+该限制防止把 64×65536 候选集中到单 invocation，实测此类长任务曾触发 device lost；不降低总采样数或改变估计器。
+首表面与初始 reservoir 全部 tile 完成后，才进入最终可见性、独立 delta 太阳和路径尾部着色。
+每 epoch 对应一个新路径样本，batch 1..16 依次推进 epoch，全批完成才发布图像/最后表面/reservoir/spp。
+同一计数器域与光能分工用于两个入口。首表面保存命中、位置、法线和观察方向；尾部从保存的首命中继续，避免重复查询主射线。
+
+首表面 64 bytes/pixel，初始 reservoir 32 bytes/pixel，线性累积 128 bytes/pixel；完成 owner 共 224 bytes/pixel。
+当前批次候选 224 bytes/pixel，batch>1 另需 128 bytes/pixel 的私有累积 ping-pong。两视图/外持旧帧按真实 owner 另计。
+峰值 payload 为 `224*sum(held_complete_pixels) + (224 + (batch>1 ? 128 : 0))*candidate_pixels`，
+再加场景/纹理/AS/SBT、每 tile 参数/诊断和显式读回；读回单独为 128 bytes/pixel，固定射线结果为 64 bytes/pixel。
+渐进 tile 临时 payload 为参数 528、dummy ray 48、诊断 8、诊断读回 4 bytes，首次无历史时另有 128 bytes 零输入。
+固定射线批次还持有 32 bytes/ray 输入、64 bytes/pixel GPU 输出及同尺寸读回（加 4 bytes 诊断），
+以及参数 528、占位采样面 96、零历史 128、诊断 8 bytes；上述均为 payload，实际分配需对齐。
+实际 Vulkan memory requirements（含对齐）由同一 AllocationBudget 准入，payload 预检不替代实际额度；不包括 driver 隐藏管线开销。
+每路径最多 `2*max_bounces+2` 射线，候选数乘 tile 像素数/样本数受 2^24 预算限制；渐进全目标射线上限保持 2^32。
+tile 1..64，候选和射线预算共同限宽。状态报告区分阶段和 epoch；只在完整批次发布时推进完成计数。
+每次 submit/poll 检查取消与 generation；阶段中途失败/迟到结果丢弃整批，已完成 owner 及其采样平面不可变。
+每阶段通过 Graph 声明访问，使跨提交的写入到读取、下一 epoch 的覆盖均有显式同步。
+
+定向验收：SDK Slang/SPIR-V 真实编译、required RT/sync validation、独立 CPU 数值对照、光能/遮挡/mask/GGX/间接光、
+透视与正交、不同 tile/batch 重放、阶段中取消/失败/迟到、双视图/旧 owner/额度；不运行 Editor 或时空复用验收。
+数值接收点避开共享三角形边的精度平局；CPU 双精度三角形求交与硬件遍历不承诺边界逐位相同。
+纹理先按原 M16.7.1 过滤契约（绝对误差 .005）核对任意 UV 的硬件过滤，
+再以同 GPU 的 BSDF-only 白炉作初始 RIS 均值参考，仍同时满足 2% 与 5SE；严格 CPU/GPU 光能测试另用二进制可表示的过滤权重。
+这是分离确定性硬件过滤误差和采样误差，不放宽 RIS 统计门槛；非纹理和独立积分协议不变。
+固定射线上传将 TMin 的有符号零规范成 +0，保留其他裁剪值；实测 RTX 4070 Laptop 对 -0 TMin 漏命中，
+对照只改变 TMin 符号即可恢复。该修正同步普通/介质固定射线入口，避免相机生成的合法 -0 经接口传递后改变可见性。
+
 ## 估计器与光能分工
 
 ### 初始 RIS 与样本域
@@ -159,11 +198,12 @@ flowchart LR
     G --> H
 ```
 
+M19.2 已实施首表面/初始 RIS 与最终着色两个阶段；图中的时间、空间复用留给 M19.3/4。
 各阶段仍可按 tile 提交，跨阶段必须有完整输入面及 Graph 依赖/屏障。
 空间 pass 从冻结的输入 reservoir 平面读，向独立平面写，不能原地读取邻居刚更新的数据。
-旧完整历史、当前初始/时间结果与空间输出的活跃期分别计入内存；具体复用布局在 M19.2 冻结。
+旧完整历史、当前初始/时间结果与空间输出的活跃期分别计入内存；M19.2 冻结初始采样布局，新增复用平面在 M19.3/4 分别确立。
 首表面记录与该 epoch 的抖动主射线一致，记录位置、几何/着色法线、接收材质/primitive、观察方向与有效性，
-不直接使用光栅深度或累积图像的旧首样本 hit。路径尾部可以保存状态或确定性重放，M19.2 比较成本后确定。
+不直接使用光栅深度或累积图像的旧首样本 hit。M19.2 保存首命中后确定性继续路径尾部，不重复查询主射线。
 
 `batch_spp` 仅打包多个顺序 epoch，不改变复用拓扑；tile 大小和遍历顺序不影响样本编号或邻接输入。
 包内 epoch 作为私有候选推进，整批通过才一起提交；取消后从最后已发布状态重算。
@@ -231,7 +271,8 @@ M19.5 若发现条件概率/支持域无法满足，先修订推导与范围，�
 
 ## 接口与消费者计划
 
-M19.1 以独立 `estimate_restir_reference` 入口和 `RestirDiSettings` 冻结 CPU 初始采样及版本。
+M19.1 以独立 `estimate_restir_reference` 入口和 `RestirDiSettings` 冻结 CPU 初始采样及版本；
+M19.2 的 GPU 与渐进入口沿用该配置，实际来源置于 `PathTraceGpuImageInfo.restir`。
 后续消费者计划采用 `direct_lighting = classic_mis / restir_di`；时间/空间开关、邻居配置、历史界限
 按各实施阶段扩展，不提前把未支持的字段放进当前接口。RTXDI backend 及 DLSS reconstruction 分别适配。
 与 Surface only/Scene media 正交，不复用介质模式开关表达算法；旧请求默认保持原行为。
@@ -289,7 +330,7 @@ M19.8 至少三轮独立计时，不能验收时降低目标。单灯、天空�
   核对目标支持、复用归一化和可见性复用的偏差风险，不将基本归一化等同完整校正。
 
 M19.1 的首表面光能分工、合并数学及有限历史的约束见 CPU 实施契约；窄高光保留 light-only proposal 的高方差限制。
-M19.2 核验 RTXDI 并冻结 GPU 布局/容量、路径状态保存方式；M19.3/4 验证实际屏幕支持与有限历史，
+M19.2 的 RTXDI/GPU 布局、容量与路径状态保存方式见实施契约；M19.3/4 验证实际屏幕支持与有限历史，
 M19.5 单独解决介质条件采样，DLSS 的 SR/RR/FG 范围与能力协商另行设计。
 M19 验收后，再依据直接/间接/介质噪声占比决定下一步采用 ReSTIR GI/PT、ReGIR 或体积重要性采样。
 
@@ -299,3 +340,4 @@ M19 验收后，再依据直接/间接/介质噪声占比决定下一步采用 R
 - [0117 渐进状态与额度](../development/0117-pathtracing-progressive.md)、[0128 介质性能](../development/0128-path-media-performance.md)、
   [0132 路径正交与捕获](../development/0132-pathtrace-orthographic-capture.md)。
 - [0134 CPU 参考实施记录](../development/0134-restir-reference.md)；各后续 M19.x 分别留档、验证并本地提交。
+- [0135 GPU 初始 RIS 与 RTXDI](../development/0135-restir-gpu-initial.md)。

@@ -1,6 +1,7 @@
 #pragma once
 #include <dk/render/PathTraceReference.hpp>
 #include <dk/render/VolumePathReference.hpp>
+#include <dk/render/RestirReference.hpp>
 #include <dk/graphics/Resources.hpp>
 #include <filesystem>
 
@@ -27,6 +28,7 @@ struct PathTraceGpuMediumInfo {
 struct PathTraceGpuImageInfo : PathTraceImageInfo {
     std::uint64_t geometry_fingerprint=0;
     std::optional<PathTraceGpuMediumInfo> medium; // Absent for the legacy surface integrator.
+    std::optional<RestirDiSettings> restir; // Initial RIS v1, RTXDI 3.1.0; absent for classic paths.
     bool fixed_rays = false;
     std::uint32_t first_pixel = 0; // Counter origin for fixed-ray batches.
     // Hardware traversal counts are unavailable; statistics.triangle_tests stays zero.
@@ -63,6 +65,7 @@ struct PathTraceSchedule {
     std::uint64_t session = 0, gesture = 0;
     bool paused = false;
     double exposure = 0; // Display-only metadata; linear history is unchanged.
+    bool reverse_tiles = false; // Traversal only; frozen at batch start, no sample identity change.
 };
 struct PathTraceProgress {
     std::uint64_t view_id = 0, generation = 0;
@@ -70,6 +73,9 @@ struct PathTraceProgress {
     std::uint32_t completed_tiles = 0, total_tiles = 0;
     bool pending = false, paused = false, device_lost = false;
     double exposure = 0;
+    // Initial RIS only: current private epoch and pass (0 surface/RIS, 1 shade).
+    // completed_spp still advances only after the entire batch succeeds.
+    std::uint32_t sampling_epoch = 0, sampling_pass = 0;
 };
 // Immutable completed GPU history. External holders remain charged to the renderer's budget.
 class PathTraceCompletedFrame final {
@@ -96,6 +102,7 @@ struct PathTraceMemoryStats {
 // One queue, externally serialized. Two view slots, one progressive batch; no implicit waits.
 class PathTraceRenderer final {
 public:
+    static constexpr std::uint32_t restir_max_candidates_per_invocation = 1u << 18;
     PathTraceRenderer() = default;
     [[nodiscard]] static Result<PathTraceRenderer> create(memory::ResourceHandle, graphics::SubmissionQueue&,
         const std::filesystem::path& shader_directory, std::stop_token = {},
@@ -107,6 +114,14 @@ public:
         const PathTraceSettings& = {}, PathTraceSamples = {}, std::uint32_t first_pixel = 0, std::stop_token = {}) const;
     [[nodiscard]] Result<void> configure_view(graphics::SubmissionQueue&, std::uint64_t view_id,
         const PathTraceGpuScene&, const RenderView&, const PathTraceSettings& = {}, const PathTraceSchedule& = {});
+    // No history: split high spp into consecutive sample intervals when count*candidates > 2^18.
+    [[nodiscard]] Result<PathTraceFrame> submit_restir_rays(graphics::SubmissionQueue&, const PathTraceGpuScene&,
+        std::span<const PathTraceRay>, const PathTraceSettings& = {}, const RestirDiSettings& = {},
+        PathTraceSamples = {}, std::uint32_t first_pixel = 0, std::stop_token = {}) const;
+    [[nodiscard]] Result<PathTraceFrame> submit_restir_view(graphics::SubmissionQueue&, const PathTraceGpuScene&,
+        const RenderView&, const PathTraceSettings& = {}, const RestirDiSettings& = {}, PathTraceSamples = {}, std::stop_token = {}) const;
+    [[nodiscard]] Result<void> configure_restir_view(graphics::SubmissionQueue&, std::uint64_t view_id,
+        const PathTraceGpuScene&, const RenderView&, const PathTraceSettings& = {}, const RestirDiSettings& = {}, const PathTraceSchedule& = {});
     // Model 4 / sampler 2. Requires a matching frozen environment with clouds disabled.
     [[nodiscard]] Result<PathTraceFrame> submit_air_rays(graphics::SubmissionQueue&,const PathTraceGpuScene&,
         const PathMediumSnapshot&,std::span<const PathTraceRay>,const VolumePathSettings& = {},PathTraceSamples = {},

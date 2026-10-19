@@ -78,6 +78,7 @@
 | CPU路径追踪解析/收敛、MIS/RR、采样/相机/输入快照与预算/取消/内存失败 | dk_pathtracing_reference_tests | `^dk\.pathtracing\.[a-z]+ `（CPU-only，单元测试名首词后的空格排除demo_cpu） |
 | ReSTIR CPU reservoir/RIS、支持校正合并数学、首表面光能与状态 | dk_pathtracing_reference_tests | `^dk\.pathtracing\.RESTIR `（CPU-only；不表示 GPU/时空/RTXDI 已接入） |
 | ReSTIR CPU 单灯/100灯/1000灯基准入口与工作量 | dk_restir_reference_benchmark | `^dk\.pathtracing\.restir_reference_benchmark_cpu$`；正式基线用 `--samples 1024 --output <json>`，不作为 GPU 性能结论 |
+| ReSTIR GPU 初始 RIS/RTXDI、CPU 数值、材质与光能、两阶段 epoch/tile、失败与额度 | dk_pathtracing_probe | `^dk\.pathtracing\.restir_.*_gpu_required$`（required RT/validation/sync；CPU-only 不下载 RTXDI） |
 | CPU路径追踪示例、线性/PPM产物、重复样本与非法输入保护 | dk_pathtracing_reference_demo | `^dk\.pathtracing\.demo_cpu$`（Python 3.11+，CPU-only） |
 | GPU 资产输入校验、缓存空/关闭状态（无需 GPU） | dk_gpu_asset_tests | `^dk\.render\.assets\.` |
 | GpuMesh/纹理 Graph 上传、字节读回、缓存与在途卸载 | dk_render_resources_probe | `^dk\.render\.gpu_`（gpu label；77 为跳过） |

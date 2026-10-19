@@ -1,6 +1,9 @@
 #ifndef DK_PATH_EMPTY
 #define DK_PATH_EMPTY 0
 #endif
+#ifndef DK_PATH_RESTIR
+#define DK_PATH_RESTIR 0
+#endif
 struct PathPayload { float distance; float2 barycentric; uint index; uint found; };
 #if !DK_PATH_EMPTY
 [[vk::binding(0,0)]] RaytracingAccelerationStructure scene;
@@ -131,21 +134,41 @@ RayDesc primaryRay(uint2 coordinate,uint pixel,uint sample,out float3 originOffs
     }
     return ray;
 }
+#if DK_PATH_RESTIR
+#include "path-restir-bridge.slang"
+#endif
 #if !DK_PATH_EMPTY
-float3 tracePath(RayDesc ray,uint pixel,uint sample,inout uint rays,out float4 firstHit,out float4 firstNormal) {
+float3 tracePath(RayDesc ray,uint pixel,uint sample,inout uint rays,out float4 firstHit,out float4 firstNormal,uint restirPixel=0) {
     uint4 counts=asuint(parameters[1]),flags=asuint(parameters[2]);
     float3 radiance=0,throughput=1,previous=0; float bsdfPdf=0;
     firstHit=float4(-1,0,0,0); firstNormal=0;
     for(uint depth=0;depth<=counts.z;++depth) {
-        PathPayload hit={}; ++rays; TraceRay(scene,RAY_FLAG_NONE,255,0,2,0,ray,hit);
+        PathPayload hit={}; ++rays;
+#if DK_PATH_RESTIR
+        bool saved=depth==0 && asuint(parameters[32]).y==1;
+        if(saved) {
+            float4 record=restirSurfaces[restirPixel*4]; hit.distance=record.x; hit.barycentric=record.yz;
+            hit.found=record.w!=0 ? 1u : 0u; hit.index=hit.found!=0 ? uint(record.w)-1 : 0;
+        } else
+#endif
+        TraceRay(scene,RAY_FLAG_NONE,255,0,2,0,ray,hit);
         if(hit.found==0) {
-            radiance+=throughput*parameters[3].xyz*(depth!=0 && flags.x==0 ? weight(bsdfPdf,parameters[4].w/(4*pi)) : 1); break;
+            radiance+=throughput*parameters[3].xyz*(DK_PATH_RESTIR && depth==1 ? 0 : (depth!=0 && flags.x==0 ? weight(bsdfPdf,parameters[4].w/(4*pi)) : 1)); break;
         }
         float3 position=positionOf(hit),normal=normalOf(hit,ray.Direction);
+#if DK_PATH_RESTIR
+        if(saved) { position=restirSurfaces[restirPixel*4+2].xyz; normal=restirSurfaces[restirPixel*4+1].xyz; }
+#endif
         if(depth==0) { firstHit=float4(hit.distance,hit.barycentric,float(hit.index+1)); firstNormal=float4(normal,dot(ray.Direction,triangles[hit.index*9+3].xyz)<0 ? 1 : -1); }
         PathBsdf bsdf=materialAt(hit.index,hit.barycentric); float3 emission=triangles[hit.index*9+5].xyz;
-        radiance+=throughput*emission*(depth!=0 && flags.x==0 ? weight(bsdfPdf,areaPdf(hit.index,previous,position)) : 1);
+        radiance+=throughput*emission*(DK_PATH_RESTIR && depth==1 ? (triangles[hit.index*9+1].w>0 ? 0 : 1) : (depth!=0 && flags.x==0 ? weight(bsdfPdf,areaPdf(hit.index,previous,position)) : 1));
         if(depth==counts.z || (!bsdf.ggx && largest(bsdf.color)==0)) break;
+#if DK_PATH_RESTIR
+        if(depth==0) {
+            RestirSample reservoir=saved ? loadRestir(restirPixel,sample) : initialRestir(hit,position,normal,bsdf,-ray.Direction,pixel,sample);
+            radiance+=throughput*shadeRestir(reservoir,hit,position,normal,bsdf,-ray.Direction,rays);
+        } else
+#endif
         radiance+=throughput*directLight(hit,position,normal,bsdf,-ray.Direction,pixel,sample,depth,rays);
         float3 wi=sampleBsdf(bsdf,normal,-ray.Direction,randomValue(pixel,sample,depth,6),randomValue(pixel,sample,depth,7));
         BsdfEval evaluated=evalBsdf(bsdf,normal,-ray.Direction,wi); if(evaluated.pdf<=0) break;
@@ -159,6 +182,55 @@ float3 tracePath(RayDesc ray,uint pixel,uint sample,inout uint rays,out float4 f
     }
     return radiance;
 }
+#endif
+#if DK_PATH_RESTIR
+void runRestirPixel(uint2 coordinate) {
+    uint4 image=asuint(parameters[0]),tile=asuint(parameters[11]);
+    uint localPixel=coordinate.y*image.x+coordinate.x;
+    if(tile.w!=0) coordinate+=tile.xy;
+    uint pixel=tile.w!=0 ? coordinate.y*tile.z+coordinate.x : localPixel;
+    uint counter=pixel+asuint(parameters[10]).x;
+    if(asuint(parameters[32]).y==0) {
+        float3 offset; RayDesc ray=primaryRay(coordinate,pixel,image.z,offset);
+        float4 record=float4(-1,0,0,0),normal=0,position=0;
+        RestirSample reservoir=emptyRestir();
+#if !DK_PATH_EMPTY
+        PathPayload hit={}; TraceRay(scene,RAY_FLAG_NONE,255,0,2,0,ray,hit);
+        if(hit.found!=0) {
+            record=float4(hit.distance,hit.barycentric,float(hit.index+1));
+            normal=float4(normalOf(hit,ray.Direction),dot(ray.Direction,triangles[hit.index*9+3].xyz)<0 ? 1 : -1);
+            position=float4(positionOf(hit),1); PathBsdf bsdf=materialAt(hit.index,hit.barycentric);
+            if(asuint(parameters[1]).z!=0 && (bsdf.ggx || largest(bsdf.color)>0))
+                reservoir=initialRestir(hit,position.xyz,normal.xyz,bsdf,-ray.Direction,counter,image.z);
+        }
+#endif
+        if(!all(isfinite(record)) || !all(isfinite(normal)) || !all(isfinite(position)) || !all(isfinite(ray.Direction))) restirError();
+        restirSurfaces[pixel*4]=record; restirSurfaces[pixel*4+1]=normal;
+        restirSurfaces[pixel*4+2]=position; restirSurfaces[pixel*4+3]=float4(-ray.Direction,asfloat(image.z));
+        storeRestir(pixel,reservoir,image.z); return;
+    }
+    Accumulation a=beginAccumulation(pixel);
+    for(uint sample=image.z;sample<image.z+image.w;++sample) {
+        float4 hit=float4(-1,0,0,0),n=0; float3 offset;
+        RayDesc ray=primaryRay(coordinate,pixel,sample,offset);
+        float3 value=parameters[3].xyz;
+#if !DK_PATH_EMPTY
+        value=tracePath(ray,counter,sample,a.rays,hit,n,pixel);
+#endif
+        addSample(a,value,sample,hit,n);
+    }
+    finishAccumulation(a,pixel,localPixel);
+}
+#if !DK_PATH_EMPTY
+[shader("raygeneration")]
+void restirMain() { runRestirPixel(DispatchRaysIndex().xy); }
+#else
+[shader("compute")]
+[numthreads(64,1,1)]
+void restirEmptyMain(uint3 id:SV_DispatchThreadID) {
+    uint4 image=asuint(parameters[0]); if(id.x<image.x*image.y) runRestirPixel(uint2(id.x%image.x,id.x/image.x));
+}
+#endif
 #endif
 void runPathPixel(uint2 coordinate) {
     uint4 image=asuint(parameters[0]),tile=asuint(parameters[11]);

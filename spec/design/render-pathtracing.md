@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-19T13:06:00+08:00"
+updated_at: "2026-10-19T14:18:00+08:00"
 status: accepted
 ---
 
@@ -22,7 +22,12 @@ CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、
 独立的[ReSTIR 设计](render-restir.md)负责估计器、光能分工、完整 epoch、时空历史与介质接入。
 M19.1 在 CPU reference target 中增加独立 `estimate_restir_reference`：首表面初始 RIS、独立 delta 太阳、
 后续普通 MIS/RR，以及支持域校正的 reservoir 合并数学；旧入口和 model=3/sampler=1 保持原行为。
-CPU 参考不提供 GPU/时空会话或 Editor/capture 新模式。GPU 阶段优先核验 RTXDI-Library；
+M19.2 增加 GPU 独立 `submit_restir_rays/view`、`configure_restir_view`，使用固定 RTXDI-Library shader 数学。
+渐进采样按全图首表面/RIS、全图着色两个阶段推进 epoch；每批 1..16 epoch 完整成功后发布，失败保留旧 owner。
+完成 owner 的线性/首表面/reservoir 共 224 bytes/pixel，多 epoch 候选另加 128 bytes/pixel ping-pong；实际 owner 仍计入共享额度。
+详细光能/接口/精确预算和失败行为见 [M19.2 契约](render-restir.md#m192-gpu-初始-ris-实施契约)。
+旧 MIS 和介质入口不变；目前没有时间/空间复用或 Editor/capture 新模式。
+固定射线上传统一将合法的 -0 TMin 转成 +0，避免硬件遍历漏命中；其他裁剪语义不变，三个入口均有回归。
 后续 DLSS 由独立重建适配层消费线性结果，SDK 类型不进入 CPU oracle 或 Scene。
 阶段与验收见 [Roadmap M19](../roadmap.md#m19restir-直接光重采样)。
 原 M16 范围不包含 ReSTIR 的说明仅描述该阶段边界；GI/PT、介质散射顶点复用和去噪不由 M19 DI 隐含引入。

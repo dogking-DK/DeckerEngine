@@ -1,14 +1,14 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-10-19T13:03:00+08:00"
+updated_at: "2026-10-19T13:54:00+08:00"
 status: accepted
 ---
 
 # DeckerEngine 三方库说明
 
 本文集中说明三方库的用途、当前版本、接入状态和版本维护规则。
-依赖声明以 [vcpkg.json](../vcpkg.json) 为准，实际模块选择见
+vcpkg 依赖声明以 [vcpkg.json](../vcpkg.json) 为准，RTXDI 固定来源见 [Rtxdi.cmake](../cmake/Rtxdi.cmake)，实际模块选择见
 [CMake 映射](../cmake/Vcpkg.cmake)，构建入口见 [构建指南](guides/build.md#vcpkg-开发配置)。
 模块内部的封装和接口约定继续放在对应设计中；历史升级过程见开发记录。
 
@@ -213,15 +213,20 @@ M9.1 使用 `find_package(unofficial-luau CONFIG REQUIRED)` 与导出 target
 
 传递依赖随所选 feature/平台变化，以实际 vcpkg 解析计划为准；上述版本不是独立手工 pin。
 
-## 已确定的后续渲染 SDK 接入
+## 渲染 SDK 接入
 
-以下为用户指定的后续接入方向，尚未下载、加入清单或链接；没有当前已固定/已验收的 SDK 版本。
-开始接入时按上文规则查询 vcpkg 官方 registry；若无合适 port，再记录上游固定 release/commit、来源哈希、
-许可/分发条件和适配方式，不把浮动分支加入日常构建。
+RTXDI 已固定官方 v3.1.0（2026-09-03）对应库 commit `f12037fa8e97ebc08e9e3edfd2de528ed1772a4b`。
+2026-10-19 查询官方 vcpkg registry `664933b8d385dfc01f4e0cdff4c7c74e71f6a740` 完整树，无 RTXDI port；
+采用 [固定上游 archive](https://codeload.github.com/NVIDIA-RTX/RTXDI-Library/zip/f12037fa8e97ebc08e9e3edfd2de528ed1772a4b)，
+SHA256 为 `f91de92d7c27f9824915ee5fcf62b0da664a6eb294edb659056ff3c462823f75`，现有 builtin-baseline 不变。
+仅 GPU target 配置时下载到构建树，日常构建不跟踪分支、不执行上游 CMake。CPU-only 无下载或 SDK 依赖。
+许可是 [NVIDIA RTX SDKs LICENSE](https://github.com/NVIDIA-RTX/RTXDI-Library/blob/f12037fa8e97ebc08e9e3edfd2de528ed1772a4b/LICENSE.txt)，
+并非 MIT/BSD；原许可随固定 archive 保存，SDK 源码不复制进仓库。实际发布时须核对许可中的分发和通知要求。
+DLSS 尚未选定/下载 SDK 版本，其接入时再按 registry/固定上游规则核验。
 
 | SDK | 用途与边界 | 接入顺序与当前状态 |
 | --- | --- | --- |
-| RTXDI-Library | ReSTIR 采样后端；通过应用桥接访问引擎光表、BSDF、接收面和可见性。SDK 类型 PRIVATE，CPU oracle 不依赖 SDK，GPU 资源仍由引擎/Graph 管理 | M19.2 优先进行 Slang/SPIR-V/桥接可行性与版本核验；M19.1 仅独立 CPU 参考，无 SDK 接入 |
+| RTXDI-Library v3.1.0 对应固定库提交 | GPU 初始 RIS 的 StreamSample/FinalizeResampling shader 数学；引擎桥接光表/BSDF/可见性并保留 float UV。SDK 类型 PRIVATE，CPU oracle 独立，GPU 资源仍由引擎/Graph 管理 | M19.2 接入与定向验证，证据见 [0135](development/0135-restir-gpu-initial.md)；不代表时间/空间/介质复用已接入 |
 | DLSS / Streamline 或 NGX | 独立图像重建适配；区分 SR、RR、FG 的功能/能力与输入，不以算法采样模式替代重建模式 | 后续单独设计接入；保留线性颜色、render/output 尺寸、depth/motion/jitter/exposure/reset 的语义边界，尚无 SDK 或 UI 开关 |
 
 依据：[RTXDI 集成说明](https://github.com/NVIDIA-RTX/RTXDI/blob/main/Doc/Integration.md)、

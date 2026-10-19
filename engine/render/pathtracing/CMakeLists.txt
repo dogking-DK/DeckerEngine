@@ -8,6 +8,7 @@ target_sources(dk_render_pathtracing_reference PUBLIC FILE_SET HEADERS BASE_DIRS
 target_link_libraries(dk_render_pathtracing_reference PUBLIC dk::render_data dk::asset_data dk::render_cloud_fields)
 dk_target_defaults(dk_render_pathtracing_reference)
 if(DK_BUILD_RENDER_PATHTRACING)
+    include(Rtxdi)
     if(NOT TARGET dk::graphics_device OR NOT TARGET dk::graphics_graph OR NOT TARGET dk::graphics_shaders)
         message(FATAL_ERROR "GPU path tracing requires Graphics Device, Graph and Shaders")
     endif()
@@ -16,6 +17,6 @@ if(DK_BUILD_RENDER_PATHTRACING)
     target_sources(dk_render_pathtracing PUBLIC FILE_SET HEADERS BASE_DIRS include
         FILES include/dk/render/PathTraceRenderer.hpp)
     target_link_libraries(dk_render_pathtracing PUBLIC dk::render_pathtracing_reference dk::graphics_device
-        PRIVATE dk::graphics_graph dk::graphics_shaders)
+        PRIVATE dk::graphics_graph dk::graphics_shaders dk::rtxdi_shaders)
     dk_target_defaults(dk_render_pathtracing)
 endif()

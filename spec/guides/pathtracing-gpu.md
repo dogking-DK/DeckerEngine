@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-14T14:37:00+08:00"
-updated_at: "2026-10-16T15:16:16+08:00"
+updated_at: "2026-10-19T14:05:00+08:00"
 ---
 
 # GPU表面、空气、云与渐进路径追踪
@@ -9,6 +9,25 @@ updated_at: "2026-10-16T15:16:16+08:00"
 提供硬件三角形求交、NEE/MIS/RR和拥有型HDR结果，使用与[CPU参考](pathtracing-reference.md)一致的冻结输入与采样模型。
 提供≤64×64无历史参考和≤2048×2048渐进接口，支持Lambert/GGX、baseColor纹理/alpha-mask，以及显式GPU空气/云积分。
 [编辑器](editor.md#路径追踪预览m169)支持 Surface only / Scene media；固定 capture v2 同样可追踪空气/云。
+
+## 初始 RIS / RTXDI
+
+M19.2 提供 C++ GPU 初始 RIS：`submit_restir_rays`、`submit_restir_view`、`configure_restir_view`。
+`RestirDiSettings` 默认 version=1、8 候选（合法 1..64），要求 MIS 和显式 Surface only；
+没有时间/空间复用、介质 RIS 或新的 Editor/capture 选项。普通 `submit/configure_view` 继续原 MIS 路径。
+来源的 `PathTraceGpuImageInfo.restir` 保存实际配置，候选数不是额外 spp。
+无历史入口每像素每次提交的 `samples.count * initial_candidates` 不超过 2^18；
+高 spp 验证使用连续样本区间分批，再按样本数合并均值/二阶矩。渐进入口自动按单 epoch 分阶段推进。
+
+渐进调用仍用 `submit_batch`/`poll`，每 epoch 完成全图首表面与初始 RIS 后才开始全图着色，
+一个 batch 可含 1..16 epoch，全部成功才发布。`sampling_pass`/`sampling_epoch` 只描述私有在途工作，
+完成进度仍看 `completed_spp`。`reverse_tiles` 可用于遍历顺序重放验证，不改变采样身份。
+首表面/reservoir 会增加显存；默认额度、精确 payload 和旧 owner 计费见 [M19.2 设计](../design/render-restir.md#m192-gpu-初始-ris-实施契约)。
+
+GPU target 首次配置下载固定 RTXDI-Library archive 并校验 SHA256，源码和许可保留在构建树 `_deps`，
+运行时编译 shader 需要该 Include 目录；无上游框架或 DLL 链接，CPU-only 不下载。
+版本、来源和许可证见 [三方库说明](../third-party-libraries.md#渲染-sdk-接入)。
+定向验证选择 `dk_pathtracing_probe` / `^dk\.pathtracing\.restir_.*_gpu_required$`，证据见 [0135](../development/0135-restir-gpu-initial.md)。
 
 ## 构建与验证
 

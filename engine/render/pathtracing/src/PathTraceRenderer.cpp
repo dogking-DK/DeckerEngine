@@ -24,6 +24,10 @@ struct PathGpuState {
     PipelineLayout layout,empty_layout;
     RayTracingPipeline pipeline;
     ShaderBindingTable table;
+    PipelineLayout restir_layout,restir_empty_layout;
+    RayTracingPipeline restir_pipeline;
+    ShaderBindingTable restir_table;
+    ComputePipeline restir_empty_pipeline;
     ComputePipeline empty_pipeline,tone_pipeline;
     ComputePipeline air_empty_pipeline;
     PipelineLayout air_empty_layout;
@@ -66,6 +70,7 @@ struct PathGpuCompleted {
     PathTraceScene source;
     PathTraceGpuImageInfo info;
     Buffer buffer;
+    Buffer surface,reservoir; // Last complete RIS epoch; immutable with this owner.
 };
 struct PathGpuView {
     explicit PathGpuView(RenderView v) : view(std::move(v)) {}
@@ -73,6 +78,7 @@ struct PathGpuView {
     std::shared_ptr<const PathGpuScene> scene;
     RenderView view;
     PathTraceSettings settings;
+    std::optional<RestirDiSettings> restir;
     std::optional<PathMediumSnapshot> medium;
     std::shared_ptr<const PathGpuCloud> cloud;
     VolumePathSettings medium_settings;
@@ -86,8 +92,10 @@ struct PathGpuBatch {
     std::shared_ptr<const PathGpuCompleted> history;
     std::shared_ptr<const PathGpuFrame> frame;
     std::uint32_t first=0,count=0,edge=0,next_tile=0,columns=0,rows=0;
+    std::uint32_t epoch=0,phase=0;
+    Buffer scratch;
     std::stop_token stop, tile_stop;
-    bool discarded=false;
+    bool discarded=false,reverse_tiles=false;
 };
 struct PathGpuImage {
     explicit PathGpuImage(memory::ResourceHandle heap) : colors(0,memory::Allocator<Vec3d>{heap}),
@@ -151,6 +159,7 @@ struct TraceContext {
     std::size_t shader_table;
     bool progressive=false;
     bool air=false;
+    bool restir=false;
 };
 Result<void> trace_record(graph::PassContext& pass,void* context) {
     const auto& c=*static_cast<TraceContext*>(context);
@@ -161,12 +170,13 @@ Result<void> trace_record(graph::PassContext& pass,void* context) {
             return pass.pass_index()==1 ? pass.copy_buffer(3,4,bytes) : pass.copy_buffer(6,4,4,0,bytes);
         }
         const std::array<const BindingSet*,1> sets{&c.bindings};
-        if (!c.empty) return pass.trace(c.state.pipeline,c.shader_table,sets,{}, {c.width,c.height,1});
-        auto encoder=take(pass.compute()); check(encoder.bind_pipeline(c.air ? c.state.air_empty_pipeline : c.state.empty_pipeline)); check(encoder.bind_sets(sets));
+        if (!c.empty) return pass.trace(c.restir ? c.state.restir_pipeline : c.state.pipeline,c.shader_table,sets,{}, {c.width,c.height,1});
+        auto encoder=take(pass.compute()); check(encoder.bind_pipeline(c.restir ? c.state.restir_empty_pipeline : (c.air ? c.state.air_empty_pipeline : c.state.empty_pipeline))); check(encoder.bind_sets(sets));
         return encoder.dispatch({(c.width*c.height+63)/64,1,1});
     } catch (const Error& error) { return std::unexpected(error); }
 }
-using Parameters=std::array<Float4,32>;
+using Parameters=std::array<Float4,33>;
+void restir_memory(const PathGpuState&,std::uint64_t,std::uint32_t);
 Parameters view_parameters(const PathSceneState&,const RenderView&,const PathTraceSettings&,PathTraceSamples);
 Parameters parameters(const PathSceneState& scene,const PathTraceSettings& s,PathTraceSamples samples,
     std::uint32_t width,std::uint32_t height,bool rays,std::uint32_t first_pixel) {
@@ -182,12 +192,18 @@ Parameters parameters(const PathSceneState& scene,const PathTraceSettings& s,Pat
     p[5]=pack(direction); p[10]=integers(first_pixel,0,0,0); return p;
 }
 std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& queue,const PathGpuScene& scene,
-    Parameters p,std::span<const Float4> rays,PathTraceGpuImageInfo info,std::stop_token stop,const Buffer* candidate=nullptr,const Buffer* completed=nullptr,std::shared_ptr<const PathGpuCloud> cloud={}) {
+    Parameters p,std::span<const Float4> rays,PathTraceGpuImageInfo info,std::stop_token stop,const Buffer* candidate=nullptr,const Buffer* completed=nullptr,std::shared_ptr<const PathGpuCloud> cloud={},
+    const Buffer* surface=nullptr,const Buffer* reservoir=nullptr) {
     const bool empty=scene.source.triangle_count()==0;
     const bool air=info.medium.has_value();
+    const bool restir=info.restir.has_value();
+    if(restir) p[32][0]=std::bit_cast<float>(info.restir->initial_candidates);
     const auto count=std::uint64_t{info.width}*info.height,bytes=count*sizeof(PathGpuPixel);
     auto frame=memory::make_shared_in<PathGpuFrame>(state.heap); frame->heap=state.heap; frame->source=scene.source; frame->info=std::move(info);
     const auto storage=vk::BufferUsageFlagBits::eStorageBuffer;
+    Buffer dummy_surface,dummy_reservoir;
+    if(restir && !surface) { dummy_surface=take(state.factory.create_buffer({64,storage})); surface=&dummy_surface; }
+    if(restir && !reservoir) { dummy_reservoir=take(state.factory.create_buffer({32,storage})); reservoir=&dummy_reservoir; }
     auto uniform=upload(state.factory,std::as_bytes(std::span{p}),storage);
     auto input=upload(state.factory,std::as_bytes(rays),storage);
     Buffer allocated;
@@ -203,15 +219,17 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     frame->diagnostic_offset=candidate ? 0 : bytes;
     Vector<BindingWrite> writes(0,memory::Allocator<BindingWrite>{state.heap});
     if (!empty) { writes.push_back({0,0,AccelerationStructureBinding{&scene.geometry->tlas}}); writes.push_back({1,0,BufferBinding{&scene.geometry->triangles}}); }
-    if(!empty || air) { writes.push_back({4,0,BufferBinding{&input}});
+    if(!empty || air || restir) { writes.push_back({4,0,BufferBinding{&input}});
         writes.push_back({9,0,BufferBinding{cloud ? &cloud->data : &uniform}}); }
     writes.push_back({2,0,BufferBinding{&uniform}}); writes.push_back({3,0,BufferBinding{&output}});
     writes.push_back({7,0,BufferBinding{&history}}); writes.push_back({8,0,BufferBinding{&status}});
+    if(restir) { writes.push_back({10,0,BufferBinding{surface}}); writes.push_back({11,0,BufferBinding{reservoir}}); }
     if(!empty && state.textured) for(std::uint32_t i=0;i<64;++i) {
         const auto& texture=scene.geometry->textures[std::min<std::size_t>(i,scene.geometry->texture_count-1)];
         writes.push_back({5,i,ImageBinding{&texture.view}}); writes.push_back({6,i,SamplerBinding{&texture.sampler}});
     }
-    auto bindings=take(state.factory.create_bindings(empty ? (air ? state.air_empty_layout : state.empty_layout) : state.layout,0,writes));
+    const auto& layout=restir ? (empty ? state.restir_empty_layout : state.restir_layout) : (empty ? (air ? state.air_empty_layout : state.empty_layout) : state.layout);
+    auto bindings=take(state.factory.create_bindings(layout,0,writes));
     auto g=take(graph::Graph::create(state.heap));
     const auto params=take(g.declare_buffer("parameters",uniform.description(),graph::Lifetime::external,true));
     const auto geometry=take(g.declare_buffer("triangles",empty ? BufferDesc{4,storage} : scene.geometry->triangles.description(),graph::Lifetime::external,true));
@@ -227,13 +245,23 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     uses.push_back(use(diagnostic,stage,vk::AccessFlagBits2::eShaderRead|vk::AccessFlagBits2::eShaderWrite));
     Vector<graph::ExternalBinding> imports(0,memory::Allocator<graph::ExternalBinding>{state.heap});
     imports.push_back({0,&uniform}); imports.push_back({3,&output}); imports.push_back({4,&frame->readback}); imports.push_back({5,&history}); imports.push_back({6,&status});
-    if(empty && air) { uses.push_back(use(ray_input,stage,vk::AccessFlagBits2::eShaderRead)); imports.push_back({2,&input}); }
+    if(restir) {
+        const bool shading=std::bit_cast<std::uint32_t>(p[32][1])==1;
+        const auto access=shading ? vk::AccessFlagBits2::eShaderRead : vk::AccessFlagBits2::eShaderWrite;
+        const auto a=take(g.declare_buffer("RIS surface",surface->description(),graph::Lifetime::external,shading));
+        const auto b=take(g.declare_buffer("RIS reservoir",reservoir->description(),graph::Lifetime::external,shading));
+        // As with the candidate image, tile writes are discard writes: no previous contents
+        // are consumed. The scheduler gates every reader on completion of the whole plane.
+        uses.push_back(use(a,stage,access,!shading)); uses.push_back(use(b,stage,access,!shading));
+        imports.push_back({7,surface}); imports.push_back({8,reservoir});
+    }
+    if(empty && (air || restir)) { uses.push_back(use(ray_input,stage,vk::AccessFlagBits2::eShaderRead)); imports.push_back({2,&input}); }
     // Compiled Graph resources are grouped by type: buffers (including clouds), images, AS, SBT.
     for(std::size_t i=0;i<scene.geometry->texture_count;++i) {
         const auto& texture=scene.geometry->textures[i];
         auto id=take(g.declare_image("baseColor-"+std::to_string(i),texture.image.description(),graph::Lifetime::external,true));
         uses.push_back({id,{{stage,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal}}});
-        imports.push_back({7+i+(cloud ? 1u : 0u),nullptr,&texture.image});
+        imports.push_back({7+i+(cloud ? 1u : 0u)+(restir ? 2u : 0u),nullptr,&texture.image});
     }
     if (!empty) {
         const auto blas=declare(g,"BLAS",AccelerationStructureKind::bottom_level,{},true);
@@ -242,8 +270,8 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
         uses.push_back(use(geometry,stage,vk::AccessFlagBits2::eShaderRead)); uses.push_back(use(ray_input,stage,vk::AccessFlagBits2::eShaderRead));
         uses.push_back(graph::acceleration_read(blas)); uses.push_back(graph::acceleration_read(tlas)); uses.push_back(graph::shader_table_read(sbt));
         imports.push_back({1,&scene.geometry->triangles}); imports.push_back({2,&input});
-        const auto base=7+scene.geometry->texture_count+(cloud ? 1u : 0u);
-        imports.push_back({base,nullptr,nullptr,{},&scene.geometry->blas}); imports.push_back({base+1,nullptr,nullptr,{},&scene.geometry->tlas}); imports.push_back({base+2,nullptr,nullptr,{},nullptr,&state.table});
+        const auto base=7+scene.geometry->texture_count+(cloud ? 1u : 0u)+(restir ? 2u : 0u);
+        imports.push_back({base,nullptr,nullptr,{},&scene.geometry->blas}); imports.push_back({base+1,nullptr,nullptr,{},&scene.geometry->tlas}); imports.push_back({base+2,nullptr,nullptr,{},nullptr,restir ? &state.restir_table : &state.table});
     }
     if(cloud) {
         const auto id=take(g.declare_buffer("immutable cloud fields",cloud->data.description(),graph::Lifetime::external,true));
@@ -260,7 +288,7 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
         add(g,"path diagnostic readback",copy);
     }
     check(g.mark_output(readback)); check(g.mark_output(result));
-    auto plan=take(g.compile(stop)); TraceContext context{state,bindings,frame->info.width,frame->info.height,empty,9+scene.geometry->texture_count+(cloud ? 1u : 0u),candidate!=nullptr,air};
+    auto plan=take(g.compile(stop)); TraceContext context{state,bindings,frame->info.width,frame->info.height,empty,9+scene.geometry->texture_count+(cloud ? 1u : 0u)+(restir ? 2u : 0u),candidate!=nullptr,air,restir};
     const std::array callbacks{graph::PassCallback{0,trace_record,&context},graph::PassCallback{1,trace_record,&context},graph::PassCallback{2,trace_record,&context}};
     const std::array final{graph::FinalAccess{4,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}}};
     cancelled(stop); auto execution=take(graph::execute(plan,queue,{imports,std::span{callbacks}.first(candidate ? 2 : 3),final}));
@@ -371,15 +399,18 @@ Result<PathTraceRenderer> PathTraceRenderer::create(memory::ResourceHandle heap,
     state->identity=take(state->factory.create_buffer({4}));
     const std::array names{"pathMain","pathMiss","shadowMiss","pathHit","pathAnyHit"};
     const std::array stages{ShaderStage::raygeneration,ShaderStage::miss,ShaderStage::miss,ShaderStage::closesthit,ShaderStage::anyhit};
-    std::array<ShaderCompileRequest,8> requests;
+    std::array<ShaderCompileRequest,10> requests;
+    const std::array<std::filesystem::path,1> rtxdi_includes{DK_RTXDI_INCLUDE_DIR};
     const std::array defines{ShaderDefine{"DK_PATH_TEXTURES",state->textured ? "1" : "0"}};
     for (std::size_t i=0;i<5;++i) requests[i]={directory/"pathtrace.slang",names[i],stages[i],{},defines};
     requests[5]={directory/"pathtrace-empty.slang","emptyMain",ShaderStage::compute};
     requests[6]={directory/"pathtrace-tone.slang","toneMain",ShaderStage::compute};
     requests[7]={directory/"path-air-empty.slang","airEmptyMain",ShaderStage::compute};
+    requests[8]={directory/"path-restir.slang","restirMain",ShaderStage::raygeneration,rtxdi_includes,defines};
+    requests[9]={directory/"path-restir-empty.slang","restirEmptyMain",ShaderStage::compute,rtxdi_includes};
     for(auto& request:requests) request.precise_floating_point=true;
     auto compiled=take(compile_shaders(requests,heap,stop));
-    std::array<ShaderModule,8> shaders; for (std::size_t i=0;i<shaders.size();++i) { cancelled(stop); shaders[i]=take(state->factory.create_shader(compiled[i])); }
+    std::array<ShaderModule,10> shaders; for (std::size_t i=0;i<shaders.size();++i) { cancelled(stop); shaders[i]=take(state->factory.create_shader(compiled[i])); }
     const std::array<const ShaderModule*,5> entries{&shaders[0],&shaders[1],&shaders[2],&shaders[3],&shaders[4]};
     state->layout=take(state->factory.create_pipeline_layout(entries));
     const std::array<const ShaderModule*,2> misses{&shaders[1],&shaders[2]};
@@ -394,6 +425,13 @@ Result<PathTraceRenderer> PathTraceRenderer::create(memory::ResourceHandle heap,
     const std::array<const ShaderModule*,1> air_empty{&shaders[7]};
     state->air_empty_layout=take(state->factory.create_pipeline_layout(air_empty));
     state->air_empty_pipeline=take(state->factory.create_compute_pipeline({&shaders[7],&state->air_empty_layout}));
+    const std::array<const ShaderModule*,5> restir_entries{&shaders[8],&shaders[1],&shaders[2],&shaders[3],&shaders[4]};
+    state->restir_layout=take(state->factory.create_pipeline_layout(restir_entries));
+    state->restir_pipeline=take(state->factory.create_ray_tracing_pipeline({&state->restir_layout,&shaders[8],misses,hits,2}));
+    state->restir_table=take(state->factory.create_shader_binding_table(state->restir_pipeline));
+    const std::array<const ShaderModule*,1> restir_empty{&shaders[9]};
+    state->restir_empty_layout=take(state->factory.create_pipeline_layout(restir_empty));
+    state->restir_empty_pipeline=take(state->factory.create_compute_pipeline({&shaders[9],&state->restir_empty_layout}));
     cancelled(stop); return PathTraceRenderer{std::move(state)};
 } catch (const Error& error) { return std::unexpected(error); }
 catch (const std::exception& error) { return std::unexpected(Error{ErrorCode::internal_error,error.what()}); }
@@ -503,7 +541,7 @@ Result<PathTraceFrame> PathTraceRenderer::submit_rays(SubmissionQueue& queue,con
         check(validate_path_ray(ray)); cancelled(stop);
         const double maximum=std::min(ray.maximum,double(std::numeric_limits<float>::max()));
         if (ray.minimum>maximum) return std::unexpected(path_invalid("Path ray interval exceeds float domain"));
-        packed.push_back(pack(ray.origin,ray.minimum)); packed.push_back(pack(ray.direction,maximum));
+        packed.push_back(pack(ray.origin,ray.minimum==0 ? 0.0 : ray.minimum)); packed.push_back(pack(ray.direction,maximum));
     }
     const auto width=std::uint32_t(rays.size()); auto p=parameters(cpu,settings,samples,width,1,true,first_pixel);
     auto info=info_for(scene.source(),width,1,settings,samples); info.fixed_rays=true; info.first_pixel=first_pixel;
@@ -580,7 +618,7 @@ Result<void> PathTraceRenderer::configure_view(SubmissionQueue& queue,std::uint6
     auto* slot=view_slot(*state_,id);
     if(slot) {
         const auto& previous=**slot; const auto& a=previous.view.description(); const auto& b=view.description();
-        if(!previous.medium && previous.scene==scene.state_ && a.width==b.width && a.height==b.height && a.camera_world.matrix()==b.camera_world.matrix() &&
+        if(!previous.medium && !previous.restir && previous.scene==scene.state_ && a.width==b.width && a.height==b.height && a.camera_world.matrix()==b.camera_world.matrix() &&
             a.projection==b.projection && same_integrator(previous.settings,settings) && previous.schedule.session==schedule.session &&
             previous.schedule.gesture==schedule.gesture) {
             (*slot)->settings=settings; (*slot)->schedule=schedule; return {};
@@ -608,7 +646,7 @@ Result<PathTraceFrame> PathTraceRenderer::submit_medium_rays(SubmissionQueue& qu
         check(validate_path_ray(ray)); cancelled(stop);
         const double maximum=std::min(ray.maximum,double(std::numeric_limits<float>::max()));
         if(ray.minimum>maximum) throw path_invalid("Path ray interval exceeds float domain");
-        packed.push_back(pack(ray.origin,ray.minimum)); packed.push_back(pack(ray.direction,maximum));
+        packed.push_back(pack(ray.origin,ray.minimum==0 ? 0.0 : ray.minimum)); packed.push_back(pack(ray.direction,maximum));
         packed.push_back(radial_origin(medium,ray.origin));
         for(const auto& phase:cloud_origin(medium,ray.origin)) packed.push_back(phase);
     }
@@ -684,24 +722,40 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
         batch=memory::make_shared_in<PathGpuBatch>(state_->heap); batch->owner=view; batch->generation=view->generation;
         batch->history=view->completed; batch->first=completed;
         batch->count=std::min(view->schedule.batch_spp,view->schedule.target_spp-completed); batch->stop=stop;
-        const auto pixels=view->settings.max_rays/(batch->count*(2ull*view->settings.max_bounces+1));
+        batch->reverse_tiles=view->schedule.reverse_tiles;
+        auto pixels=view->settings.max_rays/((view->restir ? 1 : batch->count)*(2ull*view->settings.max_bounces+(view->restir ? 2 : 1)));
+        if(view->restir) pixels=std::min(pixels,view->restir->max_candidate_evaluations/view->restir->initial_candidates);
         batch->edge=std::min(view->schedule.tile_edge,std::uint32_t(std::sqrt(double(pixels))));
         const auto& d=view->view.description(); batch->columns=(d.width+batch->edge-1)/batch->edge; batch->rows=(d.height+batch->edge-1)/batch->edge;
+        if(view->restir) restir_memory(*state_,std::uint64_t{d.width}*d.height,batch->count);
         batch->candidate=memory::make_shared_in<PathGpuCompleted>(state_->heap);
         auto& frame=*batch->candidate; frame.heap=state_->heap; frame.factory=state_->factory; frame.source=view->scene->source;
         frame.info=info_for(frame.source,d.width,d.height,view->settings,{0,completed+batch->count}); frame.info.view=d;
+        frame.info.restir=view->restir;
         if(view->medium) frame.info.medium=PathTraceGpuMediumInfo{view->medium->environment(),view->medium->settings(),view->medium_settings,view->medium->field_hash()};
         frame.buffer=take(state_->factory.create_buffer({std::uint64_t{d.width}*d.height*128,
             vk::BufferUsageFlagBits::eStorageBuffer|vk::BufferUsageFlagBits::eTransferSrc}));
+        if(view->restir) {
+            const auto n=std::uint64_t{d.width}*d.height;
+            frame.surface=take(state_->factory.create_buffer({n*64,vk::BufferUsageFlagBits::eStorageBuffer}));
+            frame.reservoir=take(state_->factory.create_buffer({n*32,vk::BufferUsageFlagBits::eStorageBuffer}));
+            if(batch->count>1) batch->scratch=take(state_->factory.create_buffer({n*128,vk::BufferUsageFlagBits::eStorageBuffer|vk::BufferUsageFlagBits::eTransferSrc}));
+        }
     }
     const auto& d=view->view.description();
-    const auto x=(batch->next_tile%batch->columns)*batch->edge,y=(batch->next_tile/batch->columns)*batch->edge;
+    const auto tile_index=batch->reverse_tiles ? batch->columns*batch->rows-1-batch->next_tile : batch->next_tile;
+    const auto x=(tile_index%batch->columns)*batch->edge,y=(tile_index/batch->columns)*batch->edge;
     const auto width=std::min(batch->edge,d.width-x),height=std::min(batch->edge,d.height-y);
     // Freeze the integrator for this batch; later scheduling/budget edits affect the next batch.
     const auto& frozen=batch->candidate->info.settings;
     auto p=view_parameters(*PathReferenceAccess::get(view->scene->source),view->view,frozen,{batch->first,batch->count});
     p[0]=integers(width,height,batch->first,batch->count); p[11]=integers(x,y,d.width,1);
     auto info=info_for(view->scene->source,width,height,frozen,{batch->first,batch->count});
+    info.restir=batch->candidate->info.restir;
+    if(info.restir) {
+        p[0]=integers(width,height,batch->first+batch->epoch,1); p[32]=integers(info.restir->initial_candidates,batch->phase,0,0);
+        info.samples={batch->first+batch->epoch,1};
+    }
     if(view->medium) {
         const auto& air=*batch->candidate->info.medium; medium_parameters(p,*view->medium,air.settings);
         medium_origin(p,*view->medium,{p[6][0],p[6][1],p[6][2]}); info.medium=air;
@@ -709,7 +763,8 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
     const std::array<Float4,3> dummy{};
     cancelled(batch->stop);
     auto frame=submit(*state_,queue,*view->scene,p,dummy,std::move(info),stop,&batch->candidate->buffer,
-        batch->history ? &batch->history->buffer : nullptr,view->cloud);
+        view->restir && batch->epoch ? &batch->scratch : (batch->history ? &batch->history->buffer : nullptr),view->cloud,
+        view->restir ? &batch->candidate->surface : nullptr,view->restir ? &batch->candidate->reservoir : nullptr);
     batch->tile_stop=stop; batch->frame=std::move(frame); state_->active=std::move(batch); return true;
 } catch(const Error& error) {
     if(state_ && queue.stats().device_lost) state_->terminal=true;
@@ -742,6 +797,12 @@ Result<bool> PathTraceRenderer::poll(SubmissionQueue& queue,std::stop_token stop
     if(!current(*state_,*batch)) { state_->active.reset(); return false; }
     ++batch->next_tile;
     if(batch->next_tile!=batch->columns*batch->rows) return false;
+    if(batch->candidate->info.restir) {
+        if(batch->phase==0) { batch->phase=1; batch->next_tile=0; return false; }
+        if(++batch->epoch<batch->count) {
+            std::swap(batch->candidate->buffer,batch->scratch); batch->phase=0; batch->next_tile=0; return false;
+        }
+    }
     batch->owner->completed=std::move(batch->candidate); state_->active.reset(); return true;
 } catch(const Error& error) { return std::unexpected(error); }
 catch(const std::exception& error) { return std::unexpected(Error{ErrorCode::internal_error,error.what()}); }
@@ -772,6 +833,7 @@ Result<PathTraceProgress> PathTraceRenderer::status(std::uint64_t id) const {
     if(state_->active && state_->active->owner==*slot && current(*state_,*state_->active)) {
         const auto& b=*state_->active; result.pending=true; result.submitted_spp=b.first+b.count;
         result.completed_tiles=b.next_tile; result.total_tiles=b.columns*b.rows;
+        if(b.candidate->info.restir) { result.sampling_epoch=b.first+b.epoch; result.sampling_pass=b.phase; }
     }
     return result;
 }
@@ -862,7 +924,7 @@ Result<std::optional<PathTraceGpuImage>> PathTraceFrame::read(SubmissionQueue& q
         for (const auto& block:{pixel.mean,pixel.second,pixel.hit,pixel.normal}) for (const auto value:block)
             if (!std::isfinite(value)) return std::unexpected(Error{ErrorCode::internal_error,"Nonfinite GPU path result"});
         const Vec3d color{pixel.mean[0],pixel.mean[1],pixel.mean[2]},moment{pixel.second[0],pixel.second[1],pixel.second[2]};
-        const double rays=pixel.mean[3],bound=double(image->info.samples.count)*(2*image->info.settings.max_bounces+1);
+        const double rays=pixel.mean[3],bound=double(image->info.samples.count)*(2*image->info.settings.max_bounces+(image->info.restir ? 2 : 1));
         if ((color.array()<0).any() || (moment.array()<0).any() || pixel.second[3]!=0 || rays<0 || rays>bound || rays!=std::floor(rays))
             return std::unexpected(Error{ErrorCode::internal_error,"Invalid GPU path HDR/statistics"});
         image->info.statistics.rays+=std::uint64_t(rays); image->colors.push_back(color); image->moments.push_back(moment);
@@ -906,4 +968,5 @@ Result<void> PathTraceRenderer::configure_air_view(graphics::SubmissionQueue& q,
     if(m.environment().clouds.enabled) return std::unexpected(Error{ErrorCode::not_supported,"Air paths require clouds disabled; use medium paths"});
     return configure_medium_view(q,id,scene,m,view,s,schedule);
 }
+#include "PathRestirGpu.inl"
 } // namespace dk::render
