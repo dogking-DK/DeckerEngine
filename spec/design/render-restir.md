@@ -1,7 +1,7 @@
 ---
 module: render-restir
 created_at: "2026-10-19T12:50:00+08:00"
-updated_at: "2026-10-19T23:40:34+08:00"
+updated_at: "2026-10-20T00:19:43+08:00"
 status: accepted
 ---
 
@@ -126,16 +126,18 @@ GPU target 私有使用 RTXDI v3.1.0 对应 RTXDI-Library commit `f12037fa8e97eb
 每 epoch 对应一个新路径样本，batch 1..16 依次推进 epoch，全批完成才发布图像/最后表面/reservoir/spp。
 同一计数器域与光能分工用于两个入口。首表面保存命中、位置、法线和观察方向；尾部从保存的首命中继续，避免重复查询主射线。
 
-首表面 64 bytes/pixel，初始 reservoir 32 bytes/pixel，线性累积 128 bytes/pixel；完成 owner 共 224 bytes/pixel。
+首表面 64 bytes/pixel，初始 reservoir 32 bytes/pixel，线性累积 128 bytes/pixel；temporal 完成 owner 共 224 bytes/pixel。
+无 temporal 时完成发布前释放首表面/reservoir，完成 owner 为128 bytes/pixel；spatial 私有输出同批次回收。
+外持线性图像和来源/诊断不变，下一 epoch 仍重新生成初始候选，不改变采样或光能分工。
 当前批次候选 224 bytes/pixel，batch>1 另需 128 bytes/pixel 的私有累积 ping-pong。两视图/外持旧帧按真实 owner 另计。
-峰值 payload 为 `224*sum(held_complete_pixels) + (224 + (batch>1 ? 128 : 0))*candidate_pixels`，
+初始 RIS 峰值 payload 为 `128*sum(held_complete_pixels) + (224 + (batch>1 ? 128 : 0))*candidate_pixels`，
 再加场景/纹理/AS/SBT、每 tile 参数/诊断和显式读回；读回单独为 128 bytes/pixel，固定射线结果为 64 bytes/pixel。
 渐进 RIS tile 临时 payload 现为参数 672、dummy ray 48、诊断 64、诊断读回 64 bytes，首次无历史时另有 128 bytes 零输入。
 固定射线批次还持有 32 bytes/ray 输入、64 bytes/pixel GPU 输出及同尺寸读回（加 4 bytes 诊断），
 以及参数 672、占位采样面 96、零历史 128、诊断 64 bytes；上述均为 payload，实际分配需对齐。
 实际 Vulkan memory requirements（含对齐）由同一 AllocationBudget 准入，payload 预检不替代实际额度；不包括 driver 隐藏管线开销。
 每路径最多 `2*max_bounces+2` 射线，候选数乘 tile 像素数/样本数受 2^24 预算限制；渐进全目标射线上限保持 2^32。
-tile 1..64，候选和射线预算共同限宽。状态报告区分阶段和 epoch；只在完整批次发布时推进完成计数。
+tile 1..256（调用默认64），候选和射线预算共同限宽。状态报告区分阶段和 epoch；只在完整批次发布时推进完成计数。
 每次 submit/poll 检查取消与 generation；阶段中途失败/迟到结果丢弃整批，已完成 owner 及其采样平面不可变。
 每阶段通过 Graph 声明访问，使跨提交的写入到读取、下一 epoch 的覆盖均有显式同步。
 

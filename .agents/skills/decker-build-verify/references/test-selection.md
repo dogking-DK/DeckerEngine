@@ -70,6 +70,7 @@
 | ReSTIR v3 四种复用/两种介质、独立历史/来源、取消失败与 Python/Luau | dk_run、dk_ctl | `^dk\.pathtracing\.restir_capture_gpu_required$`（required RT/validation/sync） |
 | ReSTIR 实际 GUI 算法切换与同配置 capture 对照 | dk_editor_app、dk_ctl | `^dk\.editor\.restir_pathtracing_gpu_validation$`（后台窗口、required RT/validation/sync） |
 | ReSTIR worker 暂停/曝光/相机历史、刷新/尺寸/算法、配置失败与取消关闭 | dk_editor_render_benchmark | `^dk\.editor\.restir_worker_gpu_validation$`（required RT/validation/sync） |
+| 默认 Sponza 1600×1200 / 2048² 四模式、显存额度与连续累积/取消恢复 | dk_editor_render_benchmark | `^dk\.editor\.restir_desktop_gpu_validation$`（需要 demo 素材；required RT/validation/sync） |
 | Runtime 截图、版本/像素、原子发布和退出 | dk_run | `^dk\.runtime\.capture_gpu_validation$`（gpu label；77 为跳过） |
 | Runtime 的 batch/stdio 进程行为 | dk_run | `^dk\.runtime\.` |
 | 编辑器选择/草稿、相机、Gizmo 事务/撤销、保存重载与失败保护（无需 GPU） | dk_editor_tests | `^dk\.editor\.(workspace \|runtime \|camera \|interaction )` |

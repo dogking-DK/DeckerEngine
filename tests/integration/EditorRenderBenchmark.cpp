@@ -21,16 +21,19 @@ void ppm(const std::filesystem::path& path,const EnvironmentPreviewResult& r) {
 }
 }
 #include "RestirWorker.inl"
+#include "PathDesktopWorker.inl"
 int main(int argc,char** argv) {
     if(argc<3) return 2;
-    bool validation=false,profile=false,media=false,restir=false;
+    bool validation=false,profile=false,media=false,restir=false,desktop_path=false;
     for(int i=3;i<argc;++i) {
         const std::string_view option=argv[i];
         if(option=="--validation") validation=true; else if(option=="--profile") profile=true;
-        else if(option=="--media") media=true; else if(option=="--restir") restir=true; else return 2;
+        else if(option=="--media") media=true; else if(option=="--restir") restir=true;
+        else if(option=="--desktop-path") desktop_path=true; else return 2;
     }
     const std::filesystem::path output=argv[2]; std::filesystem::create_directories(output);
     if(restir) return restir_worker(argv[1],output);
+    if(desktop_path) return desktop_path_worker(argv[1],output,validation);
     Json report={{"status","failed"},{"validation",validation},{"profile",profile},{"environment",Json::array()},{"path",Json::array()}};
     int code=1;
     try {

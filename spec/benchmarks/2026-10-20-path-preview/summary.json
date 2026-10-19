@@ -1,0 +1,237 @@
+{
+  "scope": "Sponza surface, 640x360, four bounces, same seeds/samples; three rounds; no validation; GPU timestamps",
+  "modes": {
+    "classic": {
+      "before": {
+        "tile": 64,
+        "frame_wall_ms": 42.922399999999996,
+        "round_frame_median_ms": [
+          44.78255,
+          40.657849999999996,
+          41.65365
+        ],
+        "frame_gpu_ms": 14.867776,
+        "record_submit_ms": 10.300650000000001,
+        "wait_poll_ms": 25.70205,
+        "submissions_per_spp": 60,
+        "tile_gpu_p95_ms": 0.380896,
+        "preview_p95_ms": 21.5416,
+        "cancel_p95_ms": 0.4859,
+        "owned_peak": 911440512
+      },
+      "after": {
+        "tile": 256,
+        "frame_wall_ms": 15.50315,
+        "round_frame_median_ms": [
+          9.48385,
+          16.2989,
+          14.9406
+        ],
+        "frame_gpu_ms": 10.488016,
+        "record_submit_ms": 1.8352,
+        "wait_poll_ms": 13.58945,
+        "submissions_per_spp": 6,
+        "tile_gpu_p95_ms": 4.669632,
+        "preview_p95_ms": 14.8238,
+        "cancel_p95_ms": 1.0438,
+        "owned_peak": 911440512
+      },
+      "speedup": 2.7686244408394423,
+      "comparison_exact": true
+    },
+    "initial": {
+      "before": {
+        "tile": 64,
+        "frame_wall_ms": 46.7412,
+        "round_frame_median_ms": [
+          47.135149999999996,
+          47.124399999999994,
+          46.54205
+        ],
+        "frame_gpu_ms": 10.77736,
+        "record_submit_ms": 20.991100000000003,
+        "wait_poll_ms": 19.76345,
+        "submissions_per_spp": 120,
+        "tile_gpu_p95_ms": 0.248832,
+        "preview_p95_ms": 38.0165,
+        "cancel_p95_ms": 3.8147,
+        "owned_peak": 933558960
+      },
+      "after": {
+        "tile": 256,
+        "frame_wall_ms": 31.780300000000004,
+        "round_frame_median_ms": [
+          32.4585,
+          31.780300000000004,
+          24.39155
+        ],
+        "frame_gpu_ms": 13.605248,
+        "record_submit_ms": 3.7381,
+        "wait_poll_ms": 28.52075,
+        "submissions_per_spp": 12,
+        "tile_gpu_p95_ms": 4.400544,
+        "preview_p95_ms": 17.8531,
+        "cancel_p95_ms": 11.3688,
+        "owned_peak": 933558960
+      },
+      "speedup": 1.4707601879151548,
+      "comparison_exact": true
+    },
+    "temporal": {
+      "before": {
+        "tile": 64,
+        "frame_wall_ms": 77.22255,
+        "round_frame_median_ms": [
+          76.16215,
+          77.67179999999999,
+          77.668
+        ],
+        "frame_gpu_ms": 33.279104000000004,
+        "record_submit_ms": 28.5429,
+        "wait_poll_ms": 47.369550000000004,
+        "submissions_per_spp": 180,
+        "tile_gpu_p95_ms": 0.417152,
+        "preview_p95_ms": 80.0169,
+        "cancel_p95_ms": 3.0723,
+        "owned_peak": 933558960
+      },
+      "after": {
+        "tile": 256,
+        "frame_wall_ms": 60.45285,
+        "round_frame_median_ms": [
+          53.36215,
+          61.260799999999996,
+          59.9089
+        ],
+        "frame_gpu_ms": 41.161712,
+        "record_submit_ms": 5.31265,
+        "wait_poll_ms": 54.7281,
+        "submissions_per_spp": 18,
+        "tile_gpu_p95_ms": 7.17632,
+        "preview_p95_ms": 47.6678,
+        "cancel_p95_ms": 2.6686,
+        "owned_peak": 933558960
+      },
+      "speedup": 1.2774013135857119,
+      "comparison_exact": true
+    },
+    "spatial": {
+      "before": {
+        "tile": 64,
+        "frame_wall_ms": 120.99955,
+        "round_frame_median_ms": [
+          120.99955,
+          121.11144999999999,
+          123.3089
+        ],
+        "frame_gpu_ms": 60.545952,
+        "record_submit_ms": 39.1046,
+        "wait_poll_ms": 80.00155000000001,
+        "submissions_per_spp": 240,
+        "tile_gpu_p95_ms": 0.52048,
+        "preview_p95_ms": 119.9996,
+        "cancel_p95_ms": 2.667,
+        "owned_peak": 940931760
+      },
+      "after": {
+        "tile": 256,
+        "frame_wall_ms": 62.91975,
+        "round_frame_median_ms": [
+          71.0364,
+          62.91975,
+          65.9121
+        ],
+        "frame_gpu_ms": 51.914352,
+        "record_submit_ms": 6.26285,
+        "wait_poll_ms": 56.3604,
+        "submissions_per_spp": 24,
+        "tile_gpu_p95_ms": 7.060832,
+        "preview_p95_ms": 71.1586,
+        "cancel_p95_ms": 2.8466,
+        "owned_peak": 940931760
+      },
+      "speedup": 1.9230774121003342,
+      "comparison_exact": true
+    }
+  },
+  "desktop": {
+    "1600": {
+      "Classic MIS": {
+        "steady_delivery_median_ms": 30.8231,
+        "first_delivery_ms": [
+          13283.1882,
+          11399.2091,
+          14126.9373
+        ],
+        "owned_peak_bytes": 1127709312
+      },
+      "ReSTIR initial": {
+        "steady_delivery_median_ms": 42.6671,
+        "first_delivery_ms": [
+          75.3199,
+          55.5721,
+          74.5258
+        ],
+        "owned_peak_bytes": 1148869632
+      },
+      "ReSTIR temporal": {
+        "steady_delivery_median_ms": 232.4946,
+        "first_delivery_ms": [
+          260.3438,
+          234.3916,
+          259.4449
+        ],
+        "owned_peak_bytes": 1333189632
+      },
+      "ReSTIR temporal + spatial": {
+        "steady_delivery_median_ms": 473.6761,
+        "first_delivery_ms": [
+          446.1704,
+          429.9021,
+          447.8789
+        ],
+        "owned_peak_bytes": 1394629632
+      }
+    },
+    "2048": {
+      "Classic MIS": {
+        "steady_delivery_median_ms": 61.6262,
+        "first_delivery_ms": [
+          60.9527,
+          75.7647,
+          59.436
+        ],
+        "owned_peak_bytes": 1555356624
+      },
+      "ReSTIR initial": {
+        "steady_delivery_median_ms": 93.012,
+        "first_delivery_ms": [
+          92.2404,
+          91.1627,
+          92.4994
+        ],
+        "owned_peak_bytes": 1966595072
+      },
+      "ReSTIR temporal": {
+        "steady_delivery_median_ms": 520.7432,
+        "first_delivery_ms": [
+          508.3975,
+          511.3671,
+          505.0194
+        ],
+        "owned_peak_bytes": 2369248256
+      },
+      "ReSTIR temporal + spatial": {
+        "steady_delivery_median_ms": 1080.2914,
+        "first_delivery_ms": [
+          1018.2594,
+          1041.2024,
+          981.0744
+        ],
+        "owned_peak_bytes": 2503465984
+      }
+    },
+    "limit_bytes": 6300631040,
+    "max_cancel_observed_ms": 20.0388
+  }
+}

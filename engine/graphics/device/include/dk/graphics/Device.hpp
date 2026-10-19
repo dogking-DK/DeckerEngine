@@ -79,6 +79,7 @@ struct AdapterInfo {
     bool swapchain = false, swapchain_maintenance1 = false;
     RayTracingSupport ray_tracing;
     bool sampled_image_non_uniform_indexing = false;
+    bool memory_budget = false; // Optional VK_EXT_memory_budget, enabled for VMA when supported.
 };
 struct AdapterSelection { std::uint32_t adapter_index; std::uint32_t queue_family; };
 // Pure policy functions; no loader, instance, or GPU is needed.

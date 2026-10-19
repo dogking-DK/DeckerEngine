@@ -89,7 +89,9 @@ void PathPreview::run(std::stop_token stop) {
                 if(!queue) queue.emplace(take(graphics::SubmissionQueue::create(heap_,std::move(device_))));
                 if(!initialized) {
                     phase(active->sequence,"Compiling");
-                    renderer=take(render::PathTraceRenderer::create(heap_,*queue,DK_EDITOR_PATH_SHADER_DIR,cancel)); initialized=true;
+                    const auto limit=render::PathTraceRenderer::recommended_memory_limit(queue->device());
+                    renderer=take(render::PathTraceRenderer::create(heap_,*queue,DK_EDITOR_PATH_SHADER_DIR,cancel,limit)); initialized=true;
+                    std::lock_guard lock(mutex_); status_.gpu_memory_limit=limit;
                 }
                 const auto old_generation=configured ? take(renderer.status(1)).generation : 0;
                 std::string reset_reason=!configured ? "New view" : asset_session!=active->snapshot.state.document_id ? "Document changed" :
@@ -148,6 +150,7 @@ void PathPreview::run(std::stop_token stop) {
                 settings.sun=active->settings.sun ? render::PathTraceSun::scene : render::PathTraceSun::none;
                 settings.surface_only=active->settings.surface_only;
                 render::PathTraceSchedule schedule; schedule.session=session; schedule.target_spp=active->settings.target; schedule.gesture=active->preview;
+                schedule.tile_edge=active->settings.scene_media ? 64u : 256u;
                 schedule.paused=active->settings.paused; schedule.exposure=active->settings.exposure;
                 render::RestirDiSettings restir; restir.initial_candidates=active->settings.restir_candidates;
                 if(active->settings.restir_temporal) restir.temporal.emplace();

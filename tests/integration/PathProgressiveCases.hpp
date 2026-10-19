@@ -62,6 +62,14 @@ void progressive_images(memory::ResourceHandle heap,PathTraceRenderer& r,Submiss
     check(r.release_view(22)); check(r.reset(11));
     schedule.batch_spp=1; schedule.tile_edge=64; check(r.configure_view(q,11,gpu,view,s,schedule));
     compare_images(finish_view(r,q,11),once,0);
+    // Large dispatches, non-divisible extents and reverse traversal keep sample identity.
+    auto large_desc=view.description(); large_desc.width=257; large_desc.height=129;
+    auto large=take(RenderView::create(f.source(),large_desc));
+    schedule.target_spp=2; check(r.configure_view(q,11,gpu,large,s,schedule)); auto tiled=finish_view(r,q,11);
+    check(r.reset(11)); schedule.tile_edge=256; schedule.reverse_tiles=true;
+    check(r.configure_view(q,11,gpu,large,s,schedule)); compare_images(finish_view(r,q,11),tiled,0);
+    schedule.tile_edge=257; require(!r.configure_view(q,11,gpu,large,s,schedule),"oversize dispatch accepted");
+    require(take(r.status(11)).completed_spp==2,"invalid tile replaced completed frame"); schedule.reverse_tiles=false;
     // Extent boundary beyond the CPU oracle limit, including a short final tile.
     Fixture empty{heap}; auto sky=take(r.prepare_scene(q,empty.scene())); auto d=empty.view(empty.source()).description(); d.width=2048; d.height=2;
     auto wide=take(RenderView::create(empty.source(),d)); schedule.target_spp=2; schedule.batch_spp=2; schedule.tile_edge=63;
@@ -147,6 +155,9 @@ void progressive_failure(memory::ResourceHandle heap,PathTraceRenderer& r,Submis
     std::puts("progressive later-tile failure/retry/timeout/cancel/late release/config protection=pass");
 }
 void progressive_budget(memory::ResourceHandle heap,PathTraceRenderer&,SubmissionQueue& q) {
+    const auto recommended=PathTraceRenderer::recommended_memory_limit(q.device());
+    require(recommended>=(1ull<<20) && recommended<=PathTraceRenderer::max_memory_limit,"invalid device budget recommendation");
+    require(!PathTraceRenderer::create(heap,q,DK_PATH_SHADER_DIR,{},PathTraceRenderer::max_memory_limit+1),"oversize GPU budget accepted");
     // Generic budget survives wrapper destruction until pending uses retire, including AS scratch.
     auto budget=memory::make_shared_in<AllocationBudget>(heap,1ull<<20); auto factory=q.resources().with_budget(budget);
     auto source=take(factory.create_buffer({4096,vk::BufferUsageFlagBits::eTransferSrc,BufferMemory::upload}));

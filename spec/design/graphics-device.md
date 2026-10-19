@@ -1,7 +1,7 @@
 ---
 module: graphics-device
 created_at: "2026-09-28T16:38:00+08:00"
-updated_at: "2026-10-14T11:03:02+08:00"
+updated_at: "2026-10-20T00:19:43+08:00"
 status: accepted
 ---
 
@@ -39,6 +39,8 @@ InstanceBuilder 使用同一版本，不将 headers 的 patch 版本当作最低
 必须具有 timelineSemaphore、synchronization2、dynamicRendering、maintenance4，
 一个 queueCount > 0 且同时支持 graphics/compute 的 family（按规范也支持 transfer）。
 默认离屏模式只启用这四项 feature，创建该 family 的第 0 个队列，不要求 present 或任何 device extension。
+若设备支持 VK_EXT_memory_budget，则启用该可选扩展及 VMA 对应标志，使 heap budget/usage 包含驱动提供的预算信息；
+不支持时保留 VMA 的容量/分配估计，不影响设备选择。该数值用于应用准入留余量，不保证未来分配成功。
 M5.6 可选 SurfaceSource 在 instance 后、选卡前创建 surface，Device 保留窗口 token 并拥有 surface。
 此模式额外检查同 family 的 present、VK_KHR_swapchain 与 EXT swapchainMaintenance1，
 Device 自动补齐所需 surface/get-surface-capabilities2/surface-maintenance1 实例依赖并去重，

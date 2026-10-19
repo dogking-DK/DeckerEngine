@@ -418,12 +418,26 @@ PathTraceGpuImageInfo medium_info(const PathTraceScene& scene,const PathMediumSn
 }
 }
 
+std::uint64_t PathTraceRenderer::recommended_memory_limit(const Device& device) {
+    const auto properties=device.physical_device().getMemoryProperties();
+    std::array<VmaBudget,VK_MAX_MEMORY_HEAPS> budgets{};
+    vmaGetHeapBudgets(device.allocator(),budgets.data());
+    std::uint64_t capacity=0,available=0;
+    for(std::uint32_t i=0;i<properties.memoryHeapCount;++i) {
+        const auto& heap=properties.memoryHeaps[i];
+        if(!(heap.flags&vk::MemoryHeapFlagBits::eDeviceLocal) || heap.size<=capacity) continue;
+        capacity=heap.size;
+        const auto budget=budgets[i].budget ? std::min(std::uint64_t(budgets[i].budget),capacity) : capacity;
+        available=budget>budgets[i].usage ? budget-budgets[i].usage : 0;
+    }
+    return std::max(std::uint64_t{1}<<20,std::min({max_memory_limit,capacity/4,available/2}));
+}
 Result<PathTraceRenderer> PathTraceRenderer::create(memory::ResourceHandle heap,SubmissionQueue& queue,const std::filesystem::path& directory,std::stop_token stop,std::uint64_t memory_limit) try {
     cancelled(stop);
     if (!heap || heap.state()!=memory::ResourceState::open || !queue.device().ray_tracing_enabled())
         return std::unexpected(Error{ErrorCode::not_supported,"Path renderer requires open Memory and enabled RT"});
     auto state=memory::make_shared_in<detail::PathGpuState>(heap); state->heap=heap; state->factory=queue.resources();
-    if(memory_limit<(1ull<<20) || memory_limit>(1ull<<30)) return std::unexpected(path_invalid("Path GPU memory limit must be 1 MiB..1 GiB"));
+    if(memory_limit<(1ull<<20) || memory_limit>max_memory_limit) return std::unexpected(path_invalid("Path GPU memory limit must be 1 MiB..8 GiB"));
     state->budget=memory::make_shared_in<AllocationBudget>(heap,memory_limit);
     state->factory=state->factory.with_budget(state->budget);
     state->textured=queue.device().sampled_image_indexing_enabled();
@@ -628,7 +642,7 @@ Parameters view_parameters(const PathSceneState& cpu,const RenderView& view,cons
 }
 void validate_progressive(const PathSceneState& cpu,const RenderView& view,const PathTraceSettings& settings,const PathTraceSchedule& schedule) {
     if(!schedule.target_spp || schedule.target_spp>65536 || !schedule.batch_spp || schedule.batch_spp>16 ||
-        !schedule.tile_edge || schedule.tile_edge>64 || !std::isfinite(schedule.exposure) || std::abs(schedule.exposure)>32)
+        !schedule.tile_edge || schedule.tile_edge>256 || !std::isfinite(schedule.exposure) || std::abs(schedule.exposure)>32)
         throw path_invalid("Invalid path target, batch, tile or exposure");
     check(validate_path_view(cpu,view,2048));
     auto validation=settings; validation.max_triangle_tests=1ull<<29;
@@ -891,6 +905,11 @@ Result<bool> PathTraceRenderer::poll(SubmissionQueue& queue,std::stop_token stop
             }
             std::swap(batch->candidate->buffer,batch->scratch); batch->phase=0; batch->next_tile=0; return false;
         }
+    }
+    if(batch->candidate->info.restir && !batch->candidate->info.restir->temporal) {
+        // Only temporal reuse consumes these planes after this epoch. Retained completed
+        // frames still own their immutable accumulation and provenance, charged in full.
+        batch->candidate->surface={}; batch->candidate->reservoir={};
     }
     batch->owner->completed=std::move(batch->candidate);
     if(batch->owner->restir && batch->owner->restir->temporal) batch->owner->sampling_history=batch->owner->completed;

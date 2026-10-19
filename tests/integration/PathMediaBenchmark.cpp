@@ -308,7 +308,7 @@ int main(int argc,char** argv) {
         output["quality_wait"]="active_poll_1ms_then_block";
         output["skip_reference"]=skip_reference; output["performance_samples"]=performance_samples;
         output["reconstruction"]="none"; output["tracking_observation"]="unavailable in GPU image diagnostics";
-        require(!root.empty() && !report.empty() && edge>0 && edge<=64,"Root/output/tile required"); std::filesystem::create_directories(report.parent_path());
+        require(!root.empty() && !report.empty() && edge>0 && edge<=256,"Root/output/tile required"); std::filesystem::create_directories(report.parent_path());
         output.update({{"kind",quality ? "quality" : "performance"},{"validation",(quality && !timing_quality) || smoke},{"smoke",smoke},{"tile",edge},
             {"model",4},{"sampler",2},{"time",17},{"bounces",4},{"configuration",DK_BENCH_CONFIG}});
         run(root,shaders,output,quality,smoke,edge); output["status"]="passed";

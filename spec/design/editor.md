@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-19T17:07:00+08:00"
+updated_at: "2026-10-20T00:19:43+08:00"
 status: accepted
 ---
 
@@ -39,12 +39,12 @@ Sponza worker探针分别记录首次与稳态完整帧、云首帧/收敛帧、
 
 编辑场景视口提供Raster/Path trace显式切换；Path trace显示实际completed/target spp、阶段、暂停/继续、
 Reset、seed、反弹、环境RGB、太阳和曝光EV。设置为会话状态，不写Scene/Undo；Surface only 明确忽略空气/云，Scene media 使用统一介质路径。
-构建未启用或设备RT未启用时显示原因，不退回光栅冒充路径图。默认目标64spp，batch=1，tile≤64。
+构建未启用或设备RT未启用时显示原因，不退回光栅冒充路径图。默认目标64spp，batch=1；Surface only tile≤256，Scene media tile≤64。
 窗口设备在启用模块的构建请求RT和纹理索引if_available，不切模式重建设备；windows-editor预设启用路径模块。
 
 正常启动的默认Sponza也属于预览验收范围。路径视口显式使用与光栅相同的unlit_preview导入配置，
 保留base color、mask、双面、金属度/粗糙度常量，面板说明不导入法线/AO/金属粗糙度纹理和切线。
-路径场景允许100万三角形、4096 primitive、64张纹理和128MiB RGBA8源数据，GPU仍受1GiB实际分配额度约束；
+路径场景允许100万三角形、4096 primitive、64张纹理和128MiB RGBA8源数据，GPU使用[路径追踪推荐额度](render-pathtracing.md#预算取消与交互)，面板显示实际额度；
 CPU参考默认额度不变。失败不替换已显示图像；切换到大气时默认模型穿过地面的包围盒不应拒绝整帧。
 几何变化先校验CPU候选，再在旧提交排空后退休旧路径history/GPU场景，避免两套大场景同时占据预算；
 环境变化保留几何 owner，校验内容后复用 AS；
@@ -339,7 +339,7 @@ Console 不阻塞等待 Job（jobs.wait 只允许 timeout_ms=0），用户通过
 同资产、相同世界实例/引用的环境版本复用 CPU 路径几何，并通过 renderer 相同几何owner复用 AS；源重绑失败不发布候选。相机变化不重建几何。
 Scene media 相机移动期间长边192像素，面板显示 Motion preview 和实际 Shown size；停动200ms恢复完整请求尺寸并从样本0累积。相机请求等待完整预览，渲染阶段最多100ms后替换；冷编译/导入期间合并相机输入，不反复取消准备工作，物理变更/刷新立即失效，不混合尺寸历史。
 请求合并和失效规则保持document/revision/物理参数边界，迟到帧保留实际相机与尺寸并标旧来源；完整新视角与GUI帧循环分别测量。
-性能观测使用独立开关，GPU时间戳/VMA读取只在测量时启用；所有阶段遵守原1GiB renderer预算，取消返回与GPU回收分别记录。
+性能观测使用独立开关，GPU时间戳/VMA统计只在测量时启用；初始化读取一次heap预算选择renderer额度，取消返回与GPU回收分别记录。
 
 Suspend 通知立即唤醒 worker；排空在途提交后才报告 Suspended，不将 cancel 调用返回作为 GPU 回收完成。
 

@@ -27,6 +27,7 @@ struct PathPreviewRequest {
 };
 struct PathPreviewStatus {
     std::uint64_t sequence=0;
+    std::uint64_t gpu_memory_limit=0;
     render::PathTraceProgress progress;
     std::string phase="Idle",error,reset_reason="No completed configuration";
 };

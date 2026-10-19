@@ -77,7 +77,7 @@ private:
     std::shared_ptr<const detail::PathGpuFrame> state_;
 };
 struct PathTraceSchedule {
-    std::uint32_t target_spp = 256, batch_spp = 1, tile_edge = 64;
+    std::uint32_t target_spp = 256, batch_spp = 1, tile_edge = 64; // Explicit tile edge: 1..256.
     std::uint64_t session = 0, gesture = 0;
     bool paused = false;
     double exposure = 0; // Display-only metadata; linear history is unchanged.
@@ -119,6 +119,9 @@ struct PathTraceMemoryStats {
 class PathTraceRenderer final {
 public:
     static constexpr std::uint32_t restir_max_candidates_per_invocation = 1u << 18;
+    static constexpr std::uint64_t max_memory_limit = std::uint64_t{8} << 30;
+    // Conservative startup policy; includes headroom for other users of the device.
+    [[nodiscard]] static std::uint64_t recommended_memory_limit(const graphics::Device&);
     PathTraceRenderer() = default;
     [[nodiscard]] static Result<PathTraceRenderer> create(memory::ResourceHandle, graphics::SubmissionQueue&,
         const std::filesystem::path& shader_directory, std::stop_token = {},

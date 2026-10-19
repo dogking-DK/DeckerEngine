@@ -1,0 +1,36 @@
+{
+  "baseline": {
+    "source_commit": "f1e5734",
+    "benchmark_sha256": "858641c47c7830c72740a1ab05eb646c13c5c69ee61e62f4a4636f1a73fa8a21",
+    "configuration": "Release",
+    "device": "NVIDIA GeForce RTX 5090 D v2",
+    "driver": "610.88",
+    "tile": 64,
+    "width": 640,
+    "height": 360,
+    "rounds": 3,
+    "validation": false,
+    "gpu_timestamps": true,
+    "obs_capture_disabled": true
+  },
+  "after_measurement_exe_sha256": "13ddf2ccb60cc0fbb0c2a8f9a331dac278dd1b171a46ceb324bce1e8b4c822b3",
+  "final_exe_sha256": "e65070f1e2ff219c9881cad0a78219e7f7c3d7e7e2255cb55d158daf636e1c07",
+  "source_sha256": {
+    "engine/editor/src/PathPreview.cpp": "ac17fa878c8dd30a4a7290046c90837f6fd35cb662aa1bbb5865eb1e95e7ba80",
+    "engine/editor/src/PathPanel.cpp": "df97b48a8b155373d36f31de7923b176aa218888e8cc1644f504e83b9a62facc",
+    "engine/editor/src/PathPreview.hpp": "e5c7be10bc7848cb347bdb66e0b448336cc7e9d0072c66cd6828ed413bc6bac5",
+    "engine/graphics/device/src/Device.cpp": "208254c83762c953b955b43284ed3482681f0ff1e7ccae4786cf0c6f2e2679c9",
+    "engine/graphics/device/include/dk/graphics/Device.hpp": "5d5e5ca89dadf3f4e8a258bae4c8e2f85367adf201b1df018456ffc9b3feb092",
+    "engine/render/pathtracing/src/PathTraceRenderer.cpp": "7b7966bc7790b619b34a96a31d51897b8e3c968a0c9f224b2dcc0012448bde9c",
+    "engine/render/pathtracing/include/dk/render/PathTraceRenderer.hpp": "cb3a708520ac2ca6cffbd5cf4f78dab760be1849f2229865a6faf0b183386b97"
+  },
+  "note": "Final rebuild only spells the lower clamp bound as uint64_t rather than ull; these are identical types on this MSVC build. Performance runs preceded that portable type spelling fix.",
+  "compiler": "MSVC 19.51.36256.0; VS2026 18.9.1",
+  "cmake": "4.2.1",
+  "vcpkg_baseline": "33d78c1ed898a06938f31312167c7abefd229455",
+  "gpu": "NVIDIA GeForce RTX 5090 D v2",
+  "driver": "610.88",
+  "cpu": "AMD Ryzen 9 9950X3D",
+  "memory_budget_extension": true,
+  "validation_performance": false
+}

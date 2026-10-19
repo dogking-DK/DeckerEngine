@@ -67,7 +67,8 @@ void WorkbenchUi::path_panel(Viewport& preview) {
     ImGui::Text("Tiles %u / %u  |  shown %u spp",p.completed_tiles,p.total_tiles,preview.path_samples());
     if(!status.error.empty()) ImGui::TextWrapped("%s",status.error.c_str());
     ImGui::TextWrapped("Preview imports base color textures and material factors. Normal, occlusion and metallic-roughness textures and tangents are omitted.");
-    ImGui::TextWrapped("Limits: 1 million triangles, 64 textures / 128 MiB source pixels, 1 GiB GPU budget. Exposure preserves accumulated samples.");
+    if(status.gpu_memory_limit) ImGui::Text("GPU budget: %.2f GiB",double(status.gpu_memory_limit)/(1ull<<30));
+    ImGui::TextWrapped("Limits: 1 million triangles, 64 textures / 128 MiB source pixels. GPU budget follows device capacity. Exposure preserves accumulated samples.");
     ImGui::End();
 }
 }

@@ -1,14 +1,15 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-19T23:40:34+08:00"
+updated_at: "2026-10-20T00:19:43+08:00"
 status: accepted
 ---
 
 # 渐进式路径追踪管线设计
 
 编辑器worker在tile提交后以≤1ms的GPU完成票据等待推进，不在每块间固定sleep；GUI不等待该票据。
-更快的提交调度保持tile≤64、batch=1和原样本序号、累积、取消与1GiB预算；性能证据见[0122](../development/0122-editor-render-performance.md)。
+batch=1，表面预览tile≤256、介质预览tile≤64，保留原样本序号、累积与取消约定；
+预算按设备留余量，早期等待优化见[0122](../development/0122-editor-render-performance.md)，桌面吞吐与预算调整见[0142](../development/0142-path-preview-throughput.md)。
 
 ## 目标与范围
 
@@ -252,11 +253,11 @@ shader以全局xy/pixel及连续sample采样，tile仅改变调度，不改变�
 completed_frame返回拥有型只读GPU缓冲，显示无需读回；显式read_linear才提交全帧读回。
 poll仅读4字节tile错误标志，非有限/负辐射或历史样本计数不一致均拒绝发布。
 
-冻结尺寸1..2048、batch 1..16、target 1..65536，tile边长1..64（默认64）；
+冻结尺寸1..2048、batch 1..16、target 1..65536，tile边长1..256（默认64）；
 按max_rays及保守visibility上界自动缩小tile，每次提交不超过2^24射线；
 整个目标的保守工作量不超过2^32，超限拒绝，无静默降低spp/反弹/尺寸。
 CPU参考仍限制64²，GPU不以CPU暴力三角测试额度限制硬件遍历。
-renderer自有VMA分配默认上限1GiB，可在create时收紧，至少1MiB；
+renderer自有VMA分配默认上限1GiB，create允许显式1MiB..8GiB；Editor按设备推荐政策选择；
 资源工厂共享额度按驱动memory requirements先预留、分配失败回滚，实际owner销毁后释放；
 几何、纹理、AS storage/scratch、SBT、候选/历史、读回、在途及外部旧帧全部计入。
 统计报告额度当前/峰值及host-visible/device-local分配字节；VMA全设备block/allocation统计单列，
@@ -306,7 +307,7 @@ min_filter及mip模式保留来源但在本阶段不参与采样。nearest取flo
 双线性插值，RGB每个texel先按IEC sRGB解码，alpha不解码；repeat/clamp/mirrored_repeat按各轴独立处理。
 GPU上传前解码为RGBA32F线性纹理，再用硬件过滤；这与sRGB先解码再过滤的数学语义一致。
 实测本机RGBA8-sRGB硬件解码误差超过冻结nearest门槛，故保留门槛并采用显式标准解码，
-不将近似误差吞入容差。GPU图像与上传各为源RGBA8的四倍，desktop上限各512MiB；M16.8统一实际显存准入仍为1GiB，最大纹理与几何额度不保证同时装入。
+不将近似误差吞入容差。GPU图像与上传各为源RGBA8的四倍，desktop上限各512MiB；统一实际显存准入默认1GiB，Editor按设备选择额度，最大纹理与几何额度不保证同时装入。
 UV准入绝对值不超过1e6，避免整数转换溢出；CPU使用double作为数值参考，GPU使用float。
 alpha乘factor后以float比较，严格小于cutoff才剔除，等于保留；opaque忽略alpha。
 radiance和visibility使用同一mask/背面规则。mask发光面light PDF为0，BSDF命中权重1，
@@ -573,9 +574,13 @@ M16.8冻结限制：GPU渐进图像≤2048²，CPU 参考≤64²；每批 1..16 
 不自动降低 spp、反弹数或尺寸。单条 trace 的实际耗时仍与几何/any-hit 数有关，不能将计数预算视为毫秒硬上限。
 固定descriptor数组容量64，受实际设备 limits 限制，超出资产须明确拒绝，不截断纹理。
 
-renderer自有GPU分配预算冻结为1GiB，包含几何复制、AS、scratch、纹理、历史/候选/读回及在途旧代。
-每像素历史128字节，单张2048²为512MiB；新旧两张已占1GiB，故此尺寸续批需明确报告额度不足，
-不能保证所有维度、场景和外部持有组合均可用。GPU显示图像与参数沿同一额度，外部显示owner也继续计费。
+renderer自有GPU分配预算默认1GiB，允许显式1MiB..8GiB，包含几何复制、AS、scratch、纹理、历史/候选/读回及在途旧代。
+Editor创建worker时使用推荐额度：最大device-local heap容量的四分之一、该heap当前可用预算的一半、8GiB三者取小；
+VMA预算不可用时按heap容量扣除已知usage计算，结果至少1MiB。额度冻结到renderer销毁，不随空闲量变化扩大。
+每像素历史128字节，单张2048²为512MiB；默认1GiB仍可能拒绝续批。不能保证所有尺寸、场景和外部持有组合均可用。
+GPU显示图像与参数沿同一额度，外部显示owner也继续计费。推荐额度是应用准入政策，不是驱动分配成功保证。
+Surface only编辑器tile上限256以减少每tile资源准备、Graph编译和同步等待；Scene media保持64。
+射线/候选工作上界仍进一步拆分，随机计数器、完整帧提交点、单在途票据和取消保护不变。
 记录owned allocation当前/峰值及host-visible/device-local（可重叠）；全设备VMA allocation/block单列。
 CPU输入沿资产/Memory额度；driver隐藏pipeline/descriptor开销不可观测。额度是准入上限，未证明交互性能。
 

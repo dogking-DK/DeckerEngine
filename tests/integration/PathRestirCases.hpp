@@ -143,6 +143,16 @@ void restir_schedule(memory::ResourceHandle heap,PathTraceRenderer& r,Submission
             close_color(actual.linear_rgb()[0],oracle.mean,.02*oracle.mean.norm()+1e-4);
         }
     }
+    auto large_desc=f.view(f.source(),257).description(); large_desc.height=129;
+    auto large=take(RenderView::create(f.source(),large_desc));
+    for(unsigned mode=0;mode<4;++mode) {
+        RestirDiSettings ris;
+        if(mode&1) ris.temporal.emplace(); if(mode&2) ris.spatial.emplace();
+        PathTraceSchedule tiles; tiles.target_spp=2; tiles.batch_spp=2;
+        check(r.configure_restir_view(q,71,gpu,large,s,ris,tiles)); auto baseline=finish_view(r,q,71); check(r.release_view(71));
+        tiles.tile_edge=256; tiles.reverse_tiles=true;
+        check(r.configure_restir_view(q,71,gpu,large,s,ris,tiles)); compare_images(finish_view(r,q,71),baseline,0); check(r.release_view(71));
+    }
     Fixture sky{heap}; auto empty=take(r.prepare_scene(q,sky.scene())); auto view=sky.view(sky.source(),3);
     PathTraceSchedule schedule; schedule.target_spp=3; schedule.batch_spp=2; schedule.tile_edge=2;
     check(r.configure_restir_view(q,71,empty,view,s,{},schedule));
@@ -192,10 +202,10 @@ void restir_state(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQue
     check(bounded.configure_restir_view(q,1,small,view,s,{},schedule)); finish_view(bounded,q,1); auto old=bounded.completed_frame(1);
     const auto owned=bounded.memory_stats(q).owned.current; check(bounded.release_view(1));
     require(bounded.memory_stats(q).owned.current==owned,"external completed owner not charged"); old={};
-    require(bounded.memory_stats(q).owned.current+224*16<=owned,"RIS plane owner did not release bytes");
+    require(bounded.memory_stats(q).owned.current+128*16<=owned,"RIS image owner did not release bytes");
     // Candidate rejection caused by external full-frame owners must be recoverable.
     schedule.target_spp=2; schedule.batch_spp=2; schedule.tile_edge=64;
-    auto medium_view=f.view(f.source(),32); check(bounded.configure_restir_view(q,1,small,medium_view,s,{},schedule)); advance_view(bounded,q,1);
+    auto medium_view=f.view(f.source(),40); check(bounded.configure_restir_view(q,1,small,medium_view,s,{},schedule)); advance_view(bounded,q,1);
     auto first=bounded.completed_frame(1); check(bounded.reset(1)); advance_view(bounded,q,1);
     auto second=bounded.completed_frame(1); check(bounded.reset(1)); advance_view(bounded,q,1);
     const auto retained=bounded.completed_frame(1).linear_buffer(); schedule.target_spp=4;

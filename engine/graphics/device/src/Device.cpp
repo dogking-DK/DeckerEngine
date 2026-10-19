@@ -353,6 +353,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
             if (name == VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) rt.acceleration_structure_extension = true;
             if (name == VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) rt.ray_tracing_pipeline_extension = true;
             if (name == VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME) rt.deferred_host_operations = true;
+            if (name == VK_EXT_MEMORY_BUDGET_EXTENSION_NAME) info.memory_budget = true;
         }
         // Old physical devices are still reported/rejected, but must not receive
         // feature/property structures introduced after their advertised API.
@@ -448,7 +449,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     device_info.pNext = &features12;
     device_info.queueCreateInfoCount = 1;
     device_info.pQueueCreateInfos = &queue_info;
-    std::array<const char*, 5> device_extensions{};
+    std::array<const char*, 6> device_extensions{};
     std::uint32_t extension_count = 0;
     if (presentation) {
         device_extensions[extension_count++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
@@ -459,6 +460,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
         device_extensions[extension_count++] = VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME;
         device_extensions[extension_count++] = VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME;
     }
+    if (impl->info.memory_budget) device_extensions[extension_count++] = VK_EXT_MEMORY_BUDGET_EXTENSION_NAME;
     device_info.enabledExtensionCount = extension_count;
     device_info.ppEnabledExtensionNames = extension_count ? device_extensions.data() : nullptr;
     PendingDevice pending_device{VK_NULL_HANDLE, destroy_device};
@@ -499,6 +501,7 @@ Result<Device> detail::DeviceAccess::create(memory::ResourceHandle resource, con
     allocator_info.device = static_cast<VkDevice>(*impl->device);
     allocator_info.vulkanApiVersion = device_api_version;
     if (impl->ray_tracing) allocator_info.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    if (impl->info.memory_budget) allocator_info.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
     allocator_info.pVulkanFunctions = &functions;
     result = impl->allocator.api.create(&allocator_info, &impl->allocator.handle);
     if (result != VK_SUCCESS) { impl->allocator.handle = VK_NULL_HANDLE; return std::unexpected(vk_error("vmaCreateAllocator", result)); }

@@ -994,6 +994,10 @@ if(TARGET dk_editor_app AND TARGET dk_render_pathtracing AND TARGET dk_ctl AND W
             "${PROJECT_SOURCE_DIR}/projects/demo" "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/media-worker" --media --validation)
         add_test(NAME dk.editor.restir_worker_gpu_validation COMMAND dk_editor_render_benchmark
             "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk" "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/restir-worker" --restir --validation)
+        add_test(NAME dk.editor.restir_desktop_gpu_validation COMMAND dk_editor_render_benchmark
+            "${PROJECT_SOURCE_DIR}/projects/demo" "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/restir-desktop" --desktop-path --validation)
+        set_tests_properties(dk.editor.restir_desktop_gpu_validation PROPERTIES TIMEOUT 600 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
         set_tests_properties(dk.editor.restir_worker_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
         set_tests_properties(dk.editor.media_worker_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"

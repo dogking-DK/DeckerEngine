@@ -9,6 +9,13 @@
 真实worker补测192×108的完整新相机显示、环境变更、取消至排空；后台GUI持续拖动2秒，检查低尺寸期间持续产生新来源，停动恢复原尺寸。
 临时预览与完整图使用相同介质模型，尺寸改变重置历史；不能用预览时间证明640×360或生产尺寸达到固定质量。
 
+0142 的表面预览调度对照允许显式 `--tile 256`；历史 M17/M19.8 固定基准仍用64，不能混合聚合。
+例如 `dk-pathmedia-benchmark --root projects/demo --case surface --algorithm initial --tile 256 --full-preview --output out/preview/initial.json`。
+默认场景实际 worker 入口为 `dk-editor-render-benchmark projects/demo out/preview/desktop --desktop-path`，
+在1600×1200和2048²下依次切换 Classic/initial/temporal/spatial，记录连续采样、显存和取消恢复。
+加 `--validation` 启用 required validation；对应 CTest 为 `dk.editor.restir_desktop_gpu_validation`，需要 demo 素材和足够的设备额度。
+该 worker 使用真实默认相机与 Editor 预算/调度，但没有窗口合成，不作为 GUI 帧率；有验证层的结果不作为关闭验证层的性能数据。
+
 冻结4反弹/RR3、model4/sampler2、时间17、曝光0、种子101+7919*i（i=0..7）；surface是model3/sampler1的独立开销对照。
 负载涵盖庭院、天空、clear/sparse/overcast、低太阳、雾、云内、云上方。原始JSON保存环境、相机、几何hash和字段hash。
 优化前后另存32×18/4 spp线性RGB及二阶矩，绝对差不得超过1e-6。
