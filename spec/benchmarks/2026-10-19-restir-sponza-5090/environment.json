@@ -1,0 +1,39 @@
+{
+  "timestamp": "2026-10-19T22:07:04.381545+08:00",
+  "cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+  "os": "Microsoft Windows NT 10.0.26200.0",
+  "gpu": "NVIDIA GeForce RTX 5090 D v2",
+  "driver": "610.88",
+  "vram_mib": 24455,
+  "compiler": "MSVC 19.51.36256.0",
+  "cmake": "4.2.1",
+  "python": "3.12.14",
+  "vulkan_sdk": "1.4.328.1",
+  "vulkan_headers": "1.4.357.0",
+  "configuration": "Release",
+  "profiling": false,
+  "vcpkg_baseline": "33d78c1ed898a06938f31312167c7abefd229455",
+  "process_environment": {
+    "DISABLE_VULKAN_OBS_CAPTURE": "1"
+  },
+  "runtime_dll_sha256": {
+    "fastgltf.dll": "4429d5ea9306f3c0661b84e21325c7247320247f3fd08a72b749ba7876cde625",
+    "flecs.dll": "3472c1fbdf5febe6aef9f64e092a1ec0df1b2f02d34283bbe1cd5c109e03355f",
+    "mimalloc.dll": "175231d580444a1c5733b31954aeec355e69d4d3a0583d630813e500f35350a5",
+    "simdjson.dll": "d34e7697cfe5761e83625b97c8031edd4b53c7c02267a0794e2f6c81233a3eef",
+    "slang-compiler.dll": "47a55cd15c080d72f1e3a04c8164780acb84e55e6f91302c8834933496944144",
+    "slang-glslang.dll": "13223344fdd945f60c091885d3c219b09a737735fc9fc185394588210c5c28ba",
+    "xxhash.dll": "43e72c77d0f73da1e66558a0e754e04c811e223a88f25833bb36896f3d231a4a"
+  },
+  "source_commit": "3202043e583420c7e623c23dbc90ef78769871ce",
+  "source_sha256": {
+    "tests/integration/PathMediaBenchmark.cpp": "8742e4811960f7b64533af0e06aa0b4925e10f50659f468d75e06cb71ad16340",
+    "tests/integration/PathBenchmarkSupport.hpp": "ffad7dc825726ff4141111b898c66954195441bd927c3be631df405c037f285f",
+    "scripts/benchmark-restir-sponza.py": "9c4c75bd3b098a753b62e37f39f1654a7a0c0b487fdcda370c523e098d0c384f",
+    "scripts/benchmark-path-media.py": "1d46c73cab1b5d77df0fb96af280fd32d0836e4f186365d7b7ff756bd9769b18",
+    "tests/integration/RestirSponzaBenchmarkTest.py": "2b9fe357adeef42d0f750451e421919eb86ff43afa3f08111c1360b32932af84",
+    "CMakePresets.json": "0ec6a9c476cc604e81b3efa3aa4e83d99e66c3baf80436dae72a5bf60257e64e",
+    "vcpkg.json": "886e642c22dd3a646a71feb8fae45f740dac54948094c8c66ffaa5954cf4e1e0",
+    "vcpkg-configuration.json": "e98fdf505a0363392b92cdff38c8997501158271441aaca50e12aeda0f86c6f2"
+  }
+}

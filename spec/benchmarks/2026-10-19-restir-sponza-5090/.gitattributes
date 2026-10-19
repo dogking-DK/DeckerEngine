@@ -1,0 +1,3 @@
+validation/*.txt text eol=lf
+validation/*.xml text eol=lf
+*.gz binary

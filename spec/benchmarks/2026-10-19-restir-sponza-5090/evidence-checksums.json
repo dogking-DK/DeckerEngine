@@ -1,0 +1,10 @@
+{
+  "environment.json": "5cb6d461c944375319e90c53ae20df65b1347cc87e8dc2be58b5a5e88f370e2e",
+  "validation/build.txt.gz": "e8b98bd123bb1ae35bd5367f33067234d9d3f388f63bdc1c99e741b402d55baa",
+  "validation/collection.txt": "f95db86f082a5ae40f96486fbf192b146878ba783d067ee8d1ac1887f590c507",
+  "validation/configure.txt.gz": "124c600b3a75bd004df43ae19c376e23a343217ffa966d8055c467d5f6bdd778",
+  "validation/discovery.json.gz": "99786342b86b3ac99dd2e25ae825936f451ffd9c6aeeb315e09e3fc8851267a2",
+  "validation/results.xml": "09506ffdf1021ab0a6cb256df91dcb67e28714a01400af4a0ba439a874236474",
+  "validation/summary.json": "d4497de146509c030f8ad4357a113f1b1c6f7d2a9dd879d27a08c8b4131df012",
+  "validation/tests.txt": "65c80dedd9f0999a6ef23da687a209f6a018aa618ab4ab08d4d7d523aa0a6331"
+}

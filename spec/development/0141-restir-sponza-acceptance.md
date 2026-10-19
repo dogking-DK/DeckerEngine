@@ -1,8 +1,8 @@
 ---
 id: "0141"
 created_at: "2026-10-19T18:28:00+08:00"
-updated_at: "2026-10-19T20:02:34+08:00"
-status: in-progress
+updated_at: "2026-10-19T23:45:12+08:00"
+status: completed
 design_refs:
   - ../design/render-restir.md
   - ../design/render-pathtracing.md
@@ -14,7 +14,7 @@ design_refs:
 
 ## 实施与验证
 
-已扩展既有 [介质基准](../../tests/integration/PathMediaBenchmark.cpp)，保持旧默认入口，增加四种模式、实际配置/历史来源、完整线性图像、长链 GPU/wall 计时、640×360 相机移动与停动恢复。独立 [采集/聚合脚本](../../scripts/benchmark-restir-sponza.py)核对冻结输入、三轮身份、8 seed 链、缺失/非有限时间与图像；参考未认证、阶梯未达、交互未达均单列。默认仍为 Classic MIS；最终验收与策略结论待剩余质量数据完成。
+已扩展既有 [介质基准](../../tests/integration/PathMediaBenchmark.cpp)，保持旧默认入口，增加四种模式、实际配置/历史来源、完整线性图像、长链 GPU/wall 计时、640×360 相机移动与停动恢复。独立 [采集/聚合脚本](../../scripts/benchmark-restir-sponza.py)核对冻结输入、三轮身份、8 seed 链、缺失/非有限时间与图像；参考未认证、阶梯未达、交互未达均单列。新机完整验收已完成，最终策略保持 Classic MIS，结果见下文及[报告](../benchmarks/2026-10-19-restir-sponza.md)。
 
 首次沙箱构建停在 MSBuild 启动阶段，已取消；沙箱外构建成功。`20261019-183532-a036e836` 中旧聚合 1 项通过，4 个 GPU 烟测因本机 AMD switchable layer API 版本 warning 失败；按既有进程级兼容变量复验，不降低诊断要求。新聚合 Python 单元 6 项独立运行通过。随后 20261019-183928-52520022 的 13 项定向检查通过；20261019-184421-53bb0988 中 6 项通过，新增质量烟测发现 seed 结束与场景结束重复 release_view。修复后仅重跑失败用例，20261019-184553-03221839 通过。合计 14 个唯一定向 CTest 通过，无最终失败/跳过；正式三轮性能已完成；质量链按下述交接状态暂存。
 
@@ -47,9 +47,31 @@ design_refs:
 
 进度归档校验通过：40 份已完成进程报告、12 份缺失任务显式列出，120 幅图像按内容去重为 119 份，总量约 86 MiB；逐文件 hash、图像尺寸/有限性和等待对照通过。`check-spec.ps1 -Path` 定向检查 8 个 Markdown / 745 个本地链接及全局索引/测试入口通过，`git diff --check` 通过。
 
-## 新电脑接续顺序
+## 新电脑接续（2026-10-19）
 
-1. 读取本记录、[ReSTIR 实施契约](../design/render-restir.md#m198-sponza-验收实施契约)、[性能草稿](../benchmarks/2026-10-19-restir-sponza.md)及进度归档 README。继续使用 0141，不新建重复记录。
+当前 CPU Ryzen 9 9950X3D，GPU NVIDIA GeForce RTX 5090 D v2 / 610.88，VS2026 18.9.1、MSVC 19.51.36256.0（工具目录 14.51.36231）、CMake 4.2.1、Vulkan SDK 1.4.328.1。系统 Python 仅有未安装解释器的启动器，使用本机 Python 3.12.14，并通过忽略的 CMakeUserPresets.json / windows-editor-local 显式指定。
+
+vcpkg 最初缺少项目 baseline；仅 fetch 后旧 checkout 仍没有所需版本数据库。已确认无本地修改，再快进到固定 33d78c1e 并 bootstrap，24 个依赖安装与 configure 成功，未修改依赖清单或版本。Sponza 从原公开来源恢复 74 文件 / 53,606,207 字节，与旧归档逐文件 SHA-256 一致，70 个外部 URI 完整；HDR/天空盒不被本阶段使用，未恢复。具体操作补入[构建指南](../guides/build.md#新机器接续)与[素材说明](../../projects/demo/assets/README.md)。
+
+本机 vulkaninfo 检出 OBS 捕获层 API 版本警告，按其 JSON 的 disable_environment 在子进程设置 DISABLE_VULKAN_OBS_CAPTURE=1 后警告消失；未设置旧机 AMD 兼容变量，required Khronos/sync 保留。Release 基准与 probe 已构建成功，`out/verify/20261019-220424-f1bdb0b1` 的 14 项检查全部通过（12 GPU、2 聚合；0 失败/0 跳过，CTest 550.26s）。其中介质支持域 CPU oracle/GPU 长链用例 371.92s，通过后才开始正式采集。额外独立运行的 7 个报告拒绝 Python 单元通过；首轮文档检查 6 文件 / 86 本地链接通过。
+
+正式采集使用新目录 `out/restir-sponza-5090`，于 22:15:54–23:35:26 完成 12 个性能进程与 40 个质量进程，无失败、重试或删除轮次；严格聚合成功。`--archive spec/benchmarks/2026-10-19-restir-sponza-5090` 随后生成并立即离线复算成功。保存 52 份报告、120 幅完整线性图像（119 份去重文件），连同环境和验证证据约 87.2 MiB，见[完整归档](../benchmarks/2026-10-19-restir-sponza-5090/README.md)。附加证据哈希另行校验通过。旧机性能草稿另存为[4070 历史报告](../benchmarks/2026-10-19-restir-sponza-4070-progress.md)，旧机数据保留，不混用计时。
+
+本机个人预设为 `windows-editor-local`；`out/enter-decker.ps1` 可在 PowerShell 中 dot-source，临时提供 Python PATH 和本机 OBS 兼容变量，已验证 Python 3.12.14。它们属于忽略的本地配置，不写入共享路径或修改系统 PATH。绘图依赖仅安装在 out/plot-deps，生成报告图表并人工检查，无引擎依赖变化。
+
+## 最终结果与交付范围
+
+- 仅 cloud-inside/cloud-above 的 N/4N 参考通过 0.5%：0.3738% / 0.3716%。四模式均在 16384 spp 达到 2%，ReSTIR 等误差加速比 0.357–0.581×，未达 2×；其余八组保持未认证和 null 时间/加速比。
+- 40 个模式/场景的 4096→16384 误差均下降、RGB 均值均满足两项界限；未认证参考下只作描述性检查，不证明全尺寸质量。共同实测预算下 ReSTIR 误差均高于 Classic。
+- 三项交互同时达标为 Classic 6/10、initial 7/10、temporal 2/10、spatial 0/10；tile 与取消均达标。Classic 第二轮 surface 和 spatial 第一轮等存在明显预览波动，原样保留，不将原因归给未经定位的组件。
+- owned peak 最大 897.342 MiB，满足 1GiB；所有进程 CPU/VMA 活分配为 0、诊断错误/警告为 0。运动 epoch 连续，停动恢复到 16 spp，历史界限与来源通过聚合。
+- M19.8 与 M19 测量流程完成，默认仍为 Classic MIS，ReSTIR 显式可选。没有修改生产 shader、物理模型、采样门槛或默认算法；下一步为参考收敛和成本归因，不提前宣称 GI/PT/DLSS 已实现。
+
+新机 required 验证使用 Release，目标 dk_pathmedia_benchmark / dk_pathtracing_probe，14 项筛选与复现命令完整保存在[验证摘要](../benchmarks/2026-10-19-restir-sponza-5090/validation/summary.json)和[报告](../benchmarks/2026-10-19-restir-sponza.md#复现)。未运行全工程、Debug 矩阵、独立 CPU-only 或本阶段 GUI/capture 回归；本轮未改生产代码。最终文档检查通过 13 份 Markdown、851 个本地链接及全局索引/测试入口/JSON；归档说明补充后 2 份 / 24 链接复验通过。首次暂存检查发现原始工具输出的行尾空白，改为 gzip 保留原始字节；其余附加日志使用不被忽略的 txt，摘要文本通过 attributes 固定 LF，避免跨机换行转换破坏哈希。修正后 git diff --cached --check 通过，直接读取 Git 暂存 blob 的 181 个核心/附加文件 SHA-256 全部匹配；2 份文档 / 24 链接复验通过。
+
+## 换机前交接清单（历史）
+
+1. 读取本记录、[ReSTIR 实施契约](../design/render-restir.md#m198-sponza-验收实施契约)、[性能草稿](../benchmarks/2026-10-19-restir-sponza-4070-progress.md)及进度归档 README。继续使用 0141，不新建重复记录。
 2. 按[构建指南](../guides/build.md)准备 VS2026/CMake/vcpkg/Vulkan 环境，配置 `cmake --preset windows-editor`；构建 `dk_pathmedia_benchmark` 和定向验证所需的 `dk_pathtracing_probe`，运行受影响 smoke/数值回归。AMD switchable layer 的进程兼容变量仅在该机需要时设置，Khronos/sync 验证仍必须保留。
 3. 换硬件、驱动或重建程序后，使用全新输出目录，重新采集完整三轮性能和四模式质量。不要把本机已完成报告拼接成新机器的一套计时；manifest 二进制和设备/驱动来源必须一致。同机同二进制原目录才可使用 `--resume`。
 4. 用草稿中的命令完成采集，执行 `--summarize`，核对参考认证、独立链均值、4096→16384 趋势、相机停动与有限历史。未达保持未达，未认证保持 null；不要为了完成阶段降低阈值或关闭 pass。

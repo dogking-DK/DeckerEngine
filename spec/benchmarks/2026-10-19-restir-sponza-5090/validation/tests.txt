@@ -1,0 +1,36 @@
+Test project E:/code/code_file/DeckerEngine/out/build/windows-editor
+      Start  42: dk.pathtracing.restir_medium_numeric_gpu_required
+ 1/14 Test  #42: dk.pathtracing.restir_medium_numeric_gpu_required ......   Passed   32.46 sec
+      Start  44: dk.pathtracing.restir_medium_cloud_gpu_required
+ 2/14 Test  #44: dk.pathtracing.restir_medium_cloud_gpu_required ........   Passed   49.39 sec
+      Start  45: dk.pathtracing.restir_medium_reuse_gpu_required
+ 3/14 Test  #45: dk.pathtracing.restir_medium_reuse_gpu_required ........   Passed   23.90 sec
+      Start  47: dk.pathtracing.restir_medium_state_gpu_required
+ 4/14 Test  #47: dk.pathtracing.restir_medium_state_gpu_required ........   Passed    1.78 sec
+      Start  49: dk.pathtracing.restir_medium_support_gpu_required
+ 5/14 Test  #49: dk.pathtracing.restir_medium_support_gpu_required ......   Passed  371.92 sec
+      Start  54: dk.pathtracing.restir_spatial_numeric_gpu_required
+ 6/14 Test  #54: dk.pathtracing.restir_spatial_numeric_gpu_required .....   Passed   12.49 sec
+      Start  59: dk.pathtracing.restir_temporal_numeric_gpu_required
+ 7/14 Test  #59: dk.pathtracing.restir_temporal_numeric_gpu_required ....   Passed    9.98 sec
+      Start  63: dk.pathtracing.restir_numeric_gpu_required
+ 8/14 Test  #63: dk.pathtracing.restir_numeric_gpu_required .............   Passed    7.63 sec
+      Start 257: dk.pathtracing.restir_sponza_initial_gpu_validation
+ 9/14 Test #257: dk.pathtracing.restir_sponza_initial_gpu_validation ....   Passed   15.87 sec
+      Start 258: dk.pathtracing.restir_sponza_temporal_gpu_validation
+10/14 Test #258: dk.pathtracing.restir_sponza_temporal_gpu_validation ...   Passed    7.18 sec
+      Start 259: dk.pathtracing.restir_sponza_spatial_gpu_validation
+11/14 Test #259: dk.pathtracing.restir_sponza_spatial_gpu_validation ....   Passed    8.65 sec
+      Start 260: dk.pathtracing.restir_sponza_quality_gpu_validation
+12/14 Test #260: dk.pathtracing.restir_sponza_quality_gpu_validation ....   Passed    6.09 sec
+      Start 262: dk.pathtracing.restir_sponza_aggregation
+13/14 Test #262: dk.pathtracing.restir_sponza_aggregation ...............   Passed    1.82 sec
+      Start 263: dk.pathtracing.media_benchmark_aggregation
+14/14 Test #263: dk.pathtracing.media_benchmark_aggregation .............   Passed    1.06 sec
+
+100% tests passed, 0 tests failed out of 14
+
+Label Time Summary:
+gpu    = 547.35 sec*proc (12 tests)
+
+Total Test time (real) = 550.26 sec

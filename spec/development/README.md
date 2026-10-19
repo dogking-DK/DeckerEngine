@@ -142,6 +142,6 @@
 | 0138 | [M19.5 Scene media 首表面 RIS 条件参考](0138-restir-volume-reference.md) | render-restir、render-pathtracing | completed |
 | 0139 | [M19.6 GPU Scene media 首表面 DI](0139-restir-gpu-media.md) | render-restir、render-pathtracing | completed |
 | 0140 | [Editor 与独立 ReSTIR 捕获](0140-editor-restir-capture.md) | render-restir、render-pathtracing、render-capture、editor | completed |
-| 0141 | [M19.8 Sponza 质量、性能与默认策略](0141-restir-sponza-acceptance.md) | render-restir、render-pathtracing | in-progress |
+| 0141 | [M19.8 Sponza 质量、性能与默认策略](0141-restir-sponza-acceptance.md) | render-restir、render-pathtracing | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

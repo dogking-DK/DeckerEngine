@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-03T17:07:43+08:00"
-updated_at: "2026-10-03T17:31:34+08:00"
+updated_at: "2026-10-19T22:05:05+08:00"
 ---
 
 # 默认测试场景素材
@@ -39,3 +39,12 @@ Sponza 的 70 个外部 buffer/image URI 均在复制目录内解析成功，buf
 HDR 头部尺寸为 4096x2048；六张天空盒面各为 512x512，PNG 完整性检查通过。
 复制校验明细保存于本机 `out/default-test-assets-copy.json`（从仓库根解析）。
 本节只记录素材复制核对；磁盘导入和渲染验收另见 [M7.3 记录](../../../spec/development/0063-render-disk.md)。
+
+## 2026-10-19 新机器恢复
+
+从 [Khronos glTF-Sample-Models Sponza](https://github.com/KhronosGroup/glTF-Sample-Models/tree/main/2.0/Sponza)
+恢复完整 Sponza 子目录的 74 个文件、53,606,207 字节，保留 README 许可和截图。
+每个文件均与[换机前 manifest](../../../spec/benchmarks/2026-10-19-restir-sponza-progress/manifest.json)的 SHA-256 一致，
+70 个外部 URI 全部存在。下载与核对脚本/日志位于本机 `out/restore-sponza.py`、`out/restore-sponza.log`。
+HDR 和天空盒尚未恢复；M19.8 使用程序化物理介质，不读取这两组素材。新机测试结果见
+[0141](../../../spec/development/0141-restir-sponza-acceptance.md)。

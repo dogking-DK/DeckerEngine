@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-15T09:28:38+08:00"
+updated_at: "2026-10-19T22:04:00+08:00"
 ---
 
 # 构建与依赖配置
@@ -86,6 +86,22 @@ bootstrap 使用新的 `windows-bootstrap-stduuid` 构建目录，避免复用�
 Visual Studio 18 2026 生成器。其他工具链可在个人预设中指定生成器。
 
 ## vcpkg 开发配置
+
+### 新机器接续
+
+先核对 `cmake --version`、VS2026 C++ 工具、`VCPKG_ROOT`、`VULKAN_SDK` 和实际 Python 3.11+ 解释器；
+WindowsApps 的 `python.exe` 或 `py.exe` 启动器存在不代表解释器已经安装。
+将本机 Python 路径通过 `-DPython3_EXECUTABLE=...` 或忽略的 `CMakeUserPresets.json` 显式传给 CMake。
+若 vcpkg 缺少固定 baseline，先获取该提交；只有 Git 对象仍不足以更新旧 checkout 的版本数据库，
+确认无本地修改后再快进索引并执行 `bootstrap-vcpkg.bat -disableMetrics`。项目依赖清单与 baseline 保持不变。
+
+`projects/demo/assets` 的素材不随 Git 分发。运行 Sponza 测试前按[素材说明](../../projects/demo/assets/README.md)
+恢复 glTF、buffer、纹理及许可文件；有历史 manifest 时逐文件核对 SHA-256。M19.8 只使用 Sponza 与程序化介质，
+不读取该目录中另列的 HDR/天空盒。换机、换驱动或重建后必须新目录重采性能，不能拼接旧机器报告。
+
+用 `vulkaninfo --summary` 核对设备与校验层。若已安装 OBS 捕获层产生 API 版本警告，可在测试子进程中设置
+`DISABLE_VULKAN_OBS_CAPTURE=1`（来自该层 JSON 的 `disable_environment`）；AMD switchable layer 冲突仅在出现时
+使用其 `DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1=1`。不修改全局注册表或关闭 required Khronos/sync 校验。
 
 安装 vcpkg 后，将 `VCPKG_ROOT` 指向其根目录，并确保该 checkout 包含清单中的
 builtin-baseline 提交。配置阶段会自动执行 manifest install；

@@ -1,7 +1,7 @@
 # M19.8 换机前测量快照
 
 这是用户要求于 2026-10-19 换电脑前保存的**未完成进度**，不是完整验收归档。
-阶段及接续顺序见 [0141](../../development/0141-restir-sponza-acceptance.md)，性能结果与复现命令见[报告草稿](../2026-10-19-restir-sponza.md)。
+阶段及接续顺序见 [0141](../../development/0141-restir-sponza-acceptance.md)，旧机性能结果与复现命令见[4070 报告草稿](../2026-10-19-restir-sponza-4070-progress.md)。
 
 - 已完成 40 个进程报告：12/12 性能（三轮、四模式），28/40 质量（classic 10、initial 10、temporal 8）。
 - 尚缺 temporal/cloud-inside、temporal/cloud-above 和 spatial 的全部十组；停止时未完成的进程不计入证据。

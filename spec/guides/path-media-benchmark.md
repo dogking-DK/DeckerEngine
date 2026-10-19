@@ -46,3 +46,18 @@ python scripts/benchmark-path-media.py --directory spec/benchmarks/2026-10-16-pa
 输入指纹v3用于CPU几何复用，刷新资产必须重新导入/构建。Capture仍保持小场景额度，Sponza视口能力不等于Sponza离屏捕获能力。
 
 本机阶段结果与未达候选见[2026-10-16实测](../benchmarks/2026-10-16-path-media.md)。归档如包含editor.json，还校验三轮worker与真实GUI的100ms候选及连续运动/完整尺寸恢复。
+
+## M19.8 ReSTIR 四模式 Sponza 验收
+
+使用同一 `dk-pathmedia-benchmark` 与独立 `scripts/benchmark-restir-sponza.py`，比较 classic / initial / temporal / spatial。
+本入口的性能与热相机均为 640×360；质量仍为 4×4、8 条独立历史链和五档 spp，不能外推全尺寸质量。
+质量显式关闭 validation 并逐提交记录 wall/GPU 时间；required Khronos/sync 烟测与数值回归另行执行。
+参考 0.5%、候选 2%、收益 2 倍及预览/取消 100ms、tile 8ms 门槛固定，未认证或有限阶梯未达均保留。
+
+新机先按[构建指南](build.md#新机器接续)恢复环境与 Sponza。构建目标为 `dk_pathmedia_benchmark` / `dk_pathtracing_probe`，
+CTest 筛选与完整采集命令见[M19.8 报告](../benchmarks/2026-10-19-restir-sponza.md#复现)。
+在全新证据目录依次执行 `--collect performance`、`--collect quality`、`--summarize`；四模式三轮性能共 12 进程，
+十场景四模式质量共 40 进程。`--archive` 保存完整线性图像与所有报告，`--verify-archive` 离线重算并核对字节摘要。
+仅同设备/驱动、同二进制和同输入可用 `--resume`；改变来源后完整重采，不拼接旧机器计时。
+参考与候选从各自空历史开始，模式共享参考数据，不共享 reservoir；保留全部 pass 与当前可见性校正。
+GPU tracking 步数未暴露时标为不可观测，不以预算代替实测。默认策略以报告证据为准，不由测量流程自动开启 ReSTIR。

@@ -1,0 +1,40 @@
+{
+  "started_at": "2026-10-19T22:04:24.5018038+08:00",
+  "finished_at": "2026-10-19T22:15:42.2418141+08:00",
+  "build_dir": "E:\\code\\code_file\\DeckerEngine\\out\\build\\windows-editor",
+  "configuration": "Release",
+  "targets": [
+    "dk_pathmedia_benchmark",
+    "dk_pathtracing_probe"
+  ],
+  "full": false,
+  "reason": "M19.8 new-machine Sponza smoke, aggregation and direct ReSTIR numeric/state regression",
+  "test_regex": "^dk\\.pathtracing\\.(restir_sponza_.*|media_benchmark_aggregation|restir_(numeric|temporal_numeric|spatial_numeric|medium_numeric|medium_cloud|medium_reuse|medium_state|medium_support)_gpu_required)$",
+  "commit": "3202043e583420c7e623c23dbc90ef78769871ce",
+  "working_tree": [
+    " M spec/design/render-restir.md",
+    " M spec/development/0141-restir-sponza-acceptance.md"
+  ],
+  "stage": "complete",
+  "status": "passed",
+  "selected_tests": [
+    "dk.pathtracing.restir_medium_numeric_gpu_required",
+    "dk.pathtracing.restir_medium_cloud_gpu_required",
+    "dk.pathtracing.restir_medium_reuse_gpu_required",
+    "dk.pathtracing.restir_medium_state_gpu_required",
+    "dk.pathtracing.restir_medium_support_gpu_required",
+    "dk.pathtracing.restir_spatial_numeric_gpu_required",
+    "dk.pathtracing.restir_temporal_numeric_gpu_required",
+    "dk.pathtracing.restir_numeric_gpu_required",
+    "dk.pathtracing.restir_sponza_initial_gpu_validation",
+    "dk.pathtracing.restir_sponza_temporal_gpu_validation",
+    "dk.pathtracing.restir_sponza_spatial_gpu_validation",
+    "dk.pathtracing.restir_sponza_quality_gpu_validation",
+    "dk.pathtracing.restir_sponza_aggregation",
+    "dk.pathtracing.media_benchmark_aggregation"
+  ],
+  "passed": 14,
+  "failed": 0,
+  "skipped": 0,
+  "error": null
+}
