@@ -44,7 +44,7 @@ HDR 头部尺寸为 4096x2048；六张天空盒面各为 512x512，PNG 完整性
 
 从 [Khronos glTF-Sample-Models Sponza](https://github.com/KhronosGroup/glTF-Sample-Models/tree/main/2.0/Sponza)
 恢复完整 Sponza 子目录的 74 个文件、53,606,207 字节，保留 README 许可和截图。
-每个文件均与[换机前 manifest](../../../spec/benchmarks/2026-10-19-restir-sponza-progress/manifest.json)的 SHA-256 一致，
+每个文件均与[保留的验收 manifest](../../../spec/benchmarks/2026-10-19-restir-sponza-5090/manifest.json)的 SHA-256 一致（其中 74 个 Sponza 文件哈希与换机前相同），
 70 个外部 URI 全部存在。下载与核对脚本/日志位于本机 `out/restore-sponza.py`、`out/restore-sponza.log`。
 HDR 和天空盒尚未恢复；M19.8 使用程序化物理介质，不读取这两组素材。新机测试结果见
 [0141](../../../spec/development/0141-restir-sponza-acceptance.md)。

@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-19T18:54:00+08:00"
-updated_at: "2026-10-19T23:40:34+08:00"
+updated_at: "2026-10-20T08:55:24+08:00"
 ---
 
 # M19.8 Sponza ReSTIR 质量与性能验收
@@ -8,9 +8,9 @@ updated_at: "2026-10-19T23:40:34+08:00"
 本报告使用新机完整采集的 52 个进程：12 个性能进程（三轮 × 四模式）与 40 个质量进程（十场景 × 四模式）。
 默认保持 **Classic MIS**，ReSTIR 保持显式可选；完成测量不表示所有质量、收益或交互目标达标。
 十场景中仅云内/云上方参考通过 0.5% 认证；这两组四模式均在 16384 spp 达到 2%，但 ReSTIR 的等误差加速比仅 0.357–0.581×，未达 2× 目标。其余八组保持未认证。
-严格聚合、完整线性图像和离线复算见[完整归档](2026-10-19-restir-sponza-5090/README.md)，
+保留的统计汇总、输入来源和验证摘要见[关键数据](2026-10-19-restir-sponza-5090/README.md)，
 实施与定向验证见[0141](../development/0141-restir-sponza-acceptance.md)。
-[旧机 4070 草稿](2026-10-19-restir-sponza-4070-progress.md)与[部分数据](2026-10-19-restir-sponza-progress/README.md)保留为历史证据，未拼入本报告。
+旧机 4070 的中间结论见下文历史说明，未拼入本报告。逐轮报告、完整图像和重复日志已按用户要求从当前目录清除。
 
 ## 设备与固定输入
 
@@ -18,12 +18,12 @@ Windows NT 10.0.26200、AMD Ryzen 9 9950X3D、NVIDIA GeForce RTX 5090 D v2（24 
 VS2026 18.9.1 / MSVC 19.51.36256.0、CMake 4.2.1、Release、Tracy OFF、Python 3.12.14。
 Vulkan SDK/校验层 1.4.328.1，项目 Vulkan headers/loader 1.4.357.0；固定依赖基线不变。
 仅在进程中禁用产生版本警告的 OBS 捕获层，required 测试仍开启 Khronos/sync；正式计时 validation OFF、GPU timestamp ON。
-工具版本、运行库/源文件 SHA-256 见归档 environment.json，二进制、资产、shader 与 RTXDI 头文件见 manifest.json。
+工具版本、运行库/源文件 SHA-256 见关键数据中的 environment.json，二进制、资产、shader 与 RTXDI 头文件见 manifest.json。
 
 真实 Sponza 为 262266 个三角形、25 张实际使用纹理，metallic-roughness 材质；74 个素材文件逐一匹配旧机 SHA-256。
 固定环境时间 17、4 次反弹、RR 从第 3 次开始、曝光 0、无去噪/重建。
 远场边界 RGB=(0.3,0.4,0.6)，云单次反照率 0.9、g=0.6；surface 使用 model 3/sampler 1，其余为 Scene media model 4/sampler 2。
-实际相机、环境、几何/完整输入指纹和云场 hash 随每场景保存。
+实际相机、环境、几何/完整输入指纹和云场 hash 在采集时随每场景记录；当前保留范围见关键数据说明，固定输入仍可从基准源码重建。
 RTXDI-Library 固定为 3.1.0 / f12037fa8e97ebc08e9e3edfd2de528ed1772a4b。
 
 | 模式 | 初始候选 | 时间历史 | 空间邻域 |
@@ -166,7 +166,7 @@ owned peak 为 renderer 累计额度高水位，VMA block 为采样到的最大�
 | cloud-inside | 0.472% / 满足 / 下降 | 0.474% / 满足 / 下降 | 0.474% / 满足 / 下降 | 0.474% / 满足 / 下降 |
 | cloud-above | 0.390% / 满足 / 下降 | 0.392% / 满足 / 下降 | 0.392% / 满足 / 下降 | 0.392% / 满足 / 下降 |
 
-完整五档误差、上/下半 ROI、RGB 均值/偏差/联合标准误差、逐链 GPU/wall 时间与有限历史计数均保留在 summary.json 和原始报告中。
+完整五档误差、上/下半 ROI、RGB 均值/偏差/联合标准误差、GPU/wall 聚合统计与选定历史计数保留在 summary.json；逐链原始数据不再随当前目录保存。
 
 40 个模式/场景组合的 4096→16384 跨链误差均下降，RGB 均值均满足两项数值界限；仅两组认证参考可支持正式均值结论，其余八组仍需更收敛的参考。有限阶梯趋势和均值界限不替代估计器推导或全尺寸质量认证。
 
@@ -191,6 +191,16 @@ current_visibility_rays 仅为空间阶段已有阴影诊断，不代表其他�
 下一步优先提高未认证场景的参考收敛并定位额外 pass、提交与显示成本，再决定新的采样/调度方案。不能以较低噪声的单幅图代替等误差收益。
 本次未引入降质、关闭校正、去噪/DLSS 或新的 GI/PT/体积复用；后续算法选择需要新的设计与针对主导成本/噪声的证据。
 验收覆盖本机和上述冻结负载，不承诺跨设备实时性，也不认证全分辨率收敛质量。
+
+## 旧机历史结论与保留范围
+
+RTX 4070 Laptop / 596.49 的换机前快照完成了 12/12 性能、28/40 质量进程，未完成最终质量验收。
+其 Classic / initial / temporal / spatial 三项交互同时达标数为 10/10、10/10、1/10、0/10；owned peak 最大约 901.076 MiB。
+这些结果与新机独立，保留为历史结论，不与上面的 5090 计时合并。
+
+2026-10-20 按用户要求精简文件，保留本报告、概览图、统计/来源/验证摘要及独立 CPU 基线。
+旧机完整进度证据可从提交 `3202043` 恢复，新机完整归档可从 `f1e5734` 恢复；当前关键数据目录只有摘要，不能直接执行 `--verify-archive`。
+重新测量时将原始数据和可选完整归档留在 `out/`，按下面命令复算，不再批量加入版本库。
 
 ## 复现
 
@@ -217,7 +227,8 @@ try {
     python scripts/benchmark-restir-sponza.py --directory out/restir-sponza-rerun --summarize
 } finally { $env:DISABLE_VULKAN_OBS_CAPTURE = $previousObsLayer }
 
-python scripts/benchmark-restir-sponza.py --directory spec/benchmarks/2026-10-19-restir-sponza-5090 --verify-archive
+python scripts/benchmark-restir-sponza.py --directory out/restir-sponza-rerun --archive out/restir-sponza-archive
+python scripts/benchmark-restir-sponza.py --directory out/restir-sponza-archive --verify-archive
 ```
 
 完整三轮和 8 seed 长链均在新机重采，未使用旧机 --resume；同机、同二进制和同输入才可接续原目录。
