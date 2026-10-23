@@ -33,3 +33,15 @@ float3 sampleBsdf(PathBsdf b,float3 n,float3 wo,float u,float v) {
     float3 h=normalize(x*local.x+y*local.y+n*local.z);
     return normalize(2*dot(wo,h)*h-wo); // Below-surface results carry zero evaluated mass.
 }
+#if DK_PATH_SIGNALS
+// Exact first-vertex BSDF lobe ratio; shared MIS/pdf/visibility and later throughput
+// apply equally to both lobes. This does not infer lobes from radiance color.
+float3 diffuseFraction(PathBsdf b,float3 n,float3 wo,float3 wi) {
+    if(!b.ggx) return float3(1);
+    float no=dot(n,wo),ni=dot(n,wi); if(no<=0 || ni<=0) return 0;
+    float transmission=.96*.96*(1-fifth(1-no))*(1-fifth(1-ni));
+    float3 diffuse=b.color*((1-b.metallic)*transmission/pi),total=evalBsdf(b,n,wo,wi).value;
+    float3 result=0; for(uint i=0;i<3;++i) if(total[i]>0) result[i]=saturate(diffuse[i]/total[i]);
+    return result;
+}
+#endif

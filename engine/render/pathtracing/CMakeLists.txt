@@ -16,7 +16,7 @@ if(DK_BUILD_RENDER_PATHTRACING)
     add_library(dk::render_pathtracing ALIAS dk_render_pathtracing)
     target_sources(dk_render_pathtracing PUBLIC FILE_SET HEADERS BASE_DIRS include
         FILES include/dk/render/PathTraceRenderer.hpp)
-    target_link_libraries(dk_render_pathtracing PUBLIC dk::render_pathtracing_reference dk::graphics_device
+    target_link_libraries(dk_render_pathtracing PUBLIC dk::render_pathtracing_reference dk::graphics_device dk::render_denoising_types
         PRIVATE dk::graphics_graph dk::graphics_shaders dk::rtxdi_shaders)
     dk_target_defaults(dk_render_pathtracing)
 endif()

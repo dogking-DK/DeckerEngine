@@ -87,19 +87,33 @@ RestirSample initialRestir(PathPayload hit,float3 position,float3 normal,PathBsd
     return chosen;
 }
 #if !DK_PATH_EMPTY
-float3 shadeRestir(RestirSample s,PathPayload hit,float3 position,float3 normal,PathBsdf bsdf,float3 wo,uint pixel,inout uint rays) {
+float3 shadeRestir(RestirSample s,PathPayload hit,float3 position,float3 normal,PathBsdf bsdf,float3 wo,uint pixel,inout uint rays
+#if DK_PATH_SIGNALS
+    ,out float3 diffuse
+#endif
+) {
     float3 value=0;
+#if DK_PATH_SIGNALS
+    diffuse=0;
+#endif
     if(s.light!=0xffffffffu) {
         float3 wi,point; float pdf; float3 contribution=restirEvaluate(s.light,s.uv,position,normal,bsdf,wo,wi,point,pdf);
         uint emitter=s.light==asuint(parameters[2]).z ? 0xffffffffu : s.light;
         uint before=rays;
         if(visible(hit.index,position,wi,emitter,point,rays)) value=contribution*s.W;
+#if DK_PATH_SIGNALS
+        diffuse=value*diffuseFraction(bsdf,normal,wo,wi);
+#endif
         if(asuint(parameters[40]).w!=0) restirStat(pixel,13,rays-before);
     }
     if(asuint(parameters[2]).y!=0) {
         float3 wi=normalize(parameters[5].xyz); float cosine=max(0.0,dot(normal,wi));
-        if(cosine>0 && visible(hit.index,position,wi,0xffffffffu,0,rays))
+        if(cosine>0 && visible(hit.index,position,wi,0xffffffffu,0,rays)) {
+#if DK_PATH_SIGNALS
+            diffuse+=evalBsdf(bsdf,normal,wo,wi).value*parameters[4].xyz*cosine*diffuseFraction(bsdf,normal,wo,wi);
+#endif
             value+=evalBsdf(bsdf,normal,wo,wi).value*parameters[4].xyz*cosine;
+        }
     }
     return value;
 }

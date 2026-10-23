@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-23T16:58:00+08:00"
+updated_at: "2026-10-23T17:51:15+08:00"
 status: accepted
 ---
 
@@ -150,7 +150,8 @@ AS/SBT、含纹理/mask的Lambert/GGX shader、渐进累积和可调用截图命
 
 M20 [路径追踪降噪](render-denoising.md)采用独立 `render/denoising` 模块的规划边界：路径侧生产信号，
 降噪侧拥有滤波/历史/SDK，上层 Editor/capture 调度；共享 types 保持 CPU-only，SDK 和图形后端不进入 Scene/CPU oracle。
-M20.1 只完成设计/固定来源，尚无对应 target；vk_oidn 所需受约束的外部 compute 录制桥和设备内存预算适配在 M20.4 实施，
+M20.2 的 `render_denoising_types` 仅依赖 Math，路径 GPU target PUBLIC 引用该共享类型并拥有输入生产；
+滤波后端尚未实现。vk_oidn 所需受约束的外部 compute 录制桥和设备内存预算适配在 M20.4 实施，
 不能由 Render 绕过 Graph/Device 的状态和提交寿命。原始累计、ReSTIR reservoir 与降噪历史分别拥有和发布。
 
 工程基础 → Foundation/资产身份 → Scene/序列化 → Commands/服务/CPU Runtime →

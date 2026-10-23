@@ -1,20 +1,36 @@
 ---
 created_at: "2026-10-14T14:37:00+08:00"
-updated_at: "2026-10-19T16:00:53+08:00"
+updated_at: "2026-10-23T17:51:15+08:00"
 ---
 
 # GPU表面、空气、云与渐进路径追踪
 
 [返回项目入口](../../README.md)。[M16.6设计](../design/render-pathtracing.md#m166-gpu无历史lambert实施契约)
 提供硬件三角形求交、NEE/MIS/RR和拥有型HDR结果，使用与[CPU参考](pathtracing-reference.md)一致的冻结输入与采样模型。
-提供≤64×64无历史参考和≤2048×2048渐进接口，支持Lambert/GGX、baseColor纹理/alpha-mask，以及显式GPU空气/云积分。
+提供≤64×64无历史参考和按设备容量/显存准入的渐进接口，支持Lambert/GGX、baseColor纹理/alpha-mask，以及显式GPU空气/云积分。
 [编辑器](editor.md#路径追踪预览m169)支持 Surface only / Scene media；固定 capture v2 同样可追踪空气/云。
+
+## 降噪输入信号
+
+渐进 Surface only 的 Classic/ReSTIR 可以设置 `PathTraceSchedule::signals.enabled=true`。
+默认关闭；本功能只生产输入，不执行降噪，也不增加 Editor/capture 选项。固定一次性提交不带信号，Scene media 明确拒绝此请求。
+
+完整帧的 `signal_buffer()` 与 raw 共用 owner；保留 `PathTraceCompletedFrame` 才能保证该指针的寿命。
+`read_linear()` 同时读回 raw 和信号，完成后通过 `denoising_signals()` 取 CPU span。
+fresh 颜色/二阶矩/lobe 分量为本批显式和，除以 `info().signals->source.sample_count` 得到均值；
+累计 albedo/normal 除以各像素 `guide_samples()`，包含 miss 的零贡献。具体布局/有效位见[设计](../design/render-denoising.md#m202-信号生产实施契约)。
+
+需要运动信息时，把上一份实际消费的完整帧 `signal_reference()` 放入下一批 `schedule.signals.previous`；
+缺少 reference 时 motion 无效，不能把零向量解释为有效静止。reference 必须匹配 renderer/view/session/场景与尺寸。
+同一结果多次读回不推进 source serial；开关改变会重建 raw/guides 的共同采样起点，更新 reference/曝光/调度仅影响下一批。
+336 字节/像素的信号、ReSTIR 多 epoch 暂存和外持旧帧均计入显存额度，超额返回错误。
+实现与定向验证见 [0146](../development/0146-denoising-signals.md)；滤波器从 M20.3 开始。
 
 ## 初始 RIS / RTXDI
 
 M19.2 提供 C++ GPU 初始 RIS：`submit_restir_rays`、`submit_restir_view`、`configure_restir_view`。
 `RestirDiSettings` 默认 version=1、8 候选（合法 1..64），要求 MIS 和显式 Surface only；
-时间和空间复用通过下述独立可选配置启用；Scene media 使用下述独立介质入口。新的 Editor/capture 选项尚未接入。
+时间和空间复用通过下述独立可选配置启用；Scene media 使用下述独立介质入口，Editor/capture v3 已消费相应采样模式。
 普通 `submit/configure_view` 继续原 MIS 路径，介质 [CPU 参考](pathtracing-reference.md#scene-media-首表面-ris-参考)保持独立。
 来源的 `PathTraceGpuImageInfo.restir` 保存实际配置，候选数不是额外 spp。
 无历史入口每像素每次提交的 `samples.count * initial_candidates` 不超过 2^18；

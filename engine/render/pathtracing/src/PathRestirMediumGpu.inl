@@ -44,6 +44,7 @@ catch(const std::exception& error) { return std::unexpected(Error{ErrorCode::int
 Result<void> PathTraceRenderer::configure_restir_medium_view(SubmissionQueue& queue,std::uint64_t id,const PathTraceGpuScene& scene,
     const PathMediumSnapshot& medium,const RenderView& view,const VolumePathSettings& settings,const RestirDiSettings& restir,const PathTraceSchedule& schedule) try {
     ready(state_,queue,{});
+    if(schedule.signals.enabled || schedule.signals.previous) throw Error{ErrorCode::not_supported,"Scene media denoising signals are not implemented"};
     if(state_->terminal) throw Error{ErrorCode::invalid_state,"Path session device lost"};
     if(!scene || scene.state_->program.lock()!=state_) throw path_invalid("Path scene belongs to a different renderer");
     if(!schedule.target_spp || !schedule.batch_spp || schedule.batch_spp>16 ||

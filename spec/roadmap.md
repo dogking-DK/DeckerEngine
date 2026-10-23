@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-23T17:14:39+08:00"
+updated_at: "2026-10-23T17:58:35+08:00"
 status: accepted
 ---
 
@@ -78,7 +78,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M16 渐进式路径追踪 | CPU参考、Vulkan RT表面积分、每视图累积、编辑器与固定spp截图 | M5/M6/M7；集成需M8/M9，观测复用M11 | 已完成质量与基线交付；CPU参考、RT/GGX、渐进视口和固定capture，见[0120](development/0120-pathtracing-delivery.md)；实时性能候选未达 |
 | M18 相机模式与投影 | Orbit/Fly/Walk、可调镜头/移速、分层正交与截图一致性 | M8/M12；路径与环境需M14–M17 | 已完成 M18.1–5；Fly/Walk、基础/路径/光栅环境正交及捕获，见[0133](development/0133-raster-orthographic-environment.md) |
 | M19 ReSTIR 直接光重采样 | 首表面 DI、时空复用、Scene media 适配与 Editor/capture、固定质量测量 | M16–M18 | 已完成；Sponza 测量未支持默认切换，保留 Classic MIS；见[设计](design/render-restir.md) |
-| M20 路径追踪降噪 | À-trous、SVGF/A-SVGF、NRD REBLUR/RELAX、vk_oidn；公共信号/历史、介质与质量性能验收 | M16–M19、现有 Graph/worker | M20.1 设计与依赖核验已完成；M20.2–11 待开始，见[设计](design/render-denoising.md) |
+| M20 路径追踪降噪 | À-trous、SVGF/A-SVGF、NRD REBLUR/RELAX、vk_oidn；公共信号/历史、介质与质量性能验收 | M16–M19、现有 Graph/worker | M20.1 设计/依赖、M20.2 表面信号生产已完成；M20.3–11 待开始，见[设计](design/render-denoising.md) |
 
 默认执行表中顺序。M5 在 Foundation 补充完成后具备独立探索条件，
 M9 的 Luau 命令绑定在 M3 后可提前做；若调整次序，仍需满足对应集成验收依赖。
@@ -803,7 +803,7 @@ M19 后按用户确定的 M20 降噪路线推进；ReSTIR GI/PT、ReGIR 或体�
 | 小阶段 | 交付物 | 必要前置 | 独立验收条件 | 状态 |
 | --- | --- | --- | --- | --- |
 | M20.1 | 公共接口/输入/能力、历史和失败/预算设计，SDK 及传递依赖来源核验与锁定 | M16–M19 | 后端需求与组合支持边界明确；官方 registry/正式 release/许可、不可变来源与哈希核验；CPU-only 隔离设计；文档一致性通过，不声称 SDK 已链接 | 已完成，见[0145](development/0145-denoising-foundation.md) |
-| M20.2 | 本轮 fresh 信号、diffuse/specular/自发光/背景分量、匹配采样 guides 和来源身份 | M20.1 | 分量重组对原始结果；Off 原样本/累积回归；透视/正交、纹理/mask/GGX/天空；guide 来源、额度、取消与完整帧发布 | 待开始 |
+| M20.2 | 本轮 fresh 信号、diffuse/specular/自发光/背景分量、匹配采样 guides 和来源身份 | M20.1 | 分量重组对原始结果；Off 原样本/累积回归；透视/正交、纹理/mask/GGX/天空；guide 来源、额度、取消与完整帧发布 | 已完成，见[0146](development/0146-denoising-signals.md)；15 项定向 GPU 检查及 CPU-only 配置隔离通过 |
 | M20.3 | CPU 小图参考和 GPU À-trous、独立选项、最小 Editor/capture 接通 | M20.2 | CPU/GPU 数学对照、常量保持、低 spp、轮廓/薄墙/纹理、奇数尺寸和跨 tile 邻域；失败/预算与 GUI/capture 一致 | 待开始 |
 | M20.4 | vk_oidn adapter、质量/运行频率、必要的外部 compute 录制桥与设备/显存适配 | M20.3 | 固定版本结果对照；必需 feature/普通卷积回退、Graph 同步、SDK 峰值准入、冷启动/resize/退出、MSVC/CRT 链接通过；不把上游性能当本机结果 | 待开始 |
 | M20.5 | 公共重投影/历史有效性、时域矩/短历史方差与 SVGF | M20.3 | Classic/ReSTIR 独立验证；相机平移旋转停动、显露/薄几何/光照变化、跳输入和双视图/reset；空间质量、闪烁与拖影均留证据 | 待开始 |
@@ -895,7 +895,8 @@ M19.7 Editor/worker 算法选项、诊断和 v3 独立捕获已完成，16 个�
 容量与Scene media后续优化见[0143](development/0143-path-capacity-media-throughput.md)：默认使用当前可用显存，路径视口/几何/纹理取消人为容量封顶，介质tile256；35项定向检查通过，Luau示例因模块未构建未运行。三轮同输入吞吐提高1.43–2.40倍，GPU区间覆盖率提高；两个ReSTIR模式tile p95略高于历史8ms候选，高分辨率复用仍非实时收敛。
 未认证参考收敛、temporal/spatial 内部 GPU 成本和冷启动保留为后续采样优化事项；当前按 M20 降噪路线推进，DLSS 尚未接入。
 用户要求的[0144](development/0144-path-throughput-optimization.md)已完成：GPU本地分片统计、有界tile组及Editor显示/采样重叠和同族第二队列交接，20项定向GPU检查通过。三轮1600×1200交付中位数Classic/initial/temporal/spatial为32.539/41.568/48.006/56.086ms，图像与统计对照一致，见[报告](benchmarks/2026-10-23-path-throughput.md)。Classic波动、初始RIS短pass等待及冷启动仍待后续优化，不将交付间隔当作窗口FPS或GPU利用率。
-M20 路线已建立，M20.1 公共设计与依赖核验已完成，证据见[0145](development/0145-denoising-foundation.md)；下一阶段为 M20.2 信号与辅助缓冲，尚未实现降噪后端。
+M20.1 公共设计与依赖核验见[0145](development/0145-denoising-foundation.md)；M20.2 可选表面输入信号、来源与预算/失败保护已完成，见[0146](development/0146-denoising-signals.md)。
+下一阶段为 M20.3 独立 À-trous 选项及最小 Editor/capture 接通；目前只有输入生产，尚未实现降噪滤波器。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 

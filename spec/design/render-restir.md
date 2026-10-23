@@ -1,7 +1,7 @@
 ---
 module: render-restir
 created_at: "2026-10-19T12:50:00+08:00"
-updated_at: "2026-10-23T16:58:00+08:00"
+updated_at: "2026-10-23T17:51:15+08:00"
 status: accepted
 ---
 
@@ -32,7 +32,9 @@ mask 发光三角形继续由 BSDF 命中估计，不扩大其 NEE 支持范围�
 不承诺动态物体运动向量、跨光源重排映射或形变复用。
 
 ReSTIR GI/PT、介质散射顶点/整条体积路径复用、ReGIR、HDRI、新材质、wavefront 与异步队列另行规划。
-去噪进入 M20 [独立降噪设计](render-denoising.md)，M20.1 仅确定契约，尚未实现。
+去噪进入 M20 [独立降噪设计](render-denoising.md)，M20.2 已实现表面渐进输入信号，尚无滤波器。
+信号在 shade pass 中按实际 BSDF lobe 拆分，保留 reservoir 的采样/可见性/统计；每批 fresh 补偿和独立于 raw 历史。
+多 epoch 信号有独立 ping-pong，整批完成才发布；累计 sample index 和随机 epoch origin 分列，motion reference 由调用者显式指定。
 reservoir 与降噪历史分属不同所有者；降噪不得改变正式采样来源/统计，A-SVGF 的相关梯度必须在 M20.9 单独验证复用状态重评估协议。
 天空或云内部的主要噪声可能来自自由程和多次散射，首表面 DI 不能直接解决；M19 必须分别测量这类场景。
 不以论文的速度倍数代替本引擎结果，不预先承诺实时或默认开启。

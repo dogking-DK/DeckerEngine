@@ -107,6 +107,7 @@
 | Editor路径模式/暂停/曝光/重置、相机/Gizmo/IPC/resize/重载/活动关闭 | dk_editor_app、dk_ctl | `^dk\.editor\.pathtracing_gpu_validation$`（后台真实GUI、required RT/validation/sync） |
 | 默认Sponza、正常相机/窗口、路径与大气切换/大场景资源回收 | dk_editor_app | `^dk\.editor\.desktop_render_gpu_validation$`（需要demo资产，后台真实GUI、required RT/validation/sync） |
 | GPU每视图渐进累积、GPU显示/sRGB/曝光、tile/reset/poll、取消/迟到/设备丢失与工作/资源额度 | dk_pathtracing_probe | `^dk\.pathtracing\.progressive_.*_gpu_required$`（required RT/validation/sync） |
+| 降噪输入 fresh/BRDF 分量、累计 guides、透视/正交 motion、纹理/mask、完整发布/取消/额度 | dk_pathtracing_probe | `^dk\.pathtracing\.signal_.*_gpu_required$`（required RT/validation/sync；Off 原始逐值对照） |
 | M19.8 Sponza 四模式、质量链/全尺寸运动与报告拒绝 | dk_pathmedia_benchmark | `^dk\.pathtracing\.restir_sponza_`；三轮/8 seed 长链与归档复算用`scripts/benchmark-restir-sponza.py`；数值回归另选 dk_pathtracing_probe 的 temporal/spatial/medium 定向用例 |
 | M17.6 介质性能/同样本/报告拒绝与后台worker取消 | dk_pathmedia_benchmark、dk_editor_render_benchmark | `^dk\.(pathtracing\.media_benchmark_\|editor\.media_worker_gpu_validation)`；三轮和独立质量用`scripts/benchmark-path-media.py`，Sponza拖动用已有desktop_render测试 |
 | GPU Lambert路径追踪、CPU/解析/统计/HDR对照、失败与寿命 | dk_pathtracing_probe | `^dk\.pathtracing\.(analytic\|statistics\|images\|lifetime\|allocations)_gpu_required$`（required RT/validation/sync；缺环境失败） |

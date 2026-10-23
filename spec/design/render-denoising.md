@@ -1,7 +1,7 @@
 ---
 module: render-denoising
 created_at: "2026-10-23T16:58:00+08:00"
-updated_at: "2026-10-23T16:58:00+08:00"
+updated_at: "2026-10-23T17:51:15+08:00"
 status: accepted
 ---
 
@@ -12,14 +12,15 @@ status: accepted
 M20 提供可独立选择的 `off / atrous / svgf / asvgf / nrd_reblur / nrd_relax / vk_oidn`。
 À-trous 是正式空间降噪选项，也是 SVGF/A-SVGF 的公共空间滤波组件；三种自研算法用 Slang 实现。
 NRD 和 vk_oidn 是私有后端。阶段、前置与当前完成状态只由 [Roadmap M20](../roadmap.md#m20路径追踪降噪)维护。
-本设计在 M20.1 确定接口语义、输入、历史/失败处理、预算与固定依赖；尚无降噪 C++ target、shader、设备能力或 UI。
+M20.1 确定公共边界与固定依赖；M20.2 实现共享信号类型和路径侧信号 shader/发布，尚无降噪滤波器、SDK 接入或 UI。
 `accepted` 表示采用本设计，不表示任一滤波器已实现或已通过 GPU 验收。
 
 当前依据是 [PathTraceRenderer](../../engine/render/pathtracing/include/dk/render/PathTraceRenderer.hpp)、
 [路径 shader](../../engine/render/pathtracing/shaders/pathtrace.slang)、[累积 shader](../../engine/render/pathtracing/shaders/path-accumulate.slang)、
 [ReSTIR 桥接](../../engine/render/pathtracing/shaders/path-restir-bridge.slang)及 [PathPreview](../../engine/editor/src/PathPreview.cpp)。
-已有输出是合并 radiance、二阶矩和首样本 hit/normal；首样本诊断不是完整降噪 G-buffer。
-当前原始累积、ReSTIR 首表面/reservoir 与 worker 完成发布契约保持，新增信号从 M20.2 实施。
+原始输出仍是合并 radiance、二阶矩和首样本 hit/normal；首样本诊断不作为降噪 G-buffer。
+可选信号通过[独立类型](../../engine/render/denoising/include/dk/render/DenoisingSignals.hpp)和
+[信号 shader](../../engine/render/pathtracing/shaders/path-signals.slang)生成，原始累积、ReSTIR reservoir 与 worker 完成发布契约保持。
 
 首个可用范围是 Surface only、现有静态三角形、Lambert/GGX、纹理/mask、透视与正交相机。
 相机运动支持不隐含动态物体/形变运动向量。Scene media 在 M20.10 独立验收；DLSS、OptiX、官方 OIDN 运行时、
@@ -27,14 +28,14 @@ NRD 和 vk_oidn 是私有后端。阶段、前置与当前完成状态只由 [Ro
 
 ## 模块边界和依赖方向
 
-计划目录为 `engine/render/denoising`，公开文件在其 `include/dk/render/`，内部适配和 shader 放 `src/`、`shaders/`。
-以下名称是接口设计，不是当前可构建目标；新增源码时再登记测试选择表。
+目录为 `engine/render/denoising`，公开文件在其 `include/dk/render/`；目前仅有共享 types。
+后续滤波器的内部适配和 shader 放 `src/`、`shaders/`，信号生产 shader 留在 Pathtracing。
 
-| 计划 target | 职责和依赖 |
+| target / 状态 | 职责和依赖 |
 | --- | --- |
-| `dk_render_denoising_types` / `dk::render_denoising_types` | 配置、来源身份、能力/错误、CPU 数据描述；PUBLIC Core/Math/Memory，不含 GPU/SDK 类型 |
-| `dk_render_denoising_reference` / `dk::render_denoising_reference` | 小图 À-trous、矩/方差与重投影数学参考；PUBLIC types，不链接路径 GPU、NRD 或 vk_oidn |
-| `dk_render_denoising` / `dk::render_denoising` | 异步会话、GPU 输入/输出、历史和后端；PUBLIC types、graphics_device；PRIVATE graphics_graph、graphics_shaders 及启用的 SDK |
+| `dk_render_denoising_types` / `dk::render_denoising_types`，已实现 | INTERFACE target，仅依赖 Math（传递 Core）；信号布局、来源身份、运动 reference，不含 GPU/SDK 类型；随 CPU/GPU Pathtracing 配置提供 |
+| `dk_render_denoising_reference` / `dk::render_denoising_reference`，待实现 | 小图 À-trous、矩/方差与重投影数学参考；PUBLIC types，不链接路径 GPU、NRD 或 vk_oidn |
+| `dk_render_denoising` / `dk::render_denoising`，待实现 | 异步会话、GPU 输入/输出、历史和后端；PUBLIC types、graphics_device；PRIVATE graphics_graph、graphics_shaders 及启用的 SDK |
 
 Pathtracing 生产拥有型只读信号包并引用 types；denoising 不反向依赖 PathTraceRenderer，也不驱动正式路径采样。
 A-SVGF 的梯度请求/结果通过 types 描述，由调用方安排路径侧重评估，避免 render 模块间循环依赖。
@@ -48,7 +49,7 @@ CPU-only 配置不求值 SDK 下载/查找逻辑，不以空 GPU stub 冒充实�
 ## 公共接口与配置
 
 版本 1 配置使用稳定字符串枚举，SDK 数值枚举不外泄。配置变更仅改变降噪会话，不修改 Scene revision 或原始估计器。
-公开 API 在相应实现阶段增加，建议的操作及语义如下：
+滤波会话 API 在相应实现阶段增加，建议的操作及语义如下；M20.2 信号生产 API 见后文：
 
 | 操作/数据 | 约定 |
 | --- | --- |
@@ -84,7 +85,7 @@ NRD 的方法及经验证的调参子集；vk_oidn 的 fast/balanced/high、辅�
 | hit distance | diffuse/specular 各自代表的后续命中距离及有效性；不能用主射线深度代替；NRD 按固定版本 helper 编码 |
 | moments/variance | 区分原始样本矩、时域亮度矩和空间滤波方差；1 spp/短历史不能用零估计冒充确定性无噪声 |
 
-M20.2 首先要求表面分量合成与原合并结果在预先约定的 FP32 容差内一致，原有 raw 路径保持原样本/加和顺序。
+M20.2 表面分量重组要求最大绝对误差不超过 `2e-5 * max(1, max(fresh_sum))`，原有 raw 路径保持原样本/加和顺序。
 解调/重调制在 adapter 明确规定，零 albedo、全金属、极低 roughness 和发光面单独测试。
 
 输入存在两种模式：
@@ -99,9 +100,59 @@ M20.2 首先要求表面分量合成与原合并结果在预先约定的 FP32 �
 À-trous 组件也可接收 SVGF 的时域结果，但这不产生用户级“叠加两个后端”。默认一次只选择一个降噪后端。
 跨 tile 的空间读取只能在完整输入发布后开始；滤波内部切 tile 必须包含所需 halo，不能以路径 tile 边缘截断邻域。
 
+## M20.2 信号生产实施契约
+
+本阶段仅为渐进 Surface only 的 Classic MIS/BSDF-only 与 ReSTIR initial/temporal/spatial 生产信号，
+以 `PathTraceSchedule::signals` 显式开启，默认关闭；固定射线/一次性提交和 Scene media 不开放信号。
+共享 `render_denoising_types` 只含 CPU 可读布局/来源/重投影描述，GPU owner 仍由 Pathtracing 管理。
+不接入滤波器、SDK 或 Editor/命令字段。
+
+每像素使用独立 FP32 缓冲；fresh 颜色、二阶矩、diffuse/specular/emission/background 保存本批显式补偿和与样本数，
+消费时除以 fresh count，不从累计图相减。albedo/世界法线另存从样本 0 起的补偿和、总计数和命中计数；
+miss 记零并计入总数，法线均值是否归一化由后端编码决定。首表面 BRDF diffuse/total 比例沿同一路径传播，
+NEE/MIS/ReSTIR 贡献在其实际入射方向按该 BRDF 拆分；保留原来的 radiance 运算、随机数和可见性射线。
+albedo 明确定义为已采样纹理的线性 baseColor，GGX 的 metallic/roughness 分列；不是预先计算的 NRD 材质因子。
+
+`PathTraceCompletedFrame::signal_buffer()` 返回拥有该 frame 生命周期内有效的 GPU buffer；
+`read_linear()` 非阻塞读回 raw 和信号，`PathTraceGpuImage::denoising_signals()` 暴露 CPU 数据。
+没有信号时 buffer 为 null、span 为空、`info().signals` 缺席。外部不得仅保存裸 buffer 指针而丢弃 frame owner。
+`signal_reference()` 返回显式运动来源描述；同一 renderer/view/session/场景、有效 serial/尺寸/有限矩阵才可用于 configure。
+raw settings、view 与源身份一并存于 frame；随机 epoch 与累计 sample index 分列，ReSTIR 移动相机后两者可能不同。
+
+布局版本 1 为 21 个 float4（336 字节/像素），与 `DenoisingSignalPixel` 一致：
+
+| float4 槽 | xyz / 主要字段 | w / 额外约定 |
+| --- | --- | --- |
+| 0–5 | 本批 radiance、RGB 二阶矩、diffuse、specular、首命中 emission、primary miss background 的补偿和 | 保留零；均值除以 source.sample_count |
+| 6–7 | 从样本 0 起累计的 baseColor、世界法线之和 | uint32 位模式：总样本数、命中样本数；均值均除以总样本数，包含 miss 零贡献 |
+| 8–10 | 本批首样本世界法线、世界位置、baseColor | 线性 roughness、正轴向 viewZ、metallic；Lambert 为 roughness=1、metallic=0 |
+| 11 | motion.xy、首条后续射线命中距离 | 主射线距离；无效/未命中由 flags 区分，不能只检查数值 |
+| 12 | uint4：triangle index、代表样本随机 epoch、有效 flags、fresh count | miss triangle 为 UINT_MAX；flags 位依次是 surface/motion/continuation-traced/continuation-hit |
+| 13–20 | 前述六个 fresh 和及两个累计 guide 和的补偿项 | 生产者状态，消费端不自行修改 |
+
+Classic 的信号候选增量为 `336 * pixels`，ReSTIR 多 epoch 批次额外需要相同大小 ping-pong；
+外持旧帧、raw 平面、读回副本、资源对齐和程序资源另按实际 owner 计入同一 AllocationBudget。
+不对 1 spp 的零样本方差作无噪声承诺；此处 RGB 二阶矩不是 SVGF 的时域亮度矩。
+
+每批首样本另外保存当前 normal/roughness、position/正 viewZ、albedo/metallic、triangle identity、
+有效位和随机 sample/epoch。代表性首条后续射线命中距离使用独立有效标记；未追踪、miss 和零距离分开，
+它不是已编码的 NRD lobe hit-distance，NRD 具体统计与编码仍在 M20.6 验收。
+相机运动使用调用方显式提供的上一份已消费完整帧的投影描述，记录其 source serial；
+不自动取上一 UI 帧。没有 reference 时 motion 无效；输出为未加全局 jitter 的 curr-to-prev 像素位移，
+当前随机像素采样位置可由 seed/首 sample 重建；越界/背面投影拒绝。静态几何，不声称支持动态对象。
+
+信号开启/关闭改变输入语义并重建 raw 与 guides 的共同样本起点；仅更新 reference/曝光/目标/分块不重置累计。
+已开始批次冻结配置/reference。原始和信号共用完整批次提交点；source serial 仅成功发布时推进，
+失败/取消/过期保留旧输出及其辅助图，外持 owner 持续计费；ReSTIR 多 epoch 的信号 ping-pong 与 raw 独立。
+开启时检查设备 storage 范围、整数尺寸及包含信号/暂存/旧代的预算；不够则拒绝，不能悄悄去掉 guides。
+信号 shader 独立变体按需创建，Off 不分配信号平面、不运行信号计算。
+
+验收覆盖三种 BRDF 边界、直接/间接/自发光/背景重组、fresh 与累计指南的独立参考、奇数尺寸与多 tile/多 epoch、
+透视/正交/显式运动 reference、纹理/mask/天空、Off 原始逐值对照、额度/取消/提交失败/旧 owner 与双视图。
+
 ## 后端输入与组合能力
 
-下表是待验收目标；M20.1 当前可用降噪能力仍为无，不能据此增加 UI 开关或注册新命令字段。
+下表是后端待验收目标；已有输入生产不代表已有降噪滤波能力，不能据此增加 UI 开关或注册新命令字段。
 
 | 后端 | 最低输入/历史 | Classic / ReSTIR Surface only | Scene media |
 | --- | --- | --- | --- |
@@ -228,10 +279,11 @@ M20.11 在基准冻结前制定各场景质量/时间门槛，按实测决定默
 
 ## 后续阶段需要收敛的问题
 
-M20.2 冻结实际通道布局与 lobe 分量推导；M20.4 完成外部 compute 桥、vk_oidn 显存上界和本机 feature/ABI 验证；
+M20.2 的通道布局与 lobe 分量推导已冻结，输入验证见 [0146](../development/0146-denoising-signals.md)；
+M20.4 完成外部 compute 桥、vk_oidn 显存上界和本机 feature/ABI 验证；
 M20.6/7 核验固定 NRD 输入编码与编译产物；M20.9 确定 ReSTIR 梯度协议；M20.10 确定体积数学分解。
 这些是已定位的后续验收项，不是 M20.1 已实现的能力，也不影响本阶段接口/状态边界成立。
 
 关联设计：[架构](architecture.md)、[路径追踪](render-pathtracing.md)、[ReSTIR](render-restir.md)、
 [Graph](graphics-graph.md)、[设备](graphics-device.md)、[Editor](editor.md)、[捕获](render-capture.md)。
-本阶段证据见 [0145](../development/0145-denoising-foundation.md)。
+依赖基线证据见 [0145](../development/0145-denoising-foundation.md)，信号实现证据见 [0146](../development/0146-denoising-signals.md)。

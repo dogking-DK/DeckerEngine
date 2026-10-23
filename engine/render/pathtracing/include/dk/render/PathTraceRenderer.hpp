@@ -2,6 +2,7 @@
 #include <dk/render/PathTraceReference.hpp>
 #include <dk/render/VolumePathReference.hpp>
 #include <dk/render/RestirReference.hpp>
+#include <dk/render/DenoisingSignals.hpp>
 #include <dk/graphics/Resources.hpp>
 #include <filesystem>
 
@@ -37,6 +38,7 @@ struct RestirMediumStatistics {
     std::uint64_t prepared_surfaces=0, applied_surfaces=0; // Complete progressive epochs only.
 };
 struct PathTraceGpuImageInfo : PathTraceImageInfo {
+    std::optional<DenoisingSignalInfo> signals; // Complete progressive surface input only.
     std::uint64_t geometry_fingerprint=0;
     std::optional<PathTraceGpuMediumInfo> medium; // Absent for the legacy surface integrator.
     std::optional<RestirDiSettings> restir; // RTXDI 3.1.0; absent for classic paths.
@@ -55,6 +57,7 @@ public:
     [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
     [[nodiscard]] std::span<const Vec3d> linear_rgb() const noexcept;
     [[nodiscard]] std::span<const Vec3d> second_moment() const noexcept;
+    [[nodiscard]] std::span<const DenoisingSignalPixel> denoising_signals() const noexcept;
     // First sample's primary hit per pixel; indices refer to the prepared scene's CPU source.
     [[nodiscard]] std::span<const std::optional<PathTraceHit>> primary_hits() const noexcept;
     [[nodiscard]] const PathTraceGpuImageInfo& info() const noexcept;
@@ -83,6 +86,7 @@ struct PathTraceSchedule {
     double exposure = 0; // Display-only metadata; linear history is unchanged.
     bool reverse_tiles = false; // Traversal only; frozen at batch start, no sample identity change.
     std::uint32_t tiles_per_submission = 1; // 1..8, same pass only; further bounded by ray/candidate work.
+    PathTraceSignalOptions signals; // Default Off. Toggling restarts raw and guides at a common sample zero.
 };
 struct PathTraceProgress {
     std::uint64_t view_id = 0, generation = 0;
@@ -102,6 +106,8 @@ public:
     [[nodiscard]] const PathTraceGpuImageInfo& info() const noexcept;
     // Eight float4 per pixel: mean, moment, hit, normal, sum/count, correction, moment sum/correction.
     [[nodiscard]] const graphics::Buffer* linear_buffer() const noexcept;
+    [[nodiscard]] const graphics::Buffer* signal_buffer() const noexcept; // 21 float4/pixel, or nullptr when Off.
+    [[nodiscard]] std::optional<DenoisingMotionReference> signal_reference() const;
     [[nodiscard]] Result<PathTraceFrame> read_linear(graphics::SubmissionQueue&, std::stop_token = {}) const;
 private:
     friend class PathTraceRenderer;

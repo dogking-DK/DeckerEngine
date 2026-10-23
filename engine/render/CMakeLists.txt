@@ -12,6 +12,7 @@ if(DK_BUILD_RENDER_CLOUD_FIELDS OR DK_BUILD_RENDER_CLOUD_REFERENCE OR DK_BUILD_R
     add_subdirectory(clouds)
 endif()
 if(DK_BUILD_RENDER_PATHTRACING_REFERENCE OR DK_BUILD_RENDER_PATHTRACING)
+    add_subdirectory(denoising)
     add_subdirectory(pathtracing)
 endif()
 if(DK_BUILD_RENDER_PIPELINE)
