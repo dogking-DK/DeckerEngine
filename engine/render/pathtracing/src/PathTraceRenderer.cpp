@@ -66,6 +66,8 @@ struct PathGpuFrame {
     Submission ticket;
     std::size_t stride = 64;
     std::uint64_t diagnostic_offset=0;
+    vk::DeviceSize diagnostic_stride=0,diagnostic_bytes=0;
+    std::uint32_t tile_count=1;
 };
 struct PathGpuCompleted {
     memory::ResourceHandle heap;
@@ -99,6 +101,7 @@ struct PathGpuBatch {
     std::shared_ptr<const PathGpuFrame> frame;
     std::uint32_t first=0,count=0,edge=0,next_tile=0,columns=0,rows=0;
     std::uint32_t epoch=0,phase=0;
+    std::uint32_t tiles_per_submission=1;
     Buffer scratch,scratch_surface,scratch_reservoir,spatial_output;
     std::stop_token stop, tile_stop;
     bool discarded=false,reverse_tiles=false;
@@ -180,30 +183,38 @@ Result<void> build_record(graph::PassContext& pass,void* context) {
     }
     return pass.build(2*count+pass.pass_index()+1);
 }
+using Parameters=std::array<Float4,42>;
 struct TraceContext {
-    const PathGpuState& state; const BindingSet& bindings;
+    const PathGpuState& state; std::span<const BindingSet> bindings;
+    std::span<const Parameters> parameters;
     std::uint32_t width,height; bool empty;
     std::size_t shader_table;
     bool progressive=false;
     bool air=false;
     bool restir=false;
+    vk::DeviceSize diagnostic_bytes=0;
+    std::stop_token stop;
+    std::stop_token batch_stop;
 };
 Result<void> trace_record(graph::PassContext& pass,void* context) {
     const auto& c=*static_cast<TraceContext*>(context);
     try {
         if (pass.pass_index()==0) return pass.fill(6);
-        if (pass.pass_index()!=1) {
-            if(c.progressive) return pass.copy_buffer(6,4,c.restir ? restir_status_bytes : 4);
+        if (pass.pass_index()>c.bindings.size()) {
+            if(c.progressive) return pass.copy_buffer(6,4,c.diagnostic_bytes);
             const auto bytes=std::uint64_t{c.width}*c.height*sizeof(PathGpuPixel);
-            return pass.pass_index()==2 ? pass.copy_buffer(3,4,bytes) : pass.copy_buffer(6,4,4,0,bytes);
+            return pass.pass_index()==c.bindings.size()+1 ? pass.copy_buffer(3,4,bytes) : pass.copy_buffer(6,4,4,0,bytes);
         }
-        const std::array<const BindingSet*,1> sets{&c.bindings};
-        if (!c.empty) return pass.trace(c.restir ? c.state.restir_pipeline : c.state.pipeline,c.shader_table,sets,{}, {c.width,c.height,1});
+        cancelled(c.stop); cancelled(c.batch_stop);
+        const auto index=pass.pass_index()-1;
+        const auto width=std::bit_cast<std::uint32_t>(c.parameters[index][0][0]);
+        const auto height=std::bit_cast<std::uint32_t>(c.parameters[index][0][1]);
+        const std::array<const BindingSet*,1> sets{&c.bindings[index]};
+        if (!c.empty) return pass.trace(c.restir ? c.state.restir_pipeline : c.state.pipeline,c.shader_table,sets,{}, {width,height,1});
         auto encoder=take(pass.compute()); check(encoder.bind_pipeline(c.restir ? c.state.restir_empty_pipeline : (c.air ? c.state.air_empty_pipeline : c.state.empty_pipeline))); check(encoder.bind_sets(sets));
-        return encoder.dispatch({(c.width*c.height+63)/64,1,1});
+        return encoder.dispatch({(width*height+63)/64,1,1});
     } catch (const Error& error) { return std::unexpected(error); }
 }
-using Parameters=std::array<Float4,42>;
 void restir_memory(const PathGpuState&,std::uint64_t,std::uint32_t,const RestirDiSettings&);
 std::uint64_t restir_evaluations(const RestirDiSettings& r) {
     return r.initial_candidates+(r.temporal ? 2 : 0)+(r.spatial ? 2*r.spatial->neighbor_count+1 : 0);
@@ -225,18 +236,27 @@ Parameters parameters(const PathSceneState& scene,const PathTraceSettings& s,Pat
 std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& queue,const PathGpuScene& scene,
     Parameters p,std::span<const Float4> rays,PathTraceGpuImageInfo info,std::stop_token stop,const Buffer* candidate=nullptr,const Buffer* completed=nullptr,std::shared_ptr<const PathGpuCloud> cloud={},
     const Buffer* surface=nullptr,const Buffer* reservoir=nullptr,const Buffer* old_surface=nullptr,const Buffer* old_reservoir=nullptr,
-    const Buffer* spatial_input=nullptr) {
+    const Buffer* spatial_input=nullptr,std::span<const Parameters> grouped={},std::stop_token batch_stop={}) {
     const bool empty=scene.source.triangle_count()==0;
     const bool air=info.medium.has_value();
     const bool restir=info.restir.has_value();
     if(restir) p[32][0]=std::bit_cast<float>(info.restir->initial_candidates);
+    const auto dispatches=grouped.empty() ? std::span<const Parameters>{&p,1} : grouped;
+    const auto alignment=std::max(vk::DeviceSize{1},queue.device().adapter().properties.limits.minStorageBufferOffsetAlignment);
+    const auto aligned=[&](vk::DeviceSize n) { return ((n+alignment-1)/alignment)*alignment; };
+    const auto parameter_stride=aligned(sizeof(Parameters));
     const auto count=std::uint64_t{info.width}*info.height,bytes=count*sizeof(PathGpuPixel);
     auto frame=memory::make_shared_in<PathGpuFrame>(state.heap); frame->heap=state.heap; frame->source=scene.source; frame->info=std::move(info);
     const auto storage=vk::BufferUsageFlagBits::eStorageBuffer;
     Buffer dummy_surface,dummy_reservoir;
     if(restir && !surface) { dummy_surface=take(state.factory.create_buffer({64,storage})); surface=&dummy_surface; }
     if(restir && !reservoir) { dummy_reservoir=take(state.factory.create_buffer({32,storage})); reservoir=&dummy_reservoir; }
-    auto uniform=upload(state.factory,std::as_bytes(std::span{p}),storage);
+    Vector<std::byte> parameter_bytes(parameter_stride*dispatches.size(),memory::Allocator<std::byte>{state.heap});
+    for(std::size_t i=0;i<dispatches.size();++i) {
+        const auto data=std::as_bytes(std::span{dispatches[i]});
+        std::copy(data.begin(),data.end(),parameter_bytes.begin()+i*parameter_stride);
+    }
+    auto uniform=upload(state.factory,parameter_bytes,storage);
     auto input=upload(state.factory,std::as_bytes(rays),storage);
     Buffer allocated;
     if(!candidate) allocated=take(state.factory.create_buffer({bytes,storage|vk::BufferUsageFlagBits::eTransferSrc}));
@@ -253,15 +273,17 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     // Errors and medium tracking remain global words 0/1. Observational RIS
     // counters occupy 256 shards, initialized on the device in this submission.
     const auto status_bytes=restir ? restir_status_bytes : path_status_words*sizeof(std::uint32_t);
-    auto status=take(state.factory.create_buffer({status_bytes,storage|vk::BufferUsageFlagBits::eTransferSrc|vk::BufferUsageFlagBits::eTransferDst}));
-    frame->readback=take(state.factory.create_buffer({candidate ? (restir ? restir_status_bytes : 4ull) : bytes+4,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
+    frame->tile_count=std::uint32_t(dispatches.size()); frame->diagnostic_stride=aligned(status_bytes);
+    frame->diagnostic_bytes=(dispatches.size()-1)*frame->diagnostic_stride+(restir && candidate ? restir_status_bytes : 4ull);
+    auto status=take(state.factory.create_buffer({dispatches.size()*frame->diagnostic_stride,storage|vk::BufferUsageFlagBits::eTransferSrc|vk::BufferUsageFlagBits::eTransferDst}));
+    frame->readback=take(state.factory.create_buffer({candidate ? frame->diagnostic_bytes : bytes+4,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
     frame->diagnostic_offset=candidate ? 0 : bytes;
     Vector<BindingWrite> writes(0,memory::Allocator<BindingWrite>{state.heap});
     if (!empty) { writes.push_back({0,0,AccelerationStructureBinding{&scene.geometry->tlas}}); writes.push_back({1,0,BufferBinding{&scene.geometry->triangles}}); }
     if(!empty || air || restir) { writes.push_back({4,0,BufferBinding{&input}});
         writes.push_back({9,0,BufferBinding{cloud ? &cloud->data : &uniform}}); }
-    writes.push_back({2,0,BufferBinding{&uniform}}); writes.push_back({3,0,BufferBinding{&output}});
-    writes.push_back({7,0,BufferBinding{&history}}); writes.push_back({8,0,BufferBinding{&status}});
+    const auto parameter_binding=writes.size(); writes.push_back({2,0,BufferBinding{&uniform,0,sizeof(Parameters)}}); writes.push_back({3,0,BufferBinding{&output}});
+    writes.push_back({7,0,BufferBinding{&history}}); const auto diagnostic_binding=writes.size(); writes.push_back({8,0,BufferBinding{&status,0,status_bytes}});
     if(restir) {
         writes.push_back({10,0,BufferBinding{surface}}); writes.push_back({11,0,BufferBinding{reservoir}});
         writes.push_back({12,0,BufferBinding{old_surface}}); writes.push_back({13,0,BufferBinding{old_reservoir}});
@@ -272,7 +294,13 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
         writes.push_back({5,i,ImageBinding{&texture.view}}); writes.push_back({6,i,SamplerBinding{&texture.sampler}});
     }
     const auto& layout=restir ? (empty ? state.restir_empty_layout : state.restir_layout) : (empty ? (air ? state.air_empty_layout : state.empty_layout) : state.layout);
-    auto bindings=take(state.factory.create_bindings(layout,0,writes));
+    Vector<BindingSet> bindings(0,memory::Allocator<BindingSet>{state.heap}); bindings.reserve(dispatches.size());
+    for(std::size_t i=0;i<dispatches.size();++i) {
+        cancelled(stop);
+        writes[parameter_binding].resource=BufferBinding{&uniform,i*parameter_stride,sizeof(Parameters)};
+        writes[diagnostic_binding].resource=BufferBinding{&status,i*frame->diagnostic_stride,status_bytes};
+        bindings.push_back(take(state.factory.create_bindings(layout,0,writes)));
+    }
     auto g=take(graph::Graph::create(state.heap));
     const auto params=take(g.declare_buffer("parameters",uniform.description(),graph::Lifetime::external,true));
     const auto geometry=take(g.declare_buffer("triangles",empty ? BufferDesc{4,storage} : scene.geometry->triangles.description(),graph::Lifetime::external,true));
@@ -337,7 +365,11 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     }
     const std::array clear{use(diagnostic,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,true)};
     add(g,"clear path status",clear);
-    add(g,empty ? "empty environment" : "surface path trace",uses);
+    for(std::size_t i=0;i<dispatches.size();++i) {
+        const auto name=std::string(empty ? "empty environment" : "surface path trace")+
+            (dispatches.size()>1 ? " tile "+std::to_string(i) : "");
+        add(g,name,uses);
+    }
     Vector<graph::Use> copy(0,memory::Allocator<graph::Use>{state.heap});
     copy.push_back(use(candidate ? diagnostic : result,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead));
     copy.push_back(use(readback,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,true));
@@ -348,10 +380,11 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
         add(g,"path diagnostic readback",copy);
     }
     check(g.mark_output(readback)); check(g.mark_output(result));
-    auto plan=take(g.compile(stop)); TraceContext context{state,bindings,frame->info.width,frame->info.height,empty,9+scene.geometry->texture_count+(cloud ? 1u : 0u)+restir_buffers,candidate!=nullptr,air,restir};
-    const std::array callbacks{graph::PassCallback{0,trace_record,&context},graph::PassCallback{1,trace_record,&context},graph::PassCallback{2,trace_record,&context},graph::PassCallback{3,trace_record,&context}};
+    auto plan=take(g.compile(stop)); TraceContext context{state,bindings,dispatches,frame->info.width,frame->info.height,empty,9+scene.geometry->texture_count+(cloud ? 1u : 0u)+restir_buffers,candidate!=nullptr,air,restir,frame->diagnostic_bytes,stop,batch_stop};
+    Vector<graph::PassCallback> callbacks(0,memory::Allocator<graph::PassCallback>{state.heap});
+    for(std::size_t i=0;i<dispatches.size()+(candidate ? 2 : 3);++i) callbacks.push_back({i,trace_record,&context});
     const std::array final{graph::FinalAccess{4,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}}};
-    cancelled(stop); auto execution=take(graph::execute(plan,queue,{imports,std::span{callbacks}.first(candidate ? 3 : 4),final}));
+    cancelled(stop); auto execution=take(graph::execute(plan,queue,{imports,callbacks,final}));
     frame->ticket=execution.submission(); if(cloud) state.cloud=std::move(cloud); return frame; // No allocation/fallible work after successful submit.
 }
 PathTraceGpuImageInfo info_for(const PathTraceScene& scene,std::uint32_t width,std::uint32_t height,
@@ -722,7 +755,8 @@ void validate_gpu_view(const Device& device,const PathSceneState& cpu,const Rend
 }
 void validate_progressive(const Device& device,const PathSceneState& cpu,const RenderView& view,const PathTraceSettings& settings,const PathTraceSchedule& schedule) {
     if(!schedule.target_spp || !schedule.batch_spp || schedule.batch_spp>16 ||
-        !schedule.tile_edge || schedule.tile_edge>256 || !std::isfinite(schedule.exposure) || std::abs(schedule.exposure)>32)
+        !schedule.tile_edge || schedule.tile_edge>256 || !schedule.tiles_per_submission || schedule.tiles_per_submission>8 ||
+        !std::isfinite(schedule.exposure) || std::abs(schedule.exposure)>32)
         throw path_invalid("Invalid path target, batch, tile or exposure");
     validate_gpu_view(device,cpu,view);
     auto validation=settings; validation.max_triangle_tests=1ull<<29;
@@ -799,7 +833,8 @@ Result<void> PathTraceRenderer::configure_medium_view(SubmissionQueue& queue,std
     if(state_->terminal) throw Error{ErrorCode::invalid_state,"Path session device lost"};
     if(!scene || scene.state_->program.lock()!=state_) throw path_invalid("Path scene belongs to a different renderer");
     if(!schedule.target_spp || !schedule.batch_spp || schedule.batch_spp>16 ||
-        !schedule.tile_edge || schedule.tile_edge>256 || !std::isfinite(schedule.exposure) || std::abs(schedule.exposure)>32)
+        !schedule.tile_edge || schedule.tile_edge>256 || !schedule.tiles_per_submission || schedule.tiles_per_submission>8 ||
+        !std::isfinite(schedule.exposure) || std::abs(schedule.exposure)>32)
         throw path_invalid("Invalid medium target, batch, tile or exposure");
     validate_medium(scene.source(),medium,settings,{0,1},1);
     const auto& cpu=*PathReferenceAccess::get(scene.source()); validate_gpu_view(queue.device(),cpu,view);
@@ -851,6 +886,12 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
         auto pixels=view->settings.max_rays/((view->restir ? 1 : batch->count)*(2ull*view->settings.max_bounces+(view->restir && !view->medium ? 2 : 1)));
         if(view->restir) pixels=std::min(pixels,view->restir->max_candidate_evaluations/restir_evaluations(*view->restir));
         batch->edge=std::min(view->schedule.tile_edge,std::uint32_t(std::sqrt(double(pixels))));
+        const auto tile_pixels=std::uint64_t{batch->edge}*batch->edge;
+        const auto ray_work=tile_pixels*(view->restir ? 1 : batch->count)*
+            (2ull*view->settings.max_bounces+(view->restir && !view->medium ? 2 : 1));
+        auto group_limit=std::min(std::uint64_t{view->schedule.tiles_per_submission},view->settings.max_rays/ray_work);
+        if(view->restir) group_limit=std::min(group_limit,view->restir->max_candidate_evaluations/(tile_pixels*restir_evaluations(*view->restir)));
+        batch->tiles_per_submission=std::uint32_t(group_limit);
         const auto& d=view->view.description(); batch->columns=(d.width+batch->edge-1)/batch->edge; batch->rows=(d.height+batch->edge-1)/batch->edge;
         if(view->restir) restir_memory(*state_,std::uint64_t{d.width}*d.height,batch->count,*view->restir);
         batch->candidate=memory::make_shared_in<PathGpuCompleted>(state_->heap);
@@ -921,12 +962,23 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
         medium_origin(p,*view->medium,{p[6][0],p[6][1],p[6][2]}); info.medium=air;
     }
     const std::array<Float4,3> dummy{};
+    const auto group_count=std::min(batch->tiles_per_submission,batch->columns*batch->rows-batch->next_tile);
+    std::array<Parameters,8> grouped;
+    for(std::uint32_t i=0;i<group_count;++i) {
+        cancelled(batch->stop); cancelled(stop);
+        const auto index=batch->reverse_tiles ? batch->columns*batch->rows-1-batch->next_tile-i : batch->next_tile+i;
+        const auto tx=(index%batch->columns)*batch->edge,ty=(index/batch->columns)*batch->edge;
+        grouped[i]=p;
+        grouped[i][0][0]=std::bit_cast<float>(std::min(batch->edge,d.width-tx));
+        grouped[i][0][1]=std::bit_cast<float>(std::min(batch->edge,d.height-ty));
+        grouped[i][11]=integers(tx,ty,d.width,1);
+    }
     cancelled(batch->stop);
     auto frame=submit(*state_,queue,*view->scene,p,dummy,std::move(info),stop,&batch->candidate->buffer,
         view->restir && batch->epoch ? &batch->scratch : (batch->history ? &batch->history->buffer : nullptr),view->cloud,
         view->restir ? &batch->candidate->surface : nullptr,
         view->restir ? (batch->phase==4 ? &batch->spatial_output : &batch->candidate->reservoir) : nullptr,old_surface,old_reservoir,
-        batch->phase==4 ? &batch->candidate->reservoir : nullptr);
+        batch->phase==4 ? &batch->candidate->reservoir : nullptr,std::span{grouped}.first(group_count),batch->stop);
     batch->tile_stop=stop; batch->frame=std::move(frame); state_->active=std::move(batch); return true;
 } catch(const Error& error) {
     if(state_ && queue.stats().device_lost) state_->terminal=true;
@@ -953,13 +1005,17 @@ Result<bool> PathTraceRenderer::poll(SubmissionQueue& queue,std::stop_token stop
     }
     if(!*waited) return false;
     if(!current(*state_,*batch)) { state_->active.reset(); return false; }
-    std::array<std::uint32_t,restir_status_words> diagnostic{};
-    check(batch->frame->readback.read(0,std::as_writable_bytes(std::span{diagnostic}).first(batch->candidate->info.restir ? restir_status_bytes : 4)));
+    const auto frame=batch->frame;
+    Vector<std::uint32_t> diagnostic(frame->diagnostic_bytes/sizeof(std::uint32_t),memory::Allocator<std::uint32_t>{state_->heap});
+    check(frame->readback.read(0,std::as_writable_bytes(std::span{diagnostic})));
+    std::uint32_t error=0;
+    for(std::uint32_t i=0;i<frame->tile_count;++i) error|=diagnostic[i*frame->diagnostic_stride/sizeof(std::uint32_t)];
     batch->frame.reset();
-    if(diagnostic[0]) { state_->active.reset(); return std::unexpected(sample_error(diagnostic[0])); }
+    if(error) { state_->active.reset(); return std::unexpected(sample_error(error)); }
     if(!current(*state_,*batch)) { state_->active.reset(); return false; }
-    if(batch->candidate->info.restir) append_restir_statistics(batch->candidate->info,diagnostic);
-    ++batch->next_tile;
+    if(batch->candidate->info.restir) for(std::uint32_t i=0;i<frame->tile_count;++i)
+        append_restir_statistics(batch->candidate->info,std::span{diagnostic}.subspan(i*frame->diagnostic_stride/sizeof(std::uint32_t),restir_status_words));
+    batch->next_tile+=frame->tile_count;
     if(batch->next_tile!=batch->columns*batch->rows) return false;
     if(batch->candidate->info.restir) {
         const auto after_temporal=batch->candidate->info.restir->spatial ? 4u : 1u;

@@ -82,6 +82,7 @@ struct PathTraceSchedule {
     bool paused = false;
     double exposure = 0; // Display-only metadata; linear history is unchanged.
     bool reverse_tiles = false; // Traversal only; frozen at batch start, no sample identity change.
+    std::uint32_t tiles_per_submission = 1; // 1..8, same pass only; further bounded by ray/candidate work.
 };
 struct PathTraceProgress {
     std::uint64_t view_id = 0, generation = 0;
@@ -167,9 +168,9 @@ public:
         PathTraceSamples = {},std::stop_token = {}) const;
     [[nodiscard]] Result<void> configure_restir_medium_view(graphics::SubmissionQueue&,std::uint64_t view_id,const PathTraceGpuScene&,
         const PathMediumSnapshot&,const RenderView&,const VolumePathSettings& = {},const RestirDiSettings& = {},const PathTraceSchedule& = {});
-    // Returns true only when a tile was submitted; repeated calls while pending are no-ops.
+    // Submits one bounded group of tiles. Repeated calls while pending are no-ops.
     [[nodiscard]] Result<bool> submit_batch(graphics::SubmissionQueue&, std::uint64_t view_id, std::stop_token = {});
-    // Collects one tile without submitting more work. True only when a whole batch is published.
+    // Collects one group without submitting more work. True only when a whole batch is published.
     [[nodiscard]] Result<bool> poll(graphics::SubmissionQueue&, std::stop_token = {});
     [[nodiscard]] Result<void> reset(std::uint64_t view_id);
     [[nodiscard]] Result<void> cancel(std::uint64_t view_id); // Retains completed history, discards current batch.

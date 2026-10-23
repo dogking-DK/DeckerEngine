@@ -47,7 +47,8 @@ Result<void> PathTraceRenderer::configure_restir_medium_view(SubmissionQueue& qu
     if(state_->terminal) throw Error{ErrorCode::invalid_state,"Path session device lost"};
     if(!scene || scene.state_->program.lock()!=state_) throw path_invalid("Path scene belongs to a different renderer");
     if(!schedule.target_spp || !schedule.batch_spp || schedule.batch_spp>16 ||
-        !schedule.tile_edge || schedule.tile_edge>256 || !std::isfinite(schedule.exposure) || std::abs(schedule.exposure)>32)
+        !schedule.tile_edge || schedule.tile_edge>256 || !schedule.tiles_per_submission || schedule.tiles_per_submission>8 ||
+        !std::isfinite(schedule.exposure) || std::abs(schedule.exposure)>32)
         throw path_invalid("Invalid medium RIS target, batch, tile or exposure");
     validate_medium(scene.source(),medium,settings,{0,1},1);
     const auto common=common_settings(settings); validate_restir(common,restir,1,{0,1},false,true);

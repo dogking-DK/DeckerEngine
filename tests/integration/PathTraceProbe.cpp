@@ -304,6 +304,7 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
 #include "PathSpatialCases.hpp"
 #include "PathRestirMediumCases.hpp"
 #include "PathRestirMediumSupportCases.hpp"
+#include "PathTileGroupCases.hpp"
 int main(int argc,char** argv) {
     try {
         require(argc==2,"expected analytic/statistics/images/lifetime case");
@@ -359,6 +360,8 @@ int main(int argc,char** argv) {
               else if(mode=="air_progressive") air_progressive(memory.heap,renderer,queue);
               else if(mode=="air_failure") air_failure(memory.heap,renderer,queue);
               else if(mode=="air_resources") air_resources(memory.heap,queue);
+              else if(mode=="tile_group_images") tile_group_images(memory.heap,renderer,queue);
+              else if(mode=="tile_group_state") tile_group_state(memory.heap,renderer,queue);
               else if(mode=="progressive_images") progressive_images(memory.heap,renderer,queue);
               else if(mode=="progressive_state") progressive_state(memory.heap,renderer,queue);
               else if(mode=="progressive_failure") progressive_failure(memory.heap,renderer,queue);

@@ -8,6 +8,7 @@ namespace {
 std::string algorithm="classic", selected_case;
 unsigned quality_width=4,quality_height=4,quality_limit=16384,reference_n=16384;
 unsigned performance_samples=4,preview_width=96,preview_height=54;
+unsigned submission_tiles=1;
 std::filesystem::path linear_directory;
 bool skip_reference=false,timing_quality=false,full_preview=false;
 std::optional<RestirDiSettings> restir_config() {
@@ -127,12 +128,13 @@ PathMediumSnapshot medium(const EnvironmentDescription& e,CloudFieldCache& cache
 }
 void configure(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& gpu,const PathMediumSnapshot& m,const RenderView& v,
     bool only,unsigned seed,const PathTraceSchedule& schedule) {
+    auto grouped=schedule; grouped.tiles_per_submission=submission_tiles;
     const auto restir=restir_config();
     if(restir) {
-        if(only) check(r.configure_restir_view(q,1,gpu,v,surface(seed),*restir,schedule));
-        else check(r.configure_restir_medium_view(q,1,gpu,m,v,volume(seed),*restir,schedule));
-    } else if(only) check(r.configure_view(q,1,gpu,v,surface(seed),schedule));
-    else check(r.configure_medium_view(q,1,gpu,m,v,volume(seed),schedule));
+        if(only) check(r.configure_restir_view(q,1,gpu,v,surface(seed),*restir,grouped));
+        else check(r.configure_restir_medium_view(q,1,gpu,m,v,volume(seed),*restir,grouped));
+    } else if(only) check(r.configure_view(q,1,gpu,v,surface(seed),grouped));
+    else check(r.configure_medium_view(q,1,gpu,m,v,volume(seed),grouped));
 }
 Json image(const PathTraceGpuImage& value) {
     return {{"linear",pixels(value.linear_rgb())},{"second",pixels(value.second_moment())},{"samples",value.info().samples.count}};
@@ -285,6 +287,7 @@ int main(int argc,char** argv) {
             else if(option=="--root" && i+1<argc) root=argv[++i]; else if(option=="--output" && i+1<argc) report=argv[++i];
             else if(option=="--shaders" && i+1<argc) shaders=argv[++i]; else if(option=="--tile" && i+1<argc) edge=unsigned(std::stoul(argv[++i]));
             else if(option=="--algorithm" && i+1<argc) algorithm=argv[++i];
+            else if(option=="--tiles-per-submission" && i+1<argc) submission_tiles=unsigned(std::stoul(argv[++i]));
             else if(option=="--case" && i+1<argc) selected_case=argv[++i];
             else if(option=="--quality-width" && i+1<argc) quality_width=unsigned(std::stoul(argv[++i]));
             else if(option=="--quality-height" && i+1<argc) quality_height=unsigned(std::stoul(argv[++i]));
@@ -304,6 +307,7 @@ int main(int argc,char** argv) {
         output["quality_extent"]={quality_width,quality_height}; output["quality_limit"]=quality_limit;
         output["reference_n"]=reference_n; output["preview_extent"]={preview_width,preview_height};
         output["initial_candidates"]=algorithm=="classic" ? 0 : 8;
+        require(submission_tiles>=1 && submission_tiles<=8,"Invalid submission group size"); output["tiles_per_submission"]=submission_tiles;
         output["restir"]=restir_json(restir_config()); output["timing_quality"]=timing_quality;
         output["quality_wait"]="active_poll_1ms_then_block";
         output["skip_reference"]=skip_reference; output["performance_samples"]=performance_samples;

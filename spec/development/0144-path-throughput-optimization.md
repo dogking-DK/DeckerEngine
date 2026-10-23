@@ -31,13 +31,16 @@ Renderer拥有候选线性/表面/reservoir及单在途票据；每组完成后�
 
 - 已先更新三个模块设计并建立本记录。
 - A已完成：Renderer的status改为device-local，同一Graph中fill初始化；256个16-word统计分片在完成后按原SUM/MAX归约，错误位和tracking总量保持全局。三个shader与四个调度回归同步，统计不参与采样选择。
-- B/C仍在实现，尚未验收。
+- B已完成：新增默认1、范围1..8的tiles_per_submission；同一pass内共享参数/诊断分配、Graph和提交，按设备alignment为每dispatch绑定独立区域；组数按射线/候选总工作进一步收缩。完成后先合并全部错误，成功才归约统计和推进tile；batch和当前submit两个取消token均在录制dispatch前检查。
+- 新增两个group GPU用例覆盖表面/介质五种算法组合、1/4/8分组、尾组/反序、全部统计和逐值图像、独立tracking及超额、后续提交失败/取消/恢复，以及真实小额度下8tile失败、单tile恢复。性能程序新增--tiles-per-submission（默认1）并报告实际组数。
+- C仍在实现，尚未验收。
 
 ## 验证记录
 
 - 基线已完成：61770f7、本机RTX 4070 Laptop/596.49、Release，3轮默认worker及4模式×3轮renderer共15个进程全部通过，原始数据/冻结shader和二进制保存在out/optimization/20261023-path-throughput/before。Classic存在明显轮间波动，保留全部数据。
 - A：`out/verify/20261023-094603-23d1c22b`，Release构建dk_pathtracing_probe，11项required RT/validation/sync检查通过，0失败/跳过。覆盖时空/介质调度图像与全部统计、tracking错误、状态、旧owner、Classic渐进/预算/失败。
 - 该子进程设置本机AMD层JSON明确支持的`DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1=1`，避免旧隐式层版本告警；required Khronos/sync保持开启。未更改系统配置。
+- B首轮`out/verify/20261023-095426-d9994464`：既有11项通过，两个新增用例失败，分别暴露测试表面模式未显式surface_only和多个Graph Pass重名；修正输入及为组内Pass编号后，`out/verify/20261023-095759-36345cde`两项复验通过，0失败/跳过。后一次同时补足正消光tracking隔离/超额、非法0/9分组、小额度恢复和双取消token检查。
 - 待运行：按阶段选择required RT/validation/sync、progressive/ReSTIR/介质调度状态、worker/后台GUI/capture；文档与diff检查。
 - 未计划全工程、Debug/Release双矩阵、其他设备或完整高spp质量认证；本次不改变原ReSTIR等误差默认结论。
 
