@@ -123,7 +123,7 @@ void restir_medium_schedule(memory::ResourceHandle heap,PathTraceRenderer& r,Sub
                 const auto& stats=image.info().restir_medium_statistics;
                 require(stats.prepared_surfaces==25*19 && stats.applied_surfaces>0 && stats.applied_surfaces<stats.prepared_surfaces,"reservoir conditioned on primary survival");
                 if(base) {
-                    compare_images(image,base,0); require(stats.applied_surfaces==base.info().restir_medium_statistics.applied_surfaces,"survival depends on schedule");
+                    compare_images(image,base,0); compare_restir_statistics(image.info(),base.info());
                 } else base=image;
                 if(mode&1) require(image.info().temporal_statistics.reused>0,"medium temporal inactive");
                 if(mode&2) require(image.info().spatial_statistics.reused>0,"medium spatial inactive");

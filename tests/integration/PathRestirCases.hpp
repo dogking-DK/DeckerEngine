@@ -1,5 +1,17 @@
 #pragma once
 namespace {
+void compare_restir_statistics(const PathTraceGpuImageInfo& actual,const PathTraceGpuImageInfo& expected) {
+    const auto& a=actual.temporal_statistics; const auto& b=expected.temporal_statistics;
+    require(a.reused==b.reused && a.rejected==b.rejected && a.expired==b.expired && a.support_corrected==b.support_corrected &&
+        a.max_age==b.max_age && a.max_candidates==b.max_candidates,"temporal diagnostics depend on scheduling");
+    const auto& c=actual.spatial_statistics; const auto& d=expected.spatial_statistics;
+    require(c.reused==d.reused && c.rejected==d.rejected && c.support_corrected==d.support_corrected &&
+        c.max_candidates==d.max_candidates && c.max_age==d.max_age && c.current_visibility_rays==d.current_visibility_rays,
+        "spatial diagnostics depend on scheduling");
+    require(actual.restir_medium_statistics.prepared_surfaces==expected.restir_medium_statistics.prepared_surfaces &&
+        actual.restir_medium_statistics.applied_surfaces==expected.restir_medium_statistics.applied_surfaces,
+        "medium diagnostics depend on scheduling");
+}
 PathTraceGpuImage ris_ray(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& scene,const PathTraceSettings& s,
     std::uint32_t count,const RestirDiSettings& ris={},const PathTraceRay& ray=down) {
     return complete(q,take(r.submit_restir_rays(q,scene,std::span{&ray,1},s,ris,{0,count})));
@@ -151,7 +163,8 @@ void restir_schedule(memory::ResourceHandle heap,PathTraceRenderer& r,Submission
         PathTraceSchedule tiles; tiles.target_spp=2; tiles.batch_spp=2;
         check(r.configure_restir_view(q,71,gpu,large,s,ris,tiles)); auto baseline=finish_view(r,q,71); check(r.release_view(71));
         tiles.tile_edge=256; tiles.reverse_tiles=true;
-        check(r.configure_restir_view(q,71,gpu,large,s,ris,tiles)); compare_images(finish_view(r,q,71),baseline,0); check(r.release_view(71));
+        check(r.configure_restir_view(q,71,gpu,large,s,ris,tiles)); auto reversed=finish_view(r,q,71);
+        compare_images(reversed,baseline,0); compare_restir_statistics(reversed.info(),baseline.info()); check(r.release_view(71));
     }
     Fixture sky{heap}; auto empty=take(r.prepare_scene(q,sky.scene())); auto view=sky.view(sky.source(),3);
     PathTraceSchedule schedule; schedule.target_spp=3; schedule.batch_spp=2; schedule.tile_edge=2;

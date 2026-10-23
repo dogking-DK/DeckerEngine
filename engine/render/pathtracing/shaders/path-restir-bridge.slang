@@ -14,6 +14,15 @@ float restirRandom(uint pixel,uint sample,uint candidate,uint purpose) {
     return min((float(h>>8)+.5)/16777216.0,asfloat(0x3f7fffff));
 }
 void restirError() { uint ignored; InterlockedOr(status[0],1,ignored); }
+// Match the renderer's 256 x 16-word diagnostic storage. Error/medium budget
+// words remain global; only observational words 2..15 are sharded.
+uint restirStatIndex(uint pixel,uint at) { return (mixBits(pixel)&255u)*16u+at; }
+void restirStat(uint pixel,uint at,uint value=1) {
+    uint ignored; InterlockedAdd(status[restirStatIndex(pixel,at)],value,ignored);
+}
+void restirMax(uint pixel,uint at,uint value) {
+    uint ignored; InterlockedMax(status[restirStatIndex(pixel,at)],value,ignored);
+}
 float3 restirEvaluate(uint light,float2 uv,float3 position,float3 normal,PathBsdf bsdf,float3 wo,
     out float3 wi,out float3 point,out float pdf) {
     bool medium=asuint(parameters[12]).x!=0;
@@ -78,14 +87,14 @@ RestirSample initialRestir(PathPayload hit,float3 position,float3 normal,PathBsd
     return chosen;
 }
 #if !DK_PATH_EMPTY
-float3 shadeRestir(RestirSample s,PathPayload hit,float3 position,float3 normal,PathBsdf bsdf,float3 wo,inout uint rays) {
+float3 shadeRestir(RestirSample s,PathPayload hit,float3 position,float3 normal,PathBsdf bsdf,float3 wo,uint pixel,inout uint rays) {
     float3 value=0;
     if(s.light!=0xffffffffu) {
         float3 wi,point; float pdf; float3 contribution=restirEvaluate(s.light,s.uv,position,normal,bsdf,wo,wi,point,pdf);
         uint emitter=s.light==asuint(parameters[2]).z ? 0xffffffffu : s.light;
         uint before=rays;
         if(visible(hit.index,position,wi,emitter,point,rays)) value=contribution*s.W;
-        if(asuint(parameters[40]).w!=0) { uint ignored; InterlockedAdd(status[13],rays-before,ignored); }
+        if(asuint(parameters[40]).w!=0) restirStat(pixel,13,rays-before);
     }
     if(asuint(parameters[2]).y!=0) {
         float3 wi=normalize(parameters[5].xyz); float cosine=max(0.0,dot(normal,wi));
@@ -104,7 +113,6 @@ RestirSample loadRestir(uint pixel,uint epoch) {
     if(asuint(b.z)!=epoch) restirError();
     RestirSample s; s.light=asuint(a.x); s.uv=a.yz; s.W=a.w; s.target=b.x; s.M=b.y; s.age=asuint(b.w); return s;
 }
-void temporalStat(uint at) { uint ignored; InterlockedAdd(status[at],1,ignored); }
 float4 previousClip(float3 p) {
     float4 v=float4(p,1);
     return float4(dot(parameters[35],v),dot(parameters[36],v),dot(parameters[37],v),dot(parameters[38],v));
@@ -154,7 +162,7 @@ void temporalRestir(uint pixel,uint epoch) {
     if(temporalReceiver(pixel,oldPixel)) {
         float4 a=previousReservoirs[oldPixel*2],b=previousReservoirs[oldPixel*2+1];
         if(asuint(b.z)!=asuint(parameters[34]).w) restirError();
-        if(asuint(b.w)>=asuint(parameters[33]).w) temporalStat(4);
+        if(asuint(b.w)>=asuint(parameters[33]).w) restirStat(pixel,4);
         else {
             RestirSample old; old.light=asuint(a.x); old.uv=a.yz; old.W=a.w; old.target=b.x; old.M=min(b.y,float(asuint(parameters[34]).z)); old.age=asuint(b.w);
             float4 hit=restirSurfaces[pixel*4];
@@ -169,11 +177,11 @@ void temporalRestir(uint pixel,uint epoch) {
             result.W=combined.weightSum; result.target=combined.targetPdf; result.M=combined.M;
             result.age=old.age+1; // Ancestry of ALL sources, never the age of the selected sample.
             if(combined.weightSum==0) result.light=0xffffffffu;
-            temporalStat(2); if(support==0 && old.M>0) temporalStat(7);
+            restirStat(pixel,2); if(support==0 && old.M>0) restirStat(pixel,7);
         }
-    } else temporalStat(3);
+    } else restirStat(pixel,3);
     if(!isfinite(result.W) || result.W<0 || !isfinite(result.M) || (result.target>0 && result.W==0)) restirError();
-    uint ignored; InterlockedMax(status[5],result.age,ignored); InterlockedMax(status[6],uint(result.M),ignored);
+    restirMax(pixel,5,result.age); restirMax(pixel,6,uint(result.M));
     storeRestir(pixel,result,epoch);
 }
 RestirSample loadSpatial(uint pixel,uint epoch) {
@@ -204,13 +212,13 @@ void spatialRestir(uint pixel,uint epoch) {
                 if(sourceHit.w==0 || distance(position,restirSurfaces[source*4+2].xyz)>parameters[41].x ||
                     dot(normal,restirSurfaces[source*4+1].xyz)<parameters[41].y) accepted=false;
             }
-            if(!accepted) { temporalStat(9); continue; }
+            if(!accepted) { restirStat(pixel,9); continue; }
             if(asuint(restirSurfaces[source*4+3].w)!=epoch) restirError();
             RestirSample s=loadSpatial(source,epoch);
             pixels[count]=source; counts[count]=s.M; ++count; age=max(age,s.age);
             float target=temporalTarget(s,hit,position,normal,wo);
             if(RTXDI_CombineDIReservoirs(combined,sdkReservoir(s,s.M),restirRandom(pixel,epoch,i,7),target)) result=s;
-            temporalStat(8);
+            restirStat(pixel,8);
         }
         float support=0;
         for(uint j=0;j<count;++j) {
@@ -221,9 +229,9 @@ void spatialRestir(uint pixel,uint epoch) {
         RTXDI_FinalizeResampling(combined,1,support);
         result.W=combined.weightSum; result.target=combined.targetPdf; result.M=combined.M; result.age=age;
         if(result.W==0) result.light=0xffffffffu;
-        if(support<combined.M && result.W>0) temporalStat(10);
+        if(support<combined.M && result.W>0) restirStat(pixel,10);
     }
     if(!isfinite(result.W) || result.W<0 || !isfinite(result.M) || (result.target>0 && result.W==0)) restirError();
-    uint ignored; InterlockedMax(status[11],uint(result.M),ignored); InterlockedMax(status[12],result.age,ignored);
+    restirMax(pixel,11,uint(result.M)); restirMax(pixel,12,result.age);
     storeRestir(pixel,result,epoch);
 }

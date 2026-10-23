@@ -181,7 +181,7 @@ float3 tracePath(RayDesc ray,uint pixel,uint sample,inout uint rays,out float4 f
 #if DK_PATH_RESTIR
         if(depth==0) {
             RestirSample reservoir=saved ? loadRestir(restirPixel,sample) : initialRestir(hit,position,normal,bsdf,-ray.Direction,pixel,sample);
-            radiance+=throughput*shadeRestir(reservoir,hit,position,normal,bsdf,-ray.Direction,rays);
+            radiance+=throughput*shadeRestir(reservoir,hit,position,normal,bsdf,-ray.Direction,pixel,rays);
         } else
 #endif
         radiance+=throughput*directLight(hit,position,normal,bsdf,-ray.Direction,pixel,sample,depth,rays);
@@ -222,7 +222,7 @@ void runRestirPixel(uint2 coordinate) {
                 record=float4(v.ground ? segment.y : hit.distance,hit.barycentric,v.ground ? -1.0 : float(hit.index+1));
                 normal=float4(v.normal,1); position=float4(v.position,1);
                 if(asuint(parameters[1]).z!=0) {
-                    reservoir=initialRestir(hit,v.position,v.normal,v.bsdf,-ray.Direction,counter,epoch); temporalStat(14);
+                    reservoir=initialRestir(hit,v.position,v.normal,v.bsdf,-ray.Direction,counter,epoch); restirStat(pixel,14);
                 }
             }
         } else {

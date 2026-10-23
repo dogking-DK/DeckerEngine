@@ -42,7 +42,7 @@ void spatial_schedule(memory::ResourceHandle heap,PathTraceRenderer& r,Submissio
     auto gpu=take(r.prepare_scene(q,ggx_scene(f))); auto s=settings(3); s.environment_rgb={.2,.3,.4};
     for(bool temporal:{false,true}) for(bool ortho:{false,true}) {
         auto ris=spatial_settings(temporal); ris.spatial->neighbor_count=8; ris.spatial->radius=1;
-        auto view=temporal_view(f,5,ortho); PathTraceGpuImage baseline; RestirSpatialStatistics diagnostics;
+        auto view=temporal_view(f,5,ortho); PathTraceGpuImage baseline;
         for(unsigned batch:{1u,7u,16u}) {
             PathTraceSchedule schedule; schedule.target_spp=19; schedule.batch_spp=batch; schedule.tile_edge=batch==1 ? 64 : 3; schedule.reverse_tiles=batch==16;
             check(r.configure_restir_view(q,102,gpu,view,s,ris,schedule)); auto actual=finish_view(r,q,102);
@@ -50,9 +50,8 @@ void spatial_schedule(memory::ResourceHandle heap,PathTraceRenderer& r,Submissio
             require(stats.reused>0 && stats.rejected>0 && stats.current_visibility_rays<=25*19,"spatial schedule fixture inactive");
             if(baseline) {
                 compare_images(actual,baseline,0);
-                require(stats.reused==diagnostics.reused && stats.rejected==diagnostics.rejected && stats.support_corrected==diagnostics.support_corrected &&
-                    stats.max_candidates==diagnostics.max_candidates && stats.max_age==diagnostics.max_age && stats.current_visibility_rays==diagnostics.current_visibility_rays,"spatial diagnostics depend on scheduling");
-            } else { baseline=actual; diagnostics=stats; }
+                compare_restir_statistics(actual.info(),baseline.info());
+            } else baseline=actual;
             check(r.release_view(102));
         }
     }

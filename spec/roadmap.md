@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-20T00:19:43+08:00"
+updated_at: "2026-10-23T09:42:00+08:00"
 status: accepted
 ---
 
@@ -865,6 +865,7 @@ M19.7 Editor/worker 算法选项、诊断和 v3 独立捕获已完成，16 个�
 
 容量与Scene media后续优化见[0143](development/0143-path-capacity-media-throughput.md)：默认使用当前可用显存，路径视口/几何/纹理取消人为容量封顶，介质tile256；35项定向检查通过，Luau示例因模块未构建未运行。三轮同输入吞吐提高1.43–2.40倍，GPU区间覆盖率提高；两个ReSTIR模式tile p95略高于历史8ms候选，高分辨率复用仍非实时收敛。
 下一步优先提升未认证参考的收敛并定位temporal/spatial内部GPU成本及冷启动，再决定新的采样扩展；DLSS 尚未接入。
+当前按用户要求推进[0144](development/0144-path-throughput-optimization.md)：分阶段优化GPU统计、有界tile提交组及Editor显示/采样交接，保持图像采样和完整发布；结果以该记录实际验收为准。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 

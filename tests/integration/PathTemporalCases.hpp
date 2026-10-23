@@ -96,7 +96,8 @@ void temporal_schedule(memory::ResourceHandle heap,PathTraceRenderer& r,Submissi
             const auto& stats=actual.info().temporal_statistics;
             require(stats.reused>0 && stats.expired>0 && stats.max_age==3 && stats.max_candidates<=17,"temporal limits/reuse missing");
             require(actual.info().sampling_first_epoch==0 && !actual.info().temporal_history_epoch,"fresh view has history origin");
-            if(baseline) compare_images(actual,baseline,0); else baseline=actual;
+            if(baseline) { compare_images(actual,baseline,0); compare_restir_statistics(actual.info(),baseline.info()); }
+            else baseline=actual;
             check(r.release_view(91));
         }
     }

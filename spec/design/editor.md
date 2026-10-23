@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-20T01:21:06+08:00"
+updated_at: "2026-10-23T09:42:00+08:00"
 status: accepted
 ---
 
@@ -10,6 +10,17 @@ status: accepted
 worker自动使用设备当前可用显存额度，desktop场景不以100万三角形、64张纹理或128 MiB源字节封顶。
 介质与表面统一256 tile以减少同步空隙；不通过降低尺寸、spp或反弹获得吞吐。用户目标spp使用32位输入。
 显式物理参数、数值合法域和设备能力检查保留；错误保留上一次完整画面并报告。
+
+## 路径预览吞吐与队列交接（0144）
+
+计划与证据见[0144](../development/0144-path-throughput-optimization.md)。worker采用4 tile提交组，仍只有一个renderer在途票据；完整显示帧经独立不可变completed owner供tone读取，可在显示提交后继续计算下一批候选。最多一份待交接显示和一份renderer候选；acceptance线性读回仍有界，不复用尚未完成的资源。
+
+GUI设备在路径模块启用时请求同族第二队列；可用时路径worker使用queue 1，否则保留queue 0。所有者各有独立ledger，native操作沿对应queue gate串行，图像交接沿已有同设备同族timeline机制。与模拟共享queue 1时仍受同一个gate保护，不承诺硬件并行。GUI保留每帧完成等待，以保护ImGui descriptor/backend缓冲寿命。
+
+Surface only相机仍合并最新输入并等待完整图后提交，避免持续取消导致显示饥饿；本轮通过缩短交付时间改善实际导航延迟，不静默降低分辨率。Scene media现有显式Motion preview政策不扩展。完成帧保留真实相机/尺寸/设置来源，过期帧不能作为当前帧拾取。取消/关闭仍先排空所有生产与显示票据，再释放资源。
+
+验收包含tone/线性读回与下一采样重叠、暂停/曝光/相机/尺寸/模式切换、取消和在途关闭，以及真实后台GUI与固定capture一致性。
+
 # M8.1 编辑器工作台
 
 ## 基础正交与 Unlit inspection

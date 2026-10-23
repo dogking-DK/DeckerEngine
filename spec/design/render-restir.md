@@ -1,7 +1,7 @@
 ---
 module: render-restir
 created_at: "2026-10-19T12:50:00+08:00"
-updated_at: "2026-10-20T08:55:24+08:00"
+updated_at: "2026-10-23T09:42:00+08:00"
 status: accepted
 ---
 
@@ -9,6 +9,9 @@ status: accepted
 当前容量扩展见[0143](../development/0143-path-capacity-media-throughput.md)：渐进介质与表面统一256 tile，不限制完整目标的射线总量。
 目标采样编号可使用uint32范围；每个epoch/pass仍完整完成后发布。候选、历史与数值算法参数合法域不变。
 自动显存额度改为设备当前可用预算，所有真实owner继续计费；失败/取消不更改已完成帧。
+
+统计与调度优化见[0144](../development/0144-path-throughput-optimization.md)及[路径追踪提交契约](render-pathtracing.md#提交与统计吞吐优化0144)：诊断使用device-local storage，观测统计256分片并在完成后精确归约；错误与介质总量保留每dispatch实时检查。保留全部来源/历史/可见性统计，不通过删除统计获得性能。可显式合并同一pass内的有界tile组，跨pass屏障、独立空间平面、epoch顺序及完整候选提交点保持。
+
 # ReSTIR 光照重采样设计
 
 本文件是[路径追踪设计](render-pathtracing.md)的采样扩展设计。

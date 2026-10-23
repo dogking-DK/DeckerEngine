@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-20T01:21:06+08:00"
+updated_at: "2026-10-23T09:42:00+08:00"
 status: accepted
 ---
 
@@ -10,6 +10,18 @@ status: accepted
 尺寸按设备maxImageDimension2D、maxStorageBufferRange与32位shader寻址检查；目标spp使用32位编号，不预限整个目标的射线总量。
 每次dispatch继续有界分块以维持取消和计数正确性；CPU参考/固定射线数值接口、物理模型参数与数值合法域保持独立。
 渐进射线统计在历史平面预留w分量中以两个uint32累计，避免大目标下float整数失真或32位回绕；无需shaderInt64，不增加每像素显存。固定工作接口保持原布局。
+
+## 提交与统计吞吐优化（0144）
+
+实施计划与证据见[0144](../development/0144-path-throughput-optimization.md)。保持尺寸、spp、反弹、随机序列和完整批次发布；本轮不改变估计器或引入重建。
+
+- 诊断 status 改为 device-local storage，由同一 Graph 的 transfer fill 初始化，再进入 trace 和诊断读回。错误位及介质 tracking 总量保持每 dispatch 独立、sticky、实时可见。
+- ReSTIR 的观测统计使用256个16-word分片；以像素散列选择分片，SUM / MAX 在完成票据后按原字段语义归约。错误位与 tracking 预算不分片；全部分片及在途读回计入现有额度，不增加 subgroup 能力要求。
+- `PathTraceSchedule.tiles_per_submission` 默认1，合法1..8；Editor采用4。一次提交只合并同一epoch/pass内的相邻tile，受单提交射线/候选工作预算进一步收缩；不跨pass提前消费不完整平面。每dispatch有独立参数和诊断区域，介质tracking预算不跨tile合并。
+- 一组tile共享参数/诊断分配、Graph编译、命令提交及完成通知；每tile独立descriptor范围且满足设备offset alignment。单在途票据保持，只有整组完成才推进completed_tiles，只有完整批次成功才发布completed_spp。提交失败或任一tile诊断失败丢弃整个候选，外持旧帧不变。
+- 合并组在录制各dispatch之前检查取消；GPU已提交组不能抢占。组数有界且单提交总工作量继续受预算限制，取消延迟实测单列，不承诺固定毫秒上限。
+- 测试比较1/4/8 tile组、非整除尺寸及反向遍历的线性颜色、二阶矩、命中和全部复用统计；覆盖介质tracking超额、后续组失败、取消、旧owner和两个视图。
+- 性能使用相同设备/输入的三轮Release基线与改后测量，记录wall、CPU record-submit、GPU区间、提交数及默认相机worker交付/取消。原生GPU时间与监视器利用率分别解释。
 desktop场景取消100万三角形、4096个primitive、64张纹理及128 MiB源字节的容量封顶；保留表示范围与显式调用者额度。
 GPU场景检查设备AS、buffer、image和descriptor限制；纹理数组按需增长，先创建所有候选管线再替换，旧绑定和在途命令继续拥有旧管线。
 真实owner计费继续包含外持完成帧和在途资源；OOM或失败不发布部分图像，不破坏已完成图像。

@@ -113,6 +113,10 @@ struct PathGpuImage {
 }
 namespace {
 using namespace detail;
+constexpr std::size_t path_status_words=16;
+constexpr std::size_t restir_status_shards=256;
+constexpr std::size_t restir_status_words=path_status_words*restir_status_shards;
+constexpr std::size_t restir_status_bytes=restir_status_words*sizeof(std::uint32_t);
 template<class T> T take(Result<T> result) { if (!result) throw result.error(); return std::move(*result); }
 void check(Result<void> result) { if (!result) throw result.error(); }
 Error sample_error(std::uint32_t diagnostic) {
@@ -120,6 +124,23 @@ Error sample_error(std::uint32_t diagnostic) {
     if(diagnostic&4) return {ErrorCode::invalid_argument,"GPU medium path exceeds numerical domain",{"render.pathtracing.medium_domain"}};
     if(diagnostic&8) return {ErrorCode::internal_error,"GPU medium extinction exceeds majorant"};
     return {ErrorCode::internal_error,"Invalid GPU path sample/history"};
+}
+void append_restir_statistics(PathTraceGpuImageInfo& info,std::span<const std::uint32_t> diagnostic) {
+    auto& temporal=info.temporal_statistics;
+    auto& spatial=info.spatial_statistics;
+    auto& medium=info.restir_medium_statistics;
+    // Tile work caps bound every uint32 shard. SUM fields widen before their
+    // first addition; MAX fields retain the original integer semantics.
+    for(std::size_t shard=0;shard<restir_status_shards;++shard) {
+        const auto words=diagnostic.subspan(shard*path_status_words,path_status_words);
+        temporal.reused+=std::uint64_t{words[2]}; temporal.rejected+=std::uint64_t{words[3]}; temporal.expired+=std::uint64_t{words[4]};
+        temporal.max_age=std::max(temporal.max_age,words[5]); temporal.max_candidates=std::max(temporal.max_candidates,words[6]);
+        temporal.support_corrected+=std::uint64_t{words[7]};
+        spatial.reused+=std::uint64_t{words[8]}; spatial.rejected+=std::uint64_t{words[9]}; spatial.support_corrected+=std::uint64_t{words[10]};
+        spatial.max_candidates=std::max(spatial.max_candidates,words[11]); spatial.max_age=std::max(spatial.max_age,words[12]);
+        spatial.current_visibility_rays+=std::uint64_t{words[13]};
+        medium.prepared_surfaces+=std::uint64_t{words[14]}; medium.applied_surfaces+=std::uint64_t{words[15]};
+    }
 }
 void cancelled(std::stop_token stop) {
     if (stop.stop_requested()) throw Error{ErrorCode::invalid_state,"GPU path tracing cancelled",{"render.pathtracing.cancelled"}};
@@ -170,10 +191,11 @@ struct TraceContext {
 Result<void> trace_record(graph::PassContext& pass,void* context) {
     const auto& c=*static_cast<TraceContext*>(context);
     try {
-        if (pass.pass_index()!=0) {
-            if(c.progressive) return pass.copy_buffer(6,4,c.restir ? 64 : 4);
+        if (pass.pass_index()==0) return pass.fill(6);
+        if (pass.pass_index()!=1) {
+            if(c.progressive) return pass.copy_buffer(6,4,c.restir ? restir_status_bytes : 4);
             const auto bytes=std::uint64_t{c.width}*c.height*sizeof(PathGpuPixel);
-            return pass.pass_index()==1 ? pass.copy_buffer(3,4,bytes) : pass.copy_buffer(6,4,4,0,bytes);
+            return pass.pass_index()==2 ? pass.copy_buffer(3,4,bytes) : pass.copy_buffer(6,4,4,0,bytes);
         }
         const std::array<const BindingSet*,1> sets{&c.bindings};
         if (!c.empty) return pass.trace(c.restir ? c.state.restir_pipeline : c.state.pipeline,c.shader_table,sets,{}, {c.width,c.height,1});
@@ -228,9 +250,11 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     if(!old_reservoir) old_reservoir=&uniform;
     const bool spatial_pass=restir && std::bit_cast<std::uint32_t>(p[32][1])==4;
     if(!spatial_input) spatial_input=&uniform;
-    const std::array<std::uint32_t,16> clean{};
-    auto status=upload(state.factory,std::as_bytes(std::span{clean}),storage|vk::BufferUsageFlagBits::eTransferSrc);
-    frame->readback=take(state.factory.create_buffer({candidate ? (restir ? 64ull : 4ull) : bytes+4,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
+    // Errors and medium tracking remain global words 0/1. Observational RIS
+    // counters occupy 256 shards, initialized on the device in this submission.
+    const auto status_bytes=restir ? restir_status_bytes : path_status_words*sizeof(std::uint32_t);
+    auto status=take(state.factory.create_buffer({status_bytes,storage|vk::BufferUsageFlagBits::eTransferSrc|vk::BufferUsageFlagBits::eTransferDst}));
+    frame->readback=take(state.factory.create_buffer({candidate ? (restir ? restir_status_bytes : 4ull) : bytes+4,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
     frame->diagnostic_offset=candidate ? 0 : bytes;
     Vector<BindingWrite> writes(0,memory::Allocator<BindingWrite>{state.heap});
     if (!empty) { writes.push_back({0,0,AccelerationStructureBinding{&scene.geometry->tlas}}); writes.push_back({1,0,BufferBinding{&scene.geometry->triangles}}); }
@@ -256,7 +280,7 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     const auto result=take(g.declare_buffer("HDR and diagnostics",output.description(),graph::Lifetime::external));
     const auto readback=take(g.declare_buffer("readback",frame->readback.description(),graph::Lifetime::external));
     const auto previous=take(g.declare_buffer("completed history",history.description(),graph::Lifetime::external,true));
-    const auto diagnostic=take(g.declare_buffer("tile status",status.description(),graph::Lifetime::external,true));
+    const auto diagnostic=take(g.declare_buffer("tile status",status.description(),graph::Lifetime::external));
     const auto stage=empty ? vk::PipelineStageFlagBits2::eComputeShader : vk::PipelineStageFlagBits2::eRayTracingShaderKHR;
     Vector<graph::Use> uses(0,memory::Allocator<graph::Use>{state.heap});
     uses.push_back(use(params,stage,vk::AccessFlagBits2::eShaderRead)); uses.push_back(use(result,stage,vk::AccessFlagBits2::eShaderWrite,true));
@@ -311,6 +335,8 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
         const auto id=take(g.declare_buffer("immutable cloud fields",cloud->data.description(),graph::Lifetime::external,true));
         uses.push_back(use(id,stage,vk::AccessFlagBits2::eShaderRead)); imports.push_back({7+restir_buffers,&cloud->data});
     }
+    const std::array clear{use(diagnostic,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,true)};
+    add(g,"clear path status",clear);
     add(g,empty ? "empty environment" : "surface path trace",uses);
     Vector<graph::Use> copy(0,memory::Allocator<graph::Use>{state.heap});
     copy.push_back(use(candidate ? diagnostic : result,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead));
@@ -323,9 +349,9 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     }
     check(g.mark_output(readback)); check(g.mark_output(result));
     auto plan=take(g.compile(stop)); TraceContext context{state,bindings,frame->info.width,frame->info.height,empty,9+scene.geometry->texture_count+(cloud ? 1u : 0u)+restir_buffers,candidate!=nullptr,air,restir};
-    const std::array callbacks{graph::PassCallback{0,trace_record,&context},graph::PassCallback{1,trace_record,&context},graph::PassCallback{2,trace_record,&context}};
+    const std::array callbacks{graph::PassCallback{0,trace_record,&context},graph::PassCallback{1,trace_record,&context},graph::PassCallback{2,trace_record,&context},graph::PassCallback{3,trace_record,&context}};
     const std::array final{graph::FinalAccess{4,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}}};
-    cancelled(stop); auto execution=take(graph::execute(plan,queue,{imports,std::span{callbacks}.first(candidate ? 2 : 3),final}));
+    cancelled(stop); auto execution=take(graph::execute(plan,queue,{imports,std::span{callbacks}.first(candidate ? 3 : 4),final}));
     frame->ticket=execution.submission(); if(cloud) state.cloud=std::move(cloud); return frame; // No allocation/fallible work after successful submit.
 }
 PathTraceGpuImageInfo info_for(const PathTraceScene& scene,std::uint32_t width,std::uint32_t height,
@@ -927,20 +953,12 @@ Result<bool> PathTraceRenderer::poll(SubmissionQueue& queue,std::stop_token stop
     }
     if(!*waited) return false;
     if(!current(*state_,*batch)) { state_->active.reset(); return false; }
-    std::array<std::uint32_t,16> diagnostic{};
-    check(batch->frame->readback.read(0,std::as_writable_bytes(std::span{diagnostic}).first(batch->candidate->info.restir ? 64 : 4)));
+    std::array<std::uint32_t,restir_status_words> diagnostic{};
+    check(batch->frame->readback.read(0,std::as_writable_bytes(std::span{diagnostic}).first(batch->candidate->info.restir ? restir_status_bytes : 4)));
     batch->frame.reset();
     if(diagnostic[0]) { state_->active.reset(); return std::unexpected(sample_error(diagnostic[0])); }
     if(!current(*state_,*batch)) { state_->active.reset(); return false; }
-    auto& stats=batch->candidate->info.temporal_statistics;
-    stats.reused+=diagnostic[2]; stats.rejected+=diagnostic[3]; stats.expired+=diagnostic[4];
-    stats.max_age=std::max(stats.max_age,diagnostic[5]); stats.max_candidates=std::max(stats.max_candidates,diagnostic[6]); stats.support_corrected+=diagnostic[7];
-    auto& spatial=batch->candidate->info.spatial_statistics;
-    spatial.reused+=diagnostic[8]; spatial.rejected+=diagnostic[9]; spatial.support_corrected+=diagnostic[10];
-    spatial.max_candidates=std::max(spatial.max_candidates,diagnostic[11]); spatial.max_age=std::max(spatial.max_age,diagnostic[12]);
-    spatial.current_visibility_rays+=diagnostic[13];
-    auto& media=batch->candidate->info.restir_medium_statistics;
-    media.prepared_surfaces+=diagnostic[14]; media.applied_surfaces+=diagnostic[15];
+    if(batch->candidate->info.restir) append_restir_statistics(batch->candidate->info,diagnostic);
     ++batch->next_tile;
     if(batch->next_tile!=batch->columns*batch->rows) return false;
     if(batch->candidate->info.restir) {

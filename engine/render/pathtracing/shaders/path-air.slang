@@ -270,7 +270,7 @@ float shadeAirRestir(RestirSample s,AirVertex v,uint channel,uint pixel,uint sam
     if(contribution[channel]==0) return 0;
     uint light=s.light<asuint(parameters[2]).z ? s.light : 0xffffffffu,before=rays;
     float T=airVisibility(v,wi,light,point,channel,pixel,sample,0,rays,steps,11);
-    if(asuint(parameters[40]).w!=0) { uint ignored; InterlockedAdd(status[13],rays-before,ignored); }
+    if(asuint(parameters[40]).w!=0) restirStat(pixel,13,rays-before);
     return contribution[channel]*s.W*T;
 }
 #endif
@@ -288,7 +288,7 @@ float3 traceAir(RayDesc ray,AirLocation location,uint pixel,uint sample,inout ui
     bool prepared=counts.z!=0 && (receiver.ground || primary.found!=0);
     RestirSample reservoir=emptyRestir();
     if(saved) reservoir=loadRestir(restirPixel,sample);
-    else if(prepared) { reservoir=initialRestir(primary,receiver.position,receiver.normal,receiver.bsdf,-ray.Direction,pixel,sample); temporalStat(14); }
+    else if(prepared) { reservoir=initialRestir(primary,receiver.position,receiver.normal,receiver.bsdf,-ray.Direction,pixel,sample); restirStat(pixel,14); }
 #endif
     // Every RGB reservoir, including history, is fixed independently of this hero and flight.
     uint channel=min(2u,uint(airRandom(pixel,sample,0,0)*3));
@@ -328,7 +328,7 @@ float3 traceAir(RayDesc ray,AirLocation location,uint pixel,uint sample,inout ui
         if(depth==counts.z) break;
 #if DK_PATH_RESTIR
         bool firstRestir=depth==0 && event==0 && prepared;
-        if(firstRestir) { temporalStat(15); value+=beta*shadeAirRestir(reservoir,v,channel,pixel,sample,rays,steps); }
+        if(firstRestir) { restirStat(pixel,15); value+=beta*shadeAirRestir(reservoir,v,channel,pixel,sample,rays,steps); }
         else
 #endif
         value+=beta*airDirect(v,channel,pixel,sample,depth,rays,steps);
