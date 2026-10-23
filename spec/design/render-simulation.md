@@ -1,11 +1,20 @@
 ---
 module: render-simulation
 created_at: "2026-10-09T10:59:13+08:00"
-updated_at: "2026-10-19T11:24:37+08:00"
+updated_at: "2026-10-23T18:22:00+08:00"
 status: accepted
 ---
 
 # 模拟布片可视化
+
+## M21 通用粒子预览边界（设计）
+
+本模块仍负责规则布片可视化。WCSPH/PBF 的通用点云拟新增独立
+[render-particles](render-particles.md)，通过公共粒子完成输出接入服务，
+不强制规则 columns/rows，也不依赖 GPU XPBD 才能显示 CPU 流体。
+共享现有视图身份、完成图像/队列交接、暂停导航和显式读回契约；
+布片现有接口继续兼容，新增点绘制在各阶段做直接受影响的布片回归。
+阶段和验收见 [M21](../roadmap.md)，本节没有新增运行时能力。
 
 ## M12.2 编辑器输出
 

@@ -148,5 +148,6 @@
 | 0144 | [路径追踪统计、提交与Editor吞吐优化](0144-path-throughput-optimization.md) | render-pathtracing、render-restir、editor | completed |
 | 0145 | [M20.1 降噪接口、状态与依赖基线](0145-denoising-foundation.md) | render-denoising、render-pathtracing、render-restir、architecture | completed |
 | 0146 | [M20.2 路径追踪降噪输入信号](0146-denoising-signals.md) | render-denoising、render-pathtracing、render-restir | completed |
+| 0147 | [M21.1 原生点绘制与粒子流体设计落档](0147-particle-fluid-plan.md) | physics-fluids、render-particles、physics-api、render-simulation、graphics-device、graphics-vulkan、graphics-shaders、architecture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-23T17:51:15+08:00"
+updated_at: "2026-10-23T18:22:00+08:00"
 status: accepted
 ---
 
@@ -44,6 +44,16 @@ render/pipeline 通过 Graph 执行 depth/opaque/tone/readback，提供绑定场
 本设计整理自用户引用的“设计引擎架构”讨论（会话
 `6ab1c45a-ec94-83ea-82df-a152c0c45cc5`）中可读取的内容，
 并采用当前用户明确指定的工程名称和命名空间。
+
+## M21 粒子流体扩展边界（设计）
+
+[粒子流体](physics-fluids.md)拟独立增加公共粒子输出、CPU WCSPH/PBF 与可选 GPU compute 模块；
+[粒子可视化](render-particles.md)独立消费 CPU/GPU 输出，原生 point-list 能力归 Graphics。
+Physics 不依赖 Render/Editor，CPU 公共数据不含 Vulkan；Services 装配有类型的 cloth/fluid 分支，
+保留现有 owner/worker、Edit/Play 和命令入口。单个粒子不成为 ECS 实体。
+已发布输出保留稳定 ID、SI 单位、完成步/时间/代次与拥有型寿命；求解工作区不暴露为可变显示输入。
+OpenUSD 作为后续交换层候选，MAC/场 ray marching 和 USD/VDB 依赖均不进入本期。
+下表仍描述现有实现，M21 设计状态和阶段验收见 [Roadmap](../roadmap.md)。
 
 ## 模块边界
 

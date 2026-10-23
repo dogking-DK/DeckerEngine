@@ -1,11 +1,19 @@
 ---
 module: graphics-shaders
 created_at: "2026-09-28T19:00:00+08:00"
-updated_at: "2026-10-14T17:37:19+08:00"
+updated_at: "2026-10-23T18:22:00+08:00"
 status: accepted
 ---
 
 # Slang 离线编译与最小布局反射
+
+## M21 原生点 shader 扩展（设计）
+
+拟在原有 vertex/fragment 链路核验 `SV_PointSize` 和 `SV_PointCoord` 到 SPIR-V
+`BuiltIn PointSize` / `BuiltIn PointCoord` 的映射，覆盖编译、产物加载和原生方点/圆点实际绘制。
+语义依据见 [点绘制设计](render-particles.md)，固定编译器的可用性以 M21.2 实测为准，
+不由在线最新文档推定当前版本已验证。首期不新增 shader stage 或无依据升级 Slang；
+出现兼容性问题先记录诊断并更新设计/依赖说明，不能静默改成三角形实现。
 
 ## 目标与边界
 

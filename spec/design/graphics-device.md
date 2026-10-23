@@ -1,11 +1,20 @@
 ---
 module: graphics-device
 created_at: "2026-09-28T16:38:00+08:00"
-updated_at: "2026-10-20T00:19:43+08:00"
+updated_at: "2026-10-23T18:22:00+08:00"
 status: accepted
 ---
 
 # Vulkan 设备与诊断
+
+## M21 原生点能力扩展（设计）
+
+拟在 Device 查询中公开 largePoints 的 supported/enabled 和 pointSizeRange/pointSizeGranularity，
+创建选项沿用已有可选/必需 feature 请求方式。Vulkan 1.4 要求设备支持 largePoints，
+但逻辑设备仍需显式启用；宿主 Editor 与独立 runner 必须在创建时作出选择，不能事后开启。
+未启用时仅允许 1 px；超过能力的点大小在提交前拒绝，不隐式转成三角形。
+详细点绘制契约见 [粒子可视化](render-particles.md)，实施/真实设备验证见 [M21 Roadmap](../roadmap.md)。
+本节为待实现扩展，不表示当前 Device 已提供这些字段或已开启特性。
 
 ## 目标与边界
 

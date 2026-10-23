@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-10-23T17:58:35+08:00"
+updated_at: "2026-10-23T18:27:00+08:00"
 status: accepted
 ---
 
@@ -79,10 +79,12 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M18 相机模式与投影 | Orbit/Fly/Walk、可调镜头/移速、分层正交与截图一致性 | M8/M12；路径与环境需M14–M17 | 已完成 M18.1–5；Fly/Walk、基础/路径/光栅环境正交及捕获，见[0133](development/0133-raster-orthographic-environment.md) |
 | M19 ReSTIR 直接光重采样 | 首表面 DI、时空复用、Scene media 适配与 Editor/capture、固定质量测量 | M16–M18 | 已完成；Sponza 测量未支持默认切换，保留 Classic MIS；见[设计](design/render-restir.md) |
 | M20 路径追踪降噪 | À-trous、SVGF/A-SVGF、NRD REBLUR/RELAX、vk_oidn；公共信号/历史、介质与质量性能验收 | M16–M19、现有 Graph/worker | M20.1 设计/依赖、M20.2 表面信号生产已完成；M20.3–11 待开始，见[设计](design/render-denoising.md) |
+| M21 原生点绘制与粒子流体 | point-list、统一粒子输出、WCSPH/PBF CPU/GPU、工作台/脚本/导出 | M5/M6、M10–M12、M18.3 | M21.1 设计已完成；M21.2–9 待开始，见[流体设计](design/physics-fluids.md)、[点绘制设计](design/render-particles.md) |
 
 默认执行表中顺序。M5 在 Foundation 补充完成后具备独立探索条件，
 M9 的 Luau 命令绑定在 M3 后可提前做；若调整次序，仍需满足对应集成验收依赖。
 本路线不要求同时开展多个模块。
+用户指定路线时按该路线的必要前置推进；M21 不依赖 M20 的降噪滤波器。
 
 首轮的三个可单独交付节点：
 
@@ -821,6 +823,35 @@ M19 后按用户确定的 M20 降噪路线推进；ReSTIR GI/PT、ReGIR 或体�
 M20.1 是设计验收，尚不启用 SDK、构建 feature 或 UI；之后仅开放通过实际验收的组合。
 默认后端由 M20.11 实测决定，不预先承诺实时性能；DLSS/OptiX、动态物体/形变、超分辨率和新物理模型单独规划。
 
+## M21：原生点绘制与粒子流体
+
+用户确定首期为原生点绘制及 SPH/PBF，SPH 具体采用 WCSPH；两种算法各支持 CPU/GPU。
+设计见 [粒子流体](design/physics-fluids.md)、[点绘制](design/render-particles.md)，背景见
+[水体/OpenUSD 调查](research/2026-10-23-water-simulation.md)。首期三维单相、等温、等质量、固定粒子数、
+静态盒状容器及单域。GPU 沿用 Vulkan Compute/Slang/Graph；CPU-only 数值运行/导出保持图形隔离。
+下表设计验收不等于实现验收；M21 父阶段须全部子阶段通过才完成。
+
+| 小阶段 | 交付物 | 前置 | 独立验收条件 | 状态 |
+| --- | --- | --- | --- | --- |
+| M21.1 | 公共粒子/输出、单位/状态/时间、原生点能力及算法边界设计；数值验证方法与依赖规划 | M5/M6、M10–M12 | 正式模块设计、现有设计/索引/研究衔接及文档一致性；明确数值基线在 CPU 阶段建立，不开放虚假能力 | 已完成：文档检查通过，见[0147](development/0147-particle-fluid-plan.md)；仅设计验收 |
+| M21.2 | Device 点特性/限制、point-list、Slang PointSize/PointCoord、管线校验 | M21.1 | 固定编译器 SPIR-V 与真实离屏 1 px/多尺寸/方圆点、深度/裁剪/索引、未启用/非法尺寸拒绝；三角形回归；宿主和独立设备配置 | 待开始 |
+| M21.3 | 公共粒子数据/通道/完成输出、PointCloudRenderer、服务有类型流体分支 | M21.2 | 静态 CPU 上传/合成 GPU 数据直接绘制，身份/布局/单位/缺失通道、同步/旧代寿命、暂停导航不改物理；CPU-only 隔离、原布料兼容 | 待开始 |
+| M21.4 | CPU WCSPH、共享 CPU 邻域/边界/内部子步、服务与最低可用预览/数值导出 | M21.3 | 核/边界离散与归一化容差落档；暴力邻域、成对内力、静水/溃坝、自由表面/近壁、质量/穿透、整拍时间和超限保护；脚本真实推进/点预览 | 待开始 |
+| M21.5 | CPU PBF、Jacobi/每轮邻域/速度重建、增强项开关、服务与预览 | M21.4 的公共基础 | 独立约束/单轮修正、残差趋势、新邻居/退化、边界/速度重建；固定基线和容差；切换算法重建 run、真实显示和数值导出 | 待开始 |
+| M21.6 | GPU cell keys、排序/scan/ranges、ID/通道重排、资源/工作预算 | M21.3、M21.4 的 CPU oracle | 暴力邻域集合对照、负坐标/边界/拥挤 cell、非 workgroup 整倍数、所有通道关联、预算/溢出拒绝与 required 同步 validation | 待开始 |
+| M21.7 | GPU WCSPH、常驻工作集/健康归约、完成输出和服务/预览接入 | M21.4、M21.6 | 固定输入/子步短期逐 ID CPU/GPU 对照；真实 compute 到点绘制、无全量读回预览、初始化/推进取消、提交/完成/故障与旧代保护 | 待开始 |
+| M21.8 | GPU PBF、位置双缓冲/动态邻域、速度修正与服务接入 | M21.5、M21.6、M21.7 的集成路径 | CPU PBF 对照、修正后新增邻居、增强项独立对照、有限拍/暂停/取消、迭代成本/资源上界和预览 | 待开始 |
+| M21.9 | 四组合 Editor/脚本/导出、CPU-only、性能/容量报告及 XPBD 回归 | M21.4/5/7/8、M18.3 | 从配置到数值/图像完整重放；真实后台 GUI 与命令一致；4k 功能及 16k/64k 实测或明确超额；请求/退休延迟与阶段成本、冷启动/旧代峰值；文件失败/退出保护 | 待开始 |
+
+推荐顺序 M21.1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9；M21.6 不依赖 PBF 数学实现，
+在 M21.4 的 CPU oracle 可用后可独立推进。每个 solver 阶段同步最小服务、能力发现、命令参考和点预览；
+M21.9 完成统一 UI/跨入口与整体性能验收，不把前面阶段长期保留为孤立求解器。
+
+原研究计划 P0–P8 分别对应 M21.1–9；后续状态只在本表维护，每个验收小阶段单独记录并本地提交。
+GPU 优化前锁定 CPU 参考和容差，不允许为性能放宽阈值；约 4k/16k/64k 是验证规模，不是实时性能承诺。
+MAC CPU、场 ray marching、USD/VDB 实际适配、检查点、发射器、多相/耦合、表面重建与真实水面光学另立后续阶段。
+OpenUSD 保留为统一交换入口候选，运行时求解和首期预览不以其为前置。
+
 ## 当前执行边界与下一步
 
 M0–M6、M1.7 Memory/Tracy 补充均已完成。当前可运行的 CPU 链路包括
@@ -893,17 +924,19 @@ M19.7 Editor/worker 算法选项、诊断和 v3 独立捕获已完成，16 个�
 后续默认场景可用性与提交成本优化已完成，见[0142](development/0142-path-preview-throughput.md)：设备显存额度、表面tile256与非时间复用平面回收，16项定向验收及两项最终复验通过；1600×1200/2048²四模式可用，同输入三轮热吞吐提高1.28–2.77倍，未改变图像采样。
 
 容量与Scene media后续优化见[0143](development/0143-path-capacity-media-throughput.md)：默认使用当前可用显存，路径视口/几何/纹理取消人为容量封顶，介质tile256；35项定向检查通过，Luau示例因模块未构建未运行。三轮同输入吞吐提高1.43–2.40倍，GPU区间覆盖率提高；两个ReSTIR模式tile p95略高于历史8ms候选，高分辨率复用仍非实时收敛。
-未认证参考收敛、temporal/spatial 内部 GPU 成本和冷启动保留为后续采样优化事项；当前按 M20 降噪路线推进，DLSS 尚未接入。
+未认证参考收敛、temporal/spatial 内部 GPU 成本和冷启动保留为后续采样优化事项；渲染扩展按 M20 降噪路线推进，DLSS 尚未接入。
 用户要求的[0144](development/0144-path-throughput-optimization.md)已完成：GPU本地分片统计、有界tile组及Editor显示/采样重叠和同族第二队列交接，20项定向GPU检查通过。三轮1600×1200交付中位数Classic/initial/temporal/spatial为32.539/41.568/48.006/56.086ms，图像与统计对照一致，见[报告](benchmarks/2026-10-23-path-throughput.md)。Classic波动、初始RIS短pass等待及冷启动仍待后续优化，不将交付间隔当作窗口FPS或GPU利用率。
 M20.1 公共设计与依赖核验见[0145](development/0145-denoising-foundation.md)；M20.2 可选表面输入信号、来源与预算/失败保护已完成，见[0146](development/0146-denoising-signals.md)。
-下一阶段为 M20.3 独立 À-trous 选项及最小 Editor/capture 接通；目前只有输入生产，尚未实现降噪滤波器。
+降噪路线下一阶段为 M20.3 独立 À-trous 选项及最小 Editor/capture 接通；目前只有输入生产，尚未实现降噪滤波器。
+粒子流体路线 M21.1 设计落档已完成，见[0147](development/0147-particle-fluid-plan.md)；下一阶段为 M21.2 原生点绘制。
+M21 当前没有流体实现或点绘制验收，不能把设计采用状态解释为功能可用。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 
 工程基础维护记录包括 [0018](development/0018-vs2026-generation-script.md)、
 [0019](development/0019-development-skills.md) 和 [0041](development/0041-ai-documentation-workflow.md)，不改变里程碑顺序。
 设计准备记录与实现验收分开：[0020](development/0020-m4-development-plan.md)、
-[0022](development/0022-memory-profiling-design.md)、[0093](development/0093-atmosphere-cloud-plan.md)、[0108](development/0108-pathtracing-plan.md)、[0145](development/0145-denoising-foundation.md)
+[0022](development/0022-memory-profiling-design.md)、[0093](development/0093-atmosphere-cloud-plan.md)、[0108](development/0108-pathtracing-plan.md)、[0145](development/0145-denoising-foundation.md)、[0147](development/0147-particle-fluid-plan.md)
 本身不作为对应功能实现完成证据。
 开发编号在实际创建记录时扫描目录取最大值加一，不在导航文档预写下一编号。
 
@@ -930,9 +963,10 @@ M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断
 ## 尚未纳入本轮扩展的工作
 
 跨图形 API 的通用 RHI、多后端、复杂多线程渲染、异步 compute、
-GPU 内存 aliasing、通用节点编辑器、完整反射、热重载体系和多种物理求解器
+GPU 内存 aliasing、通用节点编辑器、完整反射、热重载体系和 M21 之外的物理求解器
 仍按实际需求单独立项设计，不由 M11–M13 的响应性和实验管理工作隐含引入。
 模拟检查点、布料弯曲/自碰撞等物理扩展、完整PBR/IBL与光栅混合光追效果另行确定阶段；
+M21 已纳入 WCSPH/PBF CPU/GPU 与点绘制，尚不包含 MAC、场 ray marching 或 USD/VDB 接入。
 M16只规划表面路径追踪的几何可见性/阴影、受限金属粗糙度材质和常量环境，不代表完整光照系统；
 M14只引入单太阳/天空漫反射接收，M15只引入云透射阴影，不等于完整光照系统。
 M13 的批处理恢复不替代模拟检查点。

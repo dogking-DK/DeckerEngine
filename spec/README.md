@@ -10,6 +10,9 @@
 - [开发 Roadmap](roadmap.md)：阶段依赖、交付物、验收条件和近期任务。
 - [工程基础设计](design/project-foundation.md)
 - [三方库说明](third-party-libraries.md)：当前版本、用途、接入状态和默认采用 vcpkg 最新版本的规则。
+- [粒子流体设计](design/physics-fluids.md) / [原生点绘制设计](design/render-particles.md)：WCSPH/PBF CPU/GPU 和通用粒子输出；实施状态见 Roadmap M21。
+- [水体模拟与 OpenUSD 调查](research/2026-10-23-water-simulation.md)：粒子/场可视化与格式选型背景；MAC 和 USD/VDB 接入后置。
+- [原生点绘制与 SPH/PBF 原始计划](research/2026-10-23-sph-pbf-plan.md)：已纳入正式设计与 M21，保留方案形成依据。
 - [Memory 性能基线](benchmarks/2026-09-28-memory.md)：M1.7.7 的可复现工作负载、完整聚合表和测量限制。
 - [设计模板](templates/design.md) / [开发记录模板](templates/development.md)
 - [开发留档 skill](../.agents/skills/decker-spec-workflow/SKILL.md)

@@ -1,11 +1,20 @@
 ---
 module: graphics-vulkan
 created_at: "2026-09-30T10:18:48+08:00"
-updated_at: "2026-10-14T12:15:10+08:00"
+updated_at: "2026-10-23T18:22:00+08:00"
 status: accepted
 ---
 
 # Vulkan 使用层封装设计
+
+## M21 原生点拓扑扩展（设计）
+
+拟将 GraphicsPipelineDesc 的拓扑校验扩展为 triangle list/strip 及 point list，
+原生点走 `vk::PrimitiveTopology::ePointList`，不是 polygonMode 点化或三角形 billboard。
+复用 draw/draw_indexed 与绑定/范围校验，空点集在上层跳过 draw，不放宽零数量拒绝。
+点大小按逻辑设备已启用能力与范围校验；PointSize/PointCoord 经固定 Slang 产物和真实绘制验证。
+深度测试/写入与原有附件契约一致，圆点由 fragment discard 实现；原三角形链路必须回归。
+细节及失败/寿命见 [粒子可视化](render-particles.md)。这是待实现设计，当前管线仍只接受三角形拓扑。
 
 ## 目标与现状
 
