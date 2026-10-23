@@ -54,13 +54,21 @@ void PathPreview::run(std::stop_token stop) {
         try {
             if(queue) { check(queue->poll()); if(configured) (void)take(renderer.poll(*queue)); }
             if(display && take(queue->wait(display->submission,0))) {
+                // Keep the readback ticket even for an obsolete/cancelled image:
+                // retiring it early would leave a pending queue slot with no
+                // ticket for the reconfiguration/suspend drain to wait on.
+                if(linear && !take(queue->wait(linear->submission(),0))) {
+                    busy=true; (void)take(queue->wait(linear->submission(),1000000)); continue;
+                }
                 if(active && enabled && display_sequence==active->sequence && !cancel.stop_requested()) {
                     PathPreviewResult result; result.sequence=display_sequence; result.document=active->snapshot.state;
                     result.camera=active->camera; result.info=display_info; result.scene=scene; result.meshes=meshes;
                     if(active->observe_memory) result.memory=renderer.memory_stats(*queue);
                     if(linear) {
                         auto value=take(linear->read(*queue,cancel));
-                        if(!value) { busy=true; continue; }
+                        if(!value) {
+                            busy=true; (void)take(queue->wait(linear->submission(),1000000)); continue;
+                        }
                         result.linear=std::move(*value);
                     }
                     result.image=take(queue->export_image(display->image));
@@ -83,7 +91,12 @@ void PathPreview::run(std::stop_token stop) {
             if(pending_config) {
                 // Drain obsolete producer work by polling before rebuilding. This bounds the
                 // queue even during continuous resize/drag and never blocks the GUI owner.
-                if(queue && queue->stats().pending_slots) { busy=true; continue; }
+                if(queue && queue->stats().pending_slots) {
+                    busy=true;
+                    const auto ticket=linear ? linear->submission() : display ? display->submission : renderer.pending_submission();
+                    if(ticket.value()) (void)take(queue->wait(ticket,1000000));
+                    continue;
+                }
                 if(terminal) throw std::runtime_error("Path tracing device lost; restart the editor.");
                 if(active->snapshot.scene.logical_bytes()>32U*1024U*1024U) throw std::runtime_error("Path preview snapshot exceeds 32 MiB");
                 if(!queue) queue.emplace(take(graphics::SubmissionQueue::create(heap_,std::move(device_))));
@@ -158,6 +171,7 @@ void PathPreview::run(std::stop_token stop) {
                 settings.surface_only=active->settings.surface_only;
                 render::PathTraceSchedule schedule; schedule.session=session; schedule.target_spp=active->settings.target; schedule.gesture=active->preview;
                 schedule.tile_edge=256;
+                schedule.tiles_per_submission=4;
                 schedule.paused=active->settings.paused; schedule.exposure=active->settings.exposure;
                 render::RestirDiSettings restir; restir.initial_candidates=active->settings.restir_candidates;
                 if(active->settings.restir_temporal) restir.temporal.emplace();
@@ -200,7 +214,10 @@ void PathPreview::run(std::stop_token stop) {
                 display_sequence=active->sequence; display_info=completed.info();
                 displayed_spp=progress.completed_spp; displayed_exposure=active->settings.exposure;
             }
-            if(!display && take(renderer.submit_batch(*queue,1,cancel)))
+            // Tone and acceptance readback only read the immutable completed HDR;
+            // the next batch writes a separate candidate. Three queue slots cover
+            // tone, optional readback and one sampling submission without a CPU gap.
+            if(!renderer.pending_submission().value() && take(renderer.submit_batch(*queue,1,cancel)))
                 phase(active->sequence,"Rendering",take(renderer.status(1)));
             busy=bool(display) || progress.pending || (!progress.paused && progress.completed_spp<progress.target_spp);
             // A Windows timed sleep can round a 1 ms tile delay up to a scheduler

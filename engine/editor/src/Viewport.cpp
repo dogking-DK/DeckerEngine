@@ -11,7 +11,12 @@ Viewport::Viewport(memory::MemorySystem& memory,memory::ResourceHandle heap,grap
 #ifdef DK_EDITOR_PATHTRACING
     if(!queue.device().ray_tracing_enabled()) path_unavailable_="GPU ray tracing is unavailable (AS / RT pipeline / buffer device address).";
     else if(!queue.device().sampled_image_indexing_enabled()) path_unavailable_="Non-uniform sampled image indexing is unavailable.";
-    else { path_=std::make_unique<PathPreview>(memory,heap,take(queue.device().share_queue(0))); path_unavailable_.clear(); }
+    else {
+        // Keep path submissions off the presentation queue when the device exposes
+        // a second same-family queue. ImageTransfer supplies its timeline dependency.
+        const auto index=queue.device().queue_count()>1 ? 1u : 0u;
+        path_=std::make_unique<PathPreview>(memory,heap,take(queue.device().share_queue(index))); path_unavailable_.clear();
+    }
 #endif
 }
 Viewport::~Viewport() { close_path(); release_texture(); }

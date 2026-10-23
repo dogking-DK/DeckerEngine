@@ -82,7 +82,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     device.sampled_image_indexing=options.pathtrace_smoke ? graphics::SampledImageIndexingMode::required : graphics::SampledImageIndexingMode::if_available;
 #endif
     device.diagnostic_sink=diagnostic; device.diagnostic_user_data=&diagnostics;
-#ifdef DK_SIMULATION_GPU
+#if defined(DK_SIMULATION_GPU) || defined(DK_EDITOR_PATHTRACING)
     device.secondary_queue=true;
 #endif
     ShutdownPhase presenter_phase{shutdown,"presenter"};

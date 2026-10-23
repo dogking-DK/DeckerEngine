@@ -1,3 +1,4 @@
+#include <cmath>
 // Consumer lifecycle checks. GPU transport math is covered by PathTraceGpuTests.
 int restir_worker(const std::filesystem::path& root,const std::filesystem::path& output) {
     Json evidence={{"status","failed"},{"checks",Json::array()}};
@@ -7,13 +8,31 @@ int restir_worker(const std::filesystem::path& root,const std::filesystem::path&
         std::atomic<unsigned> diagnostics=0;
         {
             memory::ThreadContext context{system,heap}; memory::ExecutionScope scope{context,heap};
-            graphics::DeviceOptions options; options.validation=graphics::ValidationMode::required;
+            graphics::DeviceOptions options; options.validation=graphics::ValidationMode::required; options.secondary_queue=true;
             options.ray_tracing=graphics::RayTracingMode::required; options.sampled_image_indexing=graphics::SampledImageIndexingMode::required;
             options.diagnostic_user_data=&diagnostics;
             options.diagnostic_sink=[](void* u,const graphics::Diagnostic& d) noexcept {
                 if(d.severity>=VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) ++*static_cast<std::atomic<unsigned>*>(u);
             };
-            PathPreview worker{system,heap,take(graphics::Device::create(heap,options))};
+            auto device=take(graphics::Device::create(heap,options));
+            auto consumer=take(graphics::SubmissionQueue::create(heap,take(device.share_queue(0))));
+            graphics::Image retained;
+            std::vector<std::byte> retained_pixels;
+            auto pixels=[&](const graphics::Image& image) {
+                const auto& d=image.description();
+                auto batch=take(consumer.begin());
+                auto readback=take(batch.readback(image,{0,0,0,0,d.width,d.height}));
+                check(batch.transition(image,vk::ImageLayout::eShaderReadOnlyOptimal));
+                require(take(consumer.wait(take(consumer.submit(std::move(batch))))),"Worker image inspection timed out");
+                const auto copy=readback.description(); std::vector<std::byte> source(std::size_t(copy.bytes));
+                require(take(readback.try_read(source)),"Worker image inspection incomplete");
+                std::vector<std::byte> result(std::size_t(d.width)*d.height*4);
+                for(unsigned y=0;y<d.height;++y)
+                    std::copy_n(source.begin()+std::size_t(y)*copy.row_pitch,std::size_t(d.width)*4,result.begin()+std::size_t(y)*d.width*4);
+                return result;
+            };
+            auto producer=std::make_unique<PathPreview>(system,heap,take(device.share_queue(device.queue_count()>1 ? 1u : 0u)));
+            auto& worker=*producer;
             PathPreviewRequest request{*model->snapshot(),Camera{true}};
             request.width=32; request.height=24; request.read_linear=true;
             request.settings.target=3; request.settings.restir_di=request.settings.restir_temporal=request.settings.restir_spatial=true;
@@ -23,7 +42,7 @@ int restir_worker(const std::filesystem::path& root,const std::filesystem::path&
                 for(;;) {
                     if(auto r=worker.take_result()) {
                         require(r->sequence==request.sequence,"Obsolete worker result");
-                        if(r->info.samples.count==spp) return std::move(*r);
+                        if(!spp || r->info.samples.count==spp) return std::move(*r);
                     }
                     const auto status=worker.status(); require(status.error.empty(),status.error.c_str());
                     require(elapsed(start)<90000,"ReSTIR worker timed out"); std::this_thread::sleep_for(1ms);
@@ -69,9 +88,58 @@ int restir_worker(const std::filesystem::path& root,const std::filesystem::path&
             require(!worker.take_result(),"Suspended worker published late result");
             request.settings.target=3; request.settings.reset++; send(); auto returned=wait(3);
             require(returned.info.sampling_first_epoch==0 && !returned.info.temporal_history_epoch,"Resume retained cancelled history");
-            // Destructor joins a live producer; no explicit wait or close in the caller.
+            // Tone and acceptance readback share three producer slots with the
+            // next sampling submission. Check the image against its own HDR while
+            // that producer continues, then retain it beyond producer destruction.
             request.settings.target=4096; send();
-            evidence["checks"].push_back("in-flight suspend/recovery and producer destruction");
+            auto progressing=wait(0);
+            require(progressing.info.samples.count>=returned.info.samples.count && progressing.info.samples.count<=request.settings.target,
+                "Continuation published an incomplete sample interval");
+            require(progressing.linear.info().samples.first==progressing.info.samples.first &&
+                progressing.linear.info().samples.count==progressing.info.samples.count,"Tone/readback sources differ");
+            retained=take(consumer.import_image(std::move(progressing.image))); retained_pixels=pixels(retained);
+            const auto colors=progressing.linear.linear_rgb();
+            require(retained_pixels.size()==colors.size()*4,"Worker tone extent differs from HDR");
+            for(std::size_t i=0;i<colors.size();++i) {
+                for(unsigned c=0;c<3;++c) {
+                    const double linear=colors[i][c]*std::exp2(request.settings.exposure);
+                    double expected=linear/(1+linear);
+                    if(!request.srgb) expected=expected<=.0031308 ? 12.92*expected : 1.055*std::pow(expected,1./2.4)-.055;
+                    require(std::abs(int(std::to_integer<unsigned char>(retained_pixels[i*4+c]))-std::lround(expected*255))<=1,
+                        "Overlapped tone differs from its completed HDR");
+                }
+                require(retained_pixels[i*4+3]==std::byte{255},"Worker tone alpha differs");
+            }
+            start=Clock::now();
+            while(!worker.status().progress.pending) {
+                require(worker.status().error.empty(),"Worker continuation failed");
+                require(elapsed(start)<90000,"No live producer at destruction"); std::this_thread::sleep_for(1ms);
+            }
+            // Destructor joins this live producer without caller-side wait/close.
+            evidence["checks"].push_back("three-slot tone/readback/continuation; image pixels match their completed HDR");
+            producer.reset();
+            require(pixels(retained)==retained_pixels,"Producer destruction changed its transferred image");
+            retained={};
+            // The same-device single native queue fallback still has independent
+            // consumer/producer ledgers and the same image handoff dependency.
+            {
+                PathPreview fallback{system,heap,take(device.share_queue(0))};
+                PathPreviewRequest request{*model->snapshot(),Camera{true}};
+                request.width=8; request.height=6; request.sequence=1; request.settings.target=2;
+                fallback.request(request); const auto start=Clock::now();
+                for(;;) {
+                    if(auto result=fallback.take_result(); result && result->info.samples.count==request.settings.target) {
+                        require(result->sequence==request.sequence,"Fallback published obsolete image");
+                        auto image=take(consumer.import_image(std::move(result->image)));
+                        require(pixels(image).size()==std::size_t(request.width)*request.height*4,"Fallback image handoff incomplete"); break;
+                    }
+                    require(fallback.status().error.empty(),"Single native queue worker failed");
+                    require(elapsed(start)<90000,"Single native queue worker timed out"); std::this_thread::sleep_for(1ms);
+                }
+            }
+            check(consumer.close());
+            evidence["checks"].push_back("in-flight suspend/recovery; transferred image survives live producer destruction; single native queue fallback");
+            evidence["queues"]=device.queue_count();
         }
         require(!diagnostics && !heap.snapshot().live_allocations,"Worker leaked resources or emitted validation diagnostics");
         require(system.try_close().closed(),"Worker memory did not close"); evidence["status"]="passed";
