@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-23T09:42:00+08:00"
+updated_at: "2026-10-23T16:58:00+08:00"
 status: accepted
 ---
 
@@ -60,6 +60,9 @@ M19.6 增加 GPU `submit_restir_medium_rays/view` 和 `configure_restir_medium_v
 沿用 model 4/sampler 2，CPU 介质参考拒绝 temporal/spatial，图像来源记录配置与候选/存活/阴影统计。
 旧 MIS 和介质入口不变；Editor 与 pathtrace v3 捕获的算法选择见 [ReSTIR 消费契约](render-restir.md#m197-消费端实施契约)。
 固定射线上传统一将合法的 -0 TMin 转成 +0，避免硬件遍历漏命中；其他裁剪语义不变，三个入口均有回归。
+M20 [降噪设计](render-denoising.md)由独立模块消费路径信号；M20.1 仅确定接口，当前仍无降噪实现。
+M20.2 将显式生成本轮 fresh 分量与匹配采样 guides，保持原始样本/累积和完成发布；不把首样本 hit/normal 当完整降噪输入。
+降噪结果不回写本模块的 raw 累积或 ReSTIR reservoir，Scene media 组合在 M20.10 单独验收。
 后续 DLSS 由独立重建适配层消费线性结果，SDK 类型不进入 CPU oracle 或 Scene。
 M19.8 已完成真实 Sponza 的四模式质量、三轮性能和资源测量，见[报告](../benchmarks/2026-10-19-restir-sponza.md)。
 仅两组低尺寸参考认证，ReSTIR 未达 2× 等误差收益；默认保持 Classic MIS，不认证全尺寸质量或稳定实时交互。

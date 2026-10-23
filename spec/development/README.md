@@ -146,5 +146,6 @@
 | 0142 | [默认场景路径预览显存与吞吐优化](0142-path-preview-throughput.md) | render-pathtracing、render-restir、editor、graphics-device | completed |
 | 0143 | [路径预览按设备容量准入与介质吞吐](0143-path-capacity-media-throughput.md) | render-pathtracing、render-restir、editor、assets-importers、render-disk、render-capture | completed |
 | 0144 | [路径追踪统计、提交与Editor吞吐优化](0144-path-throughput-optimization.md) | render-pathtracing、render-restir、editor | completed |
+| 0145 | [M20.1 降噪接口、状态与依赖基线](0145-denoising-foundation.md) | render-denoising、render-pathtracing、render-restir、architecture | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

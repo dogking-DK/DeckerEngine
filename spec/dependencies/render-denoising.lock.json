@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "verified_at": "2026-10-23T16:58:00+08:00",
+  "status": "verified_not_integrated",
+  "scope": "M20.1 dependency design baseline; not consumed by CMake yet",
+  "platform": "windows-x64",
+  "registry_audit": {
+    "repository": "https://github.com/microsoft/vcpkg",
+    "commit": "23b8a8e7409c2d6346114a88e834165bde79a51c",
+    "ports_tree": "65dcb0b27bade6ad19391e8d13cbeb93127c2193",
+    "baseline_blob": "6e9317b053ba5ccba913930dfe67361c0a84e639",
+    "port_count": 2886,
+    "tree_truncated": false,
+    "nrd_port": null,
+    "vk_oidn_port": null,
+    "active_builtin_baseline_unchanged": "33d78c1ed898a06938f31312167c7abefd229455"
+  },
+  "artifacts": [
+    {
+      "id": "nrd",
+      "version": "4.17.3",
+      "release_url": "https://github.com/NVIDIA-RTX/NRD/releases/tag/v4.17.3",
+      "commit": "792eff196afdd350fd9c3f862119017ccb438a0e",
+      "url": "https://codeload.github.com/NVIDIA-RTX/NRD/zip/792eff196afdd350fd9c3f862119017ccb438a0e",
+      "sha256": "ad148d3653e7e4a149af0d1608ec662eeb522144cf34f6a29f9dfd333933baa8",
+      "bytes": 4445130,
+      "license": "NVIDIA RTX SDKs LICENSE",
+      "license_url": "https://github.com/NVIDIA-RTX/NRD/blob/792eff196afdd350fd9c3f862119017ccb438a0e/LICENSE.txt",
+      "dependencies": ["shadermake", "mathlib", "directx-dxc"],
+      "build_options": {
+        "NRD_STATIC_LIBRARY": true,
+        "NRD_NRI": false,
+        "NRD_EMBEDS_SPIRV_SHADERS": true,
+        "NRD_EMBEDS_DXIL_SHADERS": false,
+        "NRD_EMBEDS_DXBC_SHADERS": false,
+        "SHADERMAKE_FIND_COMPILERS": false
+      }
+    },
+    {
+      "id": "shadermake",
+      "role": "NRD pinned build dependency and blob support",
+      "commit": "18f5a344e7ca8fa65daaf079d07bc8ce38453e05",
+      "url": "https://codeload.github.com/NVIDIA-RTX/ShaderMake/zip/18f5a344e7ca8fa65daaf079d07bc8ce38453e05",
+      "sha256": "35de2547e28cf10f18a0e2782cf154a3d1610212d00d829fa8e73a18210623b6",
+      "bytes": 38124,
+      "license": "MIT"
+    },
+    {
+      "id": "mathlib",
+      "version": "11",
+      "role": "NRD pinned host/shader dependency, Windows x64 only",
+      "commit": "aa432ad9a80691eb8c3ec4d576bbad5ac100fdc8",
+      "url": "https://codeload.github.com/NVIDIA-RTX/MathLib/zip/aa432ad9a80691eb8c3ec4d576bbad5ac100fdc8",
+      "sha256": "e25e0689809446ddb460189c2a06f299ce63bcec2bdd8efc06b1145344402918",
+      "bytes": 96199,
+      "license": "MIT"
+    },
+    {
+      "id": "vk_oidn",
+      "version": "0.2.0",
+      "release_url": "https://github.com/nvpro-samples/vk_oidn/releases/tag/v0.2.0",
+      "source_commit": "81b75b54f064da71f79b821eab067de81cfe65d6",
+      "url": "https://github.com/nvpro-samples/vk_oidn/releases/download/v0.2.0/vk_oidn-0.2.0-windows-x64.zip",
+      "sha256": "5077a0fce672f0e4933b5bf2241a4e31192401c996a9a803f3b012a75836f0c7",
+      "bytes": 38949227,
+      "license": "Apache-2.0",
+      "license_files": ["LICENSE", "NOTICE"],
+      "target": "vk_oidn::vk_oidn",
+      "crt": "dynamic",
+      "configurations": ["Debug", "Release"],
+      "weights_repository": "https://github.com/RenderKit/oidn-weights",
+      "weights_commit": "28883d1769d5930e13cf7f1676dd852bd81ed9e7",
+      "weights_reference_oidn_version": "2.5.1",
+      "weights_delivery": "embedded in selected SDK, no runtime download"
+    }
+  ],
+  "host_tools": [
+    {
+      "id": "directx-dxc",
+      "version": "2026-05-27",
+      "port_version": 0,
+      "registry_commit": "23b8a8e7409c2d6346114a88e834165bde79a51c",
+      "upstream_tag": "v1.9.2602.24",
+      "url": "https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.9.2602.24/dxc_2026_05_27.zip",
+      "sha512": "cf331112f1753fca68525c85bb4964714d85dbf7cb5e41af4720bbdffefdfddad1878c7a1a74898e2105dff32957a526d188d9ee3f18f0df310ec8548827a374",
+      "verification": "official port metadata verified; tool not downloaded, built, installed or executed",
+      "activation": "recheck registry and pin active registry when M20.6 introduces the host dependency"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-10-19T17:07:00+08:00"
+updated_at: "2026-10-23T16:58:00+08:00"
 status: accepted
 ---
 
@@ -233,6 +233,34 @@ DLSS 尚未选定/下载 SDK 版本，其接入时再按 registry/固定上游�
 [Streamline DLSS 指南](https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideDLSS.md)，2026-10-19 核对。
 具体契约与切换关系见 [ReSTIR 设计](design/render-restir.md)；选择 RTXDI 不隐含导入其示例框架、NRD 或 DLSS，
 选择 DLSS 也不改变原始线性光照的数值验收。未支持能力应明确报告，不能静默替换模式。
+
+## M20 降噪依赖基线
+
+2026-10-23 完成 M20.1 来源核验，固定信息见[锁定清单](dependencies/render-denoising.lock.json)，
+接口/状态边界见[降噪设计](design/render-denoising.md)，下载和检查证据见[0145](development/0145-denoising-foundation.md)。
+状态为 **已核验、未集成**：没有 CMake 消费者、SDK 链接或 GPU 验收，不改变当前 builtin-baseline。
+检查官方 vcpkg [commit](https://github.com/microsoft/vcpkg/commit/23b8a8e7409c2d6346114a88e834165bde79a51c) 的
+[baseline](https://github.com/microsoft/vcpkg/blob/23b8a8e7409c2d6346114a88e834165bde79a51c/versions/baseline.json)
+及完整、未截断的 ports 树：均 2886 项，没有 NRD/vk_oidn port，因此直接 SDK 使用固定上游来源。
+
+| 依赖 | 固定来源与许可 | 用途、构建边界与尚未验证项 |
+| --- | --- | --- |
+| NRD v4.17.3 | [正式 release](https://github.com/NVIDIA-RTX/NRD/releases/tag/v4.17.3)，commit `792eff196afdd350fd9c3f862119017ccb438a0e`；NVIDIA RTX SDKs LICENSE | M20.6/7 的 REBLUR/RELAX；静态 host 库和 SPIR-V，NRI/DXIL/DXBC 关闭，资源和 dispatch 由引擎适配；尚未构建/链接/执行 |
+| ShaderMake | commit `18f5a344e7ca8fa65daaf079d07bc8ce38453e05`，MIT | NRD 上游指定的编译工具与 blob 支持；关闭其编译器自动查找/下载，使用显式固定 DXC；尚未编译 |
+| MathLib v11 | commit `aa432ad9a80691eb8c3ec4d576bbad5ac100fdc8`，MIT | NRD 上游指定 host/shader 依赖，CMake 3.30；本轮 Windows x64 不进入 ARM 的浮动 sse2neon 分支 |
+| vk_oidn v0.2.0 | [正式 release](https://github.com/nvpro-samples/vk_oidn/releases/tag/v0.2.0)，源码 commit `81b75b54f064da71f79b821eab067de81cfe65d6`；Apache-2.0，保留 LICENSE/NOTICE | M20.4 使用官方 Windows x64 SDK；已检查头文件、Debug/Release 静态库与 `vk_oidn::vk_oidn` 导出，动态 CRT；MSVC 链接/设备能力/性能待验收 |
+| oidn-weights | [固定来源](https://github.com/RenderKit/oidn-weights/tree/28883d1769d5930e13cf7f1676dd852bd81ed9e7)，OIDN 2.5.1，Apache-2.0 | 已打包到选定 vk_oidn SDK，随 SDK hash 冻结；不在运行时下载，不增加官方 OIDN 运行时依赖 |
+| directx-dxc 2026-05-27#0 | [官方 port](https://github.com/microsoft/vcpkg/blob/23b8a8e7409c2d6346114a88e834165bde79a51c/ports/directx-dxc/portfile.cmake)，上游 v1.9.2602.24；许可随 port 分发 | NRD 的候选 host 编译工具已按 registry 元数据固定，未安装/执行；M20.6 激活时重新核验并固定实际 registry，不使用 ShaderMake 默认旧 DXC |
+
+四个已下载包（NRD、ShaderMake、MathLib 源码和 vk_oidn SDK）的 URL、SHA-256、字节数在锁定清单保存。
+vk_oidn SDK hash 与 GitHub asset digest、发布 SHA256SUMS 三方一致；NRD 采用正式 release，主分支 v4.18 标注不作为发布版本。
+NRD 源码许可不是 MIT；保留原许可证并在实际分发时处理其要求。vk_oidn 不属于 Intel 官方后端。
+
+本次仅静态核验 CMake/头文件/资源机制：NRD 需要 MathLib/ShaderMake/DXC；vk_oidn SDK 内核已经编译，
+从源码构建另需 Python 和支持 FP16 控制选项的 Slang，上游测试环境不等于引擎已验证的编译器组合。
+vk_oidn GPU 内存由其直接 `vkAllocateMemory`，host allocation callback 不提供设备内存接管；
+设备 feature 探测、Graph 录制桥和总峰值预算必须在 M20.4 完成，不能因 SDK 包存在就声明支持。
+日常构建不得追踪浮动分支/标签；接入阶段消费不可变来源和 hash，复核版本漂移后显式更新记录。
 
 ## 后续维护
 
