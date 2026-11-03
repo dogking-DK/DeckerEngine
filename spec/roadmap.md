@@ -80,7 +80,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M19 ReSTIR 直接光重采样 | 首表面 DI、时空复用、Scene media 适配与 Editor/capture、固定质量测量 | M16–M18 | 已完成；Sponza 测量未支持默认切换，保留 Classic MIS；见[设计](design/render-restir.md) |
 | M20 路径追踪降噪 | À-trous、SVGF/A-SVGF、NRD REBLUR/RELAX、vk_oidn；公共信号/历史、介质与质量性能验收 | M16–M19、现有 Graph/worker | M20.1 设计/依赖、M20.2 表面信号生产已完成；M20.3–11 待开始，见[设计](design/render-denoising.md) |
 | M21 原生点绘制与粒子流体 | point-list、统一粒子输出、WCSPH/PBF CPU/GPU、工作台/脚本/导出 | M5/M6、M10–M12、M18.3 | M21.1 设计已完成；M21.2–9 待开始，见[流体设计](design/physics-fluids.md)、[点绘制设计](design/render-particles.md) |
-| M22 Console 命令文本输入首期 | 命名参数、JSON 兼容、错误定位、会话历史与 GUI 输入 | M3、M8、既有 M17.5 Console | 已完成 M22.1–3；有界历史/草稿、粘贴保护和后台 GUI 验收，见[0150](development/0150-console-history-ui.md) |
+| M22 Console 与 Editor 命令交互 | 命名参数/历史、补全/参数提示、视口与相机命令、面板帮助与搜索 | M3、M8、M17.5；视口/相机复用 M18/M19 | 首期 M22.1–3 已完成；M22.4 扩展设计见[0151](development/0151-console-assistance-plan.md)，M22.5–11 待开始 |
 
 默认执行表中顺序。M5 在 Foundation 补充完成后具备独立探索条件，
 M9 的 Luau 命令绑定在 M3 后可提前做；若调整次序，仍需满足对应集成验收依赖。
@@ -853,21 +853,34 @@ GPU 优化前锁定 CPU 参考和容差，不允许为性能放宽阈值；约 4
 MAC CPU、场 ray marching、USD/VDB 实际适配、检查点、发射器、多相/耦合、表面重建与真实水面光学另立后续阶段。
 OpenUSD 保留为统一交换入口候选，运行时求解和首期预览不以其为前置。
 
-## M22：Console 命令文本输入首期
+<a id="m22console-命令文本输入首期"></a>
 
-用户指定 Console 首期路线，先设计、再逐阶段实现。本路线复用既有命令服务，不新增视口渲染控制或相机命令。
-语法、状态和验收契约见 [Console 设计](design/editor-console.md)；首期完成须 M22.2/3 均验收。
-M22.2 已支持命名参数文本与兼容 JSON 的解析/执行；M22.3 已完成历史/输入 UI 与真实后台 GUI 验收。
+## M22：Console 命令文本输入与 Editor 交互
+
+用户指定将补全、提示和 Editor 交互扩展到 M22，同步纳入前述视口/相机设置命令。
+语法、状态、共享帮助与验收契约见 [Console 设计](design/editor-console.md)。
+M22.1–3 首期已独立完成：命名参数/JSON、历史/输入 UI 与真实后台 GUI 验收，见[0150](development/0150-console-history-ui.md)。
+M22.4 是本轮扩展设计落档，后续功能按 M22.5–11 实施；设计完成不代表补全或设置命令已可用。
 
 | 小阶段 | 实际交付范围 | 必要前置 | 独立验收 | 状态 |
 | --- | --- | --- | --- | --- |
 | M22.1 | 命名参数/类型/兼容、预算/错误、guard/历史、文件范围与验收计划 | M3、M8、M17.5 | 文档索引/元数据/链接与设计边界检查，明确当前和计划能力 | 已完成：文档检查通过，见[0148](development/0148-console-command-input-plan.md)；仅设计验收 |
 | M22.2 | CPU 解析器、Workspace 分派接入、命令/刷新失败诊断及模型测试 | M22.1 | 类型与完整整数、嵌套/重复/超限/Unicode；全行错误无副作用；JSON 等价、guard/草稿/零等待及提交后失败 | 已完成：13 项 CPU 定向检查通过，无失败/跳过，见[0149](development/0149-console-command-parser.md)；GUI 验收见 M22.3 |
 | M22.3 | 有界历史、Up/Down/草稿、Console UI、后台真实输入及使用文档 | M22.2 | 历史容量/去重/只回填，Enter/Run 一次执行、成功清空/失败保留/超限粘贴拒绝；旧 JSON 和真实 GUI 定向回归 | 已完成：17 项 CPU 检查与后台工作台验收通过，48 个新增 Console 输入步骤通过，见[0150](development/0150-console-history-ui.md) |
+| M22.4 | 扩展路线、共享帮助/只读发现、补全键位与预算、宿主设置命令边界和验收计划 | M22.3 | 元数据/索引/链接/阶段依赖一致；区分当前实现、采用设计与后续功能 | 已完成：文档检查通过，见[0151](development/0151-console-assistance-plan.md)；仅扩展设计验收 |
+| M22.5 | 帮助元数据、注册校验、无 Task 的 Runtime/Workspace 描述快照，发现兼容 | M22.4 | 描述/单位/默认与 schema 一致，缺省降级、错误引用/预算拒绝、旧发现字段不变、查询无副作用 | 待开始 |
+| M22.6 | 命令名/顶层参数/枚举补全、参数提示弹窗，Tab/Enter/Esc 与历史/IME 协调 | M22.5 | UTF-8 光标/选区、稳定排序、替换/8192 字节边界、候选仅改输入、真实后台 GUI/JSON 回归 | 待开始 |
+| M22.7 | 嵌套 JSON/envelope 辅助、实体/资产动态候选、输入诊断与去抖/缓存失效 | M22.6 | 未完成与确定错误区分、类型/精度/位置、重名/分页、换会话/删除/迟到结果、无编辑或任务副作用 | 待开始 |
+| M22.8 | Edit 视口宿主服务与设置命令：模式/ReSTIR/采样目标/曝光/暂停/重置及已有介质会话参数 | M22.5；M17/M19 | 实施前明确命令表/会话 guard；GUI/Console/IPC 同路径、runner 能力隔离、重置/保留采样、失败/关闭寿命 | 待开始 |
+| M22.9 | Edit 相机设置与操作命令：模式/投影/镜头/移速/姿态、Orbit/Pan/Zoom/Frame/Reset | M22.8；M18 | 实施前明确单位/视图身份/冲突；三入口一致、旧 guard/手势拒绝、Scene/Undo 不变、相机/画面来源一致 | 待开始 |
+| M22.10 | 主要 Editor 面板统一帮助、禁用原因、设置搜索/定位及相关命令模板 | M22.6、M22.8、M22.9 | 共享字段解释/单位/范围/影响；稳定控件定位、搜索无修改、缺命令不造模板、中文/不可用项/GUI 检查 | 待开始 |
+| M22.11 | 扩展集成验收、命令参考与使用示例、能力/限制交付 | M22.7、M22.10 | 发现/补全→设置→面板同步→状态/图像确认；首期兼容回归；汇总通过/失败/未运行证据 | 待开始 |
 
-M22.2/3 分别定向构建、验收并本地提交；本路线无需全量渲染/物理或双配置矩阵。
-补全/schema 提示、位置参数别名、自动 guard、持久历史、脚本语言与 ReSTIR/采样/相机控制另行设计，
-不计入本首期完成条件。无新依赖、公共命令注册或传输协议版本。
+各阶段独立设计/实现/定向验收并本地提交；默认按编号推进，基础补全不依赖视口/相机命令完成。
+M22.1–3 的“首期完成”继续有效；扩展路线须 M22.5–11 全部交付后才标记完整完成。
+位置参数别名、自动 guard、持久历史、多行脚本、大模型生成/代执行、精确追加 N 个样本及 Simulation 独立视口命令仍后置。
+扩展默认无新依赖，不改变 JSON-RPC 传输；新增描述字段与宿主命令须在各自阶段同步注册、参考页和定向兼容验证。
+不固定运行全量渲染/物理或双配置矩阵；无功能改动的规划阶段只执行文档检查。
 
 ## 当前执行边界与下一步
 
@@ -947,15 +960,16 @@ M20.1 公共设计与依赖核验见[0145](development/0145-denoising-foundation
 降噪路线下一阶段为 M20.3 独立 À-trous 选项及最小 Editor/capture 接通；目前只有输入生产，尚未实现降噪滤波器。
 粒子流体路线 M21.1 设计落档已完成，见[0147](development/0147-particle-fluid-plan.md)；下一阶段为 M21.2 原生点绘制。
 M21 当前没有流体实现或点绘制验收，不能把设计采用状态解释为功能可用。
-用户指定的 M22 Console 首期路线已完成 M22.1–3：命名参数/JSON、会话历史/草稿与 GUI 输入已验收。
-后续补全、位置参数/别名和 ReSTIR/相机命令需独立设计；M20/M21 保持各自阶段状态，不能因本路线完成而推进。
+用户指定的 M22 首期已完成 M22.1–3；新增 M22.4 扩展设计与 M22.5–11 补全/提示、视口/相机命令及 Editor 帮助路线。
+本轮仅扩展计划，下一实现阶段 M22.5 共享帮助元数据与只读描述快照；新增功能仍未实现。
+位置参数/别名等维持上述后置边界；M20/M21 保持各自阶段状态，不能因本路线扩展而推进。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 
 工程基础维护记录包括 [0018](development/0018-vs2026-generation-script.md)、
 [0019](development/0019-development-skills.md) 和 [0041](development/0041-ai-documentation-workflow.md)，不改变里程碑顺序。
 设计准备记录与实现验收分开：[0020](development/0020-m4-development-plan.md)、
-[0022](development/0022-memory-profiling-design.md)、[0093](development/0093-atmosphere-cloud-plan.md)、[0108](development/0108-pathtracing-plan.md)、[0145](development/0145-denoising-foundation.md)、[0147](development/0147-particle-fluid-plan.md)、[0148](development/0148-console-command-input-plan.md)
+[0022](development/0022-memory-profiling-design.md)、[0093](development/0093-atmosphere-cloud-plan.md)、[0108](development/0108-pathtracing-plan.md)、[0145](development/0145-denoising-foundation.md)、[0147](development/0147-particle-fluid-plan.md)、[0148](development/0148-console-command-input-plan.md)、[0151](development/0151-console-assistance-plan.md)
 本身不作为对应功能实现完成证据。
 开发编号在实际创建记录时扫描目录取最大值加一，不在导航文档预写下一编号。
 

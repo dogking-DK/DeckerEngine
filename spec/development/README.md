@@ -152,5 +152,6 @@
 | 0148 | [M22.1 Console 命令文本输入首期计划](0148-console-command-input-plan.md) | editor-console、editor、commands、application-services | completed |
 | 0149 | [M22.2 Console 解析与执行接入](0149-console-command-parser.md) | editor-console、editor、commands、application-services | completed |
 | 0150 | [M22.3 Console 历史与界面交付](0150-console-history-ui.md) | editor-console、editor | completed |
+| 0151 | [M22.4 Console 补全与 Editor 交互扩展计划](0151-console-assistance-plan.md) | editor-console、editor、commands | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

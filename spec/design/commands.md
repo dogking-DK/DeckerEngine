@@ -1,7 +1,7 @@
 ---
 module: commands
 created_at: "2026-09-22T13:12:54+08:00"
-updated_at: "2026-09-28T16:00:00+08:00"
+updated_at: "2026-11-03T12:49:13+08:00"
 status: accepted
 ---
 
@@ -59,6 +59,21 @@ parse_command_json 拒绝重复键、坏 UTF-8、非 JSON 数值及尾随文本�
 
 验证独立 commands 构建、发现排序、重复/坏注册、嵌套 schema、未知/缺失字段、
 整数/Unicode/非有限边界、坏结果与异常错误；按本次行为选择相关用例和配置。
+
+## M22 帮助描述扩展方案（未实现）
+
+[Console/Editor 扩展设计](editor-console.md#m224-扩展设计帮助补全与设置命令)计划在 M22.5 增加独立的可选 `help` 元数据，
+服务于命令补全、参数说明和面板帮助；不往现有严格 schema 中直接添加未知说明关键字。
+帮助条目引用参数 schema 的 JSON Pointer，类型/必填/范围/枚举继续以 schema 为唯一来源；
+说明、单位、明确默认值、示例/搜索别名和候选提供器标识独立保存，缺失时退回已有信息。
+注册时校验引用、UTF-8/预算及默认值/示例，帮助不改变参数缺省行为或业务校验。
+
+M22.5 计划让 commands.describe 增量返回 help；commands.list 与已有字段含义保留。
+Runtime/Workspace 的 UI 描述查询从同一 registry 取得拥有型快照，不走 dispatch，避免击键时创建 Task；
+外部主动调用发现命令仍走原 Runtime 路径。Commands 不持 Editor widget、Scene 或 GPU 引用。
+具体接口/兼容用例在 M22.5 实施，当前 CommandDescriptor/发现返回仍未改变，不能据此宣称现有命令已附带完整帮助。
+M22.8/9 的 editor.* 设置命令须由宿主附加服务后注册，不由通用 Commands 层实现视口行为；runner 不假装提供 Editor 状态。
+扩展记录：[0151](../development/0151-console-assistance-plan.md)。
 
 参考：[JSON Schema 对象](https://json-schema.org/understanding-json-schema/reference/object)；
 记录：[0013](../development/0013-command-registry.md)。

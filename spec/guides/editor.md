@@ -293,6 +293,10 @@ entity.set_name id="<entity_id>" name="Hello 中文" guard={"document_id":"<docu
 设计及验证记录见 [Console](../design/editor-console.md)、[解析与执行](../development/0149-console-command-parser.md)、
 [历史与 GUI](../development/0150-console-history-ui.md)。
 
+M22 后续扩展已纳入命令/参数补全、输入诊断、实体/资产候选、视口/相机命令以及 Editor 悬停帮助和设置搜索，
+见 [扩展设计](../design/editor-console.md#m224-扩展设计帮助补全与设置命令) 与 [Roadmap](../roadmap.md#m22console-命令文本输入首期)。
+目前尚未提供这些功能；当前 Tab 仍用于输入空白，候选弹窗与新键位将在对应阶段交付后更新本指南。
+
 ## ReSTIR 直接光照
 
 Path tracing 面板默认 **Classic MIS**。切到 **ReSTIR DI** 后，可以设置 **Initial candidates**（1–64），

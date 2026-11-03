@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-11-03T11:52:43+08:00"
+updated_at: "2026-11-03T12:49:13+08:00"
 status: accepted
 ---
 
@@ -21,6 +21,8 @@ Editor Console 接受 `scene.query limit=20` 等命名参数文本，也兼容�
 支持 Up/Down 会话历史、草稿恢复、成功清空/失败保留与超限粘贴整段拒绝，
 见 [编辑器指南](../guides/editor.md#console-命令文本m22) 与 [M22 设计](../design/editor-console.md)。
 这只改变 Console 输入，不新增本目录命令，也不改变 JSON-RPC/IPC 格式。
+后续 M22 扩展已规划补全/参数提示、Editor 帮助与视口/相机设置命令，见 [扩展设计](../design/editor-console.md#m224-扩展设计帮助补全与设置命令)。
+这些新增能力尚未实现，本目录仍只列当前注册命令；扩展阶段实际交付时再同步新接口和调用示例。
 
 ## 按功能查找
 
