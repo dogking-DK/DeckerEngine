@@ -31,7 +31,7 @@ public:
     [[nodiscard]] static Result<std::unique_ptr<Workspace>> create(const std::filesystem::path& root);
     [[nodiscard]] Result<void> open(const std::filesystem::path& manifest, bool discard = false);
     [[nodiscard]] Result<void> refresh();
-    // JSON {method,params}; explicit guards and the shared Runtime registry.
+    // method key=value or JSON {method,params}; explicit guards and shared registry.
     [[nodiscard]] Result<Json> execute_console(std::string_view);
     [[nodiscard]] Result<void> select(std::optional<EntityId> id);
     [[nodiscard]] Result<void> apply();

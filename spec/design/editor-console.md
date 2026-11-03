@@ -1,7 +1,7 @@
 ---
 module: editor-console
 created_at: "2026-11-03T10:31:20+08:00"
-updated_at: "2026-11-03T10:36:53+08:00"
+updated_at: "2026-11-03T10:57:49+08:00"
 status: accepted
 ---
 
@@ -11,7 +11,8 @@ status: accepted
 
 让用户在 Editor Console 输入 `scene.query limit=20`，调用当前已经注册的 Runtime 命令。
 采用本设计不代表功能已经实现；实施状态统一见 [Roadmap M22](../roadmap.md#m22console-命令文本输入首期)。
-当前实现仍只接受 JSON `{method,params}`，基线为 `2d77103`，入口见
+M22.2 已接入命名参数与兼容 JSON 解析/执行，验收记录见 [0149](../development/0149-console-command-parser.md)；
+M22.3 的历史、输入提示/编辑体验及真实 GUI 验收仍待实施。原 JSON-only 基线为 `2d77103`，入口见
 [Workspace](../../engine/editor/src/Workspace.cpp) 与 [Console UI](../../engine/editor/src/WorkbenchUi.cpp)。
 
 首期交付：命令名与命名参数、标量/字符串/数组/对象、定位语法错误、原 JSON 输入兼容、
@@ -34,8 +35,8 @@ WorkbenchUi 的单次 Enter / Run
 ```
 
 - 解析器属于 `dk_editor_model` / `dk::editor_model`，复用 `dk::Json` 和命令 JSON 校验工具。
-  拟新增 `engine/editor/include/dk/editor/Console.hpp`、`engine/editor/src/Console.cpp`；公开类型使用 `dk::editor`。
-- 拟提供 `ConsoleCommand { std::string method; Json params; }` 和
+  公开头文件 [Console.hpp](../../engine/editor/include/dk/editor/Console.hpp)、实现 [Console.cpp](../../engine/editor/src/Console.cpp)；公开类型使用 `dk::editor`。
+- 提供 `ConsoleCommand { std::string method; Json params; }` 和
   `Result<ConsoleCommand> parse_console_command(std::string_view text)`。拥有解析结果，不借用 UI 缓冲区。
   纯解析不读取场景、schema 或 Runtime，不调用命令，不依赖 SDL/ImGui/Vulkan。
 - `Workspace::execute_console(std::string_view)` 保持原调用签名和 `Result<Json>` 结果；
@@ -48,12 +49,13 @@ WorkbenchUi 的单次 Enter / Run
 ## 输入语法与类型
 
 首期规范形式为 `method [key=value ...]`，参数之间用一个或多个 ASCII 空格/Tab 分隔。
-允许首尾空格/Tab，以及 `=` 两侧空格/Tab；不接受实际 CR/LF/NUL，粘贴多条命令整段拒绝，不执行首行。
+允许首尾空格/Tab，以及 `=` 两侧空格/Tab；不接受实际 CR/LF/NUL 或其他非 Tab 的 C0 控制字节，
+粘贴多条命令整段拒绝，不执行首行。
 命令名区分大小写，沿用注册名规则：1–96 个 ASCII 字符，首字符字母，后续字母/数字/点/下划线。
 顶层参数名为 `[A-Za-z_][A-Za-z0-9_]*`，区分大小写；重复参数一律拒绝，不采用最后值覆盖。
 所有参数必须命名；`scene.query 20` 明确提示使用 `limit=20` 一类命名写法，不猜测位置。
 
-以下均为待实现语法示例，当前 JSON-only Console 尚不可直接执行：
+以下为 M22.2 解析/执行入口支持的语法；历史/输入提示仍属于 M22.3：
 
 ```text
 scene.query
@@ -96,9 +98,11 @@ JSON 数字 token 在词法检查阶段区分整数与浮点并校验整数范�
 `{"method":"…","params":{…}}`。其他结构、额外字段、缺字段仍拒绝，不接受 JSON-RPC envelope 或 batch。
 JSON 分支失败后不回退文本分支，避免错误被另一种语法重新解释。
 
-两种入口共用最终 method/params 检查与执行路径。复用
-[parse_command_json / validate_command_value](../../engine/framework/commands/include/dk/commands/Schema.hpp)
-的 UTF-8、重复键、深度/节点和有限数值保护；新增扫描只负责文本边界、整数 token 与位置，不复制 schema 校验器。
+两种入口共用最终 method/params 检查与执行路径。有界词法预扫描检查 UTF-8、分隔符、
+重复 JSON 键、整数 token 与深度，再调用现有 Json 解析器；直接捕获 parse_error 的 byte 位置，
+不通过 parse_command_json 丢失结构化位置后再从英文错误文本反推。
+最终完整命令复用 [validate_command_value](../../engine/framework/commands/include/dk/commands/Schema.hpp)
+的深度/节点/编码/有限数值保护，不复制 schema 校验器。
 当前 Console 直接使用 `Json::parse`；改造会明确收紧重复 JSON 键和整数溢出，其他合法单行旧请求保持原行为。
 本期两种入口均限定单行；直接调用 execute_console 也不接受实际换行的格式化 JSON，字符串内的 JSON 转义 `\n` 仍合法。
 
@@ -133,6 +137,9 @@ UTF-8 非法时仅报告字节位置。列号按 Unicode 码点计算，不用�
    不得暗示操作回滚或主动再次执行。保持 Result<Json>，由 UI 识别该标记区分提交前失败。
 6. UI 解析/显示/历史均在 owner 线程；后台 Job 仍按原服务协议受理/查询，不因控制台输入方式改变而同步等待。
 
+M22.2 将上述分派顺序提取为 Editor 私有 ConsoleDispatch helper，Workspace 提供真实 call/stopping/refresh。
+测试用同一 helper 和真实 Runtime，仅注入刷新失败；不增加公开故障开关或改变 Runtime 的注册/执行接口。
+
 ## 命令历史与 UI
 
 历史由当前 WorkbenchUi 拥有，最多 64 条，每条最多 8192 字节；是输入历史，不是 Scene 撤销历史。
@@ -160,8 +167,9 @@ UTF-8 非法时仅报告字节位置。列号按 Unicode 码点计算，不用�
 每一实现小阶段分别定向构建、测试、留档和本地提交。首期最终完成要求 M22.2/3 全部通过。
 代码分工与选择范围如下，实际测试名在实施时注册并枚举，不把下列候选当成已运行结果：
 
-- 复用 [dk_editor_tests](../../tests/unit/CMakeLists.txt)，拟新增 `ConsoleTests.cpp` 和 `ConsoleHistoryTests.cpp`。
-  候选前缀为 `dk.editor.console `、`dk.editor.workspace console`；继承原 `workspace console shares explicit guards...` 回归。
+- 复用 [dk_editor_tests](../../tests/unit/CMakeLists.txt)，已新增 [ConsoleTests.cpp](../../tests/unit/ConsoleTests.cpp)，
+  `ConsoleHistoryTests.cpp` 留待 M22.3。解析/执行测试前缀为 `dk.editor.console `、`dk.editor.workspace console`；
+  继承原 `workspace console shares explicit guards...` 回归。
 - 类型用例：引号/空格/转义/中文/原样路径、嵌套 JSON、空数组/null、true 与字符串 true、
   整数与浮点 token、int64/uint64 边界与越界（含嵌套及兼容 JSON）、未知/重复参数/JSON 键。
 - 拒绝用例：未闭合引号/括号、缺值/尾随垃圾、位置参数、非法 UTF-8/NUL/CRLF、8192/8193 字节、
@@ -182,7 +190,7 @@ UTF-8 非法时仅报告字节位置。列号按 Unicode 码点计算，不用�
 首期使用命名参数，不推断参数位置，不在前端转换业务单位。数组/对象复用 JSON，避免引入第二套嵌套数据语言。
 显式 guard 保持当前可复现/冲突检测契约；便捷 guard、点号嵌套参数或常用别名若后续需要，单独定义覆盖与冲突规则。
 补全可在未来消费现有 commands.list/describe，首期不为补全改动 schema。
-当前设计已足够进入 M22.2；无需外部依赖选型或新增审批。渲染控制/相机命令仍需独立设计。
+M22.2 实施结果见开发记录；后续 M22.3 沿用本设计的历史/UI 契约。渲染控制/相机命令仍需独立设计。
 
 ## 相关记录
 

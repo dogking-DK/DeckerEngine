@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-11-03T10:36:53+08:00"
+updated_at: "2026-11-03T10:57:49+08:00"
 status: accepted
 ---
 
@@ -80,7 +80,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M19 ReSTIR 直接光重采样 | 首表面 DI、时空复用、Scene media 适配与 Editor/capture、固定质量测量 | M16–M18 | 已完成；Sponza 测量未支持默认切换，保留 Classic MIS；见[设计](design/render-restir.md) |
 | M20 路径追踪降噪 | À-trous、SVGF/A-SVGF、NRD REBLUR/RELAX、vk_oidn；公共信号/历史、介质与质量性能验收 | M16–M19、现有 Graph/worker | M20.1 设计/依赖、M20.2 表面信号生产已完成；M20.3–11 待开始，见[设计](design/render-denoising.md) |
 | M21 原生点绘制与粒子流体 | point-list、统一粒子输出、WCSPH/PBF CPU/GPU、工作台/脚本/导出 | M5/M6、M10–M12、M18.3 | M21.1 设计已完成；M21.2–9 待开始，见[流体设计](design/physics-fluids.md)、[点绘制设计](design/render-particles.md) |
-| M22 Console 命令文本输入首期 | 命名参数、JSON 兼容、错误定位、会话历史与 GUI 输入 | M3、M8、既有 M17.5 Console | M22.1 设计已完成；M22.2/3 待开始，见[Console 设计](design/editor-console.md) |
+| M22 Console 命令文本输入首期 | 命名参数、JSON 兼容、错误定位、会话历史与 GUI 输入 | M3、M8、既有 M17.5 Console | M22.1 设计、M22.2 解析/执行已完成；M22.3 历史/UI 待开始，见[Console 设计](design/editor-console.md) |
 
 默认执行表中顺序。M5 在 Foundation 补充完成后具备独立探索条件，
 M9 的 Luau 命令绑定在 M3 后可提前做；若调整次序，仍需满足对应集成验收依赖。
@@ -855,14 +855,14 @@ OpenUSD 保留为统一交换入口候选，运行时求解和首期预览不以
 
 ## M22：Console 命令文本输入首期
 
-用户指定先完成 Console 首期计划与设计。本路线复用既有命令服务，不新增视口渲染控制或相机命令。
+用户指定 Console 首期路线，先设计、再逐阶段实现。本路线复用既有命令服务，不新增视口渲染控制或相机命令。
 语法、状态和验收契约见 [Console 设计](design/editor-console.md)；首期完成须 M22.2/3 均验收。
-规划中出现的文本示例尚不能在当前 JSON-only Console 中使用。
+M22.2 已支持命名参数文本与兼容 JSON 的解析/执行；历史/输入 UI/真实 GUI 验收尚未完成。
 
 | 小阶段 | 实际交付范围 | 必要前置 | 独立验收 | 状态 |
 | --- | --- | --- | --- | --- |
 | M22.1 | 命名参数/类型/兼容、预算/错误、guard/历史、文件范围与验收计划 | M3、M8、M17.5 | 文档索引/元数据/链接与设计边界检查，明确当前和计划能力 | 已完成：文档检查通过，见[0148](development/0148-console-command-input-plan.md)；仅设计验收 |
-| M22.2 | CPU 解析器、Workspace 分派接入、命令/刷新失败诊断及模型测试 | M22.1 | 类型与完整整数、嵌套/重复/超限/Unicode；全行错误无副作用；JSON 等价、guard/草稿/零等待及提交后失败 | 待开始 |
+| M22.2 | CPU 解析器、Workspace 分派接入、命令/刷新失败诊断及模型测试 | M22.1 | 类型与完整整数、嵌套/重复/超限/Unicode；全行错误无副作用；JSON 等价、guard/草稿/零等待及提交后失败 | 已完成：13 项 CPU 定向检查通过，无失败/跳过，见[0149](development/0149-console-command-parser.md)；GUI 留待 M22.3 |
 | M22.3 | 有界历史、Up/Down/草稿、Console UI、后台真实输入及使用文档 | M22.2 | 历史容量/去重/只回填，Enter/Run 一次执行、成功清空/失败保留/超限粘贴拒绝；旧 JSON 和真实 GUI 定向回归 | 待开始 |
 
 M22.2/3 分别定向构建、验收并本地提交；本路线无需全量渲染/物理或双配置矩阵。
@@ -947,8 +947,8 @@ M20.1 公共设计与依赖核验见[0145](development/0145-denoising-foundation
 降噪路线下一阶段为 M20.3 独立 À-trous 选项及最小 Editor/capture 接通；目前只有输入生产，尚未实现降噪滤波器。
 粒子流体路线 M21.1 设计落档已完成，见[0147](development/0147-particle-fluid-plan.md)；下一阶段为 M21.2 原生点绘制。
 M21 当前没有流体实现或点绘制验收，不能把设计采用状态解释为功能可用。
-用户当前指定 M22 Console 首期路线，M22.1 设计落档已完成；下一阶段 M22.2 解析与执行接入。
-当前没有新 Console 文本语法或历史功能实现；M20/M21 保持各自阶段状态，不能因本路线完成而推进。
+用户当前指定 M22 Console 首期路线，M22.1 设计与 M22.2 解析/执行已完成；下一阶段 M22.3 历史与界面交付。
+当前没有 Console 命令历史与新 GUI 验收；M20/M21 保持各自阶段状态，不能因本路线完成而推进。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 

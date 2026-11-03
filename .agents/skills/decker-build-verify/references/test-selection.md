@@ -74,6 +74,7 @@
 | 默认 Sponza 1600×1200 / 2560×1440 表面和介质四模式、显存额度与连续累积/取消恢复 | dk_editor_render_benchmark | `^dk\.editor\.(restir_desktop\|media_desktop)_gpu_validation$`（需要 demo 素材；required RT/validation/sync） |
 | Runtime 截图、版本/像素、原子发布和退出 | dk_run | `^dk\.runtime\.capture_gpu_validation$`（gpu label；77 为跳过） |
 | Runtime 的 batch/stdio 进程行为 | dk_run | `^dk\.runtime\.` |
+| Console 文本/JSON 解析、精确整数/Unicode/预算、guard/草稿与提交后刷新失败（M22.2，无需 GPU） | dk_editor_tests | `^dk\.editor\.(console \|workspace console)` |
 | 编辑器选择/草稿、相机、Gizmo 事务/撤销、保存重载与失败保护（无需 GPU） | dk_editor_tests | `^dk\.editor\.(workspace \|runtime \|camera \|interaction )` |
 | CPU 射线、AABB、三角形 BVH 和仿射实例 | dk_geometry_tests | `^dk\.geometry\.` |
 | 编辑器拾取、Gizmo、相机真实输入和 runner 重载 | dk_editor_app、dk_run | `^dk\.editor\.interaction_gpu_validation$`（gpu label；77 为跳过） |

@@ -241,12 +241,44 @@ Console 输入 `{"method":"scene.query","params":{}}` 后按 Enter 或 Run，取
 输入最多 8192 字节，每条结果显示最多 4096 字节，完整 schema/结果可用 IPC；保留最近 64 条日志。
 有未应用草稿时仅允许 query 命令，先 Apply/Revert 再修改或捕获；Console 的 jobs.wait 仅允许 timeout_ms=0，避免占用 GUI 线程。
 
-`scene.query limit=20` 等文本输入与上下键命令历史已纳入 [Console 首期设计](../design/editor-console.md)，
-当前仅完成设计，尚不可直接使用；实施状态见 [Roadmap M22](../roadmap.md#m22console-命令文本输入首期)。
+命名参数文本已在 M22.2 接入，见下节；上下键命令历史和输入界面改造仍待 M22.3，
+实施状态见 [Roadmap M22](../roadmap.md#m22console-命令文本输入首期)。
 
 `dk.editor.media_pathtracing_gpu_validation` 使用独立夹具、--background 和 --media-pathtrace-smoke：真实点击模式/环境/时间/曝光、Console 输入，
 与 IPC capture 比较冻结线性结果，连续错误恢复和换会话检查。该验收将路径画面固定为至多 96×96 以控制同步验证成本；
 正常 Editor 分辨率不变，原路径验收继续覆盖正常视口、resize/minimize 与相机/实体编辑。不得把验收尺寸作为 Sponza 性能证据。
+
+## Console 命令文本（M22.2）
+
+更新并构建后的编辑器可在 Console 原输入框提交以下命令；当前提示文字仍为 JSON，
+历史浏览、成功清空、超限粘贴保护和真实 GUI 输入验收留待 M22.3。
+
+```text
+scene.query
+scene.query limit=20 offset=0
+commands.describe name=entity.create
+```
+
+格式为 `命令名 参数名=值`，允许空格/Tab 以及等号两侧空白；不支持位置参数或 `guard.revision=...`。
+字符串可用裸词、JSON 双引号或原样单引号：`name="Hello World"`、`manifest='folder with spaces/project.json'`。
+裸词 `true/false/null` 与合法 JSON 数字转换为对应类型，其他裸词为字符串；`1.0` 是浮点，不能用于整数字段。
+数字或布尔文本作为字符串时必须加引号。整数保留完整 int64/uint64 精度，溢出直接拒绝。
+数组和对象使用严格 JSON，例如 `assets=[]`、`transform={"translation":[1,2,3],"rotation":[0,0,0,1],"scale":[1,1,1]}`。
+
+写命令仍显式提供 guard，UUID 与 revision 必须替换成当前查询结果：
+
+```text
+entity.set_name id="<entity_id>" name="Hello World" guard={"document_id":"<document_id>","revision":12}
+```
+
+单次只接受一行，不支持分号串联、管道、变量展开或注释。解析器拒绝超过 8192 UTF-8 字节、
+实际换行/NUL、重复参数/JSON 键、未闭合字符串/括号或非法 UTF-8；完整解析通过后才分派，错误尾部不会执行合法前缀。
+错误包含字符列号与 `byte=` 字节位置；非法 UTF-8 只报告字节位置。原合法单行 JSON `{method,params}` 仍可使用。
+
+未应用草稿、缺失或过期 guard 继续由原契约拒绝；Console 的 jobs.wait 省略 timeout_ms 或显式整数 0 均为零等待。
+看到 `Command executed, but view refresh failed` 表示业务已经成功、随后刷新失败，应先查询实际状态，不能直接假定未执行而重试。
+参数 schema/单位/可用命令仍以 commands.list/describe 为准；本阶段没有新增 `restir`、`raytracing` 或 `cam.orbit` 控制命令。
+设计及验证记录见 [Console](../design/editor-console.md)、[0149](../development/0149-console-command-parser.md)。
 
 ## ReSTIR 直接光照
 
