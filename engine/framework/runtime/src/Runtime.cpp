@@ -2,6 +2,7 @@
 #include <dk/operations/SimulationOperations.hpp>
 #include <dk/runtime/Runtime.hpp>
 #include <dk/profiling/Profiler.hpp>
+#include <algorithm>
 #ifdef DK_RUNTIME_ASSETS
 #include <dk/operations/AssetOperations.hpp>
 #endif
@@ -15,6 +16,31 @@
 
 namespace dk
 {
+AssetCatalogReadVersion Runtime::asset_catalog_version() const {
+#ifdef DK_RUNTIME_ASSETS
+    if (!stopping_) if (auto service=assets_->catalog()) {
+        const auto guard=(*service)->catalog().guard();
+        return {true,guard.session_id.to_string(),guard.revision};
+    }
+#endif
+    return {};
+}
+Result<AssetCatalogReadPage> Runtime::read_asset_catalog(const AssetCatalogReadVersion& version, std::size_t offset, std::size_t limit) const {
+    if (version!=asset_catalog_version()) return std::unexpected(Error{ErrorCode::conflict,"Asset catalog changed"});
+    if (!limit || limit>256 || offset>10000) return std::unexpected(Error{ErrorCode::invalid_argument,"Catalog page limit must be 1..256 and offset at most 10000"});
+#ifdef DK_RUNTIME_ASSETS
+    if (version.available) {
+        auto service=assets_->catalog(); if(!service) return std::unexpected(service.error());
+        const auto records=(*service)->catalog().records();
+        if(offset>records.size()) return std::unexpected(Error{ErrorCode::invalid_argument,"Catalog offset outside range"});
+        const auto end=std::min(records.size(),offset+limit);
+        AssetCatalogReadPage page{version,{},offset,records.size(),end<records.size()};
+        for(auto i=offset;i<end;++i) page.records.push_back({records[i].id,records[i].kind,std::string(records[i].path)});
+        return page;
+    }
+#endif
+    return std::unexpected(Error{ErrorCode::invalid_state,"Asset catalog unavailable; open a project first"});
+}
 Result<SceneReadSnapshot> Runtime::read_scene(EditGuard guard) const
 {
     return service_->read_snapshot(guard);

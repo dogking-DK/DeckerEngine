@@ -45,8 +45,9 @@ Result<Json> catalog_state(const AsyncAssetService& service) {
 Json catalog_guard_json(CatalogGuard guard) { return {{"session_id",guard.session_id.to_string()},{"revision",guard.revision}}; }
 Json asset_job_result_schema() { return result_schema(); }
 Result<void> register_asset_commands(CommandRegistry& registry, AsyncAssetService& service, bool with_jobs) {
-    auto add = [&](std::string name, std::string description, Json params, Json result, CommandEffect effect, CommandHandler handler) {
-        return registry.add({std::move(name),std::move(description),std::move(params),std::move(result),effect,false},std::move(handler));
+    auto declared=registry.register_completion_provider("assets.any"); if(!declared) return declared;
+    auto add = [&](std::string name, std::string description, Json params, Json result, CommandEffect effect, CommandHandler handler, std::optional<Json> help=std::nullopt) {
+        return registry.add({std::move(name),std::move(description),std::move(params),std::move(result),effect,false,std::move(help)},std::move(handler));
     };
     auto r = add("assets.open","Open a project asset catalog without loading a scene",
         schema::object({{"manifest",schema::string(1,4096)},{"guard",guard_schema()}},{"manifest"}),catalog_state_schema(),CommandEffect::control,
@@ -107,7 +108,7 @@ Result<void> register_asset_commands(CommandRegistry& registry, AsyncAssetServic
                 auto result = std::string_view{method} == "assets.load" ? service.load(*asset) :
                     std::string_view{method} == "assets.unload" ? service.unload(*asset) : service.status(*asset);
                 if (!result) return std::unexpected(result.error()); return asset_json(*result,service);
-            }); if (!r) return r;
+            },Json{{"version",1},{"fields",{{"/properties/id",{{"completion_provider","assets.any"}}}}}}); if (!r) return r;
     }
     if (!with_jobs) return {};
     return register_job_commands(registry,{

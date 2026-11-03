@@ -1,7 +1,7 @@
 ---
 module: command-reference-entity
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-09-22T17:00:46+08:00"
+updated_at: "2026-11-03T14:26:14+08:00"
 status: accepted
 ---
 
@@ -14,6 +14,11 @@ status: accepted
 失败保留状态。实体不存在返回 not_found，过期 guard 返回 conflict。
 实现：[SceneOperations.cpp](../../engine/framework/operations/src/SceneOperations.cpp)、
 [SceneDocument.cpp](../../engine/scene/src/SceneDocument.cpp)。
+
+Console 可用 Tab 补全查询/编辑的 `id`、`entity.set_parent` 的 `parent`（保留 null），
+以及 `entity.set_assets` 的数组项 `id`。实体来自已发布场景；资产引用来自当前工程映射并按同项 kind 过滤。
+候选显示名称/路径、种类和 UUID，只回填带引号的 ID，不补 guard、不自动执行。
+`entity.create.id` 用于新身份，不提供已有实体候选；详见[Console 指南](../guides/editor.md#console-命令文本m22)。
 
 ## entity.create
 

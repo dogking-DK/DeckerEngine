@@ -1,6 +1,6 @@
 #pragma once
 #include "ConsoleHistory.hpp"
-#include "ConsoleAssist.hpp"
+#include "ConsoleAssistCache.hpp"
 #include <imgui.h>
 #include <array>
 #include <utility>
@@ -8,7 +8,7 @@
 namespace dk::editor::detail {
 class ConsoleInput final {
 public:
-    bool draw(bool composing, const CommandCatalogSnapshot&);
+    bool draw(bool composing, const CommandCatalogSnapshot&, const Workspace&);
     void draw_assistance();
     void dismiss() { popup_ = false; hidden_ = true; }
     bool remember() { return history_.remember(text()); }
@@ -27,7 +27,7 @@ public:
 private:
     struct ClipboardScope;
     static int callback(ImGuiInputTextCallbackData*);
-    void sync(ImGuiInputTextCallbackData*);
+    void sync(ImGuiInputTextCallbackData*,bool explicit_tab=false);
     void accept(ImGuiInputTextCallbackData*);
     void reject(std::string error) { rejected_ = true; error_ = std::move(error); }
     std::array<char,console_input_limit+1> buffer_{};
@@ -37,6 +37,10 @@ private:
     std::string error_;
     std::optional<std::string> pending_paste_;
     const CommandCatalogSnapshot* catalog_ = nullptr; // only borrowed during draw/callback
+    const Workspace* workspace_ = nullptr;
+    ConsoleReferenceVersion references_;
+    ConsoleAssistCache cache_;
+    std::uint64_t displayed_publication_=0;
     ConsoleEditState edit_;
     ConsoleAssistance assistance_;
     std::size_t selected_ = 0;

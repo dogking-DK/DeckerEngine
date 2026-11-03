@@ -75,11 +75,11 @@
 | 默认 Sponza 1600×1200 / 2560×1440 表面和介质四模式、显存额度与连续累积/取消恢复 | dk_editor_render_benchmark | `^dk\.editor\.(restir_desktop\|media_desktop)_gpu_validation$`（需要 demo 素材；required RT/validation/sync） |
 | Runtime 截图、版本/像素、原子发布和退出 | dk_run | `^dk\.runtime\.capture_gpu_validation$`（gpu label；77 为跳过） |
 | Runtime 的 batch/stdio 进程行为 | dk_run | `^dk\.runtime\.` |
-| Console 文本/JSON、整数/Unicode/预算、guard/草稿/刷新失败、历史、基础补全/提示与来源/选区保护（M22.2/3/6，无需 GPU） | dk_editor_tests | `^dk\.editor\.(console \|workspace console)` |
+| Console 文本/JSON、整数/Unicode/预算、guard/草稿/刷新失败、历史、基础/嵌套补全、实体资产候选/诊断/去抖与来源/选区保护（M22.2/3/6/7，无需 GPU） | dk_editor_tests | `^dk\.editor\.(console \|workspace console)` |
 | 编辑器选择/草稿、相机、Gizmo 事务/撤销、保存重载与失败保护（无需 GPU） | dk_editor_tests | `^dk\.editor\.(workspace \|runtime \|camera \|interaction )` |
 | CPU 射线、AABB、三角形 BVH 和仿射实例 | dk_geometry_tests | `^dk\.geometry\.` |
 | 编辑器拾取、Gizmo、相机真实输入和 runner 重载 | dk_editor_app、dk_run | `^dk\.editor\.interaction_gpu_validation$`（gpu label；77 为跳过） |
-| 编辑器真实窗口、Console 输入/历史/粘贴/组合输入/补全提示与键鼠、场景预览与保存重载 | dk_editor_app | `^dk\.editor\.workbench_gpu_validation$`（gpu label；77 为跳过） |
+| 编辑器真实窗口、Console 输入/历史/粘贴/组合输入/基础与嵌套补全/实体资产候选/诊断与键鼠、场景预览与保存重载 | dk_editor_app | `^dk\.editor\.workbench_gpu_validation$`（gpu label；77 为跳过） |
 | CLI 版本 | dk_run | `^dk\.bootstrap\.version$` |
 | RenderScene/RenderView 提取、版本与 CPU 寿命 | dk_render_data_tests | `^dk\.render\.data\.` |
 | CPU路径追踪解析/收敛、MIS/RR、采样/相机/输入快照与预算/取消/内存失败 | dk_pathtracing_reference_tests | `^dk\.pathtracing\.[a-z]+ `（CPU-only，单元测试名首词后的空格排除demo_cpu） |

@@ -26,6 +26,20 @@ struct SimulationExportReceipt {
     std::int64_t simulated_time_ns = 0;
     std::string output;
 };
+struct ConsoleReferenceVersion {
+    DocumentId document_id;
+    std::uint64_t revision = 0;
+    AssetCatalogReadVersion assets;
+    std::uint64_t publication = 0;
+    bool operator==(const ConsoleReferenceVersion&) const = default;
+};
+struct ConsoleReferenceRecord { std::string id, name, kind; };
+struct ConsoleReferencePage {
+    ConsoleReferenceVersion version;
+    std::vector<ConsoleReferenceRecord> records;
+    std::size_t offset = 0, total = 0;
+    bool has_more = false;
+};
 class Workspace final {
 public:
     [[nodiscard]] static Result<std::unique_ptr<Workspace>> create(const std::filesystem::path& root);
@@ -36,6 +50,9 @@ public:
     // Owning metadata snapshot; does not execute commands, refresh or edit drafts.
     [[nodiscard]] CommandCatalogVersion command_catalog_version() const { return runtime_->command_catalog_version(); }
     [[nodiscard]] CommandCatalogSnapshot command_catalog() const { return runtime_->command_catalog(); }
+    [[nodiscard]] ConsoleReferenceVersion console_reference_version() const;
+    [[nodiscard]] Result<ConsoleReferencePage> read_console_references(std::string_view provider,
+        const ConsoleReferenceVersion&, std::size_t offset, std::size_t limit = 128) const;
     [[nodiscard]] Result<void> select(std::optional<EntityId> id);
     [[nodiscard]] Result<void> apply();
     [[nodiscard]] Result<void> revert();
@@ -88,6 +105,7 @@ private:
     [[nodiscard]] Json guard() const;
     std::unique_ptr<Runtime> runtime_;
     std::optional<SceneReadSnapshot> snapshot_;
+    std::uint64_t snapshot_publication_ = 0;
     std::optional<EntityId> selection_;
     std::optional<InspectorDraft> draft_;
     std::optional<EnvironmentDraft> environment_;

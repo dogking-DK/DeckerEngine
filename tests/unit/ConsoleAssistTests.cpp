@@ -63,7 +63,7 @@ TEST_CASE("console assistance preserves enum strings booleans null and full inte
 }
 TEST_CASE("console assistance rejects invalid positions nested inputs and stale selections") {
     const auto cat=catalog();
-    for (const auto* text : {"{\"method\":\"scene.qu", "render.capture guard={\"lim", "render.capture guard=[1,", "render.capture name=a;bad", "render.capture name=\"a\"suffix", "unknown li"})
+    for (const auto* text : {"render.capture guard={\"lim", "render.capture guard=[1,", "render.capture name=a;bad", "render.capture name=\"a\"suffix", "unknown li"})
         CHECK(assist_console(cat,edit(text)).candidates.empty());
     auto selected=edit("scene.query"); selected.selection_start=selected.cursor=0;
     CHECK(choose(cat,selected,"render.capture").text=="render.capture");

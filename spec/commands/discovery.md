@@ -1,7 +1,7 @@
 ---
 module: command-reference-discovery
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-11-03T13:06:50+08:00"
+updated_at: "2026-11-03T14:26:14+08:00"
 status: accepted
 ---
 
@@ -35,7 +35,8 @@ effect 的文本值为 `query`、`memory_edit`、`external`、`control`；与 co
 
 M22.5 增加可选 `help`，已有六个字段与 `commands.list` 的四字段条目保持不变。
 未提供帮助的命令省略 help，消费者应按 description/parameters 降级；不能把没有帮助理解为命令不可用。
-当前带帮助的命令为 `commands.describe`、`scene.query`、`environment.preset` 和 `environment.set`。
+当前带帮助的命令为 `commands.describe`、`scene.query`、`environment.preset/set`，
+以及 `entity.get/delete/set_name/set_transform/set_parent/set_assets` 和 `assets.load/status/unload`（共 13 条，随构建选项变化）。
 
 ```json
 {"jsonrpc":"2.0","id":3,"method":"commands.describe","params":{"name":"scene.query"}}
@@ -57,6 +58,8 @@ M22.5 增加可选 `help`，已有六个字段与 `commands.list` 的四字段�
 
 例如 scene.query 的 `/properties/limit` 含 `label="分页数量"`、`unit="entities"`、`default=128` 与示例 `[1,20,128]`；
 范围 1–256 来自 parameters schema。environment.set 的必填环境字段只提供说明/示例，不隐式补齐完整环境。
-帮助只读，不改变 handler 的参数、默认值、guard 或副作用；动态候选与补全弹窗属于后续阶段。
+帮助只读，不改变 handler 的参数、默认值、guard 或副作用。Console 已支持静态/嵌套补全与动态候选：
+`scene.entity` 标记已有实体 ID/parent，`assets.any` 标记活动目录 ID，`assets.reference` 标记工程资产引用 ID；
+创建 ID 和 guard 没有身份候选。只有候选接受会改输入，真正执行仍需明确提交。
 通过 Runtime/JSON-RPC 主动调用发现命令仍记录正常 Task；Editor 内部无 Task 的目录快照 API 见
 [Commands 设计](../design/commands.md#m225-帮助描述与只读目录)，它不是新增的传输命令。

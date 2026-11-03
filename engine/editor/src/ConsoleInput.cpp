@@ -69,17 +69,18 @@ struct ConsoleInput::ClipboardScope {
     }
 };
 bool ConsoleInput::active() const { return id_ && ImGui::GetCurrentContext() && ImGui::GetActiveID() == id_; }
-bool ConsoleInput::draw(bool composing, const CommandCatalogSnapshot& catalog) {
+bool ConsoleInput::draw(bool composing, const CommandCatalogSnapshot& catalog,const Workspace& workspace) {
     rejected_ = false; pasting_ = false; accepted_=false; accept_key_=false;
-    composing_=composing; catalog_=&catalog;
-    if (assistance_.catalog!=catalog.version) dismiss();
+    composing_=composing; catalog_=&catalog; workspace_=&workspace;
+    references_=workspace.console_reference_version();
+    if (assistance_.catalog!=catalog.version || assistance_.references!=references_) dismiss();
     id_ = ImGui::GetID("##command");
     if (focus_) { ImGui::SetKeyboardFocusHere(); focus_ = false; }
     if (composing) dismiss();
     if (active() && !composing && popup_ &&
         (ImGui::IsKeyPressed(ImGuiKey_Enter,false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter,false))) accept_key_=true;
     const bool escape=active() && !composing && !hidden_ &&
-        (popup_ || !assistance_.hint.empty()) && ImGui::IsKeyPressed(ImGuiKey_Escape,false);
+        (popup_ || !assistance_.hint.empty() || !assistance_.diagnostics.empty()) && ImGui::IsKeyPressed(ImGuiKey_Escape,false);
     if (escape) dismiss();
     ClipboardScope clipboard{*this};
     auto flags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackEdit |
@@ -98,26 +99,39 @@ bool ConsoleInput::draw(bool composing, const CommandCatalogSnapshot& catalog) {
     // A click in our assistance window is handled after the input is drawn.
     const bool in_assistance=GImGui->HoveredWindow && std::string_view(GImGui->HoveredWindow->Name).starts_with("##Console assistance");
     if (!active() && !in_assistance) dismiss();
-    catalog_=nullptr;
+    catalog_=nullptr; workspace_=nullptr;
     return enter && !composing && !rejected_ && !accepted_;
 }
-void ConsoleInput::sync(ImGuiInputTextCallbackData* data) {
+void ConsoleInput::sync(ImGuiInputTextCallbackData* data,bool explicit_tab) {
     if (composing_ || !catalog_) return;
     ConsoleEditState current{std::string(data->Buf,std::size_t(data->BufTextLen)),std::size_t(data->CursorPos),
         std::size_t(data->SelectionStart),std::size_t(data->SelectionEnd),edit_.revision};
-    if (current==edit_ && assistance_.source==current && assistance_.catalog==catalog_->version) return;
     // Completion has callback priority over Edit when typing and Tab arrive in
     // one frame. Such text changes must still detach history after stale rejection.
     if (current.text!=edit_.text && data->EventFlag!=ImGuiInputTextFlags_CallbackHistory) history_.edited();
     if (current!=edit_) ++current.revision;
     edit_=std::move(current);
-    assistance_=assist_console(*catalog_,edit_); selected_=0; scroll_candidate_=true; hidden_=false;
-    if (assistance_.candidates.empty()) popup_=false;
+    const auto now=std::uint64_t(ImGui::GetTime()*1000);
+    if(cache_.observe(edit_,catalog_->version,references_,now)) {
+        hidden_=false; assistance_={edit_,catalog_->version}; assistance_.references=references_;
+        assistance_.loading=popup_; assistance_.hint=popup_ ? "Updating suggestions..." : "";
+    }
+    cache_.poll(*catalog_,[&](std::string_view provider,const ConsoleReferenceVersion& version,std::size_t offset,std::size_t limit) {
+        return workspace_->read_console_references(provider,version,offset,limit);
+    },now,explicit_tab);
+    if(cache_.publication()!=displayed_publication_ && cache_.result()) {
+        const auto selected_value=selected_<assistance_.candidates.size() ? assistance_.candidates[selected_].insert : std::string{};
+        assistance_=*cache_.result(); displayed_publication_=cache_.publication(); selected_=0; scroll_candidate_=true;
+        const auto previous=std::ranges::find(assistance_.candidates,selected_value,&ConsoleCandidate::insert);
+        if(previous!=assistance_.candidates.end()) selected_=std::size_t(previous-assistance_.candidates.begin());
+        if(assistance_.candidates.empty() && !assistance_.loading) popup_=false;
+    }
 }
 void ConsoleInput::accept(ImGuiInputTextCallbackData* data) {
     ConsoleEditState current{std::string(data->Buf,std::size_t(data->BufTextLen)),std::size_t(data->CursorPos),
         std::size_t(data->SelectionStart),std::size_t(data->SelectionEnd),edit_.revision};
-    auto replacement=accept_console_candidate(assistance_,selected_,current,catalog_->version);
+    if(assistance_.loading && assistance_.candidates.empty()) return;
+    auto replacement=accept_console_candidate(assistance_,selected_,current,catalog_->version,references_);
     dismiss();
     if (!replacement) { reject(replacement.error().message); return; }
     data->DeleteChars(0,data->BufTextLen); data->InsertChars(0,replacement->text.c_str());
@@ -155,7 +169,7 @@ int ConsoleInput::callback(ImGuiInputTextCallbackData* data) {
         data->DeleteChars(0,data->BufTextLen); data->InsertChars(0,replacement.c_str());
     } else if (data->EventFlag == ImGuiInputTextFlags_CallbackCompletion) {
         if (input.popup_) input.accept(data);
-        else { input.sync(data); input.popup_=!input.assistance_.candidates.empty(); input.hidden_=false; input.scroll_candidate_=true; }
+        else { input.sync(data,true); input.popup_=!input.assistance_.candidates.empty() || input.assistance_.loading; input.hidden_=false; input.scroll_candidate_=true; }
     } else if (data->EventFlag == ImGuiInputTextFlags_CallbackEdit) input.history_.edited();
     if (data->EventFlag!=ImGuiInputTextFlags_CallbackCharFilter) {
         if (input.accept_key_) { input.accept_key_=false; input.accept(data); }
@@ -165,7 +179,7 @@ int ConsoleInput::callback(ImGuiInputTextCallbackData* data) {
 }
 void ConsoleInput::draw_assistance() {
     positions_.clear();
-    if (composing_ || hidden_ || (!popup_ && (!active() || assistance_.hint.empty()))) return;
+    if (composing_ || hidden_ || (!popup_ && (!active() || (assistance_.hint.empty() && assistance_.diagnostics.empty())))) return;
     const auto* viewport=ImGui::GetMainViewport();
     const auto width=std::min(640.0f,viewport->WorkSize.x-16.0f);
     const auto height=std::min(380.0f,viewport->WorkSize.y-16.0f);
@@ -177,8 +191,9 @@ void ConsoleInput::draw_assistance() {
     ImGui::Begin("##Console assistance",nullptr,flags);
     if (popup_) {
         ImGui::TextUnformatted("Tab / Enter: accept   Esc: close   Up / Down: choose");
+        if(assistance_.loading) ImGui::TextUnformatted("Loading registered identities / more pages...");
         if (assistance_.truncated) ImGui::TextUnformatted("Showing 32 matches; type a longer prefix.");
-        const float rows=float(std::min(std::size_t(8),assistance_.candidates.size()));
+        const float rows=float(std::clamp(assistance_.candidates.size(),std::size_t(1),std::size_t(8)));
         ImGui::BeginChild("##candidates",{0,rows*ImGui::GetTextLineHeightWithSpacing()+8},true);
         for (std::size_t i=0;i<assistance_.candidates.size();++i) {
             ImGui::PushID(int(i));
@@ -190,7 +205,7 @@ void ConsoleInput::draw_assistance() {
             if (selected_==i && scroll_candidate_) ImGui::SetScrollHereY();
             ImGui::PopID();
             if (chosen) {
-                const auto replacement=accept_console_candidate(assistance_,i,edit_,assistance_.catalog);
+                const auto replacement=accept_console_candidate(assistance_,i,edit_,assistance_.catalog,references_);
                 dismiss();
                 if (!replacement) reject(replacement.error().message);
                 else {
@@ -207,6 +222,10 @@ void ConsoleInput::draw_assistance() {
     }
     const auto& hint=popup_ && !assistance_.candidates.empty() ? assistance_.candidates[selected_].description : assistance_.hint;
     ImGui::TextWrapped("%s",hint.c_str());
+    for(const auto& diagnostic : assistance_.diagnostics) {
+        ImGui::TextWrapped("%s at column %zu (byte %zu): %s",diagnostic.kind==ConsoleDiagnosticKind::error ? "Error" : "Incomplete",
+            diagnostic.column,diagnostic.byte,diagnostic.message.c_str());
+    }
     ImGui::End();
 }
 void ConsoleInput::clear() {

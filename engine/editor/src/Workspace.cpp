@@ -4,6 +4,39 @@
 #include <stdexcept>
 
 namespace dk::editor {
+ConsoleReferenceVersion Workspace::console_reference_version() const {
+    if (stopping()) return {};
+    return {snapshot_ ? snapshot_->state.document_id : DocumentId{},snapshot_ ? snapshot_->state.revision : 0,runtime_->asset_catalog_version(),snapshot_publication_};
+}
+Result<ConsoleReferencePage> Workspace::read_console_references(std::string_view provider,
+    const ConsoleReferenceVersion& version, std::size_t offset, std::size_t limit) const {
+    if (version!=console_reference_version()) return std::unexpected(Error{ErrorCode::conflict,"Reference source changed"});
+    if (!limit || limit>256) return std::unexpected(Error{ErrorCode::invalid_argument,"Reference page limit must be 1..256"});
+    if (stopping()) return std::unexpected(Error{ErrorCode::invalid_state,"Workspace is stopping"});
+    if(provider=="scene.entity") {
+        if (!snapshot_) return std::unexpected(Error{ErrorCode::invalid_state,"No scene for entity candidates"});
+        const auto entities=snapshot_->scene.entities();
+        if(offset>entities.size()) return std::unexpected(Error{ErrorCode::invalid_argument,"Entity page offset outside range"});
+        const auto end=std::min(entities.size(),offset+limit);
+        ConsoleReferencePage page{version,{},offset,entities.size(),end<entities.size()};
+        for(auto i=offset;i<end;++i) page.records.push_back({entities[i].id.to_string(),entities[i].name,"entity"});
+        return page;
+    }
+    if(provider=="assets.reference") {
+        if(!snapshot_) return std::unexpected(Error{ErrorCode::invalid_state,"No project for asset references"});
+        const auto& assets=snapshot_->project.description().assets;
+        if(offset>assets.size()) return std::unexpected(Error{ErrorCode::invalid_argument,"Project asset offset outside range"});
+        const auto end=std::min(assets.size(),offset+limit);
+        ConsoleReferencePage page{version,{},offset,assets.size(),end<assets.size()};
+        for(auto i=offset;i<end;++i) page.records.push_back({assets[i].id.to_string(),assets[i].path,std::string(asset_kind_name(assets[i].kind))});
+        return page;
+    }
+    if(provider!="assets.any") return std::unexpected(Error{ErrorCode::invalid_argument,"Unknown reference provider"});
+    auto assets=runtime_->read_asset_catalog(version.assets,offset,limit); if(!assets) return std::unexpected(assets.error());
+    ConsoleReferencePage page{version,{},offset,assets->total,assets->has_more};
+    for(const auto& asset : assets->records) page.records.push_back({asset.id.to_string(),asset.path,std::string(asset_kind_name(asset.kind))});
+    return page;
+}
 namespace {
 Error pending_error() { return {ErrorCode::invalid_state,"Apply or Revert the pending draft first."}; }
 Json guard_json(EditGuard guard) { return {{"document_id",guard.document_id.to_string()},{"revision",guard.revision}}; }
@@ -91,6 +124,7 @@ Result<void> Workspace::refresh() {
         selection_.reset(); draft_.reset(); environment_.reset();
     }
     snapshot_=std::move(*candidate);
+    ++snapshot_publication_;
     if(!environment_ || !environment_->modified) {
         auto env=revert_environment(); if(!env) return env;
     }

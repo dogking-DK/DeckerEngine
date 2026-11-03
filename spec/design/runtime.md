@@ -1,7 +1,7 @@
 ---
 module: runtime
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-11-03T13:06:50+08:00"
+updated_at: "2026-11-03T14:27:23+08:00"
 status: accepted
 ---
 
@@ -26,6 +26,12 @@ M22.5 增加 owner 线程只读 `command_catalog_version()` / `command_catalog()
 这是目录元数据，停止状态和动态场景/资源有效性仍须分别检查，不能把相同目录代号当作实体候选仍有效。
 正常 commands.list/describe 仍保持原分派与 Task 语义；结构与预算见 [Commands](commands.md#m225-帮助描述与只读目录)，
 验收见 [0152](../development/0152-command-help-catalog.md)。
+
+M22.7 的 `asset_catalog_version()` / `read_asset_catalog(version,offset,limit)` 直接读取已发布资产目录。
+版本包含 available、session_id、revision；未启用模块、目录未打开或 Runtime 已停止时 available=false。
+页大小 1–256，offset 在目录范围内，版本失配返回 conflict；返回 AssetRecord 副本，不借用服务或初始化/加载资源。
+这些 owner 线程 API 不分派命令、不 pump、不产生 Task/Job，不触及磁盘、场景或历史；用于 Editor 动态候选，见
+[0154](../development/0154-console-context-assistance.md)。外部 assets.catalog 的原协议与任务语义不变。
 
 ## 批处理入口
 

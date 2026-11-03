@@ -17,7 +17,7 @@ void ConsoleCompletionSmoke::restore() {
 }
 bool ConsoleCompletionSmoke::input(Workspace& model,WorkbenchUi& ui,unsigned window_id) {
     const auto stage=tick_/8,phase=tick_++%8;
-    if(stage==66) { restore(); return true; }
+    if(stage>=66) { restore(); return context_.input(model,ui); }
     auto& io=ImGui::GetIO();
     const auto click=[&](ImVec2 at) { pointer_=at; io.AddMousePosEvent(at.x,at.y); io.AddMouseButtonEvent(0,true); };
     const auto control=[&](const char* name) { const auto it=ui.controls().find(name); require(it!=ui.controls().end(),"missing control"); click(it->second); };
@@ -28,6 +28,7 @@ bool ConsoleCompletionSmoke::input(Workspace& model,WorkbenchUi& ui,unsigned win
         require(SDL_PushEvent(&e),"composition injection failed");
     };
     if(phase==0) {
+        action_time_=ImGui::GetTime();
         io.AddFocusEvent(true);
         if(stage==0) {
             errors_=ui.errors(); history_=ui.console_input().history_size(); revision_=model.snapshot()->state.revision;
@@ -83,6 +84,7 @@ bool ConsoleCompletionSmoke::input(Workspace& model,WorkbenchUi& ui,unsigned win
         io.AddKeyEvent(ImGuiMod_Ctrl,false);
     }
     if(phase!=5) return false;
+    if(ImGui::GetTime()-action_time_<.14) { --tick_; return false; }
     const auto& input=ui.console_input(); const auto text=input.text();
     require(ImGui::GetPlatformIO().Platform_ClipboardUserData==this,"clipboard scope not restored");
     require(ui.errors()==errors_,"unexpected error count"); require(input.history_size()==history_,"acceptance or navigation submitted history");

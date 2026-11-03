@@ -1,7 +1,7 @@
 ---
 module: editor-console
 created_at: "2026-11-03T10:31:20+08:00"
-updated_at: "2026-11-03T13:51:22+08:00"
+updated_at: "2026-11-03T14:26:14+08:00"
 status: accepted
 ---
 
@@ -20,7 +20,7 @@ M22.3 的历史、输入适配及真实 GUI 验收记录见 [0150](../developmen
 不新增 Runtime 命令，不增加依赖或持久化格式，不改变 IPC、dk-ctl、Luau 或 Python 的输入协议。
 
 M22.4 将共享帮助元数据、Console 补全/提示/诊断、视口与相机命令、Editor 帮助和设置搜索纳入同一路线；
-扩展方案见下文，M22.5/6 已接入共享帮助、只读目录与基础补全/参数提示，其他功能按 Roadmap 后续阶段推进。M22.1–3 的首期验收结论不变。
+扩展方案见下文，M22.5–7 已接入共享帮助、只读目录、基础/嵌套补全、动态候选与诊断，其他功能按 Roadmap 后续阶段推进。M22.1–3 的首期验收结论不变。
 仍排除位置参数及别名、多行脚本/注释/分号串联、管道、变量/表达式、文件包含、历史持久化、
 自动 guard 和大模型生成/代执行。`restir on`、`raytracing iterate 12`、`cam.orbit 15 20` 不是现有可调用命令；
 扩展先提供注册命令与命名参数，简写/位置语法及精确追加 N 个样本的完成语义不由补全推断。
@@ -199,7 +199,7 @@ RAII 恢复原读写回调和 user data。
 
 ## M22.4 扩展设计：帮助、补全与设置命令
 
-本节为采用的扩展方案；M22.5/6 的帮助元数据、描述快照和基础补全/参数提示已接入，其余交互尚未实现，
+本节为采用的扩展方案；M22.5–7 的帮助元数据、描述快照、补全/参数提示、动态候选与诊断已接入，其余交互尚未实现，
 阶段及验证状态以 [Roadmap](../roadmap.md#m22console-命令文本输入与-editor-交互) 为准。
 既有命令、解析器、显式 guard、8192 字节输入、会话历史和提交后失败契约继续适用。
 这里的 Editor 指 DeckerEngine 工作台，不包括 VS Code/LSP 或独立脚本编辑器。
@@ -217,7 +217,8 @@ schema 注册仍拒绝未知关键字，不直接塞入任意 description/unit/d
 - 注册时验证帮助版本、字段引用、默认值/示例与 schema 的一致性及 UTF-8/大小预算；每命令帮助编码上限 64 KiB，
   同时服从命令值预算。存在条件关系的限制由服务验证，帮助说明条件，不伪造 schema 已表达的约束。
 - `commands.list` 保持轻量结果；`commands.describe` 增加可选 `help`，旧字段含义不变。
-  当前覆盖 commands.describe、scene.query、environment.preset/set；其他命令保留 schema/原说明降级。
+  M22.5 首批覆盖 commands.describe、scene.query、environment.preset/set；M22.7 扩展实体/资产候选绑定，
+  完整当前覆盖见[命令发现](../commands/discovery.md)，其余命令保留 schema/原说明降级。
 - Runtime/Workspace 提供 owner 线程只读 `command_catalog_version()` / `command_catalog()`，来源仍是同一 registry，使用拥有型副本与代号。
   不在每次击键时调用 `dispatch(commands.describe)`，不增加 Task、Job、命令历史或 Scene 变化。
   缓存以注册表/宿主能力代号失效，描述缺失或失败时仍保留正常手动输入与原执行路径。
@@ -225,9 +226,9 @@ schema 注册仍拒绝未知关键字，不直接塞入任意 description/unit/d
   相同设置的命令和面板复用描述与校验来源，不要求将所有复杂面板自动生成。
 
 具体 help v1 字段、注册前校验、目录身份/修订号与失败发布边界见 [Commands 实施契约](commands.md#m225-帮助描述与只读目录)，
-验证记录见 [0152](../development/0152-command-help-catalog.md)。当前没有内建动态候选提供器；注册语义标识不等于已实现枚举。
+验证记录见 [0152](../development/0152-command-help-catalog.md)。M22.7 已接入下述三类内建动态候选；注册语义标识本身不执行枚举。
 Workspace 元数据读取不走 execute_console/refresh，在没有活动文档或存在未应用草稿时也只读取目录；
-场景重载不改变静态目录，后续动态候选仍独立按文档修订失效。
+场景重载不改变静态目录，动态候选独立按文档/快照/资产来源失效。
 
 ### Console 基础补全与提示（M22.6）
 
@@ -251,7 +252,7 @@ Workspace 元数据读取不走 execute_console/refresh，在没有活动文档�
 M22.6 实施约定（记录 [0153](../development/0153-console-completion.md)）：
 
 - 私有 CPU 模型 ConsoleAssist 随 dk_editor_model 构建，复用解析器的字符规则、输入预算和完整值解析。
-  仅定位文本命令、顶层 key/value；跳过已闭合的引号/数组/对象，JSON envelope 和嵌套值内部不生成候选。
+  M22.6 首批定位文本命令、顶层 key/value；M22.7 已按下述契约扩展 JSON envelope 与嵌套值内部候选。
   不完整字符串可以补全；确定的结构错误保守返回空列表，最终提交仍由原解析器裁决。
 - 输入快照包含完整文本、UTF-8 字节光标/选区与递增编辑修订。候选持有来源快照与目录版本，
   接受前逐项比较；拒绝旧文本、光标、选区、目录及超限结果，失败保持原输入。
@@ -284,6 +285,27 @@ M22.6 实施约定（记录 [0153](../development/0153-console-completion.md)）
 - 单次最多展示 16 条诊断，长度/深度预算沿用解析器；字节定位与 Unicode 显示位置对应。
   输入变化不能触发场景编辑、业务 Task/Job、日志刷屏或文件写入；最终 Enter/Run 重新解析校验。
   路径文件浏览、大模型建议、任意表达式和跨工程搜索不在本阶段范围。
+
+M22.7 实施契约（[0154](../development/0154-console-context-assistance.md)）：
+
+- ConsoleStructure 建立有界的部分语法树，保留 key/value 的字节范围、闭合状态与重复键；named 与 JSON envelope 共用
+  JSON 对象/数组扫描。已闭合标量复用严格解析器，完整节点复用 schema 校验；未完成节点不补值、不尝试执行。
+  envelope 的 method/params 顺序不影响 schema 解析，参数 JSON Pointer 始终相对于命令 parameters。
+- 诊断最多 16 条、每条最多 512 UTF-8 字节，区分 incomplete 与 error，提供 byte 与 Unicode column。缺值/未闭合和未填的顶层必填参数为待补充，
+  已闭合的错误类型、数值越界、重复/未知字段为错误；不推断 guard、业务状态或资源有效性。诊断只显示于辅助窗口，不刷日志。
+- provider 明确绑定：scene.entity 用于现有实体查询/编辑目标及 parent（不用于创建 ID）；assets.any 用于资产 load/status/unload，
+  assets.reference 用于 entity.set_assets 的 items/id，读取已发布 SceneReadSnapshot.project 映射，并按同一对象的 kind 过滤，尚未填 kind 时显示各合法种类。
+  assets.any 只读活动 Runtime 目录；打开场景不隐式打开该目录，缺目录提示不可用。两种来源分别对应命令实际使用的身份范围。
+  这些语义由 Operations 的 help 注册，不能仅据字段名 id 推断；不补 guard、不变更命令行为。
+- Runtime 提供资产目录轻量版本和 1–256 条的拥有型只读页，版本含 available/session_id/revision；页面要求匹配版本。
+  不 open/pump/load/dispatch，不读磁盘；缺模块/未打开目录明确不可用。Workspace 的候选页组合已发布 Scene 快照和此目录，
+  版本同时包含 document_id/revision、Workspace 快照发布序号与资产版本；换文档、删除/改名、映射刷新、目录切换后旧页拒绝。
+- ConsoleAssistCache 以输入快照、命令目录与候选来源版本作为请求身份，100 ms 稳定后计算；每次最多读取 128 条，
+  按帧继续分页，保留最多 32 个匹配候选并显示“加载中/更多”。所有枚举在 owner 线程同步进行，不创建后台任务。
+  显式 Tab 可立即计算静态上下文，动态页与实时诊断仍受去抖约束；任意版本变化立即撤销旧结果。
+  发布核对请求序号和来源，接受再次核对当前输入与来源；迟到结果不能覆盖新请求，候选显示名称/路径、种类和完整 UUID。
+  同一请求去抖完成或后续页发布时，若当前选中的插入值仍存在则保留选择，避免列表更新跳回首项。
+- 继续沿 M22.6 的两次 Enter、历史/IME、预算与失败不变约定；新增结构/诊断/分页/迟到结果 CPU 用例和后台 GUI 输入。
 
 ### 视口渲染与相机命令（M22.8–9）
 
@@ -326,7 +348,7 @@ M22.6 实施约定（记录 [0153](../development/0153-console-completion.md)）
 | 范围 | 预计接入位置 | 独立检查 |
 | --- | --- | --- |
 | 帮助与描述快照 | Commands 描述/注册、Runtime 与 Workspace 只读入口；既有 schema 保持职责 | 帮助引用/预算/缺省正确；坏元数据拒绝；查询不产生 Task/场景变化；旧发现结果兼容 |
-| 补全与诊断 | editor_model 中拟新增纯 CPU assistance 模型；ConsoleInput/WorkbenchUi 弹窗；ConsoleTests/ConsoleSmoke | 光标中间/选区、中文/转义、半成品/完整错误、精确整数、超限拒绝；候选/历史/IME/Enter/Run 冲突 |
+| 补全与诊断 | editor_model 中 ConsoleStructure/ConsoleAssist/ConsoleAssistCache 纯 CPU 模型；ConsoleInput/WorkbenchUi 弹窗；ConsoleTests/ConsoleSmoke | 光标中间/选区、中文/转义、半成品/完整错误、精确整数、超限拒绝；候选/历史/IME/Enter/Run 冲突 |
 | 动态候选 | Workspace 快照与受限目录提供器 | 重名与类别、分页、空结果/加载中区分、删除/换会话/迟到结果、只读性 |
 | 视口/相机 | 拟新增宿主会话服务/Operations 桥；PathPanel/CameraSettingsUi/导航共享入口 | GUI/Console/IPC 同状态；guard/草稿/活动手势冲突；重置/保留累积；异步失败与关闭；runner 无宿主命令 |
 | 面板帮助/搜索 | 共享帮助适配、各面板稳定控件定位与 WorkbenchUi | 文案/单位对应元数据；禁用原因；搜索只定位；缺命令不造模板；无 Scene/任务副作用 |
@@ -349,4 +371,4 @@ M22.11 汇总前面独立证据并完成至少一条“发现/补全 → 设置 
 [Editor 设计](editor.md)、[命令设计](commands.md)、[服务状态契约](application-services.md)、
 [原 Console 实现记录](../development/0127-editor-media-pathtracing.md)、
 [0148 首期计划](../development/0148-console-command-input-plan.md)、[0150 首期交付](../development/0150-console-history-ui.md)、
-[0151 扩展路线设计](../development/0151-console-assistance-plan.md)。
+[0151 扩展路线设计](../development/0151-console-assistance-plan.md)、[0154 嵌套辅助与诊断](../development/0154-console-context-assistance.md)。

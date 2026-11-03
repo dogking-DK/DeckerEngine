@@ -194,7 +194,7 @@ void WorkbenchUi::console() {
     if (!console_catalog_ || console_catalog_->version!=model_.command_catalog_version()) console_catalog_=model_.command_catalog();
     const auto document=model_.snapshot() ? model_.snapshot()->state.document_id : DocumentId{};
     if (document!=console_document_) { console_document_=document; console_input_.dismiss(); }
-    const bool enter=console_input_.draw(console_composing_,*console_catalog_); mark("console_input");
+    const bool enter=console_input_.draw(console_composing_,*console_catalog_,model_); mark("console_input");
     ImGui::SameLine(); ImGui::BeginDisabled(console_composing_);
     const bool run=ImGui::Button("Run"); mark("console_run"); ImGui::EndDisabled();
     if (auto error = console_input_.take_error(); !error.empty()) report("Console input",std::unexpected(Error{ErrorCode::invalid_argument,std::move(error)}));

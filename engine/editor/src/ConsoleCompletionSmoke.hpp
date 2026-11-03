@@ -1,4 +1,5 @@
 #pragma once
+#include "ConsoleContextSmoke.hpp"
 #include <imgui.h>
 #include <cstdint>
 #include <string>
@@ -17,6 +18,8 @@ private:
     ImVec2 pointer_{};
     std::string clipboard_;
     bool installed_=false;
+    double action_time_=0;
+    ConsoleContextSmoke context_;
     const char* (*clipboard_get_)(ImGuiContext*)=nullptr;
     void* clipboard_user_=nullptr;
     void restore();

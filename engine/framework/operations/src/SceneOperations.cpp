@@ -209,6 +209,9 @@ Result<SceneEdit> decode_scene_edit(std::string_view method, const Json &p)
 }
 Result<void> register_scene_commands(CommandRegistry &registry, SceneService &service)
 {
+    for(const auto* provider : {"scene.entity","assets.reference"}) {
+        auto declared=registry.register_completion_provider(provider); if(!declared) return declared;
+    }
     auto add = [&](std::string name, std::string description, Json parameters, Json result,
                    CommandEffect effect, CommandHandler handler, std::optional<Json> help = std::nullopt)
     {
@@ -333,7 +336,7 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
                 if (!id)
                     return std::unexpected(id.error());
                 return entity_json(**doc, *id);
-            });
+            },Json{{"version",1},{"fields",{{"/properties/id",{{"completion_provider","scene.entity"}}}}}});
     if (!r)
         return r;
     auto preset_version=schema::integer(); preset_version["enum"]={1};
@@ -408,6 +411,14 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
             properties["assets"] = schema::array(asset_schema(), 0, 64);
             required.push_back("assets");
         }
+        std::optional<Json> help;
+        if(name!="entity.create") {
+            Json fields={{"/properties/id",{{"completion_provider","scene.entity"}}}};
+            if(name=="entity.set_parent") fields["/properties/parent"]={{"completion_provider","scene.entity"}};
+            if(name=="entity.set_assets") fields["/properties/assets/items/properties/id"]={{"completion_provider","assets.reference"},
+                {"description","Registered asset UUID, filtered by kind in this reference object when specified."}};
+            help=Json{{"version",1},{"fields",std::move(fields)}};
+        }
         r = add(name, "Edit scene: " + name, schema::object(properties, required),
                 schema::object({{"state", state_schema()}, {"created_id", schema::nullable(id_schema())}},
                                {"state", "created_id"}),
@@ -425,7 +436,7 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
                         return std::unexpected(result.error());
                     return Json{{"state", document_state_json(*service.state())},
                                 {"created_id", *result ? Json((*result)->to_string()) : Json(nullptr)}};
-                });
+                },std::move(help));
         if (!r)
             return r;
     }

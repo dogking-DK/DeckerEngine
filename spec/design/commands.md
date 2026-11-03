@@ -1,7 +1,7 @@
 ---
 module: commands
 created_at: "2026-09-22T13:12:54+08:00"
-updated_at: "2026-11-03T13:06:50+08:00"
+updated_at: "2026-11-03T14:26:14+08:00"
 status: accepted
 ---
 
@@ -72,7 +72,8 @@ JSON Pointer 最多 1024 字节，只能沿 properties/<name> 和 items 到达�
 引用、UTF-8/深度/预算、默认值与各示例均在注册前校验；帮助不填充调用参数，schema 和业务校验不放宽。
 
 注册表提供 `register_completion_provider(id)` 注册语义标识；只有已声明标识才能被 help 引用。
-这只是拥有型名称目录，不持有回调或读取场景；宿主实际候选提供器在 M22.7 接入，目前内建命令未宣称具备动态候选。
+这只是拥有型名称目录，不持有回调或读取场景。M22.7 内建 Operations 声明 scene.entity、assets.any、assets.reference，
+分别绑定现有实体、活动资产目录和工程资产引用字段；Workspace/Console 根据标识提供只读候选，详见 [Console 设计](editor-console.md)。
 标识沿命令名字符/长度规则，重复或非法注册拒绝。Commands 仍不依赖 Scene/Editor/GPU。
 
 `CommandCatalogVersion {registry_id, revision}` 用独立 StableId 区分注册表重建；每次成功添加命令或候选标识后 revision 增一，
@@ -86,7 +87,8 @@ Runtime/Workspace 分别提供同名用途的 `command_catalog_version()` 与 `c
 
 首批真实帮助覆盖 commands.describe、scene.query、environment.preset/set；分页缺省值与 handler 使用同一常量。
 环境完整对象的必填字段只提供说明/单位/示例，不伪造缺省值；未补充的命令继续按原 schema/描述降级。
-Console 弹窗、动态候选和 Editor 会话控制仍由后续阶段实现。
+M22.6/7 已接入 Console 弹窗、嵌套辅助、动态候选与诊断；实体 get/delete/set_name/set_transform/set_parent/set_assets
+及资产 load/status/unload 新增候选帮助，entity.create 的新 ID 与 guard 不绑定已有身份。Editor 会话控制仍由后续阶段实现。
 
 ### 扩展设计的兼容边界
 

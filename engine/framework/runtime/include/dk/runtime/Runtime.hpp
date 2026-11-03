@@ -28,6 +28,18 @@ struct TaskRecord
     std::optional<ErrorCode> error_code;
     std::optional<DocumentState> document;
 };
+struct AssetCatalogReadVersion {
+    bool available = false;
+    std::string session_id;
+    std::uint64_t revision = 0;
+    bool operator==(const AssetCatalogReadVersion&) const = default;
+};
+struct AssetCatalogReadPage {
+    AssetCatalogReadVersion version;
+    std::vector<AssetRecord> records;
+    std::size_t offset = 0, total = 0;
+    bool has_more = false;
+};
 class Runtime final
 {
   public:
@@ -38,6 +50,8 @@ class Runtime final
     // Owner-thread, metadata-only reads. Do not dispatch, pump or record Tasks/Jobs.
     [[nodiscard]] CommandCatalogVersion command_catalog_version() const { return commands_.catalog_version(); }
     [[nodiscard]] CommandCatalogSnapshot command_catalog() const { return commands_.catalog_snapshot(); }
+    [[nodiscard]] AssetCatalogReadVersion asset_catalog_version() const;
+    [[nodiscard]] Result<AssetCatalogReadPage> read_asset_catalog(const AssetCatalogReadVersion&, std::size_t offset, std::size_t limit = 128) const;
     [[nodiscard]] std::shared_ptr<RuntimeEvents> events() const { return events_; }
     // Immutable owner-thread copy, checked against the active session and revision.
     [[nodiscard]] Result<SceneReadSnapshot> read_scene(EditGuard guard) const;

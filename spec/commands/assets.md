@@ -1,7 +1,7 @@
 ---
 module: asset-command-reference
 created_at: "2026-09-28T15:02:00+08:00"
-updated_at: "2026-09-28T15:24:33+08:00"
+updated_at: "2026-11-03T14:26:14+08:00"
 status: accepted
 ---
 
@@ -22,6 +22,10 @@ status: accepted
 | assets.load | id | AssetStatus；control，已登记 ID 才能加载；Loading 复用作业，Ready 复用拥有值 |
 | assets.status | id | AssetStatus；query，未知/未登记 ID 返回 not_found |
 | assets.unload | id | AssetStatus；control，递增代次、取消旧请求、释放服务当前引用；外部旧句柄仍可读 |
+
+Console 对 `assets.load/status/unload` 的 `id` 提供活动目录候选，显示路径、种类和 UUID；
+先显式 `assets.open` 建立目录，单独打开场景不会隐式建立该异步目录。候选读取不加载资产、不创建任务、不改 guard。
+实体的资产引用补全另取其当前工程映射，见[实体命令](entity.md)。
 
 目录 guard 为 `{session_id,revision}`，由 open/catalog/register/rename 返回，不能使用 Scene guard。
 首次 open 省略 guard；替换活动目录必须携带旧 guard。load/status/unload/register/rename/catalog 要求活动目录，

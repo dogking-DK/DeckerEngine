@@ -291,7 +291,8 @@ entity.set_name id="<entity_id>" name="Hello 中文" guard={"document_id":"<docu
 看到 `Command executed, but view refresh failed` 表示业务已经成功、随后刷新失败，应先查询实际状态，不能直接假定未执行而重试。
 参数 schema/单位/可用命令仍以 commands.list/describe 为准；本阶段没有新增 `restir`、`raytracing` 或 `cam.orbit` 控制命令。
 设计及验证记录见 [Console](../design/editor-console.md)、[解析与执行](../development/0149-console-command-parser.md)、
-[历史与 GUI](../development/0150-console-history-ui.md)、[基础补全](../development/0153-console-completion.md)。
+[历史与 GUI](../development/0150-console-history-ui.md)、[基础补全](../development/0153-console-completion.md)、
+[嵌套辅助与诊断](../development/0154-console-context-assistance.md)。
 
 M22 后续扩展已纳入命令/参数补全、输入诊断、实体/资产候选、视口/相机命令以及 Editor 悬停帮助和设置搜索，
 见 [扩展设计](../design/editor-console.md#m224-扩展设计帮助补全与设置命令) 与 [Roadmap](../roadmap.md#m22console-命令文本输入与-editor-交互)。
@@ -312,8 +313,26 @@ M22.6 支持命令名、顶层参数名和布尔/null/枚举值的基础补全�
 Run 直接提交当前原文，不代替用户接受候选。候选接受只改输入、退出历史浏览，不执行命令、不进入提交历史。
 替换保留其他参数；整 token 选区可替换，部分 token 或跨字段选区保守不补全。超出 8192 字节时整次拒绝。
 Tab 键用于补全，粘贴内容中的 Tab 仍保留为空白；输入法组合期间暂停辅助，不抢候选操作键。
-当前不补全嵌套 JSON 或兼容 JSON envelope，不提供实体/资产动态候选、实时输入诊断或面板搜索；
-这些能力按 M22.7 及后续阶段交付，已有 JSON 输入和错误提示继续可用。
+M22.7 扩展到嵌套对象/数组与兼容 JSON envelope，以下输入在光标末尾按 Tab 打开并接受：
+
+| 当前输入（故意尚未写完） | 候选或提示 |
+| --- | --- |
+| `entity.set_transform transform={"tr` | 补全 `"translation":`，其余必填项仍需填写 |
+| `{"method":"scene.query","params":{"li` | 补全 `"limit":`；也支持 method 命令名补全 |
+| `entity.get id=` | 按名称或 UUID 前缀筛选场景实体，接受后插入带引号 UUID |
+| `entity.set_parent parent=` | 现有实体或 null；最终执行仍校验层级关系 |
+| `entity.set_assets assets=[{"kind":"mesh","id":` | 当前工程的 mesh 身份；kind 未填时列出所有合法种类 |
+| `assets.status id=` | 活动异步资产目录身份，需先显式 assets.open |
+
+实体/资产候选显示名称或路径、种类和完整 UUID，重名仍可区分；不会为 entity.create 的新 ID 或 guard 提供已有身份。
+当前工程引用与活动异步目录各取实际来源，补全不会打开目录、扫描磁盘或加载资产。无目录时提示不可用。
+输入/光标/选区稳定 100 ms 后更新诊断与动态候选，每页最多 128 条；加载更多页期间显示提示，结果最多保留 32 项。
+显式 Tab 可以立即显示静态候选，动态候选等待去抖；缩小前缀可筛选大型目录。场景/工程快照、目录或输入变化使旧候选失效。
+
+诊断区分 `Incomplete`（缺值、未闭合、必填参数尚未输入）和 `Error`（已确定的类型/范围、重复/未知字段错误），
+最多 16 条，每条给出字符列号和 UTF-8 字节位置。例如 `scene.query limit=` 为待补充，`limit=1.0` 为整数类型错误。
+诊断只显示在辅助窗口，不进入命令日志/历史；业务前置条件、ID 存在性、guard 仍在最终 Enter/Run 时校验。
+视口/相机设置命令、面板帮助与设置搜索仍按后续阶段交付。
 
 ## ReSTIR 直接光照
 

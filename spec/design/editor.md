@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-11-03T13:51:22+08:00"
+updated_at: "2026-11-03T14:26:14+08:00"
 status: accepted
 ---
 
@@ -364,7 +364,9 @@ M22.4 扩展设计将共享帮助元数据、Console 补全/诊断、Edit 视口
 M22.5 已接入可选帮助元数据与 Workspace 只读目录 API，数据沿 Runtime/Commands 同一来源，不 dispatch/refresh，不覆盖草稿。
 验收见 [0152](../development/0152-command-help-catalog.md)。M22.6 接入 ConsoleAssist CPU 模型与 ConsoleInput 的候选/参数说明，
 Workbench 按目录代号缓存数据，候选来源与输入/光标/选区/目录匹配后才回填；键位与验收见 [0153](../development/0153-console-completion.md)。
-补全只编辑输入，后续搜索只定位控件；共享帮助不复制业务校验；视口会话命令由宿主注入的服务统一处理，
+M22.7 使用 ConsoleStructure 定位嵌套 JSON/envelope，ConsoleAssistCache 以 100 ms 去抖和版本核对发布候选/诊断。
+Workspace 只读已发布实体/工程映射与 Runtime 活动目录，快照发布序号保护映射刷新；不产生业务 Task 或草稿刷新。
+实现与验证见 [0154](../development/0154-console-context-assistance.md)。补全只编辑输入，后续搜索只定位控件；共享帮助不复制业务校验；视口会话命令由宿主注入的服务统一处理，
 不将相机/曝光等会话状态写入 Scene/Undo。当前界面操作和独立 render.capture 语义保持，实施阶段再补齐具体接口与命令表。
 
 ## M17.6 缓存与交互调度
