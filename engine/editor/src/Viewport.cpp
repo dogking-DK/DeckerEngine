@@ -125,7 +125,7 @@ void Viewport::publish(std::vector<std::byte> pixels,const render::FrameInfo& in
         image_=std::move(image); view_=std::move(view); descriptor_=descriptor;
         pixel_signature_=14695981039346656037ULL;
         for (const auto byte : pixels) { pixel_signature_^=std::to_integer<unsigned char>(byte); pixel_signature_*=1099511628211ULL; }
-        info_=info; published_session_=key.session; attempted_=key; published_=key; error_.clear();
+        info_=info; published_session_=key.session; attempted_=key; published_=key; error_.clear(); published_path_=false;
         scene_=std::move(scene); camera_=camera; published_camera_=camera.revision();
         if (retain_pixels_) pixels_=std::move(pixels);
 }

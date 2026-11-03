@@ -7,6 +7,7 @@
 #include "ResponseProbe.hpp"
 #ifdef DK_EDITOR_PATHTRACING
 #include "PathSmoke.hpp"
+#include "ViewportCommandSmoke.hpp"
 #endif
 #include "EditorSupport.hpp"
 #include <dk/memory/MemorySystem.hpp>
@@ -55,7 +56,7 @@ void write_capture(const std::filesystem::path& output,const graphics::ReadbackR
 }
 int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory::ResourceHandle heap,Diagnostics& diagnostics) {
     if(options.smoke) std::setvbuf(stdout,nullptr,_IONBF,0); // Preserve the last acceptance stage on native crashes.
-    const bool path_acceptance=options.pathtrace_smoke || options.desktop_render_smoke;
+    const bool path_acceptance=options.pathtrace_smoke || options.desktop_render_smoke || options.viewport_command_smoke;
     if ((path_acceptance || options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe) && !std::filesystem::is_regular_file(options.root/".dk-editor-smoke"))
         throw std::runtime_error("--smoke requires a disposable project with .dk-editor-smoke marker");
     ShutdownProbe shutdown{options.simulation_response_probe};
@@ -78,8 +79,8 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     device.validation=options.validation ? graphics::ValidationMode::required : options.disable_validation ?
         graphics::ValidationMode::disabled : default_validation;
 #ifdef DK_EDITOR_PATHTRACING
-    device.ray_tracing=options.pathtrace_smoke ? graphics::RayTracingMode::required : graphics::RayTracingMode::if_available;
-    device.sampled_image_indexing=options.pathtrace_smoke ? graphics::SampledImageIndexingMode::required : graphics::SampledImageIndexingMode::if_available;
+    device.ray_tracing=(options.pathtrace_smoke || options.viewport_command_smoke) ? graphics::RayTracingMode::required : graphics::RayTracingMode::if_available;
+    device.sampled_image_indexing=(options.pathtrace_smoke || options.viewport_command_smoke) ? graphics::SampledImageIndexingMode::required : graphics::SampledImageIndexingMode::if_available;
 #endif
     device.diagnostic_sink=diagnostic; device.diagnostic_user_data=&diagnostics;
 #if defined(DK_SIMULATION_GPU) || defined(DK_EDITOR_PATHTRACING)
@@ -111,7 +112,12 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     GuiRenderer gui{queue,window};
     ShutdownPhase viewport_phase{shutdown,"viewport"};
     Viewport viewport{memory,heap,queue,device,options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || path_acceptance};
-    WorkbenchUi ui{*model,options.fixture_camera,take(window.native_sdl_window()),options.media_pathtrace_smoke ? 96u : 0u};
+    check(model->attach_editor_viewport({viewport.path_unavailable().empty(),viewport.path_unavailable()}));
+    struct ViewportHostScope {
+        Workspace& model;
+        ~ViewportHostScope() { model.detach_editor_viewport(); }
+    } viewport_host{*model};
+    WorkbenchUi ui{*model,options.fixture_camera,take(window.native_sdl_window()),(options.media_pathtrace_smoke || options.viewport_command_smoke) ? 96u : 0u};
     SmokeDriver smoke{options.interaction_smoke,options.simulation_smoke};
     std::optional<ConsistencyDriver> consistency;
     std::optional<SimulationConsistencyDriver> simulation_consistency;
@@ -121,7 +127,9 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     if (options.simulation_consistency_smoke) simulation_consistency.emplace(options.root);
 #ifdef DK_EDITOR_PATHTRACING
     std::optional<PathSmoke> path_smoke;
-    if(path_acceptance) path_smoke.emplace(options.root,options.desktop_render_smoke,options.media_pathtrace_smoke,options.restir_pathtrace_smoke);
+    std::optional<ViewportCommandSmoke> viewport_smoke;
+    if(options.viewport_command_smoke) viewport_smoke.emplace(options.root);
+    if(options.pathtrace_smoke || options.desktop_render_smoke) path_smoke.emplace(options.root,options.desktop_render_smoke,options.media_pathtrace_smoke,options.restir_pathtrace_smoke);
 #else
     if(path_acceptance) throw std::runtime_error("Path tracing module is disabled");
 #endif
@@ -158,6 +166,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
             gui.new_frame([&] {
 #ifdef DK_EDITOR_PATHTRACING
                 if(path_smoke) path_smoke->input(ui,*model,viewport,window);
+                if(viewport_smoke) viewport_smoke->input(ui,*model);
 #endif
                 if (options.smoke) smoke.input(*model,ui,window,viewport);
                 if (consistency) consistency->input(ui,*model,viewport);
@@ -187,6 +196,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
             if (simulation_consistency) simulation_consistency->presented(*model,ui,viewport);
 #ifdef DK_EDITOR_PATHTRACING
             if(path_smoke) path_smoke->presented(*model,ui,viewport);
+            if(viewport_smoke) viewport_smoke->presented(ui,*model,viewport);
 #endif
             if (response) response->presented();
             if (capture) write_capture(options.screenshot,*capture);
@@ -213,6 +223,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
         // Rendering completion is sufficient for the viewport/ImGui resources.
         // Keep the swapchain and its presentation fences until after their cleanup.
         ui.cancel_interaction();
+        model->detach_editor_viewport();
         viewport.close_path();
         check(queue.close());
         shutdown.mark("render_closed");
@@ -220,6 +231,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     } catch (...) {
         // Drain before descriptor/backend destruction, including a failed frame.
         ui.cancel_interaction();
+        model->detach_editor_viewport();
         viewport.close_path();
         const auto closed=presenter.close();
         if (!closed) std::fprintf(stderr,"presenter close: %s\n",closed.error().message.c_str());

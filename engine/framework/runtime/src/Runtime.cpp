@@ -1,4 +1,5 @@
 #include <dk/operations/SceneOperations.hpp>
+#include <dk/operations/EditorViewportOperations.hpp>
 #include <dk/operations/SimulationOperations.hpp>
 #include <dk/runtime/Runtime.hpp>
 #include <dk/profiling/Profiler.hpp>
@@ -16,6 +17,21 @@
 
 namespace dk
 {
+Runtime::~Runtime() { detach_editor_viewport(); }
+Result<void> Runtime::attach_editor_viewport(std::shared_ptr<EditorViewportService> service) {
+    if(stopping_ || dispatching_ || !service || editor_viewport_)
+        return std::unexpected(Error{ErrorCode::invalid_state,"Cannot attach the Editor viewport"});
+    if(!editor_commands_registered_) {
+        auto registered=register_editor_viewport_commands(commands_,[this]{return editor_viewport_;});
+        if(!registered) return registered;
+        editor_commands_registered_=true;
+    }
+    editor_viewport_=std::move(service); return {};
+}
+void Runtime::detach_editor_viewport() {
+    if(editor_viewport_) editor_viewport_->close();
+    editor_viewport_.reset();
+}
 AssetCatalogReadVersion Runtime::asset_catalog_version() const {
 #ifdef DK_RUNTIME_ASSETS
     if (!stopping_) if (auto service=assets_->catalog()) {
@@ -215,6 +231,7 @@ Result<void> Runtime::register_runtime_commands()
                          {
                              Json value{{"stopping", true}};
                              simulation_.request_shutdown();
+                             detach_editor_viewport();
                              stopping_ = true;
                              return value;
                          });
@@ -262,7 +279,7 @@ Result<CommandExecution> Runtime::dispatch(std::string_view method, const Json &
         }
     } reset{dispatching_};
     auto effective = parameters;
-    if (auto_guard && effective.is_object() && !effective.contains("guard"))
+    if (auto_guard && !method.starts_with("editor.") && effective.is_object() && !effective.contains("guard"))
     {
         auto descriptor = commands_.describe(method);
         if (descriptor && (*descriptor)["parameters"].contains("properties") &&

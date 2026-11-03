@@ -33,7 +33,7 @@ void Viewport::update_path(const SceneReadSnapshot& snapshot,std::uint32_t width
             info_={result->info.scene,result->info.revision,result->sequence,result->info.width,result->info.height,0};
             published_=attempted_; published_session_=result->document.document_id; published_camera_=result->camera.revision();
             camera_=result->camera; scene_=std::move(result->scene); meshes_=std::move(result->meshes);
-            path_info_=result->info;
+            path_info_=result->info; published_path_=true;
             path_samples_=result->info.samples.count; error_.clear();
             path_published_request_=path_requested_at_;
             path_linear_=std::move(result->linear);

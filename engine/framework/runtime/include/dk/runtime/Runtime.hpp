@@ -1,6 +1,7 @@
 #pragma once
 #include <dk/commands/CommandRegistry.hpp>
 #include <dk/services/SceneService.hpp>
+#include <dk/services/EditorViewportService.hpp>
 #include <dk/services/SimulationService.hpp>
 #include <dk/runtime/RuntimeEvents.hpp>
 #ifdef DK_RUNTIME_ASSETS
@@ -43,6 +44,7 @@ struct AssetCatalogReadPage {
 class Runtime final
 {
   public:
+    ~Runtime();
     [[nodiscard]] static Result<std::unique_ptr<Runtime>> create(const std::filesystem::path &root);
     [[nodiscard]] Result<CommandExecution> dispatch(std::string_view method, const Json &parameters,
                                                     bool auto_guard = false);
@@ -55,6 +57,9 @@ class Runtime final
     [[nodiscard]] std::shared_ptr<RuntimeEvents> events() const { return events_; }
     // Immutable owner-thread copy, checked against the active session and revision.
     [[nodiscard]] Result<SceneReadSnapshot> read_scene(EditGuard guard) const;
+    [[nodiscard]] Result<DocumentState> document_state() const { return service_->state(); }
+    [[nodiscard]] Result<void> attach_editor_viewport(std::shared_ptr<EditorViewportService>);
+    void detach_editor_viewport();
     [[nodiscard]] Result<PlaySceneSnapshot> read_play_scene(SimulationId run_id) const;
     [[nodiscard]] Result<PlayParticleSnapshot> read_play_particles(SimulationId run_id) const;
     void pump();
@@ -89,6 +94,8 @@ class Runtime final
     [[nodiscard]] Result<JobCancel> cancel_job(JobId);
 #endif
     CommandRegistry commands_;
+    std::shared_ptr<EditorViewportService> editor_viewport_;
+    bool editor_commands_registered_=false;
     bool dispatching_ = false;
     bool stopping_ = false;
     std::vector<TaskRecord> tasks_;

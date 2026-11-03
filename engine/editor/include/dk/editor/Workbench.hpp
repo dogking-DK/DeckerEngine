@@ -13,6 +13,7 @@ struct WorkbenchOptions {
     // Bounded native UI acceptance run. Caller must supply a disposable project.
     bool smoke = false;
     bool pathtrace_smoke = false;
+    bool viewport_command_smoke = false;
     bool media_pathtrace_smoke = false;
     bool restir_pathtrace_smoke = false;
     bool desktop_render_smoke = false;

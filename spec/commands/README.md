@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-11-03T14:26:14+08:00"
+updated_at: "2026-11-03T15:04:51+08:00"
 status: accepted
 ---
 
@@ -24,7 +24,8 @@ Editor Console 接受 `scene.query limit=20` 等命名参数文本，也兼容�
 这只改变 Console 输入，不新增本目录命令，也不改变 JSON-RPC/IPC 格式。
 后续 M22 扩展已规划补全/参数提示、Editor 帮助与视口/相机设置命令，见 [扩展设计](../design/editor-console.md#m224-扩展设计帮助补全与设置命令)。
 M22.5–7 已接入共享帮助、只读目录、基础/嵌套补全、实体/资产候选与输入诊断；Tab 打开候选，Tab/Enter 接受后再次 Enter 才执行。
-完整键位见[编辑器指南](../guides/editor.md#console-命令文本m22)。面板帮助与视口/相机设置命令仍待后续阶段，本目录只列当前注册命令。
+完整键位见[编辑器指南](../guides/editor.md#console-命令文本m22)。M22.8 已提供 [Edit 视口设置命令](editor-viewport.md)，
+仅附加视口的 Editor 注册；相机命令与面板帮助/搜索仍待后续阶段。
 
 ## 按功能查找
 
@@ -33,6 +34,7 @@ M22.5–7 已接入共享帮助、只读目录、基础/嵌套补全、实体/�
 | [发现](discovery.md) | `commands.list`、`commands.describe` | 列出命令、查询参数和结果 schema |
 | [场景与工程](scene.md) | `scene.new`、`scene.load`、`scene.query`、`scene.save`、`project.save`、`scene.transaction` | 文档会话、查询、保存和事务 |
 | [环境](environment.md) | `environment.query`、`environment.preset`、`environment.set` | 大气/单太阳/云CPU参数、environment v2、事务/撤销与场景持久化 |
+| [Editor 视口](editor-viewport.md) | `editor.viewport.query`、`editor.viewport.set`、`editor.viewport.pause`、`editor.viewport.resume`、`editor.viewport.reset` | 仅 Editor；Edit 会话模式、ReSTIR、目标/曝光/介质与累积控制，不修改场景历史 |
 | [实体](entity.md) | `entity.create`、`entity.get`、`entity.delete`、`entity.set_name`、`entity.set_transform`、`entity.set_parent`、`entity.set_assets` | 实体编辑和查询 |
 | [历史](history.md) | `history.status`、`history.undo`、`history.redo` | 内存撤销与重做 |
 | [运行时与任务](runtime.md) | `runtime.capabilities`、`runtime.shutdown`、`tasks.list`、`tasks.get` | 能力、同步任务和关闭 |
@@ -42,7 +44,7 @@ M22.5–7 已接入共享帮助、只读目录、基础/嵌套补全、实体/�
 | [后台作业](jobs.md) | `jobs.get`、`jobs.wait`、`jobs.cancel` | JobId 状态、等待和协作取消 |
 
 各参考页的“参数”指请求的 `params`，“返回”指响应的 `result.value`。
-所有示例使用 JSON-RPC；排版为多行的单个 JSON 对象，发送到 runner 时须压缩为一行。
+传输示例使用 JSON-RPC；Console 也可使用命名参数文本。排版为多行的单个 JSON 对象，发送到 runner 时须压缩为一行；Editor 宿主命令发送到其 IPC。
 示例里的 `<document_id>`、`<task_id>` 要替换为实际响应值；示例 revision=0 也要替换为最新值。
 实体示例中的固定 UUID 仅供演示，使用前按对应命令的前置条件创建实体。
 
@@ -88,6 +90,8 @@ id 支持字符串（最多 256 个 UTF-8 字节）、int64 整数或 null。省
 new/load 每次生成新的 document_id；持久 scene_id 不能用作 document_id。
 后续请求必须跟随新的 revision；无变化编辑保持 revision，真实编辑或 undo/redo 会递增。
 旧 guard 返回 conflict，并保留当前文档。
+
+上述是 Scene guard；[Editor 视口命令](editor-viewport.md)使用另一个包含 view_id 的会话 guard，必须从 editor.viewport.query 取得，不参与 auto-guard。
 
 ## 公共数据类型
 

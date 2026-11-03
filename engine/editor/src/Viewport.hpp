@@ -61,6 +61,8 @@ public:
     [[nodiscard]] const render::FrameInfo& info() const { return info_; }
     // Camera of the last Edit image, used for entity picking and Edit consistency checks only.
     [[nodiscard]] const Camera& published_camera() const { return camera_; }
+    [[nodiscard]] DocumentId published_document() const { return published_session_.value_or(DocumentId{}); }
+    [[nodiscard]] bool published_path() const { return published_path_; }
     [[nodiscard]] std::span<const std::byte> retained_pixels() const { return pixels_; }
     [[nodiscard]] bool current(const DocumentState& s) const { return published_session_==s.document_id && info_.revision==s.revision && published_==attempted_; }
     [[nodiscard]] const std::string& error() const { return error_; }
@@ -113,6 +115,7 @@ private:
     std::uint64_t pixel_signature_ = 0;
     std::uint64_t published_camera_ = 0;
     bool retain_pixels_ = false;
+    bool published_path_ = false;
     std::vector<std::byte> pixels_;
     Camera camera_;
     render::RenderScene scene_;

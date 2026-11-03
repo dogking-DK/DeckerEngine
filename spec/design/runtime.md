@@ -1,7 +1,7 @@
 ---
 module: runtime
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-11-03T14:27:23+08:00"
+updated_at: "2026-11-03T15:04:51+08:00"
 status: accepted
 ---
 
@@ -32,6 +32,11 @@ M22.7 的 `asset_catalog_version()` / `read_asset_catalog(version,offset,limit)`
 页大小 1–256，offset 在目录范围内，版本失配返回 conflict；返回 AssetRecord 副本，不借用服务或初始化/加载资源。
 这些 owner 线程 API 不分派命令、不 pump、不产生 Task/Job，不触及磁盘、场景或历史；用于 Editor 动态候选，见
 [0154](../development/0154-console-context-assistance.md)。外部 assets.catalog 的原协议与任务语义不变。
+
+M22.8 允许 owner 显式附加 CPU EditorViewportService 后注册 editor.viewport.* 宿主命令；默认 runner 不注册。
+服务读取当前文档身份与宿主冲突状态，命令写入必须携带独立视口 guard。detach/停止/析构关闭服务、清除回调；
+已注册 handler 只通过 Runtime 当前宿主槽取服务，空槽拒绝，替换实例有新 view_id。注册先完整预检再发布；分配异常遵循进程失败边界。
+详细状态、字段及验证见 [Console M22.8](editor-console.md#m228-实施契约edit-视口会话)。
 
 ## 批处理入口
 

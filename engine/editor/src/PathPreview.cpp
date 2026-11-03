@@ -166,7 +166,7 @@ void PathPreview::run(std::stop_token stop) {
                 const auto view=take(render::RenderView::create(scene,{active->width,active->height,active->sequence,
                     active->camera.world(),active->camera.projection(double(active->width)/active->height)}));
                 render::PathTraceSettings settings; settings.seed=active->settings.seed; settings.max_bounces=active->settings.bounces;
-                settings.rr_start=std::min(3u,settings.max_bounces); settings.environment_rgb=active->settings.sky;
+                settings.rr_start=std::min(3u,settings.max_bounces); settings.environment_rgb=active->settings.sky_enabled ? active->settings.sky : Vec3d::Zero();
                 settings.sun=active->settings.sun ? render::PathTraceSun::scene : render::PathTraceSun::none;
                 settings.surface_only=active->settings.surface_only;
                 render::PathTraceSchedule schedule; schedule.session=session; schedule.target_spp=active->settings.target; schedule.gesture=active->preview;

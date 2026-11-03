@@ -48,7 +48,7 @@ Release/RelWithDebInfo普通启动默认关闭Vulkan验证层；Debug默认尝�
 - **Save / Open / Reload**：Save 先应用草稿，再原子保存场景文件；Open/Reload 或关闭前
   有未保存修改时提供 Save / Discard / Cancel。保存失败不会继续切换/关闭。
   本阶段不修改 manifest 和资产映射，也不提供新建项目向导。
-- **Assets / Console**：查看项目资产映射和最近 64 条操作/失败信息；Console 可输入 JSON 命令，见下文。
+- **Assets / Console**：查看项目资产映射和最近 64 条操作/失败信息；Console 可输入命名参数文本或 JSON 命令，见下文。
 
 ## 路径追踪预览（M16.9）
 
@@ -332,7 +332,25 @@ M22.7 扩展到嵌套对象/数组与兼容 JSON envelope，以下输入在光�
 诊断区分 `Incomplete`（缺值、未闭合、必填参数尚未输入）和 `Error`（已确定的类型/范围、重复/未知字段错误），
 最多 16 条，每条给出字符列号和 UTF-8 字节位置。例如 `scene.query limit=` 为待补充，`limit=1.0` 为整数类型错误。
 诊断只显示在辅助窗口，不进入命令日志/历史；业务前置条件、ID 存在性、guard 仍在最终 Enter/Run 时校验。
-视口/相机设置命令、面板帮助与设置搜索仍按后续阶段交付。
+M22.8 已支持下述视口设置命令；相机命令、面板帮助与设置搜索仍按后续阶段交付。
+
+### Edit 视口设置命令（M22.8）
+
+Console 先输入 `editor.viewport.query`，取得包含 view_id/document_id/revision 的视口 guard。
+复制到下一条命令，可同时切换路径模式、ReSTIR 和绝对采样目标：
+
+```text
+editor.viewport.set guard={"view_id":"<view_id>","document_id":"<document_id>","revision":0} renderer=pathtrace direct_lighting=restir_di target_spp=12
+```
+
+占位符和 revision 必须替换成实际响应值。`editor.viewport.set direct_lighting=` 可按 Tab 查看枚举；
+参数提示沿用共享 schema/help。GUI 改动、Console 和 Editor IPC 使用同一个会话，后续写入需使用最新 guard。
+曝光用 exposure_ev，介质用 medium_mode=scene_media；暂停、继续、清空累积分别为 editor.viewport.pause/resume/reset，均只传 guard。
+target_spp=12 表示总目标 12 spp，已有样本不会作为额外 12 次来累加。
+
+命令成功表示设置已接受，查询 presentation.current、spp/target_spp、phase/error 确认实际画面。
+设置不会改变 Scene dirty/Undo；有草稿或正在操作 Edit Gizmo/导航时先完成操作。关闭/重开文档会使旧 guard 失效。
+这些命令仅在 Editor 宿主注册；完整字段、错误和 Python 用法见 [视口命令参考](../commands/editor-viewport.md)。
 
 ## ReSTIR 直接光照
 

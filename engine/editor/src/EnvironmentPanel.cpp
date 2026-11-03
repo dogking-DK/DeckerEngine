@@ -54,9 +54,13 @@ void WorkbenchUi::environment(const Viewport& preview) {
     ImGui::SameLine(); if(ImGui::Button("Revert")) report("Environment Revert",model_.revert_environment()); mark("environment_revert");
     ImGui::EndDisabled(); ImGui::EndDisabled();
     ImGui::Separator(); ImGui::TextUnformatted("VIEWPORT");
-    ImGui::InputFloat("Exposure",&exposure_,.1f,1,"%.3f");
-    if(!std::isfinite(exposure_) || exposure_<0) exposure_=1;
-    exposure_=std::min(exposure_,1000000.f);
+    auto candidate=model_.editor_viewport()->settings();
+    float exposure=float(candidate.raster_exposure);
+    ImGui::BeginDisabled(model_.pending() || input_.active() || input_.navigating());
+    if(ImGui::InputFloat("Exposure",&exposure,.1f,1,"%.3f")) {
+        candidate.raster_exposure=exposure; viewport_settings_changed(candidate);
+    }
+    ImGui::EndDisabled();
     if(ImGui::CollapsingHeader("Cloud render quality and time")) {
         const bool reference_available=std::uint64_t{preview.info().width}*preview.info().height<=4096;
         if(ImGui::BeginCombo("Mode",environment_settings_.mode==render::CloudRenderMode::temporal ? "Temporal (progressive)" : "Reference (small viewport)")) {

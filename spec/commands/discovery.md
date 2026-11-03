@@ -1,7 +1,7 @@
 ---
 module: command-reference-discovery
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-11-03T14:26:14+08:00"
+updated_at: "2026-11-03T15:04:51+08:00"
 status: accepted
 ---
 
@@ -37,6 +37,7 @@ M22.5 增加可选 `help`，已有六个字段与 `commands.list` 的四字段�
 未提供帮助的命令省略 help，消费者应按 description/parameters 降级；不能把没有帮助理解为命令不可用。
 当前带帮助的命令为 `commands.describe`、`scene.query`、`environment.preset/set`，
 以及 `entity.get/delete/set_name/set_transform/set_parent/set_assets` 和 `assets.load/status/unload`（共 13 条，随构建选项变化）。
+附加视口的 Editor 另有 `editor.viewport.query/set/pause/resume/reset` 五条 help v1；普通 runner 不注册这些宿主命令。
 
 ```json
 {"jsonrpc":"2.0","id":3,"method":"commands.describe","params":{"name":"scene.query"}}

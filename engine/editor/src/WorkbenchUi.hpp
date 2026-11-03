@@ -13,10 +13,10 @@ public:
     void draw(Viewport&,bool srgb);
     void request_close();
 #ifdef DK_EDITOR_PATHTRACING
-    [[nodiscard]] const PathPreviewSettings& path_settings() const { return path_settings_; }
-    [[nodiscard]] bool path_mode() const { return path_mode_; }
+    [[nodiscard]] const PathPreviewSettings& path_settings() const { return model_.editor_viewport()->settings().path; }
+    [[nodiscard]] bool path_mode() const { return model_.editor_viewport()->settings().path_trace; }
 #endif
-    void cancel_interaction() { input_.cancel(); simulation_navigation_.cancel(); }
+    void cancel_interaction() { input_.cancel(); simulation_navigation_.cancel(); model_.viewport_interacting(false); }
     bool event(const SDL_Event&);
     [[nodiscard]] bool simulation_navigating() const { return simulation_navigation_.active(); }
     [[nodiscard]] bool closing() const { return closing_; }
@@ -36,10 +36,11 @@ private:
     void inspector();
     void assets();
     void environment(const Viewport&);
+    bool viewport_settings_changed(const EditorViewportSettings&);
+    void viewport_action(EditorViewportControl);
+    void observe_viewport(const Viewport&,bool visible);
 #ifdef DK_EDITOR_PATHTRACING
     void path_panel(Viewport&);
-    PathPreviewSettings path_settings_;
-    bool path_mode_=false;
 
 #endif
     void console();
@@ -77,8 +78,6 @@ private:
     PendingAction pending_ = PendingAction::none;
     bool popup_ = false,closing_ = false,layout_ = false,scroll_log_ = true;
     unsigned errors_ = 0,acceptance_path_extent_=0;
-    float exposure_=1;
-    bool unlit_inspection_=false;
     render::EnvironmentRenderSettings environment_settings_=[] { render::EnvironmentRenderSettings s; s.mode=render::CloudRenderMode::temporal; return s; }();
 };
 }

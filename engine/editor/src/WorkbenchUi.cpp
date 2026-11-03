@@ -237,6 +237,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     if (ImGui::GetIO().AppFocusLost || ImGui::IsKeyPressed(ImGuiKey_Escape,false)) cancel_interaction();
     if (input_.edit() && (!model_.snapshot() || input_.edit()->guard.document_id!=model_.snapshot()->state.document_id ||
         input_.edit()->guard.revision!=model_.snapshot()->state.revision)) input_.cancel();
+    model_.viewport_interacting(input_.active() || input_.navigating());
     toolbar();
     const auto dock=ImGui::DockSpaceOverViewport(0,ImGui::GetMainViewport());
     if (!layout_) {
@@ -268,11 +269,12 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     if (!visible) { input_.cancel(); preview.suspend_path(); }
     if (!simulation_view(preview,visible)) {
     preview.show_edit();
+    auto viewport_settings=model_.editor_viewport()->settings();
 #ifdef DK_EDITOR_PATHTRACING
-    ImGui::BeginDisabled(input_.active());
-    if(ImGui::RadioButton("Raster",!path_mode_)) { path_mode_=false; input_.cancel(); preview.suspend_path(); } mark("path_raster"); ImGui::SameLine();
+    ImGui::BeginDisabled(model_.pending() || input_.active() || input_.navigating());
+    if(ImGui::RadioButton("Raster",!path_mode())) { viewport_settings.path_trace=false; if(viewport_settings_changed(viewport_settings)) preview.suspend_path(); } mark("path_raster"); ImGui::SameLine();
     ImGui::BeginDisabled(!preview.path_unavailable().empty());
-    if(ImGui::RadioButton("Path trace",path_mode_)) { path_mode_=true; input_.cancel(); ImGui::SetWindowFocus("Path tracing"); } mark("path_mode");
+    if(ImGui::RadioButton("Path trace",path_mode())) { viewport_settings.path_trace=true; if(viewport_settings_changed(viewport_settings)) ImGui::SetWindowFocus("Path tracing"); } mark("path_mode");
     ImGui::EndDisabled();
     ImGui::EndDisabled();
     ImGui::SameLine(); if(ImGui::SmallButton("Settings")) ImGui::SetWindowFocus("Path tracing"); mark("path_settings");
@@ -288,31 +290,31 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     bool environment_projection=model_.snapshot() && (model_.snapshot()->scene.environment().enabled || model_.snapshot()->scene.environment().clouds.enabled);
     bool path_projection=false;
 #ifdef DK_EDITOR_PATHTRACING
-    path_projection=path_mode_;
+    path_projection=path_mode();
 #endif
-    ImGui::BeginDisabled(input_.active() || path_projection);
-    if(ImGui::Checkbox("Unlit inspection",&unlit_inspection_)) input_.cancel();
+    ImGui::BeginDisabled(model_.pending() || input_.active() || input_.navigating() || path_projection);
+    if(ImGui::Checkbox("Unlit inspection",&viewport_settings.unlit_inspection)) viewport_settings_changed(viewport_settings);
     mark("unlit_inspection"); ImGui::EndDisabled();
     input_.pathtracing(path_projection);
-    input_.environment(environment_projection && !path_projection && !unlit_inspection_);
+    input_.environment(environment_projection && !path_projection && !viewport_settings.unlit_inspection);
     // Keep one line in all modes so toggling a preference does not resize the image.
     ImGui::TextDisabled(path_projection ? "Path trace supports Perspective and Orthographic" :
-        environment_projection && !unlit_inspection_ ? "Atmosphere and clouds support Perspective and Orthographic" :
+        environment_projection && !viewport_settings.unlit_inspection ? "Atmosphere and clouds support Perspective and Orthographic" :
         "Unlit inspection skips scene lighting for this viewport");
     input_.toolbar(model_,preview,controls_,[&](const char* action,Result<void> result) { return report(action,std::move(result)); });
     if (const auto* s=model_.snapshot(); s && visible) {
         if (preview.texture()) {
 #ifdef DK_EDITOR_PATHTRACING
-            if(path_mode_) ImGui::Text("rev %llu  /  %s",static_cast<unsigned long long>(preview.info().revision),
+            if(path_mode()) ImGui::Text("rev %llu  /  %s",static_cast<unsigned long long>(preview.info().revision),
                 preview.current(s->state) ? "Current scene" : "STALE PREVIEW");
             else
 #endif
             ImGui::Text("rev %llu  /  %zu draws  /  %s",static_cast<unsigned long long>(preview.info().revision),preview.info().draw_count,
                 preview.current(s->state) ? "Current scene" : "STALE PREVIEW");
         } else ImGui::TextUnformatted("Preparing scene...");
-        if(preview.texture() && !unlit_inspection_ && (s->scene.environment().enabled || s->scene.environment().clouds.enabled)
+        if(preview.texture() && !viewport_settings.unlit_inspection && (s->scene.environment().enabled || s->scene.environment().clouds.enabled)
 #ifdef DK_EDITOR_PATHTRACING
-            && !path_mode_
+            && !path_mode()
 #endif
         ) {
             const auto& used=preview.environment_settings();
@@ -325,15 +327,15 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
             auto width=static_cast<std::uint32_t>(std::clamp(available.x,32.0f,1600.0f));
             auto height=static_cast<std::uint32_t>(std::clamp(available.y,32.0f,1200.0f));
 #ifdef DK_EDITOR_PATHTRACING
-            if(path_mode_) { width=static_cast<std::uint32_t>(available.x); height=static_cast<std::uint32_t>(available.y); }
+            if(path_mode()) { width=static_cast<std::uint32_t>(available.x); height=static_cast<std::uint32_t>(available.y); }
 #endif
             input_.aspect(double(width)/height);
             environment_settings_.camera_revision=input_.camera().revision();
 #ifdef DK_EDITOR_PATHTRACING
-            if(path_mode_) preview.update_path(*s,acceptance_path_extent_ ? std::min(width,acceptance_path_extent_) : width,acceptance_path_extent_ ? std::min(height,acceptance_path_extent_) : height,srgb,input_.camera(),input_.edit(),input_.revision(),path_settings_);
+            if(path_mode()) preview.update_path(*s,acceptance_path_extent_ ? std::min(width,acceptance_path_extent_) : width,acceptance_path_extent_ ? std::min(height,acceptance_path_extent_) : height,srgb,input_.camera(),input_.edit(),input_.revision(),path_settings());
             else
 #endif
-            preview.update(*s,width,height,srgb,input_.camera(),input_.edit(),input_.revision(),exposure_,environment_settings_,unlit_inspection_);
+            preview.update(*s,width,height,srgb,input_.camera(),input_.edit(),input_.revision(),float(viewport_settings.raster_exposure),environment_settings_,viewport_settings.unlit_inspection);
             if (preview.texture()) {
                 const auto& info=preview.info();
                 const float scale=std::min(available.x/static_cast<float>(info.width),available.y/static_cast<float>(info.height));
@@ -348,6 +350,8 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     }
     }
     ImGui::End();
+    model_.viewport_interacting(input_.active() || input_.navigating());
+    observe_viewport(preview,visible && !preview.simulation_run());
     assets(); console(); simulation(); confirmation();
     input_.end_frame(); simulation_navigation_.end_frame();
 }

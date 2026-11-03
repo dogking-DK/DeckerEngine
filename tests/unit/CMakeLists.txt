@@ -327,6 +327,7 @@ endif()
 
 if(TARGET dk_editor_model)
     add_executable(dk_editor_tests EditorTests.cpp ConsoleTests.cpp ConsoleHistoryTests.cpp EditorCatalogTests.cpp ConsoleAssistTests.cpp ConsoleContextTests.cpp)
+    target_sources(dk_editor_tests PRIVATE EditorViewportTests.cpp)
     target_include_directories(dk_editor_tests PRIVATE "${PROJECT_SOURCE_DIR}/engine/editor/src")
     target_link_libraries(dk_editor_tests PRIVATE dk::editor_model Catch2::Catch2WithMain)
     if(TARGET dk_editor)

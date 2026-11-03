@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-11-03T14:26:14+08:00"
+updated_at: "2026-11-03T15:04:51+08:00"
 status: accepted
 ---
 
@@ -366,7 +366,9 @@ M22.5 已接入可选帮助元数据与 Workspace 只读目录 API，数据沿 R
 Workbench 按目录代号缓存数据，候选来源与输入/光标/选区/目录匹配后才回填；键位与验收见 [0153](../development/0153-console-completion.md)。
 M22.7 使用 ConsoleStructure 定位嵌套 JSON/envelope，ConsoleAssistCache 以 100 ms 去抖和版本核对发布候选/诊断。
 Workspace 只读已发布实体/工程映射与 Runtime 活动目录，快照发布序号保护映射刷新；不产生业务 Task 或草稿刷新。
-实现与验证见 [0154](../development/0154-console-context-assistance.md)。补全只编辑输入，后续搜索只定位控件；共享帮助不复制业务校验；视口会话命令由宿主注入的服务统一处理，
+实现与验证见 [0154](../development/0154-console-context-assistance.md)。M22.8 已接入 EditorViewportService 与 editor.viewport 五条命令，
+Path tracing/模式/光栅曝光控件使用同一权威设置；路径 worker 消费副本。独立 guard、失败保留画面与关闭验收见 [0155](../development/0155-editor-viewport-commands.md)。
+补全只编辑输入，后续搜索只定位控件；共享帮助不复制业务校验；视口会话命令由宿主注入的服务统一处理，
 不将相机/曝光等会话状态写入 Scene/Undo。当前界面操作和独立 render.capture 语义保持，实施阶段再补齐具体接口与命令表。
 
 ## M17.6 缓存与交互调度

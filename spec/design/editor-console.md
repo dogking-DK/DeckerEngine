@@ -1,7 +1,7 @@
 ---
 module: editor-console
 created_at: "2026-11-03T10:31:20+08:00"
-updated_at: "2026-11-03T14:26:14+08:00"
+updated_at: "2026-11-03T15:04:51+08:00"
 status: accepted
 ---
 
@@ -317,7 +317,7 @@ M22.7 实施契约（[0154](../development/0154-console-context-assistance.md)�
 | M22.8 视口 | 查询；Raster/Path trace；Surface/Scene media；Classic/ReSTIR、候选数/时空复用；target_spp、seed、bounces、天空/太阳开关、曝光；暂停/继续/重置；已有介质时间/云散射会话参数 | Edit 视口会话，不改 Scene dirty/Undo；target_spp 为绝对目标，不承诺 `iterate N` 精确追加；能力缺失时明确拒绝 |
 | M22.9 相机 | 查询；Orbit/Fly/Walk、透视/正交、标准视图；FOV/裁剪/正交高度、速度/灵敏度；姿态、Orbit/Pan/Zoom、Frame/Reset | Edit 视口相机，角度/距离/步长单位显式；不修改物体 Transform，不引入碰撞/重力；Simulation 独立视口命令后置 |
 
-采用 `editor.*` 宿主命名空间，具体命令名/参数表在对应阶段实现前补齐，不在当前命令参考冒充已注册接口。
+采用 `editor.*` 宿主命名空间，M22.8 的具体命令表见[视口参考](../commands/editor-viewport.md)；M22.9 相机表在实施前补齐。
 通过宿主注入 CPU 可见的会话控制服务接口，由 Editor owner 线程处理；Runtime/Operations 不反向链接 ImGui 或整个 Editor。
 只在附加了服务的 Editor 注册，runner 不提供虚假的可用命令；Console、Editor IPC 与 GUI 调用相同会话控制逻辑。
 
@@ -331,6 +331,32 @@ M22.7 实施契约（[0154](../development/0154-console-context-assistance.md)�
   不把设置回执当作新画面完成。曝光等保留采样、算法/物理参数等重置采样沿用现有契约。
 - 会话修改标记 control、不可进入 Scene 事务/Undo、不随 scene.save 持久化；环境/实体编辑保持原来的事务与撤销语义。
   关闭时先停止接收写入并解除回调，再释放视图/服务，验证挂起任务与迟到结果不会访问已销毁 owner。
+
+### M22.8 实施契约：Edit 视口会话
+
+- 新增纯 CPU EditorViewportService（framework/services）与 EditorViewportOperations；Runtime 只在显式附加宿主时注册
+  editor.viewport.query/set/pause/resume/reset。runner 默认无这些命令；Workspace 持有会话，GUI 不再保存另一份权威路径参数。
+  Runtime 不反向依赖 Editor/ImGui/Render。路径预览设置的纯值类型下移，worker 继续消费拥有型副本。
+- query 无参数，返回 guard、settings、capabilities、blocked_reason、presentation。guard 为
+  `{view_id,document_id,revision}`；view_id 标识本次 Edit 视口，document_id 从 Runtime 当前场景实时读取，revision 只计设置变化。
+  文档切换保留用户视口偏好，但旧文档 guard 失效；detach/重新 attach 分配新 view_id，旧服务关闭并清除上下文回调。
+- set 使用顶层可选命名参数：renderer=raster/pathtrace、medium_mode=surface_only/scene_media、direct_lighting=classic/restir_di、
+  initial_candidates=1..64、temporal_reuse/spatial_reuse、target_spp=1..UINT32_MAX（绝对目标）、seed=0..UINT32_MAX、
+  bounces=1..32、environment_rgb=[0..1000] 三元组、sky_enabled、sun、exposure_ev=-16..16、raster_exposure=0..1e6、
+  unlit_inspection、time_seconds=-1e9..1e9、cloud_albedo=0..1、cloud_anisotropy=-.95...95。
+  set 至少一个设置；pause/resume/reset 仅 guard，要求当前 renderer=pathtrace 且能力可用。reset 单独递增重置序号及会话 revision。
+- query 为 query；其余为 control、undoable=false，不支持 scene.transaction，不保存 Scene/工程、不修改 dirty/Undo。
+  set 从当前值构造候选，Operations schema 与 Service 完整强类型校验后一次发布；坏参数/过期 guard/能力不足保留全部原设置。
+  无变化 set/pause/resume 不增 revision、不重置采样。path 模块/GPU 不可用时拒绝显式路径字段，即使当前 renderer=raster。
+- 活动 Edit Gizmo/导航、未应用 Inspector/Environment 草稿拒绝写入；查询仍允许。GUI 同样调用服务，禁用相关控件，
+  不因命令修改取消手势或覆盖草稿；Simulation 画面不成为默认目标，命令始终只设置明确 guard 标识的 Edit 视口。
+- 服务不等待 GPU。渲染观察由 owner 在绘制后发布；presentation 同时标出观察时 guard、已显示图像 guard/Scene 来源、
+  current/phase/error/spp/generation。新设置先 accepted，只有实际匹配的完成图像才 current；失败保留前一图像来源。
+  曝光/目标/暂停保留已有样本，物理设置/算法/介质与 reset 走既有 worker 失效规则；不承诺精确追加 N spp。
+- Console/IPC 经同一 Runtime/Operations/Service；GUI 直接使用同一 Service 与校验，无按帧业务 Task。
+  GUI detach 在 renderer/device 销毁前执行；Runtime shutdown 先关闭宿主，后续写入拒绝，迟到观察不得复活会话。
+- 验收：CPU guard/原子拒绝/no-op/能力/生命周期/草稿/旧文档/发现隔离；真实后台 GUI 按钮、Console 输入和 IPC 交替控制，
+  核对曝光保留、reset/模式变化、来源/失败画面以及关闭。沿用单一 Debug 定向验证，记录见 [0155](../development/0155-editor-viewport-commands.md)。
 
 ### Editor 帮助与设置搜索（M22.10）
 

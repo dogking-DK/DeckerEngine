@@ -42,7 +42,12 @@ struct ConsoleReferencePage {
 };
 class Workspace final {
 public:
+    ~Workspace();
     [[nodiscard]] static Result<std::unique_ptr<Workspace>> create(const std::filesystem::path& root);
+    [[nodiscard]] Result<void> attach_editor_viewport(EditorViewportCapabilities);
+    void detach_editor_viewport();
+    [[nodiscard]] const std::shared_ptr<EditorViewportService>& editor_viewport() const { return editor_viewport_; }
+    void viewport_interacting(bool value) { viewport_interacting_=value; }
     [[nodiscard]] Result<void> open(const std::filesystem::path& manifest, bool discard = false);
     [[nodiscard]] Result<void> refresh();
     // method key=value or JSON {method,params}; explicit guards and shared registry.
@@ -104,6 +109,8 @@ private:
     [[nodiscard]] Result<void> history_step(std::string_view method);
     [[nodiscard]] Json guard() const;
     std::unique_ptr<Runtime> runtime_;
+    std::shared_ptr<EditorViewportService> editor_viewport_;
+    bool viewport_interacting_=false;
     std::optional<SceneReadSnapshot> snapshot_;
     std::uint64_t snapshot_publication_ = 0;
     std::optional<EntityId> selection_;

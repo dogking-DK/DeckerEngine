@@ -2,18 +2,9 @@
 #include "EnvironmentPreview.hpp"
 #include <dk/render/PathTraceRenderer.hpp>
 #include <dk/graphics/Transfer.hpp>
+#include <dk/services/EditorViewportService.hpp>
 namespace dk::editor::detail {
-struct PathPreviewSettings {
-    std::uint32_t target=64,seed=1,bounces=4;
-    Vec3d sky{.3,.4,.6};
-    double exposure=0;
-    bool paused=false,sun=true,surface_only=true,scene_media=false;
-    double time_seconds=0,cloud_albedo=.9,cloud_anisotropy=.6;
-    bool restir_di=false,restir_temporal=false,restir_spatial=false;
-    std::uint32_t restir_candidates=8;
-    std::uint64_t reset=0;
-    bool operator==(const PathPreviewSettings&) const = default;
-};
+using PathPreviewSettings = ViewportPathSettings;
 struct PathPreviewRequest {
     SceneReadSnapshot snapshot;
     Camera camera;

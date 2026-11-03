@@ -75,6 +75,8 @@
 | 默认 Sponza 1600×1200 / 2560×1440 表面和介质四模式、显存额度与连续累积/取消恢复 | dk_editor_render_benchmark | `^dk\.editor\.(restir_desktop\|media_desktop)_gpu_validation$`（需要 demo 素材；required RT/validation/sync） |
 | Runtime 截图、版本/像素、原子发布和退出 | dk_run | `^dk\.runtime\.capture_gpu_validation$`（gpu label；77 为跳过） |
 | Runtime 的 batch/stdio 进程行为 | dk_run | `^dk\.runtime\.` |
+| Edit 视口宿主命令、独立 guard、原子设置/控制、能力/草稿/手势与关闭寿命（M22.8，无需 GPU） | dk_editor_tests | `^dk\.editor\.viewport ` |
+| 真实 GUI/Console/IPC 共享视口、采样/曝光/重置、失败保留画面/恢复和活动关闭（M22.8） | dk_editor_app、dk_run、dk_ctl | `^dk\.editor\.viewport_commands_gpu_validation$`（required RT + 同步 validation） |
 | Console 文本/JSON、整数/Unicode/预算、guard/草稿/刷新失败、历史、基础/嵌套补全、实体资产候选/诊断/去抖与来源/选区保护（M22.2/3/6/7，无需 GPU） | dk_editor_tests | `^dk\.editor\.(console \|workspace console)` |
 | 编辑器选择/草稿、相机、Gizmo 事务/撤销、保存重载与失败保护（无需 GPU） | dk_editor_tests | `^dk\.editor\.(workspace \|runtime \|camera \|interaction )` |
 | CPU 射线、AABB、三角形 BVH 和仿射实例 | dk_geometry_tests | `^dk\.geometry\.` |
