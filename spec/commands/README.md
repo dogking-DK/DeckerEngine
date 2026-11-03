@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-11-03T12:49:13+08:00"
+updated_at: "2026-11-03T13:06:50+08:00"
 status: accepted
 ---
 
@@ -11,6 +11,7 @@ status: accepted
 `windows-dev` 构建启用此功能，最小 bootstrap 仅提供 `--help/--version`。
 命令集合随构建选项变化，以实际`commands.list`为准；截图模块提供render.capture/render.sequence，CPU环境预设无需GPU。
 完整字段 schema 可通过 `commands.describe` 查询。
+`commands.describe` 还可返回可选 help v1（说明/单位/明确默认值/示例等）；覆盖范围与兼容规则见[命令发现](discovery.md)。
 
 独立离线 CLI 另见 [dk-shaderc 编译参数与输出](shaderc.md)（schema v3包含纹理维度、非一致索引能力、RT接口和来源指纹）；它不属于下列 Runtime 命令集。
 Windows 本机调用使用 [dk-ctl / IPC 协议](ipc.md)，启动、guard 和重试示例见 [IPC 指南](../guides/ipc.md)。
@@ -22,7 +23,7 @@ Editor Console 接受 `scene.query limit=20` 等命名参数文本，也兼容�
 见 [编辑器指南](../guides/editor.md#console-命令文本m22) 与 [M22 设计](../design/editor-console.md)。
 这只改变 Console 输入，不新增本目录命令，也不改变 JSON-RPC/IPC 格式。
 后续 M22 扩展已规划补全/参数提示、Editor 帮助与视口/相机设置命令，见 [扩展设计](../design/editor-console.md#m224-扩展设计帮助补全与设置命令)。
-这些新增能力尚未实现，本目录仍只列当前注册命令；扩展阶段实际交付时再同步新接口和调用示例。
+M22.5 已接入共享帮助和内部只读描述快照；补全弹窗、面板帮助与设置命令仍待后续阶段，本目录只列当前注册命令。
 
 ## 按功能查找
 

@@ -242,7 +242,7 @@ Console 输入 `{"method":"scene.query","params":{}}` 后按 Enter 或 Run，取
 有未应用草稿时仅允许 query 命令，先 Apply/Revert 再修改或捕获；Console 的 jobs.wait 仅允许 timeout_ms=0，避免占用 GUI 线程。
 
 命名参数文本、上下键命令历史和粘贴保护见下节，
-实施状态见 [Roadmap M22](../roadmap.md#m22console-命令文本输入首期)。
+实施状态见 [Roadmap M22](../roadmap.md#m22console-命令文本输入与-editor-交互)。
 
 `dk.editor.media_pathtracing_gpu_validation` 使用独立夹具、--background 和 --media-pathtrace-smoke：真实点击模式/环境/时间/曝光、Console 输入，
 与 IPC capture 比较冻结线性结果，连续错误恢复和换会话检查。该验收将路径画面固定为至多 96×96 以控制同步验证成本；
@@ -294,8 +294,10 @@ entity.set_name id="<entity_id>" name="Hello 中文" guard={"document_id":"<docu
 [历史与 GUI](../development/0150-console-history-ui.md)。
 
 M22 后续扩展已纳入命令/参数补全、输入诊断、实体/资产候选、视口/相机命令以及 Editor 悬停帮助和设置搜索，
-见 [扩展设计](../design/editor-console.md#m224-扩展设计帮助补全与设置命令) 与 [Roadmap](../roadmap.md#m22console-命令文本输入首期)。
-目前尚未提供这些功能；当前 Tab 仍用于输入空白，候选弹窗与新键位将在对应阶段交付后更新本指南。
+见 [扩展设计](../design/editor-console.md#m224-扩展设计帮助补全与设置命令) 与 [Roadmap](../roadmap.md#m22console-命令文本输入与-editor-交互)。
+M22.5 已提供共享帮助信息，可以在 Console 输入 `commands.describe name=scene.query` 查看可选 help，
+其中包含分页参数的说明、单位、默认值与示例；完整输出可通过 IPC 查询。
+补全弹窗、输入诊断、动态候选和面板搜索仍未提供；当前 Tab 仍用于输入空白，新键位将在对应阶段交付后更新本指南。
 
 ## ReSTIR 直接光照
 

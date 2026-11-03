@@ -6,6 +6,7 @@ namespace dk
 {
 namespace
 {
+constexpr std::size_t default_query_offset = 0, default_query_limit = 128;
 Json id_schema()
 {
     return schema::string(36, 36);
@@ -209,10 +210,10 @@ Result<SceneEdit> decode_scene_edit(std::string_view method, const Json &p)
 Result<void> register_scene_commands(CommandRegistry &registry, SceneService &service)
 {
     auto add = [&](std::string name, std::string description, Json parameters, Json result,
-                   CommandEffect effect, CommandHandler handler)
+                   CommandEffect effect, CommandHandler handler, std::optional<Json> help = std::nullopt)
     {
         return registry.add({std::move(name), std::move(description), std::move(parameters),
-                             std::move(result), effect, effect == CommandEffect::memory_edit},
+                             std::move(result), effect, effect == CommandEffect::memory_edit, std::move(help)},
                             std::move(handler));
     };
     auto r = add("scene.new", "Create a new scene session",
@@ -300,8 +301,8 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
                     return std::unexpected(doc.error());
                 Json entities = Json::array();
                 const auto ids = (*doc)->entity_ids();
-                const auto offset = p.value("offset", std::size_t{0});
-                const auto end = std::min(ids.size(), offset + p.value("limit", std::size_t{128}));
+                const auto offset = p.value("offset", default_query_offset);
+                const auto end = std::min(ids.size(), offset + p.value("limit", default_query_limit));
                 for (auto i = offset; i < end; ++i)
                 {
                     auto entity = entity_json(**doc, ids[i]);
@@ -313,7 +314,12 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
                             {"entities", std::move(entities)},
                             {"offset", offset},
                             {"has_more", end < ids.size()}};
-            });
+            }, Json{{"version",1},{"fields",{
+                {"/properties/offset",{{"label","起始位置"},{"description","Number of entities to skip in persistent-ID order."},
+                    {"unit","entities"},{"default",default_query_offset},{"examples",Json::array({0,20})},{"aliases",Json::array({"偏移","offset"})}}},
+                {"/properties/limit",{{"label","分页数量"},{"description","Maximum entities returned in this page; has_more indicates another page."},
+                    {"unit","entities"},{"default",default_query_limit},{"examples",Json::array({1,20,128})},{"aliases",Json::array({"数量","page size"})}}}
+            }}});
     if (!r)
         return r;
     r = add("entity.get", "Query one entity and its world matrix",
@@ -337,7 +343,9 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
         CommandEffect::query, [](const Json& p)->Result<Json> {
             auto e=environment_preset(p["name"].get<std::string>()); if(!e) return std::unexpected(e.error());
             return Json{{"version",1},{"environment",operations_detail::environment_json(*e)}};
-        });
+        }, Json{{"version",1},{"fields",{{"/properties/name",{{"label","环境预设"},
+            {"description","Returns a complete environment object without applying it to the scene."},
+            {"examples",Json::array({"clear","sparse","sunset"})},{"aliases",Json::array({"预设","preset"})}}}}}});
     if (!r) return r;
     r = add("environment.query", "Query the scene environment in meters and scene-linear RGB", schema::object(),
         schema::object({{"state", state_schema()}, {"environment", operations_detail::environment_schema()}},
@@ -362,7 +370,15 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
             auto result = service.edit(*guard, *edit);
             if (!result) return std::unexpected(result.error());
             return Json{{"state", document_state_json(*service.state())}, {"created_id", nullptr}};
-        });
+        }, Json{{"version",1},{"fields",{
+            {"/properties/environment",{{"label","完整环境"},{"description","Replace the complete v2 object read from environment.query; partial patches are not accepted."}}},
+            {"/properties/environment/properties/sun/properties/irradiance",{{"label","太阳强度"},{"unit","scene-linear RGB"},
+                {"description","Scene-normalized normal irradiance, not lux. Query the current environment before editing."},
+                {"examples",Json::array({Json::array({1,1,1})})},{"aliases",Json::array({"光照","sun intensity"})}}},
+            {"/properties/environment/properties/clouds/properties/coverage",{{"label","云覆盖率"},{"unit","fraction"},
+                {"description","Zero gives a cloud-free field. This required value has no command default."},
+                {"examples",Json::array({0.0,0.5,1.0})},{"aliases",Json::array({"云量","coverage"})}}}
+        }}});
     if (!r) return r;
     for (const auto *method : {"entity.create", "entity.delete", "entity.set_name", "entity.set_transform",
                                "entity.set_parent", "entity.set_assets"})

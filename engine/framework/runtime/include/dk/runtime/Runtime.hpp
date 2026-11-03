@@ -35,6 +35,9 @@ class Runtime final
     [[nodiscard]] Result<CommandExecution> dispatch(std::string_view method, const Json &parameters,
                                                     bool auto_guard = false);
     [[nodiscard]] bool has_command(std::string_view method) const;
+    // Owner-thread, metadata-only reads. Do not dispatch, pump or record Tasks/Jobs.
+    [[nodiscard]] CommandCatalogVersion command_catalog_version() const { return commands_.catalog_version(); }
+    [[nodiscard]] CommandCatalogSnapshot command_catalog() const { return commands_.catalog_snapshot(); }
     [[nodiscard]] std::shared_ptr<RuntimeEvents> events() const { return events_; }
     // Immutable owner-thread copy, checked against the active session and revision.
     [[nodiscard]] Result<SceneReadSnapshot> read_scene(EditGuard guard) const;

@@ -31,7 +31,8 @@
 | 异步资产候选、取消/代际、owner 发布与 Ready 寿命 | dk_async_asset_tests | `^dk\.async_assets\.` |
 | 资产/作业命令 schema、guard 与服务接入 | dk_asset_command_tests | `^dk\.asset_commands\.` |
 | CPU 资产真实 stdio、重启与关闭 | dk_run | `^dk\.runtime\.assets_stdio$` |
-| 命令注册、schema | dk_commands_tests | `^dk\.commands\.` |
+| 命令注册、schema、帮助元数据校验与拥有型目录（M22.5） | dk_commands_tests | `^dk\.commands\.` |
+| Runtime/Workspace 目录无 Task/草稿副作用、发现兼容与寿命（M22.5，无需 GPU） | dk_protocol_tests、dk_editor_tests | `^dk\.(protocol\|editor)\.catalog ` |
 | Luau 绑定、值转换、预算、取消/关闭和能力模式 | dk_luau_tests | `^dk\.luau\.`（含 Windows 控制台取消；target 自动构建 runner 夹具，CLI 进程测试另见下行） |
 | Luau runner 创建/保存重载、预算参数和诊断 | dk_run | `^dk\.luau\.runner_roundtrip$` |
 | 服务、事务、历史、Operations | dk_service_tests | `^dk\.services\.` |

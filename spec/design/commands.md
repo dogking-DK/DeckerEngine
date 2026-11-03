@@ -1,7 +1,7 @@
 ---
 module: commands
 created_at: "2026-09-22T13:12:54+08:00"
-updated_at: "2026-11-03T12:49:13+08:00"
+updated_at: "2026-11-03T13:06:50+08:00"
 status: accepted
 ---
 
@@ -60,18 +60,46 @@ parse_command_json 拒绝重复键、坏 UTF-8、非 JSON 数值及尾随文本�
 验证独立 commands 构建、发现排序、重复/坏注册、嵌套 schema、未知/缺失字段、
 整数/Unicode/非有限边界、坏结果与异常错误；按本次行为选择相关用例和配置。
 
-## M22 帮助描述扩展方案（未实现）
+## M22.5 帮助描述与只读目录
 
-[Console/Editor 扩展设计](editor-console.md#m224-扩展设计帮助补全与设置命令)计划在 M22.5 增加独立的可选 `help` 元数据，
+本阶段实施契约如下，完成/验证状态见 [0152](../development/0152-command-help-catalog.md)。
+CommandDescriptor 尾部增加 `std::optional<Json> help`，旧 aggregate 初始化继续有效；未提供时 describe 不输出 help。
+help 严格为 `{version:1,fields:{<schema JSON Pointer>:<entry>}}`，最多 64 KiB UTF-8 JSON 编码。
+entry 至少含一个字段，可选 label/description/unit/default/examples/aliases/completion_provider；未知字段拒绝。
+label/unit/description 分别最多 256/64/4096 UTF-8 字节，非空且无 NUL；说明可用换行/Tab，其他显示字符串不含控制字节。
+examples 最多 8 个，aliases 最多 16 个、各最多 128 字节且不重复；default 可为 null，但必须符合目标 schema。
+JSON Pointer 最多 1024 字节，只能沿 properties/<name> 和 items 到达真正 schema 节点，空路径表示参数根。
+引用、UTF-8/深度/预算、默认值与各示例均在注册前校验；帮助不填充调用参数，schema 和业务校验不放宽。
+
+注册表提供 `register_completion_provider(id)` 注册语义标识；只有已声明标识才能被 help 引用。
+这只是拥有型名称目录，不持有回调或读取场景；宿主实际候选提供器在 M22.7 接入，目前内建命令未宣称具备动态候选。
+标识沿命令名字符/长度规则，重复或非法注册拒绝。Commands 仍不依赖 Scene/Editor/GPU。
+
+`CommandCatalogVersion {registry_id, revision}` 用独立 StableId 区分注册表重建；每次成功添加命令或候选标识后 revision 增一，
+拒绝/重复注册不变，耗尽时在修改前拒绝。注册表构造生成身份失败时抛出构造错误，分配异常继续向上传播。
+发布点为 map/set 成功插入之后；所有帮助/描述校验在插入前完成。
+`catalog_version()` 返回轻量代号；`catalog_snapshot()` 返回包含代号、有序 CommandDescriptor 副本和候选标识列表的
+`CommandCatalogSnapshot`。无 handler/借用引用，快照修改或 owner 销毁不影响其他快照/注册表；调用沿现有 owner 线程串行契约。
+Runtime/Workspace 分别提供同名用途的 `command_catalog_version()` 与 `command_catalog()`，直接读取注册表而不 dispatch，
+不创建 Task/Job、不刷新快照、不改 Scene/历史/草稿/文件；UI 可以先比较代号再决定是否复制整个目录。
+场景切换不改变命令目录代号，动态实体候选须另按 document_id/revision 失效，不能复用目录代号代表场景状态。
+
+首批真实帮助覆盖 commands.describe、scene.query、environment.preset/set；分页缺省值与 handler 使用同一常量。
+环境完整对象的必填字段只提供说明/单位/示例，不伪造缺省值；未补充的命令继续按原 schema/描述降级。
+Console 弹窗、动态候选和 Editor 会话控制仍由后续阶段实现。
+
+### 扩展设计的兼容边界
+
+[Console/Editor 扩展设计](editor-console.md#m224-扩展设计帮助补全与设置命令)使用独立的可选 `help` 元数据，
 服务于命令补全、参数说明和面板帮助；不往现有严格 schema 中直接添加未知说明关键字。
 帮助条目引用参数 schema 的 JSON Pointer，类型/必填/范围/枚举继续以 schema 为唯一来源；
 说明、单位、明确默认值、示例/搜索别名和候选提供器标识独立保存，缺失时退回已有信息。
 注册时校验引用、UTF-8/预算及默认值/示例，帮助不改变参数缺省行为或业务校验。
 
-M22.5 计划让 commands.describe 增量返回 help；commands.list 与已有字段含义保留。
+M22.5 让 commands.describe 增量返回 help；commands.list 与已有字段含义保留。
 Runtime/Workspace 的 UI 描述查询从同一 registry 取得拥有型快照，不走 dispatch，避免击键时创建 Task；
 外部主动调用发现命令仍走原 Runtime 路径。Commands 不持 Editor widget、Scene 或 GPU 引用。
-具体接口/兼容用例在 M22.5 实施，当前 CommandDescriptor/发现返回仍未改变，不能据此宣称现有命令已附带完整帮助。
+接口/兼容用例按上述实施契约验证；帮助是可选字段，不能据此宣称每个命令都已附带完整帮助。
 M22.8/9 的 editor.* 设置命令须由宿主附加服务后注册，不由通用 Commands 层实现视口行为；runner 不假装提供 Editor 状态。
 扩展记录：[0151](../development/0151-console-assistance-plan.md)。
 

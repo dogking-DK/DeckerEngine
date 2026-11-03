@@ -33,6 +33,9 @@ public:
     [[nodiscard]] Result<void> refresh();
     // method key=value or JSON {method,params}; explicit guards and shared registry.
     [[nodiscard]] Result<Json> execute_console(std::string_view);
+    // Owning metadata snapshot; does not execute commands, refresh or edit drafts.
+    [[nodiscard]] CommandCatalogVersion command_catalog_version() const { return runtime_->command_catalog_version(); }
+    [[nodiscard]] CommandCatalogSnapshot command_catalog() const { return runtime_->command_catalog(); }
     [[nodiscard]] Result<void> select(std::optional<EntityId> id);
     [[nodiscard]] Result<void> apply();
     [[nodiscard]] Result<void> revert();

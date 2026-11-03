@@ -1,7 +1,7 @@
 ---
 module: editor-console
 created_at: "2026-11-03T10:31:20+08:00"
-updated_at: "2026-11-03T12:49:13+08:00"
+updated_at: "2026-11-03T13:06:50+08:00"
 status: accepted
 ---
 
@@ -10,7 +10,7 @@ status: accepted
 ## 目标与本次范围
 
 让用户在 Editor Console 输入 `scene.query limit=20`，调用当前已经注册的 Runtime 命令。
-采用本设计不代表功能已经实现；实施状态统一见 [Roadmap M22](../roadmap.md#m22console-命令文本输入首期)。
+采用本设计不代表功能已经实现；实施状态统一见 [Roadmap M22](../roadmap.md#m22console-命令文本输入与-editor-交互)。
 M22.2 已接入命名参数与兼容 JSON 解析/执行，验收记录见 [0149](../development/0149-console-command-parser.md)；
 M22.3 的历史、输入适配及真实 GUI 验收记录见 [0150](../development/0150-console-history-ui.md)。原 JSON-only 基线为 `2d77103`，入口见
 [Workspace](../../engine/editor/src/Workspace.cpp) 与 [Console UI](../../engine/editor/src/WorkbenchUi.cpp)。
@@ -199,14 +199,15 @@ RAII 恢复原读写回调和 user data。
 
 ## M22.4 扩展设计：帮助、补全与设置命令
 
-本节为采用的扩展方案，尚未实现；阶段及状态以 [Roadmap](../roadmap.md#m22console-命令文本输入首期) 为准。
+本节为采用的扩展方案；M22.5 的帮助元数据与描述快照已接入，其余交互尚未实现，
+阶段及验证状态以 [Roadmap](../roadmap.md#m22console-命令文本输入与-editor-交互) 为准。
 既有命令、解析器、显式 guard、8192 字节输入、会话历史和提交后失败契约继续适用。
 这里的 Editor 指 DeckerEngine 工作台，不包括 VS Code/LSP 或独立脚本编辑器。
 
 ### 共享元数据和只读发现（M22.5）
 
-当前 `commands.list/describe` 已提供命令说明、参数/结果 schema、effect/undoable；字段帮助信息尚不完整。
-现有 schema 注册会拒绝未知关键字，不能直接塞入任意 description/unit/default；采用独立的可选帮助元数据：
+当前 `commands.list/describe` 提供命令说明、参数/结果 schema、effect/undoable；M22.5 为部分命令补充字段帮助。
+schema 注册仍拒绝未知关键字，不直接塞入任意 description/unit/default；使用独立的可选帮助元数据：
 
 - 在 CommandDescriptor 增加可选、拥有型 `help`（version=1），字段条目通过指向参数 schema 的 JSON Pointer 标识，
   例如 `/properties/limit`、`/properties/pathtrace/properties/target_spp`；数组元素使用 schema 的 `items` 路径。
@@ -215,13 +216,18 @@ RAII 恢复原读写回调和 user data。
   省略值没有明确默认行为时不展示“默认值”；帮助里的默认值不自动注入调用参数，也不代替服务实际缺省逻辑。
 - 注册时验证帮助版本、字段引用、默认值/示例与 schema 的一致性及 UTF-8/大小预算；每命令帮助编码上限 64 KiB，
   同时服从命令值预算。存在条件关系的限制由服务验证，帮助说明条件，不伪造 schema 已表达的约束。
-- `commands.list` 保持轻量结果；`commands.describe` 计划增加可选 `help`，旧字段含义不变。
-  M22.5 同步发现参考页、序列化契约和相关消费者兼容检查；本次不修改实际返回结果。
-- 为 Editor 增加 Runtime/Workspace 的 owner 线程只读描述快照入口，来源仍是同一 registry，使用拥有型副本与代号。
+- `commands.list` 保持轻量结果；`commands.describe` 增加可选 `help`，旧字段含义不变。
+  当前覆盖 commands.describe、scene.query、environment.preset/set；其他命令保留 schema/原说明降级。
+- Runtime/Workspace 提供 owner 线程只读 `command_catalog_version()` / `command_catalog()`，来源仍是同一 registry，使用拥有型副本与代号。
   不在每次击键时调用 `dispatch(commands.describe)`，不增加 Task、Job、命令历史或 Scene 变化。
   缓存以注册表/宿主能力代号失效，描述缺失或失败时仍保留正常手动输入与原执行路径。
 - 通用 Commands 层只持数据，不依赖 ImGui、SDL、Scene 或 GPU；Editor 会话控件在自己的模块提供帮助/定位映射。
   相同设置的命令和面板复用描述与校验来源，不要求将所有复杂面板自动生成。
+
+具体 help v1 字段、注册前校验、目录身份/修订号与失败发布边界见 [Commands 实施契约](commands.md#m225-帮助描述与只读目录)，
+验证记录见 [0152](../development/0152-command-help-catalog.md)。当前没有内建动态候选提供器；注册语义标识不等于已实现枚举。
+Workspace 元数据读取不走 execute_console/refresh，在没有活动文档或存在未应用草稿时也只读取目录；
+场景重载不改变静态目录，后续动态候选仍独立按文档修订失效。
 
 ### Console 基础补全与提示（M22.6）
 

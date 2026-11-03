@@ -1,7 +1,7 @@
 ---
 module: runtime
 created_at: "2026-09-22T13:50:31+08:00"
-updated_at: "2026-10-09T19:38:24+08:00"
+updated_at: "2026-11-03T13:06:50+08:00"
 status: accepted
 ---
 
@@ -19,6 +19,13 @@ dispatch 使用动态文本记录 method；不改变命令/schema/guard/stdout �
 Runtime::create(existing_root) 捕获既有工程根；dispatch(method,params,auto_guard=false)
 为串行状态修改安全点，拒绝同实例重入。宿主必须在同一线程调用，未声明线程安全。
 每次命令通过注册表校验并调用统一服务，事务由服务负责；异常复位调度标志，资源异常交进程入口处理。
+
+M22.5 增加 owner 线程只读 `command_catalog_version()` / `command_catalog()`，直接读取 Commands 注册表，
+分别返回 registry_id/revision 与拥有型描述快照；不走 dispatch、不 pump、不初始化 GPU、不记录 Task/Job 或刷新 Scene。
+调用不需要活动文档，返回值不借用 Runtime/handler，销毁 Runtime 后仍可读取；新 Runtime 有不同 registry_id。
+这是目录元数据，停止状态和动态场景/资源有效性仍须分别检查，不能把相同目录代号当作实体候选仍有效。
+正常 commands.list/describe 仍保持原分派与 Task 语义；结构与预算见 [Commands](commands.md#m225-帮助描述与只读目录)，
+验收见 [0152](../development/0152-command-help-catalog.md)。
 
 ## 批处理入口
 

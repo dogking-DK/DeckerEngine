@@ -1,7 +1,7 @@
 ---
 module: command-reference-scene
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-10-12T15:10:00+08:00"
+updated_at: "2026-11-03T13:06:50+08:00"
 status: accepted
 ---
 
@@ -49,6 +49,7 @@ status: accepted
 
 需要活动场景，无需 guard；effect=query，undoable=false。
 可选 `offset`（默认 0，整数 0–10000）、`limit`（默认 128，整数 1–256）。
+`commands.describe(name="scene.query")` 的可选 [help](discovery.md) 提供分页字段说明、单位、默认值和示例；不改变缺省行为。
 返回 `{state, entities, offset, has_more}`，entities 为按持久 EntityId 排序的 Entity 数组。
 后续页使用 `offset + entities.length`；多次查询之间发生编辑时不保证跨页快照一致性。
 无活动场景返回 invalid_state。

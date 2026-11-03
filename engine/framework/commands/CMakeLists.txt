@@ -1,6 +1,6 @@
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(magic_enum CONFIG REQUIRED)
-add_library(dk_commands STATIC src/CommandRegistry.cpp src/Schema.cpp)
+add_library(dk_commands STATIC src/CommandRegistry.cpp src/Schema.cpp src/CommandHelp.cpp src/CommandHelp.hpp)
 add_library(dk::commands ALIAS dk_commands)
 target_sources(dk_commands PUBLIC FILE_SET HEADERS BASE_DIRS include FILES
     include/dk/commands/CommandRegistry.hpp include/dk/commands/Schema.hpp)

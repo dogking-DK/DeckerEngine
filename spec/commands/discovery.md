@@ -1,7 +1,7 @@
 ---
 module: command-reference-discovery
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-09-24T10:21:18+08:00"
+updated_at: "2026-11-03T13:06:50+08:00"
 status: accepted
 ---
 
@@ -32,3 +32,31 @@ effect 的文本值为 `query`、`memory_edit`、`external`、`control`；与 co
 ```json
 {"jsonrpc":"2.0","id":2,"method":"commands.describe","params":{"name":"entity.set_transform"}}
 ```
+
+M22.5 增加可选 `help`，已有六个字段与 `commands.list` 的四字段条目保持不变。
+未提供帮助的命令省略 help，消费者应按 description/parameters 降级；不能把没有帮助理解为命令不可用。
+当前带帮助的命令为 `commands.describe`、`scene.query`、`environment.preset` 和 `environment.set`。
+
+```json
+{"jsonrpc":"2.0","id":3,"method":"commands.describe","params":{"name":"scene.query"}}
+```
+
+对应结果的 help 为 `{version:1,fields:{...}}`，fields 的键是指向 parameters schema 节点的 JSON Pointer，
+例如 `/properties/limit`、`/properties/environment/properties/sun/properties/irradiance`。
+空路径指参数根，数组沿 items；`~0`/`~1` 分别转义属性名中的 `~`/`/`。
+每个条目可含以下字段，均为可选；类型、范围、必填和枚举仍从原 schema 取得。
+
+| 字段 | 含义 |
+| --- | --- |
+| label / description | 显示名称与字段说明；未提供时保留原参数名/约束 |
+| unit | 单位说明；不会自动换算输入值 |
+| default | 服务已明确的缺省值；没有该字段表示没有声明缺省行为，显式 null 仍是一个值 |
+| examples | 最多 8 个符合该字段 schema 的示例，不保证当前业务前置条件成立 |
+| aliases | 最多 16 个搜索别名，不是可执行的参数名或命令别名 |
+| completion_provider | 已声明的候选语义标识；候选枚举由宿主实现，字段本身不执行任何查询 |
+
+例如 scene.query 的 `/properties/limit` 含 `label="分页数量"`、`unit="entities"`、`default=128` 与示例 `[1,20,128]`；
+范围 1–256 来自 parameters schema。environment.set 的必填环境字段只提供说明/示例，不隐式补齐完整环境。
+帮助只读，不改变 handler 的参数、默认值、guard 或副作用；动态候选与补全弹窗属于后续阶段。
+通过 Runtime/JSON-RPC 主动调用发现命令仍记录正常 Task；Editor 内部无 Task 的目录快照 API 见
+[Commands 设计](../design/commands.md#m225-帮助描述与只读目录)，它不是新增的传输命令。

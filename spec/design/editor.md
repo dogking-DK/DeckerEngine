@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-11-03T12:49:13+08:00"
+updated_at: "2026-11-03T13:06:50+08:00"
 status: accepted
 ---
 
@@ -361,7 +361,9 @@ M22.3 接入有界历史、Up/Down 与草稿恢复、成功清空/失败保留�
 首期没有增加渲染设置/相机控制命令，也不改变 IPC/Luau/Python 输入协议；guard、草稿保护和零等待沿用现有契约。
 M22.4 扩展设计将共享帮助元数据、Console 补全/诊断、Edit 视口/相机命令、面板帮助/设置搜索纳入同一路线，
 详见 [Console 扩展设计](editor-console.md#m224-扩展设计帮助补全与设置命令) 与 [0151](../development/0151-console-assistance-plan.md)。
-新增功能仍待实现：补全只编辑输入，搜索只定位控件；共享帮助不复制业务校验；视口会话命令由宿主注入的服务统一处理，
+M22.5 已接入可选帮助元数据与 Workspace 只读目录 API，数据沿 Runtime/Commands 同一来源，不 dispatch/refresh，不覆盖草稿。
+验收见 [0152](../development/0152-command-help-catalog.md)。补全弹窗、搜索与设置命令仍待实现：
+补全只编辑输入，搜索只定位控件；共享帮助不复制业务校验；视口会话命令由宿主注入的服务统一处理，
 不将相机/曝光等会话状态写入 Scene/Undo。当前界面操作和独立 render.capture 语义保持，实施阶段再补齐具体接口与命令表。
 
 ## M17.6 缓存与交互调度

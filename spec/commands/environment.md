@@ -1,7 +1,7 @@
 ---
 module: command-reference-environment
 created_at: "2026-10-12T15:10:00+08:00"
-updated_at: "2026-10-13T18:54:48+08:00"
+updated_at: "2026-11-03T13:06:50+08:00"
 status: accepted
 ---
 
@@ -59,6 +59,9 @@ disabled仍须通过全部参数校验，避免之后启用时出现无效状态
 环境JSON顶层恰含`version:2`（整数）、`enabled:boolean`、`atmosphere:object`、`sun:object`和`clouds:object`，
 均必填、无隐含缺省字段；命令拒绝旧v1对象，请先query再修改。下面默认值用于新场景；
 旧磁盘environment v1会迁移disabled云。大气/太阳向量为3个有限数值，风为2个。
+
+M22.5 的 `commands.describe` 为 environment.preset 的预设名和 environment.set 的完整对象、太阳强度、云覆盖率
+提供可选 [help](discovery.md)。这些必填环境字段不声明命令默认值；帮助不会补齐缺失字段或执行修改。
 
 | atmosphere字段 | 默认值 | 单位/支持范围 |
 | --- | --- | --- |
