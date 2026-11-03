@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-11-03T10:57:49+08:00"
+updated_at: "2026-11-03T11:52:43+08:00"
 status: accepted
 ---
 
@@ -356,7 +356,8 @@ Console 不阻塞等待 Job（jobs.wait 只允许 timeout_ms=0），用户通过
 [Console 专项设计](editor-console.md)规定 `method key=value`、基本值/JSON 复合参数、错误定位、
 兼容旧 JSON 以及有界会话历史；采用现有 editor_model/editor target 和 Runtime 命令注册表。
 M22.2 已接入有界解析与 Workspace 执行，细节和验证见 [0149](../development/0149-console-command-parser.md)；
-M22.3 的历史与 UI 交付待实施，实施状态见 [Roadmap](../roadmap.md)。
+M22.3 接入有界历史、Up/Down 与草稿恢复、成功清空/失败保留、粘贴整段预检和输入法组合保护；
+验证记录见 [0150](../development/0150-console-history-ui.md)，阶段状态见 [Roadmap](../roadmap.md)。
 不增加渲染设置/相机控制命令，不改变 IPC/Luau/Python 输入协议；guard、草稿保护和零等待沿用现有契约。
 
 ## M17.6 缓存与交互调度

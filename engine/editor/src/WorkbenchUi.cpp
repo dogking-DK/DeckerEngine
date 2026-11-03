@@ -8,6 +8,7 @@
 
 namespace dk::editor::detail {
 WorkbenchUi::WorkbenchUi(Workspace& model,bool fixture,SDL_Window* window,unsigned acceptance_path_extent) : model_(model),relative_mouse_(window),input_(fixture,relative_mouse_),manifest_(take(path_to_utf8(model.manifest()))),simulation_navigation_(relative_mouse_),acceptance_path_extent_(acceptance_path_extent) {
+    window_id_ = SDL_GetWindowID(window);
     log_.push_back("Opened "+manifest_);
     log_.push_back("Viewport: CPU picking / local Gizmo / Orbit, Fly and Walk. Edits use guarded commands.");
 }
@@ -24,7 +25,7 @@ bool WorkbenchUi::report(const char* action,Result<void> result) {
     }
     else message+=" succeeded";
     if (log_.size()==64) log_.erase(log_.begin());
-    log_.push_back(std::move(message)); scroll_log_=true;
+    log_.push_back(console_log_text(message)); scroll_log_=true;
     return bool(result);
 }
 void WorkbenchUi::perform() {
@@ -44,6 +45,13 @@ void WorkbenchUi::request(PendingAction action) {
     else perform();
 }
 bool WorkbenchUi::event(const SDL_Event& event) {
+    if (event.type == SDL_EVENT_TEXT_EDITING && event.edit.windowID == window_id_)
+        console_composing_ = console_input_.active() && event.edit.text && event.edit.text[0];
+    if (event.type == SDL_EVENT_TEXT_INPUT && event.text.windowID == window_id_) console_composing_ = false;
+    if (relative_mouse_.belongs(event) && (event.type == SDL_EVENT_WINDOW_FOCUS_LOST || event.type == SDL_EVENT_WINDOW_HIDDEN))
+        console_composing_ = false;
+    if (console_composing_ && console_input_.active() && (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) &&
+        event.key.windowID == window_id_ && (event.key.key == SDLK_UP || event.key.key == SDLK_DOWN || event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER)) return true;
     if(event.type==SDL_EVENT_QUIT || (relative_mouse_.belongs(event) &&
        (event.type==SDL_EVENT_WINDOW_FOCUS_LOST || event.type==SDL_EVENT_WINDOW_MINIMIZED ||
         event.type==SDL_EVENT_WINDOW_HIDDEN || event.type==SDL_EVENT_WINDOW_CLOSE_REQUESTED ||
@@ -183,16 +191,25 @@ void WorkbenchUi::console() {
     if (scroll_log_) { ImGui::SetScrollHereY(1.0f); scroll_log_=false; }
     ImGui::EndChild();
     ImGui::SetNextItemWidth(-55);
-    const bool enter=ImGui::InputTextWithHint("##command","JSON {method,params}",console_input_.data(),console_input_.size(),ImGuiInputTextFlags_EnterReturnsTrue); mark("console_input");
-    ImGui::SameLine(); const bool run=ImGui::Button("Run"); mark("console_run");
-    if(enter || run) {
-        auto result=model_.execute_console(console_input_.data());
+    const bool enter=console_input_.draw(console_composing_); mark("console_input");
+    ImGui::SameLine(); ImGui::BeginDisabled(console_composing_);
+    const bool run=ImGui::Button("Run"); mark("console_run"); ImGui::EndDisabled();
+    if (auto error = console_input_.take_error(); !error.empty()) report("Console input",std::unexpected(Error{ErrorCode::invalid_argument,std::move(error)}));
+    if((enter || run) && !console_composing_ && !console_input_.rejected()) {
+        if (console_input_.text().find_first_not_of(" \t") == std::string_view::npos) { ImGui::End(); return; }
+        console_input_.remember();
+        if(log_.size()==64) log_.erase(log_.begin());
+        log_.push_back(console_log_text("> " + std::string{console_input_.text()})); scroll_log_=true;
+        auto result=model_.execute_console(console_input_.text());
         if(result) {
-            auto text=result->dump(); if(text.size()>4096) { text.resize(4096); text+=" ... (truncated; use IPC for full result)"; }
+            auto text=(result->is_object() && result->contains("job_id") ? "Accepted: " : "Succeeded: ") + result->dump();
             if(log_.size()==64) log_.erase(log_.begin());
-            log_.push_back(std::move(text)); scroll_log_=true;
+            log_.push_back(console_log_text(text)); scroll_log_=true;
+            console_input_.clear();
         } else report("Command",std::unexpected(result.error()));
+        console_input_.focus();
     }
+    if (!console_input_.active()) console_composing_=false;
     ImGui::End();
 }
 void WorkbenchUi::confirmation() {

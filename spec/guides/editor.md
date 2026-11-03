@@ -241,22 +241,22 @@ Console 输入 `{"method":"scene.query","params":{}}` 后按 Enter 或 Run，取
 输入最多 8192 字节，每条结果显示最多 4096 字节，完整 schema/结果可用 IPC；保留最近 64 条日志。
 有未应用草稿时仅允许 query 命令，先 Apply/Revert 再修改或捕获；Console 的 jobs.wait 仅允许 timeout_ms=0，避免占用 GUI 线程。
 
-命名参数文本已在 M22.2 接入，见下节；上下键命令历史和输入界面改造仍待 M22.3，
+命名参数文本、上下键命令历史和粘贴保护见下节，
 实施状态见 [Roadmap M22](../roadmap.md#m22console-命令文本输入首期)。
 
 `dk.editor.media_pathtracing_gpu_validation` 使用独立夹具、--background 和 --media-pathtrace-smoke：真实点击模式/环境/时间/曝光、Console 输入，
 与 IPC capture 比较冻结线性结果，连续错误恢复和换会话检查。该验收将路径画面固定为至多 96×96 以控制同步验证成本；
 正常 Editor 分辨率不变，原路径验收继续覆盖正常视口、resize/minimize 与相机/实体编辑。不得把验收尺寸作为 Sponza 性能证据。
 
-## Console 命令文本（M22.2）
+## Console 命令文本（M22）
 
-更新并构建后的编辑器可在 Console 原输入框提交以下命令；当前提示文字仍为 JSON，
-历史浏览、成功清空、超限粘贴保护和真实 GUI 输入验收留待 M22.3。
+在 Console 输入框逐行输入，按 Enter 或点击 Run 提交：
 
 ```text
 scene.query
 scene.query limit=20 offset=0
 commands.describe name=entity.create
+commands.list
 ```
 
 格式为 `命令名 参数名=值`，允许空格/Tab 以及等号两侧空白；不支持位置参数或 `guard.revision=...`。
@@ -268,17 +268,30 @@ commands.describe name=entity.create
 写命令仍显式提供 guard，UUID 与 revision 必须替换成当前查询结果：
 
 ```text
-entity.set_name id="<entity_id>" name="Hello World" guard={"document_id":"<document_id>","revision":12}
+entity.set_name id="<entity_id>" name="Hello 中文" guard={"document_id":"<document_id>","revision":12}
 ```
 
 单次只接受一行，不支持分号串联、管道、变量展开或注释。解析器拒绝超过 8192 UTF-8 字节、
 实际换行/NUL、重复参数/JSON 键、未闭合字符串/括号或非法 UTF-8；完整解析通过后才分派，错误尾部不会执行合法前缀。
 错误包含字符列号与 `byte=` 字节位置；非法 UTF-8 只报告字节位置。原合法单行 JSON `{method,params}` 仍可使用。
 
+输入交互：
+
+- 成功显示 `Succeeded` 并清空输入；异步返回 job_id 显示 `Accepted`，再用 `jobs.get id=<job_id>` 查询完成状态。
+  失败显示错误并保留输入供修改；空白输入忽略。
+- 输入框聚焦时按 Up 查看更早提交，Down 查看更新提交，越过最近一条恢复原草稿。边界不循环。
+  回填只修改输入，再按 Enter/Run 才执行；编辑回填内容后退出历史浏览。输入法组合期间方向键/Enter 留给候选操作。
+- 本窗口保留最近 64 条非空提交尝试（包括失败），裁掉首尾空格/Tab，连续相同文本只留一条。
+  历史不写磁盘，重开窗口后清空；切换文档不重写历史中的 guard，旧 guard 会冲突。
+- 输入上限为 8192 **UTF-8 字节**，中文通常占 3 字节。粘贴超限、多行或非法 UTF-8 会整段拒绝并保留现有输入，
+  不执行被截断的前缀；选中文字后粘贴按替换后的总长度计算。输入达到上限后继续键入会提示拒绝。
+- 日志保留最近 64 条，每条最多 4096 字节并保持完整 UTF-8 字符；长结果标记截断，完整结果通过 IPC 查询。
+
 未应用草稿、缺失或过期 guard 继续由原契约拒绝；Console 的 jobs.wait 省略 timeout_ms 或显式整数 0 均为零等待。
 看到 `Command executed, but view refresh failed` 表示业务已经成功、随后刷新失败，应先查询实际状态，不能直接假定未执行而重试。
 参数 schema/单位/可用命令仍以 commands.list/describe 为准；本阶段没有新增 `restir`、`raytracing` 或 `cam.orbit` 控制命令。
-设计及验证记录见 [Console](../design/editor-console.md)、[0149](../development/0149-console-command-parser.md)。
+设计及验证记录见 [Console](../design/editor-console.md)、[解析与执行](../development/0149-console-command-parser.md)、
+[历史与 GUI](../development/0150-console-history-ui.md)。
 
 ## ReSTIR 直接光照
 

@@ -1,7 +1,7 @@
 ---
 module: editor-console
 created_at: "2026-11-03T10:31:20+08:00"
-updated_at: "2026-11-03T10:57:49+08:00"
+updated_at: "2026-11-03T11:52:43+08:00"
 status: accepted
 ---
 
@@ -12,7 +12,7 @@ status: accepted
 让用户在 Editor Console 输入 `scene.query limit=20`，调用当前已经注册的 Runtime 命令。
 采用本设计不代表功能已经实现；实施状态统一见 [Roadmap M22](../roadmap.md#m22console-命令文本输入首期)。
 M22.2 已接入命名参数与兼容 JSON 解析/执行，验收记录见 [0149](../development/0149-console-command-parser.md)；
-M22.3 的历史、输入提示/编辑体验及真实 GUI 验收仍待实施。原 JSON-only 基线为 `2d77103`，入口见
+M22.3 的历史、输入适配及真实 GUI 验收记录见 [0150](../development/0150-console-history-ui.md)。原 JSON-only 基线为 `2d77103`，入口见
 [Workspace](../../engine/editor/src/Workspace.cpp) 与 [Console UI](../../engine/editor/src/WorkbenchUi.cpp)。
 
 首期交付：命令名与命名参数、标量/字符串/数组/对象、定位语法错误、原 JSON 输入兼容、
@@ -41,7 +41,7 @@ WorkbenchUi 的单次 Enter / Run
   纯解析不读取场景、schema 或 Runtime，不调用命令，不依赖 SDL/ImGui/Vulkan。
 - `Workspace::execute_console(std::string_view)` 保持原调用签名和 `Result<Json>` 结果；
   命令字段、业务约束和 effect 仍以现有注册表为准，不在解析器手写第二套命令目录。
-- 历史模型使用 Editor 内部类型，拟放在 `engine/editor/src/ConsoleHistory.hpp/.cpp`，
+- 历史模型使用 Editor 内部类型，位于 `engine/editor/src/ConsoleHistory.hpp/.cpp`，
   随 `dk_editor_model` 构建以便 CPU 验证；由 WorkbenchUi 持有实例，ImGui 仅适配输入回调。
 - 更新现有 Editor CMake 源清单与测试源清单，不新增 library/executable target；
   新文件进入现有 target 的 PRIVATE/PUBLIC FILE_SET，不使用全局 include/link。
@@ -156,6 +156,16 @@ M22.2 将上述分派顺序提取为 Editor 私有 ConsoleDispatch helper，Work
 - 历史与草稿随窗口销毁，不写磁盘，不属于工程保存/撤销/重放格式。打开不同文档保持本窗口历史。
 - 提交时有界回显命令，并分别标识成功/失败；异步返回 JobId 只显示已受理，完成状态使用已有查询命令查看。
 
+M22.3 实施：ConsoleHistory 为 CPU 内部模型，ConsoleInput 为 ImGui 私有适配；保留固定 8193 字节缓冲。
+InputText 调用期间临时包装本 context 的剪贴板读取回调，先检查整段 UTF-8/控制字节与替换选区后的总长度，
+拒绝则返回空内容且保留输入/选区，不让 ImGui 先过滤换行或截断前缀；复制/剪切写回调转发原 user data，
+RAII 恢复原读写回调和 user data。
+普通字符输入通过字符回调按 UTF-8 字节数限额，拒绝的同帧不执行 Enter/Run；不修改系统剪贴板内容。
+历史回调只改输入；编辑回调退出历史浏览；提交成功清空后同步 ImGui 活动缓冲。输入框聚焦且处于
+本窗口 SDL TEXT_EDITING 组合期间，关闭历史回调并忽略提交；TEXT_INPUT/组合结束或失焦清除组合状态。
+真实 GUI 验收扩展现有 workbench smoke，输入仍走 ImGui 键鼠/剪贴板和 SDL 组合事件，使用独立夹具与 --background。
+剪贴板验收临时使用测试回调，不读写用户系统剪贴板，覆盖与生产相同的 InputText 粘贴路径。
+
 ## 实施步骤和验证计划
 
 | 阶段 | 改动范围 | 独立验收 |
@@ -168,7 +178,7 @@ M22.2 将上述分派顺序提取为 Editor 私有 ConsoleDispatch helper，Work
 代码分工与选择范围如下，实际测试名在实施时注册并枚举，不把下列候选当成已运行结果：
 
 - 复用 [dk_editor_tests](../../tests/unit/CMakeLists.txt)，已新增 [ConsoleTests.cpp](../../tests/unit/ConsoleTests.cpp)，
-  `ConsoleHistoryTests.cpp` 留待 M22.3。解析/执行测试前缀为 `dk.editor.console `、`dk.editor.workspace console`；
+  [ConsoleHistoryTests.cpp](../../tests/unit/ConsoleHistoryTests.cpp) 覆盖历史与日志边界。测试前缀为 `dk.editor.console `、`dk.editor.workspace console`；
   继承原 `workspace console shares explicit guards...` 回归。
 - 类型用例：引号/空格/转义/中文/原样路径、嵌套 JSON、空数组/null、true 与字符串 true、
   整数与浮点 token、int64/uint64 边界与越界（含嵌套及兼容 JSON）、未知/重复参数/JSON 键。
@@ -178,7 +188,7 @@ M22.2 将上述分派顺序提取为 Editor 私有 ConsoleDispatch helper，Work
   `jobs.wait` 省略/显式零允许与非整数/非零拒绝；通过故障注入验证已提交后刷新失败不重试。
 - 历史 CPU 用例验证状态转换与容量；真实 GUI 通过现有独立夹具/输入驱动机制，使用 `--background`，
   覆盖键盘输入、粘贴超限、Up/Down 草稿恢复、成功清空/失败保留和旧 JSON。
-  可扩展 [SmokeDriver](../../engine/editor/src/SmokeDriver.cpp) 的工作台流程，
+  已通过 [ConsoleSmoke](../../engine/editor/src/ConsoleSmoke.cpp) 扩展 [SmokeDriver](../../engine/editor/src/SmokeDriver.cpp) 的工作台流程，
   优先运行 `dk.editor.workbench_gpu_validation`；若实现时需新增独立 smoke，须同步测试选择表。
 - 定向构建使用 [verify.ps1](../../scripts/verify.ps1)，CPU 用例只需 `dk_editor_tests`；GUI 用例需
   `dk_editor_tests`、`dk_editor_app`，配置选择现有可用单配置。无需整个渲染/物理/IPC/Python/Luau 测试矩阵。
@@ -190,7 +200,7 @@ M22.2 将上述分派顺序提取为 Editor 私有 ConsoleDispatch helper，Work
 首期使用命名参数，不推断参数位置，不在前端转换业务单位。数组/对象复用 JSON，避免引入第二套嵌套数据语言。
 显式 guard 保持当前可复现/冲突检测契约；便捷 guard、点号嵌套参数或常用别名若后续需要，单独定义覆盖与冲突规则。
 补全可在未来消费现有 commands.list/describe，首期不为补全改动 schema。
-M22.2 实施结果见开发记录；后续 M22.3 沿用本设计的历史/UI 契约。渲染控制/相机命令仍需独立设计。
+M22.2/3 实施结果见开发记录；渲染控制/相机命令仍需独立设计。
 
 ## 相关记录
 

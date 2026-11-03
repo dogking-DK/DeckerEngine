@@ -151,5 +151,6 @@
 | 0147 | [M21.1 原生点绘制与粒子流体设计落档](0147-particle-fluid-plan.md) | physics-fluids、render-particles、physics-api、render-simulation、graphics-device、graphics-vulkan、graphics-shaders、architecture | completed |
 | 0148 | [M22.1 Console 命令文本输入首期计划](0148-console-command-input-plan.md) | editor-console、editor、commands、application-services | completed |
 | 0149 | [M22.2 Console 解析与执行接入](0149-console-command-parser.md) | editor-console、editor、commands、application-services | completed |
+| 0150 | [M22.3 Console 历史与界面交付](0150-console-history-ui.md) | editor-console、editor | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

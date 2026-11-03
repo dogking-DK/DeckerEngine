@@ -1,6 +1,7 @@
 #pragma once
 #include "WorkbenchUi.hpp"
 #include "NavigationSmoke.hpp"
+#include "ConsoleSmoke.hpp"
 #include <dk/platform/Window.hpp>
 #include <dk/io/File.hpp>
 namespace dk::editor::detail {
@@ -25,6 +26,7 @@ private:
     double translation_ = 0;
     std::uint64_t pixels_ = 0;
     NavigationSmoke navigation_smoke_;
+    ConsoleSmoke console_smoke_;
     unsigned ortho_stage_=0,ortho_phase_=0,ortho_errors_=0;
     double ortho_height_=0;
     Mat4d navigation_pose_=Mat4d::Identity(),edit_pose_=Mat4d::Identity();

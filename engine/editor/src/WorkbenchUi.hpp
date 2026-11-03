@@ -1,6 +1,7 @@
 #pragma once
 #include "Viewport.hpp"
 #include "ViewportInput.hpp"
+#include "ConsoleInput.hpp"
 #include <map>
 #include <array>
 
@@ -21,6 +22,7 @@ public:
     [[nodiscard]] bool closing() const { return closing_; }
     [[nodiscard]] const std::map<std::string,ImVec2>& controls() const { return controls_; }
     [[nodiscard]] unsigned errors() const { return errors_; }
+    [[nodiscard]] const ConsoleInput& console_input() const { return console_input_; }
     [[nodiscard]] const ViewportInput& input() const { return input_; }
     [[nodiscard]] const SimulationState& displayed_simulation() const { return displayed_simulation_; }
     [[nodiscard]] const Camera& simulation_camera() const { return simulation_camera_; }
@@ -51,7 +53,9 @@ private:
     RelativeMouse relative_mouse_;
     ViewportInput input_;
     std::string manifest_;
-    std::array<char,8193> console_input_{};
+    ConsoleInput console_input_;
+    std::uint32_t window_id_ = 0;
+    bool console_composing_ = false;
     std::map<std::string,ImVec2> controls_;
     std::vector<std::string> log_;
     std::string viewport_error_;

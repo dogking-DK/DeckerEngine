@@ -22,7 +22,7 @@ void SmokeDriver::input(Workspace& model,WorkbenchUi& ui,platform::Window& windo
     io.ConfigInputTrickleEventQueue=false;
     if (tick_++<12 || done_) return;
     const auto elapsed=tick_-13,stage=elapsed/8,phase=elapsed%8;
-    if (stage>=actions.size()) { done_=true; return; }
+    if (stage>=actions.size()) { done_=console_smoke_.input(model,ui,SDL_GetWindowID(take(window.native_sdl_window()))); return; }
     const std::string action=actions[stage];
     if (phase==0) {
         io.AddFocusEvent(true);
