@@ -1,7 +1,7 @@
 ---
 module: command-reference-simulation
 created_at: "2026-10-08T17:23:40+08:00"
-updated_at: "2026-10-10T11:23:00+08:00"
+updated_at: "2026-11-03T17:57:12+08:00"
 status: accepted
 ---
 
@@ -12,6 +12,9 @@ status: accepted
 实现：[SimulationOperations](../../engine/framework/operations/src/SimulationOperations.cpp)、
 [SimulationService](../../engine/framework/services/src/SimulationService.cpp)。
 用法见 [模拟指南](../guides/simulation.md)。
+M22.10 为 simulation.run 增加可选 help v1，记录已有默认值和单位；Console 与 Editor Settings 搜索共用。
+Simulation 面板参数属于下一次 Play/Prepare 的草稿，修改或定位它们不改变活动实验。
+命令模板不填当前 guard/run 身份，不自动启动；参数、控制前置条件和副作用仍以下述命令契约为准。
 
 ## 公共结果和状态
 

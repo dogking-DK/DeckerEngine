@@ -11,14 +11,14 @@ void WorkbenchUi::simulation_results(const SimulationRunState* run) {
         simulation_sample_error_=result ? std::string{} : result.error().message;
         report("Sample metrics",std::move(result));
     }
-    mark("sim_sample");
+    mark("sim_sample"); help("simulation.sample");
     if (Workspace::gpu_simulation_available()) {
         ImGui::SameLine();
         if (ImGui::Button("Export")) {
             const auto output=simulation_output_.empty() ? "experiment-"+run->run_id.to_string()+"-"+std::to_string(run->clock.steps) : simulation_output_;
             report("Export experiment",model_.export_simulation(run->run_id,run->clock.steps,output,simulation_export_width_,simulation_export_height_));
         }
-        mark("sim_export");
+        mark("sim_export"); help("simulation.export");
     }
     ImGui::EndDisabled();
     if (!settled) ImGui::TextWrapped("Pause at a healthy completed step to sample or export.");
@@ -58,11 +58,13 @@ void WorkbenchUi::simulation_results(const SimulationRunState* run) {
         }
     } else ImGui::TextWrapped("Numerics: Unavailable (not sampled)");
 
+    if (!Workspace::gpu_simulation_available() && settings_help_.reveal("Simulation","Results")) settings_help_.unavailable_panel("Simulation");
+    if(Workspace::gpu_simulation_available() && settings_help_.reveal("Simulation","Results/Export options")) ImGui::SetNextItemOpen(true);
     if (Workspace::gpu_simulation_available() && ImGui::TreeNode("Export options")) {
         ImGui::TextWrapped("New project-relative directory. Leave blank for an automatic run/step name.");
-        ImGui::SetNextItemWidth(-1); ImGui::InputText("##experiment_output",&simulation_output_);
-        ImGui::SetNextItemWidth(100); ImGui::InputInt("Width (1-2048)",&simulation_export_width_);
-        ImGui::SetNextItemWidth(100); ImGui::InputInt("Height (1-2048)",&simulation_export_height_);
+        ImGui::SetNextItemWidth(-1); ImGui::InputText("##experiment_output",&simulation_output_); help("export.output");
+        ImGui::SetNextItemWidth(100); ImGui::InputInt("Width (1-2048)",&simulation_export_width_); help("export.width");
+        ImGui::SetNextItemWidth(100); ImGui::InputInt("Height (1-2048)",&simulation_export_height_); help("export.height");
         ImGui::TextWrapped("Exports config.json, metrics.json, particles.json, image.ppm and provenance.json using the fixed experiment camera.");
         ImGui::TextWrapped("Sampling and export explicitly wait for GPU readback; export also writes files.");
         ImGui::TreePop();

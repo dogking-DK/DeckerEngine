@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-11-03T17:13:21+08:00"
+updated_at: "2026-11-03T17:57:12+08:00"
 status: accepted
 ---
 
@@ -369,6 +369,10 @@ Workspace 只读已发布实体/工程映射与 Runtime 活动目录，快照发
 实现与验证见 [0154](../development/0154-console-context-assistance.md)。M22.8 已接入 EditorViewportService 与 editor.viewport 五条命令，
 Path tracing/模式/光栅曝光控件使用同一权威设置；路径 worker 消费副本。独立 guard、失败保留画面与关闭验收见 [0155](../development/0155-editor-viewport-commands.md)。
 M22.9 把 Edit Camera 的权威值接入同一宿主服务，新增 editor.camera 七条命令；GUI 弹层/导航/Frame 与 Console/IPC 共用提交和 guard，Simulation 相机独立。
+M22.10 在 editor_model 增加 SettingsCatalog 和共享 CommandFieldHelp；UI 的 SettingsHelpUi 以语义 ID 展开、定位、高亮已有字段，
+覆盖 Console、Inspector、Environment、Edit 相机、Path tracing、Simulation。搜索/悬停不 dispatch，不改变业务状态；
+Copy/Insert 仅输出实际命令的必填占位模板，非空 Console/IME 输入受保护。实现契约见 [Editor 帮助设计](editor-console.md#m2210-实施契约)，
+验证见 [0157](../development/0157-editor-settings-help.md)。
 相机纯值模型位于 dk_editor_services，导航适配留在 Editor；纯偏好不改变渲染版本，图像来源核对实际已发布相机，见 [0156](../development/0156-editor-camera-commands.md)。
 补全只编辑输入，后续搜索只定位控件；共享帮助不复制业务校验；视口会话命令由宿主注入的服务统一处理，
 不将相机/曝光等会话状态写入 Scene/Undo。独立 render.capture 语义保持；当前命令表见[视口](../commands/editor-viewport.md)与[相机](../commands/editor-camera.md)。

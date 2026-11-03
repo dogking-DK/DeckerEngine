@@ -74,6 +74,7 @@ void WorkbenchUi::toolbar() {
     if (ImGui::Button("Reload")) { manifest_=take(path_to_utf8(model_.manifest())); request(PendingAction::open); } mark("reload");
     ImGui::Separator();
     if(ImGui::Button("Environment")) ImGui::SetWindowFocus("Environment"); mark("environment_open");
+    ImGui::SameLine(); if(ImGui::Button("Settings")) settings_help_.open(); mark("settings_open");
     ImGui::Separator();
     const auto history=model_.history();
     ImGui::BeginDisabled(model_.pending() || !history.undo_count);
@@ -124,34 +125,34 @@ void WorkbenchUi::hierarchy() {
     ImGui::End();
 }
 void WorkbenchUi::inspector() {
-    ImGui::Begin("Inspector");
+    settings_help_.panel("Inspector"); ImGui::Begin("Inspector");
     auto* draft=model_.draft();
-    if (!draft) { ImGui::TextWrapped("Select an entity in Hierarchy to inspect or edit it."); ImGui::End(); return; }
+    if (!draft) { ImGui::TextWrapped("Select an entity in Hierarchy to inspect or edit it."); settings_help_.unavailable_panel("Inspector"); ImGui::End(); return; }
     ImGui::TextUnformatted("ENTITY"); ImGui::TextWrapped("%s",draft->entity.id.to_string().c_str());
     ImGui::Separator();
     ImGui::BeginDisabled(input_.active() || (model_.environment_draft() && model_.environment_draft()->modified));
     bool modified=false;
     ImGui::SetNextItemWidth(-1);
-    modified|=ImGui::InputText("##Name",&draft->entity.name); mark("name");
+    modified|=ImGui::InputText("##Name",&draft->entity.name); mark("name"); help("inspector.name");
     ImGui::TextDisabled("Name");
     ImGui::Spacing(); ImGui::TextUnformatted("LOCAL TRANSFORM");
     ImGui::SetNextItemWidth(-1);
-    modified|=ImGui::InputScalarN("##Translation",ImGuiDataType_Double,draft->entity.local.translation.data(),3,nullptr,nullptr,"%.4f"); mark("translation");
+    modified|=ImGui::InputScalarN("##Translation",ImGuiDataType_Double,draft->entity.local.translation.data(),3,nullptr,nullptr,"%.4f"); mark("translation"); help("inspector.translation");
     const auto translation_min=ImGui::GetItemRectMin(),translation_max=ImGui::GetItemRectMax();
     controls_["translation"]={translation_min.x+(translation_max.x-translation_min.x)/6,(translation_min.y+translation_max.y)*0.5f};
     ImGui::TextDisabled("Translation  X / Y / Z");
     ImGui::SetNextItemWidth(-1);
-    modified|=ImGui::InputScalarN("##Rotation",ImGuiDataType_Double,draft->entity.local.rotation.coeffs().data(),4,nullptr,nullptr,"%.4f");
+    modified|=ImGui::InputScalarN("##Rotation",ImGuiDataType_Double,draft->entity.local.rotation.coeffs().data(),4,nullptr,nullptr,"%.4f"); help("inspector.rotation");
     ImGui::TextDisabled("Quaternion  X / Y / Z / W");
     ImGui::SetNextItemWidth(-1);
-    modified|=ImGui::InputScalarN("##Scale",ImGuiDataType_Double,draft->entity.local.scale.data(),3,nullptr,nullptr,"%.4f");
+    modified|=ImGui::InputScalarN("##Scale",ImGuiDataType_Double,draft->entity.local.scale.data(),3,nullptr,nullptr,"%.4f"); help("inspector.scale");
     ImGui::TextDisabled("Scale  X / Y / Z");
     draft->modified|=modified;
     ImGui::Spacing();
     ImGui::BeginDisabled(!model_.pending());
-    if (ImGui::Button("Apply")) report("Apply",model_.apply()); mark("apply");
+    if (ImGui::Button("Apply")) report("Apply",model_.apply()); mark("apply"); help("inspector.apply");
     ImGui::SameLine();
-    if (ImGui::Button("Revert")) report("Revert",model_.revert()); mark("revert");
+    if (ImGui::Button("Revert")) report("Revert",model_.revert()); mark("revert"); help("inspector.revert");
     ImGui::EndDisabled();
     ImGui::EndDisabled();
     // Commands may replace the draft; reacquire before displaying it.
@@ -185,7 +186,7 @@ void WorkbenchUi::assets() {
     ImGui::End();
 }
 void WorkbenchUi::console() {
-    ImGui::Begin("Console");
+    settings_help_.panel("Console"); ImGui::Begin("Console");
     ImGui::BeginChild("Command log",{0,-ImGui::GetFrameHeightWithSpacing()},false,ImGuiWindowFlags_HorizontalScrollbar);
     for (const auto& line:log_) ImGui::TextWrapped("%s",line.c_str());
     if (scroll_log_) { ImGui::SetScrollHereY(1.0f); scroll_log_=false; }
@@ -194,9 +195,9 @@ void WorkbenchUi::console() {
     if (!console_catalog_ || console_catalog_->version!=model_.command_catalog_version()) console_catalog_=model_.command_catalog();
     const auto document=model_.snapshot() ? model_.snapshot()->state.document_id : DocumentId{};
     if (document!=console_document_) { console_document_=document; console_input_.dismiss(); }
-    const bool enter=console_input_.draw(console_composing_,*console_catalog_,model_); mark("console_input");
+    const bool enter=console_input_.draw(console_composing_,*console_catalog_,model_); mark("console_input"); help("console.input");
     ImGui::SameLine(); ImGui::BeginDisabled(console_composing_);
-    const bool run=ImGui::Button("Run"); mark("console_run"); ImGui::EndDisabled();
+    const bool run=ImGui::Button("Run"); mark("console_run"); help("console.run"); ImGui::EndDisabled();
     if (auto error = console_input_.take_error(); !error.empty()) report("Console input",std::unexpected(Error{ErrorCode::invalid_argument,std::move(error)}));
     if((enter || run) && !console_composing_ && !console_input_.rejected() && !console_input_.accepted()) {
         console_input_.dismiss();
@@ -238,7 +239,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     if (input_.edit() && (!model_.snapshot() || input_.edit()->guard.document_id!=model_.snapshot()->state.document_id ||
         input_.edit()->guard.revision!=model_.snapshot()->state.revision)) input_.cancel();
     model_.viewport_interacting(input_.active() || input_.navigating(),input_.active());
-    toolbar();
+    prepare_help(preview); toolbar();
     const auto dock=ImGui::DockSpaceOverViewport(0,ImGui::GetMainViewport());
     if (!layout_) {
         ImGui::DockBuilderRemoveNode(dock);
@@ -264,25 +265,30 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     hierarchy(); inspector(); environment(preview);
 #ifdef DK_EDITOR_PATHTRACING
     path_panel(preview);
+#else
+    if(settings_help_.reveal("Path tracing","") || settings_help_.located().starts_with("path.")) {
+        settings_help_.panel("Path tracing"); ImGui::Begin("Path tracing"); settings_help_.unavailable_panel("Path tracing"); ImGui::End();
+    }
 #endif
+    settings_help_.panel("Viewport");
     const bool visible=ImGui::Begin("Viewport",nullptr,ImGuiWindowFlags_NoScrollWithMouse|ImGuiWindowFlags_NoScrollbar);
     if (!visible) { input_.cancel(); model_.camera_draft(false); preview.suspend_path(); }
     const bool simulation_displayed=simulation_view(preview,visible);
-    if(simulation_displayed) model_.camera_draft(false);
+    if(simulation_displayed) { model_.camera_draft(false); settings_help_.unavailable_panel("Viewport"); }
     if (!simulation_displayed) {
     preview.show_edit();
     auto viewport_settings=model_.editor_viewport()->settings();
 #ifdef DK_EDITOR_PATHTRACING
     ImGui::BeginDisabled(model_.pending() || input_.active() || input_.navigating());
-    if(ImGui::RadioButton("Raster",!path_mode())) { viewport_settings.path_trace=false; if(viewport_settings_changed(viewport_settings)) preview.suspend_path(); } mark("path_raster"); ImGui::SameLine();
+    if(ImGui::RadioButton("Raster",!path_mode())) { viewport_settings.path_trace=false; if(viewport_settings_changed(viewport_settings)) preview.suspend_path(); } mark("path_raster"); help("viewport.renderer"); ImGui::SameLine();
     ImGui::BeginDisabled(!preview.path_unavailable().empty());
-    if(ImGui::RadioButton("Path trace",path_mode())) { viewport_settings.path_trace=true; if(viewport_settings_changed(viewport_settings)) ImGui::SetWindowFocus("Path tracing"); } mark("path_mode");
+    if(ImGui::RadioButton("Path trace",path_mode())) { viewport_settings.path_trace=true; if(viewport_settings_changed(viewport_settings)) ImGui::SetWindowFocus("Path tracing"); } mark("path_mode"); help("viewport.renderer",preview.path_unavailable());
     ImGui::EndDisabled();
     ImGui::EndDisabled();
     ImGui::SameLine(); if(ImGui::SmallButton("Settings")) ImGui::SetWindowFocus("Path tracing"); mark("path_settings");
     ImGui::SameLine();
 #else
-    ImGui::TextDisabled("Path trace unavailable (module disabled)"); ImGui::SameLine();
+    ImGui::TextDisabled("Path trace unavailable (module disabled)"); help("viewport.renderer","Path tracing module is unavailable."); ImGui::SameLine();
 #endif
     ImGui::BeginDisabled(input_.active());
     if (ImGui::SmallButton("Refresh")) preview.retry(); mark("path_refresh");
@@ -296,12 +302,12 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
 #endif
     ImGui::BeginDisabled(model_.pending() || input_.active() || input_.navigating() || path_projection);
     if(ImGui::Checkbox("Unlit inspection",&viewport_settings.unlit_inspection)) viewport_settings_changed(viewport_settings);
-    mark("unlit_inspection"); ImGui::EndDisabled();
+    mark("unlit_inspection"); help("viewport.unlit_inspection"); ImGui::EndDisabled();
     // Keep one line in all modes so toggling a preference does not resize the image.
     ImGui::TextDisabled(path_projection ? "Path trace supports Perspective and Orthographic" :
         environment_projection && !viewport_settings.unlit_inspection ? "Atmosphere and clouds support Perspective and Orthographic" :
         "Unlit inspection skips scene lighting for this viewport");
-    input_.toolbar(model_,preview,controls_,[&](const char* action,Result<void> result) { return report(action,std::move(result)); });
+    input_.toolbar(model_,preview,controls_,[&](const char* action,Result<void> result) { return report(action,std::move(result)); },&settings_help_);
     if (const auto* s=model_.snapshot(); s && visible) {
         if (preview.texture()) {
 #ifdef DK_EDITOR_PATHTRACING
@@ -352,7 +358,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     ImGui::End();
     model_.viewport_interacting(input_.active() || input_.navigating(),input_.active());
     observe_viewport(preview,visible && !preview.simulation_run());
-    assets(); console(); simulation(); confirmation();
+    assets(); console(); simulation(); confirmation(); settings_search();
     input_.end_frame(); simulation_navigation_.end_frame();
 }
 }

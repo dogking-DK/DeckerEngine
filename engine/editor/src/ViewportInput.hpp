@@ -6,17 +6,19 @@
 #include <map>
 
 namespace dk::editor::detail {
+class SettingsHelpUi;
 class ViewportInput final {
 public:
     using Report=std::function<bool(const char*,Result<void>)>;
     explicit ViewportInput(std::shared_ptr<EditorViewportService> host,RelativeMouse& mouse,bool fixture) : host_(std::move(host)),navigation_(mouse),fixture_(fixture) {}
-    void toolbar(Workspace&,Viewport&,std::map<std::string,ImVec2>&,const Report&);
+    void toolbar(Workspace&,Viewport&,std::map<std::string,ImVec2>&,const Report&,SettingsHelpUi* = nullptr);
     void aspect(double value) { aspect_=value; host_->camera_aspect(value); }
     void image(Workspace&,Viewport&,std::map<std::string,ImVec2>&,const Report&);
     void cancel();
     void begin_frame() { navigation_.begin_frame(); }
     void end_frame() { navigation_.end_frame(); }
     [[nodiscard]] bool navigating() const { return navigation_.active(); }
+    [[nodiscard]] bool camera_popup() const { return settings_ui_.pending(); }
     [[nodiscard]] bool active() const { return bool(edit_); }
     [[nodiscard]] Camera camera() const { return host_->camera(); }
     [[nodiscard]] const std::optional<TransformEdit>& edit() const { return edit_; }

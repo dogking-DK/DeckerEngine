@@ -1,4 +1,5 @@
 #include "ConsoleAssist.hpp"
+#include "CommandFieldHelp.hpp"
 #include "ConsoleHistory.hpp"
 #include "ConsoleLexical.hpp"
 #include <algorithm>
@@ -22,19 +23,6 @@ bool valid(const ConsoleEditState& state) {
 }
 std::string path_key(const std::string& path,const std::string& key) {
     Json::json_pointer pointer(path); pointer/="properties"; pointer/=key; return pointer.to_string();
-}
-std::string field_hint(const CommandDescriptor* command,const std::string& path,const Json& field,bool required) {
-    std::string hint=(command ? command->name : "Console envelope")+"  "+path+(required ? " (required)" : " (optional)");
-    for(const auto* name : {"type","minimum","maximum","minLength","maxLength","minItems","maxItems","enum"})
-        if(field.contains(name)) hint+="\n"+std::string(name)+": "+bounded(field[name].dump(),512);
-    if(command && command->help) {
-        const auto& fields=command->help->at("fields");
-        if(fields.contains(path)) for(const auto* name : {"label","description","unit","default","examples"}) {
-            const auto& entry=fields[path];
-            if(entry.contains(name)) hint+="\n"+std::string(name)+": "+bounded(entry[name].is_string() ? entry[name].get<std::string>() : entry[name].dump(),512);
-        }
-    }
-    return bounded(std::move(hint),2048);
 }
 bool required(const Json& schema,const std::string& key) {
     return schema.contains("required") && std::ranges::find(schema["required"],Json(key))!=schema["required"].end();
@@ -179,7 +167,7 @@ ConsoleAssistance assist_console(const CommandCatalogSnapshot& catalog,const Con
             if(!context.json && (key.empty() || (!letter(key[0]) && key[0]!='_') || !std::ranges::all_of(key,name_char))) continue;
             if(context.parent && std::ranges::any_of(context.parent->children,[&](const auto& n){return &n!=context.node && n.key==key;})) continue;
             const auto path=path_key(context.path,key);
-            auto hint=field_hint(command,path,field,required(*context.parent_schema,key));
+            auto hint=command_field_help(command,path,field,required(*context.parent_schema,key));
             if(context.node && context.node->key==key) result.hint=hint;
             auto insert=context.json ? Json(key).dump() : key;
             if(!context.node || !context.node->separator) insert+=context.json ? ":" : "=";
@@ -187,7 +175,7 @@ ConsoleAssistance assist_console(const CommandCatalogSnapshot& catalog,const Con
         }
     } else if(context.node && context.schema) {
         const auto& node=*context.node; const auto& field=*context.schema;
-        result.hint=field_hint(command,context.path,field,context.parent_schema && required(*context.parent_schema,node.key));
+        result.hint=command_field_help(command,context.path,field,context.parent_schema && required(*context.parent_schema,node.key));
         if(node.shape==ConsoleShape::object || node.shape==ConsoleShape::array) return result;
         result.begin=node.begin; result.end=node.end;
         if(!selected_token(state,result.begin,result.end)) return result;

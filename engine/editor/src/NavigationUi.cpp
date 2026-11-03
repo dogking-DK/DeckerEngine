@@ -1,4 +1,5 @@
 #include "NavigationUi.hpp"
+#include "SettingsHelpUi.hpp"
 #include <SDL3/SDL.h>
 #include <cstdio>
 
@@ -35,7 +36,7 @@ Vec2d RelativeMouse::consume(const void* owner) {
     const Vec2d result=delta_; delta_.setZero(); return result;
 }
 void NavigationUi::cancel() { mouse_.release(this); navigation_.cancel(); button_=-1; last_={}; }
-void NavigationUi::toolbar(Camera& camera,std::map<std::string,ImVec2>& controls,const char* prefix) {
+void NavigationUi::toolbar(Camera& camera,std::map<std::string,ImVec2>& controls,const char* prefix,SettingsHelpUi* help) {
     ImGui::PushID(prefix);
     const char* names[]={"Orbit","Fly","Walk"};
     const char* keys[]={"orbit","fly","walk"};
@@ -48,6 +49,7 @@ void NavigationUi::toolbar(Camera& camera,std::map<std::string,ImVec2>& controls
         }
         const auto a=ImGui::GetItemRectMin(),b=ImGui::GetItemRectMax();
         controls[std::string(prefix)+keys[i]]={(a.x+b.x)/2,(a.y+b.y)/2};
+        if(help) help->item("camera.navigation_mode",camera.projection_mode()==ProjectionMode::orthographic && mode!=NavigationMode::orbit ? "Return to Perspective to use Fly/Walk." : "");
         ImGui::EndDisabled();
         if(i<2) ImGui::SameLine();
     }

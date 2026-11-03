@@ -1,7 +1,7 @@
 ---
 module: commands
 created_at: "2026-09-22T13:12:54+08:00"
-updated_at: "2026-11-03T14:26:14+08:00"
+updated_at: "2026-11-03T17:57:12+08:00"
 status: accepted
 ---
 
@@ -88,7 +88,10 @@ Runtime/Workspace 分别提供同名用途的 `command_catalog_version()` 与 `c
 首批真实帮助覆盖 commands.describe、scene.query、environment.preset/set；分页缺省值与 handler 使用同一常量。
 环境完整对象的必填字段只提供说明/单位/示例，不伪造缺省值；未补充的命令继续按原 schema/描述降级。
 M22.6/7 已接入 Console 弹窗、嵌套辅助、动态候选与诊断；实体 get/delete/set_name/set_transform/set_parent/set_assets
-及资产 load/status/unload 新增候选帮助，entity.create 的新 ID 与 guard 不绑定已有身份。Editor 会话控制仍由后续阶段实现。
+及资产 load/status/unload 新增候选帮助，entity.create 的新 ID 与 guard 不绑定已有身份。
+M22.8/9 已接入宿主限定的视口/相机命令。M22.10 补充实体名称/TRS 与 simulation.run 的字段描述/单位/已定义默认值，
+Editor 设置搜索与 Console 通过 CommandFieldHelp 共用格式化结果；业务校验的跨字段约束另作明确说明，不改 schema 或自动填值。
+实际界面、输入保护与验收见 [0157](../development/0157-editor-settings-help.md)。
 
 ### 扩展设计的兼容边界
 

@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-11-03T17:13:21+08:00"
+updated_at: "2026-11-03T17:57:12+08:00"
 status: accepted
 ---
 
@@ -25,7 +25,8 @@ Editor Console 接受 `scene.query limit=20` 等命名参数文本，也兼容�
 M22 扩展覆盖补全/参数提示、Editor 帮助与视口/相机设置命令，见 [扩展设计](../design/editor-console.md#m224-扩展设计帮助补全与设置命令)。
 M22.5–7 已接入共享帮助、只读目录、基础/嵌套补全、实体/资产候选与输入诊断；Tab 打开候选，Tab/Enter 接受后再次 Enter 才执行。
 完整键位见[编辑器指南](../guides/editor.md#console-命令文本m22)。M22.8 已提供 [Edit 视口设置命令](editor-viewport.md)，
-M22.9 已提供 [Edit 相机命令](editor-camera.md)。两组命令仅在附加视口的 Editor 注册；面板帮助/搜索仍待 M22.10。
+M22.9 已提供 [Edit 相机命令](editor-camera.md)。两组命令仅在附加视口的 Editor 注册。
+M22.10 已接入[面板帮助与设置搜索](../guides/editor.md#字段帮助与设置搜索m2210)，支持稳定定位和命令占位模板复制/插入，不自动填 guard 或执行。
 
 ## 按功能查找
 

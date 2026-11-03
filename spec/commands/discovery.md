@@ -1,7 +1,7 @@
 ---
 module: command-reference-discovery
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-11-03T17:13:21+08:00"
+updated_at: "2026-11-03T17:57:12+08:00"
 status: accepted
 ---
 
@@ -36,8 +36,10 @@ effect 的文本值为 `query`、`memory_edit`、`external`、`control`；与 co
 M22.5 增加可选 `help`，已有六个字段与 `commands.list` 的四字段条目保持不变。
 未提供帮助的命令省略 help，消费者应按 description/parameters 降级；不能把没有帮助理解为命令不可用。
 当前带帮助的命令为 `commands.describe`、`scene.query`、`environment.preset/set`，
-以及 `entity.get/delete/set_name/set_transform/set_parent/set_assets` 和 `assets.load/status/unload`（共 13 条，随构建选项变化）。
+以及 `entity.get/delete/set_name/set_transform/set_parent/set_assets`、`assets.load/status/unload` 和 `simulation.run`（共 14 条，随构建选项变化）。
 附加视口的 Editor 另有 `editor.viewport.query/set/pause/resume/reset` 五条及 `editor.camera.query/set/orbit/pan/zoom/frame/reset` 七条 help v1；普通 runner 不注册这些宿主命令。
+M22.10 的 Editor 字段提示与 Settings 搜索复用这些 schema/help；实体 TRS 补充单位/坐标含义，simulation.run 补充已定义的时间步、批次与布片参数默认值/单位。
+帮助不改变必填字段或自动填值；模板全部保留占位符，使用见 [Editor 指南](../guides/editor.md#字段帮助与设置搜索m2210)。
 
 ```json
 {"jsonrpc":"2.0","id":3,"method":"commands.describe","params":{"name":"scene.query"}}

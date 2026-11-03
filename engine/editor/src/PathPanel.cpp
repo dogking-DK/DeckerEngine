@@ -2,53 +2,55 @@
 #include <algorithm>
 namespace dk::editor::detail {
 void WorkbenchUi::path_panel(Viewport& preview) {
-    ImGui::Begin("Path tracing");
-    if(!preview.path_unavailable().empty()) { ImGui::TextWrapped("%s",preview.path_unavailable().c_str()); ImGui::End(); return; }
+    settings_help_.panel("Path tracing"); ImGui::Begin("Path tracing");
+    if(!preview.path_unavailable().empty()) ImGui::TextWrapped("%s",preview.path_unavailable().c_str());
     auto candidate=model_.editor_viewport()->settings();
     auto& path_settings_=candidate.path;
     bool reset=false,pause=false;
-    ImGui::BeginDisabled(model_.pending() || input_.active() || input_.navigating());
+    ImGui::BeginDisabled(!preview.path_unavailable().empty() || model_.pending() || input_.active() || input_.navigating() || input_.camera_popup());
     ImGui::TextUnformatted(path_mode() ? "GPU path tracing" : "Select Path trace in Viewport");
-    if(ImGui::RadioButton("Surface only",!path_settings_.scene_media)) path_settings_.scene_media=false; mark("path_surface");
-    ImGui::SameLine(); if(ImGui::RadioButton("Scene media",path_settings_.scene_media)) path_settings_.scene_media=true; mark("path_media");
+    if(ImGui::RadioButton("Surface only",!path_settings_.scene_media)) path_settings_.scene_media=false; mark("path_surface"); help("path.medium_mode");
+    ImGui::SameLine(); if(ImGui::RadioButton("Scene media",path_settings_.scene_media)) path_settings_.scene_media=true; mark("path_media"); help("path.medium_mode");
     ImGui::TextWrapped(path_settings_.scene_media ? "Trace scene air, clouds and surfaces at a fixed time." : "Trace surface lighting; omit scene air and clouds.");
-    if(ImGui::RadioButton("Classic MIS",!path_settings_.restir_di)) path_settings_.restir_di=false; mark("path_classic");
-    ImGui::SameLine(); if(ImGui::RadioButton("ReSTIR DI",path_settings_.restir_di)) path_settings_.restir_di=true; mark("path_restir");
-    if(path_settings_.restir_di) {
+    if(ImGui::RadioButton("Classic MIS",!path_settings_.restir_di)) path_settings_.restir_di=false; mark("path_classic"); help("path.direct_lighting");
+    ImGui::SameLine(); if(ImGui::RadioButton("ReSTIR DI",path_settings_.restir_di)) path_settings_.restir_di=true; mark("path_restir"); help("path.direct_lighting");
+    ImGui::BeginDisabled(!path_settings_.restir_di); {
         int candidates=int(path_settings_.restir_candidates); ImGui::SetNextItemWidth(125);
-        if(ImGui::InputInt("Initial candidates",&candidates)) path_settings_.restir_candidates=std::uint32_t(std::clamp(candidates,1,64)); mark("path_candidates");
+        if(ImGui::InputInt("Initial candidates",&candidates)) path_settings_.restir_candidates=std::uint32_t(std::clamp(candidates,1,64)); mark("path_candidates"); help("path.initial_candidates");
         controls_["path_candidates"].x=ImGui::GetItemRectMin().x+30;
-        ImGui::Checkbox("Temporal reuse",&path_settings_.restir_temporal); mark("path_temporal");
-        ImGui::Checkbox("Spatial reuse",&path_settings_.restir_spatial); mark("path_spatial");
-    }
+        ImGui::Checkbox("Temporal reuse",&path_settings_.restir_temporal); mark("path_temporal"); help("path.temporal_reuse");
+        ImGui::Checkbox("Spatial reuse",&path_settings_.restir_spatial); mark("path_spatial"); help("path.spatial_reuse");
+    } ImGui::EndDisabled();
     auto target=path_settings_.target,seed=path_settings_.seed; int bounces=int(path_settings_.bounces);
     ImGui::SetNextItemWidth(125);
-    if(ImGui::InputScalar("Target spp",ImGuiDataType_U32,&target)) path_settings_.target=std::max(target,1u); mark("path_target"); controls_["path_target"].x=ImGui::GetItemRectMin().x+30;
+    if(ImGui::InputScalar("Target spp",ImGuiDataType_U32,&target)) path_settings_.target=std::max(target,1u); mark("path_target"); help("path.target_spp"); controls_["path_target"].x=ImGui::GetItemRectMin().x+30;
     ImGui::SetNextItemWidth(125);
-    if(ImGui::InputScalar("Seed",ImGuiDataType_U32,&seed)) path_settings_.seed=seed; mark("path_seed"); controls_["path_seed"].x=ImGui::GetItemRectMin().x+30;
+    if(ImGui::InputScalar("Seed",ImGuiDataType_U32,&seed)) path_settings_.seed=seed; mark("path_seed"); help("path.seed"); controls_["path_seed"].x=ImGui::GetItemRectMin().x+30;
     ImGui::SetNextItemWidth(125);
-    if(ImGui::InputInt("Bounces",&bounces)) path_settings_.bounces=std::uint32_t(std::clamp(bounces,1,32)); mark("path_bounces"); controls_["path_bounces"].x=ImGui::GetItemRectMin().x+30;
+    if(ImGui::InputInt("Bounces",&bounces)) path_settings_.bounces=std::uint32_t(std::clamp(bounces,1,32)); mark("path_bounces"); help("path.bounces"); controls_["path_bounces"].x=ImGui::GetItemRectMin().x+30;
     float sky[3]={float(path_settings_.sky.x()),float(path_settings_.sky.y()),float(path_settings_.sky.z())};
     ImGui::SetNextItemWidth(160);
-    if(ImGui::ColorEdit3("Environment",sky,ImGuiColorEditFlags_Float|ImGuiColorEditFlags_HDR))
+    if(ImGui::ColorEdit3("Environment",sky,ImGuiColorEditFlags_Float|ImGuiColorEditFlags_HDR)) {
         path_settings_.sky=Vec3d{sky[0],sky[1],sky[2]}.cwiseMax(0).cwiseMin(1000);
-    ImGui::Checkbox("Sky",&path_settings_.sky_enabled); mark("path_sky");
-    ImGui::Checkbox("Scene sun",&path_settings_.sun); mark("path_sun");
+    }
+    help("path.environment_rgb");
+    ImGui::Checkbox("Sky",&path_settings_.sky_enabled); mark("path_sky"); help("path.sky_enabled");
+    ImGui::Checkbox("Scene sun",&path_settings_.sun); mark("path_sun"); help("path.sun");
     float exposure=float(path_settings_.exposure); ImGui::SetNextItemWidth(125);
-    if(ImGui::InputFloat("Exposure (EV)",&exposure,.25f,1,"%.2f")) path_settings_.exposure=std::clamp(double(exposure),-16.,16.); mark("path_exposure"); controls_["path_exposure"].x=ImGui::GetItemRectMin().x+30;
+    if(ImGui::InputFloat("Exposure (EV)",&exposure,.25f,1,"%.2f")) path_settings_.exposure=std::clamp(double(exposure),-16.,16.); mark("path_exposure"); help("path.exposure_ev"); controls_["path_exposure"].x=ImGui::GetItemRectMin().x+30;
     ImGui::BeginDisabled(!path_mode());
-    if(ImGui::Button(path_settings_.paused ? "Resume" : "Pause")) pause=true; mark("path_pause");
-    ImGui::SameLine(); if(ImGui::Button("Reset accumulation")) reset=true; mark("path_reset");
+    if(ImGui::Button(path_settings_.paused ? "Resume" : "Pause")) pause=true; mark("path_pause"); help("path.pause");
+    ImGui::SameLine(); if(ImGui::Button("Reset accumulation")) reset=true; mark("path_reset"); help("path.reset");
     ImGui::EndDisabled();
-    if(path_settings_.scene_media) {
+    ImGui::BeginDisabled(!path_settings_.scene_media); {
         ImGui::SetNextItemWidth(125);
-        if(ImGui::InputDouble("Time (s)",&path_settings_.time_seconds,1,10,"%.3f")) path_settings_.time_seconds=std::clamp(path_settings_.time_seconds,-1e9,1e9); mark("path_time");
+        if(ImGui::InputDouble("Time (s)",&path_settings_.time_seconds,1,10,"%.3f")) path_settings_.time_seconds=std::clamp(path_settings_.time_seconds,-1e9,1e9); mark("path_time"); help("path.time_seconds");
         controls_["path_time"].x=ImGui::GetItemRectMin().x+30;
         ImGui::SetNextItemWidth(125);
-        if(ImGui::InputDouble("Cloud albedo",&path_settings_.cloud_albedo,.05,.1,"%.3f")) path_settings_.cloud_albedo=std::clamp(path_settings_.cloud_albedo,0.,1.);
+        if(ImGui::InputDouble("Cloud albedo",&path_settings_.cloud_albedo,.05,.1,"%.3f")) path_settings_.cloud_albedo=std::clamp(path_settings_.cloud_albedo,0.,1.); help("path.cloud_albedo");
         ImGui::SetNextItemWidth(125);
-        if(ImGui::InputDouble("Cloud anisotropy",&path_settings_.cloud_anisotropy,.05,.1,"%.3f")) path_settings_.cloud_anisotropy=std::clamp(path_settings_.cloud_anisotropy,-.95,.95);
-    }
+        if(ImGui::InputDouble("Cloud anisotropy",&path_settings_.cloud_anisotropy,.05,.1,"%.3f")) path_settings_.cloud_anisotropy=std::clamp(path_settings_.cloud_anisotropy,-.95,.95); help("path.cloud_anisotropy");
+    } ImGui::EndDisabled();
     ImGui::EndDisabled();
     viewport_settings_changed(candidate);
     if(pause) viewport_action(path_settings_.paused ? EditorViewportControl::resume : EditorViewportControl::pause);

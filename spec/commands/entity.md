@@ -1,7 +1,7 @@
 ---
 module: command-reference-entity
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-11-03T14:26:14+08:00"
+updated_at: "2026-11-03T17:57:12+08:00"
 status: accepted
 ---
 
@@ -19,6 +19,8 @@ Console 可用 Tab 补全查询/编辑的 `id`、`entity.set_parent` 的 `parent
 以及 `entity.set_assets` 的数组项 `id`。实体来自已发布场景；资产引用来自当前工程映射并按同项 kind 过滤。
 候选显示名称/路径、种类和 UUID，只回填带引号的 ID，不补 guard、不自动执行。
 `entity.create.id` 用于新身份，不提供已有实体候选；详见[Console 指南](../guides/editor.md#console-命令文本m22)。
+M22.10 中名称/TRS 的字段提示与 Inspector 搜索共用 commands.describe help；平移单位为米、旋转为 XYZW 四元数、缩放为无量纲比例。
+设置搜索仅定位或插入带 guard/ID/完整 TRS 占位的模板，不提交 Inspector 草稿。
 
 ## entity.create
 

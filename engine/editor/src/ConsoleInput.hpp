@@ -13,6 +13,7 @@ public:
     void dismiss() { popup_ = false; hidden_ = true; }
     bool remember() { return history_.remember(text()); }
     void clear();
+    [[nodiscard]] Result<void> insert_template(std::string_view);
     void focus() { focus_ = true; }
     [[nodiscard]] bool active() const;
     [[nodiscard]] std::string_view text() const { return buffer_.data(); }

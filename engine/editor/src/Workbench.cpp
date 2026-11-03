@@ -2,6 +2,7 @@
 #include "WorkbenchUi.hpp"
 #include "GuiRenderer.hpp"
 #include "SmokeDriver.hpp"
+#include "SettingsHelpSmoke.hpp"
 #include "ConsistencyDriver.hpp"
 #include "SimulationConsistencyDriver.hpp"
 #include "ResponseProbe.hpp"
@@ -57,9 +58,9 @@ void write_capture(const std::filesystem::path& output,const graphics::ReadbackR
     check(write_file_bytes_atomic(output,ppm));
 }
 int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory::ResourceHandle heap,Diagnostics& diagnostics) {
-    if(options.smoke) std::setvbuf(stdout,nullptr,_IONBF,0); // Preserve the last acceptance stage on native crashes.
+    if(options.smoke || options.settings_help_smoke) std::setvbuf(stdout,nullptr,_IONBF,0); // Preserve the last acceptance stage on native crashes.
     const bool path_acceptance=options.pathtrace_smoke || options.desktop_render_smoke || options.viewport_command_smoke || options.camera_command_smoke;
-    if ((path_acceptance || options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe) && !std::filesystem::is_regular_file(options.root/".dk-editor-smoke"))
+    if ((path_acceptance || options.settings_help_smoke || options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe) && !std::filesystem::is_regular_file(options.root/".dk-editor-smoke"))
         throw std::runtime_error("--smoke requires a disposable project with .dk-editor-smoke marker");
     ShutdownProbe shutdown{options.simulation_response_probe};
     ShutdownPhase model_phase{shutdown,"model"};
@@ -130,6 +131,8 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     } viewport_host{*model};
     WorkbenchUi ui{*model,options.fixture_camera,take(window.native_sdl_window()),(options.media_pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke) ? 96u : 0u};
     SmokeDriver smoke{options.interaction_smoke,options.simulation_smoke};
+    std::optional<SettingsHelpSmoke> settings_smoke;
+    if(options.settings_help_smoke) settings_smoke.emplace();
     std::optional<ConsistencyDriver> consistency;
     std::optional<SimulationConsistencyDriver> simulation_consistency;
     std::optional<ResponseProbe> response;
@@ -161,7 +164,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
             model->pump();
             if (ui.closing()) check(model->request_shutdown());
             if (model->stopping()) break;
-            if ((options.smoke || options.frames) && std::chrono::steady_clock::now()-start>std::chrono::seconds(90))
+            if ((options.smoke || options.frames || options.settings_help_smoke) && std::chrono::steady_clock::now()-start>std::chrono::seconds(90))
                 throw std::runtime_error("Workbench acceptance run timed out");
             if ((consistency || simulation_consistency) && std::chrono::steady_clock::now()-start>std::chrono::seconds(options.environment_consistency_smoke ? 360 : 180))
                 throw std::runtime_error("Consistency acceptance run timed out");
@@ -183,6 +186,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
                 if(camera_smoke) camera_smoke->input(ui,*model);
 #endif
                 if (options.smoke) smoke.input(*model,ui,window,viewport);
+                if (settings_smoke) settings_smoke->input(*model,ui);
                 if (consistency) consistency->input(ui,*model,viewport);
                 if (simulation_consistency) simulation_consistency->input(ui);
             });
@@ -196,7 +200,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
 #ifdef DK_EDITOR_PATHTRACING
                 (path_smoke && path_smoke->done()) ||
 #endif
-                (options.smoke && smoke.done()) || (consistency && consistency->done()) ||
+                (settings_smoke && settings_smoke->done()) || (options.smoke && smoke.done()) || (consistency && consistency->done()) ||
                 (simulation_consistency && simulation_consistency->done()) || (options.frames && frames>=options.frames);
             const bool finish=finish_requested && (!options.environment_consistency_smoke || viewport.current(model->snapshot()->state));
             std::optional<graphics::ReadbackRequest> capture;

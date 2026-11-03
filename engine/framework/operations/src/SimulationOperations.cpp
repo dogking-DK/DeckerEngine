@@ -38,6 +38,22 @@ Json cloth_json(ClothConfig c) {
         {"particle_mass", c.particle_mass}, {"compliance", c.compliance}, {"iterations", c.physics.iterations},
         {"gravity_y", c.physics.gravity_y}, {"floor_y", c.physics.floor_y}, {"damping", c.physics.damping}};
 }
+Json run_help() {
+    Json fields={
+        {"/properties/count",{{"description","Absolute finite experiment step count; does not edit the Scene or Undo."},{"unit","steps"}}},
+        {"/properties/batch_steps",{{"description","Steps per submitted batch; affects control latency."},{"unit","steps"},{"default",8}}},
+        {"/properties/fixed_dt_ns",{{"description","Fixed simulation time per step, independent of wall-clock frame duration."},{"unit","ns"},{"default",10000000}}},
+        {"/properties/solver",{{"description","Independent experiment backend; available enum values depend on the build."},{"default","xpbd_cpu"}}},
+        {"/properties/paused",{{"description","Initialize the experiment without advancing steps until resumed or stepped."},{"default",false}}}};
+    const auto defaults=cloth_json({});
+    for(const auto& [key,value]:defaults.items()) fields["/properties/cloth/properties/"+key]={{"default",value},{"description","Initial cloth configuration for this new experiment; changing a GUI draft does not alter an active run."}};
+    for(const auto* key:{"spacing","height","floor_y"}) fields[std::string("/properties/cloth/properties/")+key]["unit"]="m";
+    fields["/properties/cloth/properties/particle_mass"]["unit"]="kg";
+    fields["/properties/cloth/properties/compliance"]["unit"]="m/N";
+    fields["/properties/cloth/properties/gravity_y"]["unit"]="m/s2";
+    fields["/properties/cloth/properties/damping"]["unit"]="1/s";
+    return {{"version",1},{"fields",std::move(fields)}};
+}
 Json metrics_schema() {
     Json properties{{"particle_count", integer(1, 1024)}, {"constraint_count", integer(0, 8192)}, {"color_count", integer(0, 32)}};
     for (const auto field : {"max_constraint_error", "rms_constraint_error", "max_relative_error", "max_speed",
@@ -148,7 +164,7 @@ Result<void> register_simulation_commands(CommandRegistry& registry, SimulationS
         schema::object({{"guard",guard},{"count",integer(1,1000000)},{"batch_steps",integer(1,8)},
             {"fixed_dt_ns",integer(1000000,33333333)},{"solver",solver_schema(true)},{"cloth",cloth_schema()},
             {"paused",schema::boolean()}},{"guard","count"}),
-        status_schema(),CommandEffect::control,false}, [&service,&edit](const Json& p) -> Result<Json> {
+        status_schema(),CommandEffect::control,false,run_help()}, [&service,&edit](const Json& p) -> Result<Json> {
             auto g=parse_edit_guard(p["guard"]); if (!g) return std::unexpected(g.error());
             const auto solver=p.value("solver",std::string{"xpbd_cpu"});
             return control_result(service,service.run(edit,*g,p["count"].get<std::uint32_t>(),

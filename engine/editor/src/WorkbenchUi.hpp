@@ -2,6 +2,7 @@
 #include "Viewport.hpp"
 #include "ViewportInput.hpp"
 #include "ConsoleInput.hpp"
+#include "SettingsHelpUi.hpp"
 #include <map>
 #include <array>
 
@@ -26,6 +27,7 @@ public:
     [[nodiscard]] const ViewportInput& input() const { return input_; }
     [[nodiscard]] const SimulationState& displayed_simulation() const { return displayed_simulation_; }
     [[nodiscard]] const Camera& simulation_camera() const { return simulation_camera_; }
+    [[nodiscard]] const SettingsHelpUi& settings_help() const { return settings_help_; }
 private:
     void mark(const char* id);
     bool report(const char*,Result<void>);
@@ -44,6 +46,9 @@ private:
 
 #endif
     void console();
+    void prepare_help(const Viewport&);
+    void settings_search();
+    void help(std::string_view id,std::string_view reason={}) { settings_help_.item(id,reason); }
     void simulation();
     void simulation_results(const SimulationRunState*);
     bool simulation_view(Viewport&,bool visible);
@@ -55,6 +60,7 @@ private:
     ViewportInput input_;
     std::string manifest_;
     ConsoleInput console_input_;
+    SettingsHelpUi settings_help_;
     std::optional<CommandCatalogSnapshot> console_catalog_;
     DocumentId console_document_;
     std::uint32_t window_id_ = 0;

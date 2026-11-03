@@ -7,6 +7,7 @@
 struct SDL_Window;
 union SDL_Event;
 namespace dk::editor::detail {
+class SettingsHelpUi;
 // One main-thread owner for the borrowed window. Outlives both navigation adapters.
 class RelativeMouse final {
 public:
@@ -33,7 +34,7 @@ public:
     void cancel();
     void begin_frame() { used_=false; }
     void end_frame() { if(!used_) cancel(); }
-    void toolbar(Camera&,std::map<std::string,ImVec2>&,const char* prefix);
+    void toolbar(Camera&,std::map<std::string,ImVec2>&,const char* prefix,SettingsHelpUi* = nullptr);
     // Called immediately after the actual Image; remains usable when the last image is stale.
     void image(Camera&,bool blocked);
     [[nodiscard]] bool active() const { return button_>=0; }

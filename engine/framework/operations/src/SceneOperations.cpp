@@ -415,6 +415,12 @@ Result<void> register_scene_commands(CommandRegistry &registry, SceneService &se
         if(name!="entity.create") {
             Json fields={{"/properties/id",{{"completion_provider","scene.entity"}}}};
             if(name=="entity.set_parent") fields["/properties/parent"]={{"completion_provider","scene.entity"}};
+            if(name=="entity.set_name") fields["/properties/name"]={{"description","Entity display name; commits a guarded Scene edit and Undo entry."}};
+            if(name=="entity.set_transform") {
+                fields["/properties/transform/properties/translation"]={{"unit","m"},{"description","Local XYZ translation; all three transform fields are required."}};
+                fields["/properties/transform/properties/rotation"]={{"description","Local quaternion in XYZW order; finite and nonzero, normalized on commit."}};
+                fields["/properties/transform/properties/scale"]={{"unit","ratio"},{"description","Local XYZ scale; finite values including zero or negative scales."}};
+            }
             if(name=="entity.set_assets") fields["/properties/assets/items/properties/id"]={{"completion_provider","assets.reference"},
                 {"description","Registered asset UUID, filtered by kind in this reference object when specified."}};
             help=Json{{"version",1},{"fields",std::move(fields)}};

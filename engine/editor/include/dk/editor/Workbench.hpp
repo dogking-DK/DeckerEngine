@@ -15,6 +15,7 @@ struct WorkbenchOptions {
     bool pathtrace_smoke = false;
     bool viewport_command_smoke = false;
     bool camera_command_smoke = false;
+    bool settings_help_smoke = false;
     bool media_pathtrace_smoke = false;
     bool restir_pathtrace_smoke = false;
     bool desktop_render_smoke = false;

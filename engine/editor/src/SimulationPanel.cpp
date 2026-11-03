@@ -2,7 +2,7 @@
 
 namespace dk::editor::detail {
 void WorkbenchUi::simulation() {
-    const bool visible=ImGui::Begin("Simulation");
+    settings_help_.panel("Simulation"); const bool visible=ImGui::Begin("Simulation");
     displayed_simulation_=model_.simulation_state();
     if (!visible) { ImGui::End(); return; }
     const auto& state=displayed_simulation_;
@@ -19,13 +19,13 @@ void WorkbenchUi::simulation() {
     const auto control=[&](const char* label,const char* id,SimulationControl action,bool enabled) {
         ImGui::BeginDisabled(!enabled);
         if (ImGui::Button(label)) result(label,model_.control_simulation(run->run_id,action));
-        mark(id); ImGui::EndDisabled();
+        mark(id); help("simulation."+std::string(id+4)); ImGui::EndDisabled();
     };
     ImGui::BeginDisabled(input_.active());
     ImGui::BeginDisabled(run || !model_.snapshot() || model_.pending());
-    if (ImGui::Button("Play")) result("Simulation Play",model_.start_simulation()); mark("sim_play");
+    if (ImGui::Button("Play")) result("Simulation Play",model_.start_simulation()); mark("sim_play"); help("simulation.play");
     ImGui::SameLine();
-    if (ImGui::Button("Prepare paused")) result("Simulation prepare",model_.start_simulation(true)); mark("sim_prepare");
+    if (ImGui::Button("Prepare paused")) result("Simulation prepare",model_.start_simulation(true)); mark("sim_prepare"); help("simulation.prepare");
     ImGui::EndDisabled();
     control("Pause","sim_pause",SimulationControl::pause,run && !run->fault && !terminal &&
         (state.mode==SimulationMode::running || state.mode==SimulationMode::initializing));
@@ -64,17 +64,17 @@ void WorkbenchUi::simulation() {
     const bool changed=!simulation_panel_initialized_ || current_run!=simulation_panel_run_;
     if (changed) { simulation_panel_initialized_=true; simulation_panel_run_=current_run; simulation_sample_error_.clear(); }
     if (ImGui::BeginTabBar("simulation_tabs")) {
-    const bool results=ImGui::BeginTabItem("Results",nullptr,changed && run ? ImGuiTabItemFlags_SetSelected : 0);
+    const bool results=ImGui::BeginTabItem("Results",nullptr,(settings_help_.reveal("Simulation","Results") || (changed && run)) ? ImGuiTabItemFlags_SetSelected : 0);
     mark("sim_results");
     if (results) { simulation_results(run); ImGui::EndTabItem(); }
-    const bool setup=ImGui::BeginTabItem("Next experiment",nullptr,changed && !run ? ImGuiTabItemFlags_SetSelected : 0);
+    const bool setup=ImGui::BeginTabItem("Next experiment",nullptr,(settings_help_.reveal("Simulation","Next experiment") || (changed && !run)) ? ImGuiTabItemFlags_SetSelected : 0);
     mark("sim_setup");
     if (setup) {
         auto& d=model_.simulation_draft(); auto& c=d.cloth;
         ImGui::TextWrapped("Changes apply when starting a new experiment.");
         ImGui::SetNextItemWidth(140);
         const bool choose=ImGui::BeginCombo("Solver",d.gpu ? "GPU XPBD" : "CPU XPBD");
-        mark("sim_solver");
+        mark("sim_solver"); help("simulation.solver");
         if (choose) {
             if (ImGui::Selectable("CPU XPBD",!d.gpu)) d.gpu=false;
             mark("sim_cpu");
@@ -85,29 +85,29 @@ void WorkbenchUi::simulation() {
             ImGui::EndCombo();
         }
         if (ImGui::BeginTable("parameters",2,ImGuiTableFlags_SizingStretchSame)) {
-            const auto field=[](const char* label,ImGuiDataType type,void* value) {
+            const auto field=[&](const char* key,const char* label,ImGuiDataType type,void* value) {
                 ImGui::PushID(label); ImGui::TableNextRow(); ImGui::TableNextColumn();
                 ImGui::TextWrapped("%s",label); ImGui::TableNextColumn(); ImGui::SetNextItemWidth(-1);
-                ImGui::InputScalar("##value",type,value,nullptr,nullptr,type==ImGuiDataType_Float ? "%.6g" : nullptr);
+                ImGui::InputScalar("##value",type,value,nullptr,nullptr,type==ImGuiDataType_Float ? "%.6g" : nullptr); help("simulation."+std::string(key));
                 ImGui::PopID();
             };
-            field("Target steps",ImGuiDataType_S32,&d.target_steps); mark("sim_target");
-            field("Batch steps (1-8)",ImGuiDataType_S32,&d.batch_steps);
-            field("Fixed dt (ns)",ImGuiDataType_S64,&d.fixed_dt_ns);
-            field("Columns",ImGuiDataType_U32,&c.columns);
-            field("Rows",ImGuiDataType_U32,&c.rows);
-            field("Seed",ImGuiDataType_U32,&c.seed);
-            field("Spacing (m)",ImGuiDataType_Float,&c.spacing);
-            field("Height (m)",ImGuiDataType_Float,&c.height);
-            field("Mass (kg)",ImGuiDataType_Float,&c.particle_mass);
-            field("Compliance (m/N)",ImGuiDataType_Float,&c.compliance);
-            field("Iterations",ImGuiDataType_U32,&c.physics.iterations);
-            field("Gravity (m/s2)",ImGuiDataType_Float,&c.physics.gravity_y);
-            field("Floor (m)",ImGuiDataType_Float,&c.physics.floor_y);
-            field("Damping (1/s)",ImGuiDataType_Float,&c.physics.damping);
+            field("count","Target steps",ImGuiDataType_S32,&d.target_steps); mark("sim_target");
+            field("batch_steps","Batch steps (1-8)",ImGuiDataType_S32,&d.batch_steps);
+            field("fixed_dt_ns","Fixed dt (ns)",ImGuiDataType_S64,&d.fixed_dt_ns);
+            field("columns","Columns",ImGuiDataType_U32,&c.columns);
+            field("rows","Rows",ImGuiDataType_U32,&c.rows);
+            field("seed","Seed",ImGuiDataType_U32,&c.seed);
+            field("spacing","Spacing (m)",ImGuiDataType_Float,&c.spacing);
+            field("height","Height (m)",ImGuiDataType_Float,&c.height);
+            field("particle_mass","Mass (kg)",ImGuiDataType_Float,&c.particle_mass);
+            field("compliance","Compliance (m/N)",ImGuiDataType_Float,&c.compliance);
+            field("iterations","Iterations",ImGuiDataType_U32,&c.physics.iterations);
+            field("gravity_y","Gravity (m/s2)",ImGuiDataType_Float,&c.physics.gravity_y);
+            field("floor_y","Floor (m)",ImGuiDataType_Float,&c.physics.floor_y);
+            field("damping","Damping (1/s)",ImGuiDataType_Float,&c.physics.damping);
             ImGui::EndTable();
         }
-        if (ImGui::Button("Reset draft")) d=SimulationDraft{};
+        if (ImGui::Button("Reset draft")) d=SimulationDraft{}; help("simulation.reset_draft");
         ImGui::EndTabItem();
     }
         ImGui::EndTabBar();

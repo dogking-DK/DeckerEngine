@@ -1,4 +1,5 @@
 #include "ViewportInput.hpp"
+#include "SettingsHelpUi.hpp"
 #include "EditorSupport.hpp"
 #include <Eigen/LU>
 #include <algorithm>
@@ -44,7 +45,7 @@ void ViewportInput::frame_camera(EntityId entity,const Report& report) {
     auto result=host_->frame_camera(state->guard,entity,true);
     report("Frame",result ? Result<void>{} : std::unexpected(result.error()));
 }
-void ViewportInput::toolbar(Workspace& model,Viewport&,std::map<std::string,ImVec2>& controls,const Report& report) {
+void ViewportInput::toolbar(Workspace& model,Viewport&,std::map<std::string,ImVec2>& controls,const Report& report,SettingsHelpUi* help) {
     auto camera_=host_->camera();
     const auto document=model.snapshot() ? model.snapshot()->state.document_id : DocumentId{};
     if(camera_document_!=document) { settings_ui_.cancel(); model.camera_draft(false); camera_document_=document; }
@@ -52,14 +53,14 @@ void ViewportInput::toolbar(Workspace& model,Viewport&,std::map<std::string,ImVe
     if (ImGui::RadioButton("Move",mode_==Mode::translate)) mode_=Mode::translate; mark(controls,"mode_move"); ImGui::SameLine();
     if (ImGui::RadioButton("Rotate",mode_==Mode::rotate)) mode_=Mode::rotate; mark(controls,"mode_rotate"); ImGui::SameLine();
     if (ImGui::RadioButton("Scale",mode_==Mode::scale)) mode_=Mode::scale; mark(controls,"mode_scale"); ImGui::SameLine();
-    if (ImGui::SmallButton("Reset")) { navigation_.cancel(); camera_.reset(fixture_); } mark(controls,"camera_reset");
+    if (ImGui::SmallButton("Reset")) { navigation_.cancel(); camera_.reset(fixture_); } mark(controls,"camera_reset"); if(help) help->item("camera.reset");
     ImGui::SameLine();
     ImGui::BeginDisabled(!model.selection());
     if (ImGui::SmallButton("Frame") && model.snapshot()) { frame_camera(*model.selection(),report); camera_=host_->camera(); }
-    mark(controls,"camera_frame"); ImGui::EndDisabled(); ImGui::SameLine();
+    mark(controls,"camera_frame"); if(help) help->item("camera.frame"); ImGui::EndDisabled(); ImGui::SameLine();
     const auto camera_revision=camera_.revision();
-    if(settings_ui_.draw(camera_,fixture_,aspect_,controls,"camera_") || camera_.revision()!=camera_revision) navigation_.cancel();
-    navigation_.toolbar(camera_,controls,"camera_");
+    if(settings_ui_.draw(camera_,fixture_,aspect_,controls,"camera_",help) || camera_.revision()!=camera_revision) navigation_.cancel();
+    navigation_.toolbar(camera_,controls,"camera_",help);
     model.camera_draft(settings_ui_.pending());
     commit_camera(model,camera_,report);
     ImGui::EndDisabled();

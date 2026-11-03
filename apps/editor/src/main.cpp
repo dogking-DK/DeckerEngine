@@ -32,6 +32,7 @@ int main(int argc,char** argv) {
             else if (arg=="--media-pathtrace-smoke") { options.media_pathtrace_smoke=true; options.pathtrace_smoke=true; }
             else if (arg=="--pathtrace-smoke") options.pathtrace_smoke=true;
             else if (arg=="--camera-command-smoke") options.camera_command_smoke=true;
+            else if (arg=="--settings-help-smoke") options.settings_help_smoke=true;
             else if (arg=="--viewport-command-smoke") options.viewport_command_smoke=true;
             else if (arg=="--desktop-render-smoke") options.desktop_render_smoke=true;
             else if (arg=="--smoke") options.smoke=true;
@@ -55,6 +56,7 @@ int main(int argc,char** argv) {
                     "            --desktop-render-smoke --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "Acceptance: --frames N --screenshot OUTPUT.ppm [--fixture-camera]\n"
                     "            --smoke/--interaction-smoke/--simulation-smoke --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
+                    "            --settings-help-smoke --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --environment-consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --simulation-consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
@@ -73,6 +75,8 @@ int main(int argc,char** argv) {
             throw std::runtime_error("--desktop-render-smoke requires --screenshot and the normal camera; incompatible with other acceptance modes");
         if(options.pathtrace_smoke && (options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe || options.frames || options.pipe.empty() || !options.fixture_camera || options.screenshot.empty()))
             throw std::runtime_error("--pathtrace-smoke requires --pipe, --fixture-camera and --screenshot; incompatible with other acceptance modes");
+        if(options.settings_help_smoke && (options.camera_command_smoke || options.viewport_command_smoke || options.pathtrace_smoke || options.desktop_render_smoke || options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe || options.frames || !options.fixture_camera || options.screenshot.empty()))
+            throw std::runtime_error("--settings-help-smoke requires --fixture-camera and --screenshot; incompatible with other acceptance modes");
         if (options.validation && options.disable_validation) throw std::runtime_error("--validation and --no-validation are mutually exclusive");
         if (options.environment_consistency_smoke && (options.smoke || options.consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe || options.frames || options.pipe.empty() || !options.fixture_camera || options.screenshot.empty()))
             throw std::runtime_error("--environment-consistency-smoke requires --pipe, --fixture-camera and --screenshot; incompatible with other acceptance modes");

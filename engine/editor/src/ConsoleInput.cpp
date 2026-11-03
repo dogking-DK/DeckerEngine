@@ -232,4 +232,12 @@ void ConsoleInput::clear() {
     buffer_[0] = '\0'; history_.edited(); dismiss();
     if (auto* state = ImGui::GetInputTextState(id_)) state->ReloadUserBufAndMoveToEnd();
 }
+Result<void> ConsoleInput::insert_template(std::string_view value) {
+    if(!text().empty() || composing_) return std::unexpected(Error{ErrorCode::invalid_state,"Finish IME and clear Console before inserting a template; existing input is preserved."});
+    if(auto problem=console_text_problem(value)) return std::unexpected(Error{ErrorCode::invalid_argument,*problem});
+    std::copy(value.begin(),value.end(),buffer_.begin()); buffer_[value.size()]='\0';
+    history_.edited(); dismiss(); focus();
+    if(auto* state=ImGui::GetInputTextState(id_)) state->ReloadUserBufAndMoveToEnd();
+    return {};
+}
 } // namespace dk::editor::detail
