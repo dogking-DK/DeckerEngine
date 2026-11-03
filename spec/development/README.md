@@ -154,5 +154,6 @@
 | 0150 | [M22.3 Console 历史与界面交付](0150-console-history-ui.md) | editor-console、editor | completed |
 | 0151 | [M22.4 Console 补全与 Editor 交互扩展计划](0151-console-assistance-plan.md) | editor-console、editor、commands | completed |
 | 0152 | [M22.5 共享帮助与只读命令目录](0152-command-help-catalog.md) | commands、editor-console、runtime、editor | completed |
+| 0153 | [M22.6 Console 基础补全与参数提示](0153-console-completion.md) | editor-console、editor | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

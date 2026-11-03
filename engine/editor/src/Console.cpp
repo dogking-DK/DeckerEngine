@@ -1,4 +1,5 @@
 #include <dk/editor/Console.hpp>
+#include "ConsoleLexical.hpp"
 #include <algorithm>
 #include <charconv>
 #include <cstdint>
@@ -7,10 +8,10 @@
 
 namespace dk::editor {
 namespace {
-bool space(char c) { return c == ' ' || c == '\t'; }
-bool letter(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
-bool digit(char c) { return c >= '0' && c <= '9'; }
-bool name_char(char c) { return letter(c) || digit(c) || c == '_'; }
+using detail::space;
+using detail::letter;
+using detail::digit;
+using detail::name_char;
 enum class Number { none, integer, floating };
 Number number_kind(std::string_view s) {
     std::size_t p = 0;
@@ -202,7 +203,7 @@ private:
             ++at_; return result;
         }
         while (at_ < text_.size() && !space(text_[at_])) {
-            if (std::string_view{"\"'[]{}=;&|"}.find(text_[at_]) != std::string_view::npos)
+            if (detail::bare_forbidden(text_[at_]))
                 fail("Quote this value; shell operators and command chaining are not supported", at_);
             ++at_;
         }

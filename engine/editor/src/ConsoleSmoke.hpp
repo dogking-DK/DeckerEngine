@@ -1,4 +1,5 @@
 #pragma once
+#include "ConsoleCompletionSmoke.hpp"
 #include <imgui.h>
 #include <cstdint>
 #include <string>
@@ -13,6 +14,7 @@ public:
     ~ConsoleSmoke();
     bool input(Workspace&, WorkbenchUi&, unsigned window_id);
 private:
+    ConsoleCompletionSmoke completion_;
     void restore_clipboard();
     unsigned tick_ = 0, errors_ = 0;
     std::size_t history_ = 0, entities_ = 0;

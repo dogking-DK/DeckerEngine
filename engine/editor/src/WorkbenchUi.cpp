@@ -49,9 +49,9 @@ bool WorkbenchUi::event(const SDL_Event& event) {
         console_composing_ = console_input_.active() && event.edit.text && event.edit.text[0];
     if (event.type == SDL_EVENT_TEXT_INPUT && event.text.windowID == window_id_) console_composing_ = false;
     if (relative_mouse_.belongs(event) && (event.type == SDL_EVENT_WINDOW_FOCUS_LOST || event.type == SDL_EVENT_WINDOW_HIDDEN))
-        console_composing_ = false;
+        { console_composing_ = false; console_input_.dismiss(); }
     if (console_composing_ && console_input_.active() && (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) &&
-        event.key.windowID == window_id_ && (event.key.key == SDLK_UP || event.key.key == SDLK_DOWN || event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER)) return true;
+        event.key.windowID == window_id_ && (event.key.key == SDLK_UP || event.key.key == SDLK_DOWN || event.key.key == SDLK_TAB || event.key.key == SDLK_ESCAPE || event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER)) return true;
     if(event.type==SDL_EVENT_QUIT || (relative_mouse_.belongs(event) &&
        (event.type==SDL_EVENT_WINDOW_FOCUS_LOST || event.type==SDL_EVENT_WINDOW_MINIMIZED ||
         event.type==SDL_EVENT_WINDOW_HIDDEN || event.type==SDL_EVENT_WINDOW_CLOSE_REQUESTED ||
@@ -191,11 +191,15 @@ void WorkbenchUi::console() {
     if (scroll_log_) { ImGui::SetScrollHereY(1.0f); scroll_log_=false; }
     ImGui::EndChild();
     ImGui::SetNextItemWidth(-55);
-    const bool enter=console_input_.draw(console_composing_); mark("console_input");
+    if (!console_catalog_ || console_catalog_->version!=model_.command_catalog_version()) console_catalog_=model_.command_catalog();
+    const auto document=model_.snapshot() ? model_.snapshot()->state.document_id : DocumentId{};
+    if (document!=console_document_) { console_document_=document; console_input_.dismiss(); }
+    const bool enter=console_input_.draw(console_composing_,*console_catalog_); mark("console_input");
     ImGui::SameLine(); ImGui::BeginDisabled(console_composing_);
     const bool run=ImGui::Button("Run"); mark("console_run"); ImGui::EndDisabled();
     if (auto error = console_input_.take_error(); !error.empty()) report("Console input",std::unexpected(Error{ErrorCode::invalid_argument,std::move(error)}));
-    if((enter || run) && !console_composing_ && !console_input_.rejected()) {
+    if((enter || run) && !console_composing_ && !console_input_.rejected() && !console_input_.accepted()) {
+        console_input_.dismiss();
         if (console_input_.text().find_first_not_of(" \t") == std::string_view::npos) { ImGui::End(); return; }
         console_input_.remember();
         if(log_.size()==64) log_.erase(log_.begin());
@@ -210,6 +214,7 @@ void WorkbenchUi::console() {
         console_input_.focus();
     }
     if (!console_input_.active()) console_composing_=false;
+    console_input_.draw_assistance();
     ImGui::End();
 }
 void WorkbenchUi::confirmation() {

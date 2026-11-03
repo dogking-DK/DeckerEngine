@@ -279,7 +279,7 @@ entity.set_name id="<entity_id>" name="Hello 中文" guard={"document_id":"<docu
 
 - 成功显示 `Succeeded` 并清空输入；异步返回 job_id 显示 `Accepted`，再用 `jobs.get id=<job_id>` 查询完成状态。
   失败显示错误并保留输入供修改；空白输入忽略。
-- 输入框聚焦时按 Up 查看更早提交，Down 查看更新提交，越过最近一条恢复原草稿。边界不循环。
+- 候选弹窗关闭时，输入框按 Up 查看更早提交，Down 查看更新提交，越过最近一条恢复原草稿。边界不循环。
   回填只修改输入，再按 Enter/Run 才执行；编辑回填内容后退出历史浏览。输入法组合期间方向键/Enter 留给候选操作。
 - 本窗口保留最近 64 条非空提交尝试（包括失败），裁掉首尾空格/Tab，连续相同文本只留一条。
   历史不写磁盘，重开窗口后清空；切换文档不重写历史中的 guard，旧 guard 会冲突。
@@ -291,13 +291,29 @@ entity.set_name id="<entity_id>" name="Hello 中文" guard={"document_id":"<docu
 看到 `Command executed, but view refresh failed` 表示业务已经成功、随后刷新失败，应先查询实际状态，不能直接假定未执行而重试。
 参数 schema/单位/可用命令仍以 commands.list/describe 为准；本阶段没有新增 `restir`、`raytracing` 或 `cam.orbit` 控制命令。
 设计及验证记录见 [Console](../design/editor-console.md)、[解析与执行](../development/0149-console-command-parser.md)、
-[历史与 GUI](../development/0150-console-history-ui.md)。
+[历史与 GUI](../development/0150-console-history-ui.md)、[基础补全](../development/0153-console-completion.md)。
 
 M22 后续扩展已纳入命令/参数补全、输入诊断、实体/资产候选、视口/相机命令以及 Editor 悬停帮助和设置搜索，
 见 [扩展设计](../design/editor-console.md#m224-扩展设计帮助补全与设置命令) 与 [Roadmap](../roadmap.md#m22console-命令文本输入与-editor-交互)。
 M22.5 已提供共享帮助信息，可以在 Console 输入 `commands.describe name=scene.query` 查看可选 help，
 其中包含分页参数的说明、单位、默认值与示例；完整输出可通过 IPC 查询。
-补全弹窗、输入诊断、动态候选和面板搜索仍未提供；当前 Tab 仍用于输入空白，新键位将在对应阶段交付后更新本指南。
+
+M22.6 支持命令名、顶层参数名和布尔/null/枚举值的基础补全，参数说明自动随光标显示：
+
+| 输入与操作 | 结果 |
+| --- | --- |
+| 输入 `scene.qu`，Tab 打开，再按 Tab 或 Enter | 回填 `scene.query`，继续按 Enter 才执行 |
+| 输入 `scene.query li`，Tab 打开并接受 | 回填 `limit=`；输入数值时显示类型、范围、默认值与示例 |
+| 输入 `environment.preset name=`，Tab 打开 | Up/Down 选择预设，Tab/Enter 或鼠标点击回填带引号的字符串 |
+| 输入 `render.capture renderer=`，Tab 打开 | 按本机实际注册 schema 列出 renderer 枚举；不会切换当前视口 |
+
+第一按 Tab 打开候选，再按 Tab/Enter 接受；无候选时不修改输入。最多返回 32 项，列表最多显示 8 行，可滚动；
+输入更长前缀可缩小范围。Esc 关闭候选/提示并保留原文；输入或光标改变后重新显示说明。
+Run 直接提交当前原文，不代替用户接受候选。候选接受只改输入、退出历史浏览，不执行命令、不进入提交历史。
+替换保留其他参数；整 token 选区可替换，部分 token 或跨字段选区保守不补全。超出 8192 字节时整次拒绝。
+Tab 键用于补全，粘贴内容中的 Tab 仍保留为空白；输入法组合期间暂停辅助，不抢候选操作键。
+当前不补全嵌套 JSON 或兼容 JSON envelope，不提供实体/资产动态候选、实时输入诊断或面板搜索；
+这些能力按 M22.7 及后续阶段交付，已有 JSON 输入和错误提示继续可用。
 
 ## ReSTIR 直接光照
 

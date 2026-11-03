@@ -54,6 +54,8 @@ private:
     ViewportInput input_;
     std::string manifest_;
     ConsoleInput console_input_;
+    std::optional<CommandCatalogSnapshot> console_catalog_;
+    DocumentId console_document_;
     std::uint32_t window_id_ = 0;
     bool console_composing_ = false;
     std::map<std::string,ImVec2> controls_;

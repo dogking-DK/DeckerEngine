@@ -24,7 +24,7 @@ void ConsoleSmoke::restore_clipboard() {
 }
 bool ConsoleSmoke::input(Workspace& model, WorkbenchUi& ui, unsigned window_id) {
     const auto stage = tick_/8, phase = tick_++%8;
-    if (stage == 48) { restore_clipboard(); return true; }
+    if (stage >= 48) { restore_clipboard(); return completion_.input(model,ui,window_id); }
     auto& io = ImGui::GetIO();
     const auto click = [&](const char* name, bool down) {
         const auto found = ui.controls().find(name);
@@ -93,7 +93,7 @@ bool ConsoleSmoke::input(Workspace& model, WorkbenchUi& ui, unsigned window_id) 
             break;
         }
         case 42: composing("4",true); break;
-        case 46: io.AddInputCharactersUTF8("  "); break;
+        case 46: paste("  \t"); break;
         case 47: io.AddKeyEvent(ImGuiKey_Enter,true); break;
         default: break;
         }
@@ -110,8 +110,6 @@ bool ConsoleSmoke::input(Workspace& model, WorkbenchUi& ui, unsigned window_id) 
         if(stage!=33) io.AddKeyEvent(ImGuiKey_Enter,false);
     }
     if (phase==2 && stage==33) io.AddKeyEvent(ImGuiKey_Enter,false);
-    // ImGui consumes Tab as a key, deliberately ignoring Tab in the text queue.
-    if (stage==46 && (phase==2 || phase==3)) io.AddKeyEvent(ImGuiKey_Tab,phase==2);
     if (phase != 5) return false;
     const auto text = ui.console_input().text();
     require(ImGui::GetPlatformIO().Platform_ClipboardUserData==this,"input did not restore clipboard callback user data");

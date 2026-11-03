@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-11-03T13:06:50+08:00"
+updated_at: "2026-11-03T13:51:22+08:00"
 status: accepted
 ---
 
@@ -23,7 +23,8 @@ Editor Console 接受 `scene.query limit=20` 等命名参数文本，也兼容�
 见 [编辑器指南](../guides/editor.md#console-命令文本m22) 与 [M22 设计](../design/editor-console.md)。
 这只改变 Console 输入，不新增本目录命令，也不改变 JSON-RPC/IPC 格式。
 后续 M22 扩展已规划补全/参数提示、Editor 帮助与视口/相机设置命令，见 [扩展设计](../design/editor-console.md#m224-扩展设计帮助补全与设置命令)。
-M22.5 已接入共享帮助和内部只读描述快照；补全弹窗、面板帮助与设置命令仍待后续阶段，本目录只列当前注册命令。
+M22.5/6 已接入共享帮助、内部只读目录和 Console 基础补全/参数提示；Tab 打开候选，Tab/Enter 接受后再次 Enter 才执行。
+完整键位见[编辑器指南](../guides/editor.md#console-命令文本m22)。嵌套/动态候选、面板帮助与设置命令仍待后续阶段，本目录只列当前注册命令。
 
 ## 按功能查找
 
