@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-10-23T09:42:00+08:00"
+updated_at: "2026-11-03T10:31:20+08:00"
 status: accepted
 ---
 
@@ -349,6 +349,13 @@ CPU 云字段采用一个已提交 owner 和一个局部候选，成功 configur
 Console 输入有界 JSON {method,params}，调用 Workspace/Runtime 既有命令。必须显式 guard；活动草稿拒绝非 query 命令，避免覆盖未提交编辑。
 Console 不阻塞等待 Job（jobs.wait 只允许 timeout_ms=0），用户通过 jobs.get 查看异步捕获；命令成功后刷新快照，输出/错误有界。
 自动验收使用 --background 和仅限独立夹具的输入驱动，覆盖真实面板、Console、IPC、介质变更/错误恢复/会话切换，并与固定 capture 比较线性结果。
+
+### M22 Console 输入首期规划
+
+[Console 专项设计](editor-console.md)规定 `method key=value`、基本值/JSON 复合参数、错误定位、
+兼容旧 JSON 以及有界会话历史；采用现有 editor_model/editor target 和 Runtime 命令注册表。
+本轮只完成设计，现有 Console 行为仍为上述 JSON 入口；实施状态见 [Roadmap](../roadmap.md)。
+不增加渲染设置/相机控制命令，不改变 IPC/Luau/Python 输入协议；guard、草稿保护和零等待沿用现有契约。
 
 ## M17.6 缓存与交互调度
 

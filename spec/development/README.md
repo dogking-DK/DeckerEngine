@@ -149,5 +149,6 @@
 | 0145 | [M20.1 降噪接口、状态与依赖基线](0145-denoising-foundation.md) | render-denoising、render-pathtracing、render-restir、architecture | completed |
 | 0146 | [M20.2 路径追踪降噪输入信号](0146-denoising-signals.md) | render-denoising、render-pathtracing、render-restir | completed |
 | 0147 | [M21.1 原生点绘制与粒子流体设计落档](0147-particle-fluid-plan.md) | physics-fluids、render-particles、physics-api、render-simulation、graphics-device、graphics-vulkan、graphics-shaders、architecture | completed |
+| 0148 | [M22.1 Console 命令文本输入首期计划](0148-console-command-input-plan.md) | editor-console、editor、commands、application-services | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

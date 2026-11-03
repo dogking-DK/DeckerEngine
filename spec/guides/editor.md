@@ -241,6 +241,9 @@ Console 输入 `{"method":"scene.query","params":{}}` 后按 Enter 或 Run，取
 输入最多 8192 字节，每条结果显示最多 4096 字节，完整 schema/结果可用 IPC；保留最近 64 条日志。
 有未应用草稿时仅允许 query 命令，先 Apply/Revert 再修改或捕获；Console 的 jobs.wait 仅允许 timeout_ms=0，避免占用 GUI 线程。
 
+`scene.query limit=20` 等文本输入与上下键命令历史已纳入 [Console 首期设计](../design/editor-console.md)，
+当前仅完成设计，尚不可直接使用；实施状态见 [Roadmap M22](../roadmap.md#m22console-命令文本输入首期)。
+
 `dk.editor.media_pathtracing_gpu_validation` 使用独立夹具、--background 和 --media-pathtrace-smoke：真实点击模式/环境/时间/曝光、Console 输入，
 与 IPC capture 比较冻结线性结果，连续错误恢复和换会话检查。该验收将路径画面固定为至多 96×96 以控制同步验证成本；
 正常 Editor 分辨率不变，原路径验收继续覆盖正常视口、resize/minimize 与相机/实体编辑。不得把验收尺寸作为 Sponza 性能证据。

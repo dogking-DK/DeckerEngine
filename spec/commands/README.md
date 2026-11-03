@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-10-19T17:07:00+08:00"
+updated_at: "2026-11-03T10:31:20+08:00"
 status: accepted
 ---
 
@@ -16,6 +16,10 @@ status: accepted
 Windows 本机调用使用 [dk-ctl / IPC 协议](ipc.md)，启动、guard 和重试示例见 [IPC 指南](../guides/ipc.md)。
 
 Luau 调用同一套场景/实体/历史服务，入口、值转换与允许命令集合见 [脚本指南](../guides/scripting.md)；不增加新的 Runtime 命令。
+
+Editor Console 当前接受 JSON `{method,params}`，见 [编辑器指南](../guides/editor.md)。
+`scene.query limit=20` 等文本输入已纳入 [M22 首期设计](../design/editor-console.md)，尚未实现；
+它只改变 Console 输入，不新增本目录命令，也不改变 JSON-RPC/IPC 格式。
 
 ## 按功能查找
 

@@ -2,6 +2,7 @@
 
 | 模块 | 文档 | 状态 | 范围 | 源码入口 | 测试入口 |
 | --- | --- | --- | --- | --- | --- |
+| editor-console | [Console 命令文本输入](editor-console.md) | accepted | M22 首期设计：命名参数、JSON 兼容、有界错误与会话历史；代码待实现 | [现有 Workspace](../../engine/editor/src/Workspace.cpp)、[Console UI](../../engine/editor/src/WorkbenchUi.cpp)；拟新增 Console 解析/历史模型 | [现有模型测试](../../tests/unit/EditorTests.cpp)、[工作台输入](../../engine/editor/src/SmokeDriver.cpp)；拟补解析/历史用例 |
 | physics-fluids | [粒子流体与统一物理输出](physics-fluids.md) | accepted | M21 设计：WCSPH/PBF CPU/GPU、粒子数据/邻域/时间/状态/导出；代码待实现 | 拟新增 `engine/physics/particles`、`fluids` 及 GPU 模块；接入 [Services](../../engine/framework/services) | 拟新增粒子/流体测试；现有 [单元入口](../../tests/unit/CMakeLists.txt)、[集成入口](../../tests/integration/CMakeLists.txt) |
 | render-particles | [原生点绘制与粒子可视化](render-particles.md) | accepted | M21 设计：point-list、点大小/深度/物理量和 CPU/GPU 输入；代码待实现 | 拟新增 `engine/render/particles`；底座 [Device](../../engine/graphics/device)、[Shaders](../../engine/graphics/shaders) | 拟新增原生点探针与粒子预览测试；现有 [集成入口](../../tests/integration/CMakeLists.txt) |
 | render-denoising | [路径追踪降噪](render-denoising.md) | accepted | 公共边界/固定依赖；表面渐进 fresh/lobe/guide/运动来源生产；À-trous、SVGF/A-SVGF、NRD、vk_oidn 待实现 | [共享类型](../../engine/render/denoising/include/dk/render/DenoisingSignals.hpp)、[生产者](../../engine/render/pathtracing/src/PathTraceRenderer.cpp)、[信号 shader](../../engine/render/pathtracing/shaders/path-signals.slang) | [信号数值/几何/纹理/状态](../../tests/integration/PathSignalCases.hpp)；后端验收见设计 |
