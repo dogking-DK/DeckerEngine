@@ -1,7 +1,7 @@
 ---
 module: command-reference-editor-viewport
 created_at: "2026-11-03T14:56:20+08:00"
-updated_at: "2026-11-03T15:04:51+08:00"
+updated_at: "2026-11-03T17:13:21+08:00"
 status: accepted
 ---
 
@@ -15,13 +15,13 @@ status: accepted
 ## 身份、状态和副作用
 
 视口 guard 为 `{view_id,document_id,revision}`，从下述命令的直接返回值取得。
-view_id 是本次附加视口的 UUID，document_id 是当前场景文档会话，revision 是视口设置的 uint64 修订号，初始为 0。
+view_id 是本次附加视口的 UUID，document_id 是当前场景文档会话，revision 是视口设置与 Edit 相机共享的 uint64 修订号，初始为 0；GUI 或命令修改相机也会使旧 guard 失效。
 它与 Scene guard 不同，不自动补齐。换文档保留设置但使旧 document_id 失效，关闭或替换视口使旧 view_id 失效。
 修改成功后使用响应中的新 guard；重复提交旧 guard 返回 conflict。
 
 query 的 effect=query；set/pause/resume/reset 的 effect=control；全部 undoable=false。
 不改变 Scene revision/dirty、Undo/Redo、工程文件或 scene.save 内容，不允许嵌入 scene.transaction。
-未应用 Inspector/Environment 草稿或活动 Edit Gizmo/导航手势拒绝写入，query 仍可调用。
+未应用 Inspector/Environment 草稿、打开的 Camera 弹层或活动 Edit Gizmo/导航手势拒绝写入，query 仍可调用。
 任何参数/guard/能力检查失败均保留原设置和已发布画面；修改多个字段时一次校验、整体接受。
 同值 set 和已处于目标状态的 pause/resume 不增加修订号或重置采样。
 
@@ -43,7 +43,7 @@ generation/target_spp 是路径 worker 进度，spp 是已显示样本数；光�
 确认达到目标还需比较 spp/target_spp 和 phase。降低目标不会丢弃已完成样本，spp 可以大于 target_spp。
 暂停后 reset 保留旧纹理但清空累积，新样本出现前 current=false。
 后台渲染失败用 error/Failed 表示，保留上一完整图像；命令成功回执不保证 GPU 渲染成功。
-隐藏视口不继续采样，phase 可为 Hidden；观察信息允许落后一帧，query 会立即识别新设置/新文档使旧观察过期。
+隐藏视口不继续采样，phase 可为 Hidden；观察信息允许落后一帧，query 会立即识别新设置/新文档/新相机使旧观察过期。
 
 ## editor.viewport.query
 
@@ -139,4 +139,4 @@ state = client.call("editor.viewport.pause", {"guard": state["guard"]}).value
 print(state["settings"], state["presentation"])
 ```
 
-该示例只接受/暂停设置；不等待采样完成。没有 `restir on`、`iterate N` 位置参数别名，相机命令按 M22.9 后续交付。
+该示例只接受/暂停设置；不等待采样完成。没有 `restir on`、`iterate N` 位置参数别名；相机控制见 [M22.9 命令参考](editor-camera.md)。

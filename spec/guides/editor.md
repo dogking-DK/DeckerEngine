@@ -332,7 +332,7 @@ M22.7 扩展到嵌套对象/数组与兼容 JSON envelope，以下输入在光�
 诊断区分 `Incomplete`（缺值、未闭合、必填参数尚未输入）和 `Error`（已确定的类型/范围、重复/未知字段错误），
 最多 16 条，每条给出字符列号和 UTF-8 字节位置。例如 `scene.query limit=` 为待补充，`limit=1.0` 为整数类型错误。
 诊断只显示在辅助窗口，不进入命令日志/历史；业务前置条件、ID 存在性、guard 仍在最终 Enter/Run 时校验。
-M22.8 已支持下述视口设置命令；相机命令、面板帮助与设置搜索仍按后续阶段交付。
+M22.8/9 已支持下述视口和相机命令；面板帮助与设置搜索按 M22.10 交付。
 
 ### Edit 视口设置命令（M22.8）
 
@@ -351,6 +351,25 @@ target_spp=12 表示总目标 12 spp，已有样本不会作为额外 12 次来�
 命令成功表示设置已接受，查询 presentation.current、spp/target_spp、phase/error 确认实际画面。
 设置不会改变 Scene dirty/Undo；有草稿或正在操作 Edit Gizmo/导航时先完成操作。关闭/重开文档会使旧 guard 失效。
 这些命令仅在 Editor 宿主注册；完整字段、错误和 Python 用法见 [视口命令参考](../commands/editor-viewport.md)。
+
+### Edit 相机命令（M22.9）
+
+先输入 `editor.camera.query` 取得当前 guard，再提交明确单位的操作：
+
+```text
+editor.camera.orbit guard={"view_id":"<view_id>","document_id":"<document_id>","revision":0} yaw_deg=15 pitch_deg=20
+```
+
+占位符和 revision 替换为查询结果；角度单位为度。`editor.camera.set` 可修改模式、透视/正交、镜头、移速/灵敏度和姿态；
+`pan right=0.2 up=0.1` 使用米，`zoom steps=1` 使用滚轮步数，均要求 Orbit 和最新 guard。
+`frame` 接受实体或世界包围盒，`reset` 恢复姿态，`reset defaults=true` 同时恢复偏好。
+完整命令都使用 `editor.camera.` 前缀；目前没有 `cam.orbit 15 20` 位置参数别名。
+
+`editor.camera.set projection=` 按 Tab 可补全枚举；`editor.camera.frame entity=` 可按名称或 UUID 查找场景实体。
+相机与视口设置共享 guard；GUI、Console、IPC 任一入口修改都会使旧 guard 失效。
+外部写入遇到 Scene 草稿、Camera 弹层或活动 Gizmo/导航会拒绝。GUI 可保留 Scene 草稿继续导航；Simulation 相机独立。
+移速/灵敏度等偏好不重置路径采样；姿态/镜头变化按现有渲染规则更新。
+通过 `render_revision` 和 `presentation` 确认真实完成画面；完整范围、冲突及 Python 示例见[相机参考](../commands/editor-camera.md)。
 
 ## ReSTIR 直接光照
 

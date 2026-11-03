@@ -17,6 +17,10 @@
 
 namespace dk
 {
+Result<bool> Runtime::document_lighting() const {
+    auto doc=service_->document(); if(!doc) return std::unexpected(doc.error());
+    const auto environment=(*doc)->environment(); return environment.enabled || environment.clouds.enabled;
+}
 Runtime::~Runtime() { detach_editor_viewport(); }
 Result<void> Runtime::attach_editor_viewport(std::shared_ptr<EditorViewportService> service) {
     if(stopping_ || dispatching_ || !service || editor_viewport_)

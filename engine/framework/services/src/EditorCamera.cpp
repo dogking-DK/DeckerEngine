@@ -1,4 +1,4 @@
-#include <dk/editor/Camera.hpp>
+#include <dk/services/EditorCamera.hpp>
 #include <algorithm>
 #include <cmath>
 #include <numbers>
@@ -7,6 +7,39 @@ namespace dk::editor {
 namespace {
 bool range(double value,double minimum,double maximum) { return std::isfinite(value) && value>=minimum && value<=maximum; }
 Error invalid(const char* message) { return {ErrorCode::invalid_argument,message}; }
+}
+CameraPose Camera::pose() const { return {eye_,yaw_*180/std::numbers::pi,pitch_*180/std::numbers::pi,distance_}; }
+bool Camera::same_session(const Camera& c) const {
+    return eye_==c.eye_ && yaw_==c.yaw_ && pitch_==c.pitch_ && distance_==c.distance_ && settings_==c.settings_ &&
+        mode_==c.mode_ && perspective_mode_==c.perspective_mode_ && projection_==c.projection_ && standard_view_==c.standard_view_;
+}
+Result<void> Camera::set_pose(const CameraPose& p,double aspect) {
+    if(!p.eye.allFinite() || (p.eye.cwiseAbs().array()>1e9).any() || !range(p.yaw_deg,-180,180) ||
+       !range(p.pitch_deg,-90,90) || !range(p.focus_distance,.1,3000))
+        return std::unexpected(invalid("Camera pose requires finite eye within +/-1e9 m, yaw +/-180 deg, pitch +/-90 deg and focus distance 0.1..3000 m"));
+    // Preserve exact named-view orientation for an explicit no-op pose round trip.
+    const auto before=pose();
+    if(p.eye==before.eye && p.yaw_deg==before.yaw_deg && p.pitch_deg==before.pitch_deg && p.focus_distance==before.focus_distance) return validate(aspect);
+    Camera candidate=*this; candidate.eye_=p.eye; candidate.yaw_=radians(p.yaw_deg); candidate.pitch_=radians(p.pitch_deg);
+    candidate.distance_=p.focus_distance; candidate.standard_view_=StandardView::none;
+    if(auto valid=candidate.validate(aspect); !valid) return valid;
+    candidate.revision_=revision_+(candidate.world().matrix()!=world().matrix() ? 1 : 0); *this=candidate; return {};
+}
+Result<void> Camera::orbit_degrees(double yaw,double pitch,double aspect) {
+    if(!range(yaw,-360,360) || !range(pitch,-180,180)) return std::unexpected(invalid("Orbit deltas require yaw +/-360 and pitch +/-180 degrees"));
+    Camera candidate=*this;
+    candidate.orbit(-radians(yaw)/settings_.navigation.orbit_sensitivity,
+        radians(pitch)/(settings_.navigation.orbit_sensitivity*(settings_.navigation.invert_y ? -1 : 1)));
+    if(auto valid=candidate.validate(aspect); !valid) return valid;
+    *this=candidate; return {};
+}
+Result<void> Camera::pan_meters(double right,double up,double aspect) {
+    if(!range(right,-1e6,1e6) || !range(up,-1e6,1e6)) return std::unexpected(invalid("Pan deltas require finite meters within +/-1e6"));
+    Camera candidate=*this; const auto m=world().matrix();
+    candidate.eye_+=m.block<3,1>(0,0)*right+m.block<3,1>(0,1)*up;
+    if(!candidate.eye_.allFinite() || (candidate.eye_.cwiseAbs().array()>1e9).any()) return std::unexpected(invalid("Pan eye is outside +/-1e9 m"));
+    if(auto valid=candidate.validate(aspect); !valid) return valid;
+    candidate.revision_=revision_+(candidate.eye_!=eye_ ? 1 : 0); *this=candidate; return {};
 }
 void Camera::reset(bool fixture) {
     const Vec3d eye=fixture ? Vec3d{0,0,-2} : Vec3d{8,1.8,0};
@@ -189,4 +222,12 @@ Result<void> Camera::frame(const geometry::Bounds& bounds,double aspect) {
     }
     return {};
 }
+Result<void> Camera::set_navigation_mode(NavigationMode mode) {
+    if(mode!=NavigationMode::orbit && mode!=NavigationMode::fly && mode!=NavigationMode::walk)
+        return std::unexpected(Error{ErrorCode::invalid_argument,"Unknown navigation mode"});
+    if(projection_==ProjectionMode::orthographic && mode!=NavigationMode::orbit)
+        return std::unexpected(Error{ErrorCode::not_supported,"Orthographic supports Orbit only; return to Perspective for Fly/Walk"});
+    mode_=mode; return {};
+}
+
 }

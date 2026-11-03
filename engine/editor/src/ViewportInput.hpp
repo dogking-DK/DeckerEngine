@@ -9,27 +9,28 @@ namespace dk::editor::detail {
 class ViewportInput final {
 public:
     using Report=std::function<bool(const char*,Result<void>)>;
-    explicit ViewportInput(bool fixture,RelativeMouse& mouse) : camera_(fixture),navigation_(mouse),fixture_(fixture) {}
+    explicit ViewportInput(std::shared_ptr<EditorViewportService> host,RelativeMouse& mouse,bool fixture) : host_(std::move(host)),navigation_(mouse),fixture_(fixture) {}
     void toolbar(Workspace&,Viewport&,std::map<std::string,ImVec2>&,const Report&);
-    void aspect(double value) { aspect_=value; }
+    void aspect(double value) { aspect_=value; host_->camera_aspect(value); }
     void image(Workspace&,Viewport&,std::map<std::string,ImVec2>&,const Report&);
     void cancel();
     void begin_frame() { navigation_.begin_frame(); }
     void end_frame() { navigation_.end_frame(); }
     [[nodiscard]] bool navigating() const { return navigation_.active(); }
-    void environment(bool enabled) { camera_.set_environment(enabled); }
-    void pathtracing(bool enabled) { camera_.set_pathtracing(enabled); }
     [[nodiscard]] bool active() const { return bool(edit_); }
-    [[nodiscard]] const Camera& camera() const { return camera_; }
+    [[nodiscard]] Camera camera() const { return host_->camera(); }
     [[nodiscard]] const std::optional<TransformEdit>& edit() const { return edit_; }
     [[nodiscard]] std::uint64_t revision() const { return revision_; }
 private:
     enum class Mode { translate,rotate,scale };
-    Camera camera_;
+    std::shared_ptr<EditorViewportService> host_;
+    void commit_camera(Workspace&,const Camera&,const Report&);
+    void frame_camera(EntityId,const Report&);
+    DocumentId camera_document_;
     CameraSettingsUi settings_ui_;
     NavigationUi navigation_;
     double aspect_=1;
-    bool fixture_;
+    bool fixture_=false;
     Mode mode_=Mode::translate;
     std::optional<TransformEdit> edit_;
     std::uint64_t revision_=0;

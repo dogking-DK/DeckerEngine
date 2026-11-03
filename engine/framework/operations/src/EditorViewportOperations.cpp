@@ -1,4 +1,5 @@
 #include <dk/operations/EditorViewportOperations.hpp>
+#include "EditorHostCommands.hpp"
 
 namespace dk {
 namespace {
@@ -68,8 +69,7 @@ Json editor_viewport_state_json(const EditorViewportState& s) {
             {"has_image",p.has_image},{"current",p.current},{"renderer",p.renderer},{"phase",p.phase},{"error",p.error}}}};
 }
 Result<void> register_editor_viewport_commands(CommandRegistry& registry,std::function<std::shared_ptr<EditorViewportService>()> host) {
-    struct Entry { CommandDescriptor descriptor; CommandHandler handler; };
-    std::vector<Entry> entries;
+    std::vector<EditorCommandEntry> entries;
     for(const std::string action : {"query","set","pause","resume","reset"}) {
         auto fields=action=="set" ? properties() : Json::object();
         if(action!="query") fields["guard"]=guard_schema();
@@ -107,7 +107,12 @@ Result<void> register_editor_viewport_commands(CommandRegistry& registry,std::fu
             }});
     }
     // Validate the complete extension before publishing any names to a live Runtime.
+    auto camera=editor_camera_commands(host,result_schema());
+    for(auto& entry : camera) entries.push_back(std::move(entry));
     CommandRegistry preflight;
+    for(const auto& provider : registry.catalog_snapshot().completion_providers) {
+        auto declared=preflight.register_completion_provider(provider); if(!declared) return declared;
+    }
     for(const auto& e : entries) {
         if(registry.describe(e.descriptor.name)) return std::unexpected(Error{ErrorCode::conflict,"Viewport command already registered"});
         auto checked=preflight.add(e.descriptor,e.handler); if(!checked) return checked;

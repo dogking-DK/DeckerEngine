@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-11-03T15:04:51+08:00"
+updated_at: "2026-11-03T17:13:21+08:00"
 status: accepted
 ---
 
@@ -368,8 +368,10 @@ M22.7 使用 ConsoleStructure 定位嵌套 JSON/envelope，ConsoleAssistCache �
 Workspace 只读已发布实体/工程映射与 Runtime 活动目录，快照发布序号保护映射刷新；不产生业务 Task 或草稿刷新。
 实现与验证见 [0154](../development/0154-console-context-assistance.md)。M22.8 已接入 EditorViewportService 与 editor.viewport 五条命令，
 Path tracing/模式/光栅曝光控件使用同一权威设置；路径 worker 消费副本。独立 guard、失败保留画面与关闭验收见 [0155](../development/0155-editor-viewport-commands.md)。
+M22.9 把 Edit Camera 的权威值接入同一宿主服务，新增 editor.camera 七条命令；GUI 弹层/导航/Frame 与 Console/IPC 共用提交和 guard，Simulation 相机独立。
+相机纯值模型位于 dk_editor_services，导航适配留在 Editor；纯偏好不改变渲染版本，图像来源核对实际已发布相机，见 [0156](../development/0156-editor-camera-commands.md)。
 补全只编辑输入，后续搜索只定位控件；共享帮助不复制业务校验；视口会话命令由宿主注入的服务统一处理，
-不将相机/曝光等会话状态写入 Scene/Undo。当前界面操作和独立 render.capture 语义保持，实施阶段再补齐具体接口与命令表。
+不将相机/曝光等会话状态写入 Scene/Undo。独立 render.capture 语义保持；当前命令表见[视口](../commands/editor-viewport.md)与[相机](../commands/editor-camera.md)。
 
 ## M17.6 缓存与交互调度
 

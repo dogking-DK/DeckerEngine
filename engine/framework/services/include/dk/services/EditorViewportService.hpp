@@ -1,5 +1,6 @@
 #pragma once
 #include <dk/services/SceneService.hpp>
+#include <dk/services/EditorCamera.hpp>
 #include <functional>
 #include <memory>
 
@@ -30,7 +31,11 @@ struct EditorViewportGuard {
     std::uint64_t revision=0;
     bool operator==(const EditorViewportGuard&) const = default;
 };
-struct EditorViewportContext { DocumentId document_id; std::uint64_t scene_revision=0; std::string blocked_reason; };
+struct EditorViewportContext {
+    DocumentId document_id; std::uint64_t scene_revision=0; std::string blocked_reason;
+    bool scene_lighting=false;
+    std::string gui_camera_blocked_reason;
+};
 struct EditorViewportCapabilities { bool pathtracing=false; std::string unavailable; };
 struct EditorViewportPresentation {
     EditorViewportGuard observed;
@@ -49,20 +54,32 @@ struct EditorViewportState {
     EditorViewportPresentation presentation;
 };
 enum class EditorViewportControl { pause,resume,reset };
+struct EditorCameraState { EditorViewportState viewport; editor::Camera camera; double aspect=1; };
 class EditorViewportService final {
 public:
     // Owner-thread only. The host must close before destroying the context owner.
     using Context = std::function<Result<EditorViewportContext>()>;
-    static Result<std::shared_ptr<EditorViewportService>> create(EditorViewportCapabilities,Context);
+    using FrameBounds=std::function<Result<geometry::Bounds>(EntityId,DocumentId,std::uint64_t)>;
+    static Result<std::shared_ptr<EditorViewportService>> create(EditorViewportCapabilities,Context,bool fixture=false);
     Result<EditorViewportState> query() const;
     Result<EditorViewportState> set(EditorViewportGuard,const EditorViewportSettings&,bool explicit_path_fields=false);
     Result<EditorViewportState> control(EditorViewportGuard,EditorViewportControl);
     const EditorViewportSettings& settings() const { return settings_; }
+    [[nodiscard]] editor::Camera camera() const;
+    [[nodiscard]] Result<EditorCameraState> query_camera() const;
+    // GUI may finish its own popup/navigation, and retain Scene drafts; Gizmo still blocks camera writes.
+    [[nodiscard]] Result<EditorCameraState> commit_camera(EditorViewportGuard,editor::Camera,bool from_gui=false);
+    [[nodiscard]] Result<EditorCameraState> frame_camera(EditorViewportGuard,EntityId,bool from_gui=false);
+    [[nodiscard]] Result<EditorCameraState> reset_camera(EditorViewportGuard,bool defaults,bool from_gui=false);
+    void camera_aspect(double);
+    [[nodiscard]] double camera_aspect() const { return aspect_; }
+    void frame_bounds(FrameBounds resolver) { if(!closed_) frame_bounds_=std::move(resolver); }
     void present(EditorViewportGuard,EditorViewportPresentation);
     void close();
 private:
-    EditorViewportService(EditorViewId id,EditorViewportCapabilities capabilities,Context context)
-        : id_(id),capabilities_(std::move(capabilities)),context_(std::move(context)) {}
+    EditorViewportService(EditorViewId id,EditorViewportCapabilities capabilities,Context context,bool fixture)
+        : id_(id),capabilities_(std::move(capabilities)),context_(std::move(context)),camera_(fixture),fixture_(fixture) {}
+    editor::Camera effective_camera(const EditorViewportContext&) const;
     Result<EditorViewportState> write(EditorViewportGuard,const EditorViewportSettings&,bool explicit_path,bool resetting);
     EditorViewId id_;
     std::uint64_t revision_=0;
@@ -70,6 +87,10 @@ private:
     Context context_;
     EditorViewportSettings settings_;
     EditorViewportPresentation presentation_;
+    mutable editor::Camera camera_; // Derived renderer/environment context is refreshed on owner-thread reads.
+    FrameBounds frame_bounds_;
+    double aspect_=1;
+    bool fixture_=false;
     bool closed_=false;
 };
 }

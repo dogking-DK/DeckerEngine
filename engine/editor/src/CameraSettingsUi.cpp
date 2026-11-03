@@ -12,6 +12,7 @@ bool CameraSettingsUi::draw(Camera& camera,bool fixture,double aspect,std::map<s
     ImGui::SetNextWindowSize({460,0},ImGuiCond_Appearing);
     const bool open=ImGui::BeginPopup("Camera settings");
     if(open) {
+        if(cancel_) ImGui::CloseCurrentPopup();
         ImGui::Text("%s / %s",camera.navigation_mode()==NavigationMode::orbit ? "Orbit" : camera.navigation_mode()==NavigationMode::fly ? "Fly" : "Walk",
             camera.projection_mode()==ProjectionMode::orthographic ? "Orthographic" : "Perspective");
         ImGui::TextDisabled("Session settings for this viewport");
@@ -90,6 +91,7 @@ bool CameraSettingsUi::draw(Camera& camera,bool fixture,double aspect,std::map<s
     }
     ImGui::EndDisabled();
     if(!error_.empty() && !open) ImGui::TextWrapped("%s",error_.c_str());
+    open_=ImGui::IsPopupOpen("Camera settings"); cancel_=false;
     ImGui::PopID(); return open;
 }
 }

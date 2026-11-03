@@ -1,7 +1,7 @@
 ---
 module: editor-interaction
 created_at: "2026-10-08T11:35:00+08:00"
-updated_at: "2026-10-19T12:40:31+08:00"
+updated_at: "2026-11-03T17:13:21+08:00"
 status: accepted
 ---
 
@@ -20,7 +20,7 @@ Frame、F、Home重新取景；默认 Orbit 的右键环绕、中键平移、滚
 
 ## 边界
 
-CPU Camera 与变换手势进入 `dk_editor_model`；Geometry 提供独立射线/BVH。
+CPU Camera 值与 Edit 相机会话归 `dk_editor_services`；导航与变换手势在 `dk_editor_model`；Geometry 提供独立射线/BVH。
 UI 私有适配负责 ImGui 图像矩形、轴/环绘制、输入路由和 DiskScene 网格到 BVH 的转换。
 沿用已有 ImGui/Eigen，不新增三方库。Gizmo 首版提供本地轴平移、旋转、缩放，
 使用原始 TRS 及父级仿射变换计算，不对含 shear 的世界矩阵强行 TRS 分解。
@@ -74,7 +74,7 @@ M18.1 已实现镜头与导航设置；M18.2 接入 Fly/Walk；M18.3 按下述�
 
 | 范围 | 源码检查结果 | 扩展影响 |
 | --- | --- | --- |
-| 编辑相机 | [Camera](../../engine/editor/src/Camera.cpp) 仅有 target/yaw/pitch/distance；右键 Orbit、中键 Pan、滚轮 Dolly、F 聚焦与 Home 重置 | 没有导航模式、键盘连续移动、移速或可调镜头 |
+| 编辑相机 | [Camera](../../engine/framework/services/src/EditorCamera.cpp) 仅有 target/yaw/pitch/distance；右键 Orbit、中键 Pan、滚轮 Dolly、F 聚焦与 Home 重置 | 没有导航模式、键盘连续移动、移速或可调镜头 |
 | 投影与尺度 | FOV 固定 65°，投影、ray、pan、frame、units_per_pixel 共用硬编码 tan(32.5°)；far=10000，near 通常 0.05、环境标志启用时为 1 | FOV 必须同时进入所有投影/交互计算，不能只改矩阵 |
 | 输入 | [ViewportInput](../../engine/editor/src/ViewportInput.cpp) 与 [SimulationViewUi](../../engine/editor/src/SimulationViewUi.cpp) 分别实现导航 | 抽出共用控制器；编辑和模拟仍持有独立相机状态 |
 | 基础光栅/模拟 | [RenderView](../../engine/render/data/src/RenderScene.cpp) 接收有限可逆投影；[基础管线](../../engine/render/pipeline/src/PipelinePolicy.hpp) 和 [模拟视口](../../engine/editor/src/SimulationViewport.cpp) 消费矩阵 | 有接入正交的基础，但没有完整正交编辑器功能或专项验收 |
@@ -177,7 +177,7 @@ Capture/sequence 的正交字段见下述兼容契约；路径/光栅环境各�
 
 ### 数据模型、共享计算与切换
 
-`dk_editor_model` 维护 Camera 的姿态/镜头值与不依赖 ImGui/SDL 的导航控制器；UI 将每帧输入转为
+`dk_editor_services` 维护 Camera 的姿态/镜头值；`dk_editor_model` 维护不依赖 ImGui/SDL 的导航控制器；UI 将每帧输入转为
 `NavigationInput`（观察增量、移动轴、滚轮、修饰键、有效 dt），Edit/Simulation 共用同一更新规则。
 模型建议以 eye + yaw/pitch 为唯一姿态，pivot/focus_distance 用于 Orbit 和取景；不维护两套可漂移的眼点。
 纯投影/反投影计算适合提取到 [Foundation Math](foundation-math.md)，供 Editor 与 Capture/Render 复用，
@@ -269,3 +269,9 @@ M18.1 就消除一致性驱动中的固定 65°，无需等正交 schema 才保�
 CPU 控制器保持可在不启用 GUI/GPU 的配置中构建。窗口自动化一律 `--background`，不能为了捕获测试抢用户焦点；
 相对鼠标的 OS 捕获与输入注入分开验证，不能只测试直接调用 Camera 方法。
 GPU 正确性使用 required validation；持续导航分别记录 GUI 呈现与实际新视图发布，停机后核对最终镜头/序号，不能用 GUI FPS 代替画面更新。
+
+## M22.9 相机服务接入
+
+Edit Camera 由 CPU EditorViewportService 持有；GUI 每次构造候选并经服务提交，Simulation 保持独立。
+Camera 值模型下移至 framework/services，旧公开头作为兼容入口；相机导航数学和输入规则不变。
+相机/视口共享 guard 与阻止原因，命令单位、Frame 来源及原子失败规则见 [M22.9 契约](editor-console.md#m229-实施契约edit-相机命令)。

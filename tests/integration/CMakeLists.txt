@@ -1031,6 +1031,14 @@ if(TARGET dk_editor_app AND TARGET dk_render_pathtracing AND TARGET dk_ctl AND W
                 --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
         set_tests_properties(dk.editor.viewport_commands_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+        add_test(NAME dk.editor.camera_commands_gpu_validation
+            COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python" "PYTHONDONTWRITEBYTECODE=1"
+                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/EditorCameraCommandTest.py"
+                --editor "$<TARGET_FILE:dk_editor_app>" --client "$<TARGET_FILE:dk_ctl>" --runner "$<TARGET_FILE:dk_run>"
+                --fixtures "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk"
+                --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+        set_tests_properties(dk.editor.camera_commands_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
         add_test(NAME dk.editor.restir_pathtracing_gpu_validation
             COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python" "PYTHONDONTWRITEBYTECODE=1"
                 "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/EditorPathTraceTest.py" --restir

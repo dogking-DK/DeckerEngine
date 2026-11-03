@@ -1,7 +1,7 @@
 ---
 id: "0131"
 created_at: "2026-10-19T10:58:00+08:00"
-updated_at: "2026-10-19T11:24:37+08:00"
+updated_at: "2026-11-03T17:13:21+08:00"
 status: completed
 design_refs:
   - ../design/editor-interaction.md
@@ -22,7 +22,7 @@ design_refs:
 ## 实际变更
 
 - [Projection](../../engine/foundation/math/src/Projection.cpp) 提供正交矩阵与近裁剪面平行射线；Math 无新增依赖。
-- [Camera](../../engine/editor/src/Camera.cpp) 实现焦平面尺度往返、正交高度/平移/缩放、精确六视向、完整边界取景与原子拒绝；正交只允许 Orbit，返回透视恢复之前的导航模式。
+- [Camera](../../engine/framework/services/src/EditorCamera.cpp)（M22.9 迁入 Services，更新代码链接）实现焦平面尺度往返、正交高度/平移/缩放、精确六视向、完整边界取景与原子拒绝；正交只允许 Orbit，返回透视恢复之前的导航模式。
 - 两视口共用镜头/视向面板；模拟正交 Frame cloth 保留视向。固定极点返回透视后零导航输入保留姿态，实际观察输入才退出固定视向。
 - [Viewport](../../engine/editor/src/Viewport.cpp) 的会话 Unlit inspection 显式选择基础管线，key 包含显示选项，取消旧环境请求；原 Scene 不变。UI 与实际提交分别拒绝路径/环境正交，旧图禁止拾取。
 - 扩展现有数学、相机、管线及窗口验收；[OrthographicSmoke](../../engine/editor/src/OrthographicSmoke.cpp) 经真实 ImGui 输入覆盖六视图、拾取、三种 Gizmo、取消/历史、导航、外部环境拒绝与 Unlit 恢复。无新增测试程序/命令 schema。

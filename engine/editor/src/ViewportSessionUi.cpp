@@ -1,7 +1,7 @@
 #include "WorkbenchUi.hpp"
 namespace dk::editor::detail {
 bool WorkbenchUi::viewport_settings_changed(const EditorViewportSettings& candidate) {
-    model_.viewport_interacting(input_.active() || input_.navigating());
+    model_.viewport_interacting(input_.active() || input_.navigating(),input_.active());
     auto& host=*model_.editor_viewport();
     if(candidate==host.settings()) return true;
     auto state=host.query();
@@ -10,7 +10,7 @@ bool WorkbenchUi::viewport_settings_changed(const EditorViewportSettings& candid
     return report("Viewport settings",result ? Result<void>{} : std::unexpected(result.error()));
 }
 void WorkbenchUi::viewport_action(EditorViewportControl action) {
-    model_.viewport_interacting(input_.active() || input_.navigating());
+    model_.viewport_interacting(input_.active() || input_.navigating(),input_.active());
     auto& host=*model_.editor_viewport(); auto state=host.query();
     if(!state) { report("Viewport action",std::unexpected(state.error())); return; }
     auto result=host.control(state->guard,action);

@@ -157,5 +157,6 @@
 | 0153 | [M22.6 Console 基础补全与参数提示](0153-console-completion.md) | editor-console、editor | completed |
 | 0154 | [M22.7 嵌套辅助、动态候选与输入诊断](0154-console-context-assistance.md) | editor-console、editor、runtime、commands | completed |
 | 0155 | [M22.8 Edit 视口会话与设置命令](0155-editor-viewport-commands.md) | editor-console、editor、runtime、commands、application-services | completed |
+| 0156 | [M22.9 Edit 相机设置与操作命令](0156-editor-camera-commands.md) | editor-console、editor-interaction、editor、runtime、application-services | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

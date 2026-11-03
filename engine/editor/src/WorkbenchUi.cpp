@@ -7,7 +7,7 @@
 #include <unordered_map>
 
 namespace dk::editor::detail {
-WorkbenchUi::WorkbenchUi(Workspace& model,bool fixture,SDL_Window* window,unsigned acceptance_path_extent) : model_(model),relative_mouse_(window),input_(fixture,relative_mouse_),manifest_(take(path_to_utf8(model.manifest()))),simulation_navigation_(relative_mouse_),acceptance_path_extent_(acceptance_path_extent) {
+WorkbenchUi::WorkbenchUi(Workspace& model,bool fixture,SDL_Window* window,unsigned acceptance_path_extent) : model_(model),relative_mouse_(window),input_(model.editor_viewport(),relative_mouse_,fixture),manifest_(take(path_to_utf8(model.manifest()))),simulation_navigation_(relative_mouse_),acceptance_path_extent_(acceptance_path_extent) {
     window_id_ = SDL_GetWindowID(window);
     log_.push_back("Opened "+manifest_);
     log_.push_back("Viewport: CPU picking / local Gizmo / Orbit, Fly and Walk. Edits use guarded commands.");
@@ -237,7 +237,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     if (ImGui::GetIO().AppFocusLost || ImGui::IsKeyPressed(ImGuiKey_Escape,false)) cancel_interaction();
     if (input_.edit() && (!model_.snapshot() || input_.edit()->guard.document_id!=model_.snapshot()->state.document_id ||
         input_.edit()->guard.revision!=model_.snapshot()->state.revision)) input_.cancel();
-    model_.viewport_interacting(input_.active() || input_.navigating());
+    model_.viewport_interacting(input_.active() || input_.navigating(),input_.active());
     toolbar();
     const auto dock=ImGui::DockSpaceOverViewport(0,ImGui::GetMainViewport());
     if (!layout_) {
@@ -266,8 +266,10 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     path_panel(preview);
 #endif
     const bool visible=ImGui::Begin("Viewport",nullptr,ImGuiWindowFlags_NoScrollWithMouse|ImGuiWindowFlags_NoScrollbar);
-    if (!visible) { input_.cancel(); preview.suspend_path(); }
-    if (!simulation_view(preview,visible)) {
+    if (!visible) { input_.cancel(); model_.camera_draft(false); preview.suspend_path(); }
+    const bool simulation_displayed=simulation_view(preview,visible);
+    if(simulation_displayed) model_.camera_draft(false);
+    if (!simulation_displayed) {
     preview.show_edit();
     auto viewport_settings=model_.editor_viewport()->settings();
 #ifdef DK_EDITOR_PATHTRACING
@@ -295,8 +297,6 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     ImGui::BeginDisabled(model_.pending() || input_.active() || input_.navigating() || path_projection);
     if(ImGui::Checkbox("Unlit inspection",&viewport_settings.unlit_inspection)) viewport_settings_changed(viewport_settings);
     mark("unlit_inspection"); ImGui::EndDisabled();
-    input_.pathtracing(path_projection);
-    input_.environment(environment_projection && !path_projection && !viewport_settings.unlit_inspection);
     // Keep one line in all modes so toggling a preference does not resize the image.
     ImGui::TextDisabled(path_projection ? "Path trace supports Perspective and Orthographic" :
         environment_projection && !viewport_settings.unlit_inspection ? "Atmosphere and clouds support Perspective and Orthographic" :
@@ -350,7 +350,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     }
     }
     ImGui::End();
-    model_.viewport_interacting(input_.active() || input_.navigating());
+    model_.viewport_interacting(input_.active() || input_.navigating(),input_.active());
     observe_viewport(preview,visible && !preview.simulation_run());
     assets(); console(); simulation(); confirmation();
     input_.end_frame(); simulation_navigation_.end_frame();

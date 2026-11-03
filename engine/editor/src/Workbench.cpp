@@ -8,6 +8,7 @@
 #ifdef DK_EDITOR_PATHTRACING
 #include "PathSmoke.hpp"
 #include "ViewportCommandSmoke.hpp"
+#include "CameraCommandSmoke.hpp"
 #endif
 #include "EditorSupport.hpp"
 #include <dk/memory/MemorySystem.hpp>
@@ -17,6 +18,7 @@
 #include <imgui_impl_sdl3.h>
 #include <SDL3/SDL.h>
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 
@@ -56,7 +58,7 @@ void write_capture(const std::filesystem::path& output,const graphics::ReadbackR
 }
 int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory::ResourceHandle heap,Diagnostics& diagnostics) {
     if(options.smoke) std::setvbuf(stdout,nullptr,_IONBF,0); // Preserve the last acceptance stage on native crashes.
-    const bool path_acceptance=options.pathtrace_smoke || options.desktop_render_smoke || options.viewport_command_smoke;
+    const bool path_acceptance=options.pathtrace_smoke || options.desktop_render_smoke || options.viewport_command_smoke || options.camera_command_smoke;
     if ((path_acceptance || options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe) && !std::filesystem::is_regular_file(options.root/".dk-editor-smoke"))
         throw std::runtime_error("--smoke requires a disposable project with .dk-editor-smoke marker");
     ShutdownProbe shutdown{options.simulation_response_probe};
@@ -79,8 +81,8 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     device.validation=options.validation ? graphics::ValidationMode::required : options.disable_validation ?
         graphics::ValidationMode::disabled : default_validation;
 #ifdef DK_EDITOR_PATHTRACING
-    device.ray_tracing=(options.pathtrace_smoke || options.viewport_command_smoke) ? graphics::RayTracingMode::required : graphics::RayTracingMode::if_available;
-    device.sampled_image_indexing=(options.pathtrace_smoke || options.viewport_command_smoke) ? graphics::SampledImageIndexingMode::required : graphics::SampledImageIndexingMode::if_available;
+    device.ray_tracing=(options.pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke) ? graphics::RayTracingMode::required : graphics::RayTracingMode::if_available;
+    device.sampled_image_indexing=(options.pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke) ? graphics::SampledImageIndexingMode::required : graphics::SampledImageIndexingMode::if_available;
 #endif
     device.diagnostic_sink=diagnostic; device.diagnostic_user_data=&diagnostics;
 #if defined(DK_SIMULATION_GPU) || defined(DK_EDITOR_PATHTRACING)
@@ -112,12 +114,21 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     GuiRenderer gui{queue,window};
     ShutdownPhase viewport_phase{shutdown,"viewport"};
     Viewport viewport{memory,heap,queue,device,options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || path_acceptance};
-    check(model->attach_editor_viewport({viewport.path_unavailable().empty(),viewport.path_unavailable()}));
+    check(model->attach_editor_viewport({viewport.path_unavailable().empty(),viewport.path_unavailable()},options.fixture_camera));
+    model->editor_viewport()->frame_bounds([&](EntityId entity,DocumentId document,std::uint64_t revision)->Result<geometry::Bounds> {
+        const auto* snapshot=model->snapshot();
+        if(!snapshot || snapshot->state.document_id!=document || snapshot->state.revision!=revision ||
+           viewport.simulation_run() || !viewport.current(snapshot->state))
+            return std::unexpected(Error{ErrorCode::invalid_state,"Current Edit geometry must be published before framing an entity"});
+        if(std::ranges::find(snapshot->scene.entities(),entity,&EntityData::id)==snapshot->scene.entities().end())
+            return std::unexpected(Error{ErrorCode::not_found,"Frame entity is not in the active document"});
+        return viewport.bounds(entity,snapshot->scene);
+    });
     struct ViewportHostScope {
         Workspace& model;
         ~ViewportHostScope() { model.detach_editor_viewport(); }
     } viewport_host{*model};
-    WorkbenchUi ui{*model,options.fixture_camera,take(window.native_sdl_window()),(options.media_pathtrace_smoke || options.viewport_command_smoke) ? 96u : 0u};
+    WorkbenchUi ui{*model,options.fixture_camera,take(window.native_sdl_window()),(options.media_pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke) ? 96u : 0u};
     SmokeDriver smoke{options.interaction_smoke,options.simulation_smoke};
     std::optional<ConsistencyDriver> consistency;
     std::optional<SimulationConsistencyDriver> simulation_consistency;
@@ -128,6 +139,8 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
 #ifdef DK_EDITOR_PATHTRACING
     std::optional<PathSmoke> path_smoke;
     std::optional<ViewportCommandSmoke> viewport_smoke;
+    std::optional<CameraCommandSmoke> camera_smoke;
+    if(options.camera_command_smoke) camera_smoke.emplace(options.root);
     if(options.viewport_command_smoke) viewport_smoke.emplace(options.root);
     if(options.pathtrace_smoke || options.desktop_render_smoke) path_smoke.emplace(options.root,options.desktop_render_smoke,options.media_pathtrace_smoke,options.restir_pathtrace_smoke);
 #else
@@ -167,6 +180,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
 #ifdef DK_EDITOR_PATHTRACING
                 if(path_smoke) path_smoke->input(ui,*model,viewport,window);
                 if(viewport_smoke) viewport_smoke->input(ui,*model);
+                if(camera_smoke) camera_smoke->input(ui,*model);
 #endif
                 if (options.smoke) smoke.input(*model,ui,window,viewport);
                 if (consistency) consistency->input(ui,*model,viewport);
@@ -197,6 +211,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
 #ifdef DK_EDITOR_PATHTRACING
             if(path_smoke) path_smoke->presented(*model,ui,viewport);
             if(viewport_smoke) viewport_smoke->presented(ui,*model,viewport);
+            if(camera_smoke) camera_smoke->presented(ui,*model,viewport);
 #endif
             if (response) response->presented();
             if (capture) write_capture(options.screenshot,*capture);

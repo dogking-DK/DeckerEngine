@@ -10,19 +10,23 @@ Workspace::~Workspace() {
 #endif
     detach_editor_viewport();
 }
-Result<void> Workspace::attach_editor_viewport(EditorViewportCapabilities capabilities) {
+Result<void> Workspace::attach_editor_viewport(EditorViewportCapabilities capabilities,bool fixture) {
     if(editor_viewport_) return std::unexpected(Error{ErrorCode::invalid_state,"Editor viewport already attached"});
     auto service=EditorViewportService::create(std::move(capabilities),[this]()->Result<EditorViewportContext> {
         if(stopping()) return std::unexpected(Error{ErrorCode::invalid_state,"Editor is stopping"});
         auto state=runtime_->document_state(); if(!state) return std::unexpected(state.error());
+        auto lighting=runtime_->document_lighting(); if(!lighting) return std::unexpected(lighting.error());
+        const std::string gui_blocked=viewport_gizmo_ ? "Finish the active Edit Gizmo first" : "";
         return EditorViewportContext{state->document_id,state->revision,pending() ? "Apply or Revert pending Inspector/Environment drafts first" :
-            viewport_interacting_ ? "Finish the active Edit Gizmo/navigation gesture first" : ""};
-    });
+            !gui_blocked.empty() ? gui_blocked :
+            viewport_interacting_ ? "Finish the active Edit navigation gesture first" :
+            camera_draft_ && camera_draft_document_==state->document_id ? "Apply or Cancel the Camera settings draft first" : "",*lighting,gui_blocked};
+    },fixture);
     if(!service) return std::unexpected(service.error());
     auto attached=runtime_->attach_editor_viewport(*service); if(!attached) return attached;
     editor_viewport_=std::move(*service); return {};
 }
-void Workspace::detach_editor_viewport() { runtime_->detach_editor_viewport(); editor_viewport_.reset(); viewport_interacting_=false; }
+void Workspace::detach_editor_viewport() { runtime_->detach_editor_viewport(); editor_viewport_.reset(); viewport_interacting_=viewport_gizmo_=camera_draft_=false; }
 ConsoleReferenceVersion Workspace::console_reference_version() const {
     if (stopping()) return {};
     return {snapshot_ ? snapshot_->state.document_id : DocumentId{},snapshot_ ? snapshot_->state.revision : 0,runtime_->asset_catalog_version(),snapshot_publication_};
@@ -113,7 +117,7 @@ Result<Json> Workspace::execute_console(std::string_view text) {
     return detail::dispatch_console(*command, pending(),
         [this](std::string_view method, const Json& params) { return call(method, params); },
         [this] { return stopping(); }, [this,&command]()->Result<void> {
-            if(command->method.starts_with("editor.viewport.")) return {};
+            if(command->method.starts_with("editor.viewport.") || command->method.starts_with("editor.camera.")) return {};
             return refresh();
         });
 }

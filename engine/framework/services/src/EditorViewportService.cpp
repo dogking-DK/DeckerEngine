@@ -15,17 +15,18 @@ Result<void> validate(const EditorViewportSettings& settings) {
     return {};
 }
 }
-Result<std::shared_ptr<EditorViewportService>> EditorViewportService::create(EditorViewportCapabilities capabilities,Context context) {
+Result<std::shared_ptr<EditorViewportService>> EditorViewportService::create(EditorViewportCapabilities capabilities,Context context,bool fixture) {
     if(!context) return std::unexpected(Error{ErrorCode::invalid_argument,"Viewport context is required"});
     auto id=EditorViewId::generate(); if(!id) return std::unexpected(id.error());
-    return std::shared_ptr<EditorViewportService>(new EditorViewportService(*id,std::move(capabilities),std::move(context)));
+    return std::shared_ptr<EditorViewportService>(new EditorViewportService(*id,std::move(capabilities),std::move(context),fixture));
 }
 Result<EditorViewportState> EditorViewportService::query() const {
     if(closed_) return std::unexpected(Error{ErrorCode::invalid_state,"Editor viewport is closed"});
     auto context=context_(); if(!context) return std::unexpected(context.error());
     EditorViewportState state{{id_,context->document_id,revision_},settings_,capabilities_,context->blocked_reason,presentation_};
     state.presentation.current &= state.presentation.observed==state.guard &&
-        state.presentation.document_id==context->document_id && state.presentation.scene_revision==context->scene_revision;
+        state.presentation.document_id==context->document_id && state.presentation.scene_revision==context->scene_revision &&
+        state.presentation.camera_revision==effective_camera(*context).revision();
     return state;
 }
 Result<EditorViewportState> EditorViewportService::write(EditorViewportGuard guard,const EditorViewportSettings& candidate,bool explicit_path,bool resetting) {
@@ -62,10 +63,13 @@ Result<EditorViewportState> EditorViewportService::control(EditorViewportGuard g
 void EditorViewportService::present(EditorViewportGuard observed,EditorViewportPresentation value) {
     auto state=query();
     if(!state || state->guard!=observed) return;
+    auto context=context_();
+    value.current &= context && value.document_id==context->document_id && value.scene_revision==context->scene_revision &&
+        value.camera_revision==effective_camera(*context).revision();
     value.observed=observed;
     if(value.has_image && value.current) value.shown=observed;
     else if(value.has_image) value.shown=presentation_.shown;
     presentation_=std::move(value);
 }
-void EditorViewportService::close() { closed_=true; context_={}; }
+void EditorViewportService::close() { closed_=true; context_={}; frame_bounds_={}; }
 }

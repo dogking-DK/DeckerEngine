@@ -31,6 +31,7 @@ int main(int argc,char** argv) {
             else if (arg=="--restir-pathtrace-smoke") { options.restir_pathtrace_smoke=true; options.media_pathtrace_smoke=true; options.pathtrace_smoke=true; }
             else if (arg=="--media-pathtrace-smoke") { options.media_pathtrace_smoke=true; options.pathtrace_smoke=true; }
             else if (arg=="--pathtrace-smoke") options.pathtrace_smoke=true;
+            else if (arg=="--camera-command-smoke") options.camera_command_smoke=true;
             else if (arg=="--viewport-command-smoke") options.viewport_command_smoke=true;
             else if (arg=="--desktop-render-smoke") options.desktop_render_smoke=true;
             else if (arg=="--smoke") options.smoke=true;
@@ -57,12 +58,15 @@ int main(int argc,char** argv) {
                     "            --environment-consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --simulation-consistency-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
+                    "            --camera-command-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT\n"
                     "            --viewport-command-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT\n"
                     "            --pathtrace-smoke/--media-pathtrace-smoke/--restir-pathtrace-smoke --pipe NAME --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --simulation-response-probe --pipe NAME --root DISPOSABLE_PROJECT");
                 return 0;
             } else throw std::runtime_error("Unknown dk-editor option");
         }
+        if(options.camera_command_smoke && (options.viewport_command_smoke || options.pathtrace_smoke || options.desktop_render_smoke || options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe || options.frames || options.pipe.empty() || !options.fixture_camera))
+            throw std::runtime_error("--camera-command-smoke requires --pipe and --fixture-camera; incompatible with other acceptance modes");
         if(options.viewport_command_smoke && (options.pathtrace_smoke || options.desktop_render_smoke || options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe || options.frames || options.pipe.empty() || !options.fixture_camera))
             throw std::runtime_error("--viewport-command-smoke requires --pipe and --fixture-camera; incompatible with other acceptance modes");
         if(options.desktop_render_smoke && (options.pathtrace_smoke || options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe || options.frames || options.fixture_camera || options.screenshot.empty()))

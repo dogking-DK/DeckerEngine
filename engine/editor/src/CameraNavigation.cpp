@@ -3,13 +3,6 @@
 #include <numbers>
 
 namespace dk::editor {
-Result<void> Camera::set_navigation_mode(NavigationMode mode) {
-    if(mode!=NavigationMode::orbit && mode!=NavigationMode::fly && mode!=NavigationMode::walk)
-        return std::unexpected(Error{ErrorCode::invalid_argument,"Unknown navigation mode"});
-    if(projection_==ProjectionMode::orthographic && mode!=NavigationMode::orbit)
-        return std::unexpected(Error{ErrorCode::not_supported,"Orthographic supports Orbit only; return to Perspective for Fly/Walk"});
-    mode_=mode; return {};
-}
 Result<void> CameraNavigation::update(Camera& camera,const NavigationInput& input) {
     if(!active_ || camera.mode_==NavigationMode::orbit) return {};
     const auto invalid=[] { return std::unexpected(Error{ErrorCode::invalid_argument,"Navigation requires finite input, nonnegative dt and movement axes in [-1,1]"}); };

@@ -1,7 +1,7 @@
 ---
 module: editor-console
 created_at: "2026-11-03T10:31:20+08:00"
-updated_at: "2026-11-03T15:04:51+08:00"
+updated_at: "2026-11-03T17:13:21+08:00"
 status: accepted
 ---
 
@@ -317,11 +317,11 @@ M22.7 实施契约（[0154](../development/0154-console-context-assistance.md)�
 | M22.8 视口 | 查询；Raster/Path trace；Surface/Scene media；Classic/ReSTIR、候选数/时空复用；target_spp、seed、bounces、天空/太阳开关、曝光；暂停/继续/重置；已有介质时间/云散射会话参数 | Edit 视口会话，不改 Scene dirty/Undo；target_spp 为绝对目标，不承诺 `iterate N` 精确追加；能力缺失时明确拒绝 |
 | M22.9 相机 | 查询；Orbit/Fly/Walk、透视/正交、标准视图；FOV/裁剪/正交高度、速度/灵敏度；姿态、Orbit/Pan/Zoom、Frame/Reset | Edit 视口相机，角度/距离/步长单位显式；不修改物体 Transform，不引入碰撞/重力；Simulation 独立视口命令后置 |
 
-采用 `editor.*` 宿主命名空间，M22.8 的具体命令表见[视口参考](../commands/editor-viewport.md)；M22.9 相机表在实施前补齐。
+采用 `editor.*` 宿主命名空间，M22.8 的具体命令表见[视口参考](../commands/editor-viewport.md)；M22.9 见[相机参考](../commands/editor-camera.md)。
 通过宿主注入 CPU 可见的会话控制服务接口，由 Editor owner 线程处理；Runtime/Operations 不反向链接 ImGui 或整个 Editor。
 只在附加了服务的 Editor 注册，runner 不提供虚假的可用命令；Console、Editor IPC 与 GUI 调用相同会话控制逻辑。
 
-状态契约（M22.8/9 的实施前置）：
+状态契约（M22.8/9 共用）：
 
 - 查询返回明确视图身份、会话修订号、设置和能力；写入携带匹配的会话 guard，不能静默选择最后聚焦窗口。
   Scene guard 与视口会话 guard 分离；换文档、关闭/替换视图使旧观察失效，不自动更新历史命令里的 guard。
@@ -338,7 +338,7 @@ M22.7 实施契约（[0154](../development/0154-console-context-assistance.md)�
   editor.viewport.query/set/pause/resume/reset。runner 默认无这些命令；Workspace 持有会话，GUI 不再保存另一份权威路径参数。
   Runtime 不反向依赖 Editor/ImGui/Render。路径预览设置的纯值类型下移，worker 继续消费拥有型副本。
 - query 无参数，返回 guard、settings、capabilities、blocked_reason、presentation。guard 为
-  `{view_id,document_id,revision}`；view_id 标识本次 Edit 视口，document_id 从 Runtime 当前场景实时读取，revision 只计设置变化。
+  `{view_id,document_id,revision}`；view_id 标识本次 Edit 视口，document_id 从 Runtime 当前场景实时读取，revision 计视口设置与 Edit 相机偏好/姿态变化。
   文档切换保留用户视口偏好，但旧文档 guard 失效；detach/重新 attach 分配新 view_id，旧服务关闭并清除上下文回调。
 - set 使用顶层可选命名参数：renderer=raster/pathtrace、medium_mode=surface_only/scene_media、direct_lighting=classic/restir_di、
   initial_candidates=1..64、temporal_reuse/spatial_reuse、target_spp=1..UINT32_MAX（绝对目标）、seed=0..UINT32_MAX、
@@ -348,7 +348,7 @@ M22.7 实施契约（[0154](../development/0154-console-context-assistance.md)�
 - query 为 query；其余为 control、undoable=false，不支持 scene.transaction，不保存 Scene/工程、不修改 dirty/Undo。
   set 从当前值构造候选，Operations schema 与 Service 完整强类型校验后一次发布；坏参数/过期 guard/能力不足保留全部原设置。
   无变化 set/pause/resume 不增 revision、不重置采样。path 模块/GPU 不可用时拒绝显式路径字段，即使当前 renderer=raster。
-- 活动 Edit Gizmo/导航、未应用 Inspector/Environment 草稿拒绝写入；查询仍允许。GUI 同样调用服务，禁用相关控件，
+- 活动 Edit Gizmo/导航、未应用 Inspector/Environment 草稿及打开的 Camera 弹层拒绝视口命令写入；查询仍允许。GUI 同样调用服务，禁用相关控件，
   不因命令修改取消手势或覆盖草稿；Simulation 画面不成为默认目标，命令始终只设置明确 guard 标识的 Edit 视口。
 - 服务不等待 GPU。渲染观察由 owner 在绘制后发布；presentation 同时标出观察时 guard、已显示图像 guard/Scene 来源、
   current/phase/error/spp/generation。新设置先 accepted，只有实际匹配的完成图像才 current；失败保留前一图像来源。
@@ -357,6 +357,38 @@ M22.7 实施契约（[0154](../development/0154-console-context-assistance.md)�
   GUI detach 在 renderer/device 销毁前执行；Runtime shutdown 先关闭宿主，后续写入拒绝，迟到观察不得复活会话。
 - 验收：CPU guard/原子拒绝/no-op/能力/生命周期/草稿/旧文档/发现隔离；真实后台 GUI 按钮、Console 输入和 IPC 交替控制，
   核对曝光保留、reset/模式变化、来源/失败画面以及关闭。沿用单一 Debug 定向验证，记录见 [0155](../development/0155-editor-viewport-commands.md)。
+
+### M22.9 实施契约：Edit 相机命令
+
+- 新增 editor.camera.query/set/orbit/pan/zoom/frame/reset，仅随 Edit 宿主附加注册。沿用 M22.8 的 view_id/document_id/revision guard；
+  相机与视口设置共享修订号，GUI 改动也使旧 guard 失效。Scene/Undo/文件不变；query 为 query，其余 control、不可事务/撤销。
+- Camera 的纯 CPU 值模型移至 dk_editor_services（PUBLIC Geometry/Math），保留 dk/editor/Camera.hpp 兼容入口及 dk::editor 命名空间；
+  CameraNavigation 保持 CPU 输入模型。EditorViewportService 拥有唯一 Edit Camera，Simulation 继续独立持有 Camera。
+  不让 Runtime/Operations 反向依赖 Editor、SDL、ImGui 或 Render，不引入依赖版本变更。
+- query 返回 guard、settings（navigation_mode、projection、standard_view、镜头/导航设置及 eye、yaw_deg/pitch_deg、focus_distance）、
+  effective_clip（near_plane/far_plane）、render_revision、aspect、blocked_reason 与已显示 presentation。guard 计所有会话偏好；render_revision 只计实际姿态/投影变化，
+  改速度/导航模式不重置路径累积。渲染上下文使用当前文档环境和当前渲染器推导，不等待 UI 下一帧同步；读取时只刷新派生上下文缓存，使自动裁剪的 render_revision 保持单调，
+  不修改偏好或 guard。aspect 为最近实际 Edit 视口比例，初始 1。
+- set 至少一个顶层设置：navigation_mode=orbit/fly/walk、projection=perspective/orthographic、standard_view=front/back/left/right/top/bottom；
+  fov_y_deg (1,179)、ortho_height [.01,100000] m、automatic_clip、near_plane/far_plane（有限 0<near<far）、
+  move_speed [.01,1000] m/s、fast_multiplier [1,100]、slow_multiplier [.01,1]、look_sensitivity/orbit_sensitivity [.0001,.05] rad/pixel、
+  pan_multiplier [.01,10]、wheel_sensitivity [.01,1]、invert_y；eye 各分量 [-1e9,1e9] m、yaw_deg [-180,180]、pitch_deg [-90,90]、focus_distance [.1,3000] m。
+  省略保留当前值，所有字段先在候选 Camera 上操作/验证后整体提交；投影换算先于其余设置，换算越界时先单独修正高度/距离。
+  显式 pose 字段与 standard_view 互斥，六视向仅正交，正交只允许 Orbit；沿用已有数学与后端镜头限制。
+- orbit(yaw_deg,pitch_deg) 为角度增量（可省略单轴，至少一个轴），正 yaw 增加眼点绕 pivot 的方位角、正 pitch 抬高眼点；
+  自由 pitch 按既有 Orbit 饱和到 ±1.55 rad。pan(right,up) 为相机右/上方向的米数，至少一个轴；不依赖窗口像素或灵敏度。
+  zoom(steps) 为滚轮步数，正数拉近，沿用当前 wheel_sensitivity 与距离/正交高度饱和规则；Orbit/Pan/Zoom 要求 Orbit 模式。
+- frame 接受 entity UUID 或 bounds={minimum[3],maximum[3]}，恰选其一。显式 bounds 为世界米；entity 必须来自当前文档，
+  宿主只用已发布且同文档/Scene revision 的几何（含子树）取边界，不触发磁盘/GPU 等待；未准备好/失配明确拒绝。
+  GUI Frame 复用相同取景数学与边界；reset(defaults=false) 只恢复本视口默认姿态，defaults=true 恢复模式/投影/镜头/导航。
+- 外部写入拒绝未应用 Inspector/Environment 草稿、打开的 Camera 草稿、活动 Edit Gizmo/导航；query 允许。
+  GUI 的草稿 Apply 与其拥有的连续导航可提交同一服务；沿用 M18 的显式 GUI 操作规则，保留 Inspector/Environment 草稿也可移动相机，
+  不修改或覆盖这些草稿，Gizmo 仍阻止相机写入。外部命令不能借用 GUI 豁免。
+  相机弹层取消/关闭/文档切换清除阻止标记；GUI 候选不在服务中形成第二份权威状态。
+- 同值/零增量不增 guard、不重置样本；坏参数、旧 guard、不支持模式、无法 frame 等保留全部相机/设置/图像。
+  采样提交继续异步；query 的 current 同时核对最新相机渲染修订号，旧画面不能被当作新姿态完成。关闭清除 frame 回调，迟到操作拒绝。
+- 定向 CPU 验证候选原子性、单位/六视图/模式、共享 guard、纯偏好不改 render_revision、草稿/手势、Frame 来源、关闭与无 Scene 副作用；
+  后台 GUI/Console/IPC 交替改动，核对真实相机/图像来源、失败保留、路径样本和活动关闭，回归原有相机/导航/正交输入与 M22.8。
 
 ### Editor 帮助与设置搜索（M22.10）
 
@@ -376,7 +408,7 @@ M22.7 实施契约（[0154](../development/0154-console-context-assistance.md)�
 | 帮助与描述快照 | Commands 描述/注册、Runtime 与 Workspace 只读入口；既有 schema 保持职责 | 帮助引用/预算/缺省正确；坏元数据拒绝；查询不产生 Task/场景变化；旧发现结果兼容 |
 | 补全与诊断 | editor_model 中 ConsoleStructure/ConsoleAssist/ConsoleAssistCache 纯 CPU 模型；ConsoleInput/WorkbenchUi 弹窗；ConsoleTests/ConsoleSmoke | 光标中间/选区、中文/转义、半成品/完整错误、精确整数、超限拒绝；候选/历史/IME/Enter/Run 冲突 |
 | 动态候选 | Workspace 快照与受限目录提供器 | 重名与类别、分页、空结果/加载中区分、删除/换会话/迟到结果、只读性 |
-| 视口/相机 | 拟新增宿主会话服务/Operations 桥；PathPanel/CameraSettingsUi/导航共享入口 | GUI/Console/IPC 同状态；guard/草稿/活动手势冲突；重置/保留累积；异步失败与关闭；runner 无宿主命令 |
+| 视口/相机 | EditorViewportService/EditorCamera、EditorViewportOperations/EditorCameraOperations；PathPanel/CameraSettingsUi/导航共享入口 | GUI/Console/IPC 同状态；guard/草稿/活动手势冲突；重置/保留累积；异步失败与关闭；runner 无宿主命令 |
 | 面板帮助/搜索 | 共享帮助适配、各面板稳定控件定位与 WorkbenchUi | 文案/单位对应元数据；禁用原因；搜索只定位；缺命令不造模板；无 Scene/任务副作用 |
 
 CPU 验证优先复用 dk_commands_tests、dk_protocol_tests（含 Runtime 用例）、dk_editor_tests，实际测试名在实施时核对并更新选择表。
@@ -390,11 +422,11 @@ M22.11 汇总前面独立证据并完成至少一条“发现/补全 → 设置 
 首期使用命名参数，不推断参数位置，不在前端转换业务单位。数组/对象复用 JSON，避免引入第二套嵌套数据语言。
 显式 guard 保持当前可复现/冲突检测契约；便捷 guard、点号嵌套参数或常用别名若后续需要，单独定义覆盖与冲突规则。
 补全和面板帮助共享现有 schema 与独立帮助描述，阶段划分见 Roadmap；基础输入首期不因扩展规划而重开验收。
-视口/相机命令属于扩展阶段，实施前补齐宿主接口/命令表/状态契约；位置语法与自动 guard 保持后置。
+视口/相机命令已按下述契约接入宿主服务；位置语法与自动 guard 保持后置。
 
 ## 相关记录
 
 [Editor 设计](editor.md)、[命令设计](commands.md)、[服务状态契约](application-services.md)、
 [原 Console 实现记录](../development/0127-editor-media-pathtracing.md)、
 [0148 首期计划](../development/0148-console-command-input-plan.md)、[0150 首期交付](../development/0150-console-history-ui.md)、
-[0151 扩展路线设计](../development/0151-console-assistance-plan.md)、[0154 嵌套辅助与诊断](../development/0154-console-context-assistance.md)。
+[0151 扩展路线设计](../development/0151-console-assistance-plan.md)、[0154 嵌套辅助与诊断](../development/0154-console-context-assistance.md)、[0156 相机命令](../development/0156-editor-camera-commands.md)。

@@ -1,7 +1,7 @@
 ---
 id: "0129"
 created_at: "2026-10-16T17:06:00+08:00"
-updated_at: "2026-10-16T17:25:00+08:00"
+updated_at: "2026-11-03T17:13:21+08:00"
 status: completed
 design_refs:
   - ../design/editor-interaction.md
@@ -21,7 +21,7 @@ Fly/Walk 与正交不在本次范围。保留已有 spec/README.md 和 ai-docume
 ## 实际变更
 
 - [Projection](../../engine/foundation/math/include/dk/math/Projection.hpp) / [实现](../../engine/foundation/math/src/Projection.cpp)：共享双精度透视矩阵与局部射线，有限参数和可表示性校验。Editor 与 Capture 共用矩阵，公开依赖显式链接 dk::math；无新库/构建开关。
-- [Camera](../../engine/editor/src/Camera.cpp)：姿态改为 eye/yaw/pitch/focus distance，镜头/导航偏好分离；原子设置、有效镜头版本、同值/纯偏好不失效、Home 保留设置、恢复默认与失败保护。
+- [Camera](../../engine/framework/services/src/EditorCamera.cpp)（M22.9 迁入 Services，更新代码链接）：姿态改为 eye/yaw/pitch/focus distance，镜头/导航偏好分离；原子设置、有效镜头版本、同值/纯偏好不失效、Home 保留设置、恢复默认与失败保护。
 - FOV 同时进入 ray/project/pan/frame/units_per_pixel。Frame 按包围盒角点求可行距离并检查近远裁剪，不能完整框选时拒绝并保留姿态；模拟固定初始视向不随用户灵敏度/反转设置漂移。
 - [CameraSettingsUi](../../engine/editor/src/CameraSettingsUi.cpp)：Edit/Simulation 共用弹层但独立草稿和相机，提供 FOV/Auto 与 Manual 裁剪、Orbit/平移/滚轮和后续 Fly/Walk 偏好；Apply/Cancel/Restore defaults，非法输入保留旧值及草稿。活动 Gizmo/文本/弹层阻止导航。
 - 光栅环境 Auto near=1，其余视图 near=.05，far=10000；手动值不被上下文改写。Viewport 和 worker 校验实际 aspect/环境域，失败不提交新图、保留旧图和恢复入口；相机改变不触发几何重建。

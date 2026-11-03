@@ -87,7 +87,7 @@ def main():
 
             base = checkpoint("raster")
             editor_commands = client.call("commands.list").value
-            assert {d["name"] for d in editor_commands if d["name"].startswith("editor.")} == {
+            assert {d["name"] for d in editor_commands if d["name"].startswith("editor.viewport.")} == {
                 "editor.viewport." + name for name in ("query", "set", "pause", "resume", "reset")}
             report["editor_commands"] = len(editor_commands)
             desc = {name: client.call("commands.describe", dict(name="editor.viewport."+name)).value for name in ("query", "set", "pause", "resume", "reset")}

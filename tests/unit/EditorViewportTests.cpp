@@ -101,6 +101,7 @@ TEST_CASE("viewport document and host replacement invalidate guards and detach c
 TEST_CASE("viewport presentation separates accepted state completed source failures and late observations") {
     Fixture f; auto host=f.model->editor_viewport(); auto state=host->query().value();
     EditorViewportPresentation p; p.has_image=true; p.current=true; p.document_id=state.guard.document_id;
+    p.camera_revision=host->camera().revision();
     p.scene_revision=f.model->snapshot()->state.revision; p.width=64; p.height=64; p.phase="Complete";
     host->present(state.guard,p); REQUIRE(f.query()["presentation"]["current"]==true);
     const auto shown=f.query()["presentation"]["shown_guard"];

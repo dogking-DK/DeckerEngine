@@ -1,7 +1,7 @@
 ---
 module: application-services
 created_at: "2026-09-22T13:28:00+08:00"
-updated_at: "2026-11-03T15:04:51+08:00"
+updated_at: "2026-11-03T17:13:21+08:00"
 status: accepted
 ---
 
@@ -14,12 +14,14 @@ PUBLIC 依赖 commands 和 services。framework 与 Scene 同时开启时构建�
 
 ## Edit 视口宿主服务
 
-dk::editor_services 提供纯 CPU 的 EditorViewportService 和路径设置值类型，PUBLIC 依赖 dk::scene_services；
+dk::editor_services 提供纯 CPU 的 EditorViewportService、EditorCamera 和路径设置值类型，PUBLIC 依赖 dk::scene_services/dk::geometry/dk::math；
 dk::editor_operations PUBLIC 依赖 dk::commands/dk::editor_services。它们不依赖 Editor、ImGui 或渲染模块。
-服务由宿主附加到 Runtime，保存视口设置与独立修订号，回调只读取当前文档身份和草稿/手势阻止原因。
-Operations 负责五条 editor.viewport 命令的 schema、help 和 JSON 转换；GUI 直接调用相同服务。
+服务由宿主附加到 Runtime，拥有视口设置、Edit 相机和共享修订号；回调读取当前文档/环境及草稿/手势阻止原因。
+Frame 回调只读当前文档/Scene revision 的已发布 Edit 几何，不加载磁盘或等待 GPU。
+Operations 负责五条 editor.viewport 和七条 editor.camera 命令的 schema、help 和 JSON 转换；GUI 候选也通过同一服务提交。
+外部相机写入拒绝草稿/手势冲突；GUI 允许保留 Scene 草稿继续导航或完成自己的 Camera 弹层，仍拒绝 Gizmo 冲突。
 设置整体校验后发布，Scene/Undo/文件不变；GPU 通过单独观察回报完成画面来源，关闭前解除回调。
-完整字段、失败和生命周期契约见 [Console 设计](editor-console.md#m228-实施契约edit-视口会话)。
+完整字段、失败和生命周期契约见 [视口设计](editor-console.md#m228-实施契约edit-视口会话)与[相机设计](editor-console.md#m229-实施契约edit-相机命令)。
 
 ## M14.1 环境编辑
 

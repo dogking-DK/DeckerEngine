@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-11-03T15:04:51+08:00"
+updated_at: "2026-11-03T17:13:21+08:00"
 status: accepted
 ---
 
@@ -22,10 +22,10 @@ Editor Console 接受 `scene.query limit=20` 等命名参数文本，也兼容�
 支持 Up/Down 会话历史、草稿恢复、成功清空/失败保留与超限粘贴整段拒绝，
 见 [编辑器指南](../guides/editor.md#console-命令文本m22) 与 [M22 设计](../design/editor-console.md)。
 这只改变 Console 输入，不新增本目录命令，也不改变 JSON-RPC/IPC 格式。
-后续 M22 扩展已规划补全/参数提示、Editor 帮助与视口/相机设置命令，见 [扩展设计](../design/editor-console.md#m224-扩展设计帮助补全与设置命令)。
+M22 扩展覆盖补全/参数提示、Editor 帮助与视口/相机设置命令，见 [扩展设计](../design/editor-console.md#m224-扩展设计帮助补全与设置命令)。
 M22.5–7 已接入共享帮助、只读目录、基础/嵌套补全、实体/资产候选与输入诊断；Tab 打开候选，Tab/Enter 接受后再次 Enter 才执行。
 完整键位见[编辑器指南](../guides/editor.md#console-命令文本m22)。M22.8 已提供 [Edit 视口设置命令](editor-viewport.md)，
-仅附加视口的 Editor 注册；相机命令与面板帮助/搜索仍待后续阶段。
+M22.9 已提供 [Edit 相机命令](editor-camera.md)。两组命令仅在附加视口的 Editor 注册；面板帮助/搜索仍待 M22.10。
 
 ## 按功能查找
 
@@ -35,6 +35,7 @@ M22.5–7 已接入共享帮助、只读目录、基础/嵌套补全、实体/�
 | [场景与工程](scene.md) | `scene.new`、`scene.load`、`scene.query`、`scene.save`、`project.save`、`scene.transaction` | 文档会话、查询、保存和事务 |
 | [环境](environment.md) | `environment.query`、`environment.preset`、`environment.set` | 大气/单太阳/云CPU参数、environment v2、事务/撤销与场景持久化 |
 | [Editor 视口](editor-viewport.md) | `editor.viewport.query`、`editor.viewport.set`、`editor.viewport.pause`、`editor.viewport.resume`、`editor.viewport.reset` | 仅 Editor；Edit 会话模式、ReSTIR、目标/曝光/介质与累积控制，不修改场景历史 |
+| [Editor 相机](editor-camera.md) | `editor.camera.query`、`editor.camera.set`、`editor.camera.orbit`、`editor.camera.pan`、`editor.camera.zoom`、`editor.camera.frame`、`editor.camera.reset` | 仅 Editor；模式/投影/镜头/导航偏好及姿态操作，与视口设置共享 guard |
 | [实体](entity.md) | `entity.create`、`entity.get`、`entity.delete`、`entity.set_name`、`entity.set_transform`、`entity.set_parent`、`entity.set_assets` | 实体编辑和查询 |
 | [历史](history.md) | `history.status`、`history.undo`、`history.redo` | 内存撤销与重做 |
 | [运行时与任务](runtime.md) | `runtime.capabilities`、`runtime.shutdown`、`tasks.list`、`tasks.get` | 能力、同步任务和关闭 |
@@ -91,7 +92,7 @@ new/load 每次生成新的 document_id；持久 scene_id 不能用作 document_
 后续请求必须跟随新的 revision；无变化编辑保持 revision，真实编辑或 undo/redo 会递增。
 旧 guard 返回 conflict，并保留当前文档。
 
-上述是 Scene guard；[Editor 视口命令](editor-viewport.md)使用另一个包含 view_id 的会话 guard，必须从 editor.viewport.query 取得，不参与 auto-guard。
+上述是 Scene guard；[Editor 视口命令](editor-viewport.md)与[相机命令](editor-camera.md)共享另一个包含 view_id 的会话 guard，必须从对应 query 或写入响应取得，不参与 auto-guard。
 
 ## 公共数据类型
 
@@ -104,7 +105,7 @@ new/load 每次生成新的 document_id；持久 scene_id 不能用作 document_
 | AssetRecord | `{id, kind, path}`；用于 scene.new 的工程资产清单 |
 | Entity | `id`、`name`、`transform`、`parent`、`assets`、`world_matrix`；parent 为 UUID 或 null |
 
-数学使用右手系、列向量、米/弧度；局部 TRS 按缩放→旋转→平移组合。
+数学使用右手系、列向量、米/弧度；相机命令的 `_deg` 字段明确使用度。局部 TRS 按缩放→旋转→平移组合。
 `world_matrix` 是世界矩阵的 16 个数，JSON 按行展开；本身仍采用列向量变换约定。
 整数参数必须为 JSON 整数，`1.0` 和字符串 `"1"` 均不能代替 revision。
 四元数必须有限且非零，服务会按设计规范化；缩放可为零或负值。

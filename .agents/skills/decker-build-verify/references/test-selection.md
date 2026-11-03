@@ -75,6 +75,8 @@
 | 默认 Sponza 1600×1200 / 2560×1440 表面和介质四模式、显存额度与连续累积/取消恢复 | dk_editor_render_benchmark | `^dk\.editor\.(restir_desktop\|media_desktop)_gpu_validation$`（需要 demo 素材；required RT/validation/sync） |
 | Runtime 截图、版本/像素、原子发布和退出 | dk_run | `^dk\.runtime\.capture_gpu_validation$`（gpu label；77 为跳过） |
 | Runtime 的 batch/stdio 进程行为 | dk_run | `^dk\.runtime\.` |
+| Edit 相机七命令、共享 guard、单位/原子拒绝/Frame 来源/草稿/手势/关闭/图像来源（M22.9，无需 GPU） | dk_editor_tests | `^dk\.editor\.camera commands `；数学/导航直接受影响时加 `^dk\.editor\.camera ` |
+| 真实 GUI/Console/IPC 相机、正交/路径画面、偏好保留采样、活动导航拒绝和关闭（M22.9） | dk_editor_app、dk_run、dk_ctl | `^dk\.editor\.camera_commands_gpu_validation$`（required RT + 同步 validation） |
 | Edit 视口宿主命令、独立 guard、原子设置/控制、能力/草稿/手势与关闭寿命（M22.8，无需 GPU） | dk_editor_tests | `^dk\.editor\.viewport ` |
 | 真实 GUI/Console/IPC 共享视口、采样/曝光/重置、失败保留画面/恢复和活动关闭（M22.8） | dk_editor_app、dk_run、dk_ctl | `^dk\.editor\.viewport_commands_gpu_validation$`（required RT + 同步 validation） |
 | Console 文本/JSON、整数/Unicode/预算、guard/草稿/刷新失败、历史、基础/嵌套补全、实体资产候选/诊断/去抖与来源/选区保护（M22.2/3/6/7，无需 GPU） | dk_editor_tests | `^dk\.editor\.(console \|workspace console)` |

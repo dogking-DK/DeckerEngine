@@ -60,6 +60,7 @@ class Runtime final
     [[nodiscard]] Result<DocumentState> document_state() const { return service_->state(); }
     [[nodiscard]] Result<void> attach_editor_viewport(std::shared_ptr<EditorViewportService>);
     void detach_editor_viewport();
+    [[nodiscard]] Result<bool> document_lighting() const;
     [[nodiscard]] Result<PlaySceneSnapshot> read_play_scene(SimulationId run_id) const;
     [[nodiscard]] Result<PlayParticleSnapshot> read_play_particles(SimulationId run_id) const;
     void pump();

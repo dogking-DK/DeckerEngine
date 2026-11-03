@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-10-23T18:22:00+08:00"
+updated_at: "2026-11-03T17:13:21+08:00"
 status: accepted
 ---
 
@@ -71,7 +71,7 @@ OpenUSD 作为后续交换层候选，MAC/场 ray marching 和 USD/VDB 依赖均
 | engine/automation | 协议、传输、客户端、服务端 | 客户端不链接完整 Runtime/Renderer |
 | sdk/python | Python 标准库调用、批量、等待、产物与记录/重放 | 通过 dk-ctl 使用已有协议；不嵌入引擎，不持有 Runtime 或 GPU 对象 |
 | engine/scripting | 同步 Luau 场景命令绑定 | PUBLIC Runtime、PRIVATE Compiler/VM；Runtime 不反向依赖脚本，三方接口留在实现内部 |
-| engine/editor | CPU 工作台/相机/手势模型与 ImGui 面板、拾取/Gizmo、窗口渲染桥 | model 依赖 Runtime/Geometry；UI 私有依赖 SDL3/ImGui/Presentation/Render；经命令修改状态 |
+| engine/editor | CPU 工作台/导航/手势模型与 ImGui 面板、拾取/Gizmo、窗口渲染桥 | model 依赖 Runtime/Geometry；CPU 相机值与 Edit 权威会话位于 framework/services；UI 私有依赖 SDL3/ImGui/Presentation/Render；Scene 经命令修改，视口/相机经共享服务提交 |
 
 `apps/runner` 提供 `dk-run`；`apps/editor` 提供可选 `dk-editor`；`apps/ctl` 提供 Windows `dk-ctl`。
 automation/protocol 依赖 Commands，transport 依赖 Core/Win32，client 组合两者，不链接 Runtime/Scene/Renderer；

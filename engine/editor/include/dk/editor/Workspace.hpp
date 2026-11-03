@@ -44,10 +44,11 @@ class Workspace final {
 public:
     ~Workspace();
     [[nodiscard]] static Result<std::unique_ptr<Workspace>> create(const std::filesystem::path& root);
-    [[nodiscard]] Result<void> attach_editor_viewport(EditorViewportCapabilities);
+    [[nodiscard]] Result<void> attach_editor_viewport(EditorViewportCapabilities,bool fixture=false);
     void detach_editor_viewport();
     [[nodiscard]] const std::shared_ptr<EditorViewportService>& editor_viewport() const { return editor_viewport_; }
-    void viewport_interacting(bool value) { viewport_interacting_=value; }
+    void viewport_interacting(bool value,bool gizmo=false) { viewport_interacting_=value; viewport_gizmo_=gizmo; }
+    void camera_draft(bool value) { camera_draft_=value; camera_draft_document_=snapshot_ ? snapshot_->state.document_id : DocumentId{}; }
     [[nodiscard]] Result<void> open(const std::filesystem::path& manifest, bool discard = false);
     [[nodiscard]] Result<void> refresh();
     // method key=value or JSON {method,params}; explicit guards and shared registry.
@@ -110,7 +111,8 @@ private:
     [[nodiscard]] Json guard() const;
     std::unique_ptr<Runtime> runtime_;
     std::shared_ptr<EditorViewportService> editor_viewport_;
-    bool viewport_interacting_=false;
+    bool viewport_interacting_=false,viewport_gizmo_=false,camera_draft_=false;
+    DocumentId camera_draft_document_;
     std::optional<SceneReadSnapshot> snapshot_;
     std::uint64_t snapshot_publication_ = 0;
     std::optional<EntityId> selection_;
