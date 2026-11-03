@@ -1,7 +1,7 @@
 ---
 module: editor-console
 created_at: "2026-11-03T10:31:20+08:00"
-updated_at: "2026-11-03T17:57:12+08:00"
+updated_at: "2026-11-03T18:40:35+08:00"
 status: accepted
 ---
 
@@ -423,7 +423,7 @@ M22.7 实施契约（[0154](../development/0154-console-context-assistance.md)�
 
 ### 文件范围与定向验收（M22.5–11）
 
-| 范围 | 预计接入位置 | 独立检查 |
+| 范围 | 接入位置 | 独立检查 |
 | --- | --- | --- |
 | 帮助与描述快照 | Commands 描述/注册、Runtime 与 Workspace 只读入口；既有 schema 保持职责 | 帮助引用/预算/缺省正确；坏元数据拒绝；查询不产生 Task/场景变化；旧发现结果兼容 |
 | 补全与诊断 | editor_model 中 ConsoleStructure/ConsoleAssist/ConsoleAssistCache 纯 CPU 模型；ConsoleInput/WorkbenchUi 弹窗；ConsoleTests/ConsoleSmoke | 光标中间/选区、中文/转义、半成品/完整错误、精确整数、超限拒绝；候选/历史/IME/Enter/Run 冲突 |
@@ -433,9 +433,26 @@ M22.7 实施契约（[0154](../development/0154-console-context-assistance.md)�
 
 CPU 验证优先复用 dk_commands_tests、dk_protocol_tests（含 Runtime 用例）、dk_editor_tests，实际测试名在实施时核对并更新选择表。
 GUI 必须通过真实 ImGui/SDL 输入及 `--background` 验证补全弹窗、历史/Tab/IME 与搜索定位；视口命令阶段才增加相关渲染、IPC 和来源对照。
-M22.11 汇总前面独立证据并完成至少一条“发现/补全 → 设置 → 面板同步 → 只读状态/图像确认”的跨入口流程，
+M22.11 已汇总前面独立证据，并以实际窗口/IPC 完成“发现/补全 → 设置 → 面板同步 → 只读状态/图像确认”的跨入口流程，
 保留首期 JSON/命名参数/guard/预算回归。默认单一适用配置，不把全量渲染/物理或双配置矩阵设为固定门槛。
-本扩展默认复用现有依赖；CPU 辅助不依赖 GPU 初始化，具体接口与测试源码实施前继续细化，不将拟新增文件当作现有能力。
+本扩展复用现有依赖；CPU 辅助不依赖 GPU 初始化，完整闭环/示例与阶段证据见 [0158](../development/0158-console-workflow-delivery.md)。
+
+### M22.11 实施契约：扩展集成闭环与交付
+
+- 新增独立后台原生 GUI 验收，不改变命令/解析/服务协议：通过实际 Console 键鼠完成命令名及 renderer 枚举补全，
+  明确提交后通过 Settings 中文搜索定位 Camera/Path tracing 控件，并读取实际输入框显示值核对同步。
+  GUI Apply 后验证旧 guard 拒绝，旧 JSON 输入与命名参数具有相同相机/画面结果。
+- 原生检查点仅在匹配的 Scene/相机画面发布后写入观察记录及 PPM；外部 Python 客户端独立查询命令发现、schema/help、
+  guard、参数及 presentation 来源。命令接受不等同于画面完成；路径等待 current 且达到绝对目标 spp，不将旧图或错误当作通过。
+  设置/相机变化保持 Scene revision/dirty、Undo、文件和 Simulation 相机不变；补全接受只改文本，明确 Run/Enter 才执行。
+- 提供可运行 Python 示例：连接 Editor，发现并预检能力/模式/草稿，从 query/成功回执显式携带共享 guard，启用 ReSTIR、设置绝对 spp、执行角度 Orbit，
+  有界轮询只读 presentation。发现并发 guard 变化/错误/超时立即报告，不重试写入、不覆盖用户状态，不自动保存或关闭宿主。
+  错误判定使用 observed_guard 对照本次成功回执，避免把尚未被 owner 更新的上一轮失败当成本次失败；确定性脚本测试覆盖这条异步观察边界。
+  多条命令顺序提交，不承诺跨命令事务或自动回滚；当前操作失败时已完成操作保留，文档明确其可观察边界。
+- 在一次适用 Debug 配置运行新闭环、首期命名参数/JSON/guard/预算/历史 CPU 回归和原真实 Console UI；汇总 M22.1–10 既有独立证据，
+  不为了关闭里程碑重跑无关渲染/物理矩阵。既有 Simulation GPU 发布频率失败继续单列，不修改门槛、不算作通过。
+- 更新指南、示例入口、命令参考与能力/限制表，确认宿主命令与普通 runner 隔离；完成后关闭 M22.11 及 M22，其他路线阶段不自动推进。
+  实际证据见 [0158](../development/0158-console-workflow-delivery.md)。
 
 ## 决策与后续扩展
 

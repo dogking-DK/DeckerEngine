@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-08T16:10:00+08:00"
-updated_at: "2026-10-13T11:25:00+08:00"
+updated_at: "2026-11-03T18:40:35+08:00"
 ---
 
 # Python 自动化
@@ -154,3 +154,10 @@ CPU-only 配置筛选 `^dk\.python\.(unit|cpu)$`。GPU 验收要求 Vulkan 验�
 
 
 环境截图示例、固定相机/时间/质量和来源元数据见[大气指南](atmosphere.md#编辑器和脚本m146)。
+
+## Editor 视口与相机会话
+
+[editor_settings.py](../../examples/automation/editor_settings.py)连接 `dk-editor --pipe`，发现宿主命令、预检能力/阻止状态，
+显式携带共享视口 guard 设置 ReSTIR、绝对 spp 并 Orbit，再在总时限内确认实际已发布图像。
+普通 runner 无此命令组；不要用只含 document_id/revision 的 Scene `guard(state)` 代替三字段视口 guard。
+示例逐条提交、不自动重试或回滚，也不保存 Scene/关闭 Editor；启动、参数与失败边界见[完整操作指南](console-workflow.md#用-python-重复同一类设置)。

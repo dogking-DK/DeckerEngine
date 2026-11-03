@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-11-03T17:57:12+08:00"
+updated_at: "2026-11-03T18:40:35+08:00"
 status: accepted
 ---
 
@@ -373,6 +373,9 @@ M22.10 在 editor_model 增加 SettingsCatalog 和共享 CommandFieldHelp；UI �
 覆盖 Console、Inspector、Environment、Edit 相机、Path tracing、Simulation。搜索/悬停不 dispatch，不改变业务状态；
 Copy/Insert 仅输出实际命令的必填占位模板，非空 Console/IME 输入受保护。实现契约见 [Editor 帮助设计](editor-console.md#m2210-实施契约)，
 验证见 [0157](../development/0157-editor-settings-help.md)。
+M22.11 的 ConsoleWorkflowSmoke 与独立 Python 驱动把命令发现/补全、显式提交、Settings 定位、实际 GUI 数值和已发布图像串成同一流程。
+测试沿既有 --background/一次性工程约束，CPP/CLI 参数仅用于验收；业务命令、语法和宿主状态提交契约不变。
+用户用法见[跨入口指南](../guides/console-workflow.md)，记录见 [0158](../development/0158-console-workflow-delivery.md)。
 相机纯值模型位于 dk_editor_services，导航适配留在 Editor；纯偏好不改变渲染版本，图像来源核对实际已发布相机，见 [0156](../development/0156-editor-camera-commands.md)。
 补全只编辑输入，后续搜索只定位控件；共享帮助不复制业务校验；视口会话命令由宿主注入的服务统一处理，
 不将相机/曝光等会话状态写入 Scene/Undo。独立 render.capture 语义保持；当前命令表见[视口](../commands/editor-viewport.md)与[相机](../commands/editor-camera.md)。

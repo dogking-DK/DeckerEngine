@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-11-03T17:57:12+08:00"
+updated_at: "2026-11-03T18:40:35+08:00"
 status: accepted
 ---
 
@@ -27,6 +27,7 @@ M22.5–7 已接入共享帮助、只读目录、基础/嵌套补全、实体/�
 完整键位见[编辑器指南](../guides/editor.md#console-命令文本m22)。M22.8 已提供 [Edit 视口设置命令](editor-viewport.md)，
 M22.9 已提供 [Edit 相机命令](editor-camera.md)。两组命令仅在附加视口的 Editor 注册。
 M22.10 已接入[面板帮助与设置搜索](../guides/editor.md#字段帮助与设置搜索m2210)，支持稳定定位和命令占位模板复制/插入，不自动填 guard 或执行。
+跨入口操作、显式 guard 的 Python 示例及当前能力/限制见[完整流程](../guides/console-workflow.md)。
 
 ## 按功能查找
 

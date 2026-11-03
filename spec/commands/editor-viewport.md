@@ -1,7 +1,7 @@
 ---
 module: command-reference-editor-viewport
 created_at: "2026-11-03T14:56:20+08:00"
-updated_at: "2026-11-03T17:13:21+08:00"
+updated_at: "2026-11-03T18:40:35+08:00"
 status: accepted
 ---
 
@@ -11,6 +11,8 @@ status: accepted
 普通 dk-run 不注册它们。GUI 工具栏、Path tracing 面板和光栅曝光调用同一个会话服务，修改后互相同步。
 需要活动场景；目标始终是 guard 标识的 Edit 视口，Simulation 有独立相机和画面。
 场景大气/太阳/云的持久参数仍使用 [environment.query/set](environment.md)，独立截图使用 [render.capture](render.md)。
+规范命令与原 `restir on` / `raytracing iterate 12` 意图的对应、补全/面板检查和可运行 Python 示例见[跨入口指南](../guides/console-workflow.md)。
+目标 spp 为绝对目标；图像完成需核对 presentation，不能以设置回执替代。
 
 ## 身份、状态和副作用
 

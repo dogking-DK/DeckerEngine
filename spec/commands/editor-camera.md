@@ -1,7 +1,7 @@
 ---
 module: command-reference-editor-camera
 created_at: "2026-11-03T16:35:00+08:00"
-updated_at: "2026-11-03T17:13:21+08:00"
+updated_at: "2026-11-03T18:40:35+08:00"
 status: accepted
 ---
 
@@ -10,6 +10,8 @@ status: accepted
 [返回命令目录](README.md)。Editor 的 Console、IPC 和 Python SDK 通过以下命令控制 Edit 相机；普通 dk-run 不注册它们。
 GUI 相机弹层、模式/投影按钮、鼠标导航和这些命令使用同一个会话状态。Simulation 相机独立，不是这些命令的目标。
 场景/工程文件、实体 Transform、Scene revision/dirty 和 Undo/Redo 均不改变；相机偏好不随 scene.save 保存。
+从 Console 补全到 Settings 面板及 IPC 画面确认的完整示例见[跨入口指南](../guides/console-workflow.md)，
+可运行 [Python 示例](../../examples/automation/editor_settings.py)显式携带共享 guard，顺序设置视口并 Orbit，最后有界等待实际图像。
 
 ## Guard、状态和冲突
 

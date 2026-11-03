@@ -10,6 +10,7 @@
 #include "PathSmoke.hpp"
 #include "ViewportCommandSmoke.hpp"
 #include "CameraCommandSmoke.hpp"
+#include "ConsoleWorkflowSmoke.hpp"
 #endif
 #include "EditorSupport.hpp"
 #include <dk/memory/MemorySystem.hpp>
@@ -58,8 +59,8 @@ void write_capture(const std::filesystem::path& output,const graphics::ReadbackR
     check(write_file_bytes_atomic(output,ppm));
 }
 int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory::ResourceHandle heap,Diagnostics& diagnostics) {
-    if(options.smoke || options.settings_help_smoke) std::setvbuf(stdout,nullptr,_IONBF,0); // Preserve the last acceptance stage on native crashes.
-    const bool path_acceptance=options.pathtrace_smoke || options.desktop_render_smoke || options.viewport_command_smoke || options.camera_command_smoke;
+    if(options.smoke || options.settings_help_smoke || options.console_workflow_smoke) std::setvbuf(stdout,nullptr,_IONBF,0); // Preserve the last acceptance stage on native crashes.
+    const bool path_acceptance=options.pathtrace_smoke || options.desktop_render_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke;
     if ((path_acceptance || options.settings_help_smoke || options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe) && !std::filesystem::is_regular_file(options.root/".dk-editor-smoke"))
         throw std::runtime_error("--smoke requires a disposable project with .dk-editor-smoke marker");
     ShutdownProbe shutdown{options.simulation_response_probe};
@@ -82,8 +83,8 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     device.validation=options.validation ? graphics::ValidationMode::required : options.disable_validation ?
         graphics::ValidationMode::disabled : default_validation;
 #ifdef DK_EDITOR_PATHTRACING
-    device.ray_tracing=(options.pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke) ? graphics::RayTracingMode::required : graphics::RayTracingMode::if_available;
-    device.sampled_image_indexing=(options.pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke) ? graphics::SampledImageIndexingMode::required : graphics::SampledImageIndexingMode::if_available;
+    device.ray_tracing=(options.pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke) ? graphics::RayTracingMode::required : graphics::RayTracingMode::if_available;
+    device.sampled_image_indexing=(options.pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke) ? graphics::SampledImageIndexingMode::required : graphics::SampledImageIndexingMode::if_available;
 #endif
     device.diagnostic_sink=diagnostic; device.diagnostic_user_data=&diagnostics;
 #if defined(DK_SIMULATION_GPU) || defined(DK_EDITOR_PATHTRACING)
@@ -129,7 +130,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
         Workspace& model;
         ~ViewportHostScope() { model.detach_editor_viewport(); }
     } viewport_host{*model};
-    WorkbenchUi ui{*model,options.fixture_camera,take(window.native_sdl_window()),(options.media_pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke) ? 96u : 0u};
+    WorkbenchUi ui{*model,options.fixture_camera,take(window.native_sdl_window()),(options.media_pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke) ? 96u : 0u};
     SmokeDriver smoke{options.interaction_smoke,options.simulation_smoke};
     std::optional<SettingsHelpSmoke> settings_smoke;
     if(options.settings_help_smoke) settings_smoke.emplace();
@@ -143,6 +144,8 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     std::optional<PathSmoke> path_smoke;
     std::optional<ViewportCommandSmoke> viewport_smoke;
     std::optional<CameraCommandSmoke> camera_smoke;
+    std::optional<ConsoleWorkflowSmoke> workflow_smoke;
+    if(options.console_workflow_smoke) workflow_smoke.emplace(options.root);
     if(options.camera_command_smoke) camera_smoke.emplace(options.root);
     if(options.viewport_command_smoke) viewport_smoke.emplace(options.root);
     if(options.pathtrace_smoke || options.desktop_render_smoke) path_smoke.emplace(options.root,options.desktop_render_smoke,options.media_pathtrace_smoke,options.restir_pathtrace_smoke);
@@ -184,6 +187,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
                 if(path_smoke) path_smoke->input(ui,*model,viewport,window);
                 if(viewport_smoke) viewport_smoke->input(ui,*model);
                 if(camera_smoke) camera_smoke->input(ui,*model);
+                if(workflow_smoke) workflow_smoke->input(ui,*model);
 #endif
                 if (options.smoke) smoke.input(*model,ui,window,viewport);
                 if (settings_smoke) settings_smoke->input(*model,ui);
@@ -199,6 +203,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
             const bool finish_requested=
 #ifdef DK_EDITOR_PATHTRACING
                 (path_smoke && path_smoke->done()) ||
+                (workflow_smoke && workflow_smoke->done()) ||
 #endif
                 (settings_smoke && settings_smoke->done()) || (options.smoke && smoke.done()) || (consistency && consistency->done()) ||
                 (simulation_consistency && simulation_consistency->done()) || (options.frames && frames>=options.frames);
@@ -216,6 +221,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
             if(path_smoke) path_smoke->presented(*model,ui,viewport);
             if(viewport_smoke) viewport_smoke->presented(ui,*model,viewport);
             if(camera_smoke) camera_smoke->presented(ui,*model,viewport);
+            if(workflow_smoke) workflow_smoke->presented(ui,*model,viewport);
 #endif
             if (response) response->presented();
             if (capture) write_capture(options.screenshot,*capture);

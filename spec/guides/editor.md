@@ -294,7 +294,7 @@ entity.set_name id="<entity_id>" name="Hello 中文" guard={"document_id":"<docu
 [历史与 GUI](../development/0150-console-history-ui.md)、[基础补全](../development/0153-console-completion.md)、
 [嵌套辅助与诊断](../development/0154-console-context-assistance.md)。
 
-M22 后续扩展已纳入命令/参数补全、输入诊断、实体/资产候选、视口/相机命令以及 Editor 悬停帮助和设置搜索，
+M22 扩展提供命令/参数补全、输入诊断、实体/资产候选、视口/相机命令以及 Editor 悬停帮助和设置搜索，
 见 [扩展设计](../design/editor-console.md#m224-扩展设计帮助补全与设置命令) 与 [Roadmap](../roadmap.md#m22console-命令文本输入与-editor-交互)。
 M22.5 已提供共享帮助信息，可以在 Console 输入 `commands.describe name=scene.query` 查看可选 help，
 其中包含分页参数的说明、单位、默认值与示例；完整输出可通过 IPC 查询。
@@ -335,6 +335,8 @@ M22.7 扩展到嵌套对象/数组与兼容 JSON envelope，以下输入在光�
 M22.8/9 已支持下述视口和相机命令；M22.10 增加下述字段帮助与设置搜索。
 
 ### 字段帮助与设置搜索（M22.10）
+
+完整的“发现/补全→设置→面板同步→状态/图像确认”流程与可运行 Python 示例见[跨入口操作指南](console-workflow.md)。
 
 点击顶部工具栏的 **Settings** 打开搜索窗口，输入显示名、规范参数名或中文别名，例如
 `相机 视场角`、`云 覆盖率`、`path.target_spp`、`simulation.gravity_y`。

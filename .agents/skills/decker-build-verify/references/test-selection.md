@@ -75,6 +75,8 @@
 | 默认 Sponza 1600×1200 / 2560×1440 表面和介质四模式、显存额度与连续累积/取消恢复 | dk_editor_render_benchmark | `^dk\.editor\.(restir_desktop\|media_desktop)_gpu_validation$`（需要 demo 素材；required RT/validation/sync） |
 | Runtime 截图、版本/像素、原子发布和退出 | dk_run | `^dk\.runtime\.capture_gpu_validation$`（gpu label；77 为跳过） |
 | Runtime 的 batch/stdio 进程行为 | dk_run | `^dk\.runtime\.` |
+| Editor Python 示例的新旧观察、并发 guard、超时和部分成功边界（5 项纯脚本用例） | dk_ctl | `^dk\.editor\.settings_example_unit$` |
+| Console 补全→设置→Settings 定位/GUI 显示→IPC/实际图像确认与 Python 示例（M22.11） | dk_editor_app、dk_run、dk_ctl | `^dk\.editor\.console_workflow_gpu_validation$`（required RT + 同步 validation） |
 | 字段共享帮助、设置搜索、模板必填/占位、可用原因和只读性（M22.10，无需 GPU） | dk_editor_tests | `^dk\.editor\.settings help ` |
 | 真实 Settings 搜索/定位/禁用提示、复制/插入和草稿保护（M22.10） | dk_editor_app | `^dk\.editor\.settings_help_gpu_validation$`（required GPU + 同步 validation） |
 | Edit 相机七命令、共享 guard、单位/原子拒绝/Frame 来源/草稿/手势/关闭/图像来源（M22.9，无需 GPU） | dk_editor_tests | `^dk\.editor\.camera commands `；数学/导航直接受影响时加 `^dk\.editor\.camera ` |

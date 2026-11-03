@@ -47,6 +47,7 @@ cmake --build --preset windows-debug --target dk_run
 | 离屏三角形、compute 与结果读回 | [离屏指南](spec/guides/offscreen.md) |
 | GPU Graph 声明、编译与单队列执行 | [Graph 指南](spec/guides/graph.md) |
 | 编辑器工作台、面板与保存加载 | [编辑器指南](spec/guides/editor.md) |
+| Console 补全、设置搜索与视口/相机命令闭环 | [操作流程与能力边界](spec/guides/console-workflow.md)、[Python 示例](examples/automation/editor_settings.py) |
 | 环境CPU参数、太阳方向、场景迁移与撤销 | [环境命令](spec/commands/environment.md)、[可执行示例](examples/automation/environment.jsonl) |
 | 大气积分/LUT、离屏天空与Lambert日光样例 | [大气指南](spec/guides/atmosphere.md) |
 | CPU路径追踪参考、Lambert/GGX/MIS/RR与线性数值报告 | [CPU路径追踪指南](spec/guides/pathtracing-reference.md) |
