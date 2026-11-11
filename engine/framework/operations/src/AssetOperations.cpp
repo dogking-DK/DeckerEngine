@@ -13,7 +13,10 @@ Json error_schema() { return schema::nullable(schema::object({{"code",integer()}
 Json error_json(const std::optional<Error>& error) { return error ? Json{{"code",static_cast<unsigned>(error->code)},
     {"message",error->message},{"context",error->context}} : Json(nullptr); }
 Json result_schema() { return schema::object({{"root_id",uuid()},{"key",schema::string(32,32)},{"cache_hit",schema::boolean()}},{"root_id","key","cache_hit"}); }
-Json kind_schema() { return {{"type","string"},{"enum",{"mesh","material","texture"}}}; }
+Json kind_schema() {
+    auto values=Json::array(); for(auto name:asset_kind_names()) values.push_back(name);
+    return {{"type","string"},{"enum",std::move(values)}};
+}
 Json asset_schema() { return schema::object({{"id",uuid()},{"kind",kind_schema()},
     {"state",{{"type","string"},{"enum",{"unloaded","loading","ready","failed"}}}}, {"generation",integer()},
     {"ready_generation",integer()},{"job_id",schema::nullable(uuid())},{"artifact",schema::nullable(result_schema())},{"error",error_schema()}},

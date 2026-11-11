@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-11-11T19:38:00+08:00"
+updated_at: "2026-11-11T20:41:10+08:00"
 status: accepted
 ---
 
@@ -81,7 +81,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M20 路径追踪降噪 | À-trous、SVGF/A-SVGF、NRD REBLUR/RELAX、vk_oidn；公共信号/历史、介质与质量性能验收 | M16–M19、现有 Graph/worker | M20.1 设计/依赖、M20.2 表面信号生产已完成；M20.3–11 待开始，见[设计](design/render-denoising.md) |
 | M21 原生点绘制与粒子流体 | point-list、统一粒子输出、WCSPH/PBF CPU/GPU、工作台/脚本/导出 | M5/M6、M10–M12、M18.3 | M21.1 设计已完成；M21.2–9 待开始，见[流体设计](design/physics-fluids.md)、[点绘制设计](design/render-particles.md) |
 | M22 Console 与 Editor 命令交互 | 命名参数/历史、补全/参数提示、视口与相机命令、面板帮助与搜索 | M3、M8、M17.5；视口/相机复用 M18/M19 | M22.1–11 已完成；跨入口闭环、可运行示例与范围交付见[0158](development/0158-console-workflow-delivery.md) |
-| M23 实体体素渲染 | OpenVDB/NanoVDB 稀疏网格与稠密参考、光栅/原生 GPU 路径 HDDA、Slang 门禁、资产/Editor/capture 与联合交付 | M5–M8、M14.2、M18.3；路径复用 M16–M19、信号 M20.2，上层复用 M3/M4/M9/M22 | M23.1–4 完成：设计、无 CUDA CPU/GPU 稀疏查询及 mesh/voxel 深度/HDR 合成验收；M23.5–13 待开始，见[体素设计](design/render-voxels.md) |
+| M23 实体体素渲染 | OpenVDB/NanoVDB 稀疏网格与稠密参考、光栅/原生 GPU 路径 HDDA、Slang 门禁、资产/Editor/capture 与联合交付 | M5–M8、M14.2、M18.3；路径复用 M16–M19、信号 M20.2，上层复用 M3/M4/M9/M22 | M23.1–5 完成：设计、无 CUDA CPU/GPU 稀疏查询、mesh/voxel 合成及文件资产/缓存/Scene/GPU 版本验收；M23.6–13 待开始，见[体素设计](design/render-voxels.md) |
 
 默认执行表中顺序。M5 在 Foundation 补充完成后具备独立探索条件，
 M9 的 Luau 命令绑定在 M3 后可提前做；若调整次序，仍需满足对应集成验收依赖。
@@ -900,7 +900,7 @@ OpenVDB 用于 CPU 构建/导入，NanoVDB 连续缓冲区作为运行时数据�
 | M23.2 | 稠密 DDA/外露面 oracle；锁定 VDB 依赖与无 CUDA 打包，CPU OpenVDB→NanoVDB 转换/规范化/稀疏查询 | M23.1；M1 Math/Core、现有 Geometry；重新核验官方 port | Windows x64 无 CUDA；CPU-only；Int32/背景/tile/leaf/active 语义、负坐标/半格/仿射、内外起点与边界、非法类/溢出/额度；小网格三方对照，大稀疏域不展开 | 已完成：[0160](development/0160-voxel-cpu-sparse.md)；64 项稠密及直接回归、13 项体素专项通过；PNanoVDB C32 仅为 CPU 布局证据 |
 | M23.3 | NanoVDB buffer 上传、PNanoVDB/Slang compute 兼容门禁与共享 HDDA、诊断/离屏结果 | M23.2；M5/M6、M14.2、M18.3 | 固定 Slang 的编译/SPIR-V/descriptor 反射、地址/布局核对；required GPU 读值与 HDDA 对 oracle，基础空跳过、同步/额度/失败/在途寿命；稠密结果不能替代稀疏验收 | 已完成：[0161](development/0161-voxel-gpu-hdda.md)；Slang 2026.18、SPIR-V 和 3 项 required GPU 门禁通过，64³/640×480 双投影逐像素、稀疏空跳过、失败/在途额度验收；RT 未接入 |
 | M23.4 | mesh/voxel 深度与 HDR 合成、Unlit/简单方向光、曝光/tone | M23.3；M7.2 | 双向遮挡、同深度、多实例、透视/正交及裁剪；旧 mesh 回归；不支持组合明确拒绝 | 已完成：[0162](development/0162-voxel-raster-composition.md)；2 项 required GPU 合成/寿命、64³/640×480 双投影、HDR/D32 解析对照及无体素配置 10 项旧 mesh 回归通过；程序化入口，不含正式资产/Editor/RT |
-| M23.5 | `.vdb` 命名 grid/占用描述/palette 导入、版本化 NanoVDB 产物、Scene 引用、缓存及替换/卸载 | M23.4；M2/M4/M7.1 | CPU-only 保存重载、源/config/布局版本失效，未声明语义/不支持类型/非零背景/坏变换/格式/预算拒绝；转换峰值/旧快照/在途保活，失败保留旧状态 | 待开始 |
+| M23.5 | `.vdb` 命名 grid/占用描述/palette 导入、版本化 NanoVDB 产物、Scene 引用、缓存及替换/卸载 | M23.4；M2/M4/M7.1 | CPU-only 保存重载、源/config/布局版本失效，未声明语义/不支持类型/非零背景/坏变换/格式/预算拒绝；转换峰值/旧快照/在途保活，失败保留旧状态 | 完成，见 [0163](development/0163-voxel-assets.md) |
 | M23.6 | 光栅侧服务/命令和 Editor 加载/设置/拾取/Gizmo、独立 render.capture、使用示例 | M23.5；M3/M8/M9、M22 的共享宿主入口 | GUI/Console/IPC 行为一致、持久/会话与撤销边界、固定截图来源、后台 GUI；命令文档同步 | 待开始 |
 | M23.7 | 光栅稀疏质量/显存/转换/上传/帧耗时基线及 HDDA 调优，阶段交付 | M23.6；复用 M11 观测 | 小网格对照与大跨度低占用/tile 矩阵；tree/临时/NanoVDB/在途峰值、空跳过收益、回收/重复结果；不在此关闭 M23 | 待开始 |
 | M23.8 | AABB BLAS、intersection 编译/反射、procedural hit group、SBT/Graph；NanoVDB intersection 兼容门禁 | M23.2/3；M16.2–5；通用底座部分可先于 M23.3 推进 | CPU 描述/属性/布局拒绝，required GPU 混合 SBT/两类射线和 PNanoVDB 读取/报告交点；stage 可见性/地址/坏 SBT/失败/寿命与旧 triangle 回归 | 待开始 |
@@ -1005,7 +1005,8 @@ M22 跨入口集成闭环、可运行示例与能力/限制已交付，见[0158]
 M23.2 CPU 阶段已完成，见[0160](development/0160-voxel-cpu-sparse.md)：稠密 oracle、OpenVDB 12.0.1/NanoVDB 32.7.0 无 CUDA 接入、CPU 稀疏转换/查询及失败/快照验收。
 M23.3 GPU 阶段已完成，见[0161](development/0161-voxel-gpu-hdda.md)：NanoVDB 上传、PNanoVDB/Slang compute 与共享 HDDA、真实 GPU 离屏和寿命验收。
 M23.4 合成阶段已完成，见[0162](development/0162-voxel-raster-composition.md)：mesh/voxel 深度/HDR、Unlit/方向光、曝光/tone，真实 GPU 双向遮挡/投影/状态验收及旧 mesh 回归。
-M23.5–13 待开始，下一阶段为 M23.5 正式 `.vdb` 文件/资产与 Scene 引用；Editor 和原生路径追踪尚未接入。
+M23.5 文件资产阶段已完成，见[0163](development/0163-voxel-assets.md)：命名 `.vdb`/描述/palette、版本化 NanoVDB 产物、CPU-only 缓存/Scene/异步重载和真实 GPU 替换/卸载/在途保活。
+M23.6–13 待开始，下一阶段为 M23.6 光栅服务/Editor/独立 capture 闭环；原生路径追踪仍待 M23.8/9。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 

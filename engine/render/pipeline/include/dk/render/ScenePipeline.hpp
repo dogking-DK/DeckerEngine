@@ -9,13 +9,15 @@ class AtmosphereSky;
 class CloudTextures;
 class CloudShadowMap;
 class VoxelGpuGrid;
-struct VoxelMaterial { Vec3f base_color=Vec3f::Ones(); float metallic=0,roughness=1; };
+class VoxelAssets;
+using VoxelMaterial = VoxelMaterialData;
 // Palette is borrowed only for the render call; the frame owns its uploaded copy.
 struct VoxelInstance {
     EntityId entity;
     std::shared_ptr<const VoxelGpuGrid> grid;
     Transformd world;
     std::span<const VoxelMaterial> palette;
+    AssetId asset; // Required when satisfying a Scene voxel reference; nil for procedural instances.
 };
 enum class VoxelShading { unlit, directional };
 struct VoxelRenderSettings {
@@ -119,6 +121,8 @@ public:
     // Explicit programmatic mesh/voxel composition; no atmosphere/cloud combination.
     [[nodiscard]] Result<RenderFrame> render_voxels(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
         std::span<const VoxelInstance>, const VoxelRenderSettings& = {}, const RenderSettings& = {});
+    [[nodiscard]] Result<RenderFrame> render_voxel_assets(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
+        const VoxelAssets&, const VoxelRenderSettings& = {}, const RenderSettings& = {});
     // Explicit Lambert path. Snapshot environment must match the RenderScene exactly.
     // A disabled scene uses unlit; requires DK_BUILD_RENDER_ATMOSPHERE when enabled.
     [[nodiscard]] Result<RenderFrame> render_sunlight(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,

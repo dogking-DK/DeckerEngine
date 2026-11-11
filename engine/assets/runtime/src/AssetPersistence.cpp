@@ -134,7 +134,7 @@ void validate_paths(const ProjectPaths& paths, const Record& record)
     const auto source = data_path(paths, record.source), target = data_path(paths, record.target);
     auto extension = take(path_to_utf8(source.extension()));
     std::transform(extension.begin(), extension.end(), extension.begin(), [](char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c + ('a' - 'A')) : c; });
-    require(extension == ".gltf" || extension == ".glb", "Unsupported asset source extension", ErrorCode::not_supported);
+    require(extension == ".gltf" || extension == ".glb" || extension == ".dkvoxel", "Unsupported asset source extension", ErrorCode::not_supported);
     if (record.rename()) {
         require(!same_asset_path(source, target), "Equivalent rename paths", ErrorCode::conflict);
         require(source.parent_path() == target.parent_path() && source.extension() == target.extension(), "Rename requires same directory and extension");

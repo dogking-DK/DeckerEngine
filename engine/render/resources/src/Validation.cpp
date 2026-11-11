@@ -20,6 +20,7 @@ bool wrap(TextureWrap value) {
 bool unit(float value) { return std::isfinite(value) && value >= 0 && value <= 1; }
 }
 Result<void> validate_gpu_asset(const CpuAsset& asset) {
+    if(asset.voxel) return std::unexpected(Error{ErrorCode::not_supported,"Voxel payload requires VoxelAssets"});
     if (asset.mesh.id.is_nil() || asset.mesh.primitives.empty()) return invalid("GPU mesh requires an ID and primitives");
     for (const auto& primitive : asset.mesh.primitives) {
         const auto count = primitive.positions.size();

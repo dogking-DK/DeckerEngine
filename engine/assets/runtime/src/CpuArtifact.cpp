@@ -86,6 +86,13 @@ TextureSampler read_sampler(const Json& value)
 namespace asset_detail {
 Result<EncodedCpuArtifact> encode_cpu_artifact(const ImportResult& imported, const AssetMetadata& metadata)
 {
+    if(imported.voxel) {
+#ifdef DK_ASSET_VOXELS
+        return encode_voxel_artifact(imported,metadata);
+#else
+        return std::unexpected(Error{ErrorCode::not_supported,"Voxel artifact support is not built"});
+#endif
+    }
     return attempt<EncodedCpuArtifact>("encode_cpu_artifact",[&]{
         require(!imported.inputs.empty(),"Artifact needs source snapshot"); EncodedCpuArtifact result;
         auto primitives=Json::array(),materials=Json::array(),textures=Json::array(),inputs=Json::array(),diagnostics=Json::array();
@@ -123,12 +130,20 @@ Result<CpuArtifact> load_cpu_artifact(const std::filesystem::path& directory)
             if(event==Json::parse_event_t::key)require(keys.back().insert(string(value)).second,"Duplicate artifact key");
             if(event==Json::parse_event_t::object_end)keys.pop_back();return true;
         });
+        if(j.is_object() && j.value("format",std::string{})=="DeckerVoxelAsset") {
+#ifdef DK_ASSET_VOXELS
+            return take(load_voxel_artifact(directory,std::string_view{reinterpret_cast<const char*>(text.data()),text.size()}));
+#else
+            throw Failure{Error{ErrorCode::not_supported,"Voxel artifact support is not built"}};
+#endif
+        }
         fields(j,{"format","version","hash_algorithm","meta","source","inputs","primitives","materials","textures","diagnostics","data"});
         require(j["format"]=="DeckerCpuAsset","Unknown CPU artifact format");require(j["version"].is_number_integer(),"Invalid artifact version");
         require(j["version"]==1&&j["hash_algorithm"]=="xxh3-128-v1","Unsupported artifact version or hash",ErrorCode::not_supported);
         const auto metadata=take(parse_asset_meta(j["meta"].dump()));fields(j["data"],{"file","bytes","digest"});require(j["data"]["file"]=="data.bin","Invalid artifact data file");
         const auto bytes=take(read_file_bytes(directory/"data.bin",data_limit));require(bytes.size()==number(j["data"]["bytes"],data_limit)&&content_digest(bytes).hex()==hash(j["data"]["digest"]),"CPU artifact digest/size mismatch");
         Reader reader{bytes};CpuArtifact result;result.source=owned(string(j["source"]));(void)relative_path(result.source);
+        require(metadata_importer(metadata)=="gltf-static","Mesh artifact contains voxel metadata");
         result.data.unit_scale=metadata.unit_scale;result.data.mesh.id=metadata.root_id;
         for(const auto& o:metadata.outputs){reader.ids.emplace(o.id,o.kind);result.data.outputs.push_back({o.key,o.id,o.kind});}reader.consumed.insert(metadata.root_id);
         array(j["inputs"],20001);require(!j["inputs"].empty(),"Missing artifact input fingerprints");std::set<std::string> paths;std::size_t input_bytes=0;

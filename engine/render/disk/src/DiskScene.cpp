@@ -89,6 +89,7 @@ Result<DiskScene> DiskScene::load_snapshot(memory::ResourceHandle heap,const Pro
         std::size_t used=0;
         for (std::size_t i=0;i<candidate->scene.entities().size();++i) {
             for (auto reference : take(candidate->scene.assets(i))) {
+                require(reference.kind!=AssetKind::voxel,"DiskScene voxel assembly is not available; use the explicit voxel asset pipeline",ErrorCode::not_supported);
                 if (reference.kind!=AssetKind::mesh) continue;
                 if (std::ranges::any_of(candidate->assets,[&](const auto& asset){return asset->mesh.id==reference.id;})) continue;
                 require(candidate->assets.size()<options.max_assets,"disk scene asset count exceeds limit");

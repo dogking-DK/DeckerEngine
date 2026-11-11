@@ -105,7 +105,7 @@ void AsyncAssets::pump()
         if (!ticket->requested.is_nil() && std::none_of(outputs.begin(), outputs.end(), [&](const auto& o) { return o.id == ticket->requested; }))
             return std::unexpected(Error{ErrorCode::conflict, "Requested identity absent from candidate"});
         const auto& prepared = candidate->value();
-        const auto summary = nlohmann::json{{"root_id", prepared.artifact.data.mesh.id.to_string()},
+        const auto summary = nlohmann::json{{"root_id", root_asset_id(prepared.artifact.data).to_string()},
             {"key", std::string{prepared.key}}, {"cache_hit", prepared.cache_hit}}.dump();
         // Preallocate the shared owning block before committing any persistent state.
         auto ready = memory::make_shared<CachedAsset>();

@@ -34,7 +34,8 @@ Result<AssetMetadata> parse_asset_meta(std::string_view text)
         fields(json, {"format", "version", "root_id", "importer", "settings", "outputs"});
         require(json.at("format") == "DeckerAssetMeta", "Unknown meta format"); version(json.at("version"));
         const auto& importer = json.at("importer"); fields(importer, {"name", "version"});
-        require(string(importer.at("name")) == "gltf-static", "Unsupported importer", ErrorCode::not_supported);
+        const auto importer_name=string(importer.at("name"));
+        require(importer_name=="gltf-static" || importer_name=="voxel-vdb", "Unsupported importer", ErrorCode::not_supported);
         version(importer.at("version"));
         AssetMetadata meta; meta.root_id = take(AssetId::parse(string(json.at("root_id"))));
         const auto& settings = json.at("settings");
@@ -51,7 +52,7 @@ Result<AssetMetadata> parse_asset_meta(std::string_view text)
             meta.outputs.push_back({owned(string(output.at("key"))), take(AssetId::parse(string(output.at("id")))),
                 take(parse_asset_kind(string(output.at("kind"))))});
         }
-        validate_meta(meta); return meta;
+        validate_meta(meta); require(importer_name==metadata_importer(meta),"Importer and output kind disagree"); return meta;
     });
 }
 Result<String> serialize_asset_meta(const AssetMetadata& meta)
@@ -66,7 +67,7 @@ Result<String> serialize_asset_meta(const AssetMetadata& meta)
             outputs.push_back({{"key", std::string{output->key}}, {"id", output->id.to_string()}, {"kind", asset_kind_name(output->kind)}});
         }
         const Json json{{"format", "DeckerAssetMeta"}, {"version", 1}, {"root_id", meta.root_id.to_string()},
-            {"importer", {{"name", "gltf-static"}, {"version", 1}}}, {"settings", {{"unit_scale", meta.unit_scale}}}, {"outputs", std::move(outputs)}};
+            {"importer", {{"name", metadata_importer(meta)}, {"version", 1}}}, {"settings", {{"unit_scale", meta.unit_scale}}}, {"outputs", std::move(outputs)}};
         const auto text = json.dump(2) + '\n'; require(text.size() <= asset_meta_byte_limit, "Encoded meta exceeds 2 MiB limit");
         return owned(text);
     });

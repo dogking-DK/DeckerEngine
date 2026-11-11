@@ -1,7 +1,7 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-11-11T17:42:27+08:00"
+updated_at: "2026-11-11T20:28:55+08:00"
 status: accepted
 ---
 
@@ -30,21 +30,22 @@ IO 前置检查位于 importers target。该边界调整见 [0061](../developmen
 为解析、accessor 转换、解码和摘要建立稳定 zone。三方库内部暂未适配的分配明确属于观测范围之外；
 不得仅因外层使用 PMR 就声称 fastgltf/stb 的全部分配已被接管。
 
-## M23.2/5 OpenVDB 稀疏实体导入（设计）
+## M23.2/5 OpenVDB 稀疏实体导入
 
-[体素方案](render-voxels.md)采用 OpenVDB CPU 构建/`.vdb` 导入和 NanoVDB 运行时产物；M23.2 的程序化构建/CPU 转换见 [0160](../development/0160-voxel-cpu-sparse.md)，正式 `.vdb` 文件/资产接入仍待 M23.5；既有 glTF 行为不变。
-可选导入实现 PRIVATE 链接 OpenVDB/转换器；asset_data 仅持有字节快照、描述和 palette，不公开 OpenVDB/NanoVDB 模板类型。
+[体素方案](render-voxels.md)采用 OpenVDB CPU 构建/`.vdb` 导入和 NanoVDB 运行时产物；M23.2 的程序化构建/CPU 转换见 [0160](../development/0160-voxel-cpu-sparse.md)，M23.5 正式文件/资产接入见 [0163](../development/0163-voxel-assets.md)；既有 glTF 行为不变。
+可选导入实现 PRIVATE 链接 OpenVDB/转换器；asset_data 仅持有前向声明的不可变 SparseGrid 共享快照和 palette，不公开 OpenVDB/NanoVDB 模板类型。
 CPU 查询适配层可私有使用 NanoVDB，不令 Geometry、Render 或 Scene 链接 OpenVDB；CPU-only 不要求 Vulkan/CUDA。
 M23.2 先完成无 CUDA 依赖打包和测试级 CPU 转换，M23.5 接入正式导入/产物/缓存/Scene 消费者。
 本阶段单独 target `dk_asset_voxel_importers`（`DK_BUILD_VOXEL_VDB`）暴露 [VoxelBuilder.hpp](../../engine/assets/importers/voxels/include/dk/assets/VoxelBuilder.hpp)，
 接收对齐的程序化块/源 active 状态、palette 数量、采样中心变换和额度；内部 OpenVDB GridBase 转换桥不成为公开 SDK。
-成功返回不可变 NanoVDB CPU 快照，失败保留调用者输入和已发布快照；不依赖 IO/glTF/asset_data/Scene/GPU，不提供文件解析命令。
+程序化 builder 成功返回不可变 NanoVDB CPU 快照，失败保留输入和已发布快照；最小配置不依赖 IO/glTF/asset_data/Scene/GPU。
+当 asset_data 与 IO 已启用，同一 target 增加 `VoxelImporter.hpp` 文件入口，完整 Runtime 按 `.dkvoxel` 分派。
 
 输入描述显式选择命名 Int32Grid、占用/材质语义与 palette；背景必须为零，值域及 active/inactive/tile 规范化遵循体素契约。
 拒绝未声明的 grid、SDF/fog/向量/点类、非零背景及非线性/非法变换；不推断密度阈值，也不按 active mask 丢弃非零值。
 有符号坐标、有限域和 VDB 采样中心到引擎单元角的半格转换随产物保存，grid map 与实体变换只组合一次。
 沿用受控 IO/路径/取消入口，分别限制源文件、解压树、转换临时峰值及 NanoVDB 输出；不能仅限制压缩字节或把整个稀疏域展开。
-完整描述/产物 v1 在 M23.5 冻结，指纹覆盖源、grid/导入配置、palette、转换器/布局版本和头文件来源；不兼容缓存明确拒绝或重建。
+完整描述/产物 v1 已在 [M23.5 契约](render-voxels.md#m235-资产实施契约)冻结，指纹覆盖源、grid/导入配置、palette、转换器/布局版本和头文件来源；不兼容缓存明确拒绝或重建。
 转换/验证/发布失败保留旧资产；OpenVDB 内部分配若尚未接管，单列观测限制，不声称全量 PMR 追踪。
 依赖版本、CUDA feature 限制和阶段验证见[三方库说明](../third-party-libraries.md#m23-openvdbnanovdb-稀疏网格选型)。
 
@@ -237,3 +238,26 @@ M4.4.2 在 GltfImportRequest 中加入可选 stop_token，读取、解析、prim
 GltfImportRequest 新增 profile，默认 strict 完整保持上述拒绝策略。unlit_preview 仅允许省略
 已校验的 TANGENT 与 normal/occlusion/metallicRoughness 纹理，返回明确诊断；不省略 emissiveTexture
 或未知属性，不修改 CPU artifact 格式，也不进入既有 compiler/cache 路径。见 [磁盘渲染](render-disk.md)。
+
+## M23.5 文件入口与可移植产物
+
+`.dkvoxel` 是 UTF-8 JSON，VDB 路径相对于描述所在目录，并受 ProjectPaths 根目录约束。最小例：
+
+```json
+{
+  "format": "DeckerVoxelSource", "version": 1,
+  "vdb": "solid.vdb", "grid": "solid",
+  "semantics": "solid-material-index", "transform": "vdb-sample-center",
+  "domain": {"minimum": [0, 0, 0], "maximum": [63, 63, 63]},
+  "palette": [{"base_color": [0.125, 0.25, 1.0], "metallic": 0, "roughness": 1}]
+}
+```
+
+VDB 必须已含符合该 domain/palette 的 UNKNOWN Int32Grid；0 为空，1 索引 palette[0]，active mask 不定义占用。
+VDB sample map 与 meta unit_scale 在导入时处理，Entity TRS 在绘制时处理。重复 JSON 字段、含糊 grid 名称、未知语义/字段、
+SDF/fog/浮点/非零背景、非线性或非法变换、越域及超 palette 值均拒绝。标准 File 与 Stream 归档都从同一拥有型字节快照解码，禁延迟读取。
+
+`compile_asset` / `compile_cached_asset` 自动分派；未启用 VDB 时明确 not_supported。产物采用独立 `DeckerVoxelAsset` v1，
+加载不重新读取源 VDB。Nano loader 先验证区域、相对地址、节点归属与坐标、规范化值/域、map 和完整校验和，再发布可查询快照。
+输入描述 2 MiB、VDB 64 MiB、总输入 128 MiB、解码树合计 256 MiB、NanoVDB 256 MiB、转换存活载荷默认 896 MiB。
+OpenVDB 解码树预算在解码后检查，内部 scratch/allocator/RSS 不是硬上限；诊断报告解码树与转换载荷，不能据此声称整个进程峰值受控。

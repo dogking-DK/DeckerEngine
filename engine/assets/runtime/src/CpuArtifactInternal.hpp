@@ -6,6 +6,10 @@
 namespace dk::asset_detail {
 struct EncodedCpuArtifact { std::string manifest; ByteBuffer bytes; };
 [[nodiscard]] Result<EncodedCpuArtifact> encode_cpu_artifact(const ImportResult& imported, const AssetMetadata& metadata);
+#ifdef DK_ASSET_VOXELS
+[[nodiscard]] Result<EncodedCpuArtifact> encode_voxel_artifact(const ImportResult&,const AssetMetadata&);
+[[nodiscard]] Result<CpuArtifact> load_voxel_artifact(const std::filesystem::path&,std::string_view manifest);
+#endif
 enum class CompileStep { validate_inputs, publish, metadata };
 using CompileHook = std::function<Result<void>(CompileStep)>;
 class ScopedCompileHook {

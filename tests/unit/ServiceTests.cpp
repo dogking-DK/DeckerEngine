@@ -60,7 +60,7 @@ TEST_CASE("asset kind discovery schemas preserve accepted names for parameters a
     const auto edit = s.call("commands.describe", {{"name", "entity.set_assets"}});
     const auto get = s.call("commands.describe", {{"name", "entity.get"}});
     const auto create = s.call("commands.describe", {{"name", "scene.new"}});
-    const auto expected = Json::array({"mesh", "material", "texture"});
+    const auto expected = Json::array({"mesh", "material", "texture", "voxel"});
     const auto& kind = edit["parameters"]["properties"]["assets"]["items"]["properties"]["kind"];
     REQUIRE(kind["enum"] == expected);
     REQUIRE(get["result"]["properties"]["assets"]["items"]["properties"]["kind"]["enum"] == expected);

@@ -1,0 +1,11 @@
+string(RANDOM LENGTH 16 ALPHABET 0123456789abcdef suffix)
+set(root "${WORK_DIR}/voxel-${suffix}/工程 😀")
+file(MAKE_DIRECTORY "${root}")
+foreach(mode write read)
+    execute_process(COMMAND "${PROBE}" "${mode}" "${root}"
+        RESULT_VARIABLE code OUTPUT_VARIABLE text ERROR_VARIABLE error ENCODING UTF-8)
+    message(STATUS "${text}")
+    if(NOT code STREQUAL "0")
+        message(FATAL_ERROR "Voxel ${mode} process failed: ${code} ${error}")
+    endif()
+endforeach()

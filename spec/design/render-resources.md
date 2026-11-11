@@ -1,7 +1,7 @@
 ---
 module: render-resources
 created_at: "2026-10-03T15:06:44+08:00"
-updated_at: "2026-10-03T17:31:34+08:00"
+updated_at: "2026-11-11T20:28:55+08:00"
 status: accepted
 ---
 
@@ -62,3 +62,20 @@ CPU 验证输入拒绝无需初始化 GPU。无后台任务、自动缓存淘汰
 
 关联 [CPU 资产](assets-importers.md)、[Graph](graphics-graph.md)、[资源寿命](graphics-resources.md)、
 [0061](../development/0061-render-data-resources.md)。
+
+## M23.5 体素 GPU 资产
+
+启用 render_voxels 时，resources PRIVATE 消费该模块并公开 `VoxelAssets.hpp`。`VoxelAssets::create(heap, queue)` 绑定单队列，
+缓存以 voxel AssetId 索引 `GpuVoxelAsset`（generation、VoxelGpuGrid 共享所有权、不可变 palette）。旧 GpuAssets 明确拒绝 voxel 包。
+上传校验独占 CPU payload、唯一 voxel/0 输出、全域 palette 后预留槽与候选 palette；底层上传成功后，以无分配操作发布 current 和 generation。
+原网格快照再次上传可以复用 buffer；不同 CPU 快照整份上传。失败保持旧版本，提交成功仍需 wait 判断 GPU 完成。
+
+默认最多 64 当前资产；每个底层 grid cache 512 MiB / 两个存活网格代，计入在途 staging，复用 M23.3 额度与回收规则。
+这些是每缓存实例的 payload 限额，不是跨资产或卸载重建后的进程显存总上限；palette 快照与帧载荷另受计数/帧预算约束。
+unload/clear 删除查找引用，不取消已提交帧。旧句柄保留 grid/palette，Frame 保留 grid 和上传后的 palette；等待/读回允许发生于缓存释放和 Memory closing 后。
+新 upload 拒绝 closing；device_lost 不承诺旧 GPU 资源仍有效。
+
+ScenePipeline::render_voxel_assets 从 RenderScene 的 voxel 引用解析资产、EntityId 和世界变换，复用既有 HDDA/深度/HDR/tone。
+每实体最多一个 voxel 引用，最多 64 实例；缺失资源或使用 mesh-only 入口明确失败，不能静默漏画。
+原生 PathTraceScene 和 DiskScene/capture 当前同样拒绝 voxel，留待 M23.8/9、M23.6 接入。
+验证：真实 GPU 文件→缓存→Scene 引用、palette 替换、失败提交、代际预算、卸载、在途帧及 closing，见 [0163](../development/0163-voxel-assets.md)。

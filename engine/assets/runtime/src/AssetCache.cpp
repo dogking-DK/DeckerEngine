@@ -1,3 +1,4 @@
+#include "AssetImport.hpp"
 #include "AssetCacheInternal.hpp"
 #include "CpuArtifactInternal.hpp"
 #include <dk/assets/GltfImporter.hpp>
@@ -108,7 +109,7 @@ void summarize(CachedAsset& result)
     for (const auto& i : result.artifact.inputs) { inputs.push_back({{"path", std::string{i.path}}, {"bytes", i.bytes}, {"digest", std::string{i.digest}}}); }
     for (const auto& d : result.artifact.data.diagnostics) { diagnostics.push_back(std::string{d}); }
     result.summary_json = owned(Json{{"format", "DeckerAssetCacheResult"}, {"version", 1},
-        {"source", std::string{result.artifact.source}}, {"root_id", result.artifact.data.mesh.id.to_string()},
+        {"source", std::string{result.artifact.source}}, {"root_id", root_asset_id(result.artifact.data).to_string()},
         {"key", std::string{result.key}}, {"directory", std::string{result.directory}}, {"cache_hit", result.cache_hit},
         {"miss_reason", std::string{result.miss_reason}}, {"unit_scale", result.artifact.data.unit_scale},
         {"outputs", std::move(outputs)}, {"inputs", std::move(inputs)}, {"diagnostics", std::move(diagnostics)}}.dump() + '\n');
@@ -213,14 +214,15 @@ Result<PreparedCachedAsset> prepare_cached_asset(const ProjectPaths& paths, cons
         Vector<OutputIdentity> identities;
         if (previous) { for (const auto& o : previous->outputs) { identities.push_back({o.key, o.id, o.kind}); } }
         checkpoint();
-        auto imported = take(import_gltf(paths, {request.source, identities, scale, {}, stop}));
+        auto imported = take(import_asset(paths, {request.source, identities, scale, {}, stop}));
         checkpoint();
-        CacheDescriptor d; d.source = std::string{request.source}; d.metadata.root_id = imported.mesh.id; d.metadata.unit_scale = scale;
+        CacheDescriptor d; d.source = std::string{request.source}; d.metadata.root_id = root_asset_id(imported); d.metadata.unit_scale = scale;
         for (const auto& o : imported.outputs) { d.metadata.outputs.push_back({o.key, o.id, o.kind}); }
+        d.versions=cache_versions(d.metadata);
         for (const auto& input : imported.inputs) { d.inputs.push_back({input.path, owned(content_digest(input.bytes).hex()), input.bytes.size()}); }
         for (const auto& input : d.inputs) { ordinary_cache_input(paths, input.path); }
         const auto key = take(cache_key(d)).hex(); const auto build = take(AssetId::generate()).to_string();
-        const auto destination = entry_directory(key, build); const auto current = current_name(imported.mesh.id);
+        const auto destination = entry_directory(key, build); const auto current = current_name(root_asset_id(imported));
         if (!previous) { before_index = optional_cache_text(persistent_path(paths, current), cache_index_limit); }
         const auto encoded = take(encode_cpu_artifact(imported, d.metadata));
         const auto entry_text = Json{{"format", "DeckerAssetCacheEntry"}, {"version", 1}, {"algorithm", "xxh3-128-v1"},
@@ -228,7 +230,7 @@ Result<PreparedCachedAsset> prepare_cached_asset(const ProjectPaths& paths, cons
         require(entry_text.size() <= cache_entry_limit, "Cache entry byte limit");
         const auto after_meta = take(serialize_asset_meta(d.metadata));
         const bool meta_changed = !previous || take(serialize_asset_meta(*previous)) != after_meta;
-        const auto after_index = index_json({imported.mesh.id, std::string{request.source}, key, build});
+        const auto after_index = index_json({root_asset_id(imported), std::string{request.source}, key, build});
         require(after_index.size() <= cache_index_limit, "Cache index byte limit");
         auto stage_owner = std::make_unique<StagedEntry>(StagedEntry{paths, std::string{cache_root} + "/tmp/" + build, destination,
             {{{"data.bin", content_digest(encoded.bytes)}, {"manifest.json", hash_text(encoded.manifest)}, {"entry.json", hash_text(entry_text)}}}});

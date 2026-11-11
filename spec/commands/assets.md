@@ -1,14 +1,14 @@
 ---
 module: asset-command-reference
 created_at: "2026-09-28T15:02:00+08:00"
-updated_at: "2026-11-03T14:26:14+08:00"
+updated_at: "2026-11-11T20:28:55+08:00"
 status: accepted
 ---
 
 # CPU 资产命令
 
 需要启用 Memory、Jobs、Asset Runtime、Importers、Scene 和 Framework（windows-dev 已启用）。
-所有命令 undoable=false，不允许放入 scene.transaction。CPU Ready 表示网格/材质/纹理已可读，不代表 GPU 上传。
+所有命令 undoable=false，不允许放入 scene.transaction。CPU Ready 表示网格/材质/纹理或体素已可读，不代表 GPU 上传。
 路径为工程根内规范相对路径；单源、依赖、输入、CPU 输出分别限 16、64、128、256 MiB。
 动态超额返回错误，不产生 JobId；任务中的文件/导入错误通过 jobs.get/wait 查询。
 
@@ -31,12 +31,12 @@ Console 对 `assets.load/status/unload` 的 `id` 提供活动目录候选，显�
 首次 open 省略 guard；替换活动目录必须携带旧 guard。load/status/unload/register/rename/catalog 要求活动目录，
 import 无需目录或活动 Scene。目录最多 10000 个记录；异步最多 1024 个源 slot。
 打开另一目录或实际登记/改名成功会清空异步会话并取消旧请求，旧结果不得覆盖新会话。
-每个源导入整体 mesh/material/texture，同源输出共用 Loading/Ready；unload 释放该源的整组当前数据。
+每个 glTF 源导入整体 mesh/material/texture，体素源只有 voxel/0，同源输出共用 Loading/Ready；unload 释放该源的整组当前数据。
 已 Ready 的 load 不自动监视文件，依赖改变后使用显式 import 重建或 unload 后 load。
 
-register.outputs 为可选 `[{key,kind}]`，最多 10000 条；省略视作 mesh/0，始终保留并登记已有 meta 的全部输出。
-非空数组必须含 mesh/0。key 支持 mesh/0、material/N、texture/N，kind 分别为 mesh/material/texture。
-默认要求已有 meta；显式 create_meta=true 可创建或采用旧工程单一 mesh 身份。
+register.outputs 为可选 `[{key,kind}]`，最多 10000 条；省略时保留并登记已有 meta 的全部输出，无 meta 时仍默认 mesh/0。
+glTF 非空数组必须含 mesh/0，可含 material/N、texture/N；体素必须仅含 `{key:"voxel/0",kind:"voxel"}`，两类不可混合。
+默认要求已有 meta；显式 create_meta=true 可创建或采用旧工程同种类的单一根身份。新体素源需显式 outputs。
 旧工程没有 meta 时，先 register(create_meta=true)，再 import，避免分配不同于旧工程的身份。
 register 不伪造尚未实现的导入能力；未知输出/删除旧 selector 的导入仍会报错。
 
@@ -66,3 +66,8 @@ meta 与 current 不是跨文件事务；current 失败可能保留已提交合�
 
 替换占位符和最新 revision。Batch 的 --auto-guard 会为资产命令注入目录 guard；stdio 必须显式传入。
 EOF/shutdown 会取消未完成作业并回收，持久调用者须先 wait 确认完成再关闭输入。
+
+M23.5 将 kind schema 同步为 `mesh/material/texture/voxel`，登记/同目录改名接受 `.dkvoxel`；
+启用 `DK_BUILD_VOXEL_VDB` 的 Runtime CPU 导入分支消费描述及其命名 VDB。未启用时导入明确 not_supported，
+登记引用本身不证明可解码/可渲染。体素描述 2 MiB、VDB 64 MiB、总输入 128 MiB，其余转换额度与格式见[体素导入](../design/assets-importers.md#m235-文件入口与可移植产物)。
+当前 `render.capture` 不消费 voxel；GPU 服务设置、Editor 和独立截图闭环留在 M23.6。

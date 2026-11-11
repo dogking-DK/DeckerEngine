@@ -1,14 +1,14 @@
 ---
 module: assets-types
 created_at: "2026-09-22T12:28:05+08:00"
-updated_at: "2026-09-28T10:52:48+08:00"
+updated_at: "2026-11-11T20:28:55+08:00"
 status: accepted
 ---
 
 # 资产身份与引用（M2.3）
 
 engine/assets/types 提供 dk::asset_types，仅 PUBLIC 依赖 Core。
-AssetKind 固定 mesh/material/texture 三种持久文本值；未知值返回 invalid_argument。
+AssetKind 固定 mesh/material/texture/voxel 四种持久文本值；未知值返回 invalid_argument。
 `dk::asset_types` PRIVATE 使用 magic_enum 生成名称与严格区分大小写的解析，未知枚举名称仍为空。
 `asset_kind_names()` 返回静态存储的只读 string_view span，供命令 schema 使用同一反射列表；
 不接受数字文本、首尾空白或嵌入 NUL，不在公开头文件暴露第三方类型。
@@ -33,3 +33,9 @@ CPU 数据计划放到独立 assets/data，M4.1.1 的 meta 身份/只读目录�
 types 继续只依赖 Core。一个 glTF 源的网格/材质/纹理通过 meta 映射为各自的 AssetId，
 源内选择器不写入现有 AssetReference。具体方案见 [资产运行时设计稿](assets-runtime.md)。
 meta v1、登记候选与兼容验收见 [0031](../development/0031-asset-metadata-catalog.md)；持久提交、CPU 导入/加载尚未实现。
+
+## M23.5 体素身份
+
+`voxel` 对应 `.dkvoxel` 描述及其命名 `.vdb` grid，meta 使用 `voxel-vdb` v1 / 唯一 `voxel/0`。
+ID 和 kind 继续独立于文件格式、CPU 数据和 GPU generation；Scene/Project 不新增设备字段。
+Scene v2 / Project v1 的字段结构不变，旧 reader 对未知 kind 明确拒绝。详情见[体素资产契约](render-voxels.md#m235-资产实施契约)及 [0163](../development/0163-voxel-assets.md)。

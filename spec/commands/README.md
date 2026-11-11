@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-11-03T18:40:35+08:00"
+updated_at: "2026-11-11T20:41:10+08:00"
 status: accepted
 ---
 
@@ -103,7 +103,7 @@ new/load 每次生成新的 document_id；持久 scene_id 不能用作 document_
 | UUID | 规范的 36 字符 UUID，非 nil；输入大小写均可，输出小写 |
 | State | `document_id`、`scene_id`、`revision`、`dirty`、`entity_count`；revision 为 uint64 |
 | Transform | `translation[3]`、`rotation[4]`、`scale[3]`，三个字段均必填；四元数顺序 x,y,z,w |
-| AssetReference | `{id, kind}`；kind 为 mesh/material/texture |
+| AssetReference | `{id, kind}`；kind 为 mesh/material/texture/voxel |
 | AssetRecord | `{id, kind, path}`；用于 scene.new 的工程资产清单 |
 | Entity | `id`、`name`、`transform`、`parent`、`assets`、`world_matrix`；parent 为 UUID 或 null |
 

@@ -12,7 +12,7 @@ struct SparseStatistics {
 };
 
 // Copies share an immutable, aligned NanoVDB allocation. Each query has private traversal state.
-// No public arbitrary-byte decoder: construction is through the validated CPU converter.
+// Construction is through the CPU converter or the bounded, fully validated loader below.
 class SparseGrid final {
 public:
     [[nodiscard]] std::uint32_t value(Coord) const noexcept;
@@ -28,4 +28,10 @@ private:
     explicit SparseGrid(std::shared_ptr<const detail::SparseStorage> storage) : storage_(std::move(storage)) {}
     std::shared_ptr<const detail::SparseStorage> storage_;
 };
+struct SparseLoadLimits { std::uint64_t bytes=256*1024*1024, values=64*1024*1024; };
+// Accepts the fixed single-grid Int32 NanoVDB layout only. Copies into aligned storage;
+// validates relative addresses and values before constructing any query accessor.
+[[nodiscard]] Result<SparseGrid> load_sparse_grid(std::span<const std::byte>,const Domain&,
+    const Transformd& corner_to_local,std::uint32_t palette_size,SparseLoadLimits = {});
+[[nodiscard]] std::uint32_t sparse_layout_version() noexcept;
 } // namespace dk::geometry::voxels

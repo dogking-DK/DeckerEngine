@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-11-11T19:38:00+08:00"
+updated_at: "2026-11-11T20:41:10+08:00"
 status: accepted
 ---
 
@@ -48,6 +48,10 @@ Graph 精确声明 NanoVDB 上传到 compute-read、中间资源和颜色/深度
 两条路线共享 [体素数据和表面语义](render-voxels.md)，材质、光照能力和实际验收分别报告。
 `render_voxels` 为显式程序化入口，可选 PRIVATE 依赖 render_voxels；简单方向光同时作用于 mesh/voxel，独立于大气模块。
 RenderSettings 增加可选 depth_readback，RenderFrame 提供最终 D32 float 读回；体素帧在 wait/读取/color 发布时检查 GPU 状态，错误不修改输出。
+
+M23.5 新增 `render_voxel_assets`：从 RenderScene 的 voxel 引用解析 VoxelAssets 当前快照、EntityId 和世界变换，
+最多 64 实例、每实体一个 voxel 引用；缺资源或调用 mesh-only 入口时失败，避免静默漏画。程序化入口保留，
+带 Scene 引用的程序化实例还需匹配 AssetId。提交后保留网格与 palette，替换/卸载不影响旧帧，见[资源契约](render-resources.md#m235-体素-gpu-资产)与[0163](../development/0163-voxel-assets.md)。
 
 ## M16 独立路径追踪规划
 

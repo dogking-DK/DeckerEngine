@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-11-11T19:38:00+08:00"
+updated_at: "2026-11-11T20:28:55+08:00"
 status: accepted
 ---
 
@@ -307,3 +307,7 @@ Imath 3.2.2/OpenEXR 3.4.15/Blosc 1.21.6（BSD-3-Clause）及其压缩库；许�
 本文维护当前清单和默认版本规则；构建脚本负责实际解析，开发记录保存每次验证证据。
 
 M4.4.3 [0039](development/0039-assets-jobs-commands.md) 发现官方 mimalloc 3.5.3 port 在 MI_OVERRIDE=OFF 时仍启用 MI_WIN_REDIRECT。新增[同版本 overlay](../cmake/vcpkg-ports/README.md)只设置 MI_WIN_REDIRECT=OFF，源码哈希、版本、基线保持不变；运行时不再加载 redirect DLL，不靠环境变量或 stderr 过滤。
+
+M23.5 沿用上述固定 OpenVDB/NanoVDB 版本、baseline 与无 CUDA overlay，无新增/升级依赖。
+文件导入 PRIVATE 使用 OpenVDB Stream 对拥有型快照完整解码；可移植 Nano loader、CPU 资产与 GPU 资源接口不公开厂商类型。
+构建签名含两份 NanoVDB 头 SHA256，旧布局不能复用；转换载荷与解码内部 scratch/RSS 的限制见[0163](development/0163-voxel-assets.md)。

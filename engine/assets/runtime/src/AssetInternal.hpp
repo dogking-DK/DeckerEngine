@@ -28,6 +28,7 @@ inline String owned(std::string_view value) { return String{value.begin(), value
 inline AssetKind selector_kind(std::string_view key)
 {
     if (key == "mesh/0") { return AssetKind::mesh; }
+    if (key == "voxel/0") { return AssetKind::voxel; }
     const auto slash = key.find('/');
     require(slash != key.npos && key.size() <= 13, "Invalid output selector: " + std::string{key});
     const auto kind = key.substr(0, slash), number = key.substr(slash + 1);
@@ -49,9 +50,16 @@ inline void validate_meta(const AssetMetadata& meta)
     for (const auto& output : meta.outputs) {
         require(selector_kind(output.key) == output.kind, "Output kind differs from selector: " + std::string{output.key});
         require(keys.insert(output.key).second && !output.id.is_nil() && ids.insert(output.id).second, "Duplicate selector or invalid/duplicate AssetId");
-        if (output.key == "mesh/0") { root = true; require(output.id == meta.root_id, "root_id must identify mesh/0"); }
+        if (output.key == "mesh/0" || output.key == "voxel/0") {
+            require(!root, "Mixed asset root kinds"); root = true;
+            require(output.id == meta.root_id, "root_id must identify the root output");
+            if(output.kind==AssetKind::voxel) require(meta.outputs.size()==1,"Voxel metadata has exactly one output");
+        }
     }
-    require(root, "Missing mesh/0 output");
+    require(root, "Missing mesh/0 or voxel/0 output");
+}
+inline std::string_view metadata_importer(const AssetMetadata& meta) {
+    return meta.outputs.size()==1 && meta.outputs[0].kind==AssetKind::voxel ? "voxel-vdb" : "gltf-static";
 }
 inline std::filesystem::path relative_path(std::string_view text)
 {

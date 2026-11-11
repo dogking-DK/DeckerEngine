@@ -55,10 +55,10 @@ std::optional<String> read_sidecar(const ProjectPaths& paths, std::string_view s
     const auto relative = relative_path(source);
     require(source.size() <= 4091, "Source plus .meta exceeds path limit");
     const auto extension_path = relative.extension();
-    require(!extension_path.empty(), "Only glTF/GLB registration is supported", ErrorCode::not_supported);
+    require(!extension_path.empty(), "Asset registration needs glTF/GLB or dkvoxel source", ErrorCode::not_supported);
     auto extension = take(path_to_utf8(extension_path));
     for (auto& c : extension) { if (c >= 'A' && c <= 'Z') { c = static_cast<char>(c + ('a' - 'A')); } }
-    require(extension == ".gltf" || extension == ".glb", "Only glTF/GLB registration is supported", ErrorCode::not_supported);
+    require(extension == ".gltf" || extension == ".glb" || extension == ".dkvoxel", "Asset registration needs glTF/GLB or dkvoxel source", ErrorCode::not_supported);
     const auto path = take(paths.resolve(relative));
     require(regular_file(path), "Source file not found: " + std::string{source}, ErrorCode::not_found);
     const auto meta_path = take(paths.resolve(relative_path(std::string{source} + ".meta")));
@@ -117,9 +117,9 @@ Result<RegistrationCandidate> AssetCatalog::prepare_registration(CatalogGuard gu
         bool root = request.outputs.empty();
         for (const auto& output : request.outputs) {
             require(selector_kind(output.key) == output.kind && selectors.insert(output.key).second, "Invalid or duplicate requested selector");
-            root = root || output.key == "mesh/0";
+            root = root || output.key == "mesh/0" || output.key == "voxel/0";
         }
-        require(root, "Requested outputs must include mesh/0");
+        require(root, "Requested outputs must include mesh/0 or voxel/0");
         auto original = read_sidecar(paths_, request.source);
         AssetMetadata meta;
         std::optional<String> canonical_before;
@@ -130,14 +130,16 @@ Result<RegistrationCandidate> AssetCatalog::prepare_registration(CatalogGuard gu
         } else {
             require(request.missing_meta == MissingMetaPolicy::create_or_adopt, "Asset meta not found; explicit creation/adoption required", ErrorCode::not_found);
             const auto path = relative_path(request.source);
+            const bool voxel=std::any_of(request.outputs.begin(),request.outputs.end(),[](const auto& o){return o.key=="voxel/0";});
+            const auto kind=voxel ? AssetKind::voxel : AssetKind::mesh;
             const AssetCatalogRecord* legacy = nullptr;
             for (const auto& record : records_) {
                 if (!same_path(relative_path(record.path), path)) { continue; }
-                require(record.path == request.source && !legacy && record.kind == AssetKind::mesh, "Ambiguous legacy identity or path alias", ErrorCode::conflict);
+                require(record.path == request.source && !legacy && record.kind == kind, "Ambiguous legacy identity or path alias", ErrorCode::conflict);
                 legacy = &record;
             }
             meta.root_id = legacy ? legacy->id : take(AssetId::generate());
-            meta.outputs.push_back({owned("mesh/0"), meta.root_id, AssetKind::mesh});
+            meta.outputs.push_back({owned(voxel ? "voxel/0" : "mesh/0"), meta.root_id, kind});
         }
         if (request.unit_scale) { meta.unit_scale = *request.unit_scale; }
         for (const auto& output : request.outputs) {

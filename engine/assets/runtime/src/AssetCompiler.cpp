@@ -1,3 +1,4 @@
+#include "AssetImport.hpp"
 #include <dk/assets/AssetCompiler.hpp>
 #include "AssetInternal.hpp"
 #include "AssetPersistenceInternal.hpp"
@@ -116,8 +117,8 @@ Result<CompiledAsset> compile_asset(const ProjectPaths& paths, const AssetCompil
             for (const auto& item : previous->outputs) { identities.push_back({item.key, item.id, item.kind}); }
         }
         const auto scale = request.unit_scale.value_or(previous ? previous->unit_scale : 1);
-        const auto imported = take(import_gltf(paths, {request.source, identities, scale, request.limits}));
-        AssetMetadata metadata{imported.mesh.id, scale, {}};
+        const auto imported = take(import_asset(paths, {request.source, identities, scale, request.limits}));
+        AssetMetadata metadata{root_asset_id(imported), scale, {}};
         for (const auto& item : imported.outputs) { metadata.outputs.push_back({item.key, item.id, item.kind}); }
         const auto after = take(serialize_asset_meta(metadata));
         const bool meta_changed = !previous || take(serialize_asset_meta(*previous)) != after;

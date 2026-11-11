@@ -8,6 +8,7 @@
 #include <bit>
 #ifdef DK_RENDER_VOXELS
 #include "VoxelComposition.hpp"
+#include <dk/render/VoxelAssets.hpp>
 #endif
 #ifdef DK_RENDER_SUNLIGHT
 #include <dk/render/Atmosphere.hpp>
@@ -754,6 +755,27 @@ Result<RenderFrame> ScenePipeline::render_voxels(SubmissionQueue& queue,const Re
     return std::unexpected(Error{ErrorCode::not_supported,"Voxel composition requires DK_BUILD_RENDER_VOXELS"});
 #endif
 }
+Result<RenderFrame> ScenePipeline::render_voxel_assets(SubmissionQueue& queue,const RenderView& view,const GpuAssets& meshes,
+    const VoxelAssets& assets,const VoxelRenderSettings& voxels,const RenderSettings& settings) {
+#ifdef DK_RENDER_VOXELS
+    try {
+        std::vector<GpuVoxelAsset> owners; std::vector<VoxelInstance> instances;
+        for(std::size_t i=0;i<view.scene().entities().size();++i) {
+            const auto& entity=view.scene().entities()[i];
+            for(const auto& reference:take(view.scene().assets(i))) if(reference.kind==AssetKind::voxel) {
+                if(instances.size()==64) throw Error{ErrorCode::invalid_argument,"Scene voxel instance limit exceeded"};
+                owners.push_back(take(assets.find(reference.id))); const auto& asset=owners.back();
+                instances.push_back({entity.id,asset.grid(),entity.world,asset.palette(),reference.id});
+            }
+        }
+        return render_voxels(queue,view,meshes,instances,voxels,settings);
+    } catch(const Error& e) { return std::unexpected(e); }
+      catch(const std::bad_alloc&) { return std::unexpected(Error{ErrorCode::internal_error,"Voxel Scene assembly allocation failed"}); }
+#else
+    static_cast<void>(queue); static_cast<void>(view); static_cast<void>(meshes); static_cast<void>(assets); static_cast<void>(voxels); static_cast<void>(settings);
+    return std::unexpected(Error{ErrorCode::not_supported,"Voxel Scene assembly requires DK_BUILD_RENDER_VOXELS"});
+#endif
+}
 Result<RenderFrame> ScenePipeline::render_sunlight(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings,const CloudShadowMap* shadow) {
     return render_impl(queue,view,assets,settings,view.scene().environment().enabled ? &sky : nullptr,nullptr,nullptr,nullptr,nullptr,shadow);
 }
@@ -929,6 +951,15 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
 #endif
     try {
         const auto heap=state_->heap;
+        for(std::size_t i=0;i<view.scene().entities().size();++i) {
+            unsigned references=0;
+            for(const auto& ref:take(view.scene().assets(i))) if(ref.kind==AssetKind::voxel) {
+                if(!voxel_settings || ++references>1) throw Error{ErrorCode::not_supported,"Scene voxels require explicit voxel rendering and at most one voxel reference per entity"};
+                const auto entity=view.scene().entities()[i].id;
+                if(std::ranges::none_of(voxel_instances,[&](const auto& v){return v.entity==entity && v.asset==ref.id;}))
+                    throw Error{ErrorCode::not_found,"Scene voxel reference has no matching instance/resource"};
+            }
+        }
         { auto guard=take(queue.begin()); check(guard.retain(state_->identity)); }
 #ifdef DK_RENDER_VOXELS
         std::unique_ptr<detail::VoxelComposition> voxels;

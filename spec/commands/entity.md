@@ -1,7 +1,7 @@
 ---
 module: command-reference-entity
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-11-03T17:57:12+08:00"
+updated_at: "2026-11-11T20:28:55+08:00"
 status: accepted
 ---
 
@@ -83,7 +83,7 @@ M22.10 中名称/TRS 的字段提示与 Inspector 搜索共用 commands.describe
 ## entity.set_assets
 
 必填 guard、id、`assets:AssetReference[]`，0–64 项，完整替换引用列表；空数组清空引用。
-各 AssetId 必须已注册到工程清单，kind 匹配，文件存在且为普通文件；引用列表拒绝重复 ID。
+kind 为 mesh/material/texture/voxel。各 AssetId 必须已注册到工程清单，kind 匹配，文件存在且为普通文件；引用列表拒绝重复 ID。
 引用仅包含 id/kind，文件路径来自 scene.new 或已加载的清单；本命令不导入、解码资产。
 未注册或缺失文件为 not_found，种类不符等为 invalid_argument。
 

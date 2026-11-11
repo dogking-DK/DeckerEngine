@@ -13,7 +13,7 @@ if(DK_BUILD_VOXEL_VDB)
     target_include_directories(dk_nanovdb_headers SYSTEM INTERFACE "${DK_NANOVDB_INCLUDE_DIR}")
     # NanoVDB selects std::invoke_result vs removed std::result_of using __cplusplus.
     target_compile_options(dk_nanovdb_headers INTERFACE $<$<CXX_COMPILER_ID:MSVC>:/Zc:__cplusplus>)
-    add_library(dk_geometry_voxels_sparse STATIC src/SparseVoxels.cpp)
+    add_library(dk_geometry_voxels_sparse STATIC src/SparseVoxels.cpp src/SparseLoader.cpp)
     add_library(dk::geometry_voxels_sparse ALIAS dk_geometry_voxels_sparse)
     target_sources(dk_geometry_voxels_sparse PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/geometry/SparseVoxels.hpp)
     target_link_libraries(dk_geometry_voxels_sparse PUBLIC dk::geometry_voxels PRIVATE dk::nanovdb_headers)

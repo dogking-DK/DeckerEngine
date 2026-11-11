@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-11-11T19:38:00+08:00"
+updated_at: "2026-11-11T20:28:55+08:00"
 ---
 
 # 构建与依赖配置
@@ -254,3 +254,18 @@ DK_BUILD_TESTS=OFF 会关闭全部测试；DK_BUILD_UNIT_TESTS=OFF 仅保留可�
 
 GPU timestamp/Tracy 专用预设 `windows-graphics-profiling` 继承 graphics 并启用 profiling；
 构建、采集和测量口径见 [GPU 性能观测](gpu-profiling.md)。
+
+## M23.5 体素文件资产验收
+
+`windows-voxel-assets` 增加 IO/Memory/Jobs/Scene/CPU Importers/Runtime，仍无 Vulkan、Slang、CUDA 或 Editor。
+`windows-voxel-assets-gpu` 在 M23.4 配置上启用 CPU Importers/Runtime，用文件与 Scene 引用验证 GPU 版本替换和保活；不要求 RT。
+
+```powershell
+cmake --preset windows-voxel-assets
+& ./scripts/verify.ps1 -BuildDir out/build/windows-voxel-assets -Target @('dk_voxel_asset_tests','dk_voxel_asset_process_probe') -TestRegex '^dk\.voxels\.assets[._]' -Reason 'M23.5 CPU 文件缓存/生命周期与独立进程重载'
+cmake --preset windows-voxel-assets-gpu
+& ./scripts/verify.ps1 -BuildDir out/build/windows-voxel-assets-gpu -Target dk_voxel_asset_gpu_probe -TestRegex '^dk\.voxels\.assets_gpu_required$' -Reason 'M23.5 真实 GPU 资产替换/卸载/在途保活'
+```
+
+GPU 门禁要求 validation 与同步验证，零错误/警告；该测试进程禁用机器上的 AMD switchable 隐式层，不关闭 Khronos validation。
+旧 glTF/meta/cache/Scene、无 VDB 构建及 M23.4 合成回归按实际改动另选，不固定全量。所有产物与日志位于 out。

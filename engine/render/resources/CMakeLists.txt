@@ -7,3 +7,8 @@ target_sources(dk_render_resources PRIVATE src/GpuAssets.cpp src/Validation.cpp
     PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/render/GpuAssets.hpp)
 target_link_libraries(dk_render_resources PUBLIC dk::asset_data dk::graphics_device PRIVATE dk::graphics_graph)
 dk_target_defaults(dk_render_resources)
+if(TARGET dk::render_voxels)
+    target_sources(dk_render_resources PRIVATE src/VoxelAssets.cpp
+        PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/render/VoxelAssets.hpp)
+    target_link_libraries(dk_render_resources PRIVATE dk::render_voxels)
+endif()

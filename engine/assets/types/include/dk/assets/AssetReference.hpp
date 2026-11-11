@@ -4,7 +4,7 @@
 #include <string_view>
 
 namespace dk {
-enum class AssetKind { mesh, material, texture };
+enum class AssetKind { mesh, material, texture, voxel };
 struct AssetReference {
     AssetId id;
     AssetKind kind = AssetKind::mesh;

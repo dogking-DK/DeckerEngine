@@ -1,7 +1,7 @@
 ---
 module: assets-runtime
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-09-28T15:24:33+08:00"
+updated_at: "2026-11-11T20:28:55+08:00"
 status: accepted
 ---
 
@@ -334,3 +334,20 @@ M4.1.1 的 meta/身份设计。当前 `dk_asset_tests` / `^dk\.assets\.` 验证�
 
 关联：[导入器](assets-importers.md)、[任务队列](foundation-jobs.md)、
 [已有资产类型](assets-types.md)、[工程格式](project-format.md)、[IO](foundation-io.md)。
+
+## M23.5 体素资产与版本缓存
+
+CpuAsset 增加可选 VoxelData（AssetId、不可变 SparseGrid 共享所有权、线性 palette），与 mesh/material/texture 包互斥；
+`root_asset_id` 供同步编译、缓存、异步摘要统一取根身份。asset_data 前向声明 SparseGrid，不引入 VDB/Vulkan 公共依赖。
+meta v1 对应 importer `voxel-vdb` v1 / 唯一 `voxel/0`；登记、同目录改名和持久恢复允许 `.dkvoxel`。
+省略 outputs 时已有 meta 全部保留；新建体素 meta 必须显式提供 voxel/0，旧默认 mesh/0 不改变。
+
+源描述与 VDB 的完整拥有字节分别形成依赖摘要；内容键覆盖 palette/grid/domain/map 策略、unit_scale、固定构建器与布局版本，
+并包含 NanoVDB/PNanoVDB 头 SHA256。实现签名限 256 字节；glTF 现有键保持。未知布局/签名或损坏产物作为 miss 拒绝复用并重建，旧条目不被原地覆盖。
+独立 `DeckerVoxelAsset` v1 manifest/data 严格载入后才发布；旧格式 reader 不会将 voxel 误读成 mesh。
+
+准备、输入重检、meta/current 分步提交、取消及异步 Ready/卸载沿用既有协议。接受取消后不发布；失败不替换 current，旧 CPU 句柄保持可读。
+沿用既有部分提交限制：meta 已提交而 current 写失败时可能留下新 meta 和完整孤立产物，错误 context 明确指出；不承诺跨文件原子事务。
+源内容在 prepare 与 publish 之间改变时拒绝候选。异步 unload/替换/所有者退出不破坏外部持有的旧 SparseGrid/palette。
+真实 GPU 版本所有权由独立 VoxelAssets 管理，见[资源设计](render-resources.md#m235-体素-gpu-资产)。Editor/capture 操作闭环留在 M23.6。
+实施与证据见 [0163](../development/0163-voxel-assets.md)。

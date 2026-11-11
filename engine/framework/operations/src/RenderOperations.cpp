@@ -100,14 +100,14 @@ CaptureRequest request(const Json& p,bool sequence) {
         path.max_tracking_steps=v.value("max_tracking_steps",1ull<<26); path.max_steps_per_path=v.value("max_steps_per_path",1u<<16);
         path.restir_di=v.value("direct_lighting",std::string{"classic_mis"})=="restir_di";
         if(v.contains("restir")) {
-            const auto& j=v["restir"]; CaptureRestir r;
-            r.version=j.value("version",1U); r.initial_candidates=j.value("initial_candidates",8U);
-            r.max_candidate_evaluations=j.value("max_candidate_evaluations",1ull<<24);
-            if(j.contains("temporal")) { const auto& t=j["temporal"]; r.temporal=CaptureRestirTemporal{t.value("version",1U),t.value("max_history_candidates",64U),
+            const auto& j=v["restir"]; CaptureRestir restir;
+            restir.version=j.value("version",1U); restir.initial_candidates=j.value("initial_candidates",8U);
+            restir.max_candidate_evaluations=j.value("max_candidate_evaluations",1ull<<24);
+            if(j.contains("temporal")) { const auto& t=j["temporal"]; restir.temporal=CaptureRestirTemporal{t.value("version",1U),t.value("max_history_candidates",64U),
                 t.value("max_history_age",8U),t.value("position_tolerance",.1),t.value("normal_cosine",.95)}; }
-            if(j.contains("spatial")) { const auto& s=j["spatial"]; r.spatial=CaptureRestirSpatial{s.value("version",1U),s.value("neighbor_count",4U),s.value("radius",2U),
+            if(j.contains("spatial")) { const auto& s=j["spatial"]; restir.spatial=CaptureRestirSpatial{s.value("version",1U),s.value("neighbor_count",4U),s.value("radius",2U),
                 s.value("max_source_candidates",64U),s.value("position_tolerance",1.),s.value("normal_cosine",.9)}; }
-            path.restir=r;
+            path.restir=restir;
         }
         r.path=path;
     }

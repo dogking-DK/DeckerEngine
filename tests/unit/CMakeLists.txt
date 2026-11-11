@@ -26,6 +26,18 @@ if(TARGET dk_asset_voxel_importers)
     catch_discover_tests(dk_voxel_sparse_tests TEST_PREFIX "dk.voxels.sparse."
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 120 LABELS "cpu")
 endif()
+if(TARGET dk_asset_voxel_importers AND DK_BUILD_ASSET_RUNTIME AND DK_BUILD_ASSET_IMPORTERS AND TARGET dk_scene)
+    add_executable(dk_voxel_asset_tests VoxelAssetTests.cpp)
+    if(DK_BUILD_JOBS)
+        target_sources(dk_voxel_asset_tests PRIVATE VoxelAsyncTests.cpp)
+    endif()
+    target_include_directories(dk_voxel_asset_tests PRIVATE "${PROJECT_SOURCE_DIR}/engine/assets/runtime/src")
+    target_link_libraries(dk_voxel_asset_tests PRIVATE dk::asset_runtime dk::asset_voxel_importers dk::scene
+        dk::nanovdb_headers OpenVDB::openvdb Catch2::Catch2WithMain nlohmann_json::nlohmann_json)
+    dk_target_defaults(dk_voxel_asset_tests)
+    catch_discover_tests(dk_voxel_asset_tests TEST_PREFIX "dk.voxels.assets."
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 120 LABELS "cpu")
+endif()
 if(TARGET dk_render_pathtracing_reference)
     add_executable(dk_pathtracing_reference_tests PathTraceReferenceTests.cpp PathTextureTests.cpp PathBsdfTests.cpp PathMediumTests.cpp VolumePathTests.cpp RestirReferenceTests.cpp RestirVolumeTests.cpp)
     target_link_libraries(dk_pathtracing_reference_tests PRIVATE dk::render_pathtracing_reference dk::geometry Catch2::Catch2WithMain Threads::Threads)

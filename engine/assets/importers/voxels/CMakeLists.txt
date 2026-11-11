@@ -8,3 +8,13 @@ target_include_directories(dk_asset_voxel_importers PRIVATE "${PROJECT_SOURCE_DI
 target_compile_definitions(dk_asset_voxel_importers PRIVATE NANOVDB_USE_OPENVDB)
 target_link_libraries(dk_asset_voxel_importers PUBLIC dk::geometry_voxels_sparse PRIVATE OpenVDB::openvdb dk::nanovdb_headers)
 dk_target_defaults(dk_asset_voxel_importers)
+if(TARGET dk::asset_data AND TARGET dk::io)
+    find_package(nlohmann_json CONFIG REQUIRED)
+    file(SHA256 "${DK_NANOVDB_INCLUDE_DIR}/nanovdb/NanoVDB.h" DK_VOXEL_NANO_HASH)
+    file(SHA256 "${DK_NANOVDB_INCLUDE_DIR}/nanovdb/PNanoVDB.h" DK_VOXEL_PNANO_HASH)
+    target_sources(dk_asset_voxel_importers PRIVATE src/VoxelImporter.cpp
+        PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/assets/VoxelImporter.hpp)
+    target_link_libraries(dk_asset_voxel_importers PUBLIC dk::asset_data dk::io PRIVATE nlohmann_json::nlohmann_json)
+    target_compile_definitions(dk_asset_voxel_importers PRIVATE
+        DK_VOXEL_BUILDER_SIGNATURE="voxel-vdb-v1:openvdb-12.0.1:nanovdb-32.7.0:${DK_VOXEL_NANO_HASH}:${DK_VOXEL_PNANO_HASH}")
+endif()

@@ -20,6 +20,7 @@ struct CacheDescriptor {
     AssetMetadata metadata;
     Vector<InputFingerprint> inputs;
 };
+[[nodiscard]] CacheVersions cache_versions(const AssetMetadata&);
 struct CacheIndex { AssetId root; std::string source, key, build; };
 struct CacheEntry { CacheDescriptor descriptor; CpuArtifact artifact; std::string text; };
 [[nodiscard]] Result<ContentDigest> cache_key(const CacheDescriptor&);

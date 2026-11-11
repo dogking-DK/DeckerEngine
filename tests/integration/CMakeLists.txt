@@ -1,3 +1,25 @@
+if(TARGET dk_asset_voxel_importers AND DK_BUILD_ASSET_RUNTIME AND DK_BUILD_ASSET_IMPORTERS AND TARGET dk_scene)
+    find_package(nlohmann_json CONFIG REQUIRED)
+    add_executable(dk_voxel_asset_process_probe VoxelAssetProcessProbe.cpp)
+    target_link_libraries(dk_voxel_asset_process_probe PRIVATE dk::asset_runtime dk::asset_voxel_importers dk::scene OpenVDB::openvdb nlohmann_json::nlohmann_json)
+    dk_target_defaults(dk_voxel_asset_process_probe)
+    add_test(NAME dk.voxels.assets_process COMMAND "${CMAKE_COMMAND}"
+        "-DPROBE=$<TARGET_FILE:dk_voxel_asset_process_probe>" "-DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-artifacts/$<CONFIG>"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/VoxelAssetProcessTest.cmake")
+    set_tests_properties(dk.voxels.assets_process PROPERTIES TIMEOUT 120 LABELS "cpu")
+    if(TARGET dk_render_pipeline AND TARGET dk_render_voxels)
+        add_executable(dk_voxel_asset_gpu_probe VoxelAssetGpuProbe.cpp)
+        target_link_libraries(dk_voxel_asset_gpu_probe PRIVATE dk::asset_runtime dk::asset_voxel_importers dk::render_pipeline dk::render_voxels OpenVDB::openvdb nlohmann_json::nlohmann_json)
+        target_include_directories(dk_voxel_asset_gpu_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
+        target_compile_definitions(dk_voxel_asset_gpu_probe PRIVATE DK_RENDER_SHADER_DIR="${PROJECT_SOURCE_DIR}/shaders/render"
+            DK_VOXEL_ARTIFACT_DIR="${CMAKE_CURRENT_BINARY_DIR}/voxel-artifacts")
+        dk_target_defaults(dk_voxel_asset_gpu_probe)
+        dk_deploy_slang(dk_voxel_asset_gpu_probe)
+        add_test(NAME dk.voxels.assets_gpu_required COMMAND dk_voxel_asset_gpu_probe)
+        set_tests_properties(dk.voxels.assets_gpu_required PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1;DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1=1")
+    endif()
+endif()
 if(TARGET dk_render_pathtracing)
     if(TARGET dk_render_disk)
         find_package(nlohmann_json CONFIG REQUIRED)

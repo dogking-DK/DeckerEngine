@@ -3,8 +3,10 @@
 #include <dk/math/Types.hpp>
 #include <dk/memory/Containers.hpp>
 #include <optional>
+#include <memory>
 
 namespace dk {
+namespace geometry::voxels { class SparseGrid; }
 struct OutputIdentity { String key; AssetId id; AssetKind kind = AssetKind::mesh; };
 struct InputSnapshot { String path; Vector<std::byte> bytes; };
 struct MeshPrimitive {
@@ -39,6 +41,12 @@ struct TextureData {
     TextureSampler sampler;
     String origin;
 };
+struct VoxelMaterialData { Vec3f base_color=Vec3f::Ones(); float metallic=0,roughness=1; };
+struct VoxelData {
+    AssetId id;
+    std::shared_ptr<const geometry::voxels::SparseGrid> grid;
+    Vector<VoxelMaterialData> palette;
+};
 struct CpuAsset {
     MeshData mesh;
     Vector<MaterialData> materials;
@@ -46,7 +54,9 @@ struct CpuAsset {
     Vector<OutputIdentity> outputs;
     Vector<String> diagnostics;
     double unit_scale = 1;
+    std::optional<VoxelData> voxel; // Exclusive with mesh/material/texture payloads.
 };
+[[nodiscard]] inline AssetId root_asset_id(const CpuAsset& asset) { return asset.voxel ? asset.voxel->id : asset.mesh.id; }
 struct ImportResult : CpuAsset {
     Vector<InputSnapshot> inputs; // Source first; exact owned bytes, no mutable parser views.
 };

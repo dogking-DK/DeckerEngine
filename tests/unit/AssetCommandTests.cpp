@@ -32,7 +32,12 @@ TEST_CASE("asset command discovery schemas and effects describe the implemented 
 {
     Commands c; auto caps = c.value("runtime.capabilities"); CHECK(caps["async_jobs"] == true); CHECK(caps["async_tasks"] == false);
     CHECK(caps["job_limits"]["terminal"] == 256);
-    auto commands = c.value("commands.list"); CHECK(commands.size() == (42 + int(caps["render_capture"].get<bool>()) + int(caps["simulation"]["experiment_export"].get<bool>())));
+    const auto commands = c.value("commands.list");
+    CHECK(std::count_if(commands.begin(),commands.end(),[](const auto& entry) {
+        const auto name=entry.at("name").template get<std::string>(); return name.starts_with("assets.") || name.starts_with("jobs.");
+    })==11);
+    const auto registration=c.value("commands.describe",{{"name","assets.register"}});
+    CHECK(registration["parameters"]["properties"]["outputs"]["items"]["properties"]["kind"]["enum"]==Json::array({"mesh","material","texture","voxel"}));
     for (const auto name : {"assets.open","assets.catalog","assets.import","assets.register","assets.rename","assets.load","assets.status","assets.unload","jobs.get","jobs.wait","jobs.cancel"}) {
         auto desc = c.value("commands.describe",{{"name",name}}); CHECK(desc["undoable"] == false);
         CHECK(desc["parameters"]["additionalProperties"] == false);

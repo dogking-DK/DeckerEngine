@@ -1,4 +1,7 @@
 #include "AssetCacheInternal.hpp"
+#ifdef DK_ASSET_VOXELS
+#include <dk/assets/VoxelImporter.hpp>
+#endif
 #include <algorithm>
 #include <bit>
 #include <set>
@@ -69,12 +72,23 @@ public:
     ContentDigest finish() const { return hasher_.digest(); }
 };
 }
+CacheVersions cache_versions(const AssetMetadata& meta) {
+    CacheVersions v;
+    if(metadata_importer(meta)=="voxel-vdb") {
+#ifdef DK_ASSET_VOXELS
+        v.importer=std::string{assets::voxel_builder_signature()};
+#else
+        v.importer="voxel-vdb-unavailable";
+#endif
+    }
+    return v;
+}
 Result<ContentDigest> cache_key(const CacheDescriptor& d)
 {
     return attempt<ContentDigest>("cache_key", [&] {
         validate_meta(d.metadata); (void)relative_path(d.source);
         require(!d.versions.algorithm.empty() && d.versions.algorithm.size() <= 128
-            && !d.versions.importer.empty() && d.versions.importer.size() <= 128, "Invalid cache version labels");
+            && !d.versions.importer.empty() && d.versions.importer.size() <= 256, "Invalid cache version labels");
         (void)take(path_from_utf8(d.versions.algorithm)); (void)take(path_from_utf8(d.versions.importer));
         require(!d.inputs.empty() && d.inputs.size() <= 20001, "Invalid cache inputs");
         std::vector<const InputFingerprint*> inputs;
@@ -112,9 +126,9 @@ Result<ContentDigest> cache_key(const CacheDescriptor& d)
 CacheDescriptor describe_cache(const CpuArtifact& artifact)
 {
     CacheDescriptor d; d.source = std::string{artifact.source}; d.inputs = artifact.inputs;
-    d.metadata.root_id = artifact.data.mesh.id; d.metadata.unit_scale = artifact.data.unit_scale;
+    d.metadata.root_id = root_asset_id(artifact.data); d.metadata.unit_scale = artifact.data.unit_scale;
     for (const auto& o : artifact.data.outputs) { d.metadata.outputs.push_back({o.key, o.id, o.kind}); }
-    return d;
+    d.versions=cache_versions(d.metadata); return d;
 }
 Json descriptor_json(const CacheDescriptor& d)
 {
@@ -150,7 +164,7 @@ Result<CacheEntry> read_cache_entry(const ProjectPaths& paths, std::string_view 
             "Incompatible cache entry", ErrorCode::not_supported);
         require(digest(string(j["key"])) == key && uuid(string(j["build"])) == build, "Cache entry location mismatch");
         auto d = descriptor(j["descriptor"]);
-        require(d.versions == CacheVersions{}, "Incompatible cache implementation/contract", ErrorCode::not_supported);
+        require(d.versions == cache_versions(d.metadata), "Incompatible cache implementation/contract", ErrorCode::not_supported);
         require(take(cache_key(d)).hex() == key, "Cache descriptor key mismatch");
         const auto manifest = read_cache_text(persistent_path(paths, base + "/manifest.json"), cache_entry_limit);
         require(content_digest(std::as_bytes(std::span{manifest.data(), manifest.size()})).hex() == digest(string(j["manifest_digest"])), "Cache manifest digest mismatch");

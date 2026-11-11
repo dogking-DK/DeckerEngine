@@ -1,7 +1,7 @@
 ---
 module: render-voxels
 created_at: "2026-11-11T14:51:58+08:00"
-updated_at: "2026-11-11T19:38:00+08:00"
+updated_at: "2026-11-11T20:28:55+08:00"
 status: accepted
 ---
 
@@ -13,7 +13,7 @@ status: accepted
 支持透视/正交相机、网格模型混合遮挡、版本化资产、Editor 拾取及可等待截图。
 采用两条后端路线：光栅侧的 compute HDDA/深度合成，以及现有 GPU 路径追踪器中的原生 AABB/intersection + HDDA 求交。
 阶段、依赖和实施状态由 [Roadmap M23](../roadmap.md#m23实体体素渲染)维护。
-本文 accepted 表示采用方案；CPU、GPU compute 查询与 mesh 合成的实施证据分别见 [0160](../development/0160-voxel-cpu-sparse.md)、[0161](../development/0161-voxel-gpu-hdda.md)、[0162](../development/0162-voxel-raster-composition.md)。原生 RT、正式资产和命令仍按后续阶段推进。
+本文 accepted 表示采用方案；CPU、GPU compute 查询与 mesh 合成的实施证据分别见 [0160](../development/0160-voxel-cpu-sparse.md)、[0161](../development/0161-voxel-gpu-hdda.md)、[0162](../development/0162-voxel-raster-composition.md)。M23.5 文件资产、缓存和 Scene/GPU 资源接入见 [0163](../development/0163-voxel-assets.md)；原生 RT 与上层命令闭环继续分阶段推进。
 
 OpenVDB 负责 CPU 稀疏构建和 `.vdb` 导入，NanoVDB 连续缓冲区作为 CPU/GPU 运行时快照；首期静态拓扑、整份替换。
 保留稠密整数网格、逐格 DDA 和独立外露面 oracle 作为正确性参考，生产渲染不将稀疏数据展开成完整 3D 纹理。
@@ -235,7 +235,7 @@ GPU 网格整份上传到只读 storage buffer，保留 CPU 快照、generation 
 等待/读回可在 renderer/cache 释放后继续，超时不修改调用者输出，错误不会伪装成 miss。
 
 固定 NanoVDB 32.7.0 / PNanoVDB 同源头与现有 Slang，HLSL 分支、32-bit 字节地址、uint storage stride 4。
-上传仅接受 CPU 转换器发布的不可变 Int32 快照；检查对齐、版本、尺寸不超过 uint32 地址范围及 maxStorageBufferRange。
+上传仅接受 CPU 转换器或 M23.5 严格载入器发布的不可变 Int32 快照；检查对齐、版本、尺寸不超过 uint32 地址范围及 maxStorageBufferRange。
 适配器显式检测访问越界并返回错误；shader/include 内容与宏进入 source_fingerprint，不修改安装的厂商头。
 HDDA 放在无入口的共享 Slang 文件中，compute 使用它；intersection 兼容仍需 M23.8 单独验证。
 
@@ -280,6 +280,41 @@ GPU 地址/数值/工作量错误按 `1 << status_code` 汇总为帧状态，非
 边界采用解析用例，不追加遮罩。覆盖双向遮挡、精确同深度 mesh 优先、稳定实例 tie/输入乱序、近远裁剪/内部起点、半格/负缩放/剪切、
 Unlit/方向光/曝光、空列表退化/旧 mesh/alpha mask、resize/重复帧、拒绝/submit/在途/closing。required GPU/validation/sync 禁跳过。
 实施与真实证据见 [0162](../development/0162-voxel-raster-composition.md)。
+
+## M23.5 资产实施契约
+
+源入口为 `.dkvoxel` UTF-8 JSON（`DeckerVoxelSource` v1），显式保存工程内相对 `.vdb` 路径、唯一命名 grid、
+`solid-material-index` 语义、闭整数 domain、`vdb-sample-center` 坐标变换策略及线性 palette（base_color/metallic/roughness）。
+不接受裸 `.vdb` 的隐式默认值。只选 UNKNOWN Int32Grid、零背景；所有非零值必须落在 domain/palette 内。
+VDB 自带线性采样中心变换先转换为 cell corner，再应用 meta 的 unit_scale 一次；Entity world 后续组合一次。
+palette 的非金属/粗糙度字段供两后端共享，M23.4 Lambert 仍拒绝金属；不支持纹理、alpha 或介质参数。
+
+AssetKind 新增 `voxel`，meta 使用 `voxel-vdb` v1 和唯一 `voxel/0` 输出；AssetId 在内容/描述/单位缩放变化时保持。
+复用现有 compile/cache/登记的准备、meta 提交、current 提交与取消流程；源描述和完整 VDB 字节快照都进入 XXH3-128 内容键。
+构建器版本、固定 OpenVDB/NanoVDB 版本及 NanoVDB 头文件摘要进入实现签名，缓存读取未知布局/签名时拒绝并可显式重建。
+meta/current 沿用既有分步提交：current 写失败保持旧 current，但可能保留已提交 meta 与完整孤立产物，并在错误 context 报告。
+旧 mesh meta/CPU 产物/缓存协议保持；旧 reader 因未知 importer/kind/产物 format 明确拒绝 voxel。
+Scene/Project 仍只持久化 ID/kind/path/TRS；原版本字段结构不变，旧场景默认迁移沿用既有规则，不需要空转协议升级。
+
+`DeckerVoxelAsset` v1 由 manifest.json + data.bin 组成：manifest 严格记录来源/依赖摘要、meta、语义、有限域、
+corner-to-local double 矩阵、palette、构建签名、完整 NanoVDB 版本与 little-endian Int32 布局；data.bin 为单份对齐 NanoVDB 快照字节，摘要覆盖全长，禁止尾部。
+读取先限额/验证 JSON 与摘要，再验证固定 Grid/Tree/root/节点区域、所有相对 child 地址、唯一树归属/坐标、值与 active 规范化及 domain；
+在指针范围验证完成前不调用 NanoVDB accessor。完整校验通过后才构造不可变 SparseGrid，CPU 查询无需重新导入 VDB。
+
+默认描述 2 MiB、VDB 64 MiB、累计输入 128 MiB、每棵/全部解码树 256 MiB、NanoVDB 256 MiB；
+源树/规范化树/输出/输入快照额外受转换存活载荷额度约束，统计分别报告，不能把压缩大小当作树预算。
+OpenVDB 流解码来自拥有型输入快照，禁延迟读和外部文件重读；多 grid 全部解码后检查累计树大小并按唯一名称选择。
+OpenVDB 的流解码内部不提供硬分配器配额：解码树额度为完成解码后的拒绝门槛，scratch/进程 RSS 上限不作保证；转换输出分配仍在分配前限额。
+IO/格式/转换/预算/取消失败丢弃候选并保留旧身份/current/CPU 快照；meta 已提交而 current 失败沿用既有明确的部分提交诊断。
+
+CPU data 增加可选体素拥有型数据（共享 SparseGrid、palette/身份），普通 asset_data 不依赖 OpenVDB/GPU；可选 runtime/importer 才链接实现。
+GPU 资源缓存提供按 AssetId 的体素版本、替换/卸载与 palette 保活，提交前完成全部返回容器分配；提交成功才切换当前版本。
+旧快照及在途帧继续持有旧网格/材质；closing 后拒绝新工作。Pipeline 根据 Scene 引用装配体素实例，未提供支持的 mesh-only/DiskScene/路径入口明确拒绝体素，不能成功漏画。
+服务/命令/Editor/capture 使用闭环留给 M23.6，不新增后台线程或热重载机制。
+
+验收包括 CPU-only 描述→VDB→产物→缓存→Scene 保存重载，独立进程恢复；源/palette/grid/单位缩放/布局失效，稳定身份、无 CUDA/Vulkan依赖；
+坏源/类型/背景/变换/重复 JSON/截断/尾部/地址/值/额度与提交冲突拒绝，旧快照/旧 current 不变；
+真实 GPU 上传替换/卸载、旧帧与 palette 保活、失败提交、closing、旧 mesh 回归。证据见 [0163](../development/0163-voxel-assets.md)。
 
 ## Slang 兼容性门禁
 

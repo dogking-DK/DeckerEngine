@@ -65,6 +65,7 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
             const auto& entity=source.entities()[ei];
             const auto refs=source.assets(ei); if (!refs) return std::unexpected(refs.error());
             for (const auto& ref:*refs) {
+                if(ref.kind==AssetKind::voxel) return std::unexpected(Error{ErrorCode::not_supported,"Native voxel path tracing requires M23.8/9"});
                 if (ref.kind!=AssetKind::mesh) continue;
                 const auto found=std::ranges::find_if(assets,[&](const CpuAsset* a) { return a->mesh.id==ref.id; });
                 if (found==assets.end()) return std::unexpected(Error{ErrorCode::not_found,"Path scene mesh missing"});

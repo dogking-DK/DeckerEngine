@@ -1,7 +1,7 @@
 ---
 module: scene
 created_at: "2026-09-22T12:05:49+08:00"
-updated_at: "2026-10-13T13:12:00+08:00"
+updated_at: "2026-11-11T20:28:55+08:00"
 status: accepted
 ---
 
@@ -169,3 +169,11 @@ M2 不包含 Commands/Runtime、资产解码、图形设备、版本迁移、后
 - [0010 组件与层级](../development/0010-scene-hierarchy.md)
 - [0011 工程与资产引用](../development/0011-project-assets.md)
 - [0012 序列化与安全重载](../development/0012-scene-persistence.md)
+
+## M23.5 体素持久引用
+
+Entity 的 dk.AssetReferences v1 接受 `voxel`；Project v1 映射到 `.dkvoxel`，描述再引用命名 `.vdb`。
+Scene v2 / Project v1 字段不变，不持久化 Nano 字节、GPU 句柄或缓存目录；旧文件迁移规则保持。
+CPU-only 保存重载、未知 kind 拒绝和失败 reload 保留原文档沿用现有流程；GPU 加载由 Render Resources / Pipeline 显式完成。
+未接入的 mesh-only、DiskScene/capture 和 PathTraceScene 对 voxel 明确失败；上层交互仍待 M23.6。
+格式与证据见[体素资产契约](render-voxels.md#m235-资产实施契约)、[0163](../development/0163-voxel-assets.md)。
