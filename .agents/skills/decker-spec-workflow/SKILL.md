@@ -1,6 +1,6 @@
 ---
 name: decker-spec-workflow
-description: "Maintain DeckerEngine module designs and numbered development records before and during implementation, fixes, refactors, or build/dependency changes. Use in this repository; read-only questions do not require a new development record."
+description: "Maintain DeckerEngine designs and development records for implementation, fixes, refactors, and build/dependency changes. For documentation maintenance, read only applicable rules. Skip read-only questions and planning."
 ---
 
 # DeckerEngine 开发留档
@@ -10,10 +10,17 @@ C++ 命名空间使用 dk，具体约定见根 AGENTS.md。
 
 ## 读取依据
 
-先读 [spec 流程规范](../../../spec/README.md)，通过[模块与源码索引](../../../spec/design/README.md)
-定位架构边界、当前模块设计、实现与测试；最近记录按 design_refs 关联选择。
-只补读本次涉及的章节，已读取且未变化的内容可复用。
-流程细节、时间格式和编号规则以 spec/README.md 为唯一规范。
+实现类任务先读 spec 规范的[开发记录粒度](../../../spec/README.md#开发记录粒度)和
+[执行顺序](../../../spec/README.md#每次开发的执行顺序)，不要求整读 spec/README。
+新建/更新文档元数据时补读[文件和元数据](../../../spec/README.md#文件和元数据)，
+命令变更补读[命令文档](../../../spec/README.md#命令文档)；纯文档维护只取本次适用规则。
+
+已知模块直接进入相关设计；未知时用关键词搜索[设计索引](../../../spec/design/README.md)对应行。
+长文档先用 `rg -n` 找标题/关键词，再读取完整相关章节，默认不整读 Roadmap 或各类索引。
+阶段任务只读目标 Mx.y 和必要前置；“下一步”先定位 Roadmap“当前执行边界与下一步”。
+架构、关联历史和其他 skill 按[读取范围](../../../spec/README.md#文档职责与读取范围)中的触发条件补读，
+不因入口存在链接而递归加载。已读且未变化的内容复用；范围、契约与验证入口明确后开始工作。
+流程细节、时间格式和编号规则以 spec/README.md 为唯一规范；输出截断时缩小范围补读缺失部分。
 
 ## 执行
 

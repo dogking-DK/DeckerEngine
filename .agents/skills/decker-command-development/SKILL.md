@@ -5,11 +5,13 @@ description: "Add, change, remove, or document DeckerEngine commands through Com
 
 # DeckerEngine 命令开发
 
-从 [命令参考目录](../../../spec/commands/README.md) 找到相关功能页；
-具体命令定义始终放在那里，skill 不保存第二份命令列表。
-根据本次改动读取 [命令注册/schema](../../../spec/design/commands.md)、
-[服务与操作](../../../spec/design/application-services.md)；仅涉及分派、任务或传输时再读
-[Runtime](../../../spec/design/runtime.md) 和 [协议](../../../spec/design/automation-protocol.md)。
+已知命令页直接定位目标命令；未知时用命令前缀/功能词搜索 [命令参考目录](../../../spec/commands/README.md)，
+不整读目录及所有功能页。具体定义始终放在命令参考中，skill 不保存第二份列表。
+按改动补读相关章节：注册/schema 读 [Commands](../../../spec/design/commands.md)，
+业务状态/操作装配读 [Services/Operations](../../../spec/design/application-services.md)，
+分派/任务读 [Runtime](../../../spec/design/runtime.md)，传输行为读 [协议](../../../spec/design/automation-protocol.md)。
+新命令同时核对注册与业务契约；纯文档修正从对应命令参考及实际注册/实现核对，不自动加载所有设计。
+已读取且未变化的章节复用；无需因命令改动默认读取 Roadmap 或历史记录。
 
 ## 实现路径
 

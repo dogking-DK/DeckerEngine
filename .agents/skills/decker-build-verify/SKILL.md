@@ -6,8 +6,11 @@ description: "Select and run focused build/test verification for DeckerEngine ch
 # DeckerEngine 定向验证
 
 先确定本次目标行为和直接受影响的调用链，再选择验证范围。只读解释无需执行测试。
-目录位置以仓库根为准；配置方式见 [构建指南](../../../spec/guides/build.md)，
-局部 target/测试入口见 [选择参考](references/test-selection.md)，只读取本次相关部分。
+纯文档改动直接使用下文“证据与纯文档改动”，不加载构建指南或测试选择表。
+实现验证按模块/target 搜索 [选择参考](references/test-selection.md) 的对应行，补读适用的表头/说明；
+已有调用者提供准确入口时直接核对对应测试/CMake，不重新遍历索引。
+仅首次配置、构建选项/依赖变化或配置问题需要 [构建指南](../../../spec/guides/build.md) 的相关章节。
+目录位置以仓库根为准；链接不是全量阅读清单，沿用本次任务已读取的设计与验证信息。
 
 ## 选择与执行
 

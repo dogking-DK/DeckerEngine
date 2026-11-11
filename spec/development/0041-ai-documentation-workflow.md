@@ -1,7 +1,7 @@
 ---
 id: "0041"
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-09-28T16:17:15+08:00"
+updated_at: "2026-11-11T14:45:37+08:00"
 status: completed
 design_refs:
   - ../design/project-foundation.md
@@ -61,3 +61,35 @@ design_refs:
 不解析任意 YAML/CMake、远端链接、Markdown 锚点或自然语言语义；测试 regex 和实际条件配置仍由 verify/CTest 核验。
 日志和夹具留在忽略的 out 目录；版本化脚本与本记录保留复现入口和结果。
 本次无遗留阻塞；下一引擎阶段仍按 Roadmap 为 M5.1，不因文档维护推进里程碑。
+
+## 2026-11-11：按任务定位章节，减少启动读取
+
+### 问题与变更
+
+体素渲染规划时，整读 Roadmap 与索引产生大量无关输出并被截断；既有“只读相关章节”
+与“先读 spec / 优先阅读架构和最近记录”并列，仍容易触发全量加载。本次依据
+[工程基础设计](../design/project-foundation.md#文档入口与一致性检查)合并维护本记录，不新增里程碑或编号。
+
+- [AGENTS](../../AGENTS.md) 区分只读规划、实现类任务和纯文档维护；已知模块直达，未知模块搜索索引行。
+- [spec 规范](../README.md#文档职责与读取范围)增加按任务路由、按标题边界读取的 PowerShell 示例及停止扩读条件。
+  Roadmap 只按阶段/状态/依赖需要读取；局部维护不为寻找阶段而扫描整份 Roadmap。
+  架构、历史、其他技能按具体缺口加载；输出截断必须缩小范围补读，不能当作已读完。
+- [留档 skill](../../.agents/skills/decker-spec-workflow/SKILL.md)直接链接粒度/执行/元数据/命令章节，
+  不要求先整读规范；[验证](../../.agents/skills/decker-build-verify/SKILL.md)、
+  [命令](../../.agents/skills/decker-command-development/SKILL.md)和
+  [状态](../../.agents/skills/decker-state-contracts/SKILL.md)复用当前任务信息，仅补读相关表行/章节。
+- 保留设计先行、重要开发留档、依赖固定、命令同步、状态提交/失败保护、定向验证、
+  `--background` 和分阶段详细本地提交要求；未改 skill 调用权限、引擎代码、构建或依赖。
+
+### 验证与限制
+
+- 四个仓库 skill 通过 skill-creator `quick_validate.py`（`python -X utf8`），4/4 有效。
+- 已执行规范中的三个 `rg` 定位示例：分别找到渲染管线索引行、M18/M19 边界和管线设计小节。
+  按实际边界提取完整 M18 节为 20 行 / 1803 字符；Roadmap 全文为 1017 行 / 62670 字符
+  （以 LF 连接行计数）。这是单个章节的输出体积对照，不是会话 token 或所有任务节省比例的测量。
+- `check-spec.ps1 -Path` 限定本次 8 份 Markdown：通过，扫描 103 个本地链接，
+  同时通过元数据、表格、全局索引、测试入口和 JSON 检查；`git diff --check` 通过。
+- 未运行引擎构建、CPU/GPU 回归或独立 agent 行为评测：本次仅修改文档与 skill，未改变检查脚本或引擎行为。
+  格式、链接与定位示例检查不能证明未来每次任务都会遵守读取策略；不声明实测 token 节省量。
+
+本次不改变 Roadmap 的阶段状态；前文 M5.1 是 2026-09-28 的历史交接，不是当前下一阶段。
