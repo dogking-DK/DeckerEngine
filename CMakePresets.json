@@ -70,6 +70,20 @@
       }
     },
     {
+      "name": "windows-voxels-gpu",
+      "inherits": "windows-voxels",
+      "displayName": "NanoVDB Vulkan compute without CUDA or RT",
+      "binaryDir": "${sourceDir}/out/build/windows-voxels-gpu",
+      "cacheVariables": {
+        "DK_BUILD_MEMORY": "ON",
+        "DK_BUILD_IO": "ON",
+        "DK_BUILD_GRAPHICS_DEVICE": "ON",
+        "DK_BUILD_GRAPHICS_SHADERS": "ON",
+        "DK_BUILD_GRAPHICS_GRAPH": "ON",
+        "DK_BUILD_RENDER_VOXELS": "ON"
+      }
+    },
+    {
       "name": "windows-client",
       "inherits": "windows-bootstrap",
       "displayName": "Windows lightweight IPC client (no Runtime or Renderer)",

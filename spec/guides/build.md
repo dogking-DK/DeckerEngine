@@ -124,7 +124,18 @@ ctest --preset windows-debug
 & ./scripts/verify.ps1 -BuildDir out/build/windows-voxels -Target @('dk_voxel_tests','dk_voxel_sparse_tests') -TestRegex '^dk\.voxels\.' -Reason 'M23.2 CPU 稠密和稀疏体素'
 ```
 
-稠密隔离配置只选择 `dk_voxel_tests`。新增 target 与验证范围见[体素设计](../design/render-voxels.md#m232-cpu-实施契约)，不表示 Slang/GPU 路线已接入。
+`windows-voxels-gpu` 增加 Memory/IO、Device/Graph/Shaders 与 `DK_BUILD_RENDER_VOXELS`，仍关闭 Scene/Editor/CUDA，不要求 RT。
+Vulkan SDK 的 `spirv-val` 必须在 PATH；使用真实 GPU 和 validation/sync，缺环境失败。
+
+```powershell
+cmake --preset windows-voxels-gpu -DDK_WARNINGS_AS_ERRORS=ON
+& ./scripts/verify.ps1 -BuildDir out/build/windows-voxels-gpu -Target dk_voxel_gpu_probe -TestRegex '^dk\.voxels\.(slang_compute|spirv_validation|gpu_.*_required)$' -Reason 'M23.3 Slang 与真实 GPU 体素验收'
+```
+
+诊断产物位于该构建树的 `tests/integration/voxel-artifacts`：SPIR-V、来源/布局反射 JSON 与 640×480 PPM。
+它们来自逐像素 GPU 命中读回；mesh 深度/HDR 合成、Editor/capture 接入仍按后续阶段推进。
+
+稠密隔离配置只选择 `dk_voxel_tests`。CPU 与 GPU 查询的 target/验证范围分别见[CPU 契约](../design/render-voxels.md#m232-cpu-实施契约)、[GPU 契约](../design/render-voxels.md#m233-gpu-实施契约)。
 `windows-scripting` 继承 windows-dev 并启用 `DK_BUILD_SCRIPTING_LUAU`，要求 Scene/Framework Runtime，自动选择 scripting feature，提供 `dk::scripting_luau` 和 runner 的 `--script FILE.luau`；见 [脚本指南](scripting.md)。
 `windows-graphics` 继承 windows-dev，显式启用 DK_BUILD_GRAPHICS_DEVICE、DK_BUILD_GRAPHICS_SHADERS、DK_BUILD_GRAPHICS_OFFSCREEN、DK_BUILD_GRAPHICS_GRAPH、DK_BUILD_RENDER_DATA、DK_BUILD_RENDER_RESOURCES、DK_BUILD_RENDER_PIPELINE、DK_BUILD_RENDER_DISK、DK_BUILD_RENDER_CAPTURE、DK_BUILD_PHYSICS_GPU、DK_BUILD_RENDER_SIMULATION、DK_BUILD_RENDER_ATMOSPHERE；
 Offscreen 要求 Device、Shaders、Graph，复用已有 feature。设备/资源和离屏探针见 [Graphics 指南](graphics.md)、[离屏指南](offscreen.md)。

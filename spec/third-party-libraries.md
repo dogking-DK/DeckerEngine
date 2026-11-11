@@ -37,6 +37,7 @@ Luau 此次单包替换使用固定的官方 Git registry（见下文），保�
 - 来源：[官方固定索引](https://github.com/microsoft/vcpkg/blob/33d78c1ed898a06938f31312167c7abefd229455/versions/baseline.json)。
 - Windows host/target triplet：`x64-windows`。
 - M23.2：2026-11-11 核验最新官方 OpenVDB 12.0.1#0，与原 baseline 一致；通过同源无 CUDA overlay 接入 CPU 转换/NanoVDB 查询，见 [0160](development/0160-voxel-cpu-sparse.md)。
+- M23.3：沿用上述固定来源，PNanoVDB 32.7.0 / Slang 2026.18 compute 编译、SPIR-V 与真实 GPU 上传/HDDA 验收通过，见 [0161](development/0161-voxel-gpu-hdda.md)；未新增 CUDA 或 RT 依赖。
 - M4.1.1 的 assets feature 复用 nlohmann-json 3.12.0#2；资产底层同时复用既有 types/IO/Memory，
   无新包或版本变化，固定 baseline 不变；见 [0031](development/0031-asset-metadata-catalog.md)。
 - 最近接入：[0032](development/0032-asset-commit-recovery.md)，xxHash 0.8.4（BSD-2-Clause，port #0）。
@@ -71,7 +72,7 @@ M1.7 的 Tracy 与 mimalloc 未包含在 0021 当时的 22 包解析验证中。
 | Tracy / `tracy` | 0.14.1 | profiling | dk::profiling 的 PUBLIC 依赖；CPU zone、线程名、动态文本及 heap backing 事件；graphics 私有 GPU timestamp/延迟区间适配，client BSD-3-Clause；on-demand、无 crash-handler/GUI，默认不开启 |
 | mimalloc / `mimalloc` | 3.5.3 | memory | dk::memory PRIVATE；v3 多线程 CPU heap，MIT；关闭默认 features，无 override，不替换全局 new/delete |
 | OpenVDB / `openvdb` | 12.0.1#0，固定同源 overlay | voxel-vdb | 可选 `dk_asset_voxel_importers` PRIVATE CPU 稀疏构建/规范化/转换，Apache-2.0；正式文件资产接入待 M23.5 |
-| NanoVDB / PNanoVDB | 同源布局/API 32.7.0 | voxel-vdb → openvdb[nanovdb] | `dk_geometry_voxels_sparse` PRIVATE header-only CPU 查询；C32 布局已验证，Slang/GPU 未验证；无 CUDA 依赖 |
+| NanoVDB / PNanoVDB | 同源布局/API 32.7.0 | voxel-vdb → openvdb[nanovdb] | `dk_geometry_voxels_sparse` PRIVATE CPU 查询、`dk_render_voxels` PRIVATE Slang 适配；C32 与 compute GPU 已验证，intersection 待实施；无 CUDA 依赖 |
 
 对应设计：[Core/日志](design/foundation-core.md)、[数学](design/foundation-math.md)、
 [Scene](design/scene.md)、[Commands](design/commands.md)、[Profiling](design/foundation-profiling.md)、[Memory](design/foundation-memory.md)。
@@ -268,17 +269,18 @@ vk_oidn GPU 内存由其直接 `vkAllocateMemory`，host allocation callback 不
 ## M23 OpenVDB/NanoVDB 稀疏网格选型
 
 2026-11-11 按用户决定采用 OpenVDB CPU 构建/导入 + NanoVDB CPU/GPU 快照，稠密网格仅保留为正确性参考。
-状态为 **M23.2 CPU 已集成并验收、Slang 未验证**；manifest/CMake 通过可选 `voxel-vdb` 接入，默认关闭。原 builtin-baseline 已包含最新 OpenVDB，保持不变。
+CPU 与 Slang compute 子集已集成并验收，intersection 仍待实施；manifest/CMake 通过可选 `voxel-vdb` 接入，默认关闭。沿用 M23.2 已核验的官方版本与 builtin-baseline。
 架构与阶段门禁见[体素设计](design/render-voxels.md)、[Slang 设计](design/graphics-shaders.md)和 [M23](roadmap.md#m23实体体素渲染)。
 
 | 项目 | 本次核验与计划 |
 | --- | --- |
 | 官方 registry | 实时核验 `f38855d514df2b21c2e911a6c6865703abb8da15`；最新 OpenVDB 与原固定基线 `33d78c1ed898a06938f31312167c7abefd229455` 均为 12.0.1#0，保留原基线和其他依赖版本 |
 | OpenVDB | 官方 port 最新收录 `12.0.1#0`，Apache-2.0；用于可选 CPU 导入器，PRIVATE 消费，避免传播到 Core/Math/Scene/asset_data 公共接口 |
-| NanoVDB/PNanoVDB | 同一 OpenVDB 12.0.1 归档，NanoVDB/PNanoVDB 32.7.0，ABI major 32；安装头 SHA256 与源码 SHA512 见 [0160](development/0160-voxel-cpu-sparse.md)。C32 已读回 Int32/tile/leaf/背景与大整数，不能替代 Slang 门禁 |
+| NanoVDB/PNanoVDB | 同一 OpenVDB 12.0.1 归档，NanoVDB/PNanoVDB 32.7.0，ABI major 32；安装头 SHA256 与源码 SHA512 见 [0160](development/0160-voxel-cpu-sparse.md)。C32 与 Slang compute 均已读回 Int32/tile/leaf/背景及大整数，GPU 证据见 [0161](development/0161-voxel-gpu-hdda.md) |
 | CUDA 限制 | 当前 `openvdb[nanovdb]` feature 声明 `cuda`，portfile 同时强制 `NANOVDB_USE_CUDA=ON`；上游数据结构本身不要求 CUDA，不能据此声称官方 feature 可直接用于无 CUDA 构建 |
 | M23.2 接入 | [最小 overlay](../cmake/vcpkg-ports/openvdb/README.md)保留官方源码版本/摘要/补丁，移除 nanovdb feature 的 cuda 依赖，关闭 CUDA/intrinsics/examples/unit tests；上游支持同等 CPU/header 配置后移除。MSVC 标准宏与 SDK 模板警告由引擎窄适配处理，未修改上游头 |
-| 范围与验证 | AX/Python/GUI/tools/CUDA 关闭；Windows x64 CPU 构建和 13 项体素专项通过，独立无 VDB 配置 64 项通过。安装清单无 CUDA/Vulkan/Slang，测试及部署 DLL 导入审计通过；NanoVDB 查询 target 不链接 OpenVDB。转换统计/额度与 scratch 限制见设计，不宣称进程 RSS 硬上限 |
+| CPU 范围与验证 | AX/Python/GUI/tools/CUDA 关闭；Windows x64 CPU 构建和 13 项体素专项通过，独立无 VDB 配置 64 项通过。CPU-only 安装清单无 CUDA/Vulkan/Slang，测试及部署 DLL 导入审计通过；NanoVDB CPU 查询 target 不链接 OpenVDB。转换统计/额度与 scratch 限制见设计，不宣称进程 RSS 硬上限 |
+| GPU 范围与验证 | `windows-voxels-gpu` 单独增加 Device/Graph/Slang 和 compute 模块，安装清单无 CUDA；同源头的窄 Slang 适配、SPIR-V/反射、真实 GPU HDDA/两投影离屏与失败/寿命门禁通过。不要求 RT/BDA；正式合成与 intersection 后置 |
 
 本配置主要传递依赖为 TBB 2023.1.0（Apache-2.0）、hwloc 2.11.2（BSD-2-Clause）、Boost 1.92.0（BSL-1.0）、
 Imath 3.2.2/OpenEXR 3.4.15/Blosc 1.21.6（BSD-3-Clause）及其压缩库；许可证与安装证据在 [0160](development/0160-voxel-cpu-sparse.md)。
@@ -289,7 +291,7 @@ Imath 3.2.2/OpenEXR 3.4.15/Blosc 1.21.6（BSD-3-Clause）及其压缩库；许�
 [port 构建选项](https://github.com/microsoft/vcpkg/blob/f38855d514df2b21c2e911a6c6865703abb8da15/ports/openvdb/portfile.cmake)、
 [上游 NanoVDB FAQ](https://www.openvdb.org/documentation/doxygen/NanoVDB_FAQ.html)、
 [同版本 PNanoVDB](https://github.com/AcademySoftwareFoundation/openvdb/blob/v12.0.1/nanovdb/nanovdb/PNanoVDB.h)。
-上游 HLSL/GLSL 支持仅是选型依据；工程固定 Slang 的 compute 编译/反射/真实 GPU 读取与 intersection/SBT 分别在 M23.3、M23.8 验收。
+上游 HLSL/GLSL 支持仅是选型依据；工程固定 Slang 的 compute 编译/反射/真实 GPU 读取已在 M23.3 验收，intersection/SBT 留待 M23.8 独立验收。
 
 ## 后续维护
 

@@ -846,6 +846,29 @@ if(TARGET dk_editor_app AND TARGET dk_render_atmosphere AND TARGET dk_scripting_
     endif()
 endif()
 
+if(TARGET dk_render_voxels AND TARGET dk_asset_voxel_importers)
+    add_executable(dk_voxel_gpu_probe VoxelGpuProbe.cpp)
+    target_link_libraries(dk_voxel_gpu_probe PRIVATE dk::render_voxels dk::asset_voxel_importers dk::graphics_shaders)
+    target_include_directories(dk_voxel_gpu_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src" "${PROJECT_SOURCE_DIR}/tests/unit")
+    target_compile_definitions(dk_voxel_gpu_probe PRIVATE
+        DK_VOXEL_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/voxels/shaders"
+        DK_VOXEL_NANO_INCLUDE_DIR="${DK_NANOVDB_INCLUDE_DIR}"
+        DK_VOXEL_FIXTURE_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures/shaders"
+        DK_VOXEL_ARTIFACT_DIR="${CMAKE_CURRENT_BINARY_DIR}/voxel-artifacts")
+    dk_target_defaults(dk_voxel_gpu_probe)
+    dk_deploy_slang(dk_voxel_gpu_probe)
+    add_test(NAME dk.voxels.slang_compute COMMAND dk_voxel_gpu_probe compile)
+    set_tests_properties(dk.voxels.slang_compute PROPERTIES TIMEOUT 120 LABELS "cpu" FIXTURES_SETUP voxel_spirv)
+    find_program(DK_VOXEL_SPIRV_VALIDATOR NAMES spirv-val REQUIRED)
+    add_test(NAME dk.voxels.spirv_validation COMMAND "${DK_VOXEL_SPIRV_VALIDATOR}" --target-env vulkan1.3 "${CMAKE_CURRENT_BINARY_DIR}/voxel-artifacts/voxel-query.spv")
+    set_tests_properties(dk.voxels.spirv_validation PROPERTIES TIMEOUT 60 LABELS "cpu" FIXTURES_REQUIRED voxel_spirv)
+    foreach(mode numeric offscreen lifetime)
+        add_test(NAME dk.voxels.gpu_${mode}_required COMMAND dk_voxel_gpu_probe ${mode})
+        set_tests_properties(dk.voxels.gpu_${mode}_required PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+    endforeach()
+endif()
+
 if(TARGET dk_render_clouds AND TARGET dk_graphics_shaders)
     add_executable(dk_cloud_field_probe CloudFieldProbe.cpp)
     target_link_libraries(dk_cloud_field_probe PRIVATE dk::render_clouds dk::graphics_shaders)

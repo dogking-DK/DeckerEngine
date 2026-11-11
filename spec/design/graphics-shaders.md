@@ -1,7 +1,7 @@
 ---
 module: graphics-shaders
 created_at: "2026-09-28T19:00:00+08:00"
-updated_at: "2026-11-11T16:28:53+08:00"
+updated_at: "2026-11-11T18:45:00+08:00"
 status: accepted
 ---
 
@@ -93,16 +93,19 @@ ShaderBinding追加ShaderImageShape：none、image_2d、image_2d_array、image_3
 旧离线调用需重新编译产物。ShaderModule、布局合并/覆盖/兼容性与BindingSet保留该信息，拒绝维度冲突和错误view。
 这仍是结构校验，不证明用户手工修改的反射与完整SPIR-V一致。storage view只允许一个mip。
 
-## M23.3 PNanoVDB/Slang compute 兼容性（设计）
+## M23.3 PNanoVDB/Slang compute 兼容性
 
-[体素方案](render-voxels.md#slang-兼容性门禁待实施)采用 OpenVDB CPU 转换 + NanoVDB 连续缓冲区，稠密网格保留为参考。
-PNanoVDB 的 HLSL 分支作为最小 Slang 适配起点，不将上游 HLSL/GLSL 支持等同于工程 Slang → SPIR-V 已验证。
-M23.3 使用锁定的 Slang 与同源 NanoVDB/PNanoVDB，固定宏、Int32 布局、buffer stride/descriptor、地址宽度和字节序；
-通过真实编译入口验证 include、位操作、inout/资源参数、反射与 SPIR-V，并在 required Vulkan GPU 读回背景/tile/leaf/负坐标测试值。
-随后 HDDA 对独立稠密/面 oracle 验证节点边界、内部起点和半格变换；不能以稠密 Texture3D 输出冒充稀疏读取通过。
-32-bit 地址模式检查整个 buffer 及偏移；64-bit 模式另验编译/设备 capability，不能截断地址或依赖越界读零。
-厂商头文件由 Render 的适配层私有使用，Graphics 编译器保持通用；头文件摘要、适配差异、宏及布局进入 source_fingerprint。
-失败时保留阶段未通过与最小复现；不能静默换浮动头文件/旧版 Slang 或绕过反射。不要求 CUDA/NVCC。
+[体素方案](render-voxels.md#slang-兼容性门禁)采用 OpenVDB CPU 转换 + NanoVDB 连续缓冲区，稠密网格保留为参考。
+已通过工程 Slang 2026.18 → SPIR-V 1.5（Vulkan 1.3 校验）的 compute 编译、反射与真实 GPU 门禁，证据见 [0161](../development/0161-voxel-gpu-hdda.md)。
+同源 PNanoVDB 32.7.0 头保持原样；Render 私有适配启用 `PNANOVDB_HLSL`、`PNANOVDB_BUF_CUSTOM`、默认 `PNANOVDB_ADDRESS_32`，
+将 buffer 参数设为 `inout DkVoxelBuffer`，补齐 grid_type/常量访问宏，串行求值会共享 inout 状态的访问调用。
+采用 little-endian Int32、`StructuredBuffer<uint>` stride 4；逐次访问检查对齐与完整范围，错误返回 status，禁止 OOB 当背景。
+set 0 binding 0 为 96-byte uniform，1/2/3 为 NanoVDB/ray/result storage；ray/result stride 为 48/64，local size 为 64×1×1，无 push constant。
+`precise_floating_point=true`；HDDA 的负坐标层级块用幂二掩码向下对齐，维持 t 单调推进与空/实交界语义。
+6144 条射线对独立面 oracle，所有层级/大整数/负坐标、边角、半格及仿射对 CPU 对照；64³ 640×480 两投影逐像素验证。
+厂商头、适配器/共享 HDDA 与入口内容、宏、编译选项进入来源指纹；Graphics 编译器仍为通用实现。
+32-bit 模式同时受 buffer 长度、device storage range 与 payload 预算约束；未开放 64-bit 地址，不要求 CUDA/NVCC、RT/BDA 或 shaderFloat64。
+上述证据仅覆盖 compute；intersection 继续执行下一节独立门禁。
 
 ## M23.8 intersection 产物扩展（设计）
 
