@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-10-23T16:58:00+08:00"
+updated_at: "2026-11-11T16:28:53+08:00"
 status: accepted
 ---
 
@@ -261,6 +261,28 @@ NRD 源码许可不是 MIT；保留原许可证并在实际分发时处理其要
 vk_oidn GPU 内存由其直接 `vkAllocateMemory`，host allocation callback 不提供设备内存接管；
 设备 feature 探测、Graph 录制桥和总峰值预算必须在 M20.4 完成，不能因 SDK 包存在就声明支持。
 日常构建不得追踪浮动分支/标签；接入阶段消费不可变来源和 hash，复核版本漂移后显式更新记录。
+
+## M23 OpenVDB/NanoVDB 稀疏网格选型
+
+2026-11-11 按用户决定采用 OpenVDB CPU 构建/导入 + NanoVDB CPU/GPU 快照，稠密网格仅保留为正确性参考。
+状态为 **已选型、未集成、Slang 未验证**；本次不修改 vcpkg manifest、builtin-baseline 或 CMake，不把文档核验当作编译验收。
+架构与阶段门禁见[体素设计](design/render-voxels.md)、[Slang 设计](design/graphics-shaders.md)和 [M23](roadmap.md#m23实体体素渲染)。
+
+| 项目 | 本次核验与计划 |
+| --- | --- |
+| 官方 registry | 实时查询 master 得到 `f38855d514df2b21c2e911a6c6865703abb8da15`；这是选型证据，不是项目已采用基线 |
+| OpenVDB | 官方 port 最新收录 `12.0.1#0`，Apache-2.0；用于可选 CPU 导入器，PRIVATE 消费，避免传播到 Core/Math/Scene/asset_data 公共接口 |
+| NanoVDB/PNanoVDB | 使用同一 OpenVDB 源版本的 CPU 转换器、连续网格布局和 PNanoVDB shader 访问头；NanoVDB 自身布局版本另行记录，不能用 OpenVDB 版本号代替 ABI 校验 |
+| CUDA 限制 | 当前 `openvdb[nanovdb]` feature 声明 `cuda`，portfile 同时强制 `NANOVDB_USE_CUDA=ON`；上游数据结构本身不要求 CUDA，不能据此声称官方 feature 可直接用于无 CUDA 构建 |
+| M23.2 接入 | 开工重新核验最新官方 port/修订并固定 builtin-baseline。优先采用官方可用配置；若仍强制 CUDA，使用同版本/固定摘要源码的最小 overlay 关闭 CUDA、只启用所需 NanoVDB CPU/header 目标，记录补丁差异、理由和上游解除限制后的移除条件；不静默降版或追踪 HEAD |
+| 范围与验证 | 不启用 AX/Python/GUI/tools/CUDA 扩展；审计 OpenVDB 传递依赖、许可证、编译时间和 CPU 内存。Windows x64 无 CUDA 的导入/转换与 CPU-only 验收必须通过；NanoVDB 运行时/shader 消费者不链接 OpenVDB/CUDA |
+
+来源：[固定 port 清单](https://github.com/microsoft/vcpkg/blob/f38855d514df2b21c2e911a6c6865703abb8da15/ports/openvdb/vcpkg.json)、
+[版本/修订历史](https://github.com/microsoft/vcpkg/blob/f38855d514df2b21c2e911a6c6865703abb8da15/versions/o-/openvdb.json)、
+[port 构建选项](https://github.com/microsoft/vcpkg/blob/f38855d514df2b21c2e911a6c6865703abb8da15/ports/openvdb/portfile.cmake)、
+[上游 NanoVDB FAQ](https://www.openvdb.org/documentation/doxygen/NanoVDB_FAQ.html)、
+[同版本 PNanoVDB](https://github.com/AcademySoftwareFoundation/openvdb/blob/v12.0.1/nanovdb/nanovdb/PNanoVDB.h)。
+上游 HLSL/GLSL 支持仅是选型依据；工程固定 Slang 的 compute 编译/反射/真实 GPU 读取与 intersection/SBT 分别在 M23.3、M23.8 验收。
 
 ## 后续维护
 

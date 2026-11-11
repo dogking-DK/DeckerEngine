@@ -1,7 +1,7 @@
 ---
 module: graphics-shaders
 created_at: "2026-09-28T19:00:00+08:00"
-updated_at: "2026-11-11T15:32:31+08:00"
+updated_at: "2026-11-11T16:28:53+08:00"
 status: accepted
 ---
 
@@ -93,6 +93,17 @@ ShaderBinding追加ShaderImageShape：none、image_2d、image_2d_array、image_3
 旧离线调用需重新编译产物。ShaderModule、布局合并/覆盖/兼容性与BindingSet保留该信息，拒绝维度冲突和错误view。
 这仍是结构校验，不证明用户手工修改的反射与完整SPIR-V一致。storage view只允许一个mip。
 
+## M23.3 PNanoVDB/Slang compute 兼容性（设计）
+
+[体素方案](render-voxels.md#slang-兼容性门禁待实施)采用 OpenVDB CPU 转换 + NanoVDB 连续缓冲区，稠密网格保留为参考。
+PNanoVDB 的 HLSL 分支作为最小 Slang 适配起点，不将上游 HLSL/GLSL 支持等同于工程 Slang → SPIR-V 已验证。
+M23.3 使用锁定的 Slang 与同源 NanoVDB/PNanoVDB，固定宏、Int32 布局、buffer stride/descriptor、地址宽度和字节序；
+通过真实编译入口验证 include、位操作、inout/资源参数、反射与 SPIR-V，并在 required Vulkan GPU 读回背景/tile/leaf/负坐标测试值。
+随后 HDDA 对独立稠密/面 oracle 验证节点边界、内部起点和半格变换；不能以稠密 Texture3D 输出冒充稀疏读取通过。
+32-bit 地址模式检查整个 buffer 及偏移；64-bit 模式另验编译/设备 capability，不能截断地址或依赖越界读零。
+厂商头文件由 Render 的适配层私有使用，Graphics 编译器保持通用；头文件摘要、适配差异、宏及布局进入 source_fingerprint。
+失败时保留阶段未通过与最小复现；不能静默换浮动头文件/旧版 Slang 或绕过反射。不要求 CUDA/NVCC。
+
 ## M23.8 intersection 产物扩展（设计）
 
 当前仍仅实现下文四类 RT 阶段；[原生体素底座](graphics-raytracing.md#m238-原生体素所需底座设计)计划增加 intersection。
@@ -100,9 +111,11 @@ ShaderBinding追加ShaderImageShape：none、image_2d、image_2d_array、image_3
 三角形 hit attribute 保持 float2；procedural 属性采用受支持的固定 32-bit 类型，生产/消费签名按同一 hit group 核对。
 intersection 允许产生属性/报告交点，不获得 payload 读写权限；现有“只有 raygen 发射 TraceRay”限制保持。
 新增产物字段须在实施时升版并定义旧产物读取或明确拒绝策略，原 graphics/compute/四类 RT 用例继续回归。
-共享 DDA 的 include 内容、编译选项和布局版本进入 source_fingerprint；材质/身份的整数位不能经过有损 float 数值转换。
+共享 HDDA/PNanoVDB 的 include 内容、编译选项和布局版本进入 source_fingerprint；材质/身份的整数位不能经过有损 float 数值转换。
 验证无需 GPU 的编译/反射/坏属性拒绝、shaderc 失败保留旧输出及 RT required 管线兼容；
 不因文档增加阶段名就宣称编译器/Device 已支持，具体实施状态见 [M23](../roadmap.md#m23实体体素渲染)。
+在通用产物扩展之后，使用 M23.3 同一 buffer/accessor 单独编译和运行 NanoVDB intersection 探针，
+核对 stage 可见性、混合 SBT 的 radiance/visibility、属性限制和真实读回；完整 HDDA 路径集成仍归 M23.9。
 
 ## M16.4 光追产物
 

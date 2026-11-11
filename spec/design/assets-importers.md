@@ -1,7 +1,7 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-10-20T01:21:06+08:00"
+updated_at: "2026-11-11T16:28:53+08:00"
 status: accepted
 ---
 
@@ -29,6 +29,21 @@ IO 前置检查位于 importers target。该边界调整见 [0061](../developmen
 底层仍保留显式资源入口；最终 CPU 数据拥有其资源，失败/取消先析构解析对象再重置临时空间。
 为解析、accessor 转换、解码和摘要建立稳定 zone。三方库内部暂未适配的分配明确属于观测范围之外；
 不得仅因外层使用 PMR 就声称 fastgltf/stb 的全部分配已被接管。
+
+## M23.2/5 OpenVDB 稀疏实体导入（设计）
+
+[体素方案](render-voxels.md)已选择 OpenVDB CPU 构建/`.vdb` 导入和 NanoVDB 运行时产物，尚未实现；既有 glTF 行为不变。
+可选导入实现 PRIVATE 链接 OpenVDB/转换器；asset_data 仅持有字节快照、描述和 palette，不公开 OpenVDB/NanoVDB 模板类型。
+CPU 查询适配层可私有使用 NanoVDB，不令 Geometry、Render 或 Scene 链接 OpenVDB；CPU-only 不要求 Vulkan/CUDA。
+M23.2 先完成无 CUDA 依赖打包和测试级 CPU 转换，M23.5 接入正式导入/产物/缓存/Scene 消费者。
+
+输入描述显式选择命名 Int32Grid、占用/材质语义与 palette；背景必须为零，值域及 active/inactive/tile 规范化遵循体素契约。
+拒绝未声明的 grid、SDF/fog/向量/点类、非零背景及非线性/非法变换；不推断密度阈值，也不按 active mask 丢弃非零值。
+有符号坐标、有限域和 VDB 采样中心到引擎单元角的半格转换随产物保存，grid map 与实体变换只组合一次。
+沿用受控 IO/路径/取消入口，分别限制源文件、解压树、转换临时峰值及 NanoVDB 输出；不能仅限制压缩字节或把整个稀疏域展开。
+完整描述/产物 v1 在 M23.5 冻结，指纹覆盖源、grid/导入配置、palette、转换器/布局版本和头文件来源；不兼容缓存明确拒绝或重建。
+转换/验证/发布失败保留旧资产；OpenVDB 内部分配若尚未接管，单列观测限制，不声称全量 PMR 追踪。
+依赖版本、CUDA feature 限制和阶段验证见[三方库说明](../third-party-libraries.md#m23-openvdbnanovdb-稀疏网格选型)。
 
 ## 已确定的三方库与基线
 

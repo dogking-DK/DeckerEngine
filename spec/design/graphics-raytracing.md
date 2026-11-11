@@ -1,7 +1,7 @@
 ---
 module: graphics-raytracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-11-11T15:32:31+08:00"
+updated_at: "2026-11-11T16:28:53+08:00"
 status: accepted
 ---
 
@@ -39,14 +39,16 @@ pipeline library、indirect trace、ray query、SER、异步 compute 或多 GPU�
 - Slang/SPIR-V 增加 intersection 阶段与自定义 hit attributes 的结构校验；同一命中组内生产者/消费者一致，
   attribute 大小符合 maxRayHitAttributeSize。intersection 不访问 ray payload，通过属性向 any-hit/closest-hit 传值。
   通用 payload、布局/descriptor stage、静态 TraceRay 选择参数和 SBT 范围校验继续执行，不能靠伪造反射绕过检查。
-- Graph 声明 AABB build input、AS build/scratch 与 trace-read，及 intersection 实际读取的 buffer/3D image。
+- Graph 声明 AABB build input、AS build/scratch 与 trace-read，及 intersection 实际读取的 buffer/image；M23 使用 NanoVDB storage buffer。
   保持单队列、同代候选和 pending owners；构建输入可释放的时机与体素着色数据的保活分别检查。
-- 不增加 ray query、callable、UPDATE/refit、动态 SBT 参数或新的三方依赖。使用现有 RT/BDA 能力门禁；
+- 不增加 ray query、callable、UPDATE/refit 或动态 SBT 参数；Graphics 不链接 OpenVDB，VDB 依赖归 CPU 导入和体素适配层。使用现有 RT/BDA 能力门禁；
   编译/设备/布局不支持时明确拒绝，不用 triangle 转换静默替代原生路线。
 
 定向验收包含 CPU 描述/边界/反射拒绝、shaderc 版本/旧产物兼容、required GPU 的盒体与解析自定义表面、
 混合实例的最近命中/阴影提前终止、错误 SBT/属性/范围拒绝、Graph 同步及失败/在途释放。
-M23.8 只验通用底座；体素 DDA、材质和路径积分由 M23.9 另验。依据：
+M23.8 另验 Render 提供的最小 PNanoVDB/Slang intersection 探针：读取与 M23.3 同版本的 NanoVDB buffer，
+在混合 SBT 中报告解析交点并由 closest-hit 读回属性，验证 descriptor stage/地址/同步；compute 编译成功不能替代 intersection 兼容性。
+完整稀疏 HDDA、tile/leaf/块边界、材质和路径积分由 M23.9 另验。依据：
 [命中组](https://docs.vulkan.org/refpages/latest/refpages/source/VkRayTracingShaderGroupTypeKHR.html)、
 [intersection](https://docs.vulkan.org/spec/latest/chapters/shaders.html#shaders-intersection)。
 

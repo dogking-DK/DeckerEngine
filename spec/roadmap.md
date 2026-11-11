@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-11-11T15:32:31+08:00"
+updated_at: "2026-11-11T16:31:04+08:00"
 status: accepted
 ---
 
@@ -81,7 +81,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M20 路径追踪降噪 | À-trous、SVGF/A-SVGF、NRD REBLUR/RELAX、vk_oidn；公共信号/历史、介质与质量性能验收 | M16–M19、现有 Graph/worker | M20.1 设计/依赖、M20.2 表面信号生产已完成；M20.3–11 待开始，见[设计](design/render-denoising.md) |
 | M21 原生点绘制与粒子流体 | point-list、统一粒子输出、WCSPH/PBF CPU/GPU、工作台/脚本/导出 | M5/M6、M10–M12、M18.3 | M21.1 设计已完成；M21.2–9 待开始，见[流体设计](design/physics-fluids.md)、[点绘制设计](design/render-particles.md) |
 | M22 Console 与 Editor 命令交互 | 命名参数/历史、补全/参数提示、视口与相机命令、面板帮助与搜索 | M3、M8、M17.5；视口/相机复用 M18/M19 | M22.1–11 已完成；跨入口闭环、可运行示例与范围交付见[0158](development/0158-console-workflow-delivery.md) |
-| M23 实体体素渲染 | 光栅 compute DDA/深度合成、原生体素 GPU 路径追踪、资产/Editor/capture 与联合质量性能交付 | M5–M8、M14.2、M18.3；路径复用 M16–M19、信号 M20.2，上层复用 M3/M4/M9/M22 | M23.1 设计已完成；M23.2–13 待开始，见[体素设计](design/render-voxels.md) |
+| M23 实体体素渲染 | OpenVDB/NanoVDB 稀疏网格与稠密参考、光栅/原生 GPU 路径 HDDA、Slang 门禁、资产/Editor/capture 与联合交付 | M5–M8、M14.2、M18.3；路径复用 M16–M19、信号 M20.2，上层复用 M3/M4/M9/M22 | M23.1 设计已完成；依赖/Slang/功能未验收，M23.2–13 待开始，见[体素设计](design/render-voxels.md) |
 
 默认执行表中顺序。M5 在 Foundation 补充完成后具备独立探索条件，
 M9 的 Luau 命令绑定在 M3 后可提前做；若调整次序，仍需满足对应集成验收依赖。
@@ -886,32 +886,37 @@ M22.1–3 的“首期完成”继续有效；M22.5–11 已全部交付，M22 �
 
 ## M23：实体体素渲染
 
-落实规则三维网格中不透明实体体素的两条渲染路线，设计见 [render-voxels](design/render-voxels.md)。
-光栅侧采用 compute DDA 最近表面查询和 HDR/深度合成；路径侧采用体素块 AABB BLAS/TLAS + intersection DDA，
-复用现有路径积分器，使体素参与主射线、反弹和阴影。两侧共享 CPU 参考/网格/材质语义，不新增三方依赖。
-支持静态稠密网格与整份替换、透视/正交、资产和 Editor/capture；光栅侧不要求 RT，路径侧显式要求 RT/BDA 和新底座。
+落实 OpenVDB + NanoVDB 稀疏整数网格中不透明实体体素的两条渲染路线，设计见 [render-voxels](design/render-voxels.md)。
+OpenVDB 用于 CPU 构建/导入，NanoVDB 连续缓冲区作为运行时数据；保留稠密 DDA 和独立外露面 oracle，不将稀疏资产全量密集化。
+光栅侧采用 compute HDDA 最近表面查询和 HDR/深度合成；路径侧采用体素块 AABB BLAS/TLAS + intersection HDDA，
+复用现有路径积分器，使体素参与主射线、反弹和阴影；共享 PNanoVDB/Slang accessor、网格/坐标/材质语义。
+支持静态拓扑整份替换、透视/正交、资产和 Editor/capture；光栅侧不要求 RT，路径侧显式要求 RT/BDA 和新底座。
+依赖及无 CUDA 打包要求见[三方库说明](third-party-libraries.md#m23-openvdbnanovdb-稀疏网格选型)；Slang 兼容性尚未验证，必须按下列门禁验收。
 保留既有 M23.1–7 编号及其光栅侧交付范围，追加 M23.8–13 原生路径及联合交付；不把已有三角形光追当作体素实现。
 
 | 小阶段 | 实际交付范围 | 必要前置 | 独立验收 | 状态 |
 | --- | --- | --- | --- | --- |
-| M23.1 | 两条后端路线、数据/状态/命中契约、阶段依赖与验收计划 | 既有架构/资源/相机/RT 契约 | 文档/索引/链接一致；区分采用设计与实际功能 | 已完成：设计及扩展记录见[0159](development/0159-voxel-rendering-plan.md)；仅设计验收 |
-| M23.2 | CPU 网格视图、输入校验、DDA 表面查询、程序化夹具及独立外露面 oracle | M23.1；M1 Math/Core、现有 Geometry | 空/实/空心网格、边角/平行轴/内部起点、裁剪、仿射变换、溢出/失败保护；CPU-only | 待开始 |
-| M23.3 | 3D 整数网格上传、Slang GPU 遍历、颜色/命中/距离/法线诊断与离屏结果 | M23.2；M5/M6、M14.2、M18.3 | required GPU 对 CPU 参考；格式/额度/同步 validation、失败提交与在途资源寿命 | 待开始 |
+| M23.1 | OpenVDB/NanoVDB 与稠密参考选型，两条后端、数据/状态/命中契约、阶段与 Slang 门禁 | 既有架构/资源/相机/RT 契约 | 文档/索引/链接一致；区分采用设计与实际功能 | 已完成：设计及扩展记录见[0159](development/0159-voxel-rendering-plan.md)；仅设计验收 |
+| M23.2 | 稠密 DDA/外露面 oracle；锁定 VDB 依赖与无 CUDA 打包，CPU OpenVDB→NanoVDB 转换/规范化/稀疏查询 | M23.1；M1 Math/Core、现有 Geometry；重新核验官方 port | Windows x64 无 CUDA；CPU-only；Int32/背景/tile/leaf/active 语义、负坐标/半格/仿射、内外起点与边界、非法类/溢出/额度；小网格三方对照，大稀疏域不展开 | 待开始 |
+| M23.3 | NanoVDB buffer 上传、PNanoVDB/Slang compute 兼容门禁与共享 HDDA、诊断/离屏结果 | M23.2；M5/M6、M14.2、M18.3 | 固定 Slang 的编译/SPIR-V/descriptor 反射、地址/布局核对；required GPU 读值与 HDDA 对 oracle，基础空跳过、同步/额度/失败/在途寿命；稠密结果不能替代稀疏验收 | 待开始 |
 | M23.4 | mesh/voxel 深度与 HDR 合成、Unlit/简单方向光、曝光/tone | M23.3；M7.2 | 双向遮挡、同深度、多实例、透视/正交及裁剪；旧 mesh 回归；不支持组合明确拒绝 | 待开始 |
-| M23.5 | 版本化体素资产、Scene 引用/提取、缓存失效、上传替换/卸载生命周期 | M23.4；M2/M4/M7.1 | CPU-only 保存加载、版本/格式/预算拒绝、内容失效、旧快照与在途保活；失败保留旧状态 | 待开始 |
+| M23.5 | `.vdb` 命名 grid/占用描述/palette 导入、版本化 NanoVDB 产物、Scene 引用、缓存及替换/卸载 | M23.4；M2/M4/M7.1 | CPU-only 保存重载、源/config/布局版本失效，未声明语义/不支持类型/非零背景/坏变换/格式/预算拒绝；转换峰值/旧快照/在途保活，失败保留旧状态 | 待开始 |
 | M23.6 | 光栅侧服务/命令和 Editor 加载/设置/拾取/Gizmo、独立 render.capture、使用示例 | M23.5；M3/M8/M9、M22 的共享宿主入口 | GUI/Console/IPC 行为一致、持久/会话与撤销边界、固定截图来源、后台 GUI；命令文档同步 | 待开始 |
-| M23.7 | 光栅侧质量/显存/上传/帧耗时基线，按测量选择分块/空区域跳过，阶段交付 | M23.6；复用 M11 观测 | 固定矩阵及独立参考、资源回收、重复结果；优化保持正确性；不在此关闭整个 M23 | 待开始 |
-| M23.8 | AABB BLAS、intersection 编译/反射、procedural hit group、SBT/Graph 资源与同步 | M23.1/2；M16.2–5 | CPU 描述/属性/布局拒绝，required GPU 混合几何、两类射线、坏 SBT、失败/在途寿命与旧 triangle 回归 | 待开始 |
-| M23.9 | 原生体素 CPU/GPU Classic 路径、统一 SurfaceHit、块 DDA、Lambert/GGX 与既有灯光 | M23.3/8；M16.7/8 | voxel-only/mesh-only/混合，主射线/阴影/双向间接反弹、内部/块边界/变换、自相交；独立数值参考及内容失效 | 待开始 |
+| M23.7 | 光栅稀疏质量/显存/转换/上传/帧耗时基线及 HDDA 调优，阶段交付 | M23.6；复用 M11 观测 | 小网格对照与大跨度低占用/tile 矩阵；tree/临时/NanoVDB/在途峰值、空跳过收益、回收/重复结果；不在此关闭 M23 | 待开始 |
+| M23.8 | AABB BLAS、intersection 编译/反射、procedural hit group、SBT/Graph；NanoVDB intersection 兼容门禁 | M23.2/3；M16.2–5；通用底座部分可先于 M23.3 推进 | CPU 描述/属性/布局拒绝，required GPU 混合 SBT/两类射线和 PNanoVDB 读取/报告交点；stage 可见性/地址/坏 SBT/失败/寿命与旧 triangle 回归 | 待开始 |
+| M23.9 | 原生稀疏体素 CPU/GPU Classic 路径、统一 SurfaceHit、块内共享 HDDA、Lambert/GGX 与既有灯光 | M23.3/8；M16.7/8 | voxel-only/mesh-only/混合，主射线/阴影/双向间接反弹；tile/leaf/块边界、负坐标/变换/内部起点/自相交；独立数值参考及内容失效 | 待开始 |
 | M23.10 | 类型化表面身份、ReSTIR DI 初始/时空复用、表面 fresh/guide/reference 信号 | M23.9；M19、M20.2 | 四种 DI 配置均值与来源支持、薄体素遮挡/显露、占用/材质替换、信号重组/版本/预算；失败保留完整 epoch | 待开始 |
 | M23.11 | 既有空气/云的体素表面路径与 Scene media ReSTIR 组合 | M23.9/10；M17、M19.6 | 混合表面/体积事件顺序、阴影透射、条件 RIS、零介质退化、固定/渐进入口；保持介质信号能力边界 | 待开始 |
 | M23.12 | 原生路径 Editor/Console/IPC/独立 capture；同资产切换两后端、能力/来源/历史管理 | M23.5/6/10/11；M22 | 透视/正交、固定 spp、模式/内容切换失效、迟到/取消/关闭保护、非 RT 拒绝与光栅可用、命令文档/示例 | 待开始 |
-| M23.13 | 两条路线质量/资源/性能与最终交付；RT 块布局/AS 构建和多反弹基线 | M23.7/12；M11 | 独立 oracle、同输入几何一致性、统计均值、资源回收、各模式质量/耗时/峰值及限制；全阶段证据齐全 | 待开始 |
+| M23.13 | 两条稀疏路线质量/资源/性能与最终交付；RT tile/块布局、AS 构建和多反弹基线 | M23.7/12；M11 | 独立 oracle、同输入几何一致性、统计均值；小网格/大跨度稀疏矩阵及转换/AS/在途峰值；Slang 双阶段门禁、CPU-only/非 RT/RT 证据齐全 | 待开始 |
 
 M23.3/6/7 是光栅侧离屏、使用闭环与阶段基线；M23.9 是首个原生混合几何路径成果，M23.12 接通上层。
-M23.8 可在必要前置满足后独立推进，不必等待光栅性能优化；全部 M23.1–13 验收后才关闭 M23。
+M23.2 先冻结 CPU 转换与语义，M23.5 再接完整文件/资产协议；M23.3 和 M23.8 分别证明 Slang compute 与 intersection 可用。
+M23.8 通用 RT 底座可在 M23.2 后推进，NanoVDB 门禁依赖 M23.3 固定的 accessor/布局；不必等待光栅性能优化。
+兼容性失败保留未通过状态，修复适配或明确阻塞，不以密集化/三角化/静默降版替代；全部 M23.1–13 验收后才关闭 M23。
 不包含体素密度场 ray marching、透明体素、体素发光面采样、网格体素化、SVO/LOD、无限地形、
-流式世界、编辑笔刷或 USD/VDB 接入。光栅大气/云仍后置；已有空气/云的路径组合在 M23.11 验收。
+流式世界、编辑笔刷、USD 或任意 VDB SDF/fog/速度场渲染；M23 只导入约定的实体整数网格。
+光栅大气/云仍后置；已有空气/云的路径组合在 M23.11 验收。
 现有降噪滤波器的实施仍由 M20 负责，M23 的信号生产适配不能替代其验收。
 各实施小阶段开始时更新直接相关设计并创建实际开发记录；当前不预分配未来编号或预报通过的测试。
 
@@ -996,8 +1001,8 @@ M21 当前没有流体实现或点绘制验收，不能把设计采用状态解�
 用户指定的 M22 已完成 M22.1–11：首期输入/历史、扩展设计、共享帮助、只读目录、补全/诊断、Edit 视口/相机会话命令及面板字段帮助/设置搜索。
 M22 跨入口集成闭环、可运行示例与能力/限制已交付，见[0158](development/0158-console-workflow-delivery.md)；本路线不再保留待实施子阶段。
 位置参数/别名等维持上述后置边界；M20/M21 保持各自阶段状态，不能因本路线扩展而推进。
-体素路线 M23 已纳入光栅混合渲染与原生 GPU 路径追踪，M23.1 设计落档及扩展见[0159](development/0159-voxel-rendering-plan.md)；
-M23.2–13 待开始，下一阶段仍为 M23.2 CPU 网格与求交参考。目前没有体素渲染实现或 CPU/GPU 功能验收。
+体素路线 M23 已采用 OpenVDB/NanoVDB 稀疏网格与稠密正确性参考，包含光栅混合渲染、原生 GPU 路径追踪及 Slang 双阶段门禁；M23.1 设计及扩展见[0159](development/0159-voxel-rendering-plan.md)。
+M23.2–13 待开始，下一阶段为 M23.2 稠密 oracle、无 CUDA 依赖打包和 CPU 稀疏转换/查询。目前没有 VDB 依赖集成、体素实现或 CPU/GPU 功能验收。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 
@@ -1035,7 +1040,7 @@ GPU 内存 aliasing、通用节点编辑器、完整反射、热重载体系和 
 仍按实际需求单独立项设计，不由 M11–M13 的响应性和实验管理工作隐含引入。
 模拟检查点、布料弯曲/自碰撞等物理扩展、完整PBR/IBL与光栅混合光追效果另行确定阶段；
 M21 已纳入 WCSPH/PBF CPU/GPU 与点绘制，尚不包含 MAC、场 ray marching 或 USD/VDB 接入。
-M23 纳入规则网格的实体体素表面与原生路径追踪，以及既有空气/云的路径组合；不包含体素密度介质、流体求解器和外部格式。
+M23 纳入 OpenVDB/NanoVDB 稀疏实体表面、约定的 `.vdb` 整数网格导入、原生路径追踪及既有空气/云路径组合；不包含 VDB 密度/SDF 渲染、流体求解器或 USD。
 M16只规划表面路径追踪的几何可见性/阴影、受限金属粗糙度材质和常量环境，不代表完整光照系统；
 M14只引入单太阳/天空漫反射接收，M15只引入云透射阴影，不等于完整光照系统。
 M13 的批处理恢复不替代模拟检查点。

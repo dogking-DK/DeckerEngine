@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-11-11T15:32:31+08:00"
+updated_at: "2026-11-11T16:28:53+08:00"
 status: accepted
 ---
 
@@ -43,11 +43,13 @@ CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、
 M23.8 先扩展 [RT 底座](graphics-raytracing.md)，M23.9 接通 CPU/GPU Classic 混合几何，
 M23.10 适配 ReSTIR/表面信号，M23.11 验证已有介质组合，M23.12/13 完成消费者与联合交付。
 
-- PathTraceScene/上传/缓存支持 triangle 与 voxel 实例；原生体素用块 AABB BLAS/TLAS + intersection DDA，
-  不转 mesh，不在输出图上叠加光栅颜色。CPU 参考独立扩展，不链接 GPU 模块。
+- PathTraceScene/上传/缓存支持 triangle 与 voxel 实例；OpenVDB CPU 构建/导入后使用 NanoVDB 只读快照，原生体素用块 AABB BLAS/TLAS + intersection HDDA。
+  与 compute 共用 PNanoVDB/Slang accessor；M23.8 单独验证 intersection 兼容性。不转 mesh 或密集展开，不在输出图上叠加光栅颜色。
+  CPU 参考保留稠密 DDA/独立外露面并验证 CPU 稀疏查询，不链接 GPU 模块；tile/leaf/块边界不产生内部假面。
 - 引入类型化 SurfaceHit 及适配器，提供 kind、实例/内容版本、primitive 或 cell/face、t、位置、几何法线、材质；
   重心坐标仅用于 triangle。所有 shading、阴影、固定射线读回和首表面诊断移除“命中必为三角形”的假设。
   标识用整数/保位编码，不能受旧 float triangle-index 精度限制；实际 payload/产物布局在实施时版本化。
+  稀疏 cell 使用有符号坐标，NanoVDB 节点/字节偏移及代理块 primitive 不能作为持久身份；规范化值、有限域/半格变换遵循体素契约。
 - 空场景判断包含所有几何；voxel-only 场景仍创建/使用正确 AS。主射线遵守近远裁剪，次级射线使用自身区间。
   辐射/阴影均查询同一混合场景，保留 alpha-mask mesh、体素内部起点、逆转置法线和误差相关偏移规则。
 - 复用现有 Lambert/GGX、NEE/MIS/RR 与渐进积累；体素材质明确默认值，不新增纹理/alpha/透射模型。

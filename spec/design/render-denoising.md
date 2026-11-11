@@ -1,7 +1,7 @@
 ---
 module: render-denoising
 created_at: "2026-10-23T16:58:00+08:00"
-updated_at: "2026-11-11T15:32:31+08:00"
+updated_at: "2026-11-11T16:28:53+08:00"
 status: accepted
 ---
 
@@ -30,6 +30,7 @@ M20.1 确定公共边界与固定依赖；M20.2 实现共享信号类型和路�
 
 [M23 原生路径](render-voxels.md)将表面信号生产适配到 triangle/voxel 的共同命中模型，尚未实现。
 identity/reference 必须区分几何种类、实例、单元/面与内容/材质版本，不能沿用裸 triangle index 判断相同表面。
+NanoVDB 稀疏单元使用有符号坐标，不能将树节点/字节偏移当作身份；重打包/替换后核对版本失效及旧帧保活。
 共享 types、GPU 布局、读回、provenance 与预算在实施时一起版本化，旧布局须明确兼容或拒绝；SDK 类型仍不进入 Scene。
 fresh 样本区间、diffuse/specular 分量重组、baseColor/normal/roughness、轴向深度、运动和后续 hit distance 沿现有定义。
 体素增删/占用/材质/实例变更使对应来源和历史失效，不能把新单元误认为旧表面；纯相机运动沿已有 reference 契约。

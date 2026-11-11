@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-11-11T15:32:31+08:00"
+updated_at: "2026-11-11T16:28:53+08:00"
 status: accepted
 ---
 
@@ -35,13 +35,14 @@ M15.3提供显式render_clouds(queue,view,assets,sky,textures,cloud_settings,set
 ## M23 光栅侧体素合成（设计）
 
 当前管线尚无体素支持。[M23.3/4](../roadmap.md#m23实体体素渲染)采用混合光栅路线：
-mesh 用现有 depth/opaque，体素用 compute DDA 查最近实体表面，再写入共享 HDR/深度并执行 tone。
-DDA 沿射线跨越单元边界，不是固定步长密度积分；不把每格转换为 mesh/draw，也不在此路径做多次光线反弹。
+mesh 用现有 depth/opaque，体素通过 PNanoVDB/Slang accessor 读取 NanoVDB storage buffer，以 compute HDDA 查最近实体表面，再合入共享 HDR/深度并执行 tone。
+OpenVDB 只在 CPU 构建/导入，稠密 DDA 保留为正确性参考；M23.3 先通过固定 Slang 的编译/反射/真实 GPU 读取门禁。
+HDDA 跨过空节点并细化到实体边界，不是固定步长密度积分；不全量密集化稀疏资产，不把每格转换为 mesh/draw，也不在此路径做多次光线反弹。
 
 Pass 顺序为 clear → mesh depth/opaque → voxel compute → voxel composite → tone/readback。
 体素 compute 输出命中颜色、法线及投影深度；全屏合成 Pass 使用片段深度输出和 D32 Less/test/write，
 体素更近才覆盖，精确同深度 mesh 保留。不得 compute 写 D32 storage，或同 Pass 采样并写同一深度附件。
-Graph 精确声明中间资源和颜色/深度访问；支持透视/正交、裁剪、内部起点、resize 及旧 mesh 回归。
+Graph 精确声明 NanoVDB 上传到 compute-read、中间资源和颜色/深度访问；支持透视/正交、裁剪、内部起点、负坐标/半格变换、tile 边界、resize 及旧 mesh 回归。
 此路线不要求硬件 RT；材质显示范围为 Unlit/简单方向光，光栅大气/云组合仍后置。
 原生路径追踪通过 [Pathtracing](render-pathtracing.md#m23-原生体素几何接入设计) 独立积分，不能用本管线的像素合成代替反弹/阴影查询。
 两条路线共享 [体素数据和表面语义](render-voxels.md)，材质、光照能力和实际验收分别报告。

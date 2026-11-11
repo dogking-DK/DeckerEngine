@@ -1,7 +1,7 @@
 ---
 id: "0159"
 created_at: "2026-11-11T14:51:58+08:00"
-updated_at: "2026-11-11T15:32:31+08:00"
+updated_at: "2026-11-11T16:31:04+08:00"
 status: completed
 design_refs:
   - ../design/render-voxels.md
@@ -12,6 +12,7 @@ design_refs:
   - ../design/render-pipeline.md
   - ../design/render-restir.md
   - ../design/render-denoising.md
+  - ../design/assets-importers.md
 ---
 
 # 0159 M23.1 体素渲染正式计划
@@ -23,6 +24,7 @@ design_refs:
 本次仅设计落档；accepted 表示采用设计，completed 仅用于本设计阶段，不能表示体素功能已经实现。
 下列初始计划/验证对应提交 `c974fab`；用户随后要求原生 GPU 路径支持，本记录后段保存该扩展。
 当前采用范围以主题设计和 Roadmap 为准，初始“路径后置/七阶段”不再代表当前计划。
+后续追加 OpenVDB/NanoVDB 稀疏方案，取代此前“稠密生产网格/VDB 后置”；前两轮章节保留当时验证事实。
 
 ## 实际变更
 
@@ -115,3 +117,52 @@ M23.8/9 冻结 shader 产物/属性/SBT、块布局/通用命中，M23.10 冻结
 M23.12 接通两后端消费者，M23.13 联合交付。当前只完成这次设计扩展，不启动任何实现阶段。
 
 - 2026-11-11T15:32:31+08:00：原生路径及光栅说明扩展完成，文档验收通过；M23.2–13 均待开始。
+
+## 2026-11-11：采用 OpenVDB/NanoVDB 稀疏网格
+
+### 本次范围和决策
+
+按用户要求更新正式设计、Roadmap 和分阶段验收；本轮只改文档，不安装依赖或开始功能实现。
+保留 M23.1–13 编号，所有实现阶段仍待开始，稀疏生产路线不能由稠密参考验收代替。
+
+- OpenVDB 用于可选 CPU 构建/`.vdb` 导入，NanoVDB 连续快照用于 CPU/GPU 查询；稠密 DDA 与独立外露面 oracle 保留为正确性参考。
+- 明确 Int32 占用/palette、零背景、active/inactive/tile 规范化、负坐标、有限域、采样中心/单元角半格转换及可逆仿射 grid/entity 组合。
+  SDF/fog/速度/点网格不是本轮实体输入，不能按 active mask 或密度阈值猜测占用；不按稀疏全域分配稠密纹理。
+- 光栅 compute 与 RT intersection 共用 PNanoVDB/Slang accessor + HDDA；前者做深度/HDR 合成，后者通过块 AABB/BLAS/TLAS 参与主射线、反弹和阴影。
+  代理覆盖非零 tile，tree/leaf/块边界不产生假面；稳定身份使用有符号 cell 坐标而非节点或字节偏移。
+- M23.2 增加依赖锁定/无 CUDA CPU 构建与转换、稀疏查询对 oracle；M23.3/8 分别设 compute/intersection Slang 编译、反射和 required GPU 门禁。
+  M23.5 完成 `.vdb` 描述及 NanoVDB 产物/缓存协议；M23.7/13 增加大跨度低占用、常量 tile、转换/AS/在途内存与性能矩阵。
+- 同步架构、导入器、光栅/路径、RT/Shader、ReSTIR/信号设计和索引；复用不可变候选/提交/保活契约，明确 GPU buffer 同步与 CPU 转换峰值。
+
+### 依赖核验与已知接入问题
+
+2026-11-11 经 GitHub API 实时查询官方 vcpkg master 为 `f38855d514df2b21c2e911a6c6865703abb8da15`，
+该固定提交的 openvdb port/版本历史为 `12.0.1#0`，许可证 Apache-2.0；选型证据链接见[三方库说明](../third-party-libraries.md#m23-openvdbnanovdb-稀疏网格选型)。
+上游同版本 PNanoVDB 提供 HLSL 分支/Int32 布局，尚未在工程 Slang 编译或 GPU 上执行。
+官方 `openvdb[nanovdb]` 当前引入 CUDA，portfile 强制启用 CUDA；上游 NanoVDB 数据结构本身不依赖 CUDA。
+因此 M23.2 必须完成无 CUDA 打包验证；必要时只对同版本固定来源做最小 overlay，记录补丁与退出条件，不能默认为官方 feature 已满足要求。
+本次 manifest、builtin-baseline、CMake 和锁定的 Slang 均未改变；实施时重新核验官方最新 port 后固定构建基线。
+
+### 本次验证
+
+```powershell
+$vdbPlanDocs = @('spec/README.md','spec/roadmap.md','spec/third-party-libraries.md',
+  'spec/design/README.md','spec/design/architecture.md','spec/design/assets-importers.md',
+  'spec/design/render-voxels.md','spec/design/graphics-raytracing.md','spec/design/graphics-shaders.md',
+  'spec/design/render-pathtracing.md','spec/design/render-pipeline.md','spec/design/render-restir.md',
+  'spec/design/render-denoising.md','spec/development/README.md','spec/development/0159-voxel-rendering-plan.md')
+& ./scripts/check-spec.ps1 -Path $vdbPlanDocs
+git diff --check
+```
+
+- 文档检查通过：15 份 Markdown、1165 个本地链接，以及元数据、表格、索引、测试入口和 JSON 清单。
+- `git diff --check` 通过；人工核对现行稀疏/稠密职责、M23.2/3/8 依赖及门禁、两后端入口、阶段状态和旧计划的历史标注。
+- CPU 转换、Slang 编译、Vulkan GPU/RT、功能/性能测试均未运行，本次没有实现代码；官网/port 核验不代表这些测试通过。
+
+### 当前下一步
+
+M23.2：先保留独立稠密 oracle，再接入固定依赖与 CPU OpenVDB→NanoVDB 转换/查询，验收无 CUDA、数据/坐标/失败契约。
+M23.3 以实际 Slang compute 兼容性为门禁；M23.8 的 NanoVDB intersection 门禁依赖其已固定的 accessor/布局，通用 RT 底座可提前推进。
+任一门禁失败保留未通过状态并修复适配，不以 dense/mesh 回退宣称稀疏能力完成。父 M23 仍需全部阶段证据才能关闭。
+
+- 2026-11-11T16:31:04+08:00：稀疏方案、依赖选型及 Slang 双阶段验收计划落档，文档检查通过；依赖和 M23.2–13 功能仍未实施。
