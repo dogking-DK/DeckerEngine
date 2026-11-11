@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-23T17:51:15+08:00"
+updated_at: "2026-11-11T15:32:31+08:00"
 status: accepted
 ---
 
@@ -36,6 +36,30 @@ batch=1，表面与介质预览统一使用256 tile，保留原样本序号、�
 用户选择先建立正确性参考，再接入编辑器和截图。M16 交付静态三角形场景的渐进式表面路径追踪：
 CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、确定性样本编号、每视图累积、
 后台交互预览和固定 spp 截图。M16.1、M16.6、M16.7.1/2、M16.8、M16.9和M16.10实施契约见下文；capture集成契约见M16.10，阶段状态见[Roadmap](../roadmap.md)。
+
+## M23 原生体素几何接入（设计）
+
+[体素设计](render-voxels.md)扩展本积分器的几何输入；现有代码仍为三角形输入，下列能力均待实施。
+M23.8 先扩展 [RT 底座](graphics-raytracing.md)，M23.9 接通 CPU/GPU Classic 混合几何，
+M23.10 适配 ReSTIR/表面信号，M23.11 验证已有介质组合，M23.12/13 完成消费者与联合交付。
+
+- PathTraceScene/上传/缓存支持 triangle 与 voxel 实例；原生体素用块 AABB BLAS/TLAS + intersection DDA，
+  不转 mesh，不在输出图上叠加光栅颜色。CPU 参考独立扩展，不链接 GPU 模块。
+- 引入类型化 SurfaceHit 及适配器，提供 kind、实例/内容版本、primitive 或 cell/face、t、位置、几何法线、材质；
+  重心坐标仅用于 triangle。所有 shading、阴影、固定射线读回和首表面诊断移除“命中必为三角形”的假设。
+  标识用整数/保位编码，不能受旧 float triangle-index 精度限制；实际 payload/产物布局在实施时版本化。
+- 空场景判断包含所有几何；voxel-only 场景仍创建/使用正确 AS。主射线遵守近远裁剪，次级射线使用自身区间。
+  辐射/阴影均查询同一混合场景，保留 alpha-mask mesh、体素内部起点、逆转置法线和误差相关偏移规则。
+- 复用现有 Lambert/GGX、NEE/MIS/RR 与渐进积累；体素材质明确默认值，不新增纹理/alpha/透射模型。
+  体素 emission=0，不进入灯分布；已有环境、太阳和 mesh 面积灯继续照亮并被体素遮挡，不假造体素灯 PDF。
+- 网格/块布局/材质/实例、着色模型及命中布局版本纳入来源与失效判断；同代 AS、体素数据和身份映射一起发布。
+  palette-only 复用 AS 不等于可以保留旧图像/采样历史；失败/取消保留最后完整 owner 和 completed_spp。
+- ReSTIR 与信号字段按对应主题适配，空气/云的最近表面、事件区间和阴影透射必须看到体素。
+  尚未验收组合明确拒绝，不能默认切换算法、关闭介质或漏画几何；M20 的滤波器完成状态保持独立。
+
+验收先做 CPU/required GPU 的主射线、阴影和反弹，再做 Lambert/GGX、mesh↔voxel 间接光、
+voxel-only、块边界/内部起点/变换、自相交、连续样本与失败寿命；最后逐项打开 ReSTIR、介质、信号和消费者。
+独立外露面/三角化仅用于 oracle；共面等距 primitive 不假设硬件决胜顺序，能量/均值按现有数值门槛验收。
 
 ## M19 ReSTIR 采样扩展
 

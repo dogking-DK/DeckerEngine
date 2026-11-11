@@ -1,7 +1,7 @@
 ---
 module: graphics-raytracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-10-14T16:57:16+08:00"
+updated_at: "2026-11-11T15:32:31+08:00"
 status: accepted
 ---
 
@@ -26,6 +26,29 @@ M16.2–5已提供能力、AS、管线/SBT与Graph构建/trace；实施契约见
 Vulkan 版本满足不代表光追 feature 已启用。现有 CPU 几何 BVH 和云 ray marching 均不构成本页的硬件光追实现。
 首版只做设备端 BUILD 和三角形实例，不含 UPDATE/refit、压缩、序列化、程序化 AABB、motion blur、
 pipeline library、indirect trace、ray query、SER、异步 compute 或多 GPU。
+
+## M23.8 原生体素所需底座（设计）
+
+上述三角形/四阶段限制仍是当前实现；[M23](../roadmap.md#m23实体体素渲染)规划补齐通用 procedural 几何，尚未实施。
+业务求交算法属于 [render-voxels](render-voxels.md)，Graphics 只提供类型、编译接口、资源与执行契约。
+
+- 增加 AABB 几何描述及 BLAS BUILD 路径，检查 buffer usage/BDA、offset/stride/count、乘加溢出、设备额度、有限 min/max 和范围合法性。
+  TLAS 可同时引用 triangle 与 AABB BLAS；保留几何种类、数量、实例 SBT offset 与映射，不把二者都当作 triangle。
+- RayTracingHitGroup 增加显式 kind 与 intersection 入口；procedural 组必须有 intersection，triangle 组禁止它。
+  仍按 geometry class × ray type 组织 SBT，覆盖 radiance 和 visibility；校验 geometry kind 与实际命中组一致。
+- Slang/SPIR-V 增加 intersection 阶段与自定义 hit attributes 的结构校验；同一命中组内生产者/消费者一致，
+  attribute 大小符合 maxRayHitAttributeSize。intersection 不访问 ray payload，通过属性向 any-hit/closest-hit 传值。
+  通用 payload、布局/descriptor stage、静态 TraceRay 选择参数和 SBT 范围校验继续执行，不能靠伪造反射绕过检查。
+- Graph 声明 AABB build input、AS build/scratch 与 trace-read，及 intersection 实际读取的 buffer/3D image。
+  保持单队列、同代候选和 pending owners；构建输入可释放的时机与体素着色数据的保活分别检查。
+- 不增加 ray query、callable、UPDATE/refit、动态 SBT 参数或新的三方依赖。使用现有 RT/BDA 能力门禁；
+  编译/设备/布局不支持时明确拒绝，不用 triangle 转换静默替代原生路线。
+
+定向验收包含 CPU 描述/边界/反射拒绝、shaderc 版本/旧产物兼容、required GPU 的盒体与解析自定义表面、
+混合实例的最近命中/阴影提前终止、错误 SBT/属性/范围拒绝、Graph 同步及失败/在途释放。
+M23.8 只验通用底座；体素 DDA、材质和路径积分由 M23.9 另验。依据：
+[命中组](https://docs.vulkan.org/refpages/latest/refpages/source/VkRayTracingShaderGroupTypeKHR.html)、
+[intersection](https://docs.vulkan.org/spec/latest/chapters/shaders.html#shaders-intersection)。
 
 ## M16.2设备能力与BDA实施契约
 

@@ -1,7 +1,7 @@
 ---
 module: graphics-shaders
 created_at: "2026-09-28T19:00:00+08:00"
-updated_at: "2026-10-23T18:22:00+08:00"
+updated_at: "2026-11-11T15:32:31+08:00"
 status: accepted
 ---
 
@@ -92,6 +92,17 @@ ShaderBinding追加ShaderImageShape：none、image_2d、image_2d_array、image_3
 1D/cube/MSAA等当前设备层无法表达的形状明确拒绝。反射JSON从schema v2起每条binding包含image_shape；
 旧离线调用需重新编译产物。ShaderModule、布局合并/覆盖/兼容性与BindingSet保留该信息，拒绝维度冲突和错误view。
 这仍是结构校验，不证明用户手工修改的反射与完整SPIR-V一致。storage view只允许一个mip。
+
+## M23.8 intersection 产物扩展（设计）
+
+当前仍仅实现下文四类 RT 阶段；[原生体素底座](graphics-raytracing.md#m238-原生体素所需底座设计)计划增加 intersection。
+扩展 stage 枚举、Slang 入口、SPIR-V 阶段/属性反射和 shaderc 输出，实际结构作为校验依据，不能仅比较总字节数。
+三角形 hit attribute 保持 float2；procedural 属性采用受支持的固定 32-bit 类型，生产/消费签名按同一 hit group 核对。
+intersection 允许产生属性/报告交点，不获得 payload 读写权限；现有“只有 raygen 发射 TraceRay”限制保持。
+新增产物字段须在实施时升版并定义旧产物读取或明确拒绝策略，原 graphics/compute/四类 RT 用例继续回归。
+共享 DDA 的 include 内容、编译选项和布局版本进入 source_fingerprint；材质/身份的整数位不能经过有损 float 数值转换。
+验证无需 GPU 的编译/反射/坏属性拒绝、shaderc 失败保留旧输出及 RT required 管线兼容；
+不因文档增加阶段名就宣称编译器/Device 已支持，具体实施状态见 [M23](../roadmap.md#m23实体体素渲染)。
 
 ## M16.4 光追产物
 

@@ -1,7 +1,7 @@
 ---
 module: render-denoising
 created_at: "2026-10-23T16:58:00+08:00"
-updated_at: "2026-10-23T17:51:15+08:00"
+updated_at: "2026-11-11T15:32:31+08:00"
 status: accepted
 ---
 
@@ -25,6 +25,16 @@ M20.1 确定公共边界与固定依赖；M20.2 实现共享信号类型和路�
 首个可用范围是 Surface only、现有静态三角形、Lambert/GGX、纹理/mask、透视与正交相机。
 相机运动支持不隐含动态物体/形变运动向量。Scene media 在 M20.10 独立验收；DLSS、OptiX、官方 OIDN 运行时、
 降分辨率重建、异步 compute、训练网络和新材质不属于本轮实现。
+
+## M23.10 体素表面信号扩展（设计）
+
+[M23 原生路径](render-voxels.md)将表面信号生产适配到 triangle/voxel 的共同命中模型，尚未实现。
+identity/reference 必须区分几何种类、实例、单元/面与内容/材质版本，不能沿用裸 triangle index 判断相同表面。
+共享 types、GPU 布局、读回、provenance 与预算在实施时一起版本化，旧布局须明确兼容或拒绝；SDK 类型仍不进入 Scene。
+fresh 样本区间、diffuse/specular 分量重组、baseColor/normal/roughness、轴向深度、运动和后续 hit distance 沿现有定义。
+体素增删/占用/材质/实例变更使对应来源和历史失效，不能把新单元误认为旧表面；纯相机运动沿已有 reference 契约。
+验收 Surface Classic/ReSTIR 的信号开关、分量重组、mixed geometry 身份、相机/内容变更和旧帧保活。
+这只扩展 M20.2 已有生产端，不实现或提前验收 M20.3–11 滤波器；Scene media 信号/降噪仍由 M20.10 的能力契约约束。
 
 ## 模块边界和依赖方向
 

@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-11-11T14:51:58+08:00"
+updated_at: "2026-11-11T15:32:31+08:00"
 status: accepted
 ---
 
@@ -122,12 +122,15 @@ AS/SBT、含纹理/mask的Lambert/GGX shader、渐进累积和可调用截图命
 
 ## M23 实体体素扩展边界（设计）
 
-[体素设计](render-voxels.md)采用稠密整数网格与 CPU/GPU 表面遍历；实施状态见 [Roadmap M23](../roadmap.md#m23实体体素渲染)。
+[体素设计](render-voxels.md)采用稠密整数网格，提供光栅混合与原生 GPU 路径两条路线；实施状态见 [Roadmap M23](../roadmap.md#m23实体体素渲染)。
 拟新增 geometry/voxels 负责无 GPU 的网格视图/求交，仅依赖 Geometry/Math/Core；Assets 拥有 CPU 网格和调色板，
 Scene 只存持久引用与变换。拟新增 render/voxels 负责 Graph/Slang 遍历，现有 RenderResources 管理 GPU 代际，
-ScenePipeline 组合 mesh/voxel 深度、HDR 和 tone。Framework/Editor 通过服务接入，底层不反向依赖上层。
-复用 3D 图像/单队列与现有相机，不要求硬件光追或新三方库；CPU-only 的资产/查询边界与 GPU 功能分开。
-首期不接入大气/云、路径追踪或密度场积分；不支持组合明确拒绝，不能返回静默漏画体素的成功结果。
+ScenePipeline 用 compute DDA 结果组合 mesh/voxel 深度、HDR 和 tone，不要求 RT；Pathtracing 消费块 AABB/intersection DDA，
+扩展通用表面命中后复用既有积分器，使体素参与反弹/阴影。Graphics 只增加通用 procedural 类型、编译/属性/SBT 与 Graph 契约。
+CPU PathReference 不依赖 GPU 体素模块；Pathtracing 可私有消费体素数据/Slang 查询，体素模块不反向依赖路径积分器。
+Framework/Editor 通过服务接入，底层不反向依赖上层。路径侧显式要求已有 RT/BDA 与 M23.8 扩展，不新增三方库。
+ReSTIR/表面信号、既有空气/云路径组合和消费者逐阶段验收；光栅大气/云、体素密度介质仍后置。
+不支持组合明确拒绝，不能返回静默漏画体素的成功结果；CPU-only、光栅与 RT 能力分别报告。
 本节是采用的扩展方案，不表示新增 target、接口、shader 或体素功能已经存在；具体契约与未来验收见主题设计。
 
 ## 关键约束
