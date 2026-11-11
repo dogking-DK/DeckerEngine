@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-11-03T18:40:35+08:00"
+updated_at: "2026-11-11T14:58:14+08:00"
 status: accepted
 ---
 
@@ -81,11 +81,13 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M20 路径追踪降噪 | À-trous、SVGF/A-SVGF、NRD REBLUR/RELAX、vk_oidn；公共信号/历史、介质与质量性能验收 | M16–M19、现有 Graph/worker | M20.1 设计/依赖、M20.2 表面信号生产已完成；M20.3–11 待开始，见[设计](design/render-denoising.md) |
 | M21 原生点绘制与粒子流体 | point-list、统一粒子输出、WCSPH/PBF CPU/GPU、工作台/脚本/导出 | M5/M6、M10–M12、M18.3 | M21.1 设计已完成；M21.2–9 待开始，见[流体设计](design/physics-fluids.md)、[点绘制设计](design/render-particles.md) |
 | M22 Console 与 Editor 命令交互 | 命名参数/历史、补全/参数提示、视口与相机命令、面板帮助与搜索 | M3、M8、M17.5；视口/相机复用 M18/M19 | M22.1–11 已完成；跨入口闭环、可运行示例与范围交付见[0158](development/0158-console-workflow-delivery.md) |
+| M23 实体体素渲染 | 稠密体素表面、CPU/GPU 射线遍历、mesh 混合遮挡、资产/Editor/capture 与质量性能交付 | M5–M8、M14.2、M18.3；上层复用 M3/M4/M9/M22 | M23.1 设计已完成；M23.2–7 待开始，见[体素设计](design/render-voxels.md) |
 
 默认执行表中顺序。M5 在 Foundation 补充完成后具备独立探索条件，
 M9 的 Luau 命令绑定在 M3 后可提前做；若调整次序，仍需满足对应集成验收依赖。
 本路线不要求同时开展多个模块。
 用户指定路线时按该路线的必要前置推进；M21 不依赖 M20 的降噪滤波器，M22 不依赖 M20/M21。
+M23 不依赖 M20/M21 的算法实现；指定体素路线时可从其已满足前置的小阶段独立推进，列入计划不改变其他路线状态。
 
 首轮的三个可单独交付节点：
 
@@ -882,6 +884,27 @@ M22.1–3 的“首期完成”继续有效；M22.5–11 已全部交付，M22 �
 扩展默认无新依赖，不改变 JSON-RPC 传输；新增描述字段与宿主命令须在各自阶段同步注册、参考页和定向兼容验证。
 不固定运行全量渲染/物理或双配置矩阵；无功能改动的规划阶段只执行文档检查。
 
+## M23：实体体素渲染
+
+落实规则三维网格中不透明实体体素的直接表面渲染，设计见 [render-voxels](design/render-voxels.md)。
+采用 CPU 独立求交参考与 GPU DDA，复用原生 3D 图像、Graph、Slang 和现有透视/正交相机；不新增三方依赖。
+本路线先处理静态稠密网格与整份替换，形成离屏图像、混合场景、资产及 Editor/capture 闭环。
+
+| 小阶段 | 实际交付范围 | 必要前置 | 独立验收 | 状态 |
+| --- | --- | --- | --- | --- |
+| M23.1 | 模块设计、边界、数据/状态契约、七阶段依赖与验收计划 | 既有架构/资源/相机契约 | 文档/索引/链接一致；区分采用设计与实际功能 | 已完成：文档检查通过，见[0159](development/0159-voxel-rendering-plan.md)；仅设计验收 |
+| M23.2 | CPU 网格视图、输入校验、DDA 表面查询、程序化夹具及独立外露面 oracle | M23.1；M1 Math/Core、现有 Geometry | 空/实/空心网格、边角/平行轴/内部起点、裁剪、仿射变换、溢出/失败保护；CPU-only | 待开始 |
+| M23.3 | 3D 整数网格上传、Slang GPU 遍历、颜色/命中/距离/法线诊断与离屏结果 | M23.2；M5/M6、M14.2、M18.3 | required GPU 对 CPU 参考；格式/额度/同步 validation、失败提交与在途资源寿命 | 待开始 |
+| M23.4 | mesh/voxel 深度与 HDR 合成、Unlit/简单方向光、曝光/tone | M23.3；M7.2 | 双向遮挡、同深度、多实例、透视/正交及裁剪；旧 mesh 回归；不支持组合明确拒绝 | 待开始 |
+| M23.5 | 版本化体素资产、Scene 引用/提取、缓存失效、上传替换/卸载生命周期 | M23.4；M2/M4/M7.1 | CPU-only 保存加载、版本/格式/预算拒绝、内容失效、旧快照与在途保活；失败保留旧状态 | 待开始 |
+| M23.6 | 服务/命令和 Editor 加载/设置/拾取/Gizmo、独立 render.capture、使用示例 | M23.5；M3/M8/M9、M22 的共享宿主入口 | GUI/Console/IPC 行为一致、持久/会话与撤销边界、固定截图来源、后台 GUI；命令文档同步 | 待开始 |
+| M23.7 | 质量/显存/上传/帧耗时基线，按测量选择分块/空区域跳过，交付限制与证据 | M23.6；复用 M11 观测 | 固定矩阵及独立参考、资源回收、重复结果；优化保持正确性；性能候选达成/未达分别报告 | 待开始 |
+
+M23.3 是第一项离屏可展示成果，M23.6 形成编辑器使用闭环；全部子阶段验收后才关闭 M23。
+首期不包含密度场 ray marching、透明介质、网格体素化、体素路径追踪、SVO/LOD、无限地形、
+流式世界、编辑笔刷或 USD/VDB 接入；这些能力不由“体素渲染”名称隐含获得。
+各实施小阶段开始时更新直接相关设计并创建实际开发记录；当前不预分配未来编号或预报通过的测试。
+
 ## 当前执行边界与下一步
 
 M0–M6、M1.7 Memory/Tracy 补充均已完成。当前可运行的 CPU 链路包括
@@ -963,13 +986,15 @@ M21 当前没有流体实现或点绘制验收，不能把设计采用状态解�
 用户指定的 M22 已完成 M22.1–11：首期输入/历史、扩展设计、共享帮助、只读目录、补全/诊断、Edit 视口/相机会话命令及面板字段帮助/设置搜索。
 M22 跨入口集成闭环、可运行示例与能力/限制已交付，见[0158](development/0158-console-workflow-delivery.md)；本路线不再保留待实施子阶段。
 位置参数/别名等维持上述后置边界；M20/M21 保持各自阶段状态，不能因本路线扩展而推进。
+体素路线 M23 已列入正式计划，M23.1 设计落档已完成，见[0159](development/0159-voxel-rendering-plan.md)；
+该路线下一阶段为 M23.2 CPU 网格与求交参考。目前没有体素渲染实现或 CPU/GPU 功能验收。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 
 工程基础维护记录包括 [0018](development/0018-vs2026-generation-script.md)、
 [0019](development/0019-development-skills.md) 和 [0041](development/0041-ai-documentation-workflow.md)，不改变里程碑顺序。
 设计准备记录与实现验收分开：[0020](development/0020-m4-development-plan.md)、
-[0022](development/0022-memory-profiling-design.md)、[0093](development/0093-atmosphere-cloud-plan.md)、[0108](development/0108-pathtracing-plan.md)、[0145](development/0145-denoising-foundation.md)、[0147](development/0147-particle-fluid-plan.md)、[0148](development/0148-console-command-input-plan.md)、[0151](development/0151-console-assistance-plan.md)
+[0022](development/0022-memory-profiling-design.md)、[0093](development/0093-atmosphere-cloud-plan.md)、[0108](development/0108-pathtracing-plan.md)、[0145](development/0145-denoising-foundation.md)、[0147](development/0147-particle-fluid-plan.md)、[0148](development/0148-console-command-input-plan.md)、[0151](development/0151-console-assistance-plan.md)、[0159](development/0159-voxel-rendering-plan.md)
 本身不作为对应功能实现完成证据。
 开发编号在实际创建记录时扫描目录取最大值加一，不在导航文档预写下一编号。
 
@@ -1000,6 +1025,7 @@ GPU 内存 aliasing、通用节点编辑器、完整反射、热重载体系和 
 仍按实际需求单独立项设计，不由 M11–M13 的响应性和实验管理工作隐含引入。
 模拟检查点、布料弯曲/自碰撞等物理扩展、完整PBR/IBL与光栅混合光追效果另行确定阶段；
 M21 已纳入 WCSPH/PBF CPU/GPU 与点绘制，尚不包含 MAC、场 ray marching 或 USD/VDB 接入。
+M23 纳入规则网格的实体体素表面渲染，不改变上述密度场/介质、流体求解器和外部格式后置边界。
 M16只规划表面路径追踪的几何可见性/阴影、受限金属粗糙度材质和常量环境，不代表完整光照系统；
 M14只引入单太阳/天空漫反射接收，M15只引入云透射阴影，不等于完整光照系统。
 M13 的批处理恢复不替代模拟检查点。
@@ -1009,6 +1035,7 @@ Linux/macOS 扩展与发布打包也需要独立的平台验收，不由已有 N
 
 - [架构总览](design/architecture.md)
 - [工程基础设计](design/project-foundation.md)
+- [实体体素渲染设计](design/render-voxels.md)
 - [spec 流程规范](README.md)
 - [设计目录](design/README.md)
 - [开发目录](development/README.md)

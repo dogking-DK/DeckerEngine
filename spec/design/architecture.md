@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-11-03T17:13:21+08:00"
+updated_at: "2026-11-11T14:51:58+08:00"
 status: accepted
 ---
 
@@ -119,6 +119,16 @@ GPU通用介质入口补齐非均匀云、分段保守上界、真实多次散�
 模拟布片与去噪仍另行规划。
 ScenePipeline 的默认光栅行为保持；新后端明确选择和报告能力，不能静默替换输出。
 AS/SBT、含纹理/mask的Lambert/GGX shader、渐进累积和可调用截图命令已实现；M17体积集成状态见[Roadmap](../roadmap.md)。
+
+## M23 实体体素扩展边界（设计）
+
+[体素设计](render-voxels.md)采用稠密整数网格与 CPU/GPU 表面遍历；实施状态见 [Roadmap M23](../roadmap.md#m23实体体素渲染)。
+拟新增 geometry/voxels 负责无 GPU 的网格视图/求交，仅依赖 Geometry/Math/Core；Assets 拥有 CPU 网格和调色板，
+Scene 只存持久引用与变换。拟新增 render/voxels 负责 Graph/Slang 遍历，现有 RenderResources 管理 GPU 代际，
+ScenePipeline 组合 mesh/voxel 深度、HDR 和 tone。Framework/Editor 通过服务接入，底层不反向依赖上层。
+复用 3D 图像/单队列与现有相机，不要求硬件光追或新三方库；CPU-only 的资产/查询边界与 GPU 功能分开。
+首期不接入大气/云、路径追踪或密度场积分；不支持组合明确拒绝，不能返回静默漏画体素的成功结果。
+本节是采用的扩展方案，不表示新增 target、接口、shader 或体素功能已经存在；具体契约与未来验收见主题设计。
 
 ## 关键约束
 
