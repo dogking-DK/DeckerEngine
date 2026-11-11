@@ -161,5 +161,6 @@
 | 0157 | [M22.10 Editor 字段帮助与设置搜索](0157-editor-settings-help.md) | editor-console、editor、commands | completed |
 | 0158 | [M22.11 Console 与 Editor 扩展集成交付](0158-console-workflow-delivery.md) | editor-console、editor、commands | completed |
 | 0159 | [M23.1 体素计划、原生路径与 VDB 稀疏方案](0159-voxel-rendering-plan.md) | render-voxels、architecture、graphics-raytracing、graphics-shaders、render-pathtracing、render-pipeline、render-restir、render-denoising、assets-importers | completed |
+| 0160 | [M23.2 CPU 体素参考与稀疏转换](0160-voxel-cpu-sparse.md) | render-voxels、assets-importers、geometry-query | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

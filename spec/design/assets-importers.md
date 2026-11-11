@@ -1,7 +1,7 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-11-11T16:28:53+08:00"
+updated_at: "2026-11-11T17:42:27+08:00"
 status: accepted
 ---
 
@@ -32,10 +32,13 @@ IO 前置检查位于 importers target。该边界调整见 [0061](../developmen
 
 ## M23.2/5 OpenVDB 稀疏实体导入（设计）
 
-[体素方案](render-voxels.md)已选择 OpenVDB CPU 构建/`.vdb` 导入和 NanoVDB 运行时产物，尚未实现；既有 glTF 行为不变。
+[体素方案](render-voxels.md)采用 OpenVDB CPU 构建/`.vdb` 导入和 NanoVDB 运行时产物；M23.2 的程序化构建/CPU 转换见 [0160](../development/0160-voxel-cpu-sparse.md)，正式 `.vdb` 文件/资产接入仍待 M23.5；既有 glTF 行为不变。
 可选导入实现 PRIVATE 链接 OpenVDB/转换器；asset_data 仅持有字节快照、描述和 palette，不公开 OpenVDB/NanoVDB 模板类型。
 CPU 查询适配层可私有使用 NanoVDB，不令 Geometry、Render 或 Scene 链接 OpenVDB；CPU-only 不要求 Vulkan/CUDA。
 M23.2 先完成无 CUDA 依赖打包和测试级 CPU 转换，M23.5 接入正式导入/产物/缓存/Scene 消费者。
+本阶段单独 target `dk_asset_voxel_importers`（`DK_BUILD_VOXEL_VDB`）暴露 [VoxelBuilder.hpp](../../engine/assets/importers/voxels/include/dk/assets/VoxelBuilder.hpp)，
+接收对齐的程序化块/源 active 状态、palette 数量、采样中心变换和额度；内部 OpenVDB GridBase 转换桥不成为公开 SDK。
+成功返回不可变 NanoVDB CPU 快照，失败保留调用者输入和已发布快照；不依赖 IO/glTF/asset_data/Scene/GPU，不提供文件解析命令。
 
 输入描述显式选择命名 Int32Grid、占用/材质语义与 palette；背景必须为零，值域及 active/inactive/tile 规范化遵循体素契约。
 拒绝未声明的 grid、SDF/fog/向量/点类、非零背景及非线性/非法变换；不推断密度阈值，也不按 active mask 丢弃非零值。

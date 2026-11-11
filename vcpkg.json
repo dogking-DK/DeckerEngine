@@ -10,6 +10,10 @@
   ],
   "default-features": [],
   "features": {
+    "voxel-vdb": {
+      "description": "CPU OpenVDB and NanoVDB sparse voxels without CUDA",
+      "dependencies": [{ "name": "openvdb", "default-features": false, "features": ["nanovdb"] }]
+    },
     "platform": {
       "description": "SDL3 windows without editor UI",
       "dependencies": [{ "name": "sdl3", "features": ["vulkan"] }]

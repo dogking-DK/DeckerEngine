@@ -49,6 +49,27 @@
       }
     },
     {
+      "name": "windows-voxels-dense",
+      "inherits": "windows-bootstrap",
+      "displayName": "CPU dense voxel reference without VDB or GPU",
+      "binaryDir": "${sourceDir}/out/build/windows-voxels-dense",
+      "cacheVariables": {
+        "DK_BUILD_RUNNER": "OFF",
+        "DK_BUILD_MATH": "ON",
+        "DK_BUILD_UNIT_TESTS": "ON",
+        "DK_BUILD_GEOMETRY_VOXELS": "ON"
+      }
+    },
+    {
+      "name": "windows-voxels",
+      "inherits": "windows-voxels-dense",
+      "displayName": "CPU OpenVDB and NanoVDB voxels without CUDA or Vulkan",
+      "binaryDir": "${sourceDir}/out/build/windows-voxels",
+      "cacheVariables": {
+        "DK_BUILD_VOXEL_VDB": "ON"
+      }
+    },
+    {
       "name": "windows-client",
       "inherits": "windows-bootstrap",
       "displayName": "Windows lightweight IPC client (no Runtime or Renderer)",

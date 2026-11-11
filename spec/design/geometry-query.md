@@ -1,7 +1,7 @@
 ---
 module: geometry-query
 created_at: "2026-10-08T11:35:00+08:00"
-updated_at: "2026-10-08T12:06:32+08:00"
+updated_at: "2026-11-11T17:42:27+08:00"
 status: accepted
 ---
 
@@ -22,6 +22,14 @@ Ray 的 direction 可以不归一化；参数 t 沿 origin+t*direction，范围�
 实例查询将世界射线逆变换到局部，保留 direction 长度，保证非均匀/负缩放后的 t 可比较。
 不可逆实例返回错误；编辑器跳过零缩放实例。世界射线归一化时 t 即世界距离。
 首版不做纹理 alpha 测试或 GPU 可见性判定；使用双面几何最近命中。
+
+## 可选 CPU 体素扩展
+
+M23.2 增加可选的 [CPU 体素模块](render-voxels.md#m232-cpu-实施契约)：`dk_geometry_voxels` 复用 Ray/Transform，
+提供拥有型稠密网格和精确空/实交界查询；`dk_geometry_voxels_sparse` 私有使用 NanoVDB 实现层级查询，不链接 OpenVDB。
+两者返回单元坐标/面/离散值/t/世界法线，保留逆变换后的 t，公开头不含 VDB 类型。
+转换器在 Assets 私有消费 OpenVDB；不把文件、Scene 或 GPU 依赖引入本模块，具体额度/半格与边界约定见主题设计。
+独立外露面 oracle、稠密/稀疏对照与 CPU-only 证据见 [0160](../development/0160-voxel-cpu-sparse.md)。
 
 ## 验证
 

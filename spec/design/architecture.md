@@ -1,7 +1,7 @@
 ---
 module: architecture
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-11-11T16:28:53+08:00"
+updated_at: "2026-11-11T17:42:27+08:00"
 status: accepted
 ---
 
@@ -123,17 +123,17 @@ AS/SBT、含纹理/mask的Lambert/GGX shader、渐进累积和可调用截图命
 ## M23 实体体素扩展边界（设计）
 
 [体素设计](render-voxels.md)采用 OpenVDB CPU 源 + NanoVDB 稀疏运行时，保留稠密 DDA/独立面 oracle；实施状态见 [Roadmap M23](../roadmap.md#m23实体体素渲染)。
-拟新增 geometry/voxels 负责厂商无关视图/CPU 查询，公共依赖仅 Geometry/Math/Core，NanoVDB accessor 为可选 PRIVATE 实现。
-OpenVDB 与转换器仅由 Assets 可选 CPU 导入实现 PRIVATE 消费；asset_data 拥有 NanoVDB 字节/元数据/调色板，不暴露树类型。
+geometry/voxels 的稠密参考与 NanoVDB CPU 查询见 [M23.2 实施契约](render-voxels.md#m232-cpu-实施契约)，公共依赖仅 Geometry/Math/Core，NanoVDB accessor 为可选 PRIVATE 实现。
+OpenVDB 与转换器仅由 Assets 可选 CPU 导入实现 PRIVATE 消费；M23.2 由不可变 SparseGrid 保活字节，后续 asset_data 接管正式资产字节/元数据/调色板，不暴露树类型。
 Scene 只存持久引用与变换。拟新增 render/voxels 负责 NanoVDB buffer/PNanoVDB Slang 访问与 HDDA，现有 RenderResources 管理 GPU 代际。
 ScenePipeline 用 compute HDDA 结果组合 mesh/voxel 深度、HDR 和 tone，不要求 RT；Pathtracing 消费块 AABB/intersection HDDA，
 扩展通用表面命中后复用既有积分器，使体素参与反弹/阴影。Graphics 只增加通用 procedural 类型、编译/属性/SBT 与 Graph 契约。
 CPU PathReference 不依赖 GPU 体素模块；Pathtracing 可私有消费体素数据/Slang 查询，体素模块不反向依赖路径积分器。
 Framework/Editor 通过服务接入，底层不反向依赖上层。路径侧显式要求已有 RT/BDA 与 M23.8 扩展。
-新增依赖按[三方库说明](../third-party-libraries.md#m23-openvdbnanovdb-稀疏网格选型)锁定；无 CUDA 打包、Slang compute/intersection 兼容性均须独立验收，当前尚未接入。
+新增依赖按[三方库说明](../third-party-libraries.md#m23-openvdbnanovdb-稀疏网格选型)锁定；无 CUDA 打包/CPU 查询已验收，Slang compute/intersection 兼容性仍须独立验收。
 ReSTIR/表面信号、既有空气/云路径组合和消费者逐阶段验收；光栅大气/云、体素密度介质仍后置。
 不支持组合明确拒绝，不能返回静默漏画体素的成功结果；CPU-only、光栅与 RT 能力分别报告。
-本节是采用的扩展方案，不表示新增 target、接口、shader 或体素功能已经存在；具体契约与未来验收见主题设计。
+本节 CPU 子集已有实现；渲染、正式资产与上层仍是采用的扩展方案，具体契约与未来验收见主题设计。
 
 ## 关键约束
 

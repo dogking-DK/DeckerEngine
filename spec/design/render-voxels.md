@@ -1,7 +1,7 @@
 ---
 module: render-voxels
 created_at: "2026-11-11T14:51:58+08:00"
-updated_at: "2026-11-11T16:31:04+08:00"
+updated_at: "2026-11-11T17:42:27+08:00"
 status: accepted
 ---
 
@@ -13,7 +13,7 @@ status: accepted
 支持透视/正交相机、网格模型混合遮挡、版本化资产、Editor 拾取及可等待截图。
 采用两条后端路线：光栅侧的 compute HDDA/深度合成，以及现有 GPU 路径追踪器中的原生 AABB/intersection + HDDA 求交。
 阶段、依赖和实施状态由 [Roadmap M23](../roadmap.md#m23实体体素渲染)维护。
-本文 accepted 表示采用方案；本次只有设计落档，尚无体素类型、target、shader、命令或功能验收。
+本文 accepted 表示采用方案；M23.2 CPU 实施与验收记录见 [0160](../development/0160-voxel-cpu-sparse.md)，GPU/Slang、正式资产和命令仍待后续阶段。
 
 OpenVDB 负责 CPU 稀疏构建和 `.vdb` 导入，NanoVDB 连续缓冲区作为 CPU/GPU 运行时快照；首期静态拓扑、整份替换。
 保留稠密整数网格、逐格 DDA 和独立外露面 oracle 作为正确性参考，生产渲染不将稀疏数据展开成完整 3D 纹理。
@@ -27,7 +27,7 @@ USD 和其他体素文件格式仍后置。库版本、打包限制和接入状�
 
 ## 模块边界和依赖方向
 
-所有新增路径/target 均为拟新增，公开接口位于各模块 `include/dk/`，实现位于 `src/`。
+公开接口位于各模块 `include/dk/`，实现位于 `src/`；M23.2 的实际 CPU target 见下方实施契约，其余仍为计划。
 
 | 模块 | 计划职责与依赖 |
 | --- | --- |
@@ -197,6 +197,30 @@ RT 的 AABB/build 输入、BLAS/TLAS、SBT、网格/材质和通用命中映射�
 构建输入寿命与着色数据寿命分开：BLAS 完成后可释放的 AABB buffer，不代表 intersection 消费的体素数据也可释放。
 首次仅支持 BUILD；形状/占用变化按内容版本重建，palette-only 复用 AS 必须证明几何不变，但仍失效相关累积/历史。
 
+## M23.2 CPU 实施契约
+
+本阶段增加 `dk_geometry_voxels` 稠密拥有型网格与无新增第三方依赖的逐格查询，及可选 `dk_geometry_voxels_sparse` NanoVDB CPU 查询适配。
+`dk_asset_voxel_importers` 私有消费 OpenVDB，提供程序化稀疏块输入和测试级 OpenVDB→NanoVDB 转换；正式文件/资产协议仍在 M23.5。
+三者的公开接口不暴露 VDB 模板。CPU 查询使用 double 射线、整数 cell/face/value 和世界法线，t 保持原射线参数；每次查询显式受工作额度限制。
+稠密构建检查维度乘法、数据长度、有限域和值域后复制数组；稀疏候选规范化所有已分配 voxel/tile 的状态，保留非零值并清除零 active 标记。
+数据、转换器、查询和测试均在无 Vulkan/CUDA 配置构建；稠密配置不查找 OpenVDB。NanoVDB 私有数据由不可变快照保活，可只读借用字节供后续 GPU 上传。
+源/规范化树、转换输出、访问工作量分别检查额度；失败不发布候选，不修改调用者输入或旧快照，异常转换为 Result 错误，不承诺进程级 OOM 恢复。
+无 CUDA overlay 固定官方 port 及源码摘要，仅调整 NanoVDB CPU/header 配置；具体编译差异与验收证据记入 [0160](../development/0160-voxel-cpu-sparse.md)。
+固定 OpenVDB 12.0.1 / NanoVDB 32.7.0；MSVC 消费者启用 `/Zc:__cplusplus`，C4702 仅在 SDK 头文件范围抑制，工程代码仍使用 `/W4 /WX` 验收。
+
+- [Voxels.hpp](../../engine/geometry/voxels/include/dk/geometry/Voxels.hpp)：`DenseInput`/`DenseGrid`、闭整数 `Domain`、`Face`/`Hit`/`QueryResult`。局部三轴 cell 范围限制为 ±2^30，逆变换后射线原点限制为 ±2^40；数值不能推进时返回错误。
+  稠密默认 16 Mi 单元，查询默认 1 Mi 个访问区域；尺寸乘法先检查额度再运算。零长度擦边不命中，平行外边界视为擦边，内部平行格面按正侧单元归属；精确同时穿轴按 X/Y/Z 选择面。
+- [SparseVoxels.hpp](../../engine/geometry/voxels/include/dk/geometry/SparseVoxels.hpp)：不可变共享快照、只读 NanoVDB bytes、源/规范化树/输出大小及节点/占用统计。无公开任意字节反序列化入口；查询无需 OpenVDB。
+- [VoxelBuilder.hpp](../../engine/assets/importers/voxels/include/dk/assets/VoxelBuilder.hpp)：程序化块大小为 1/8/128/4096，起点按块大小对齐，按输入顺序覆盖；值/active 分别保留给规范化，`sample_to_local` 表示 VDB 整数采样中心。
+  可显式指定包含全部非零源的域，否则由占用推导；空网格采用合法单格域。默认最多 1 Mi 输入块、每棵树 256 MiB、NanoVDB 输出 256 MiB、16 Mi 次规范化值访问。
+  源构建每次编辑前预留一条最坏节点路径，可能保守拒绝临界额度；转换前校验源树及访问量，精确输出大小由受限 NanoVDB allocator 在分配前检查。
+  树/产物额度不等同于进程 RSS 上限：OpenVDB/TBB 内部 scratch、分配器开销尚未接管，统计不冒充完整 PMR 或进程峰值。
+- `DK_BUILD_GEOMETRY_VOXELS` 与 `DK_BUILD_VOXEL_VDB` 默认 OFF；后者同时构建稠密参考、NanoVDB 查询和 CPU 转换。
+  `windows-voxels-dense` 不选择 VDB，`windows-voxels` 选择 `voxel-vdb` feature；两预设均关闭 GPU、Scene、Editor、IO 与完整 glTF 导入。
+  原固定 builtin-baseline 已包含最新 OpenVDB 12.0.1#0，因此保持基线及其他依赖版本。
+- [CPU 测试](../../tests/unit/VoxelTests.cpp)对独立外露面 oracle；[稀疏测试](../../tests/unit/VoxelSparseTests.cpp)检查规范化/层级/快照；
+  [PNanoVDB C32 读值](../../tests/unit/VoxelPortableTests.cpp)仅验证 CPU 布局互操作，不能替代 M23.3/8 的 Slang/GPU 门禁。
+
 ## Slang 兼容性门禁（待实施）
 
 [PNanoVDB v12.0.1](https://github.com/AcademySoftwareFoundation/openvdb/blob/v12.0.1/nanovdb/nanovdb/PNanoVDB.h)
@@ -210,6 +234,8 @@ RT 的 AABB/build 输入、BLAS/TLAS、SBT、网格/材质和通用命中映射�
 | M23.3 compute 执行 | required Vulkan GPU 读回已知 background/tile/leaf/active/inactive 输入对应的规范化值；覆盖有符号坐标、节点边界/半格变换、空心/内部起点；HDDA 命中/距离/法线/材质对稠密 DDA 和独立面 oracle |
 | M23.8 intersection | 同一 accessor/布局另行编译到 intersection，验证 descriptor stage、属性生产/消费和设备 maxRayHitAttributeSize；required GPU 在混合 triangle/procedural SBT 中读 NanoVDB 并报告解析交点，覆盖辐射/visibility；compute 通过不能替代本项 |
 | M23.9 路径整合 | 共享 HDDA 接入真实多次反弹/阴影，与 CPU/三角化验证 oracle 对照；tile/leaf/RT 块边界保持同一实体表面，上传/AS/历史版本一致 |
+
+M23.2 依赖/CPU 门禁已通过，固定头文件摘要、C32 读值与无 CUDA 证据见 [0160](../development/0160-voxel-cpu-sparse.md)；上表其余 Slang/GPU 门禁尚未实施。
 
 首期优先验证 32-bit buffer 字节地址，网格长度和所有偏移必须同时受地址表示、descriptor/device 限制和预算约束；
 不得将超范围 offset 截断后继续读。若需要 64-bit 地址，单独验证 Slang 整数操作、SPIR-V capabilities 和设备特性后再开放，
@@ -258,12 +284,13 @@ RT 路线 required 用例不得以缺少硬件静默跳过；非 RT 配置另外
 依赖的 CUDA 打包问题在 M23.2 解决，CPU 格式/语义先冻结；Slang compute 与 intersection 分别在 M23.3/8 设阻断门禁。
 完整源描述/产物 v1 在 M23.5 冻结，包含两后端共同材质；中间资源布局/精度在 M23.3 固定，
 intersection 属性/SBT 与 shader 产物版本在 M23.8 固定，RT 块布局/通用命中在 M23.9 固定，信号身份版本在 M23.10 固定；
-下一步 M23.2 先完成稠密 oracle 与无 CUDA 的 CPU 稀疏转换/查询，不能仅完成稠密部分就关闭该阶段。
+CPU 子集已按 M23.2 验收；下一步 M23.3 固定 GPU 上传、PNanoVDB/Slang compute 兼容与共享 HDDA，CPU 通过不替代 GPU 门禁。
 阶段开始若发现底座缺口，应更新设计和必要前置，不隐式扩成全引擎重构。
 
 ## 相关记录
 
 - [0159 M23.1 体素渲染正式计划](../development/0159-voxel-rendering-plan.md)
+- [0160 M23.2 CPU 体素参考与稀疏转换](../development/0160-voxel-cpu-sparse.md)
 - [架构](architecture.md)、[场景管线](render-pipeline.md)、[3D 资源](graphics-resources.md)、[Slang](graphics-shaders.md)
 - [原生 RT 底座](graphics-raytracing.md)、[路径追踪](render-pathtracing.md)、[ReSTIR](render-restir.md)、[信号](render-denoising.md)
 - [OpenVDB 数据/坐标语义](https://www.openvdb.org/documentation/doxygen/overview.html)、[NanoVDB FAQ](https://www.openvdb.org/documentation/doxygen/NanoVDB_FAQ.html)：上游能力说明不替代固定版本的引擎验收。

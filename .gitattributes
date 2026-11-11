@@ -14,6 +14,7 @@ CMakeLists.txt text eol=lf
 cmake/vcpkg-ports/tracy/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof
 cmake/vcpkg-ports/mimalloc/*.diff text eol=lf whitespace=-blank-at-eol,-blank-at-eof
 cmake/vcpkg-ports/imgui/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof
+cmake/vcpkg-ports/openvdb/*.patch text eol=lf whitespace=-blank-at-eol,-blank-at-eof
 *.png binary
 *.jpg binary
 *.glb binary

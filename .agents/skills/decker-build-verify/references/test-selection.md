@@ -86,6 +86,8 @@
 | Console 文本/JSON、整数/Unicode/预算、guard/草稿/刷新失败、历史、基础/嵌套补全、实体资产候选/诊断/去抖与来源/选区保护（M22.2/3/6/7，无需 GPU） | dk_editor_tests | `^dk\.editor\.(console \|workspace console)` |
 | 编辑器选择/草稿、相机、Gizmo 事务/撤销、保存重载与失败保护（无需 GPU） | dk_editor_tests | `^dk\.editor\.(workspace \|runtime \|camera \|interaction )` |
 | CPU 射线、AABB、三角形 BVH 和仿射实例 | dk_geometry_tests | `^dk\.geometry\.` |
+| M23.2 稠密体素 DDA、独立面 oracle、边界/仿射/额度 | dk_voxel_tests | `^dk\.voxels\.dense `；`windows-voxels-dense` 无 VDB/GPU |
+| M23.2 OpenVDB→NanoVDB CPU 转换、稀疏查询、tile/负坐标/失败/快照 | dk_voxel_tests、dk_voxel_sparse_tests | `^dk\.voxels\.`；`windows-voxels` 无 CUDA/Vulkan；不表示 Slang/GPU 已通过 |
 | 编辑器拾取、Gizmo、相机真实输入和 runner 重载 | dk_editor_app、dk_run | `^dk\.editor\.interaction_gpu_validation$`（gpu label；77 为跳过） |
 | 编辑器真实窗口、Console 输入/历史/粘贴/组合输入/基础与嵌套补全/实体资产候选/诊断与键鼠、场景预览与保存重载 | dk_editor_app | `^dk\.editor\.workbench_gpu_validation$`（gpu label；77 为跳过） |
 | CLI 版本 | dk_run | `^dk\.bootstrap\.version$` |

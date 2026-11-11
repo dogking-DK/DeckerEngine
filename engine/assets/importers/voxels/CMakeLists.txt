@@ -1,0 +1,10 @@
+set(CMAKE_FOLDER "Engine/Assets/Importers")
+# The internal conversion tests live in a sibling directory and also consume the SDK.
+find_package(OpenVDB CONFIG REQUIRED GLOBAL)
+add_library(dk_asset_voxel_importers STATIC src/VoxelBuilder.cpp)
+add_library(dk::asset_voxel_importers ALIAS dk_asset_voxel_importers)
+target_sources(dk_asset_voxel_importers PUBLIC FILE_SET HEADERS BASE_DIRS include FILES include/dk/assets/VoxelBuilder.hpp)
+target_include_directories(dk_asset_voxel_importers PRIVATE "${PROJECT_SOURCE_DIR}/engine/geometry/voxels/src")
+target_compile_definitions(dk_asset_voxel_importers PRIVATE NANOVDB_USE_OPENVDB)
+target_link_libraries(dk_asset_voxel_importers PUBLIC dk::geometry_voxels_sparse PRIVATE OpenVDB::openvdb dk::nanovdb_headers)
+dk_target_defaults(dk_asset_voxel_importers)

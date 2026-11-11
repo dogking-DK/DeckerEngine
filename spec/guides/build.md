@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-10-19T22:04:00+08:00"
+updated_at: "2026-11-11T17:42:27+08:00"
 ---
 
 # 构建与依赖配置
@@ -115,6 +115,16 @@ ctest --preset windows-debug
 ```
 
 `windows-dev` 默认构建 Core、日志、Eigen 数学、IO、Scene、Memory、Jobs、CPU 资产导入/缓存、Framework 与 Catch2 单元测试。
+`windows-voxels-dense` 只启用 CPU 稠密体素参考及 Math/测试，不选择 VDB 或 GPU；
+`windows-voxels` 另启用 `DK_BUILD_VOXEL_VDB` 和 `voxel-vdb` feature，通过同版本 overlay 安装 OpenVDB/NanoVDB CPU/header，不要求 CUDA/Vulkan。
+`DK_BUILD_GEOMETRY_VOXELS`、`DK_BUILD_VOXEL_VDB` 默认 OFF，均要求 Math；后者同时构建稠密参考和 CPU 转换/稀疏查询。
+常规配置用 `cmake --preset windows-voxels`；定向构建/验收使用：
+
+```powershell
+& ./scripts/verify.ps1 -BuildDir out/build/windows-voxels -Target @('dk_voxel_tests','dk_voxel_sparse_tests') -TestRegex '^dk\.voxels\.' -Reason 'M23.2 CPU 稠密和稀疏体素'
+```
+
+稠密隔离配置只选择 `dk_voxel_tests`。新增 target 与验证范围见[体素设计](../design/render-voxels.md#m232-cpu-实施契约)，不表示 Slang/GPU 路线已接入。
 `windows-scripting` 继承 windows-dev 并启用 `DK_BUILD_SCRIPTING_LUAU`，要求 Scene/Framework Runtime，自动选择 scripting feature，提供 `dk::scripting_luau` 和 runner 的 `--script FILE.luau`；见 [脚本指南](scripting.md)。
 `windows-graphics` 继承 windows-dev，显式启用 DK_BUILD_GRAPHICS_DEVICE、DK_BUILD_GRAPHICS_SHADERS、DK_BUILD_GRAPHICS_OFFSCREEN、DK_BUILD_GRAPHICS_GRAPH、DK_BUILD_RENDER_DATA、DK_BUILD_RENDER_RESOURCES、DK_BUILD_RENDER_PIPELINE、DK_BUILD_RENDER_DISK、DK_BUILD_RENDER_CAPTURE、DK_BUILD_PHYSICS_GPU、DK_BUILD_RENDER_SIMULATION、DK_BUILD_RENDER_ATMOSPHERE；
 Offscreen 要求 Device、Shaders、Graph，复用已有 feature。设备/资源和离屏探针见 [Graphics 指南](graphics.md)、[离屏指南](offscreen.md)。

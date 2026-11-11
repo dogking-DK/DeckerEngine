@@ -1,5 +1,15 @@
 # Same-version dependency overlays
 
+## OpenVDB 12.0.1 CPU / NanoVDB
+
+[OpenVDB overlay](openvdb/README.md) comes from official registry
+`f38855d514df2b21c2e911a6c6865703abb8da15`. Its latest `12.0.1#0` version is
+already present in the project's original fixed baseline, which stays unchanged.
+The `voxel-vdb` feature disables CUDA/intrinsics and installs the CPU converter and
+portable NanoVDB headers. No unrelated dependency or profiling tool upgrade is needed.
+
+## Tracy 0.14.1
+
 Copied from microsoft/vcpkg commit `33d78c1ed898a06938f31312167c7abefd229455`,
 `ports/tracy` (Tracy 0.14.1). The upstream port and its patches are preserved.
 The only port change adds `-DTRACY_ENABLE=ON`: this Tracy release defaults that
