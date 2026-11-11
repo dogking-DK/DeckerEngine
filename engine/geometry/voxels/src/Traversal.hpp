@@ -90,6 +90,14 @@ Result<QueryResult> traverse(const Ray& world_ray, const Domain& domain,
         while (axis < 3 && before[axis] == after[axis]) ++axis;
         if (axis == 3) return {};
         const bool leaving = a != 0;
+        // A simultaneous internal cell-plane crossing does not define a surface normal.
+        for (int candidate = axis; candidate < 3; ++candidate) {
+            if (before[candidate] == after[candidate]) continue;
+            auto neighbor = leaving ? before : after;
+            const bool outward = leaving ? ray.direction[candidate] > 0 : ray.direction[candidate] < 0;
+            neighbor[candidate] += outward ? 1 : -1;
+            if (read(neighbor) == 0) { axis = candidate; break; }
+        }
         const bool positive = leaving ? ray.direction[axis] > 0 : ray.direction[axis] < 0;
         Vec3d normal = Vec3d::Zero();
         normal[axis] = positive ? 1 : -1;

@@ -8,6 +8,23 @@ namespace dk::render {
 class AtmosphereSky;
 class CloudTextures;
 class CloudShadowMap;
+class VoxelGpuGrid;
+struct VoxelMaterial { Vec3f base_color=Vec3f::Ones(); float metallic=0,roughness=1; };
+// Palette is borrowed only for the render call; the frame owns its uploaded copy.
+struct VoxelInstance {
+    EntityId entity;
+    std::shared_ptr<const VoxelGpuGrid> grid;
+    Transformd world;
+    std::span<const VoxelMaterial> palette;
+};
+enum class VoxelShading { unlit, directional };
+struct VoxelRenderSettings {
+    VoxelShading shading=VoxelShading::unlit;
+    Vec3f light_direction{0,0,1}; // Unit direction towards the source, in world space.
+    Vec3f irradiance=Vec3f::Ones();
+    std::uint64_t payload_bytes=256ull*1024*1024;
+    std::uint32_t maximum_regions=1024*1024;
+};
 struct CloudCompositionSettings;
 struct CloudOptimizedSettings;
 enum class CloudHistoryReset { none, new_view, disabled, resize, projection, camera, scene, content, quality, time, failure };
@@ -28,8 +45,9 @@ struct RenderSettings {
     Vec3f clear_rgb = Vec3f::Zero(); // Linear HDR color.
     float exposure = 1;
     bool capture_plan = false;
-    bool sky_diffuse = true; // Used by lit paths; anchor-local sky irradiance.
+    bool sky_diffuse = true; // Used by atmosphere lit paths; anchor-local sky irradiance.
     bool linear_readback = false; // Diagnostic: <= 65536 pixels, before exposure.
+    bool depth_readback = false; // Diagnostic: final D32, <= 65536 pixels.
 };
 enum class CloudRenderMode { reference, temporal };
 struct EnvironmentRenderSettings {
@@ -59,6 +77,7 @@ struct FrameInfo {
     std::uint64_t revision = 0, frame = 0;
     std::uint32_t width = 0, height = 0;
     std::size_t draw_count = 0;
+    std::size_t voxel_count = 0;
 };
 // Shared immutable result metadata; GPU completion is explicit. Views borrow this owner.
 class RenderFrame final {
@@ -70,6 +89,7 @@ public:
     [[nodiscard]] Result<bool> wait(graphics::SubmissionQueue&, std::uint64_t timeout_ns = std::numeric_limits<std::uint64_t>::max()) const;
     [[nodiscard]] Result<void> read_rgba8(std::span<std::byte> destination) const;
     [[nodiscard]] Result<void> read_linear_rgba32f(std::span<std::array<float,4>> destination) const;
+    [[nodiscard]] Result<void> read_depth32f(std::span<float> destination) const;
     // Only nonzero cloud frames with diagnostics enabled: cloud L.rgb / Tc.a,
     // or mixed T.rgb / extinction-weighted cloud distance in metres in alpha.
     [[nodiscard]] Result<void> read_cloud_rgba32f(std::span<std::array<float,4>> destination) const;
@@ -96,6 +116,9 @@ public:
         const std::filesystem::path& shader_directory);
     [[nodiscard]] Result<RenderFrame> render(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
         const RenderSettings& = {});
+    // Explicit programmatic mesh/voxel composition; no atmosphere/cloud combination.
+    [[nodiscard]] Result<RenderFrame> render_voxels(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
+        std::span<const VoxelInstance>, const VoxelRenderSettings& = {}, const RenderSettings& = {});
     // Explicit Lambert path. Snapshot environment must match the RenderScene exactly.
     // A disabled scene uses unlit; requires DK_BUILD_RENDER_ATMOSPHERE when enabled.
     [[nodiscard]] Result<RenderFrame> render_sunlight(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
@@ -120,7 +143,8 @@ public:
 private:
     [[nodiscard]] Result<RenderFrame> render_impl(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
         const RenderSettings&, const AtmosphereSky*, const AtmosphereSettings* = nullptr,
-        const CloudTextures* = nullptr, const CloudCompositionSettings* = nullptr, const CloudOptimizedSettings* = nullptr, const CloudShadowMap* = nullptr);
+        const CloudTextures* = nullptr, const CloudCompositionSettings* = nullptr, const CloudOptimizedSettings* = nullptr, const CloudShadowMap* = nullptr,
+        std::span<const VoxelInstance> = {}, const VoxelRenderSettings* = nullptr);
     explicit ScenePipeline(std::shared_ptr<detail::PipelineState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::PipelineState> state_;
 };

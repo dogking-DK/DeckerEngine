@@ -6,6 +6,9 @@
 #include <dk/profiling/Profiler.hpp>
 #include <algorithm>
 #include <bit>
+#ifdef DK_RENDER_VOXELS
+#include "VoxelComposition.hpp"
+#endif
 #ifdef DK_RENDER_SUNLIGHT
 #include <dk/render/Atmosphere.hpp>
 #include "SkyDiffuse.hpp"
@@ -53,6 +56,10 @@ struct PipelineState {
     std::array<Program,2> aerial;
     Sampler aerial_sampler;
     Buffer identity;
+    Program depth_readback;
+#ifdef DK_RENDER_VOXELS
+    std::shared_ptr<VoxelPrograms> voxels;
+#endif
     Program cloud_program;
     std::array<Program,3> cloud_optimized;
     std::filesystem::path directory;
@@ -69,6 +76,10 @@ struct PipelineState {
 struct FrameState {
     FrameInfo info;
     std::size_t color = 0, linear_readback = 0;
+    std::size_t depth_readback=0,voxel_status=0;
+#ifdef DK_RENDER_VOXELS
+    std::vector<std::shared_ptr<const VoxelGpuGrid>> voxel_grids;
+#endif
     std::array<std::size_t,2> cloud_readback{};
     std::size_t cloud_statistics=0;
     CloudFrameInfo cloud_info;
@@ -103,6 +114,7 @@ struct Draw {
     Buffer lighting;
     Transformd world;
     bool double_sided=false;
+    float metallic=0;
 };
 struct Inputs {
     explicit Inputs(memory::ResourceHandle heap)
@@ -134,6 +146,7 @@ void resolve(Inputs& result,const RenderView& view,const GpuAssets& assets) {
                     if (m == found->materials().end()) throw Error{ErrorCode::invalid_state,"GPU material reference missing"};
                     material = &*m;
                     draw.double_sided=material->double_sided;
+                    draw.metallic=material->metallic;
                     if (material->alpha_mode == AlphaMode::blend)
                         throw Error{ErrorCode::not_supported,"scene pipeline supports opaque and alpha mask materials only"};
                     if (material->base_color_texture) {
@@ -432,6 +445,24 @@ graph::Use use(graph::ResourceId id,vk::PipelineStageFlags2 stages,vk::AccessFla
     vk::ImageLayout layout=vk::ImageLayout::eUndefined,bool overwrite=false,bool depth=false) {
     return {id,{{stages,access,layout},0,VK_WHOLE_SIZE,depth ? depth_range : color_range,overwrite}};
 }
+#ifdef DK_RENDER_VOXELS
+void resolve_directional(Inputs& inputs,const VoxelRenderSettings& settings,detail::PipelineState& state) {
+    struct Lighting { std::array<std::array<float,4>,3> normal{}; std::array<float,4> light{},energy{}; };
+    static_assert(sizeof(Lighting)==80);
+    for(auto& draw:inputs.draws) {
+        if(!draw.primitive->has_normals || draw.metallic!=0) throw Error{ErrorCode::not_supported,"Simple directional mesh lighting requires normals and nonmetallic material"};
+        const auto normal=take(detail::normal_matrix(draw.world)); Lighting p;
+        for(int r=0;r<3;++r) for(int c=0;c<3;++c) p.normal[r][c]=float(normal(r,c));
+        for(int c=0;c<3;++c) {
+            if(p.normal[0][c]==0 && p.normal[1][c]==0 && p.normal[2][c]==0) throw Error{ErrorCode::invalid_argument,"Directional normal underflows float"};
+            p.light[c]=settings.light_direction[c]; p.energy[c]=settings.irradiance[c];
+        }
+        draw.lighting=take(state.factory.create_buffer({sizeof(p),vk::BufferUsageFlagBits::eUniformBuffer,BufferMemory::upload}));
+        check(draw.lighting.write(0,std::as_bytes(std::span{&p,1})));
+    }
+    for(auto& draw:inputs.draws) { inputs.buffers.push_back(&draw.lighting); draw.lighting_index=inputs.buffers.size(); }
+}
+#endif
 struct Context {
     detail::PipelineState& pipeline;
     const Inputs& inputs;
@@ -439,6 +470,11 @@ struct Context {
     std::uint32_t width, height;
     std::size_t hdr, depth, ldr, white;
     std::size_t composed=0,linear_readback=0,parameters=0;
+    std::size_t depth_values=0,depth_readback=0;
+    bool directional=false;
+#ifdef DK_RENDER_VOXELS
+    detail::VoxelComposition* voxels=nullptr;
+#endif
     std::array<std::size_t,3> atmosphere_luts{};
     std::array<std::size_t,2> volumes{},cloud_images{},cloud_readback{};
     const CloudTextures* clouds=nullptr;
@@ -455,6 +491,9 @@ Result<void> clear_pass(graph::PassContext& pass,void* pointer) {
     check(pass.clear(c.ldr,vk::ClearColorValue{std::array<float,4>{0,0,0,1}},color_range));
     check(pass.clear(c.white,vk::ClearColorValue{std::array<float,4>{1,1,1,1}},color_range));
     if(c.optimized) check(pass.fill(c.statistics));
+#ifdef DK_RENDER_VOXELS
+    if(c.voxels && !c.voxels->entries.empty()) check(pass.fill(c.voxels->status_index));
+#endif
     return {};
 }
 Result<void> geometry_pass(graph::PassContext& pass,void* pointer) {
@@ -471,11 +510,15 @@ Result<void> geometry_pass(graph::PassContext& pass,void* pointer) {
     white = take(c.pipeline.factory.create_view(*take(pass.image(c.white))));
     auto encoder = take(pass.begin_rendering(desc));
     for (const auto& draw : c.inputs.draws) {
-        check(encoder.bind_pipeline(lit ? (depth_only ? c.pipeline.sunlight_depth : c.pipeline.sunlight) :
-            (depth_only ? (draw.masked ? c.pipeline.mask : c.pipeline.depth) : c.pipeline.opaque)));
+        const auto* pipeline=lit ? (depth_only ? &c.pipeline.sunlight_depth : &c.pipeline.sunlight) :
+            (depth_only ? (draw.masked ? &c.pipeline.mask : &c.pipeline.depth) : &c.pipeline.opaque);
+#ifdef DK_RENDER_VOXELS
+        if(c.directional) pipeline=depth_only ? &c.voxels->programs->directional_depth : &c.voxels->programs->directional;
+#endif
+        check(encoder.bind_pipeline(*pipeline));
         check(encoder.vertex_buffer(0,*take(pass.buffer(draw.vertices))));
         check(encoder.index_buffer(*take(pass.buffer(draw.indices)),vk::IndexType::eUint32));
-        if (depth_only && !draw.masked && !lit) check(encoder.push_constants(vk::ShaderStageFlagBits::eVertex,0,std::as_bytes(std::span{draw.push})));
+        if (depth_only && !draw.masked && !lit && !c.directional) check(encoder.push_constants(vk::ShaderStageFlagBits::eVertex,0,std::as_bytes(std::span{draw.push})));
         else {
             const auto& view = draw.texture ? draw.texture->view : white;
             const auto& sampler = draw.texture ? draw.texture->sampler : c.pipeline.white_sampler;
@@ -492,9 +535,15 @@ Result<void> geometry_pass(graph::PassContext& pass,void* pointer) {
                     writes[count++]={6,0,ImageBinding{c.inputs.shadow ? &shadow : &white}};
                 }
             }
-            const auto& layout=lit ? (depth_only ? c.pipeline.sunlight_depth_layout : c.pipeline.sunlight_layout) :
-                (depth_only ? c.pipeline.mask_layout : c.pipeline.opaque_layout);
-            auto bindings = take(c.pipeline.factory.create_bindings(layout,0,std::span{writes}.first(count)));
+            const auto* layout=lit ? (depth_only ? &c.pipeline.sunlight_depth_layout : &c.pipeline.sunlight_layout) :
+                (depth_only ? &c.pipeline.mask_layout : &c.pipeline.opaque_layout);
+#ifdef DK_RENDER_VOXELS
+            if(c.directional) {
+                writes[count++]={2,0,BufferBinding{take(pass.buffer(draw.lighting_index))}};
+                layout=depth_only ? &c.voxels->programs->directional_depth_layout : &c.voxels->programs->directional_layout;
+            }
+#endif
+            auto bindings = take(c.pipeline.factory.create_bindings(*layout,0,std::span{writes}.first(count)));
             const std::array sets{&bindings}; check(encoder.bind_sets(sets));
             check(encoder.push_constants(vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,0,std::as_bytes(std::span{draw.push})));
         }
@@ -606,6 +655,27 @@ Result<void> copy_pass(graph::PassContext& pass,void* pointer) {
     if(c.cloud_readback[0]) for(unsigned i=0;i<2;++i)
         check(pass.copy_to_buffer(c.cloud_images[i],c.cloud_readback[i],{0,0,0,0,c.width,c.height}));
     if(c.statistics_readback) check(pass.copy_buffer(c.statistics,c.statistics_readback,sizeof(CloudTraceStatistics)));
+    if(c.depth_readback) check(pass.copy_buffer(c.depth_values,c.depth_readback,std::uint64_t(c.width)*c.height*4));
+#ifdef DK_RENDER_VOXELS
+    if(c.voxels && !c.voxels->entries.empty()) check(pass.copy_buffer(c.voxels->status_index,c.voxels->status_readback_index,4));
+#endif
+    return {};
+}
+Result<void> depth_readback_pass(graph::PassContext& pass,void* pointer) {
+    auto& c=*static_cast<Context*>(pointer);
+    auto depth=take(c.pipeline.factory.create_view(*take(pass.image(c.depth)),{vk::ImageViewType::e2D,depth_range}));
+    const std::array writes{BindingWrite{0,0,ImageBinding{&depth}},BindingWrite{1,0,BufferBinding{take(pass.buffer(c.depth_values))}}};
+    auto set=take(c.pipeline.factory.create_bindings(c.pipeline.depth_readback.layout,0,writes));
+    auto encoder=take(pass.compute()); check(encoder.bind_pipeline(c.pipeline.depth_readback.pipeline));
+    const std::array<std::uint32_t,4> extent{c.width,c.height,0,0}; check(encoder.push_constants(vk::ShaderStageFlagBits::eCompute,0,std::as_bytes(std::span{extent})));
+    const std::array sets{&set}; check(encoder.bind_sets(sets)); return encoder.dispatch({(c.width+7)/8,(c.height+7)/8,1});
+}
+Result<void> voxel_frame_status(const detail::FrameState& state) {
+    if(!state.voxel_status) return {};
+    auto buffer=state.execution.buffer(state.voxel_status); if(!buffer) return std::unexpected(buffer.error());
+    std::uint32_t status=0;
+    if(auto read=(*buffer)->read(0,std::as_writable_bytes(std::span{&status,1})); !read) return read;
+    if(status) return std::unexpected(Error{ErrorCode::invalid_argument,"Voxel GPU frame failed with status mask "+std::to_string(status)});
     return {};
 }
 }
@@ -624,7 +694,7 @@ Result<void> validate_render_settings(const RenderView& view,const RenderSetting
     const auto& desc = view.description();
     if (!view.scene() || !desc.width || !desc.height ||
         std::uint64_t{desc.width}*desc.height > std::numeric_limits<std::size_t>::max()/4 ||
-        (settings.linear_readback && std::uint64_t{desc.width}*desc.height>65536) ||
+        ((settings.linear_readback || settings.depth_readback) && std::uint64_t{desc.width}*desc.height>65536) ||
         !std::isfinite(settings.exposure) || settings.exposure < 0 || !settings.clear_rgb.allFinite() || (settings.clear_rgb.array()<0).any())
         return std::unexpected(Error{ErrorCode::invalid_argument,"render requires a scene, addressable extent and finite nonnegative color/exposure"});
     return {};
@@ -674,6 +744,15 @@ Result<ScenePipeline> ScenePipeline::create(memory::ResourceHandle heap,Submissi
 }
 Result<RenderFrame> ScenePipeline::render(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings) {
     return render_impl(queue,view,assets,settings,nullptr);
+}
+Result<RenderFrame> ScenePipeline::render_voxels(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,
+    std::span<const VoxelInstance> instances,const VoxelRenderSettings& voxels,const RenderSettings& settings) {
+#ifdef DK_RENDER_VOXELS
+    return render_impl(queue,view,assets,settings,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,instances,&voxels);
+#else
+    static_cast<void>(queue); static_cast<void>(view); static_cast<void>(assets); static_cast<void>(instances); static_cast<void>(voxels); static_cast<void>(settings);
+    return std::unexpected(Error{ErrorCode::not_supported,"Voxel composition requires DK_BUILD_RENDER_VOXELS"});
+#endif
 }
 Result<RenderFrame> ScenePipeline::render_sunlight(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings,const CloudShadowMap* shadow) {
     return render_impl(queue,view,assets,settings,view.scene().environment().enabled ? &sky : nullptr,nullptr,nullptr,nullptr,nullptr,shadow);
@@ -833,7 +912,7 @@ Result<RenderFrame> ScenePipeline::render_atmosphere(SubmissionQueue& queue,cons
     const bool enabled=view.scene().environment().enabled;
     return render_impl(queue,view,assets,settings,enabled ? &sky : nullptr,enabled ? &atmosphere : nullptr,nullptr,nullptr,nullptr,shadow);
 }
-Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings,const AtmosphereSky* sky,const AtmosphereSettings* atmosphere,const CloudTextures* clouds,const CloudCompositionSettings* cloud_settings,const CloudOptimizedSettings* optimized,const CloudShadowMap* shadow) {
+Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const RenderSettings& settings,const AtmosphereSky* sky,const AtmosphereSettings* atmosphere,const CloudTextures* clouds,const CloudCompositionSettings* cloud_settings,const CloudOptimizedSettings* optimized,const CloudShadowMap* shadow,std::span<const VoxelInstance> voxel_instances,const VoxelRenderSettings* voxel_settings) {
     DK_PROFILE_ZONE("render.scene");
     if (!state_ || state_->heap.state()!=memory::ResourceState::open || queue.stats().closed || queue.stats().device_lost)
         return std::unexpected(Error{ErrorCode::invalid_state,"scene pipeline, memory or queue is unavailable"});
@@ -851,6 +930,27 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
     try {
         const auto heap=state_->heap;
         { auto guard=take(queue.begin()); check(guard.retain(state_->identity)); }
+#ifdef DK_RENDER_VOXELS
+        std::unique_ptr<detail::VoxelComposition> voxels;
+        if(voxel_settings) {
+            detail::validate_voxel_settings(*voxel_settings);
+            if(view.scene().environment().enabled || view.scene().environment().clouds.enabled || sky || atmosphere || clouds || shadow)
+                throw Error{ErrorCode::not_supported,"Voxel composition supports Unlit/simple directional only; atmosphere/clouds are not supported"};
+            if(!voxel_instances.empty() || voxel_settings->shading==VoxelShading::directional) {
+                if(!state_->voxels) state_->voxels=detail::create_voxel_programs(heap,state_->factory,state_->directory);
+                voxels=detail::prepare_voxels(queue,view,voxel_instances,*voxel_settings,state_->voxels);
+            }
+        }
+#else
+        static_cast<void>(voxel_instances); static_cast<void>(voxel_settings);
+#endif
+        if(settings.depth_readback && !state_->depth_readback.pipeline) {
+            auto code=take(compile_shader({state_->directory/"depth-readback.slang","computeMain",ShaderStage::compute},heap));
+            auto shader=take(state_->factory.create_shader(code)); const std::array shaders{&shader};
+            auto layout=take(state_->factory.create_pipeline_layout(shaders));
+            auto pipeline=take(state_->factory.create_compute_pipeline({&shader,&layout}));
+            state_->depth_readback={std::move(layout),std::move(pipeline)};
+        }
         if(shadow && (!sky || (atmosphere && !atmosphere->surface_lighting))) throw Error{ErrorCode::invalid_argument,"Cloud shadow requires active surface sunlight"};
 #ifdef DK_RENDER_CLOUDS
         if(shadow) {
@@ -867,6 +967,9 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
         if(shadow) throw Error{ErrorCode::not_supported,"Cloud shadow requires Clouds"};
 #endif
         Inputs inputs{heap}; resolve(inputs,view,assets);
+#ifdef DK_RENDER_VOXELS
+        if(voxels && voxel_settings->shading==VoxelShading::directional) resolve_directional(inputs,*voxel_settings,*state_);
+#endif
         Buffer aerial_uniform,cloud_uniform,reconstruction_uniform;
         CloudFrameInfo cloud_info;
 #ifdef DK_RENDER_CLOUDS
@@ -918,6 +1021,10 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
         if(shadow) { frame->shadow=*shadow; frame->shadow_generation=shadow->generation(); }
 #endif
         frame->info={view.scene().id(),view.scene().revision(),view.description().frame,width,height,inputs.draws.size()};
+        frame->info.voxel_count=voxel_instances.size();
+#ifdef DK_RENDER_VOXELS
+        if(voxels) frame->voxel_grids=voxels->owners;
+#endif
         auto graph=take(graph::Graph::create(heap));
         const auto readback=take(graph.declare_buffer("RGBA8 readback",{vk::DeviceSize{width}*height*4,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
         Vector<graph::ExternalBinding> external(0,memory::Allocator<graph::ExternalBinding>{heap});
@@ -972,6 +1079,17 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             }
         }
 #endif
+        graph::ResourceId depth_values{},depth_readback{};
+        std::size_t depth_values_index=0;
+        if(settings.depth_readback) {
+            depth_values_index=graph.counts().buffers;
+            depth_values=take(graph.declare_buffer("final D32 values",{std::uint64_t(width)*height*4,vk::BufferUsageFlagBits::eStorageBuffer|vk::BufferUsageFlagBits::eTransferSrc}));
+            frame->depth_readback=graph.counts().buffers;
+            depth_readback=take(graph.declare_buffer("final D32 readback",{std::uint64_t(width)*height*4,vk::BufferUsageFlagBits::eTransferDst,BufferMemory::readback}));
+        }
+#ifdef DK_RENDER_VOXELS
+        if(voxels) { voxels->declare_buffers(graph,external); frame->voxel_status=voxels->status_readback_index; }
+#endif
         const auto image_base=graph.counts().buffers;
         const auto hdr=take(graph.declare_image("linear HDR",{width,height,vk::Format::eR32G32B32A32Sfloat,
             vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc}));
@@ -981,6 +1099,10 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled}));
         const auto white=take(graph.declare_image("default white",{1,1}));
         Context context{*state_,inputs,settings,width,height,image_base,image_base+1,image_base+2,image_base+3};
+        context.depth_values=depth_values_index; context.depth_readback=frame->depth_readback;
+#ifdef DK_RENDER_VOXELS
+        context.voxels=voxels.get(); context.directional=voxel_settings && voxel_settings->shading==VoxelShading::directional;
+#endif
         context.clouds=clouds; context.cloud_parameters=cloud_parameters; context.cloud_readback=frame->cloud_readback;
         context.optimized=optimized!=nullptr; context.reconstruction_parameters=reconstruction_parameters;
         context.statistics=statistics_index; context.statistics_readback=frame->cloud_statistics;
@@ -991,6 +1113,9 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             use(ldr,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal,true),
             use(white,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal,true)};
         if(optimized) clear_uses.push_back(use(statistics_id,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eUndefined,true));
+#ifdef DK_RENDER_VOXELS
+        if(voxels && !voxels->entries.empty()) clear_uses.push_back(use(voxels->status_id,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eUndefined,true));
+#endif
         static_cast<void>(take(graph.add_pass({"clear targets",clear_uses})));
         geometry.push_back(use(depth,depth_stages,depth_access,vk::ImageLayout::eDepthStencilAttachmentOptimal,false,true));
         geometry.push_back(use(white,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal));
@@ -1023,7 +1148,10 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             geometry.push_back(use(id,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal));
         }
         geometry.push_back(use(hdr,vk::PipelineStageFlagBits2::eColorAttachmentOutput,color_access,vk::ImageLayout::eColorAttachmentOptimal));
-        static_cast<void>(take(graph.add_pass({"opaque",geometry})));
+        const auto opaque_pass=take(graph.add_pass({"opaque",geometry})); static_cast<void>(opaque_pass);
+#ifdef DK_RENDER_VOXELS
+        if(voxels) voxels->add_passes(graph,hdr,depth,context.hdr,context.depth,opaque_pass);
+#endif
         auto final_hdr=hdr;
         if(atmosphere && !clouds) {
             constexpr auto compute=vk::PipelineStageFlagBits2::eComputeShader;
@@ -1122,6 +1250,13 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             }
         }
 #endif
+        std::size_t depth_pass=0;
+        if(settings.depth_readback) {
+            depth_pass=graph.counts().passes;
+            const std::array uses{use(depth,vk::PipelineStageFlagBits2::eComputeShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal,false,true),
+                use(depth_values,vk::PipelineStageFlagBits2::eComputeShader,vk::AccessFlagBits2::eShaderStorageWrite,vk::ImageLayout::eUndefined,true)};
+            static_cast<void>(take(graph.add_pass({"final depth diagnostic",uses})));
+        }
         const std::array tone_uses{use(final_hdr,vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal),
             use(ldr,vk::PipelineStageFlagBits2::eColorAttachmentOutput,color_access,vk::ImageLayout::eColorAttachmentOptimal)};
         static_cast<void>(take(graph.add_pass({"tone mapping",tone_uses})));
@@ -1133,6 +1268,16 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             read_uses.push_back(use(linear_readback,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eUndefined,true));
             check(graph.mark_output(linear_readback));
         }
+        if(settings.depth_readback) {
+            read_uses.push_back(use(depth_values,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead));
+            read_uses.push_back(use(depth_readback,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eUndefined,true)); check(graph.mark_output(depth_readback));
+        }
+#ifdef DK_RENDER_VOXELS
+        if(voxels && !voxels->entries.empty()) {
+            read_uses.push_back(use(voxels->status_id,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead));
+            read_uses.push_back(use(voxels->status_readback_id,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eUndefined,true)); check(graph.mark_output(voxels->status_readback_id));
+        }
+#endif
 #ifdef DK_RENDER_CLOUDS
         if(context.cloud_readback[0]) for(unsigned i=0;i<2;++i) {
             read_uses.push_back(use(cloud_outputs[i],vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead,vk::ImageLayout::eTransferSrcOptimal));
@@ -1151,16 +1296,22 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
         if (settings.capture_plan) frame->report=take(graph::format_plan(plan));
         Vector<graph::PassCallback> callbacks(0,memory::Allocator<graph::PassCallback>{heap});
         callbacks={{0,record<clear_pass>,&context},{1,record<geometry_pass>,&context},{2,record<geometry_pass>,&context}};
+#ifdef DK_RENDER_VOXELS
+        if(voxels) voxels->add_callbacks(callbacks);
+#endif
         if(atmosphere && !clouds) { callbacks.push_back({3,record<aerial_pass>,&context}); callbacks.push_back({4,record<aerial_pass>,&context}); }
 #ifdef DK_RENDER_CLOUDS
         if(clouds && !optimized) callbacks.push_back({3,record<cloud_pass>,&context});
         if(optimized) for(unsigned i=0;i<3;++i) callbacks.push_back({3+i,record<reconstruction_pass>,&context});
 #endif
+        if(settings.depth_readback) callbacks.push_back({depth_pass,record<depth_readback_pass>,&context});
         callbacks.push_back({callbacks.size(),record<tone_pass>,&context}); callbacks.push_back({callbacks.size(),record<copy_pass>,&context});
         Vector<graph::FinalAccess> finals(0,memory::Allocator<graph::FinalAccess>{heap});
         finals={{0,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}},
             {context.ldr,{{vk::PipelineStageFlagBits2::eFragmentShader,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal}}}};
         if(settings.linear_readback) finals.push_back({context.linear_readback,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}});
+        if(settings.depth_readback) finals.push_back({context.depth_readback,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}});
+        if(frame->voxel_status) finals.push_back({frame->voxel_status,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}});
         if(context.cloud_readback[0]) for(unsigned i=0;i<2;++i)
             finals.push_back({context.cloud_readback[i],{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}});
         if(context.statistics_readback) finals.push_back({context.statistics_readback,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}});
@@ -1188,10 +1339,13 @@ Result<CloudTraceStatistics> RenderFrame::read_cloud_statistics() const {
 Submission RenderFrame::submission() const noexcept { return state_ ? state_->execution.submission() : Submission{}; }
 Result<bool> RenderFrame::wait(SubmissionQueue& queue,std::uint64_t timeout) const {
     if (!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty render frame"});
-    return queue.wait(submission(),timeout);
+    auto waited=queue.wait(submission(),timeout); if(!waited || !*waited) return waited;
+    if(auto valid=voxel_frame_status(*state_); !valid) return std::unexpected(valid.error());
+    return true;
 }
 Result<void> RenderFrame::read_rgba8(std::span<std::byte> destination) const {
     if (!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty render frame"});
+    if(auto valid=voxel_frame_status(*state_); !valid) return valid;
     if (destination.size()!=std::uint64_t{state_->info.width}*state_->info.height*4)
         return std::unexpected(Error{ErrorCode::invalid_argument,"frame readback byte count differs"});
     auto buffer=state_->execution.buffer(0); if (!buffer) return std::unexpected(buffer.error());
@@ -1199,9 +1353,17 @@ Result<void> RenderFrame::read_rgba8(std::span<std::byte> destination) const {
 }
 Result<void> RenderFrame::read_linear_rgba32f(std::span<std::array<float,4>> destination) const {
     if(!state_ || !state_->linear_readback) return std::unexpected(Error{ErrorCode::invalid_state,"linear readback was not enabled"});
+    if(auto valid=voxel_frame_status(*state_); !valid) return valid;
     if(destination.size()!=std::uint64_t{state_->info.width}*state_->info.height)
         return std::unexpected(Error{ErrorCode::invalid_argument,"linear readback pixel count differs"});
     auto buffer=state_->execution.buffer(state_->linear_readback); if(!buffer) return std::unexpected(buffer.error());
+    return (*buffer)->read(0,std::as_writable_bytes(destination));
+}
+Result<void> RenderFrame::read_depth32f(std::span<float> destination) const {
+    if(!state_ || !state_->depth_readback) return std::unexpected(Error{ErrorCode::invalid_state,"depth readback was not enabled"});
+    if(auto valid=voxel_frame_status(*state_); !valid) return valid;
+    if(destination.size()!=std::uint64_t(state_->info.width)*state_->info.height) return std::unexpected(Error{ErrorCode::invalid_argument,"depth readback pixel count differs"});
+    auto buffer=state_->execution.buffer(state_->depth_readback); if(!buffer) return std::unexpected(buffer.error());
     return (*buffer)->read(0,std::as_writable_bytes(destination));
 }
 Result<void> RenderFrame::read_cloud_rgba32f(std::span<std::array<float,4>> destination) const {
@@ -1220,6 +1382,7 @@ Result<void> RenderFrame::read_medium_rgba32f(std::span<std::array<float,4>> des
 }
 Result<const Image*> RenderFrame::color() const {
     if (!state_) return std::unexpected(Error{ErrorCode::invalid_state,"empty render frame"});
+    if(auto valid=voxel_frame_status(*state_); !valid) return std::unexpected(valid.error());
     return state_->execution.image(state_->color);
 }
 std::string_view RenderFrame::plan_text() const noexcept { return state_ ? state_->report.text() : std::string_view{}; }

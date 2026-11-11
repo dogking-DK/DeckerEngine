@@ -847,6 +847,20 @@ if(TARGET dk_editor_app AND TARGET dk_render_atmosphere AND TARGET dk_scripting_
 endif()
 
 if(TARGET dk_render_voxels AND TARGET dk_asset_voxel_importers)
+    if(TARGET dk_render_pipeline)
+        add_executable(dk_voxel_raster_probe VoxelRasterProbe.cpp)
+        target_link_libraries(dk_voxel_raster_probe PRIVATE dk::render_pipeline dk::render_voxels dk::asset_voxel_importers)
+        target_include_directories(dk_voxel_raster_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
+        target_compile_definitions(dk_voxel_raster_probe PRIVATE DK_RENDER_SHADER_DIR="${PROJECT_SOURCE_DIR}/shaders/render"
+            DK_VOXEL_ARTIFACT_DIR="${CMAKE_CURRENT_BINARY_DIR}/voxel-artifacts")
+        dk_target_defaults(dk_voxel_raster_probe)
+        dk_deploy_slang(dk_voxel_raster_probe)
+        foreach(mode composition lifetime)
+            add_test(NAME dk.voxels.raster_${mode}_required COMMAND dk_voxel_raster_probe ${mode})
+            set_tests_properties(dk.voxels.raster_${mode}_required PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
+                ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+        endforeach()
+    endif()
     add_executable(dk_voxel_gpu_probe VoxelGpuProbe.cpp)
     target_link_libraries(dk_voxel_gpu_probe PRIVATE dk::render_voxels dk::asset_voxel_importers dk::graphics_shaders)
     target_include_directories(dk_voxel_gpu_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src" "${PROJECT_SOURCE_DIR}/tests/unit")

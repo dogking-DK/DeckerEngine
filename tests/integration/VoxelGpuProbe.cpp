@@ -168,9 +168,10 @@ void numeric(memory::ResourceHandle heap,SubmissionQueue& q) {
         auto gpu=take(cache->prepare(q,source));
         const std::array rays{geometry::Ray{{1.5,3.5,3.5},{1,0,0}},geometry::Ray{{7.5,3.5,3.5},{1,0,0}},geometry::Ray{{1.5,2.5,2.5},{1,0,0}},
             geometry::Ray{{-1,-1,-1},{1,1,1}},geometry::Ray{{-1,0,4},{1,0,0}},geometry::Ray{{8,2,2},{-1,0,0}},
-            geometry::Ray{{-1,2.5,2.5},{1,0,0},2,10},geometry::Ray{{-1,2.5,2.5},{1,0,0},0,1}};
+            geometry::Ray{{-1,2.5,2.5},{1,0,0},2,10},geometry::Ray{{-1,2.5,2.5},{1,0,0},0,1},geometry::Ray{{1,.5,9},{1,0,-1}}};
         const auto r=read(q,take(query.trace(q,gpu,rays)));
         for (std::size_t i=0;i<r.size();++i) compare(r[i],take(source.nearest(rays[i])).hit,i);
+        require(r.back().face==static_cast<unsigned>(vx::Face::positive_z),"Internal grid plane supplied the surface normal");
     }
     {
         const std::array blocks{VoxelBlock{{-2,1,0},1,1,false}}; VoxelBuildOptions options;

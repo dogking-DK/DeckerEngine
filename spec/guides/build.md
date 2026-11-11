@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-11-11T17:42:27+08:00"
+updated_at: "2026-11-11T19:38:00+08:00"
 ---
 
 # 构建与依赖配置
@@ -133,7 +133,18 @@ cmake --preset windows-voxels-gpu -DDK_WARNINGS_AS_ERRORS=ON
 ```
 
 诊断产物位于该构建树的 `tests/integration/voxel-artifacts`：SPIR-V、来源/布局反射 JSON 与 640×480 PPM。
-它们来自逐像素 GPU 命中读回；mesh 深度/HDR 合成、Editor/capture 接入仍按后续阶段推进。
+它们来自逐像素 GPU 命中读回；Editor/capture 接入仍按后续阶段推进。
+
+`windows-voxels-raster` 继承上述配置并增加 Scene/RenderData/RenderResources/RenderPipeline，
+用程序化实例验证 mesh/voxel 深度与 HDR 合成，不启用大气/云、Editor、CUDA 或 RT。
+
+```powershell
+cmake --preset windows-voxels-raster -DDK_WARNINGS_AS_ERRORS=ON
+& ./scripts/verify.ps1 -BuildDir out/build/windows-voxels-raster -Target dk_voxel_raster_probe -TestRegex '^dk\.voxels\.raster_.*_required$' -Reason 'M23.4 合成与在途寿命真实 GPU 验收'
+```
+
+两项 required 测试不允许缺环境跳过；同目录生成 `voxel-mixed-perspective.ppm`、`voxel-mixed-orthographic.ppm` 和 Graph 计划。
+程序化调用与限制见[渲染指南](render.md#m234-程序化体素合成)。
 
 稠密隔离配置只选择 `dk_voxel_tests`。CPU 与 GPU 查询的 target/验证范围分别见[CPU 契约](../design/render-voxels.md#m232-cpu-实施契约)、[GPU 契约](../design/render-voxels.md#m233-gpu-实施契约)。
 `windows-scripting` 继承 windows-dev 并启用 `DK_BUILD_SCRIPTING_LUAU`，要求 Scene/Framework Runtime，自动选择 scripting feature，提供 `dk::scripting_luau` 和 runner 的 `--script FILE.luau`；见 [脚本指南](scripting.md)。

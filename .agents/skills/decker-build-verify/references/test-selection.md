@@ -89,6 +89,7 @@
 | M23.2 稠密体素 DDA、独立面 oracle、边界/仿射/额度 | dk_voxel_tests | `^dk\.voxels\.dense `；`windows-voxels-dense` 无 VDB/GPU |
 | M23.2 OpenVDB→NanoVDB CPU 转换、稀疏查询、tile/负坐标/失败/快照 | dk_voxel_tests、dk_voxel_sparse_tests | `^dk\.voxels\.`；`windows-voxels` 无 CUDA/Vulkan；不表示 Slang/GPU 已通过 |
 | M23.3 NanoVDB 上传、PNanoVDB/Slang、共享 HDDA、离屏与在途寿命 | dk_voxel_gpu_probe | `^dk\.voxels\.(slang_compute\|spirv_validation\|gpu_.*_required)$`；`windows-voxels-gpu`，需 spirv-val；真实 GPU/validation/sync，禁跳过，不要求 RT |
+| M23.4 mesh/voxel 深度/HDR、方向光、曝光/tone 与失败发布 | dk_voxel_raster_probe | `^dk\.voxels\.raster_.*_required$`；`windows-voxels-raster`，真实 GPU/validation/sync，禁跳过；旧 mesh 回归另选 dk_render_pipeline_probe |
 | 编辑器拾取、Gizmo、相机真实输入和 runner 重载 | dk_editor_app、dk_run | `^dk\.editor\.interaction_gpu_validation$`（gpu label；77 为跳过） |
 | 编辑器真实窗口、Console 输入/历史/粘贴/组合输入/基础与嵌套补全/实体资产候选/诊断与键鼠、场景预览与保存重载 | dk_editor_app | `^dk\.editor\.workbench_gpu_validation$`（gpu label；77 为跳过） |
 | CLI 版本 | dk_run | `^dk\.bootstrap\.version$` |

@@ -85,6 +85,7 @@ TEST_CASE("inactive constant tiles normalize without expansion or internal faces
     REQUIRE(grid->bytes().size() < 8192);
     REQUIRE(grid->value({-4096, 0, 0}) == 1);
     REQUIRE(grid->value({4095, 4095, 4095}) == 2);
+    REQUIRE(grid->maximum_value() == 2);
     REQUIRE(grid->value({4096, 0, 0}) == 0);
     // Starts inside the first tile; the material/tile boundary at -0.5 is not a surface.
     auto result = grid->nearest({{-1, 0, 0}, {1, 0, 0}});
@@ -126,6 +127,8 @@ TEST_CASE("leaf tile transitions hollow regions and boundaries preserve surface 
     auto corner = grid->nearest({{-1, -1, -1}, {1, 1, 1}}).value();
     REQUIRE(corner.hit); REQUIRE(corner.hit->face == vx::Face::negative_x);
     REQUIRE(corner.hit->distance == 1);
+    const auto planar=grid->nearest({{1,.5,9},{1,0,-1}}).value();
+    REQUIRE(planar.hit); REQUIRE(planar.hit->face==vx::Face::positive_z);
     REQUIRE_FALSE(grid->nearest({{-1, 0, 4}, {1, 0, 0}})->hit);
     auto from_hole = grid->nearest({{7.5, 3.5, 3.5}, {1, 0, 0}}).value();
     REQUIRE(from_hole.hit); REQUIRE(from_hole.hit->distance == .5);
@@ -230,6 +233,7 @@ TEST_CASE("empty grids and concurrent snapshots require no mutable tree", "[voxe
     auto empty = build_voxel_grid({});
     REQUIRE(empty);
     REQUIRE(empty->statistics().active_voxels == 0);
+    REQUIRE(empty->maximum_value() == 0);
     REQUIRE_FALSE(empty->nearest({{-1, 0, 0}, {1, 0, 0}})->hit);
     const std::array blocks{VoxelBlock{{0, 0, 0}, 8, 1, false}};
     auto retained = build_voxel_grid(blocks).value();

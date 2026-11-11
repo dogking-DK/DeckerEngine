@@ -42,6 +42,7 @@ struct SparseStorage {
     Domain domain;
     Transformd corner_to_local;
     SparseStatistics statistics;
+    std::uint32_t maximum_value=0;
 };
 struct SparseFactory {
     static SparseGrid publish(std::shared_ptr<const SparseStorage> storage) { return SparseGrid(std::move(storage)); }

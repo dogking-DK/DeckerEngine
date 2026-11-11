@@ -25,6 +25,14 @@ bool dkTransition(inout DkVoxelBuffer buf, inout pnanovdb_readaccessor_t acc, fl
     while (axis < 3 && before[axis] == after[axis]) ++axis;
     if (axis == 3) return false;
     bool leaving = a != 0;
+    // Prefer a genuinely exposed face over a simultaneous internal cell plane.
+    for(uint candidate=axis;candidate<3;++candidate) {
+        if(before[candidate]==after[candidate]) continue;
+        int3 neighbor=leaving ? before : after;
+        bool outward=leaving ? direction[candidate]>0 : direction[candidate]<0;
+        neighbor[candidate]+=outward ? 1 : -1;
+        if(dkValue(buf,acc,neighbor,params)==0) { axis=candidate; break; }
+    }
     bool positive = leaving ? direction[axis] > 0 : direction[axis] < 0;
     float3 n = float3(0); n[axis] = positive ? 1 : -1;
     float3 world = float3(dot(params.normalRows[0].xyz,n), dot(params.normalRows[1].xyz,n), dot(params.normalRows[2].xyz,n));

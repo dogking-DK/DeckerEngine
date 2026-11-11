@@ -95,6 +95,14 @@ TEST_CASE("dense affine instances preserve ray parameter and inverse transpose n
     REQUIRE_FALSE(grid.nearest(ray, Transformd::from_trs(singular).value()));
 }
 
+TEST_CASE("dense external normals ignore internal grid plane ties", "[voxels]") {
+    const std::vector<std::uint32_t> cells(64,1);
+    const auto grid=vx::DenseGrid::build({{0,0,0},{4,4,4},cells,1}).value();
+    const auto entry=grid.nearest({{1,.5,5},{1,0,-1}}).value();
+    REQUIRE(entry.hit); CHECK(entry.hit->face==vx::Face::positive_z); CHECK(entry.hit->normal==Vec3d::UnitZ());
+    const auto exit=grid.nearest({{1,.5,1},{1,0,-1}}).value();
+    REQUIRE(exit.hit); CHECK(exit.hit->face==vx::Face::negative_z); CHECK(exit.hit->normal==-Vec3d::UnitZ());
+}
 TEST_CASE("dense DDA matches independent exposed face oracle", "[voxels]") {
     std::mt19937 random(2302);
     std::uniform_real_distribution<double> position(-3.7, 6.3), direction(-1, 1);

@@ -1,7 +1,7 @@
 ---
 module: render-voxels
 created_at: "2026-11-11T14:51:58+08:00"
-updated_at: "2026-11-11T18:45:00+08:00"
+updated_at: "2026-11-11T19:38:00+08:00"
 status: accepted
 ---
 
@@ -13,7 +13,7 @@ status: accepted
 支持透视/正交相机、网格模型混合遮挡、版本化资产、Editor 拾取及可等待截图。
 采用两条后端路线：光栅侧的 compute HDDA/深度合成，以及现有 GPU 路径追踪器中的原生 AABB/intersection + HDDA 求交。
 阶段、依赖和实施状态由 [Roadmap M23](../roadmap.md#m23实体体素渲染)维护。
-本文 accepted 表示采用方案；CPU 与 GPU compute 查询的实施证据分别见 [0160](../development/0160-voxel-cpu-sparse.md)、[0161](../development/0161-voxel-gpu-hdda.md)。mesh 合成、原生 RT、正式资产和命令仍按后续阶段推进。
+本文 accepted 表示采用方案；CPU、GPU compute 查询与 mesh 合成的实施证据分别见 [0160](../development/0160-voxel-cpu-sparse.md)、[0161](../development/0161-voxel-gpu-hdda.md)、[0162](../development/0162-voxel-raster-composition.md)。原生 RT、正式资产和命令仍按后续阶段推进。
 
 OpenVDB 负责 CPU 稀疏构建和 `.vdb` 导入，NanoVDB 连续缓冲区作为 CPU/GPU 运行时快照；首期静态拓扑、整份替换。
 保留稠密整数网格、逐格 DDA 和独立外露面 oracle 作为正确性参考，生产渲染不将稀疏数据展开成完整 3D 纹理。
@@ -83,7 +83,8 @@ CPU PathReference 只依赖纯 CPU 查询；GPU Pathtracing 私有消费 NanoVDB
 不把近裁面或起点当作伪命中；命中颜色取表面实心侧的材质。
 
 平行轴不做除零；整数网格边界按射线前进方向选择初始单元。边/角同时越界时同时推进对应轴，
-法线面按固定 X、Y、Z 优先级决胜；零长度的擦边接触不算穿入体素。
+法线面优先在实心侧单元的实际外露邻面中按 X、Y、Z 决胜，避免把同时穿越的内部格面当作表面法线；
+若退化的对角空/实交界没有该单元的单一外露邻面，按同时跨轴 X、Y、Z 兜底。零长度的擦边接触不算穿入体素。
 法线经逆转置变换并归一化，保留负缩放语义。CPU/compute 相同 t 时按稳定 EntityId、单元坐标字典序决胜。
 硬件 RT 对不同 primitive 精确同 t 的选择不承诺遍历顺序；共面重叠案例检查等价最近集合，不要求与光栅 tie-break 一致。
 循环须单调推进 t，边界步数采用受检算术；M23.2/3 固定有限域/层级对应的工作额度和超限诊断，不因稀疏跨度大而溢出或无界循环。
@@ -224,7 +225,7 @@ RT 的 AABB/build 输入、BLAS/TLAS、SBT、网格/材质和通用命中映射�
 ## M23.3 GPU 实施契约
 
 本阶段新增可选 `dk_render_voxels`，PUBLIC 为 CPU sparse 查询与 Device，PRIVATE 为 Graph/Shaders；
-程序化射线批次尚不消费 Scene/RenderData，正式场景提取/合成仍在 M23.4/5。
+程序化射线批次不消费 Scene/RenderData；M23.4 由 Pipeline 组合程序化实例，正式资产提取仍在 M23.5。
 GPU 网格整份上传到只读 storage buffer，保留 CPU 快照、generation 和 upload submission；提交成功后发布候选，
 等待完成与发布区分。缓存记录旧代直到调用者和在途工作均释放，失败不消耗 generation 或替换 current。
 上传额度计算所有存活 GPU 网格、所有未完成上传的 staging payload 和本次候选/staging；
@@ -243,13 +244,42 @@ HDDA 放在无入口的共享 Slang 文件中，compute 使用它；intersection
 实例/半格变换在 CPU double 合成并将射线逆变换一次，保持 t；GPU 用上传的逆转置矩阵生成世界法线。
 输出为每射线 64 字节：status/value/face、signed cell、normal/t、访问/跳过数与采样 dimension/active；
 诊断采样直接读取 PNanoVDB，表面查询沿用 M23.2 的空/实交界、同时跨轴和擦边契约。
-64³/640×480 的透视/正交离屏诊断以此 buffer 为依据，深度/HDR 与 mesh 合成留在 M23.4。
+64³/640×480 的透视/正交离屏诊断以此 buffer 为依据，深度/HDR 与 mesh 合成见下文 M23.4 契约。
 
 运行前固定门槛：非退化 hit/cell/value/face 完全一致，距离 `1e-4*max(1,abs(t))`，
 法线逐分量绝对误差 ≤1e-4；解析边角单列，图像按每像素命中/材质及距离/法线比较，不用扩大边缘遮罩掩盖失败。
 至少覆盖六类小网格对独立外露面 oracle、64³ 640×480、非零 inactive tile/零 active、所有树层级、
 负坐标/半格/仿射/内部与裁剪、稀疏大跨度跳过、坏地址/额度/提交失败/旧代/在途释放与 closing。
 验证要求真实 Vulkan GPU、validation 与同步检查；CPU/Slang 编译成功不能代替执行。记录见 [0161](../development/0161-voxel-gpu-hdda.md)。
+
+## M23.4 合成实施契约
+
+`ScenePipeline::render_voxels` 接受程序化实例列表（稳定 EntityId、共享 VoxelGpuGrid、仿射世界变换、线性 palette），
+不新增 Scene 持久组件/文件协议。Pipeline 可选 PRIVATE 链接 render_voxels；未构建该模块时显式拒绝此入口。
+最多 64 实例、1 Mi 像素，按 EntityId 排序并拒绝重复 ID；同 t 保留先前实例，mesh/voxel 相同 float 投影深度保留 mesh。
+CPU 构建快照记录实际最大值，提交前检查 palette 覆盖整个网格，包含不可见值；palette 颜色/metallic/roughness 在 [0,1]，方向光拒绝 metallic。
+实例先按八角包围盒保守视锥剔除；可见实例 GPU 使用 M23.3 共享 HDDA，按帧同一 Graph 内逐实例累积最近表面，禁止主机逐像素查询或读回后合成。
+每像素 64-byte 中间结果包含线性颜色、投影深度、法线/t、cell、材质和稳定实例序号；每帧默认 256 MiB 的体素附加 payload 额度。
+额度覆盖最近表面、状态/状态读回、每实例 224-byte 参数与 palette；不代替基础图像、NanoVDB 上传或进程峰值额度。
+
+相机沿用有限 forward-Z、刚体世界变换和现有透视/居中正交支持域（含翻转 Y 和透视偏移）；
+CPU double 合成逆 grid/entity/camera 变换及每像素步长，GPU 先计算相对视口中心的像素坐标，再生成索引射线；避免分别计算 NDC 导致同斜率轴产生不同舍入。
+t 为相机前向距离，near/far 直接裁剪。
+索引精度域/异常推进约束继承 M23.3。只接受显式 Unlit 或简单方向光，方向给出指向光源的单位向量，
+mesh/voxel 同用 `baseColor * irradiance * max(dot(N,L),0) / pi`，mesh 仍叠加 emissive；方向光 mesh 要求顶点法线与非金属材质，退化插值法线的漫反射贡献为零。
+不引入几何阴影、天空漫射或空气/云；启用环境的体素入口拒绝整帧。Unlit 原有 mesh 入口保持不变。
+
+顺序固定为 clear → mesh depth/opaque → voxel HDDA → voxel D32/HDR composite → 可选深度诊断 → tone/readback。
+合成采用全屏 fragment 的 SV_Depth 与 D32 Less/test/write，HDR Load 保留已绘 mesh；最终复用既有曝光/Reinhard/sRGB，alpha=1。
+读回线性 HDR 与最终 D32 用于数值验收（最多 65536 像素）；D32 通过后续只读 sampled compute 导出，避免同 pass 读写深度或扩大底层传输接口。
+GPU 地址/数值/工作量错误按 `1 << status_code` 汇总为帧状态，非有限或下溢为零的射线显式失败；wait、颜色发布和读回均检查，错误不能返回漏画的成功图像。
+所有候选、回调及 Frame 容器在提交前准备；失败不提交半帧、不改变旧帧/CPU 场景/GpuAssets/VoxelGpuCache；在途 graph 与帧保活网格、palette、shader 和图像。
+按需创建的 Pipeline shader 程序可缓存复用，即使后续输入校验失败；这不发布新的帧或修改资产代际。
+
+运行前固定验收：两种投影均逐像素对 CPU 几何/显示参考，RGB 容差 1 byte、HDR 分量误差 2e-4×max(1,abs(value))、D32 绝对误差 2e-6；
+边界采用解析用例，不追加遮罩。覆盖双向遮挡、精确同深度 mesh 优先、稳定实例 tie/输入乱序、近远裁剪/内部起点、半格/负缩放/剪切、
+Unlit/方向光/曝光、空列表退化/旧 mesh/alpha mask、resize/重复帧、拒绝/submit/在途/closing。required GPU/validation/sync 禁跳过。
+实施与真实证据见 [0162](../development/0162-voxel-raster-composition.md)。
 
 ## Slang 兼容性门禁
 
@@ -314,7 +344,7 @@ RT 路线 required 用例不得以缺少硬件静默跳过；非 RT 配置另外
 依赖的 CUDA 打包问题在 M23.2 解决，CPU 格式/语义先冻结；Slang compute 与 intersection 分别在 M23.3/8 设阻断门禁。
 完整源描述/产物 v1 在 M23.5 冻结，包含两后端共同材质；中间资源布局/精度在 M23.3 固定，
 intersection 属性/SBT 与 shader 产物版本在 M23.8 固定，RT 块布局/通用命中在 M23.9 固定，信号身份版本在 M23.10 固定；
-CPU 与 GPU compute 子集已按 M23.2/3 验收；下一步 M23.4 接 mesh 深度/HDR 合成，compute 通过不替代 intersection 或路径积分验收。
+CPU、GPU compute 与 mesh 深度/HDR 合成分别见 M23.2/3/4；下一步 M23.5 接正式文件资产，compute/合成通过不替代 intersection 或路径积分验收。
 阶段开始若发现底座缺口，应更新设计和必要前置，不隐式扩成全引擎重构。
 
 ## 相关记录
@@ -322,6 +352,7 @@ CPU 与 GPU compute 子集已按 M23.2/3 验收；下一步 M23.4 接 mesh 深�
 - [0159 M23.1 体素渲染正式计划](../development/0159-voxel-rendering-plan.md)
 - [0160 M23.2 CPU 体素参考与稀疏转换](../development/0160-voxel-cpu-sparse.md)
 - [0161 M23.3 NanoVDB GPU 上传与共享 HDDA](../development/0161-voxel-gpu-hdda.md)
+- [0162 M23.4 mesh/voxel 深度与 HDR 合成](../development/0162-voxel-raster-composition.md)
 - [架构](architecture.md)、[场景管线](render-pipeline.md)、[3D 资源](graphics-resources.md)、[Slang](graphics-shaders.md)
 - [原生 RT 底座](graphics-raytracing.md)、[路径追踪](render-pathtracing.md)、[ReSTIR](render-restir.md)、[信号](render-denoising.md)
 - [OpenVDB 数据/坐标语义](https://www.openvdb.org/documentation/doxygen/overview.html)、[NanoVDB FAQ](https://www.openvdb.org/documentation/doxygen/NanoVDB_FAQ.html)：上游能力说明不替代固定版本的引擎验收。

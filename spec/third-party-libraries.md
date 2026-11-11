@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-11-11T17:42:27+08:00"
+updated_at: "2026-11-11T19:38:00+08:00"
 status: accepted
 ---
 
@@ -38,6 +38,7 @@ Luau 此次单包替换使用固定的官方 Git registry（见下文），保�
 - Windows host/target triplet：`x64-windows`。
 - M23.2：2026-11-11 核验最新官方 OpenVDB 12.0.1#0，与原 baseline 一致；通过同源无 CUDA overlay 接入 CPU 转换/NanoVDB 查询，见 [0160](development/0160-voxel-cpu-sparse.md)。
 - M23.3：沿用上述固定来源，PNanoVDB 32.7.0 / Slang 2026.18 compute 编译、SPIR-V 与真实 GPU 上传/HDDA 验收通过，见 [0161](development/0161-voxel-gpu-hdda.md)；未新增 CUDA 或 RT 依赖。
+- M23.4：复用相同来源、ABI 和共享 HDDA，实现并验收 mesh/voxel 深度/HDR 与简单方向光合成，见 [0162](development/0162-voxel-raster-composition.md)；版本/baseline 未变，无 CUDA/RT 新依赖。
 - M4.1.1 的 assets feature 复用 nlohmann-json 3.12.0#2；资产底层同时复用既有 types/IO/Memory，
   无新包或版本变化，固定 baseline 不变；见 [0031](development/0031-asset-metadata-catalog.md)。
 - 最近接入：[0032](development/0032-asset-commit-recovery.md)，xxHash 0.8.4（BSD-2-Clause，port #0）。

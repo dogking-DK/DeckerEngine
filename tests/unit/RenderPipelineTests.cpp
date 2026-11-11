@@ -38,6 +38,7 @@ TEST_CASE("pipeline push transform rows preserve affine camera composition and r
 }
 TEST_CASE("empty render frame exposes no owners or pixels") {
     RenderFrame frame; CHECK_FALSE(frame); CHECK(frame.info().scene.is_nil()); CHECK(frame.info().draw_count==0);
+    CHECK(frame.info().voxel_count==0); CHECK_FALSE(frame.read_depth32f({}));
     CHECK(frame.plan_text().empty()); CHECK_FALSE(frame.color()); CHECK_FALSE(frame.read_rgba8({}));
 }
 TEST_CASE("orthographic environment accepts finite linear depth and parallel near plane rays") {
@@ -83,6 +84,8 @@ TEST_CASE("atmosphere perspective reconstructs physical distances and rejects am
     CHECK(validate_render_settings(fixture.view,settings));
     CHECK_FALSE(validate_render_settings(RenderView::create(fixture.scene,{257,256}).value(),settings));
     CHECK_FALSE(RenderFrame{}.read_linear_rgba32f({}));
+    settings.linear_readback=false; settings.depth_readback=true;
+    CHECK_FALSE(validate_render_settings(RenderView::create(fixture.scene,{257,256}).value(),settings));
 }
 
 TEST_CASE("atmosphere perspective accepts inclusive boundaries with reconstruction rounding") {

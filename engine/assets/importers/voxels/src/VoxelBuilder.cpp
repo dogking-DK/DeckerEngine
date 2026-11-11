@@ -58,6 +58,7 @@ Result<geometry::voxels::SparseGrid> detail::convert_openvdb(const openvdb::Grid
 
         // Validate the source before copying; inactive nonzero tiles must be included.
         std::uint64_t visits = 0;
+        std::uint32_t maximum_value=0;
         std::optional<Domain> occupied;
         for (auto it = input.tree().cbeginValueAll(); it; ++it) {
             if (++visits > options.limits.maximum_value_visits)
@@ -66,6 +67,7 @@ Result<geometry::voxels::SparseGrid> detail::convert_openvdb(const openvdb::Grid
             if (value < 0 || static_cast<std::uint32_t>(value) > options.palette_size)
                 return std::unexpected(Error{ErrorCode::invalid_argument, "OpenVDB value is outside the palette"});
             if (!value) continue;
+            maximum_value=std::max(maximum_value,static_cast<std::uint32_t>(value));
             openvdb::CoordBBox box; it.getBoundingBox(box);
             Domain domain;
             for (int i = 0; i < 3; ++i) { domain.minimum[i] = box.min()[i]; domain.maximum[i] = box.max()[i]; }
@@ -95,6 +97,7 @@ Result<geometry::voxels::SparseGrid> detail::convert_openvdb(const openvdb::Grid
         const auto* nano = storage->handle.grid<std::int32_t>();
         if (!nano) return std::unexpected(Error{ErrorCode::internal_error, "NanoVDB converter returned an incompatible grid"});
         storage->domain = domain;
+        storage->maximum_value=maximum_value;
         storage->corner_to_local = *corner_map;
         storage->statistics = {source_bytes, normalized_bytes, storage->handle.bufferSize(), visits, nano->activeVoxelCount(),
             {nano->tree().nodeCount(0), nano->tree().nodeCount(1), nano->tree().nodeCount(2)}};

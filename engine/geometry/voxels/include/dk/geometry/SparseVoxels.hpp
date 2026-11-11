@@ -16,6 +16,7 @@ struct SparseStatistics {
 class SparseGrid final {
 public:
     [[nodiscard]] std::uint32_t value(Coord) const noexcept;
+    [[nodiscard]] std::uint32_t maximum_value() const noexcept;
     [[nodiscard]] Result<QueryResult> nearest(const Ray&, const Transformd& local_to_world = {}, QueryLimits = {}) const;
     [[nodiscard]] const Domain& domain() const noexcept;
     [[nodiscard]] const Transformd& corner_to_local() const noexcept;

@@ -163,5 +163,6 @@
 | 0159 | [M23.1 体素计划、原生路径与 VDB 稀疏方案](0159-voxel-rendering-plan.md) | render-voxels、architecture、graphics-raytracing、graphics-shaders、render-pathtracing、render-pipeline、render-restir、render-denoising、assets-importers | completed |
 | 0160 | [M23.2 CPU 体素参考与稀疏转换](0160-voxel-cpu-sparse.md) | render-voxels、assets-importers、geometry-query | completed |
 | 0161 | [M23.3 NanoVDB GPU 上传与共享 HDDA](0161-voxel-gpu-hdda.md) | render-voxels、graphics-shaders | completed |
+| 0162 | [M23.4 mesh/voxel 深度与 HDR 合成](0162-voxel-raster-composition.md) | render-voxels、render-pipeline | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

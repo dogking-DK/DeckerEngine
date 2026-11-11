@@ -84,6 +84,18 @@
       }
     },
     {
+      "name": "windows-voxels-raster",
+      "inherits": "windows-voxels-gpu",
+      "displayName": "Mesh and NanoVDB depth/HDR composition without CUDA or RT",
+      "binaryDir": "${sourceDir}/out/build/windows-voxels-raster",
+      "cacheVariables": {
+        "DK_BUILD_SCENE": "ON",
+        "DK_BUILD_RENDER_DATA": "ON",
+        "DK_BUILD_RENDER_RESOURCES": "ON",
+        "DK_BUILD_RENDER_PIPELINE": "ON"
+      }
+    },
+    {
       "name": "windows-client",
       "inherits": "windows-bootstrap",
       "displayName": "Windows lightweight IPC client (no Runtime or Renderer)",

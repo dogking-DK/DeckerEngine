@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-03T15:28:09+08:00"
-updated_at: "2026-10-13T09:28:33+08:00"
+updated_at: "2026-11-11T19:38:00+08:00"
 ---
 
 # 场景数据、GPU 资源与离屏渲染
@@ -30,6 +30,27 @@ GPU 探针要求 Vulkan 设备和 Khronos validation layer，缺失返回 77（�
 本机旧 AMD 隐式层兼容处理与 [Graphics 指南](graphics.md) 相同，不能关闭 Khronos 层冒充验证通过。
 探针通过时核对 vertex/index/RGBA8 全字节、上传最终状态、重载和 pending 卸载，
 以及提交/预算失败后旧缓存不变，最终 GPU 与 Memory 分配回零。
+
+## M23.4 程序化体素合成
+
+使用[体素合成配置](build.md) `windows-voxels-raster`；入口见 [ScenePipeline.hpp](../../engine/render/pipeline/include/dk/render/ScenePipeline.hpp)，
+完整可运行夹具见 [VoxelRasterProbe.cpp](../../tests/integration/VoxelRasterProbe.cpp)。此阶段尚未接入 `.vdb` 文件资产、Editor 或 render.capture。
+
+先通过 CPU `build_voxel_grid` 获得不可变 SparseGrid，再由 `VoxelGpuCache::prepare` 上传。
+为每份实例提供稳定非空 EntityId、共享 VoxelGpuGrid、世界变换和 palette，调用
+`ScenePipeline::render_voxels(queue, view, mesh_assets, instances, voxel_settings, render_settings)`。
+palette 下标为网格离散值减一，必须覆盖整个网格的最大值；零值为空。palette 仅在调用期间借用，提交后帧保活其 GPU 副本。
+网格已有 corner-to-local 变换，实例 world 不要重复应用半格偏移。
+
+`VoxelShading::unlit` 显示线性基色；`directional` 对 mesh/voxel 共同使用 Lambert，
+`light_direction` 为世界空间指向光源的单位向量，`irradiance` 为非负线性能量，mesh emissive 保留。
+方向光要求 mesh 法线与非金属材质；拒绝大气/云组合，不产生几何阴影。
+曝光由 `RenderSettings::exposure` 控制，随后沿用 Reinhard/sRGB。
+
+每帧最多 64 实例、1 Mi 像素，默认额外 payload 额度 256 MiB。透视/正交均支持有限 near/far、内部起点与可逆仿射实例。
+等待 `frame.wait(queue)` 成功后读 `read_rgba8` 或 `color`；GPU 查询失败时这些入口拒绝发布结果。
+诊断可开启 `linear_readback` / `depth_readback`，分别使用 `read_linear_rgba32f` / `read_depth32f`，仅限最多 65536 像素。
+精确相同 float 深度保留 mesh；体素实例同 t 按稳定 EntityId 决定，输入顺序不影响结果。
 
 ## 数据提取
 

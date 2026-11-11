@@ -1,7 +1,7 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-11-11T16:28:53+08:00"
+updated_at: "2026-11-11T19:38:00+08:00"
 status: accepted
 ---
 
@@ -32,11 +32,11 @@ M15.3提供显式render_clouds(queue,view,assets,sky,textures,cloud_settings,set
 环境完整入口render_environment在实际非零云时走独立混合介质合成，接口、预算与失败边界见
 [云合成实施契约](render-clouds.md#m153-混合介质与图像合成实施契约)。零云走原M14；显式unlit/atmosphere诊断入口保持各自语义。
 
-## M23 光栅侧体素合成（设计）
+## M23 光栅侧体素合成
 
-当前管线尚无体素支持。[M23.3/4](../roadmap.md#m23实体体素渲染)采用混合光栅路线：
+[M23.3/4](../roadmap.md#m23实体体素渲染)采用混合光栅路线；M23.4 的入口/约束见[合成实施契约](render-voxels.md#m234-合成实施契约)：
 mesh 用现有 depth/opaque，体素通过 PNanoVDB/Slang accessor 读取 NanoVDB storage buffer，以 compute HDDA 查最近实体表面，再合入共享 HDR/深度并执行 tone。
-OpenVDB 只在 CPU 构建/导入，稠密 DDA 保留为正确性参考；M23.3 先通过固定 Slang 的编译/反射/真实 GPU 读取门禁。
+OpenVDB 只在 CPU 构建/导入，稠密 DDA 保留为正确性参考；固定 Slang 的 compute 门禁及合成实施证据见 [0161](../development/0161-voxel-gpu-hdda.md)、[0162](../development/0162-voxel-raster-composition.md)。
 HDDA 跨过空节点并细化到实体边界，不是固定步长密度积分；不全量密集化稀疏资产，不把每格转换为 mesh/draw，也不在此路径做多次光线反弹。
 
 Pass 顺序为 clear → mesh depth/opaque → voxel compute → voxel composite → tone/readback。
@@ -46,6 +46,8 @@ Graph 精确声明 NanoVDB 上传到 compute-read、中间资源和颜色/深度
 此路线不要求硬件 RT；材质显示范围为 Unlit/简单方向光，光栅大气/云组合仍后置。
 原生路径追踪通过 [Pathtracing](render-pathtracing.md#m23-原生体素几何接入设计) 独立积分，不能用本管线的像素合成代替反弹/阴影查询。
 两条路线共享 [体素数据和表面语义](render-voxels.md)，材质、光照能力和实际验收分别报告。
+`render_voxels` 为显式程序化入口，可选 PRIVATE 依赖 render_voxels；简单方向光同时作用于 mesh/voxel，独立于大气模块。
+RenderSettings 增加可选 depth_readback，RenderFrame 提供最终 D32 float 读回；体素帧在 wait/读取/color 发布时检查 GPU 状态，错误不修改输出。
 
 ## M16 独立路径追踪规划
 

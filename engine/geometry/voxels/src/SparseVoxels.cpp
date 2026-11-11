@@ -6,6 +6,7 @@ namespace dk::geometry::voxels {
 const Domain& SparseGrid::domain() const noexcept { return storage_->domain; }
 const Transformd& SparseGrid::corner_to_local() const noexcept { return storage_->corner_to_local; }
 const SparseStatistics& SparseGrid::statistics() const noexcept { return storage_->statistics; }
+std::uint32_t SparseGrid::maximum_value() const noexcept { return storage_->maximum_value; }
 std::span<const std::byte> SparseGrid::bytes() const noexcept {
     return {static_cast<const std::byte*>(storage_->handle.data()), static_cast<std::size_t>(storage_->handle.bufferSize())};
 }
