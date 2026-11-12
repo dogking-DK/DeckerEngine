@@ -8,6 +8,12 @@
 
 namespace dk::render {
 namespace detail { struct PathGpuState; struct PathGpuScene; struct PathGpuFrame; struct PathGpuImage; struct PathGpuCompleted; }
+// Logical buffer payload and AS requirements, not allocator/driver totals or exact peaks.
+// AABB input reports build payload, which may already have been retired.
+struct PathTraceGeometryMemory {
+    std::uint64_t triangles=0,nano=0,instances=0,blocks=0,palette=0,aabb_input=0;
+    std::uint64_t blas_storage=0,tlas_storage=0,as_scratch=0;
+};
 // Immutable queue-domain scene; CPU source owns provenance and complete world geometry.
 class PathTraceGpuScene final {
 public:
@@ -15,6 +21,7 @@ public:
     [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
     [[nodiscard]] graphics::Submission submission() const noexcept; // Empty scene needs no BUILD submission.
     [[nodiscard]] const PathTraceScene& source() const noexcept;
+    [[nodiscard]] PathTraceGeometryMemory memory_info() const noexcept;
 private:
     friend class PathTraceRenderer;
     explicit PathTraceGpuScene(std::shared_ptr<const detail::PathGpuScene> state) : state_(std::move(state)) {}
@@ -122,6 +129,7 @@ struct PathTraceDisplayFrame {
 struct PathTraceMemoryStats {
     graphics::AllocationBudgetStats owned;
     std::uint64_t device_allocation_bytes = 0, device_block_bytes = 0;
+    std::uint64_t sbt_region_bytes = 0; // Main Classic/ReSTIR regions; excludes padding and optional signal program.
 };
 // One queue, externally serialized. Two view slots, one progressive batch; no implicit waits.
 class PathTraceRenderer final {

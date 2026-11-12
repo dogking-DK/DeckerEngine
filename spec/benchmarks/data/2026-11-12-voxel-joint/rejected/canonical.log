@@ -1,0 +1,9 @@
+joint round 0 empty64
+layout 8
+layout 32
+layout 128
+joint round 0 sparse64
+layout 8
+layout 32
+layout pixel domain_max_x=63 size=640x480 ortho=0 pixel=139753 got=0.140598,0.424553,0.873426 expected=0.133493,0.39207,0.800339
+joint benchmark: pooled layout changed radiance

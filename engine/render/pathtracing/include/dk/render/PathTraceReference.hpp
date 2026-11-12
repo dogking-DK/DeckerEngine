@@ -39,6 +39,7 @@ struct PathTraceSceneLimits {
     std::size_t max_triangles = 4096, max_primitive_instances = 4096;
     std::size_t max_textures = 64, max_texture_bytes = 64*1024*1024;
     std::size_t max_voxel_instances = 256, max_voxel_bytes = 256*1024*1024, max_voxel_blocks = 1024*1024;
+    std::uint32_t voxel_block_edge = 8; // 8 native leaf/tile layout; optional aligned 32/128 pooling.
 };
 // Explicit desktop geometry capacity. CPU integration retains its separate work budget.
 [[nodiscard]] constexpr PathTraceSceneLimits desktop_path_scene_limits() {

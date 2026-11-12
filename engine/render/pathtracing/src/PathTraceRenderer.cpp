@@ -60,6 +60,7 @@ struct PathGpuGeometry {
     Buffer triangles;
     AccelerationStructure blas,tlas;
     std::array<Buffer,4> voxel_data;
+    std::uint64_t aabb_input_bytes=0;
     Vector<AccelerationStructure> voxel_blas;
     Submission built;
     explicit PathGpuGeometry(memory::ResourceHandle heap)
@@ -1282,6 +1283,10 @@ catch(const std::exception& error) { return std::unexpected(Error{ErrorCode::int
 PathTraceMemoryStats PathTraceRenderer::memory_stats(const SubmissionQueue& queue) const noexcept {
     PathTraceMemoryStats stats; if(state_) stats.owned=state_->budget->stats();
     VmaTotalStatistics total{}; vmaCalculateStatistics(queue.device().allocator(),&total);
+    if(state_) for(const auto* table:{&state_->table,&state_->restir_table}) {
+        const auto regions=table->regions();
+        stats.sbt_region_bytes+=regions.raygeneration.size+regions.miss.size+regions.hit.size+regions.callable.size;
+    }
     stats.device_allocation_bytes=total.total.statistics.allocationBytes; stats.device_block_bytes=total.total.statistics.blockBytes;
     return stats;
 }
@@ -1310,6 +1315,16 @@ Result<PathTraceFrame> PathTraceCompletedFrame::read_linear(SubmissionQueue& que
 catch(const std::exception& error) { return std::unexpected(Error{ErrorCode::internal_error,error.what()}); }
 
 Submission PathTraceGpuScene::submission() const noexcept { return state_ ? state_->geometry->built : Submission{}; }
+PathTraceGeometryMemory PathTraceGpuScene::memory_info() const noexcept {
+    PathTraceGeometryMemory info; if(!state_) return info;
+    const auto& g=*state_->geometry;
+    info.triangles=g.triangles.size(); info.nano=g.voxel_data[0].size(); info.instances=g.voxel_data[1].size();
+    info.blocks=g.voxel_data[2].size(); info.palette=g.voxel_data[3].size(); info.aabb_input=g.aabb_input_bytes;
+    info.blas_storage=g.blas.sizes().storage; info.tlas_storage=g.tlas.sizes().storage;
+    info.as_scratch=g.blas.sizes().scratch+g.tlas.sizes().scratch;
+    for(const auto& blas:g.voxel_blas) {info.blas_storage+=blas.sizes().storage;info.as_scratch+=blas.sizes().scratch;}
+    return info;
+}
 const PathTraceScene& PathTraceGpuScene::source() const noexcept { static const PathTraceScene empty; return state_ ? state_->source : empty; }
 Submission PathTraceFrame::submission() const noexcept { return state_ ? state_->ticket : Submission{}; }
 Result<std::optional<PathTraceGpuImage>> PathTraceFrame::read(SubmissionQueue& queue,std::stop_token stop) const try {

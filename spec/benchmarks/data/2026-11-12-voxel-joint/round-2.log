@@ -1,0 +1,48 @@
+joint round 2 empty64
+layout 8
+layout 32
+layout 128
+joint round 2 sparse64
+layout 8
+layout 32
+layout 128
+joint round 2 solid64
+layout 8
+layout 32
+layout 128
+joint round 2 empty128
+layout 8
+layout 32
+layout 128
+joint round 2 sparse128
+layout 8
+layout 32
+layout 128
+joint round 2 solid128
+layout 8
+layout 32
+layout 128
+joint round 2 empty256
+layout 8
+layout 32
+layout 128
+joint round 2 sparse256
+layout 8
+layout 32
+layout 128
+joint round 2 solid256
+layout 8
+layout 32
+layout 128
+joint round 2 islands16k
+layout 8
+layout 32
+layout 128
+joint round 2 root_tiles
+layout 8
+layout 32
+layout 128
+joint round 2 checker64
+layout 8
+layout 32
+layout 128

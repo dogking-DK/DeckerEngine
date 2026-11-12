@@ -1,7 +1,7 @@
 ---
 module: guide-voxels
 created_at: "2026-11-12T09:48:00+08:00"
-updated_at: "2026-11-12T16:55:54+08:00"
+updated_at: "2026-11-12T18:22:13+08:00"
 status: accepted
 ---
 
@@ -87,3 +87,22 @@ python scripts/benchmark-voxels.py --exe out/build/windows-voxels-raster/bin/Rel
 性能采集期间不要并发运行其他 GPU 测试；结果写入 `round-0/1/2.json`、`summary.json` 和 `summary.md`，失败不会被汇总成通过。
 已有原始数据可用 `--aggregate-only <round-0.json> <round-1.json> <round-2.json> --output <目录>` 独立复算，也支持 `.json.gz`；`--plot` 可选生成 SVG/PNG（需 matplotlib）。
 已归档的设备条件、完整表格和能力边界见 [2026-11-12 基线报告](../benchmarks/2026-11-12-voxel-raster.md)。
+
+## 联合质量、资源与性能基线
+
+M23.13 的 `dk_voxel_joint_benchmark` 复用上述光栅夹具，并装配同资产的原生路径。
+默认 RT 保留 8³ 叶块与非零常量 tile；显式 32/128 保守合并用于尺度对照，大 tile 不展开。
+两后端对同一 DenseGrid/解析 oracle 比较几何；光栅 Unlit 与四反弹路径的颜色和工作量不同，不把两列耗时比作同画质加速。
+
+```powershell
+./scripts/verify.ps1 -BuildDir out/build/windows-voxel-editor -Target @('dk_voxel_joint_benchmark','dk_voxel_sparse_tests','dk_voxel_path_tests') -TestRegex '^dk\.voxels\.(joint_gpu_required|joint_aggregation|sparse\.Pooled|path_cpu\.Pooled)' -Reason 'M23.13 joint quality and evidence validation'
+./scripts/verify.ps1 -BuildDir out/build/windows-voxel-editor -Configuration Release -Target dk_voxel_joint_benchmark -TestRegex '^dk\.voxels\.joint_aggregation$' -Reason 'M23.13 optimized benchmark build'
+python scripts/benchmark-voxel-joint.py --exe out/build/windows-voxel-editor/bin/Release/dk-voxel-joint-benchmark.exe --output out/benchmarks/voxel-joint --quality out/benchmarks/voxel-joint/quality.json --run-quality --plot
+```
+
+最后一条先使用同一源码/程序运行 required validation 质量门禁，然后串行执行三轮关闭 validation 的完整 Release 矩阵。
+保存全部样本、源码与程序 SHA-256、设备和 shader 指纹、原始统计均值/二阶矩及 95% 区间；缺轮、缺视图、来源混用、质量或资源回收失败均拒绝聚合。
+正式测量期间不要改源码/程序或并发其他引擎验证。GPU 时间戳、CPU 提交、读回、AS 构建与转换分开记录；内存逻辑载荷、AS 要求、VMA 和采样峰值各有边界。
+131072 格双岛仍记录原生路径精度域拒绝，完整联合矩阵采用 16384 格双岛；大跨度光栅证据继续见 M23.7，不能据此宣称任意跨度 RT 支持。
+
+`--plot` 需要 matplotlib，采集/聚合本身只用 Python 标准库；离线复算与最终边界见[联合交付报告](../benchmarks/2026-11-12-voxel-joint.md)。required 质量矩阵包含 9 输入，以及 sparse64/128/256、solid256 的两分辨率 11 spp 斜向边界回归。

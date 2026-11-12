@@ -1,18 +1,32 @@
 #include <dk/geometry/SparseVoxels.hpp>
 #include "NanoStorage.hpp"
 #include "Traversal.hpp"
+#include <set>
 
 namespace dk::geometry::voxels {
-Result<std::vector<Domain>> SparseGrid::surface_blocks(std::size_t maximum) const {
-    if (!maximum || maximum>1024*1024) return std::unexpected(Error{ErrorCode::invalid_argument,"Invalid voxel block budget"});
+Result<std::vector<Domain>> SparseGrid::surface_blocks(std::size_t maximum, std::uint32_t minimum_edge) const {
+    if (!maximum || maximum>1024*1024 || (minimum_edge!=8 && minimum_edge!=32 && minimum_edge!=128)) return std::unexpected(Error{ErrorCode::invalid_argument,"Invalid voxel block budget"});
     try {
         std::vector<Domain> blocks;
+        std::set<std::array<std::int32_t,6>> pooled;
         const auto append=[&](nanovdb::Coord origin,std::uint32_t dim) {
+            if(dim<minimum_edge) {
+                for(unsigned axis=0;axis<3;++axis) {
+                    const auto n=std::int64_t(origin[axis]),edge=std::int64_t(minimum_edge);
+                    origin[axis]=std::int32_t((n/edge-(n%edge<0))*edge);
+                }
+                dim=minimum_edge;
+            }
             Domain block;
             for (unsigned axis=0;axis<3;++axis) {
                 block.minimum[axis]=std::max(origin[axis],domain().minimum[axis]);
                 block.maximum[axis]=std::int32_t(std::min(std::int64_t(origin[axis])+dim-1,std::int64_t(domain().maximum[axis])));
                 if (block.minimum[axis]>block.maximum[axis]) return;
+            }
+            if(minimum_edge!=8) {
+                pooled.insert({block.minimum[0],block.minimum[1],block.minimum[2],block.maximum[0],block.maximum[1],block.maximum[2]});
+                if(pooled.size()>maximum) throw Error{ErrorCode::invalid_argument,"Voxel block budget exceeded"};
+                return;
             }
             if (blocks.size()==maximum) throw Error{ErrorCode::invalid_argument,"Voxel block budget exceeded"};
             blocks.push_back(block);
@@ -27,6 +41,7 @@ Result<std::vector<Domain>> SparseGrid::surface_blocks(std::size_t maximum) cons
             }
         };
         visit(visit,storage_->handle.grid<std::int32_t>()->tree().root());
+        for(const auto& b:pooled) blocks.push_back({{b[0],b[1],b[2]},{b[3],b[4],b[5]}});
         return blocks;
     } catch(const Error& error) { return std::unexpected(error); }
     catch(const std::bad_alloc&) { return std::unexpected(Error{ErrorCode::internal_error,"Voxel block allocation failed"}); }

@@ -47,40 +47,22 @@ void voxelIntersection() {
     int3 lower=voxelBlocks[block].xyz,upper=voxelBlocks[block+1].xyz;
     float3 origin=ObjectRayOrigin(),direction=ObjectRayDirection();
     if(!all(isfinite(origin)) || !all(isfinite(direction)) || any(abs(origin)>1048576) || any(abs(direction)>1048576)) { voxelError(1); return; }
-    float enter=RayTMin(),leave=RayTCurrent(); float3 entries=-3.402823466e38f;
-    for(uint axis=0;axis<3;++axis) {
-        // Half-open block ownership also applies to a ray parallel to an
-        // internal block plane. The full-grid query rejects exterior tangents.
-        if(direction[axis]==0) { if(origin[axis]<float(lower[axis]) || origin[axis]>=float(upper[axis])+1) return; }
-        else {
-            float a=(float(lower[axis])-origin[axis])/direction[axis],b=(float(upper[axis])+1-origin[axis])/direction[axis];
-            entries[axis]=min(a,b);
-            enter=max(enter,min(a,b)); leave=min(leave,max(a,b));
-        }
-    }
-    if(enter>leave) return;
-    // Rebase at the clipped block entry and snap crossed slab planes. Starting
-    // at a rounded t with the old origin can produce nextTime == time at an
-    // internal block plane even though the ray has crossed into the next cell.
-    float3 start=mad(direction,float3(enter),origin);
-    for(uint axis=0;axis<3;++axis) if(enter==entries[axis]) start[axis]=direction[axis]>0 ? float(lower[axis]) : float(upper[axis])+1;
     uint words,stride; voxelWords.GetDimensions(words,stride);
     if(stride!=4 || (meta.x&3) || (meta.y&3) || meta.x/4>words || meta.y/4>words-meta.x/4) { voxelError(2); return; }
     DkVoxelBuffer buf={voxelWords,meta.y,false,meta.x/4};
     DkVoxelParameters params=(DkVoxelParameters)0;
     params.lower=asint(voxelInstances[base+9]); params.upper=asint(voxelInstances[base+10]); params.control=uint4(1,meta.y,65536,0);
     params.normalRows[0]=float4(1,0,0,0); params.normalRows[1]=float4(0,1,0,0); params.normalRows[2]=float4(0,0,1,0);
-    // A clipped start may lie on a surface owned by the neighboring block.
-    // Skip that one endpoint; all interior surfaces belong to this block.
-    for(uint attempt=0;attempt<2;++attempt) {
-        params.control.w=attempt==0 ? 0 : 2;
-        DkVoxelRay ray=(DkVoxelRay)0; ray.origin=float4(start,0); ray.direction=float4(direction,max(0,leave-enter));
-        DkVoxelResult result=dkQueryVoxel(buf,ray,params);
-        if(result.meta.x>1) { voxelError(result.meta.x); return; }
-        if(result.meta.x==0) return;
-        if(all(result.cell.xyz>=lower) && all(result.cell.xyz<=upper)) {
-            VoxelAttributes attr={result.cell.xyz,result.meta.z,result.meta.y}; ReportHit(enter+result.normalT.w,0,attr); return;
-        }
+    // All block candidates traverse the same canonical full-grid prefix.
+    // Per-block rebasing/clipping changes floating-point boundary decisions
+    // and can hide a surface. The BVH still culls candidates; strict cell
+    // ownership ensures only the containing block may report the shared hit.
+    DkVoxelRay ray=(DkVoxelRay)0;
+    ray.origin=float4(origin,RayTMin()); ray.direction=float4(direction,RayTCurrent());
+    DkVoxelResult result=dkQueryVoxel(buf,ray,params);
+    if(result.meta.x>1) { voxelError(result.meta.x); return; }
+    if(result.meta.x==1 && all(result.cell.xyz>=lower) && all(result.cell.xyz<=upper)) {
+        VoxelAttributes attr={result.cell.xyz,result.meta.z,result.meta.y}; ReportHit(result.normalT.w,0,attr);
     }
 }
 [shader("closesthit")]

@@ -25,7 +25,8 @@ public:
     [[nodiscard]] std::span<const std::byte> bytes() const noexcept;
     // Layout v1: one conservative block per nonempty leaf or nonzero constant tile.
     // Inclusive cells, clipped to domain; does not expand constant tiles to voxels.
-    [[nodiscard]] Result<std::vector<Domain>> surface_blocks(std::size_t maximum_blocks = 1024*1024) const;
+    // Optional 32/128-cell aligned conservative pooling preserves larger constant tiles.
+    [[nodiscard]] Result<std::vector<Domain>> surface_blocks(std::size_t maximum_blocks = 1024*1024, std::uint32_t minimum_edge = 8) const;
 private:
     friend struct detail::SparseFactory;
     explicit SparseGrid(std::shared_ptr<const detail::SparseStorage> storage) : storage_(std::move(storage)) {}

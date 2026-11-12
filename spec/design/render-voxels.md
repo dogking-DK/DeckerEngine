@@ -1,7 +1,7 @@
 ---
 module: render-voxels
 created_at: "2026-11-11T14:51:58+08:00"
-updated_at: "2026-11-12T16:55:54+08:00"
+updated_at: "2026-11-12T18:22:13+08:00"
 status: accepted
 ---
 
@@ -13,7 +13,7 @@ status: accepted
 支持透视/正交相机、网格模型混合遮挡、版本化资产、Editor 拾取及可等待截图。
 采用两条后端路线：光栅侧的 compute HDDA/深度合成，以及现有 GPU 路径追踪器中的原生 AABB/intersection + HDDA 求交。
 阶段、依赖和实施状态由 [Roadmap M23](../roadmap.md#m23实体体素渲染)维护。
-本文 accepted 表示采用方案；CPU、GPU compute 查询与 mesh 合成的实施证据分别见 [0160](../development/0160-voxel-cpu-sparse.md)、[0161](../development/0161-voxel-gpu-hdda.md)、[0162](../development/0162-voxel-raster-composition.md)。M23.5 文件资产、缓存和 Scene/GPU 资源接入见 [0163](../development/0163-voxel-assets.md)；原生 RT 与上层命令闭环继续分阶段推进。
+本文 accepted 表示采用方案；CPU、GPU compute 查询与 mesh 合成的实施证据分别见 [0160](../development/0160-voxel-cpu-sparse.md)、[0161](../development/0161-voxel-gpu-hdda.md)、[0162](../development/0162-voxel-raster-composition.md)。M23.5 文件资产、缓存和 Scene/GPU 资源接入见 [0163](../development/0163-voxel-assets.md)；原生 RT、ReSTIR/信号、既有介质及双后端消费者已接通，最终联合交付见 [0171](../development/0171-voxel-joint-delivery.md) 与[报告](../benchmarks/2026-11-12-voxel-joint.md)。
 
 OpenVDB 负责 CPU 稀疏构建和 `.vdb` 导入，NanoVDB 连续缓冲区作为 CPU/GPU 运行时快照；首期静态拓扑、整份替换。
 保留稠密整数网格、逐格 DDA 和独立外露面 oracle 作为正确性参考，生产渲染不将稀疏数据展开成完整 3D 纹理。
@@ -122,7 +122,7 @@ M23.8–13 将体素作为既有路径追踪器的一种几何输入；不先转
 1. 按规范化占用的 tile/leaf 聚合体素块并生成资产局部 AABB，非空块进入 BLAS，实例进入与 mesh 共存的 TLAS；单块覆盖全网格可作为正确性基线。
    代理必须覆盖非零常量 tile，不能只枚举 leaf；巨大 tile 不展开为逐体素 AABB，变换后的盒取保守边界。
    块大小/布局在 M23.9 冻结并进入构建指纹，不能让性能调参改变体素表面语义；不为每个体素建立 BLAS。
-2. intersection shader 重新检查实际包围盒和当前射线区间，通过同一 NanoVDB buffer/accessor 在块内运行共享 Slang HDDA，报告真实空/实交界的 t 与单元/面属性。
+2. intersection shader 在当前射线区间通过同一 NanoVDB buffer/accessor 运行共享 Slang HDDA，严格按命中 cell 归属块报告真实空/实交界。M23.13 将原块内裁剪改为布局无关的完整网格遍历前缀，避免块入口浮点舍入改变表面；AABB 仍负责硬件候选剔除。
    块边界不是实体表面，须查询全网格邻格避免假面；边界面有唯一块所有权，不能漏面或重复报告。
    内部起点寻找离开实心区域的真实表面；不得把 AABB 命中直接当成体素命中。
 3. intersection 只报告交点和 hit attributes，不读写 ray payload；对应 closest-hit 将属性写入通用命中记录。
@@ -368,10 +368,10 @@ HDDA 调优限于不改变表面语义的冗余查值消除：单轴表面转换
 ## M23.9 Classic 路径实施契约
 
 - CPU `PathTraceScene::create` 消费已有 `CpuAsset::voxel`，冻结 grid/palette/实例变换；公开命中增加 geometry kind、voxel instance、signed cell/face/value。原 triangle 索引仅在 triangle 分支有效。共享材质/位置/法线适配器接入既有 NEE/BSDF/MIS/RR，不另建积分器。
-- RT block layout v1：非零常量 tile 保留其 8/128/4096 尺度，非空 leaf 产生一个 8³ 保守块；按规范化 NanoVDB 树枚举，不展开 tile。块坐标与网格域取交集。块的表面所有权按命中实心侧 cell 判定；HDDA 使用全网格邻格语义与块裁剪后的 t 区间，跨块不产生内部面。
+- RT block layout v1：非零常量 tile 保留其 8/128/4096 尺度，非空 leaf 产生一个 8³ 保守块；按规范化 NanoVDB 树枚举，不展开 tile。块坐标与网格域取交集。块的表面所有权按命中实心侧 cell 判定；HDDA 使用全网格邻格语义，跨块不产生内部面；M23.13 用统一遍历前缀替代按块裁剪 t 区间，见下节。
 - 每个 grid 的角坐标 AABB 进入 BLAS，`entity * corner_to_local` 进入 TLAS；多个实例共享 CPU 不可变网格。GPU 打包 NanoVDB 为受限 32-bit 字节子区间，独立 instance/block/palette storage buffers，所有范围、数量与分配预算先验检查。每次内容替换整份重建，成功提交后才发布缓存候选。
 - intersection 复用 `voxel-hdda.slang`，属性为 signed cell/face/value；radiance closest-hit 写入统一命中，visibility 只在真实表面提前终止。查询/地址/工作上限异常写入既有提交诊断，整帧失败，不当作背景。
-- RT 块入口先重定位并吸附实际穿越的 slab 平面，避免旧原点加裁剪 t 的舍入令 HDDA 停滞；只有起点表面属于邻块时，使用共享查询 mode 2 跳过该起点转换，随后仍按全网格占用遍历。compute 的 mode 0/1 保持不变。
+- M23.9 曾按 RT 块入口重定位/吸附 slab 平面并跳过邻块起点；M23.13 完整矩阵证明此优化依赖块尺度，已由统一 HDDA 前缀替代。compute 的 mode 0/1 与网格布局协议保持不变。
 - CPU 稀疏查询对独立外露面/三角化 oracle 验证。GPU 原点偏移在角坐标中按命中面与浮点误差推进，再变换到世界；拒绝 float 中塌缩的实例/坐标，不用固定世界 epsilon 跳过小单元。
 - CPU 体素上限及默认值为 256 个实例、256 MiB Nano 内容及 1M 代理块，可配置更低额度；每条稀疏查询最多 65536 regions，CPU 累计 region 工作另受现有 `max_triangle_tests` 额度约束。GPU 还受 AS/descriptor/storage 设备上限约束；域需可编码为 signed 21-bit，物体射线分量绝对值不超过 2²⁰，世界域不超过 1e6；float 往返误差不超过 1/16 cell，保守偏移需小于 1/8 cell，否则准备/整帧明确失败。这是数值域限制，编码范围不代表所有变换都受支持。
 - 首命中诊断保持既有 64-byte pixel/128-byte history；voxel 使用负的 instance/face tag，两个 float 槽以位模式无损保存三个 signed 21-bit cell。CPU 解码为类型化命中，不能把编码槽做浮点数值检查或 triangle 寻址。此编码仅属于帧诊断，不是 M23.10 持久表面身份。
@@ -405,6 +405,18 @@ HDDA 调优限于不改变表面语义的冗余查值消除：单轴表面转换
 - 验收使用后台真实 Editor GUI、Console、IPC 和独立 runner：同资产双后端、体素/mesh 混合拾取与 Frame/Gizmo/undo、透视/正交、四 DI/介质与固定 capture 线性结果对照、来源/内容替换失效、接受后源破坏、失败/取消/迟到/关闭保护。禁用设备 RT 验证能力拒绝及光栅可用，不能冒充非 RT 物理卡验收。同步命令参考和可执行示例，旧 mesh 与 M23.6 定向回归。
 
 实施和五项定向 GPU 验收证据见 [0170](../development/0170-voxel-path-consumers.md)，联合性能交付继续由 M23.13 承担。
+
+## M23.13 联合交付实施契约
+
+- 完整 Release 矩阵暴露按块重置/裁剪的舍入依赖：同一斜向射线在不同布局得到不同辐射值。交付版保留 BVH 块剔除及严格 cell 归属，在 intersection 中对同一 object ray 运行统一的完整网格 HDDA 前缀，只有所属块可报告最近表面。AABB 用一 ULP 外扩覆盖 float 边界，实际占用/容差不变；相同浮点 t 仍可跨过整数格面并受原区域预算约束。允许前缀重复遍历的成本由基线量化；更激进的块内裁剪优化必须重新证明完整图像一致性，不能通过放宽阈值交付。
+
+- 复用 M23.7 的版本化程序输入、独立 DenseGrid/解析盒体与两种投影；联合矩阵 v2 为 64³/128³/256³ 的空/稀疏/实心、64³ 棋盘、16384×8×8 双岛和大常量 root tile，共 12 项。原 131072 跨度双岛另测 RT 精度域拒绝并保留既有光栅证据，不把拒绝算作 RT 通过。大域不分配稠密数组。
+- 保持默认 RT 布局 v1（8³ 叶块与原生非零常量 tile）。显式 `voxel_block_edge` 仅允许 8/32/128，32/128 将较小块保守合并到对齐父块，保留更大 tile、裁剪有限域、去重且不重叠；交给同一 HDDA 查询真实占用。预算按最终块计数，非法参数/额度失败不修改 grid 或既有 PathTraceScene。布局进入实际块内容指纹；默认值和资产格式不变。是否更改默认必须依据完整质量与收益，候选无普遍收益时保留 8。
+- GPU 场景增加只读资源统计，分别报告 NanoVDB/实例/块/palette buffer、AABB 输入载荷、BLAS/TLAS storage 与 scratch 要求；renderer 报告 SBT region 字节。它们是逻辑载荷/驱动要求，不能冒充 VMA 分配、瞬态准确峰值或驱动总显存。另记录 VMA、budget 峰值、旧完成帧加在途候选、两代几何，以及释放后的计数；CPU 转换复用 1 ms 进程采样并明确下界。
+- 联合 GPU 质量门禁逐输入固定 1024 射线：compute HDDA 与 RT 主命中对同一 DenseGrid/解析 oracle，hit/cell/material/face 一致，距离 `1e-4*max(1,abs(t))`、法线 1e-4。小网格光栅颜色/深度沿用 M23.7；路径全尺寸固定 seed 的各布局输出比较 `2e-4*max(1,abs(reference))`，不要求 Unlit 与路径光照颜色相同。
+- 多反弹质量使用独立外露面三角化的 CPU 参考与 native/triangle GPU：Lambert/GGX、两种首表面、8 个固定 seed、每 seed 4096 spp、4 反弹、RR 关闭并显式匹配像素采样维度。逐 seed 均值差沿用 M23.9 的绝对 .006（RR .008），同时保存原始均值/二阶矩、8 seed 均值与 95% t 区间，不以统计均值掩盖逐项失败。
+- 性能关闭 validation，required 功能检查另运行并要求零错误/警告；使用 Release、640×480/1280×720、透视/正交、3 轮串行。设备预热 64 光栅帧与 32 路径帧并保留耗时；每视图首帧、2 预热和 8 稳态样本（路径每批 1 spp、4 反弹，完整 tile 组汇总时间戳）。CPU record/submit/wait/readback 与 GPU 时间分别记录，AS prepare/上传/build、转换、资源峰值分别列出，不报告 Editor FPS。不删慢样本，不预报加速。
+- 聚合脚本严格拒绝缺轮/缺布局/缺视图、混合设备/构建/源码/shader、无效时间戳、质量或释放失败；归档压缩原始数据、SHA-256 来源清单、统计表和可复算图。Slang compute/intersection、CPU-only、禁用 RT 与 RT 的现有门禁按影响复验，并引用仍有效的 M23.1–12 证据；最后同步能力/限制矩阵和 M23 父阶段状态。
 
 ## Slang 兼容性门禁
 
@@ -480,6 +492,7 @@ CPU、GPU compute 与 mesh 深度/HDR 合成分别见 M23.2/3/4；文件资产�
 - [0162 M23.4 mesh/voxel 深度与 HDR 合成](../development/0162-voxel-raster-composition.md)
 - [0163 M23.5 文件资产](../development/0163-voxel-assets.md)、[0164 M23.6 Editor/capture](../development/0164-voxel-editor-capture.md)
 - [0165 M23.7 光栅基线与 HDDA 调优](../development/0165-voxel-raster-baseline.md)
+- [0171 M23.13 联合交付](../development/0171-voxel-joint-delivery.md)、[质量/资源/性能报告](../benchmarks/2026-11-12-voxel-joint.md)
 - [架构](architecture.md)、[场景管线](render-pipeline.md)、[3D 资源](graphics-resources.md)、[Slang](graphics-shaders.md)
 - [原生 RT 底座](graphics-raytracing.md)、[路径追踪](render-pathtracing.md)、[ReSTIR](render-restir.md)、[信号](render-denoising.md)
 - [OpenVDB 数据/坐标语义](https://www.openvdb.org/documentation/doxygen/overview.html)、[NanoVDB FAQ](https://www.openvdb.org/documentation/doxygen/NanoVDB_FAQ.html)：上游能力说明不替代固定版本的引擎验收。

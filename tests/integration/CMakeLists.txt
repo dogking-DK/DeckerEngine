@@ -931,6 +931,23 @@ if(TARGET dk_render_voxels AND TARGET dk_asset_voxel_importers)
         find_package(Python3 3.11 COMPONENTS Interpreter REQUIRED)
         add_test(NAME dk.voxels.benchmark_aggregation COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/VoxelBenchmarkTest.py")
         set_tests_properties(dk.voxels.benchmark_aggregation PROPERTIES TIMEOUT 30 LABELS "cpu")
+        if(TARGET dk_render_pathtracing)
+            add_executable(dk_voxel_joint_benchmark VoxelJointBenchmark.cpp)
+            set_target_properties(dk_voxel_joint_benchmark PROPERTIES OUTPUT_NAME dk-voxel-joint-benchmark)
+            target_link_libraries(dk_voxel_joint_benchmark PRIVATE dk::render_pathtracing dk::render_pipeline dk::render_voxels dk::asset_voxel_importers dk::profiling dk::rtxdi_shaders OpenVDB::openvdb nlohmann_json::nlohmann_json Psapi)
+            target_include_directories(dk_voxel_joint_benchmark PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src" "${PROJECT_SOURCE_DIR}/engine/assets/importers/voxels/src")
+            target_compile_definitions(dk_voxel_joint_benchmark PRIVATE DK_RENDER_SHADER_DIR="${PROJECT_SOURCE_DIR}/shaders/render"
+                DK_VOXEL_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/voxels/shaders" DK_PATH_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/pathtracing/shaders"
+                DK_JOINT_NANO_INCLUDE_DIR="${DK_NANOVDB_INCLUDE_DIR}" DK_BENCH_CONFIG="$<CONFIG>" DK_BENCH_COMPILER="${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}")
+            dk_target_defaults(dk_voxel_joint_benchmark)
+            dk_deploy_slang(dk_voxel_joint_benchmark)
+            add_test(NAME dk.voxels.joint_gpu_required COMMAND dk_voxel_joint_benchmark --smoke --validation
+                --output "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/voxel-joint/smoke.json")
+            set_tests_properties(dk.voxels.joint_gpu_required PROPERTIES TIMEOUT 1800 RUN_SERIAL TRUE LABELS "gpu"
+                ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1;DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1=1")
+            add_test(NAME dk.voxels.joint_aggregation COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/VoxelJointBenchmarkTest.py")
+            set_tests_properties(dk.voxels.joint_aggregation PROPERTIES TIMEOUT 30 LABELS "cpu")
+        endif()
     endif()
     if(TARGET dk_render_pipeline)
         add_executable(dk_voxel_raster_probe VoxelRasterProbe.cpp)

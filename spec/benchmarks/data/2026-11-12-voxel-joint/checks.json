@@ -1,0 +1,105 @@
+[
+  {
+    "artifact": "20261112-172335-2f921baa",
+    "started_at": "2026-11-12T17:23:35.6241575+08:00",
+    "finished_at": "2026-11-12T17:24:26.2199955+08:00",
+    "configuration": "Debug",
+    "targets": [
+      "dk_voxel_sparse_tests"
+    ],
+    "reason": "M23.13 CPU-only sparse layout and dense-oracle regression without Vulkan or CUDA",
+    "test_regex": "^dk\\.voxels\\.sparse\\.",
+    "selected_tests": [
+      "dk.voxels.sparse.CPU sparse values and rays match dense and independent face oracle",
+      "dk.voxels.sparse.Pooled RT blocks are clipped disjoint bounded immutable candidates",
+      "dk.voxels.sparse.conversion budgets invalid inputs and old snapshots survive rejection",
+      "dk.voxels.sparse.conversion rejects unsupported grids and preserves input active states",
+      "dk.voxels.sparse.empty grids and concurrent snapshots require no mutable tree",
+      "dk.voxels.sparse.grid sample centers and affine instance maps compose exactly once",
+      "dk.voxels.sparse.inactive constant tiles normalize without expansion or internal faces",
+      "dk.voxels.sparse.leaf tile transitions hollow regions and boundaries preserve surface semantics",
+      "dk.voxels.sparse.portable CPU accessor agrees on NanoVDB Int32 buffer layout",
+      "dk.voxels.sparse.sparse large coordinate span skips empty hierarchy within work budget"
+    ],
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "artifact": "20261112-173345-2b25574c",
+    "started_at": "2026-11-12T17:33:45.0450914+08:00",
+    "finished_at": "2026-11-12T17:33:55.3419133+08:00",
+    "configuration": "Debug",
+    "targets": [
+      "dk_pathtracing_probe"
+    ],
+    "reason": "M23.13 strict no-VDB mesh path and state regression",
+    "test_regex": "^dk\\.pathtracing\\.(analytic|progressive_state)_gpu_required$",
+    "selected_tests": [
+      "dk.pathtracing.progressive_state_gpu_required",
+      "dk.pathtracing.analytic_gpu_required"
+    ],
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "artifact": "20261112-181030-e0dc2a28",
+    "started_at": "2026-11-12T18:10:30.9860720+08:00",
+    "finished_at": "2026-11-12T18:14:26.0134682+08:00",
+    "configuration": "Debug",
+    "targets": [
+      "dk_voxel_benchmark",
+      "dk_voxel_gpu_probe",
+      "dk_voxel_intersection_probe",
+      "dk_pathtracing_probe",
+      "dk_editor_app",
+      "dk_run",
+      "dk_ctl",
+      "dk_voxel_asset_process_probe"
+    ],
+    "reason": "M23.13 canonical HDDA final gates with unrelated AMD implicit layer disabled; required Khronos/sync retained",
+    "test_regex": "^dk\\.(voxels\\.(slang_compute|spirv_validation|slang_intersection|intersection_spirv_validation|intersection_gpu_required|gpu_numeric_required|benchmark_gpu_required|path_no_rt_gpu_required)|pathtracing\\.voxel_.*gpu_required)$",
+    "selected_tests": [
+      "dk.voxels.path_no_rt_gpu_required",
+      "dk.pathtracing.voxel_numeric_gpu_required",
+      "dk.pathtracing.voxel_lighting_gpu_required",
+      "dk.pathtracing.voxel_state_gpu_required",
+      "dk.pathtracing.voxel_restir_numeric_gpu_required",
+      "dk.pathtracing.voxel_restir_reuse_gpu_required",
+      "dk.pathtracing.voxel_signals_gpu_required",
+      "dk.pathtracing.voxel_restir_state_gpu_required",
+      "dk.pathtracing.voxel_medium_numeric_gpu_required",
+      "dk.pathtracing.voxel_medium_schedule_gpu_required",
+      "dk.pathtracing.voxel_medium_state_gpu_required",
+      "dk.pathtracing.voxel_medium_reuse_gpu_required",
+      "dk.voxels.benchmark_gpu_required",
+      "dk.voxels.slang_intersection",
+      "dk.voxels.intersection_gpu_required",
+      "dk.voxels.slang_compute",
+      "dk.voxels.intersection_spirv_validation",
+      "dk.voxels.spirv_validation",
+      "dk.voxels.gpu_numeric_required"
+    ],
+    "passed": 19,
+    "failed": 0,
+    "skipped": 0
+  },
+  {
+    "artifact": "20261112-181502-aafc720d",
+    "started_at": "2026-11-12T18:15:02.7357227+08:00",
+    "finished_at": "2026-11-12T18:15:35.5174103+08:00",
+    "configuration": "Release",
+    "targets": [
+      "dk_voxel_joint_benchmark"
+    ],
+    "reason": "M23.13 final canonical HDDA benchmark with long grazing regressions and strict quality aggregation",
+    "test_regex": "^dk\\.voxels\\.joint_aggregation$",
+    "selected_tests": [
+      "dk.voxels.joint_aggregation"
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+  }
+]

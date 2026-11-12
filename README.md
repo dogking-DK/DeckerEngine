@@ -53,7 +53,7 @@ cmake --build --preset windows-debug --target dk_run
 | CPU路径追踪参考、Lambert/GGX/MIS/RR与线性数值报告 | [CPU路径追踪指南](spec/guides/pathtracing-reference.md) |
 | Vulkan RT Lambert/GGX、每视图渐进累积、异步帧与额度 | [GPU路径追踪指南](spec/guides/pathtracing-gpu.md) |
 | 场景/视图、GPU 资产、磁盘场景渲染与读回 | [Render 指南](spec/guides/render.md) |
-| 实体体素双后端、拾取与独立截图 | [体素工作流](spec/guides/voxels.md) |
+| 实体体素双后端、拾取与独立截图 | [体素工作流](spec/guides/voxels.md)、[联合交付/性能](spec/benchmarks/2026-11-12-voxel-joint.md) |
 | SDL3 窗口三角形、缩放/最小化与交换链恢复 | [呈现指南](spec/guides/presentation.md) |
 | Core、数学、IO、Scene 与 CPU 示例 | [Foundation/Scene 指南](spec/guides/foundation.md) |
 | 实现 Mx.y 或修改已有模块 | [AGENTS.md](AGENTS.md)、[流程规范](spec/README.md)、[模块与源码索引](spec/design/README.md) |

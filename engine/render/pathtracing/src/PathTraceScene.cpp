@@ -58,6 +58,7 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
         return std::unexpected(Error{ErrorCode::invalid_state,"Path scene requires an open heap and render scene"});
     constexpr auto hard=desktop_path_scene_limits();
     if ((model!=PathTraceMaterialModel::lambert && model!=PathTraceMaterialModel::metallic_roughness) || !limits.max_triangles || limits.max_triangles>hard.max_triangles ||
+        (limits.voxel_block_edge!=8 && limits.voxel_block_edge!=32 && limits.voxel_block_edge!=128) ||
         !limits.max_voxel_instances || limits.max_voxel_instances>hard.max_voxel_instances || !limits.max_voxel_bytes || limits.max_voxel_bytes>hard.max_voxel_bytes || !limits.max_voxel_blocks || limits.max_voxel_blocks>hard.max_voxel_blocks ||
         !limits.max_primitive_instances || limits.max_primitive_instances>hard.max_primitive_instances || limits.max_textures>hard.max_textures || limits.max_texture_bytes>hard.max_texture_bytes)
         return std::unexpected(path_invalid("Invalid path scene limits"));
@@ -85,7 +86,7 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
                     const auto& input=*(*found)->voxel;
                     if(input.palette.empty() || input.grid->maximum_value()>input.palette.size() || state->owned_voxels.size()>=limits.max_voxel_instances ||
                         input.grid->bytes().size()>limits.max_voxel_bytes-voxel_bytes) return std::unexpected(path_invalid("Path voxel palette/count/byte budget exceeded"));
-                    auto blocks=input.grid->surface_blocks(limits.max_voxel_blocks); if(!blocks) return std::unexpected(blocks.error());
+                    auto blocks=input.grid->surface_blocks(limits.max_voxel_blocks,limits.voxel_block_edge); if(!blocks) return std::unexpected(blocks.error());
                     if(blocks->size()>limits.max_voxel_blocks-voxel_blocks) return std::unexpected(path_invalid("Path voxel block budget exceeded"));
                     PathVoxel voxel{heap}; voxel.entity=entity.id; voxel.asset=ref.id; voxel.world=entity.world; voxel.grid=input.grid;
                     auto world=entity.world.compose(input.grid->corner_to_local()); if(!world) return std::unexpected(world.error());

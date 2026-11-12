@@ -252,3 +252,27 @@ TEST_CASE("empty grids and concurrent snapshots require no mutable tree", "[voxe
     REQUIRE(copy.value({0, 0, 0}) == 1);
     REQUIRE(retained.value({0, 0, 0}) == 0);
 }
+
+TEST_CASE("Pooled RT blocks are clipped disjoint bounded immutable candidates", "[voxels][vdb]") {
+    const std::array blocks{VoxelBlock{{-8,0,0},8,1,false},VoxelBlock{{0,0,0},8,1,false},VoxelBlock{{24,0,0},8,1,false},VoxelBlock{{128,0,0},128,1,false}};
+    VoxelBuildOptions options; options.domain=vx::Domain{{-7,0,0},{255,127,127}};
+    auto grid=build_voxel_grid(blocks,options); // First tile extends outside domain, which conversion rejects.
+    REQUIRE_FALSE(grid);
+    options.domain=vx::Domain{{-8,0,0},{255,127,127}}; grid=build_voxel_grid(blocks,options); REQUIRE(grid);
+    const auto original=grid->surface_blocks(); REQUIRE(original); REQUIRE(original->size()==4);
+    for(unsigned edge:{32u,128u}) {
+        auto pooled=grid->surface_blocks(3,edge); REQUIRE(pooled); REQUIRE(pooled->size()==3);
+        CHECK_FALSE(grid->surface_blocks(2,edge));
+        for(const auto& b:*pooled) for(int axis=0;axis<3;++axis) {
+            CHECK(b.minimum[axis]>=options.domain->minimum[axis]); CHECK(b.maximum[axis]<=options.domain->maximum[axis]);
+        }
+        for(std::size_t i=0;i<pooled->size();++i) for(std::size_t j=i+1;j<pooled->size();++j) {
+            bool separate=false; for(int axis=0;axis<3;++axis) separate|=(*pooled)[i].maximum[axis]<(*pooled)[j].minimum[axis] || (*pooled)[j].maximum[axis]<(*pooled)[i].minimum[axis];
+            CHECK(separate);
+        }
+        CHECK(pooled->back().maximum==vx::Coord{255,127,127});
+    }
+    CHECK_FALSE(grid->surface_blocks(8,16)); CHECK_FALSE(grid->surface_blocks(0,32));
+    CHECK(grid->value({-8,0,0})==1); CHECK(grid->value({16,0,0})==0);
+    CHECK(grid->surface_blocks()->size()==original->size());
+}

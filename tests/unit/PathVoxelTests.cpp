@@ -160,3 +160,17 @@ TEST_CASE("Voxel zero medium and ground compete at the nearest endpoint", "[voxe
     s.max_triangle_tests=4096; auto work=estimate_volume_path_reference(scene,medium,inside,s,{0,1}); REQUIRE(work); CHECK(work->statistics.voxel_regions>16);
     std::stop_source stopped; stopped.request_stop(); CHECK_FALSE(estimate_volume_path_reference(scene,medium,inside,s,{0,1},0,stopped.get_token()));
 }
+
+TEST_CASE("Pooled block layout fingerprints and failed candidates preserve frozen paths", "[voxels][path]") {
+    RenderMemory memory; Fixture f{memory.heap};
+    const std::array cells{assets::VoxelBlock{{0,0,0},1,1},assets::VoxelBlock{{24,0,0},1,2}}; f.grid(cells);
+    const auto native=f.scene(); auto limits=PathTraceSceneLimits{}; limits.voxel_block_edge=32;
+    const auto pooled=f.scene(PathTraceMaterialModel::lambert,limits);
+    CHECK(pooled.geometry_fingerprint()!=native.geometry_fingerprint());
+    const PathTraceRay ray{{.3,.7,2},{0,0,-1}};
+    CHECK(pooled.nearest(ray)->value().cell==native.nearest(ray)->value().cell);
+    const auto source=f.source(); const std::array<const CpuAsset*,2> assets{&f.voxel,&f.mesh};
+    limits.voxel_block_edge=16; CHECK_FALSE(PathTraceScene::create(memory.heap,source,assets,limits));
+    limits.voxel_block_edge=32; limits.max_voxel_blocks=1; CHECK(PathTraceScene::create(memory.heap,source,assets,limits));
+    CHECK(native.nearest(ray)->value().value==1);
+}

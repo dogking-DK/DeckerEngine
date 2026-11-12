@@ -97,7 +97,9 @@ DkVoxelResult dkTraceVoxel(inout DkVoxelBuffer buf, inout pnanovdb_readaccessor_
             next[axis] = direction[axis] == 0 ? 3.402823466e38f : (plane[axis]-origin[axis])/direction[axis];
         }
         float nextTime = min(next.x,min(next.y,next.z));
-        if (!isfinite(nextTime) || nextTime <= time) { result.meta.x=4; return result; }
+        // Equal float t can still cross an integer cell plane; snapping below
+        // advances that coordinate and the existing region budget remains bounded.
+        if (!isfinite(nextTime) || nextTime < time) { result.meta.x=4; return result; }
         if (nextTime > end) return result;
         point = mad(direction,float3(nextTime),origin);
         for (uint axis=0; axis<3; ++axis) if (next[axis] == nextTime) point[axis]=plane[axis];

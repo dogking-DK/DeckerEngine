@@ -52,7 +52,11 @@ VoxelBuild prepare_voxels(PathGpuState& state,SubmissionQueue& queue,PathGpuGeom
         std::vector<vk::AabbPositionsKHR> bounds; bounds.reserve(voxel.blocks.size());
         for(const auto& b:voxel.blocks) {
             blocks.push_back({b[0],b[1],b[2],0}); blocks.push_back({b[4],b[5],b[6],0});
-            bounds.emplace_back(float(b[0]),float(b[1]),float(b[2]),float(b[4])+1,float(b[5])+1,float(b[6])+1);
+            // Cover the float-rounded surface point at shared block planes.
+            // Shader cell ownership remains exact; this is broad-phase only.
+            const auto down=[](float v){return std::nextafter(v,-std::numeric_limits<float>::infinity());};
+            const auto up=[](float v){return std::nextafter(v,std::numeric_limits<float>::infinity());};
+            bounds.emplace_back(down(float(b[0])),down(float(b[1])),down(float(b[2])),up(float(b[4])+1),up(float(b[5])+1),up(float(b[6])+1));
         }
         for(int row=0;row<3;++row) instances.push_back({forward(row,0),forward(row,1),forward(row,2),forward(row,3)});
         for(int row=0;row<3;++row) instances.push_back({inverse(row,0),inverse(row,1),inverse(row,2),inverse(row,3)});
@@ -65,6 +69,7 @@ VoxelBuild prepare_voxels(PathGpuState& state,SubmissionQueue& queue,PathGpuGeom
         instances.push_back(integers(std::uint32_t(voxel.blocks.size()),scene.material_model==PathTraceMaterialModel::metallic_roughness ? 1u : 0u,0,0));
         if(bounds.empty()) continue;
         result.bounds.push_back(take(state.factory.create_aabb_input(bounds)));
+        target.aabb_input_bytes+=result.bounds.back().size();
         AabbGeometry description{&result.bounds.back(),0,sizeof(vk::AabbPositionsKHR),std::uint32_t(bounds.size()),true};
         const auto at=result.bounds.size()-1; target.voxel_blas[at]=take(state.factory.create_aabb_blas(std::span{&description,1}));
         AccelerationStructureInstance instance; instance.blas=&target.voxel_blas[at]; instance.custom_index=std::uint32_t(vi); instance.sbt_record_offset=2;

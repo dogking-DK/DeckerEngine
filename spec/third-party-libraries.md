@@ -1,7 +1,7 @@
 ---
 module: third-party-libraries
 created_at: "2026-09-23T09:09:35+08:00"
-updated_at: "2026-11-12T11:53:00+08:00"
+updated_at: "2026-11-12T18:22:13+08:00"
 status: accepted
 ---
 
@@ -72,7 +72,7 @@ M1.7 的 Tracy 与 mimalloc 未包含在 0021 当时的 22 包解析验证中。
 | Catch2 / `catch2` | 3.16.0 | tests | 单元测试与 CTest 测试发现；测试 target 私有链接，运行时模块不依赖它 |
 | Tracy / `tracy` | 0.14.1 | profiling | dk::profiling 的 PUBLIC 依赖；CPU zone、线程名、动态文本及 heap backing 事件；graphics 私有 GPU timestamp/延迟区间适配，client BSD-3-Clause；on-demand、无 crash-handler/GUI，默认不开启 |
 | mimalloc / `mimalloc` | 3.5.3 | memory | dk::memory PRIVATE；v3 多线程 CPU heap，MIT；关闭默认 features，无 override，不替换全局 new/delete |
-| OpenVDB / `openvdb` | 12.0.1#0，固定同源 overlay | voxel-vdb | 可选 `dk_asset_voxel_importers` PRIVATE CPU 稀疏构建/规范化/转换，Apache-2.0；正式文件资产接入待 M23.5 |
+| OpenVDB / `openvdb` | 12.0.1#0，固定同源 overlay | voxel-vdb | 可选 `dk_asset_voxel_importers` PRIVATE CPU 稀疏构建/规范化/转换，Apache-2.0；M23.5 已接入命名 Int32 文件资产/版本缓存，双后端使用同一快照 |
 | NanoVDB / PNanoVDB | 同源布局/API 32.7.0 | voxel-vdb → openvdb[nanovdb] | `dk_geometry_voxels_sparse` PRIVATE CPU 查询、`dk_render_voxels` PRIVATE Slang 适配；C32、compute GPU 与 M23.8 intersection GPU 已验证；无 CUDA 依赖 |
 
 对应设计：[Core/日志](design/foundation-core.md)、[数学](design/foundation-math.md)、

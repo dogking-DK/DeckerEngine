@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-11-12T16:06:43+08:00"
+updated_at: "2026-11-12T18:22:13+08:00"
 status: accepted
 ---
 
@@ -54,6 +54,7 @@ M23.10 已适配 ReSTIR 四种 DI 与表面信号 v2（[0168](../development/016
   辐射/阴影均查询同一混合场景，保留 alpha-mask mesh、体素内部起点、逆转置法线和误差相关偏移规则。
 - 复用现有 Lambert/GGX、NEE/MIS/RR 与渐进积累；体素材质明确默认值，不新增纹理/alpha/透射模型。
   体素 emission=0，不进入灯分布；已有环境、太阳和 mesh 面积灯继续照亮并被体素遮挡，不假造体素灯 PDF。
+- M23.13 的 `PathTraceSceneLimits.voxel_block_edge` 默认为 8，可显式选择 32/128 对齐保守合并；保留大 tile、真实 HDDA 占用和不可变失败保护，实际块内容纳入几何指纹。RT 候选共享完整网格 HDDA 前缀，并按命中 cell 决定唯一所属块；AABB 一 ULP 外扩用于保守剔除，避免按块重置/裁剪造成图像差异，代价是可能重复遍历前缀。GPU 场景提供只读逻辑资源/AS 要求统计，renderer 提供主 Classic/ReSTIR SBT region 字节；这些量与 VMA/owned budget 分开，不能冒充驱动总显存或完整瞬态峰值，详见[联合契约](render-voxels.md#m2313-联合交付实施契约)。
 - 网格/块布局/材质/实例、着色模型及命中布局版本纳入来源与失效判断；同代 AS、体素数据和身份映射一起发布。
   palette-only 复用 AS 不等于可以保留旧图像/采样历史；失败/取消保留最后完整 owner 和 completed_spp。
 - ReSTIR 与信号字段按对应主题适配，空气/云的最近表面、事件区间和阴影透射必须看到体素。

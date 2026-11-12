@@ -1,0 +1,9 @@
+joint round 0 empty64
+layout 8
+layout 32
+layout 128
+joint round 0 sparse64
+layout 8
+layout 32
+layout pixel input=64 size=1280x720 ortho=0 pixel=432032 got=0.202622,0.489908,0.938656 expected=0.259243,0.530565,0.948317
+joint benchmark: pooled layout changed radiance

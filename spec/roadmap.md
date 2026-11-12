@@ -1,7 +1,7 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-11-12T16:55:54+08:00"
+updated_at: "2026-11-12T18:22:13+08:00"
 status: accepted
 ---
 
@@ -81,7 +81,7 @@ M5.1 设备与诊断、M5.2 资源与提交、M5.3 Slang 编译、M5.4 离屏绘
 | M20 路径追踪降噪 | À-trous、SVGF/A-SVGF、NRD REBLUR/RELAX、vk_oidn；公共信号/历史、介质与质量性能验收 | M16–M19、现有 Graph/worker | M20.1 设计/依赖、M20.2 表面信号生产已完成；M20.3–11 待开始，见[设计](design/render-denoising.md) |
 | M21 原生点绘制与粒子流体 | point-list、统一粒子输出、WCSPH/PBF CPU/GPU、工作台/脚本/导出 | M5/M6、M10–M12、M18.3 | M21.1 设计已完成；M21.2–9 待开始，见[流体设计](design/physics-fluids.md)、[点绘制设计](design/render-particles.md) |
 | M22 Console 与 Editor 命令交互 | 命名参数/历史、补全/参数提示、视口与相机命令、面板帮助与搜索 | M3、M8、M17.5；视口/相机复用 M18/M19 | M22.1–11 已完成；跨入口闭环、可运行示例与范围交付见[0158](development/0158-console-workflow-delivery.md) |
-| M23 实体体素渲染 | OpenVDB/NanoVDB 稀疏网格与稠密参考、光栅/原生 GPU 路径 HDDA、Slang 门禁、资产/Editor/capture 与联合交付 | M5–M8、M14.2、M18.3；路径复用 M16–M19、信号 M20.2，上层复用 M3/M4/M9/M22 | M23.1–12 完成：无 CUDA 稀疏网格、光栅基线、原生 Classic/ReSTIR 混合路径、表面信号v2与空气/云，双后端 Editor/Console/IPC/冻结 capture；M23.13 待开始，见[体素设计](design/render-voxels.md) |
+| M23 实体体素渲染 | OpenVDB/NanoVDB 稀疏网格与稠密参考、光栅/原生 GPU 路径 HDDA、Slang 门禁、资产/Editor/capture 与联合交付 | M5–M8、M14.2、M18.3；路径复用 M16–M19、信号 M20.2，上层复用 M3/M4/M9/M22 | 已完成 M23.1–13：无 CUDA 稀疏网格、双后端/Slang 门禁、Classic/ReSTIR/信号/空气云、Editor/冻结 capture 与三轮联合质量/资源/性能交付；[体素设计](design/render-voxels.md)、[联合报告](benchmarks/2026-11-12-voxel-joint.md) |
 
 默认执行表中顺序。M5 在 Foundation 补充完成后具备独立探索条件，
 M9 的 Luau 命令绑定在 M3 后可提前做；若调整次序，仍需满足对应集成验收依赖。
@@ -908,7 +908,7 @@ OpenVDB 用于 CPU 构建/导入，NanoVDB 连续缓冲区作为运行时数据�
 | M23.10 | 类型化表面身份、ReSTIR DI 初始/时空复用、表面 fresh/guide/reference 信号 | M23.9；M19、M20.2 | 四种 DI 配置均值与来源支持、薄体素遮挡/显露、占用/材质替换、信号重组/版本/预算；失败保留完整 epoch | 已完成：[0168](development/0168-voxel-restir-signals.md)；四种DI、稳定身份/信号v2、来源/预算/完整epoch验收；39项定向配置/测试组合（23 required GPU）通过 |
 | M23.11 | 既有空气/云的体素表面路径与 Scene media ReSTIR 组合 | M23.9/10；M17、M19.6 | 混合表面/体积事件顺序、阴影透射、条件 RIS、零介质退化、固定/渐进入口；保持介质信号能力边界 | 已完成：[0169](development/0169-voxel-scene-media.md)；空气/云 Classic 与四 DI、事件/透射/条件 RIS、双投影/失败保护通过；46项检查获通过证据（14 required GPU，2项 CPU 长测独立复验） |
 | M23.12 | 原生路径 Editor/Console/IPC/独立 capture；同资产切换两后端、能力/来源/历史管理 | M23.5/6/10/11；M22 | 透视/正交、固定 spp、模式/内容切换失效、迟到/取消/关闭保护、非 RT 拒绝与光栅可用、命令文档/示例 | 已完成：[0170](development/0170-voxel-path-consumers.md)；5 项定向 GPU 检查通过，双后端/固定 spp/四 DI/介质/冻结输入/失效与关闭保护，RT 禁用及无 VDB 旧 mesh 回归 |
-| M23.13 | 两条稀疏路线质量/资源/性能与最终交付；RT tile/块布局、AS 构建和多反弹基线 | M23.7/12；M11 | 独立 oracle、同输入几何一致性、统计均值；小网格/大跨度稀疏矩阵及转换/AS/在途峰值；Slang 双阶段门禁、CPU-only/非 RT/RT 证据齐全 | 待开始 |
+| M23.13 | 两条稀疏路线质量/资源/性能与最终交付；RT tile/块布局、AS 构建和多反弹基线 | M23.7/12；M11 | 独立 oracle、同输入几何一致性、统计均值；小网格/大跨度稀疏矩阵及转换/AS/在途峰值；Slang 双阶段门禁、CPU-only/非 RT/RT 证据齐全 | 已完成：[0171](development/0171-voxel-joint-delivery.md)、[报告](benchmarks/2026-11-12-voxel-joint.md)；12 输入×4 视图×3 轮，3 布局图像差异 0；修复块边界舍入，19 项跨链路门禁通过；默认 8，M23 关闭 |
 
 M23.3/6/7 是光栅侧离屏、使用闭环与阶段基线；M23.9 是首个原生混合几何路径成果，M23.12 接通上层。
 M23.2 先冻结 CPU 转换与语义，M23.5 再接完整文件/资产协议；M23.3 和 M23.8 分别证明 Slang compute 与 intersection 可用。
@@ -1008,7 +1008,7 @@ M23.4 合成阶段已完成，见[0162](development/0162-voxel-raster-compositio
 M23.5 文件资产阶段已完成，见[0163](development/0163-voxel-assets.md)：命名 `.vdb`/描述/palette、版本化 NanoVDB 产物、CPU-only 缓存/Scene/异步重载和真实 GPU 替换/卸载/在途保活。
 M23.6 使用闭环已完成，见[0164](development/0164-voxel-editor-capture.md)：Editor 加载/设置/拾取/Frame/Gizmo 撤销、GUI/Console/IPC 一致、冻结输入的独立截图及示例，真实 GPU 与旧 mesh/无 VDB 回归通过。
 M23.7 光栅基线已完成，见[0165](development/0165-voxel-raster-baseline.md)及[三轮报告](benchmarks/2026-11-12-voxel-raster.md)：12 输入/48 视图质量与耗时/内存/回收、HDDA 对照，保留首候选退化和预热协议证据，未认证内部 scratch 精确峰值或跨设备时限。
-M23.12 原生路径消费者已完成（[0170](development/0170-voxel-path-consumers.md)）：同资产 Editor GUI/Console/IPC 和独立冻结 capture、透视/正交、四 DI/介质、来源与历史失效，以及取消/迟到/关闭保护已验收；切回路径从空历史重新达到目标 spp。5 项定向 GPU 检查通过，包含设备 RT 禁用与无 VDB 旧 mesh 回归。下一阶段为 M23.13 两条稀疏路线的联合质量/资源/性能交付；M23 父阶段保持开放。
+M23.12 原生路径消费者已完成（[0170](development/0170-voxel-path-consumers.md)）：同资产 Editor GUI/Console/IPC 和独立冻结 capture、透视/正交、四 DI/介质、来源与历史失效，以及取消/迟到/关闭保护已验收；切回路径从空历史重新达到目标 spp。5 项定向 GPU 检查通过，包含设备 RT 禁用与无 VDB 旧 mesh 回归。M23.13 联合交付已完成（[0171](development/0171-voxel-joint-delivery.md)、[三轮报告](benchmarks/2026-11-12-voxel-joint.md)）：12 输入/双分辨率/双投影及 8/32/128 块布局、独立参考/统计/资源回收与 Slang/CPU-only/禁用 RT/真实 RT 证据齐全；修复块边界舍入，默认保持 8。M23 父阶段关闭，本路线不再保留待实施子阶段；M20.3/M21.2 及既有后置项不因此推进。
 默认只推进一个满足前置的小阶段；用户明确指定父阶段或多个小阶段时按授权范围逐节验收。
 M5 验收不代表场景渲染、Tracy GPU capture、其他平台或跨文件断电原子性已经验证。
 
