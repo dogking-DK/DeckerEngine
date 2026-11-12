@@ -93,7 +93,7 @@ std::unique_ptr<VoxelComposition> prepare_voxels(SubmissionQueue& queue,const Re
     const VoxelRenderSettings& settings,std::shared_ptr<VoxelPrograms> programs) {
     validate_voxel_settings(settings);
     if(instances.size()>64) throw invalid("Voxel raster supports at most 64 instances");
-    const auto& desc=view.description(); const auto projection=take(environment_depth(desc));
+    const auto& desc=view.description(); const auto projection=take(voxel_depth(desc));
     const auto count=std::uint64_t(desc.width)*desc.height; const auto& limits=queue.device().adapter().properties.limits;
     if(!count || count>1024*1024 || count*64>limits.maxStorageBufferRange || (count+63)/64>limits.maxComputeWorkGroupCount[0])
         throw invalid("Voxel raster extent exceeds query/device limits");
@@ -136,9 +136,17 @@ std::unique_ptr<VoxelComposition> prepare_voxels(SubmissionQueue& queue,const Re
         for(int c=0;c<3;++c) if(p.normals[0][c]==0 && p.normals[1][c]==0 && p.normals[2][c]==0) throw invalid("Voxel normal underflows float");
         const auto& projection_matrix=desc.projection;
         p.origin=pack(take(camera.transform_point(Vec3d::Zero())),projection.near_m);
-        p.forward=pack(take(camera.transform_direction({projection_matrix(0,2)/projection_matrix(0,0),projection_matrix(1,2)/projection_matrix(1,1),-1})),projection.far_m);
-        p.right=pack(take(camera.transform_direction({2/(projection_matrix(0,0)*desc.width),0,0})),projection.orthographic ? 1 : 0);
-        p.up=pack(take(camera.transform_direction({0,2/(projection_matrix(1,1)*desc.height),0})),result->entries.empty() ? 1 : 0);
+        const auto direction=[&](const Vec3d& v) {
+            Vec3d d=take(camera.transform_direction(v));
+            // Trig/composition can leave sin(pi)-sized residue on an axis-aligned camera.
+            // Canonicalize double roundoff only; the shared HDDA still rejects small nonzero slopes.
+            const double roundoff=32*std::numeric_limits<double>::epsilon()*d.cwiseAbs().maxCoeff();
+            for(int axis=0;axis<3;++axis) if(std::abs(d[axis])<=roundoff) d[axis]=0;
+            return d;
+        };
+        p.forward=pack(direction({projection_matrix(0,2)/projection_matrix(0,0),projection_matrix(1,2)/projection_matrix(1,1),-1}),projection.far_m);
+        p.right=pack(direction({2/(projection_matrix(0,0)*desc.width),0,0}),projection.orthographic ? 1 : 0);
+        p.up=pack(direction({0,2/(projection_matrix(1,1)*desc.height),0}),result->entries.empty() ? 1 : 0);
         if(p.origin[3]<=0 || p.forward[3]<=p.origin[3]) throw invalid("Voxel camera clipping loses float precision");
         p.projection={float(projection_matrix(2,2)),float(projection_matrix(2,3)),float(desc.width),float(desc.height)};
         p.light=pack(settings.light_direction.cast<double>()); p.energy=pack(settings.irradiance.cast<double>());

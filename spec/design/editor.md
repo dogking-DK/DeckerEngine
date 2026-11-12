@@ -1,9 +1,14 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-11-03T18:40:35+08:00"
+updated_at: "2026-11-12T10:31:11+08:00"
 status: accepted
 ---
+
+M23.6 接入实体体素光栅：DiskScene 候选、VoxelAssets 上传、同帧 CPU nearest/有限域 Frame、实体 Gizmo/Undo，
+以及共享会话显示参数。引用/路径或显式 Refresh 触发重新加载；失败保留旧资源并使画面非 current。
+只使用已完成画面的相机/Scene 进行拾取，mesh/voxel 按世界距离与 EntityId 排序；
+与独立 capture 的冻结输入边界见[体素实施契约](render-voxels.md#m236-使用闭环实施契约)，操作示例见[体素指南](../guides/voxels.md)。
 
 
 路径预览容量扩展见[0143](../development/0143-path-capacity-media-throughput.md)：默认按实际面板尺寸渲染，取消1600×1200封顶。

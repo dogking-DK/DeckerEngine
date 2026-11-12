@@ -11,6 +11,9 @@
 #include <algorithm>
 #include "CaptureInternal.hpp"
 #include "CaptureRestir.hpp"
+#ifdef DK_DISK_VOXELS
+#include <dk/geometry/SparseVoxels.hpp>
+#endif
 
 namespace dk {
 namespace {
@@ -101,10 +104,14 @@ std::string provenance(const CaptureRequest& r,const EnvironmentDescription& env
     const bool cloudy=clouds.enabled && clouds.coverage>0 && clouds.density>0 && clouds.extinction_per_m>0;
     auto value=nlohmann::json{{"environment",environment_json(environment)},{"camera",camera_json(r.camera)},
         {"exposure",r.exposure},{"time_seconds",r.environment.time_seconds},
-        {"quality",cloudy ? (r.environment.mode==render::CloudRenderMode::reference ? "cloud_reference_v1" : "cloud_temporal_v1") : environment.enabled ? "atmosphere_v1" : "unlit_v1"},
+        {"quality",r.unlit_inspection ? "unlit_v1" : cloudy ? (r.environment.mode==render::CloudRenderMode::reference ? "cloud_reference_v1" : "cloud_temporal_v1") : environment.enabled ? "atmosphere_v1" : "unlit_v1"},
         {"render_options",settings_json(r.environment)},{"warmup_frames",r.warmup_frames},{"sample_count",r.samples.empty() ? 1 : r.samples.size()},
         {"profile",r.profile==GltfImportProfile::strict ? "strict" : "unlit_preview"},{"shader_fingerprint",nullptr}};
     value["renderer"]=r.pathtrace ? "pathtrace" : "raster";
+    value["unlit_inspection"]=r.unlit_inspection;
+    value["voxel_shading"]=r.voxel.directional ? "directional" : "unlit";
+    value["voxel_light_direction"]={r.voxel.light_direction.x(),r.voxel.light_direction.y(),r.voxel.light_direction.z()};
+    value["voxel_irradiance"]={r.voxel.irradiance.x(),r.voxel.irradiance.y(),r.voxel.irradiance.z()};
     value["format"]=!r.samples.empty() ? "sequence_json" : r.linear_json ? "linear_json" : "ppm";
     value["pathtrace"]=nullptr;
     if(r.pathtrace) {
@@ -139,12 +146,13 @@ std::string provenance(const CaptureRequest& r,const EnvironmentDescription& env
 }
 Result<JobQueue::Payload> render_capture(memory::ResourceHandle resource,const SceneReadSnapshot& input,
     const CaptureRequest& request,const CaptureInfo& info,render::ViewDescription view,
-    const std::filesystem::path& shader_directory,const std::filesystem::path& output,std::stop_token stop) {
+    const std::filesystem::path& shader_directory,const std::filesystem::path& output,std::stop_token stop,render::DiskScene frozen) {
     DK_PROFILE_ZONE("Capture.Render");
     try {
         checkpoint(stop);
         render::DiskSceneOptions options; options.profile=request.profile; options.stop=stop;
-        auto source=take(render::DiskScene::load_snapshot(resource,input.project,input.scene,options));
+        options.unlit_inspection=request.unlit_inspection;
+        auto source=frozen ? std::move(frozen) : take(render::DiskScene::load_snapshot(resource,input.project,input.scene,options));
         checkpoint(stop);
         auto completion=std::make_shared<Completion>(); completion->output=output;
         graphics::DeviceOptions device_options;
@@ -154,7 +162,14 @@ Result<JobQueue::Payload> render_capture(memory::ResourceHandle resource,const S
         render::FrameInfo frame_info;
         {
             auto assets=take(source.upload(queue)); checkpoint(stop);
-            const auto fingerprint=take(render::shader_fingerprint(shader_directory,input.scene.environment().enabled || input.scene.environment().clouds.enabled));
+#ifdef DK_DISK_VOXELS
+            auto voxels=take(source.upload_voxels(queue));
+#endif
+            render::VoxelRenderSettings voxel_settings;
+            voxel_settings.shading=request.voxel.directional ? render::VoxelShading::directional : render::VoxelShading::unlit;
+            voxel_settings.light_direction=request.voxel.light_direction.cast<float>(); voxel_settings.irradiance=request.voxel.irradiance.cast<float>();
+            const bool environment_enabled=source.scene().environment().enabled || source.scene().environment().clouds.enabled;
+            const auto fingerprint=take(render::shader_fingerprint(shader_directory,environment_enabled,source.has_voxels()));
             auto pipeline=take(render::ScenePipeline::create(resource,queue,shader_directory)); checkpoint(stop);
             auto settings=render::unlit_preview_settings(); settings.exposure=request.exposure; settings.linear_readback=!request.samples.empty();
             completion->provenance=nlohmann::json::parse(info.provenance);
@@ -174,7 +189,12 @@ Result<JobQueue::Payload> render_capture(memory::ResourceHandle resource,const S
                 for(unsigned warm=0;warm<=(i==0 ? request.warmup_frames : 0);++warm) {
                     checkpoint(stop);
                     const auto frame_start=std::chrono::steady_clock::now();
+#ifdef DK_DISK_VOXELS
+                    auto frame=take(source.has_voxels() ? pipeline.render_voxel_assets(queue,render_view,assets,voxels,voxel_settings,settings) :
+                        pipeline.render_environment(queue,render_view,assets,settings,environment));
+#else
                     auto frame=take(pipeline.render_environment(queue,render_view,assets,settings,environment));
+#endif
                     require(take(frame.wait(queue)),"Capture GPU wait did not complete",ErrorCode::invalid_state);
                     checkpoint(stop);
                     if(i==0 && warm<request.warmup_frames) continue;
@@ -204,7 +224,7 @@ Result<JobQueue::Payload> render_capture(memory::ResourceHandle resource,const S
                     }
                 }
             }
-            require(take(render::shader_fingerprint(shader_directory,input.scene.environment().enabled || input.scene.environment().clouds.enabled))==fingerprint,"Render shaders changed during capture",ErrorCode::conflict);
+            require(take(render::shader_fingerprint(shader_directory,environment_enabled,source.has_voxels()))==fingerprint,"Render shaders changed during capture",ErrorCode::conflict);
             if(!request.samples.empty()) {
                 const auto& adapter=queue.device().adapter();
                 const auto report=nlohmann::json{{"schema_version",1},{"kind","decker.render_sequence"},{"status","succeeded"},
@@ -223,7 +243,7 @@ Result<JobQueue::Payload> render_capture(memory::ResourceHandle resource,const S
         completion->summary=nlohmann::json{{"kind",request.samples.empty() ? "capture" : "render_sequence"},{"document_id",info.document.to_string()},
             {"scene_id",frame_info.scene.to_string()},{"revision",frame_info.revision},{"frame",frame_info.frame},
             {"width",frame_info.width},{"height",frame_info.height},{"output",info.output},
-            {"draw_count",frame_info.draw_count},{"provenance",std::move(completion->provenance)}}.dump();
+            {"draw_count",frame_info.draw_count},{"voxel_count",frame_info.voxel_count},{"provenance",std::move(completion->provenance)}}.dump();
         require(completion->summary.size()<=4096,"Capture summary exceeds Job metadata limit");
         return completion;
     } catch (Error& e) { return std::unexpected(e.with_context(request.samples.empty() ? "render.capture" : "render.sequence")); }
@@ -251,6 +271,7 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
     auto& s=*impl_; memory::ExecutionScope scope(s.context,s.render_heap);
     try {
         auto view=view_description(request);
+        require(request.voxel.valid(),"Invalid voxel display settings; light direction must be unit length");
         require(request.pathtrace==request.path.has_value(),"Path tracing requires renderer=pathtrace and explicit pathtrace settings");
         require(!request.linear_json || request.pathtrace,"linear_json requires renderer=pathtrace");
         if(request.pathtrace) {
@@ -258,7 +279,7 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
             throw Error{ErrorCode::not_supported,"Path tracing capture was not built"};
 #endif
             const auto& p=*request.path;
-            require(request.samples.empty() && request.profile==GltfImportProfile::unlit_preview && request.exposure==1 &&
+            require(!request.unlit_inspection && request.voxel==VoxelDisplaySettings{} && request.samples.empty() && request.profile==GltfImportProfile::unlit_preview && request.exposure==1 &&
                 request.warmup_frames==0 && request.environment==render::EnvironmentRenderSettings{},"Path capture requires unlit_preview and no raster sequence/exposure/warmup/options");
             require((p.version>=1 && p.version<=3) && p.target_spp>=1 && p.target_spp<=65536 && p.max_bounces>=1 && p.max_bounces<=16 &&
                 p.rr_start<=p.max_bounces && p.environment_rgb.allFinite() && p.environment_rgb.minCoeff()>=0 && p.environment_rgb.maxCoeff()<=1e6 &&
@@ -289,6 +310,17 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
         auto relative=take(path_from_utf8(request.output));
         require(relative.extension()==(request.samples.empty() && !request.linear_json ? ".ppm" : ".json"),"Output extension must match ppm or linear_json/sequence format");
         auto snapshot=take(scene.read_snapshot(guard));
+        const bool has_voxels=std::ranges::any_of(snapshot.scene.entities(),[](const auto& entity){
+            return std::ranges::any_of(entity.assets,[](const auto& ref){return ref.kind==AssetKind::voxel;});
+        });
+        if(has_voxels) {
+            require(!request.pathtrace,"Native voxel path tracing is not implemented",ErrorCode::not_supported);
+            require(request.samples.empty(),"Voxel render.sequence is not implemented",ErrorCode::not_supported);
+            require(request.unlit_inspection || (!snapshot.scene.environment().enabled && !snapshot.scene.environment().clouds.enabled),
+                "Voxel capture with atmosphere/clouds is unsupported; use explicit unlit_inspection",ErrorCode::not_supported);
+            require(request.warmup_frames==0 && request.environment==render::EnvironmentRenderSettings{},
+                "Voxel capture does not support environment render options or warmup");
+        }
         const auto& clouds=snapshot.scene.environment().clouds;
         if(!request.samples.empty() && request.environment.mode==render::CloudRenderMode::reference && clouds.enabled && clouds.coverage>0 && clouds.density>0 && clouds.extinction_per_m>0)
             require(std::size_t{request.width}*request.height<=4096,"Reference cloud sequence allows at most 4096 pixels");
@@ -305,13 +337,25 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
         input_bytes+=request.linear_json ? static_cast<std::size_t>(request.width)*request.height*256 : request.samples.empty() ? static_cast<std::size_t>(request.width)*request.height*7 :
             static_cast<std::size_t>(request.width)*request.height*request.samples.size()*256+request.samples.size()*sizeof(CaptureSample);
         require(s.next_frame!=UINT64_MAX,"Capture frame counter exhausted",ErrorCode::invalid_state);
+        render::DiskScene frozen;
+        if(has_voxels) {
+            render::DiskSceneOptions options; options.profile=request.profile; options.cpu_bytes=64U*1024U*1024U;
+            options.unlit_inspection=request.unlit_inspection;
+            frozen=take(render::DiskScene::load_snapshot(s.render_heap,snapshot.project,snapshot.scene,options));
+            input_bytes+=frozen.cpu_bytes();
+        }
         view.frame=s.next_frame;
         CaptureInfo info{snapshot.state.document_id,{snapshot.scene.id(),snapshot.scene.revision(),view.frame,request.width,request.height,0},output_name,provenance(request,snapshot.scene.environment())};
-        auto work=[input=std::move(snapshot),request,info,view,resource=s.render_heap,shaders=s.shaders,output](std::stop_token stop,const JobQueue::Reporter& report)->Result<JobQueue::Payload> {
+        if(frozen) {
+            auto value=nlohmann::json::parse(info.provenance); value["quality"]=request.voxel.directional ? "voxel_directional_v1" : "voxel_unlit_v1";
+            value["asset_snapshot"]="accepted"; value["asset_cpu_bytes"]=frozen.cpu_bytes();
+            info.provenance=value.dump();
+        }
+        auto work=[input=std::move(snapshot),frozen,request,info,view,resource=s.render_heap,shaders=s.shaders,output](std::stop_token stop,const JobQueue::Reporter& report)->Result<JobQueue::Payload> {
 #ifdef DK_CAPTURE_PATHTRACING
             if(request.pathtrace) return capture_detail::render_path_capture(resource,input,request,info,view,output,stop,report);
 #endif
-            return render_capture(resource,input,request,info,view,shaders,output,stop);
+            return render_capture(resource,input,request,info,view,shaders,output,stop,frozen);
         };
         auto job=request.pathtrace ? s.queue.submit(std::move(work),input_bytes,{"queued","spp",0,0,request.path->target_spp}) :
             s.queue.submit([work=std::move(work)](std::stop_token stop) { return work(stop,{}); },input_bytes);

@@ -20,6 +20,8 @@ Json properties() {
         {"target_spp",integer(1,UINT32_MAX)},{"seed",integer(0,UINT32_MAX)},{"bounces",integer(1,32)},
         {"environment_rgb",schema::array(number(0,1000),3,3)},{"sky_enabled",schema::boolean()},{"sun",schema::boolean()},
         {"exposure_ev",number(-16,16)},{"raster_exposure",number(0,1e6)},{"unlit_inspection",schema::boolean()},
+        {"voxel_shading",choice({"unlit","directional"})},{"voxel_light_direction",schema::array(number(-1,1),3,3)},
+        {"voxel_irradiance",schema::array(number(0,1e6),3,3)},
         {"time_seconds",number(-1e9,1e9)},{"cloud_albedo",number(0,1)},{"cloud_anisotropy",number(-.95,.95)}};
 }
 Json object_with_all(Json fields) { auto keys=Json::array(); for(const auto& [name,value] : fields.items()) { (void)value; keys.push_back(name); } return schema::object(std::move(fields),std::move(keys)); }
@@ -30,6 +32,9 @@ Json settings_json(const EditorViewportSettings& s) {
         {"temporal_reuse",p.restir_temporal},{"spatial_reuse",p.restir_spatial},{"target_spp",p.target},{"seed",p.seed},{"bounces",p.bounces},
         {"environment_rgb",{p.sky.x(),p.sky.y(),p.sky.z()}},{"sky_enabled",p.sky_enabled},{"sun",p.sun},{"exposure_ev",p.exposure},
         {"raster_exposure",s.raster_exposure},{"unlit_inspection",s.unlit_inspection},
+        {"voxel_shading",s.voxel.directional ? "directional" : "unlit"},
+        {"voxel_light_direction",{s.voxel.light_direction.x(),s.voxel.light_direction.y(),s.voxel.light_direction.z()}},
+        {"voxel_irradiance",{s.voxel.irradiance.x(),s.voxel.irradiance.y(),s.voxel.irradiance.z()}},
         {"time_seconds",p.time_seconds},{"cloud_albedo",p.cloud_albedo},{"cloud_anisotropy",p.cloud_anisotropy},
         {"paused",p.paused},{"reset_sequence",p.reset}};
 }
@@ -55,6 +60,9 @@ EditorViewportSettings patch(const Json& p,EditorViewportSettings s) {
     assign(p,"sky_enabled",v.sky_enabled); assign(p,"sun",v.sun); assign(p,"exposure_ev",v.exposure);
     if(p.contains("environment_rgb")) for(int i=0;i<3;++i) v.sky[i]=p["environment_rgb"][i].get<double>();
     assign(p,"raster_exposure",s.raster_exposure); assign(p,"unlit_inspection",s.unlit_inspection);
+    if(p.contains("voxel_shading")) s.voxel.directional=p["voxel_shading"]=="directional";
+    if(p.contains("voxel_light_direction")) for(int i=0;i<3;++i) s.voxel.light_direction[i]=p["voxel_light_direction"][i].get<double>();
+    if(p.contains("voxel_irradiance")) for(int i=0;i<3;++i) s.voxel.irradiance[i]=p["voxel_irradiance"][i].get<double>();
     assign(p,"time_seconds",v.time_seconds); assign(p,"cloud_albedo",v.cloud_albedo); assign(p,"cloud_anisotropy",v.cloud_anisotropy);
     return s;
 }
@@ -86,6 +94,8 @@ Result<void> register_editor_viewport_commands(CommandRegistry& registry,std::fu
             help["/properties/time_seconds"]["unit"]="s";
             help["/properties/sky_enabled"]["description"]="Enable the constant environment RGB radiance; retains the RGB value and does not edit scene atmosphere.";
             help["/properties/raster_exposure"]["description"]="Raster environment exposure multiplier; independent of path display EV.";
+            help["/properties/voxel_light_direction"]["description"]="Unit world direction towards the light; length must equal one (tolerance 1e-6).";
+            help["/properties/voxel_shading"]["description"]="Solid voxel raster shading; directional requires nonmetallic palettes and no scene atmosphere/clouds. Use explicit unlit_inspection to omit scene environment.";
             help["/properties/guard"]={{"description","Use the latest view_id, document_id and viewport revision from editor.viewport.query; never a scene guard."}};
         } else help[""]={{"description",action=="query" ? "Inspect the Edit viewport guard, settings, capabilities and completed image source." :
             "Guarded Edit viewport action. Accepted state is distinct from GPU completion."}};
@@ -100,7 +110,7 @@ Result<void> register_editor_viewport_commands(CommandRegistry& registry,std::fu
                 Result<EditorViewportState> result=std::unexpected(Error{ErrorCode::invalid_argument,"At least one viewport setting is required"});
                 if(action=="set" && params.size()>1) {
                     bool explicit_path=false;
-                    for(const auto& [key,value] : params.items()) { (void)value; explicit_path|=key!="guard" && key!="renderer" && key!="raster_exposure" && key!="unlit_inspection"; }
+                    for(const auto& [key,value] : params.items()) { (void)value; explicit_path|=key!="guard" && key!="renderer" && key!="raster_exposure" && key!="unlit_inspection" && !key.starts_with("voxel_"); }
                     result=service->set(*guard,patch(params,service->settings()),explicit_path);
                 } else if(action!="set") result=service->control(*guard,action=="pause" ? EditorViewportControl::pause : action=="resume" ? EditorViewportControl::resume : EditorViewportControl::reset);
                 if(!result) return std::unexpected(result.error()); return editor_viewport_state_json(*result);

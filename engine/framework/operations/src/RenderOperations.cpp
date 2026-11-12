@@ -55,7 +55,10 @@ Json reuse_schema() {
 Json provenance_schema() {
     return schema::object({{"environment",operations_detail::environment_schema()},{"camera",camera_schema(true)},
         {"exposure",schema::number()},{"time_seconds",schema::number()},
-        {"quality",{{"type","string"},{"enum",{"atmosphere_v1","unlit_v1","cloud_reference_v1","cloud_temporal_v1","pathtrace_v1","pathtrace_v2","pathtrace_v3"}}}},
+        {"quality",{{"type","string"},{"enum",{"atmosphere_v1","unlit_v1","voxel_unlit_v1","voxel_directional_v1","cloud_reference_v1","cloud_temporal_v1","pathtrace_v1","pathtrace_v2","pathtrace_v3"}}}},
+        {"unlit_inspection",schema::boolean()},{"voxel_shading",{{"type","string"},{"enum",{"unlit","directional"}}}},
+        {"voxel_light_direction",vector_schema()},{"voxel_irradiance",schema::array(number(0,1e6),3,3)},
+        {"asset_snapshot",{{"type","string"},{"enum",{"accepted"}}}},{"asset_cpu_bytes",integer()},
         {"renderer",{{"type","string"},{"enum",{"raster","pathtrace"}}}},{"format",{{"type","string"},{"enum",{"ppm","linear_json","sequence_json"}}}},
         {"pathtrace",schema::nullable(path_schema(true))},{"model_version",integer()},{"sampler_version",integer()},
         {"material_model",schema::string()},{"estimator",schema::string()},{"actual_spp",integer(65536)},
@@ -86,6 +89,9 @@ CaptureRequest request(const Json& p,bool sequence) {
     CaptureRequest r; r.output=p["output"].get<std::string>(); r.width=p.value("width",960U); r.height=p.value("height",540U);
     r.profile=p.value("profile",std::string{"unlit_preview"})=="strict" ? GltfImportProfile::strict : GltfImportProfile::unlit_preview;
     r.exposure=p.value("exposure",1.f); r.require_validation=p.value("validation",std::string{"if_available"})=="required";
+    r.unlit_inspection=p.value("unlit_inspection",false); r.voxel.directional=p.value("voxel_shading",std::string{"unlit"})=="directional";
+    if(p.contains("voxel_light_direction")) r.voxel.light_direction=vector(p["voxel_light_direction"]);
+    if(p.contains("voxel_irradiance")) r.voxel.irradiance=vector(p["voxel_irradiance"]);
     r.warmup_frames=p.value("warmup_frames",0U); r.environment.time_seconds=p.value("time_seconds",0.0);
     r.pathtrace=p.value("renderer",std::string{"raster"})=="pathtrace";
     r.linear_json=p.value("format",std::string{"ppm"})=="linear_json";
@@ -126,7 +132,7 @@ CaptureRequest request(const Json& p,bool sequence) {
 }
 Json render_job_result_schema() {
     auto properties=info_properties();
-    properties["kind"]={{"type","string"},{"enum",{"capture","render_sequence"}}}; properties["draw_count"]=integer();
+    properties["kind"]={{"type","string"},{"enum",{"capture","render_sequence"}}}; properties["draw_count"]=integer(); properties["voxel_count"]=integer();
     properties["root_id"]=uuid(); properties["key"]=schema::string(32,32); properties["cache_hit"]=schema::boolean();
     return schema::object(std::move(properties));
 }
@@ -137,6 +143,8 @@ Result<void> register_render_commands(CommandRegistry& registry,CaptureService& 
         Json params{{"guard",schema::object({{"document_id",uuid()},{"revision",integer()}},{"document_id","revision"})},
             {"output",schema::string(1,1024)},{"width",integer(2048,1)},{"height",integer(2048,1)},
             {"exposure",number(0,1000000)},{"render_options",render_options_schema()},{"warmup_frames",integer(64)},
+            {"unlit_inspection",schema::boolean()},{"voxel_shading",{{"type","string"},{"enum",{"unlit","directional"}}}},
+            {"voxel_light_direction",schema::array(number(-1,1),3,3)},{"voxel_irradiance",schema::array(number(0,1e6),3,3)},
             {"profile",{{"type","string"},{"enum",{"strict","unlit_preview"}}}},
             {"validation",{{"type","string"},{"enum",{"if_available","required"}}}}};
         Json required={"guard","output"};
@@ -153,7 +161,7 @@ Result<void> register_render_commands(CommandRegistry& registry,CaptureService& 
             schema::object(std::move(params),std::move(required)),std::move(result),CommandEffect::external,false},
             [&service,&scene,sequence](const Json& p)->Result<Json> {
                 if(p.value("renderer",std::string{"raster"})=="pathtrace") {
-                    for(const char* name:{"exposure","time_seconds","render_options","warmup_frames"}) if(p.contains(name))
+                    for(const char* name:{"exposure","time_seconds","render_options","warmup_frames","unlit_inspection","voxel_shading","voxel_light_direction","voxel_irradiance"}) if(p.contains(name))
                         return std::unexpected(Error{ErrorCode::invalid_argument,std::string{"Raster-only parameter: "}+name});
                 }
                 if(p.contains("pathtrace")) {

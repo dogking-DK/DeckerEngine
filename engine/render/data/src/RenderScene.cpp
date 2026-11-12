@@ -18,7 +18,7 @@ struct SceneState {
 };
 }
 Result<RenderScene> RenderScene::extract(memory::ResourceHandle heap, const SceneSnapshot& source,
-    const std::optional<LocalTransformOverride>& preview) {
+    const std::optional<LocalTransformOverride>& preview, bool unlit_inspection) {
     if (!heap || heap.state() != memory::ResourceState::open)
         return std::unexpected(Error{ErrorCode::invalid_state, "render extraction requires open memory"});
     try {
@@ -26,7 +26,7 @@ Result<RenderScene> RenderScene::extract(memory::ResourceHandle heap, const Scen
             return std::unexpected(Error{ErrorCode::not_found,"Preview entity missing"});
         auto output = memory::make_shared_in<detail::SceneState>(heap, heap);
         output->id = source.id(); output->revision = source.revision();
-        output->environment = source.environment();
+        output->environment = unlit_inspection ? EnvironmentDescription{} : source.environment();
         struct Node { const EntityData* source; Transformd world; unsigned state = 0; };
         Vector<Node> nodes(0, memory::Allocator<Node>{heap});
         nodes.reserve(source.entities().size());

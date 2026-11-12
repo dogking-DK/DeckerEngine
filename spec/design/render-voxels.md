@@ -1,7 +1,7 @@
 ---
 module: render-voxels
 created_at: "2026-11-11T14:51:58+08:00"
-updated_at: "2026-11-11T20:28:55+08:00"
+updated_at: "2026-11-12T10:31:11+08:00"
 status: accepted
 ---
 
@@ -309,12 +309,39 @@ IO/格式/转换/预算/取消失败丢弃候选并保留旧身份/current/CPU �
 
 CPU data 增加可选体素拥有型数据（共享 SparseGrid、palette/身份），普通 asset_data 不依赖 OpenVDB/GPU；可选 runtime/importer 才链接实现。
 GPU 资源缓存提供按 AssetId 的体素版本、替换/卸载与 palette 保活，提交前完成全部返回容器分配；提交成功才切换当前版本。
-旧快照及在途帧继续持有旧网格/材质；closing 后拒绝新工作。Pipeline 根据 Scene 引用装配体素实例，未提供支持的 mesh-only/DiskScene/路径入口明确拒绝体素，不能成功漏画。
-服务/命令/Editor/capture 使用闭环留给 M23.6，不新增后台线程或热重载机制。
+旧快照及在途帧继续持有旧网格/材质；closing 后拒绝新工作。Pipeline 根据 Scene 引用装配体素实例，未提供支持的 mesh-only/路径入口明确拒绝体素，不能成功漏画。
+服务/命令/Editor/capture 使用闭环见 M23.6，不新增后台线程或热重载机制。
 
-验收包括 CPU-only 描述→VDB→产物→缓存→Scene 保存重载，独立进程恢复；源/palette/grid/单位缩放/布局失效，稳定身份、无 CUDA/Vulkan依赖；
+M23.5 验收包括 CPU-only 描述→VDB→产物→缓存→Scene 保存重载，独立进程恢复；源/palette/grid/单位缩放/布局失效，稳定身份、无 CUDA/Vulkan依赖；
 坏源/类型/背景/变换/重复 JSON/截断/尾部/地址/值/额度与提交冲突拒绝，旧快照/旧 current 不变；
 真实 GPU 上传替换/卸载、旧帧与 palette 保活、失败提交、closing、旧 mesh 回归。证据见 [0163](../development/0163-voxel-assets.md)。
+
+### M23.6 使用闭环实施契约
+
+- `DiskScene` 只读装配 mesh 与 voxel：描述或 artifact 的 ID/kind 必须匹配 Project；先完成整个 CPU 候选，再分别上传 mesh/voxel 资源。
+  无 VDB 构建遇到 voxel 返回 not_supported。可显式禁用提取快照中的环境用于 Unlit inspection，不修改 Scene。
+- Editor 按文档身份、引用集合/Project 路径和显式 Retry 加载资产；仅 TRS/相机变化不重读文件。
+  体素相机采用独立 forward-Z 解析：透视 far/near≤1e6、far≤1e6 m，保留刚体/有限/视域检查；
+  支持 Editor 默认 .05/10000 镜头，大气仍限定 far/near≤10000，不因体素放宽。
+  光栅射线生成端将方向中相对主分量不超过 32×double epsilon 的舍入残差归零（如 180° 相机的 sin 残差）；
+  不放宽共享 HDDA 的极小非零方向/工作上限检查，避免正交轴对齐镜头错误失败。
+  失败保留旧 GPU 快照并标记画面非 current；拾取只使用已完成画面的相机、变换和 CPU 网格。
+  CPU 稀疏 nearest 与 mesh nearest 比较世界距离，等距按 EntityId；Frame bounds 包含体素有限域的变换后八角。
+  选择与 Gizmo 复用现有整个实体的编辑、提交、undo/redo，不支持逐体素编辑。
+- 共享 CPU `VoxelDisplaySettings` 保存 Unlit/方向光、世界单位光方向和 RGB irradiance；
+  `editor.viewport.set` 的 `voxel_shading / voxel_light_direction / voxel_irradiance` 与 GUI 同走 viewport service。
+  GUI 弹层保存完整草稿，Apply 用打开时的 viewport guard 一次提交，允许先编辑三个方向分量再校验单位长度；
+  Cancel 丢弃草稿，期间其他入口改变视口则 Apply 返回 conflict，避免覆盖较新设置。
+  显示设置只推进 viewport revision，不推进 Scene revision/dirty/history；guard、no-op、失败前校验沿用既有契约。
+- `render.capture` 增加相同体素参数及 `unlit_inspection`，独立创建 GPU 设备/资源；不读取 Editor 当前画面或显示设置。
+  含 voxel 的光栅任务在接受前冻结整个 DiskScene CPU 输入（最多 64 MiB，计入队列预算），后续源文件替换不会改变任务。
+  Scene/Project/相机/显示参数和冻结资产属于该任务；提交不等于完成，仍由 owner pump 原子发布输出。
+  普通 mesh capture 保留既有 worker 加载路径；pathtrace 继续明确拒绝 voxel。
+- M23.6 的实体体素只接 Unlit/简单方向光；Scene atmosphere/cloud 组合仍拒绝，需显式 Unlit inspection。
+  不自动降级，不宣称路径追踪、金属方向光或体积介质可用。
+- 验收包含 CPU 守卫/预算/失败候选、真实 GPU 独立截图及冻结输入、后台 Editor 加载/选择/Frame/Gizmo/undo、
+  GUI/Console/IPC 设置一致和旧 mesh 回归；39 CPU/8 GPU 定向检查和无 VDB 构建回归已通过，详见 [0164](../development/0164-voxel-editor-capture.md)。
+  使用方式见[实体体素光栅工作流](../guides/voxels.md)，性能基线与原生路径仍按后续阶段推进。
 
 ## Slang 兼容性门禁
 

@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-11-11T20:41:10+08:00"
+updated_at: "2026-11-12T10:31:11+08:00"
 status: accepted
 ---
 
@@ -142,6 +142,9 @@ history.undo/redo 自身 undoable=false，表示不会再添加一个“撤销�
 stdio 在 EOF/shutdown 正常退出时为 0，先前可恢复的请求错误不改变此退出码。
 
 ## 文档维护
+
+实体体素的光栅参数由 [editor.viewport.set](editor-viewport.md) 和 [render.capture](render.md#实体体素光栅截图) 接收，
+资产登记/实体引用复用既有命令；完整示例见[体素工作流](../guides/voxels.md)。
 
 命令新增、变更或删除时同步对应功能页与本目录，不将每个命令写入 skill。
 通过 commands.list 核对目录，通过 commands.describe 核对 schema/effect/undoable，

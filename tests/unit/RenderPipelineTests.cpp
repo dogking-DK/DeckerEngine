@@ -49,6 +49,14 @@ TEST_CASE("orthographic environment accepts finite linear depth and parallel nea
     const auto rows=dk::render::detail::clip_rows(*view,Transformd{}); REQUIRE(rows);
     CHECK((*rows)[15]==1); CHECK((*rows)[14]==0);
 }
+TEST_CASE("voxel raster accepts Editor default clipping without widening atmosphere precision") {
+    ViewDescription d{128,64}; d.projection=perspective_projection({radians(65.0),.05,10000},2).value();
+    const auto voxel=dk::render::detail::voxel_depth(d); REQUIRE(voxel);
+    CHECK(std::abs(voxel->near_m-.05)<1e-10); CHECK(std::abs(voxel->far_m-10000)<1e-5);
+    CHECK_FALSE(dk::render::detail::environment_depth(d));
+    d.projection=perspective_projection({radians(65.0),.01,100000},2).value(); CHECK_FALSE(dk::render::detail::voxel_depth(d));
+    d.projection=Mat4d::Identity(); CHECK_FALSE(dk::render::detail::voxel_depth(d));
+}
 TEST_CASE("Lambert normal matrix preserves tangent orthogonality under shear and reflection") {
     Mat4d m=Mat4d::Identity(); m.topLeftCorner<3,3>() << -2,1,.3, 0,3,.5, 0,0,.7;
     const auto transform=Transformd::from_matrix(m).value();

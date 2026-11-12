@@ -15,7 +15,7 @@ class RenderScene final {
 public:
     RenderScene() = default;
     [[nodiscard]] static Result<RenderScene> extract(memory::ResourceHandle, const SceneSnapshot&,
-        const std::optional<LocalTransformOverride>& preview = {});
+        const std::optional<LocalTransformOverride>& preview = {}, bool unlit_inspection = false);
     [[nodiscard]] explicit operator bool() const noexcept { return bool(state_); }
     [[nodiscard]] SceneId id() const noexcept;
     [[nodiscard]] std::uint64_t revision() const noexcept;

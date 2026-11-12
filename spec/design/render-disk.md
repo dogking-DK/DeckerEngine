@@ -1,7 +1,7 @@
 ---
 module: render-disk
 created_at: "2026-10-03T17:17:15+08:00"
-updated_at: "2026-10-20T01:21:06+08:00"
+updated_at: "2026-11-12T10:31:11+08:00"
 status: accepted
 ---
 
@@ -56,6 +56,13 @@ dk-render-demo 默认加载该工程，以显式 unlit_preview 渲染默认 Spon
 HDR/六面天空盒继续作为预备素材，不在本阶段加载或采样。
 
 ## 验证
+
+M23.6 增加可选 voxel 包：同时启用 asset_voxel_importers/render_voxels 时，PRIVATE 接 CPU 稀疏导入与查询，
+导出 `DK_DISK_VOXELS` 能力。`.dkvoxel` / artifact 检查 root ID/kind；同一 AssetId 只加载一次，Nano 字节与 palette 计入 CPU 预算。
+`upload` 处理 mesh，`upload_voxels` 返回完整新 VoxelAssets；各自失败不返回部分缓存。
+`unlit_inspection` 只在 RenderScene 提取时关闭环境，不修改原 Scene。
+既有 material/texture 引用仍不推断 override。上层冻结输入、拾取与发布规则见
+[M23.6 契约](render-voxels.md#m236-使用闭环实施契约)。
 
 CPU 夹具使用临时 M2 Project/Scene 与小型 M4 glTF/CPU artifact，核对身份、世界矩阵、
 重复 mesh 去重、meta 冲突、缺失/损坏/不支持输入、预算/closing 和旧候选保留。

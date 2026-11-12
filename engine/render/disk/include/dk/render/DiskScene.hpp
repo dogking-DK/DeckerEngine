@@ -3,6 +3,9 @@
 #include <dk/render/GpuAssets.hpp>
 #include <dk/assets/GltfImporter.hpp>
 #include <dk/scene/Project.hpp>
+#ifdef DK_DISK_VOXELS
+#include <dk/render/VoxelAssets.hpp>
+#endif
 
 namespace dk::render {
 namespace detail { struct DiskSceneState; }
@@ -12,6 +15,7 @@ struct DiskSceneOptions {
     std::size_t cpu_bytes = 512U * 1024U * 1024U;
     std::stop_token stop;
     ImportLimits import_limits; // Explicit caller capacity; defaults keep offline limits.
+    bool unlit_inspection = false;
 };
 // Read-only CPU candidate. Requires a bound ThreadContext with scratch.
 // No meta/cache/project writes; loading again never mutates an existing candidate.
@@ -26,6 +30,11 @@ public:
     // Fresh cache; uploads and waits each package. Earlier GPU submissions cannot be undone
     // on later failure, but no partial cache is returned and all candidates are released.
     [[nodiscard]] Result<GpuAssets> upload(graphics::SubmissionQueue&) const;
+    [[nodiscard]] std::size_t cpu_bytes() const noexcept;
+    [[nodiscard]] bool has_voxels() const noexcept;
+#ifdef DK_DISK_VOXELS
+    [[nodiscard]] Result<VoxelAssets> upload_voxels(graphics::SubmissionQueue&) const;
+#endif
 private:
     explicit DiskScene(std::shared_ptr<const detail::DiskSceneState> state) : state_(std::move(state)) {}
     std::shared_ptr<const detail::DiskSceneState> state_;

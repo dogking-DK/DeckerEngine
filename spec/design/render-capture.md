@@ -1,7 +1,7 @@
 ---
 module: render-capture
 created_at: "2026-10-03T21:21:47+08:00"
-updated_at: "2026-10-20T01:21:06+08:00"
+updated_at: "2026-11-12T10:31:11+08:00"
 status: accepted
 ---
 
@@ -25,6 +25,14 @@ AssetOperations 默认仍注册资产 jobs；启用截图的 Runtime 改为一�
 当前 schema 子集无 oneOf，统一结果采用两种对象字段的可选并集，服务保证完整变体；CPU-only 保留资产严格 schema。
 
 ## 输入、快照与身份
+
+M23.6：含 voxel 的光栅 capture 在接受前用 DiskScene 冻结整个 CPU 资产集合，最多 64 MiB，
+占用计入 Job input_bytes；失败不提交、不消耗 frame、不触碰旧输出。该准备阶段同步执行，可能阻塞 owner，未新增异步导入线程。
+worker 只消费拥有型冻结包，独立建立 GPU cache/设备；`asset_snapshot=accepted` 和 `asset_cpu_bytes` 明确该来源。
+参数 `voxel_shading / voxel_light_direction / voxel_irradiance / unlit_inspection` 与 Editor 共用 CPU 值校验，
+相机/曝光始终显式提供，不借用 viewport。shader fingerprint 包含 voxel raster/composite、HDDA/adapter/PNanoVDB 头。
+pathtrace、voxel sequence、大气/云混合暂拒绝；Unlit inspection 是显式忽略环境的渲染快照选项。
+普通 mesh 资产维持 worker 读取契约；详见[体素闭环](render-voxels.md#m236-使用闭环实施契约)。
 
 `SceneService::read_snapshot(guard)` 在 owner 线程复制 Project 映射和 SceneSnapshot，
 保留 document_id、scene_id、revision；worker 不访问 ECS 或 SceneService。

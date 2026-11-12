@@ -68,6 +68,8 @@ private:
     std::map<std::string,ImVec2> controls_;
     std::vector<std::string> log_;
     std::string viewport_error_;
+    VoxelDisplaySettings voxel_draft_;
+    std::optional<EditorViewportGuard> voxel_draft_guard_;
     std::string simulation_error_;
     std::string simulation_sample_error_,simulation_output_;
     int simulation_export_width_=640,simulation_export_height_=480;

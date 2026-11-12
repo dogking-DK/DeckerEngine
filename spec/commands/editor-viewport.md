@@ -1,7 +1,7 @@
 ---
 module: command-reference-editor-viewport
 created_at: "2026-11-03T14:56:20+08:00"
-updated_at: "2026-11-03T18:40:35+08:00"
+updated_at: "2026-11-12T10:31:11+08:00"
 status: accepted
 ---
 
@@ -16,6 +16,8 @@ status: accepted
 
 ## 身份、状态和副作用
 
+M23.6 的实体体素 GUI/Console/IPC 和独立截图示例见[体素工作流](../guides/voxels.md)。
+
 视口 guard 为 `{view_id,document_id,revision}`，从下述命令的直接返回值取得。
 view_id 是本次附加视口的 UUID，document_id 是当前场景文档会话，revision 是视口设置与 Edit 相机共享的 uint64 修订号，初始为 0；GUI 或命令修改相机也会使旧 guard 失效。
 它与 Scene guard 不同，不自动补齐。换文档保留设置但使旧 document_id 失效，关闭或替换视口使旧 view_id 失效。
@@ -26,6 +28,18 @@ query 的 effect=query；set/pause/resume/reset 的 effect=control；全部 undo
 未应用 Inspector/Environment 草稿、打开的 Camera 弹层或活动 Edit Gizmo/导航手势拒绝写入，query 仍可调用。
 任何参数/guard/能力检查失败均保留原设置和已发布画面；修改多个字段时一次校验、整体接受。
 同值 set 和已处于目标状态的 pause/resume 不增加修订号或重置采样。
+
+体素光栅设置也由 `editor.viewport.set` 接收并在 settings 返回：
+
+| 字段 | 默认与约束 |
+| --- | --- |
+| voxel_shading | `unlit` 或 `directional`，默认 unlit；方向光要求非金属 palette |
+| voxel_light_direction | `[0,0,1]`；指向光源的世界单位向量，长度误差最多 1e-6 |
+| voxel_irradiance | `[1,1,1]`；每通道有限且位于 [0,1000000] |
+
+这些字段不要求 RT 能力；只影响体素光栅显示，仍遵循同值/no-op、guard 和失败整体拒绝。
+Scene 大气/云与体素组合尚不支持，可显式 `unlit_inspection=true` 忽略该视口的环境。
+invalid_argument 的零向量/非法范围不会部分修改曝光或其他设置。GPU 材质/组合错误由 presentation.error 报告。
 
 所有命令返回相同结构：
 

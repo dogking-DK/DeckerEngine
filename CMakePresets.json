@@ -216,6 +216,16 @@
       }
     },
     {
+      "name": "windows-voxel-editor",
+      "inherits": "windows-editor",
+      "displayName": "Windows editor with sparse voxel raster and capture",
+      "cacheVariables": {
+        "DK_BUILD_GEOMETRY_VOXELS": "ON",
+        "DK_BUILD_VOXEL_VDB": "ON",
+        "DK_BUILD_RENDER_VOXELS": "ON"
+      }
+    },
+    {
       "name": "windows-desktop-deps",
       "inherits": "windows-dev",
       "displayName": "Prepare all planned desktop dependencies",

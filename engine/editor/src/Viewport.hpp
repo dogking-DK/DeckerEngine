@@ -18,7 +18,7 @@ public:
     ~Viewport();
     // Previous GUI submission must be complete. Backend must be initialized.
     void update(const SceneReadSnapshot&,std::uint32_t width,std::uint32_t height,bool srgb,const Camera&,
-        const std::optional<TransformEdit>&,std::uint64_t preview_revision,float exposure=1,const render::EnvironmentRenderSettings& environment = {},bool unlit_inspection=false);
+        const std::optional<TransformEdit>&,std::uint64_t preview_revision,float exposure=1,const render::EnvironmentRenderSettings& environment = {},bool unlit_inspection=false,const VoxelDisplaySettings& voxel = {});
     void update_simulation(Workspace&,const SimulationRunState&,std::uint32_t width,std::uint32_t height,const Camera&);
     void show_edit();
     void suspend_path();
@@ -73,6 +73,7 @@ private:
         float exposure;
         render::EnvironmentRenderSettings environment;
         bool unlit_inspection=false;
+        VoxelDisplaySettings voxel;
         bool operator==(const Key&) const = default;
     };
     void publish(std::vector<std::byte>,const render::FrameInfo&,render::RenderScene,const Camera&,const Key&);
@@ -107,6 +108,11 @@ private:
     std::optional<SimulationView> simulation_view_;
     std::uint64_t simulation_steps_=0,simulation_sequence_=0,simulation_published_=0;
     render::GpuAssets assets_;
+    std::string asset_key_;
+#ifdef DK_DISK_VOXELS
+    render::VoxelAssets voxel_assets_;
+    std::vector<std::shared_ptr<const CpuAsset>> voxel_queries_;
+#endif
     graphics::Image image_;
     graphics::ImageView view_;
     VkDescriptorSet descriptor_ = VK_NULL_HANDLE;

@@ -1,11 +1,14 @@
 ---
 module: render-data
 created_at: "2026-10-03T15:06:44+08:00"
-updated_at: "2026-10-12T15:00:00+08:00"
+updated_at: "2026-11-12T10:31:11+08:00"
 status: accepted
 ---
 
 # RenderScene 与 RenderView
+
+M23.6 的 `RenderScene::extract` 可显式 `unlit_inspection=true`，仅将渲染快照的环境置为关闭；
+原 Scene、revision、实体与 TRS 不变。默认保持原环境。Editor 与独立 capture 共用该提取规则。
 
 ## M8.2 临时变换预览
 

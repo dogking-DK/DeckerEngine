@@ -303,6 +303,32 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     ImGui::BeginDisabled(model_.pending() || input_.active() || input_.navigating() || path_projection);
     if(ImGui::Checkbox("Unlit inspection",&viewport_settings.unlit_inspection)) viewport_settings_changed(viewport_settings);
     mark("unlit_inspection"); help("viewport.unlit_inspection"); ImGui::EndDisabled();
+    ImGui::BeginDisabled(model_.pending() || input_.active() || input_.navigating() || path_projection);
+    const auto open_voxel=[&] {
+        const auto state=model_.editor_viewport()->query();
+        if(!state) { report("Voxel settings",std::unexpected(state.error())); return; }
+        voxel_draft_=state->settings.voxel; voxel_draft_guard_=state->guard; ImGui::OpenPopup("Voxel display");
+    };
+    if(settings_help_.reveal("Viewport","Voxel") && !ImGui::IsPopupOpen("Voxel display")) open_voxel();
+    if(ImGui::SmallButton("Voxel settings")) open_voxel(); mark("voxel_settings");
+    if(ImGui::BeginPopup("Voxel display")) {
+        ImGui::Checkbox("Directional light",&voxel_draft_.directional);
+        mark("voxel_directional"); help("viewport.voxel_shading");
+        ImGui::InputScalarN("Light direction",ImGuiDataType_Double,voxel_draft_.light_direction.data(),3,nullptr,nullptr,"%.6f");
+        help("viewport.voxel_light_direction");
+        ImGui::InputScalarN("Irradiance",ImGuiDataType_Double,voxel_draft_.irradiance.data(),3,nullptr,nullptr,"%.4f");
+        help("viewport.voxel_irradiance");
+        if(ImGui::Button("Apply") && voxel_draft_guard_) {
+            auto candidate=model_.editor_viewport()->settings(); candidate.voxel=voxel_draft_;
+            const auto applied=model_.editor_viewport()->set(*voxel_draft_guard_,candidate);
+            report("Voxel settings",applied ? Result<void>{} : std::unexpected(applied.error()));
+            if(applied) { voxel_draft_guard_=applied->guard; viewport_settings=applied->settings; }
+        }
+        mark("voxel_apply"); ImGui::SameLine();
+        if(ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+        mark("voxel_cancel"); ImGui::EndPopup();
+    }
+    ImGui::EndDisabled();
     // Keep one line in all modes so toggling a preference does not resize the image.
     ImGui::TextDisabled(path_projection ? "Path trace supports Perspective and Orthographic" :
         environment_projection && !viewport_settings.unlit_inspection ? "Atmosphere and clouds support Perspective and Orthographic" :
@@ -341,7 +367,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
             if(path_mode()) preview.update_path(*s,acceptance_path_extent_ ? std::min(width,acceptance_path_extent_) : width,acceptance_path_extent_ ? std::min(height,acceptance_path_extent_) : height,srgb,input_.camera(),input_.edit(),input_.revision(),path_settings());
             else
 #endif
-            preview.update(*s,width,height,srgb,input_.camera(),input_.edit(),input_.revision(),float(viewport_settings.raster_exposure),environment_settings_,viewport_settings.unlit_inspection);
+            preview.update(*s,width,height,srgb,input_.camera(),input_.edit(),input_.revision(),float(viewport_settings.raster_exposure),environment_settings_,viewport_settings.unlit_inspection,viewport_settings.voxel);
             if (preview.texture()) {
                 const auto& info=preview.info();
                 const float scale=std::min(available.x/static_cast<float>(info.width),available.y/static_cast<float>(info.height));

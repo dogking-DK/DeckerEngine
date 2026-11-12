@@ -6,6 +6,7 @@
 
 | 相关行为 | 构建 target | CTest 查找范围 |
 | --- | --- | --- |
+| 体素 Editor/GUI/Console/IPC、Gizmo 与独立冻结截图（M23.6） | dk_editor_app、dk_run、dk_ctl、dk_voxel_asset_process_probe | `^dk\.voxels\.editor_capture_gpu_required$`（后台窗口、required GPU/validation/sync） |
 | Error、StableId、Logger | dk_core_tests | `^dk\.core\.` |
 | stdout/stderr 日志分离 | dk_log_probe | `^dk\.core\.log_stream_separation$` |
 | Eigen 基础数学/Transform | dk_math_tests | `^dk\.math\.` |

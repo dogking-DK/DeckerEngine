@@ -5,7 +5,7 @@
 
 namespace dk::render::detail {
 struct EnvironmentDepth { double near_m,far_m; bool orthographic; };
-inline Result<EnvironmentDepth> environment_depth(const ViewDescription& view) {
+inline Result<EnvironmentDepth> forward_depth(const ViewDescription& view,double maximum_ratio) {
     const auto& p=view.projection; const Mat3d rotation=view.camera_world.matrix().topLeftCorner<3,3>();
     const bool orthographic=p(3,3)==1;
     Mat4d expected=Mat4d::Zero();
@@ -16,7 +16,7 @@ inline Result<EnvironmentDepth> environment_depth(const ViewDescription& view) {
     const double near_m=p(2,3)/p(2,2),far_m=orthographic ? near_m-1/p(2,2) : p(2,3)/(p(2,2)+1);
     const bool supported=orthographic ?
         (2/p(0,0)<=100000 && 2/std::abs(p(1,1))<=100000) :
-        (far_m/near_m<=10000*(1+1e-10) &&
+        (far_m/near_m<=maximum_ratio*(1+1e-10) &&
         (p.topLeftCorner<2,2>().diagonal().cwiseAbs().array()>=.1).all() &&
         std::abs(p(0,2))<=2 && std::abs(p(1,2))<=2);
     if(!p.allFinite() || p!=expected || p(0,0)<=0 || p(1,1)==0 ||
@@ -25,9 +25,13 @@ inline Result<EnvironmentDepth> environment_depth(const ViewDescription& view) {
         far_m>1e6*(1+1e-10) || !supported ||
         !(rotation.transpose()*rotation).isApprox(Mat3d::Identity(),1e-10) || std::abs(rotation.determinant()-1)>1e-10 ||
         p(2,2)>=0)
-        return std::unexpected(Error{ErrorCode::not_supported,"atmosphere requires a rigid finite forward-Z camera: far <= 1e6 m; perspective far/near <= 10000 and bounded FOV, or centered orthographic spans <= 100000 m"});
+        return std::unexpected(Error{ErrorCode::not_supported,maximum_ratio==10000 ?
+            "atmosphere requires a rigid finite forward-Z camera: far <= 1e6 m; perspective far/near <= 10000 and bounded FOV, or centered orthographic spans <= 100000 m" :
+            "voxel raster requires a rigid finite forward-Z camera: far <= 1e6 m; perspective far/near <= 1e6 and bounded FOV, or centered orthographic spans <= 100000 m"});
     return EnvironmentDepth{near_m,far_m,orthographic};
 }
+inline Result<EnvironmentDepth> environment_depth(const ViewDescription& view) { return forward_depth(view,10000); }
+inline Result<EnvironmentDepth> voxel_depth(const ViewDescription& view) { return forward_depth(view,1e6); }
 inline Result<Mat3d> normal_matrix(const Transformd& world) {
     auto inverse=world.inverse();
     if(!inverse) return std::unexpected(inverse.error().with_context("Lambert normal transform"));

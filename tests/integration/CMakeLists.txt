@@ -7,6 +7,18 @@ if(TARGET dk_asset_voxel_importers AND DK_BUILD_ASSET_RUNTIME AND DK_BUILD_ASSET
         "-DPROBE=$<TARGET_FILE:dk_voxel_asset_process_probe>" "-DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-artifacts/$<CONFIG>"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/VoxelAssetProcessTest.cmake")
     set_tests_properties(dk.voxels.assets_process PROPERTIES TIMEOUT 120 LABELS "cpu")
+    if(WIN32 AND TARGET dk_editor_app AND TARGET dk_render_voxels AND TARGET dk_render_services)
+        find_package(Python3 3.11 COMPONENTS Interpreter REQUIRED)
+        add_test(NAME dk.voxels.editor_capture_gpu_required
+            COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${PROJECT_SOURCE_DIR}/sdk/python" "PYTHONDONTWRITEBYTECODE=1"
+                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/VoxelWorkflowTest.py"
+                --editor "$<TARGET_FILE:dk_editor_app>" --runner "$<TARGET_FILE:dk_run>" --client "$<TARGET_FILE:dk_ctl>"
+                --fixture "$<TARGET_FILE:dk_voxel_asset_process_probe>" --example "${PROJECT_SOURCE_DIR}/examples/render/voxel_capture.py"
+                --mesh-fixture "${PROJECT_SOURCE_DIR}/tests/fixtures/render-disk/assets"
+                --work-dir "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>")
+        set_tests_properties(dk.voxels.editor_capture_gpu_required PROPERTIES TIMEOUT 420 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1;DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1=1")
+    endif()
     if(TARGET dk_render_pipeline AND TARGET dk_render_voxels)
         add_executable(dk_voxel_asset_gpu_probe VoxelAssetGpuProbe.cpp)
         target_link_libraries(dk_voxel_asset_gpu_probe PRIVATE dk::asset_runtime dk::asset_voxel_importers dk::render_pipeline dk::render_voxels OpenVDB::openvdb nlohmann_json::nlohmann_json)

@@ -7,7 +7,7 @@ namespace {
 Result<void> validate(const EditorViewportSettings& settings) {
     const auto& p=settings.path;
     const auto range=[](double v,double low,double high){return std::isfinite(v) && v>=low && v<=high;};
-    if(!range(settings.raster_exposure,0,1e6) || !p.target || p.bounces<1 || p.bounces>32 ||
+    if(!settings.voxel.valid() || !range(settings.raster_exposure,0,1e6) || !p.target || p.bounces<1 || p.bounces>32 ||
        !p.restir_candidates || p.restir_candidates>64 || !range(p.exposure,-16,16) ||
        !range(p.time_seconds,-1e9,1e9) || !range(p.cloud_albedo,0,1) || !range(p.cloud_anisotropy,-.95,.95) ||
        !p.sky.allFinite() || (p.sky.array()<0).any() || (p.sky.array()>1000).any() || !p.surface_only)

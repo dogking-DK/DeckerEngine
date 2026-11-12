@@ -8,3 +8,7 @@ target_sources(dk_render_disk PRIVATE src/DiskScene.cpp
 target_link_libraries(dk_render_disk PUBLIC dk::render_data dk::render_resources dk::asset_importers
     PRIVATE dk::asset_runtime dk::io dk::memory dk::profiling)
 dk_target_defaults(dk_render_disk)
+if(TARGET dk_asset_voxel_importers AND TARGET dk_render_voxels)
+    target_link_libraries(dk_render_disk PRIVATE dk::asset_voxel_importers dk::geometry_voxels_sparse)
+    target_compile_definitions(dk_render_disk PUBLIC DK_DISK_VOXELS=1)
+endif()

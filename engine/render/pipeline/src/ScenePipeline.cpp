@@ -912,7 +912,7 @@ Result<void> ScenePipeline::release_cloud_history(SubmissionQueue& queue,std::ui
 #endif
     return std::unexpected(Error{ErrorCode::not_found,"Cloud history view not found"});
 }
-Result<std::string> shader_fingerprint(const std::filesystem::path& directory,bool environment) {
+Result<std::string> shader_fingerprint(const std::filesystem::path& directory,bool environment,bool voxels) {
     const std::array files{"scene.slang","tone.slang","sunlight.slang","aerial.slang","RasterCamera.slang","CloudCamera.slang",
         "../../engine/render/atmosphere/shaders/atmosphere.slang","../../engine/render/atmosphere/shaders/AtmosphereTransport.slang",
         "cloud-composition.slang","cloud-reconstruction.slang","../../engine/render/clouds/shaders/cloud-shadow.slang","../../engine/render/clouds/shaders/CloudTypes.slang","../../engine/render/clouds/shaders/CloudTransport.slang"};
@@ -925,6 +925,22 @@ Result<std::string> shader_fingerprint(const std::filesystem::path& directory,bo
         char c; while(stream.get(c)) append(static_cast<unsigned char>(c));
         if(!stream.eof()) return std::unexpected(Error{ErrorCode::io_error,"cannot finish render shader fingerprint"});
         append(0);
+    }
+    if(voxels) {
+#ifdef DK_RENDER_VOXELS
+        const std::array paths{directory/"voxel-raster.slang",directory/"voxel-composite.slang",
+            std::filesystem::path{DK_VOXEL_SHADER_DIR}/"voxel-hdda.slang",std::filesystem::path{DK_VOXEL_SHADER_DIR}/"pnano-adapter.slang",
+            std::filesystem::path{DK_VOXEL_NANO_INCLUDE_DIR}/"nanovdb/PNanoVDB.h"};
+        for(const auto& path:paths) {
+            std::ifstream stream(path,std::ios::binary);
+            if(!stream) return std::unexpected(Error{ErrorCode::io_error,"cannot read voxel shader fingerprint input"});
+            char c; while(stream.get(c)) append(static_cast<unsigned char>(c));
+            if(!stream.eof()) return std::unexpected(Error{ErrorCode::io_error,"cannot finish voxel shader fingerprint"});
+            append(0);
+        }
+#else
+        return std::unexpected(Error{ErrorCode::not_supported,"voxel shaders were not built"});
+#endif
     }
     // CPU-side sampling/mapping version, including the fixed 64 x 64 x 128 AP grid.
     for(const unsigned char c:std::string_view{"render-environment-v2:64x64x128:128:cloud-joint-v1:256x64x64:cloud-reconstruct-v1:96to256x8:half-fixed:cloud-shadow-v1:sunward-inner-sphere:environment-session-v1:low-sun-32"}) append(c);

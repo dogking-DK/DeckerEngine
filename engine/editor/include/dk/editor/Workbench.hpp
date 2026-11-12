@@ -14,6 +14,7 @@ struct WorkbenchOptions {
     bool smoke = false;
     bool pathtrace_smoke = false;
     bool viewport_command_smoke = false;
+    bool voxel_workflow_smoke = false;
     bool camera_command_smoke = false;
     bool settings_help_smoke = false;
     bool console_workflow_smoke = false;

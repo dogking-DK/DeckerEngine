@@ -1,6 +1,7 @@
 #pragma once
 #include <dk/services/SceneService.hpp>
 #include <dk/services/EditorCamera.hpp>
+#include <dk/services/VoxelDisplaySettings.hpp>
 #include <functional>
 #include <memory>
 
@@ -22,6 +23,7 @@ struct ViewportPathSettings {
 struct EditorViewportSettings {
     bool path_trace=false,unlit_inspection=false;
     double raster_exposure=1;
+    VoxelDisplaySettings voxel;
     ViewportPathSettings path;
     bool operator==(const EditorViewportSettings&) const = default;
 };

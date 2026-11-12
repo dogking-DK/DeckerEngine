@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-11-11T20:28:55+08:00"
+updated_at: "2026-11-12T10:31:11+08:00"
 ---
 
 # 构建与依赖配置
@@ -147,6 +147,16 @@ cmake --preset windows-voxels-raster -DDK_WARNINGS_AS_ERRORS=ON
 程序化调用与限制见[渲染指南](render.md#m234-程序化体素合成)。
 
 稠密隔离配置只选择 `dk_voxel_tests`。CPU 与 GPU 查询的 target/验证范围分别见[CPU 契约](../design/render-voxels.md#m232-cpu-实施契约)、[GPU 契约](../design/render-voxels.md#m233-gpu-实施契约)。
+
+`windows-voxel-editor` 在 windows-editor 上显式启用稠密/稀疏 CPU 与 voxel GPU 模块，复用固定 VDB 无 CUDA 依赖。
+M23.6 后台 Editor / Console / IPC 与独立 capture 的真实 GPU 验收：
+
+```powershell
+cmake --preset windows-voxel-editor
+& ./scripts/verify.ps1 -BuildDir out/build/windows-voxel-editor -Target @('dk_editor_app','dk_run','dk_ctl','dk_voxel_asset_process_probe') -TestRegex '^dk\.voxels\.editor_capture_gpu_required$' -Reason 'M23.6 光栅使用闭环验收'
+```
+
+必须实际支持 Vulkan 与 required validation，不将设备缺失当作通过；用法见[体素工作流](voxels.md)。
 `windows-scripting` 继承 windows-dev 并启用 `DK_BUILD_SCRIPTING_LUAU`，要求 Scene/Framework Runtime，自动选择 scripting feature，提供 `dk::scripting_luau` 和 runner 的 `--script FILE.luau`；见 [脚本指南](scripting.md)。
 `windows-graphics` 继承 windows-dev，显式启用 DK_BUILD_GRAPHICS_DEVICE、DK_BUILD_GRAPHICS_SHADERS、DK_BUILD_GRAPHICS_OFFSCREEN、DK_BUILD_GRAPHICS_GRAPH、DK_BUILD_RENDER_DATA、DK_BUILD_RENDER_RESOURCES、DK_BUILD_RENDER_PIPELINE、DK_BUILD_RENDER_DISK、DK_BUILD_RENDER_CAPTURE、DK_BUILD_PHYSICS_GPU、DK_BUILD_RENDER_SIMULATION、DK_BUILD_RENDER_ATMOSPHERE；
 Offscreen 要求 Device、Shaders、Graph，复用已有 feature。设备/资源和离屏探针见 [Graphics 指南](graphics.md)、[离屏指南](offscreen.md)。

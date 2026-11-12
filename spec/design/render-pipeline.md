@@ -1,11 +1,15 @@
 ---
 module: render-pipeline
 created_at: "2026-10-03T16:28:50+08:00"
-updated_at: "2026-11-11T20:41:10+08:00"
+updated_at: "2026-11-12T10:31:11+08:00"
 status: accepted
 ---
 
 # 最小场景渲染管线
+
+M23.6 体素相机复用刚体 forward-Z 解析但采用独立 far/near≤1e6 上限，接受 Editor 默认 .05/10000 镜头；
+大气仍≤10000，far≤1e6 m、正交跨度≤100000 m、有限/合法矩阵检查保持。
+`shader_fingerprint(..., voxels=true)` 加入 voxel raster/composite、HDDA、adapter、固定 PNanoVDB 头，供独立 capture 记录及变化拒绝。
 
 ## 天空漫射缓存
 

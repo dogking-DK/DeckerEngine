@@ -147,6 +147,9 @@ std::vector<SettingInfo> build_settings_catalog(const CommandCatalogSnapshot& ca
     add("viewport.raster_exposure","Environment","Viewport","Raster exposure","光栅 曝光","editor.viewport.set","raster_exposure","Linear raster exposure multiplier; independent from path tracing EV.",view);
     add("viewport.renderer","Viewport","View","Renderer","渲染器 光线追踪 光栅","editor.viewport.set","renderer","Raster or Path trace. Path trace requires the module and compatible GPU.",view);
     add("viewport.unlit_inspection","Viewport","View","Unlit inspection","无光照 检查","editor.viewport.set","unlit_inspection","Inspect raster geometry without scene atmosphere/light.",view);
+    add("viewport.voxel_shading","Viewport","Voxel","Voxel shading","体素 光照","editor.viewport.set","voxel_shading","Unlit or nonmetallic directional solid voxel shading.",view);
+    add("viewport.voxel_light_direction","Viewport","Voxel","Voxel light direction","体素 光源 方向","editor.viewport.set","voxel_light_direction","Unit world direction towards the light.",view);
+    add("viewport.voxel_irradiance","Viewport","Voxel","Voxel irradiance","体素 辐照度","editor.viewport.set","voxel_irradiance","Linear RGB irradiance for directional voxel shading.",view);
     for(const auto& [key,label,info]:std::initializer_list<std::array<const char*,3>>{
         {"mode","Cloud render mode","Temporal progressively refines while stationary; Reference requires at most 4096 viewport pixels."},
         {"time_seconds","Cloud render time","Fixed time in seconds; changes reset cloud history. Initial UI value 0."},
@@ -244,6 +247,7 @@ std::string setting_unavailable(const SettingInfo& s,const SettingsContext& c) {
         if((id=="path.initial_candidates" || id=="path.temporal_reuse" || id=="path.spatial_reuse") && !c.restir) return "Select ReSTIR DI to edit reuse/candidate settings.";
         if((id=="path.time_seconds" || id=="path.cloud_albedo" || id=="path.cloud_anisotropy") && !c.scene_media) return "Select Scene media to edit medium settings.";
         if(id=="viewport.unlit_inspection" && c.path_mode) return "Unlit inspection applies to the raster renderer.";
+        if(id.starts_with("viewport.voxel_") && c.path_mode) return "Voxel display settings apply to the raster renderer.";
     } else if(id.starts_with("simulation.") && s.section!="Next experiment") {
         if(c.gizmo) return "Finish the active Gizmo first.";
         if(id=="simulation.play" || id=="simulation.prepare") {

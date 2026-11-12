@@ -1,7 +1,7 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-10-20T01:07:00+08:00"
+updated_at: "2026-11-12T10:31:11+08:00"
 status: accepted
 ---
 
@@ -11,6 +11,34 @@ status: accepted
 无需窗口；设备延迟到后台 capture 执行时创建。
 
 ## render.capture
+
+### 实体体素光栅截图
+
+启用 VDB 和 render_voxels 的构建支持 Scene 的 voxel 引用，和 mesh 共享深度/HDR/曝光/色调映射。
+以下可选参数属于光栅 `render.capture`，路径模式拒绝这些显式参数：
+
+| 参数 | 默认与约束 |
+| --- | --- |
+| voxel_shading | `unlit`；可选 `directional`，要求 voxel palette 和混合场景 mesh 材质均非金属 |
+| voxel_light_direction | `[0,0,1]`，指向光源的单位世界向量，长度误差最多 1e-6 |
+| voxel_irradiance | `[1,1,1]`，有限 RGB，每通道 [0,1000000] |
+| unlit_inspection | false；true 仅在渲染快照忽略 Scene 的大气/云 |
+
+含体素场景的大气/云组合、路径追踪和 `render.sequence` 尚不支持，返回 not_supported。
+未显式 inspection 时不自动关闭环境；非法光方向/能量整体拒绝。
+含 voxel 的 CPU 资产在接受请求前冻结（包括同场景 mesh），最多 64 MiB，计入 Jobs 输入预算。
+因此缺文件/坏 metadata/预算错误可能直接拒绝请求；不生成 JobId、不消耗 frame、不改旧输出。
+接受后源文件、场景编辑与 Editor 会话设置均不影响任务。准备阶段为同步 CPU 工作，较大导入可能阻塞宿主。
+provenance 增加上述实际参数，含体素任务另含 `asset_snapshot:"accepted"`、`asset_cpu_bytes`；
+quality 为 `voxel_unlit_v1` / `voxel_directional_v1`，完成时 shader_fingerprint 覆盖 HDDA 与 PNanoVDB include；
+成功结果增加 `voxel_count`（实例数，mesh-only 为 0），`draw_count` 仍表示 mesh draw。
+结果仍通过 jobs 查询，只有 succeeded 代表输出已经原子发布。
+
+```json
+{"method":"render.capture","params":{"guard":{"document_id":"<当前文档>","revision":1},"output":"voxel.ppm","width":256,"height":256,"camera":{"eye":[0,0,-2],"target":[0,0,0]},"voxel_shading":"directional","voxel_light_direction":[0,0,-1],"voxel_irradiance":[2,2,2],"exposure":1,"validation":"required"}}
+```
+
+可执行 Python 示例与加载说明见[体素工作流](../guides/voxels.md)。
 
 对活动内存 Scene 提交截图，effect=external、undoable=false，不允许进入 scene.transaction。
 必须提供当前 guard；成功提交不改变 Scene revision、dirty 或撤销历史，也不隐式保存。
@@ -52,7 +80,8 @@ temporal使用半尺寸重建和每作业独立历史，输出最多1920×1080�
 返回 `{job_id,document_id,scene_id,revision,frame,width,height,output,provenance}`；
 frame 在当前 Runtime 内从 1 递增，拒绝请求不消耗帧号。输出路径规范化为工程相对路径。
 提交时复制 Scene 与 Project 映射，所以随后的编辑、撤销或场景替换不会影响该次截图。
-资产文件在 worker 执行时读取；不保证外部资产文件被同时修改时的内容快照。
+纯 mesh 任务的资产文件在 worker 执行时读取；不保证外部资产文件被同时修改时的内容快照。
+含 voxel 的光栅任务按下述契约在接受前冻结 CPU 资产。
 
 使用 [jobs.get / jobs.wait / jobs.cancel](jobs.md) 查询、等待和取消。
 succeeded 的 result 为 `{kind:"capture",document_id,scene_id,revision,frame,width,height,output,draw_count,provenance}`。

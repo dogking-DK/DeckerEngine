@@ -44,6 +44,19 @@ TEST_CASE("viewport commands are host only discoverable and complete from shared
     CHECK_FALSE(f.call("scene.transaction",{{"guard",{{"document_id",q["guard"]["document_id"]},{"revision",1}}},
         {"commands",Json::array({{{"method","editor.viewport.pause"},{"params",{{"guard",q["guard"]}}}}})}}));
 }
+TEST_CASE("viewport voxel raster settings work without RT and reject atomically without scene history") {
+    Fixture f(false); const auto scene=f.model->snapshot()->state; const auto history=f.model->history();
+    const auto first=f.query();
+    auto changed=f.change({{"voxel_shading","directional"},{"voxel_light_direction",{0,0,-1}},{"voxel_irradiance",{2,3,4}}});
+    CHECK(changed["guard"]["revision"]==first["guard"]["revision"].get<std::uint64_t>()+1);
+    CHECK(changed["settings"]["voxel_shading"]=="directional"); CHECK(changed["settings"]["voxel_irradiance"]==Json({2,3,4}));
+    CHECK(f.change({{"voxel_shading","directional"}})["guard"]==changed["guard"]);
+    CHECK_FALSE(f.call("editor.viewport.set",{{"guard",first["guard"]},{"voxel_shading","unlit"}}));
+    CHECK_FALSE(f.call("editor.viewport.set",{{"guard",changed["guard"]},{"voxel_light_direction",{0,0,0}},{"raster_exposure",3}}));
+    CHECK(f.query()["guard"]==changed["guard"]); CHECK(f.query()["settings"]["raster_exposure"]==1);
+    CHECK(f.model->snapshot()->state.revision==scene.revision); CHECK(f.model->snapshot()->state.dirty==scene.dirty);
+    CHECK(f.model->history().undo_count==history.undo_count); CHECK(f.model->history().redo_count==history.redo_count);
+}
 TEST_CASE("viewport settings and controls are atomic guarded and preserve scene history files") {
     Fixture f; const auto scene=f.model->snapshot()->state;
     const auto history=f.model->history(); const auto disk=read_file_bytes(f.files.root/"scene.json").value();

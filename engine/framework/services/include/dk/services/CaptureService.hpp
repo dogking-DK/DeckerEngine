@@ -1,5 +1,6 @@
 #pragma once
 #include <dk/services/SceneService.hpp>
+#include <dk/services/VoxelDisplaySettings.hpp>
 #include <dk/jobs/JobQueue.hpp>
 #include <dk/render/ScenePipeline.hpp>
 #include <dk/assets/GltfImporter.hpp>
@@ -56,6 +57,8 @@ struct CaptureRequest {
     std::vector<CaptureSample> samples; // Empty: one PPM. Otherwise: atomic sequence JSON.
     bool pathtrace=false,linear_json=false;
     std::optional<CapturePathTrace> path;
+    VoxelDisplaySettings voxel;
+    bool unlit_inspection=false;
 };
 struct CaptureInfo {
     DocumentId document;

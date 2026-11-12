@@ -1,11 +1,15 @@
 ---
 module: application-services
 created_at: "2026-09-22T13:28:00+08:00"
-updated_at: "2026-11-03T17:13:21+08:00"
+updated_at: "2026-11-12T10:31:11+08:00"
 status: accepted
 ---
 
 # 场景与资产应用服务
+
+M23.6 在既有 EditorViewportService 中增加 CPU `VoxelDisplaySettings`，GUI 和 viewport 命令共享校验/guard/no-op。
+显示配置不进入 Scene 或历史；CaptureService 独立接收相同值并冻结含 voxel 的 CPU 输入。
+新增能力不反向引入 GPU/VDB 到 CPU editor_services；详见[体素实施契约](render-voxels.md#m236-使用闭环实施契约)。
 
 services 提供 dk::scene_services，PUBLIC 依赖 Scene；operations 提供 dk::scene_operations，
 PUBLIC 依赖 commands 和 services。framework 与 Scene 同时开启时构建；没有窗口、GPU 或传输依赖。
