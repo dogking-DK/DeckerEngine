@@ -24,7 +24,7 @@ function(compile expected source output)
     if(expected EQUAL 0)
         string(JSON entry GET "${json}" entry)
         string(JSON version GET "${json}" schema_version)
-        if(NOT entry STREQUAL "computeMain" OR NOT version EQUAL 3)
+        if(NOT entry STREQUAL "computeMain" OR NOT version EQUAL 4)
             message(FATAL_ERROR "Invalid reflection: ${json}")
         endif()
         file(READ "${output}" magic LIMIT 4 HEX)
@@ -107,7 +107,7 @@ if(NOT code EQUAL 2 OR NOT json STREQUAL "" OR diagnostics STREQUAL "")
 endif()
 message(STATUS "shaderc Unicode/include/import/macros/repeatability/diagnostics/publication checks passed")
 
-# Schema v3 retains texture shape, and unsupported shapes preserve the prior SPIR-V.
+# Schema v4 retains texture shape, and unsupported shapes preserve the prior SPIR-V.
 compile(0 "${FIXTURES}/volume-store.slang" "${output}")
 string(JSON shape GET "${last_json}" bindings 0 image_shape)
 if(NOT shape STREQUAL "3d")
@@ -121,12 +121,17 @@ if(NOT volume_hash STREQUAL protected_hash OR NOT last_diagnostics MATCHES "unsu
     message(FATAL_ERROR "Unsupported image shape did not protect output")
 endif()
 
-# RT stages publish schema v3 and preserve prior artifacts on stage/interface rejection.
-foreach(pair "raygeneration,rayMain" "miss,missMain" "closesthit,hitMain" "anyhit,anyMain")
+# RT stages publish schema v4 and preserve prior artifacts on stage/interface rejection.
+foreach(pair "raygeneration,rayMain" "miss,missMain" "closesthit,hitMain" "anyhit,anyMain" "intersection,intersectionMain")
     string(REPLACE "," ";" parts "${pair}")
     list(GET parts 0 stage)
     list(GET parts 1 entry)
-    execute_process(COMMAND "${SHADERC}" compile --source "${FIXTURES}/raytracing.slang" --entry "${entry}"
+    if(stage STREQUAL "intersection")
+        set(rt_source "${FIXTURES}/procedural.slang")
+    else()
+        set(rt_source "${FIXTURES}/raytracing.slang")
+    endif()
+    execute_process(COMMAND "${SHADERC}" compile --source "${rt_source}" --entry "${entry}"
         --stage "${stage}" --output "${output}" RESULT_VARIABLE code OUTPUT_VARIABLE json ERROR_VARIABLE diagnostics)
     if(NOT code EQUAL 0)
         message(FATAL_ERROR "RT compile failed: ${diagnostics}")
@@ -134,7 +139,7 @@ foreach(pair "raygeneration,rayMain" "miss,missMain" "closesthit,hitMain" "anyhi
     string(JSON version GET "${json}" schema_version)
     string(JSON requires_rt GET "${json}" requires_ray_tracing)
     string(JSON fingerprint GET "${json}" source_fingerprint)
-    if(NOT version EQUAL 3 OR NOT requires_rt OR fingerprint STREQUAL "0")
+    if(NOT version EQUAL 4 OR NOT requires_rt OR fingerprint STREQUAL "0")
         message(FATAL_ERROR "Missing RT metadata: ${json}")
     endif()
     if(stage STREQUAL "raygeneration")

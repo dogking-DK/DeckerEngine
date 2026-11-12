@@ -211,6 +211,49 @@ Result<AccelerationStructure> ResourceFactory::create_blas(std::span<const Trian
     if (auto result = detail::allocate_acceleration(queue, *this, *state); !result) return std::unexpected(result.error());
     return AccelerationStructure{std::move(state)};
 }
+Result<Buffer> ResourceFactory::create_aabb_input(std::span<const vk::AabbPositionsKHR> bounds) const
+{
+    auto checked=detail::factory_queue(queue_); if (!checked) return std::unexpected(checked.error());
+    auto& queue=**checked;
+    if (auto enabled=detail::rt_enabled(queue); !enabled) return std::unexpected(enabled.error());
+    if (auto count=detail::acceleration_count(bounds.size(),queue.owner->device.adapter().ray_tracing.acceleration_structure_limits.maxPrimitiveCount); !count)
+        return std::unexpected(count.error());
+    if (auto valid=detail::aabb_bounds(bounds); !valid) return std::unexpected(valid.error());
+    auto buffer=create_buffer({bounds.size_bytes(),detail::acceleration_input_usage,BufferMemory::upload});
+    if (!buffer) return std::unexpected(buffer.error());
+    if (auto written=buffer->write(0,std::as_bytes(bounds)); !written) return std::unexpected(written.error());
+    return buffer;
+}
+Result<AccelerationStructure> ResourceFactory::create_aabb_blas(std::span<const AabbGeometry> geometries) const
+{
+    auto checked=detail::factory_queue(queue_); if (!checked) return std::unexpected(checked.error());
+    auto& queue=**checked;
+    if (auto enabled=detail::rt_enabled(queue); !enabled) return std::unexpected(enabled.error());
+    const auto& limits=queue.owner->device.adapter().ray_tracing.acceleration_structure_limits;
+    if (auto count=detail::acceleration_count(geometries.size(),limits.maxGeometryCount); !count) return std::unexpected(count.error());
+    std::uint64_t total=0;
+    for (const auto& input : geometries) {
+        if (auto valid=detail::input_owner(queue,input.bounds); !valid) return std::unexpected(valid.error());
+        if (auto valid=detail::aabb_description(input,input.bounds->description(),limits.maxPrimitiveCount); !valid) return std::unexpected(valid.error());
+        if (input.primitive_count>limits.maxPrimitiveCount-total)
+            return std::unexpected(Error{ErrorCode::invalid_argument,"BLAS total AABBs exceed device limit"});
+        total+=input.primitive_count;
+    }
+    auto state=memory::make_shared_in<detail::AccelerationState>(queue.resource,queue.owner,queue.resource,AccelerationStructureKind::bottom_level);
+    state->geometry_count=static_cast<std::uint32_t>(geometries.size()); state->geometry_kind=RayGeometryKind::procedural;
+    for (const auto& input : geometries) {
+        auto base=input.bounds->device_address(); if (!base) return std::unexpected(base.error());
+        auto address=detail::acceleration_address(*base,input.offset,vk::DeviceSize{input.primitive_count-1}*input.stride+sizeof(vk::AabbPositionsKHR),8);
+        if (!address) return std::unexpected(address.error());
+        vk::AccelerationStructureGeometryKHR geometry{};
+        geometry.setGeometryType(vk::GeometryTypeKHR::eAabbs).setFlags(input.opaque ? vk::GeometryFlagBitsKHR::eOpaque : vk::GeometryFlagsKHR{});
+        geometry.geometry.setAabbs(vk::AccelerationStructureGeometryAabbsDataKHR{vk::DeviceOrHostAddressConstKHR{*address},input.stride});
+        state->geometries.push_back(geometry); state->ranges.emplace_back(input.primitive_count,0,0,0);
+        state->inputs.push_back(input.bounds->share());
+    }
+    if (auto allocated=detail::allocate_acceleration(queue,*this,*state); !allocated) return std::unexpected(allocated.error());
+    return AccelerationStructure{std::move(state)};
+}
 Result<AccelerationStructure> ResourceFactory::create_tlas(std::span<const AccelerationStructureInstance> instances) const
 {
     auto checked = detail::factory_queue(queue_);
@@ -236,7 +279,7 @@ Result<AccelerationStructure> ResourceFactory::create_tlas(std::span<const Accel
         value.flags = static_cast<VkGeometryInstanceFlagsKHR>(instance.flags);
         value.accelerationStructureReference = instance.blas->state_->address;
         native.push_back(value);
-        state->hit_ranges.push_back({instance.sbt_record_offset, instance.blas->state_->geometry_count});
+        state->hit_ranges.push_back({instance.sbt_record_offset, instance.blas->state_->geometry_count, instance.blas->state_->geometry_kind});
         if (std::find(state->children.begin(), state->children.end(), instance.blas->state_) == state->children.end())
             state->children.push_back(instance.blas->state_);
     }

@@ -80,3 +80,23 @@ TEST_CASE("AS instances reject invalid transforms and packed field truncation")
     instance.flags=vk::GeometryInstanceFlagBitsKHR::eTriangleFacingCullDisable; REQUIRE(policy::instance_description(instance));
     REQUIRE_FALSE(AccelerationStructure{}.state()); REQUIRE_FALSE(AccelerationStructure{}.device_address());
 }
+
+TEST_CASE("AABB descriptions and CPU bounds reject malformed build inputs") {
+    AabbGeometry g{}; g.primitive_count=2;
+    BufferDesc buffer{48,policy::acceleration_input_usage};
+    REQUIRE(policy::aabb_description(g,buffer,2));
+    CHECK_FALSE(policy::aabb_description(g,buffer,1));
+    for (const auto stride : {0ull,16ull,25ull,0x100000000ull}) {
+        auto bad=g; bad.stride=stride; CHECK_FALSE(policy::aabb_description(bad,buffer,2));
+    }
+    auto bad=g; bad.offset=8; CHECK_FALSE(policy::aabb_description(bad,buffer,2));
+    bad.offset=UINT64_MAX; CHECK_FALSE(policy::aabb_description(bad,buffer,2));
+    bad=g; bad.primitive_count=0; CHECK_FALSE(policy::aabb_description(bad,buffer,2));
+    buffer.usage=vk::BufferUsageFlagBits::eStorageBuffer; CHECK_FALSE(policy::aabb_description(g,buffer,2));
+    std::array boxes{vk::AabbPositionsKHR{-1,-1,-1,1,1,1}};
+    REQUIRE(policy::aabb_bounds(boxes));
+    boxes[0].maxX=-2; CHECK_FALSE(policy::aabb_bounds(boxes));
+    boxes[0].maxX=std::numeric_limits<float>::infinity(); CHECK_FALSE(policy::aabb_bounds(boxes));
+    boxes[0].maxX=1; boxes[0].minY=std::numeric_limits<float>::quiet_NaN(); CHECK_FALSE(policy::aabb_bounds(boxes));
+    CHECK_FALSE(policy::aabb_bounds({}));
+}

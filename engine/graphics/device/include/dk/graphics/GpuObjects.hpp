@@ -11,6 +11,7 @@ struct GraphicsPipelineDesc;
 struct ComputePipelineDesc;
 struct BindingWrite;
 struct TriangleGeometry;
+struct AabbGeometry;
 struct AccelerationStructureInstance;
 struct RayTracingPipelineDesc;
 namespace detail { struct ViewState; struct SamplerState; struct ShaderState; struct ObjectAccess; }
@@ -85,6 +86,8 @@ public:
     [[nodiscard]] Result<Image> create_image(const ImageDesc& description) const;
     // Copy descriptions and retain input/BLAS owners. No commands are recorded or submitted here.
     [[nodiscard]] Result<AccelerationStructure> create_blas(std::span<const TriangleGeometry> geometries) const;
+    [[nodiscard]] Result<Buffer> create_aabb_input(std::span<const vk::AabbPositionsKHR> bounds) const;
+    [[nodiscard]] Result<AccelerationStructure> create_aabb_blas(std::span<const AabbGeometry> geometries) const;
     [[nodiscard]] Result<AccelerationStructure> create_tlas(std::span<const AccelerationStructureInstance> instances) const;
     [[nodiscard]] Result<RayTracingPipeline> create_ray_tracing_pipeline(const RayTracingPipelineDesc& description) const;
     [[nodiscard]] Result<ShaderBindingTable> create_shader_binding_table(const RayTracingPipeline& pipeline) const;

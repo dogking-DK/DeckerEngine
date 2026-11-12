@@ -4,6 +4,7 @@
 namespace dk::graphics {
 namespace detail { struct AccelerationState; }
 enum class AccelerationStructureKind { bottom_level, top_level };
+enum class RayGeometryKind { triangles, procedural };
 enum class AccelerationStructureStatus { candidate, submitted, completed, device_lost };
 struct AccelerationStructureSizes {
     vk::DeviceSize storage = 0, scratch = 0;
@@ -41,6 +42,13 @@ private:
     friend struct detail::ObjectAccess;
     explicit AccelerationStructure(std::shared_ptr<detail::AccelerationState> state) : state_(std::move(state)) {}
     std::shared_ptr<detail::AccelerationState> state_;
+};
+struct AabbGeometry {
+    const Buffer* bounds = nullptr;
+    vk::DeviceSize offset = 0, stride = sizeof(vk::AabbPositionsKHR);
+    std::uint32_t primitive_count = 0;
+    bool opaque = true;
+    // Raw GPU contents must contain finite ordered bounds. Use create_aabb_input for checked CPU upload.
 };
 struct TriangleGeometry {
     const Buffer* vertices = nullptr;

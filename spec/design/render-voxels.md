@@ -1,7 +1,7 @@
 ---
 module: render-voxels
 created_at: "2026-11-11T14:51:58+08:00"
-updated_at: "2026-11-12T11:32:53+08:00"
+updated_at: "2026-11-12T11:53:00+08:00"
 status: accepted
 ---
 
@@ -379,7 +379,7 @@ HDDA 调优限于不改变表面语义的冗余查值消除：单轴表面转换
 | M23.8 intersection | 同一 accessor/布局另行编译到 intersection，验证 descriptor stage、属性生产/消费和设备 maxRayHitAttributeSize；required GPU 在混合 triangle/procedural SBT 中读 NanoVDB 并报告解析交点，覆盖辐射/visibility；compute 通过不能替代本项 |
 | M23.9 路径整合 | 共享 HDDA 接入真实多次反弹/阴影，与 CPU/三角化验证 oracle 对照；tile/leaf/RT 块边界保持同一实体表面，上传/AS/历史版本一致 |
 
-M23.2 依赖/CPU 门禁见 [0160](../development/0160-voxel-cpu-sparse.md)；M23.3 compute 编译/反射、SPIR-V 和真实 GPU 门禁见 [0161](../development/0161-voxel-gpu-hdda.md)。M23.8 intersection/SBT 门禁尚未实施。
+M23.2 依赖/CPU 门禁见 [0160](../development/0160-voxel-cpu-sparse.md)；M23.3 compute 编译/反射、SPIR-V 和真实 GPU 门禁见 [0161](../development/0161-voxel-gpu-hdda.md)。M23.8 intersection/SBT 实施与独立门禁见 [0166](../development/0166-procedural-raytracing.md)：同一 PNanoVDB 32.7.0 适配、32-bit 地址/uint stride 4，混合 SBT 中读取 leaf 与 inactive constant tile，并经 ReportHit 向 closest-hit/any-hit 传属性；完整 HDDA 路径整合仍属 M23.9。
 
 首期优先验证 32-bit buffer 字节地址，网格长度和所有偏移必须同时受地址表示、descriptor/device 限制和预算约束；
 不得将超范围 offset 截断后继续读。若需要 64-bit 地址，单独验证 Slang 整数操作、SPIR-V capabilities 和设备特性后再开放，

@@ -66,6 +66,7 @@ Result<ShaderRayInterface> reflect_ray_interface(const CompiledShader& shader)
         if (op == 71 && count == 4 && w[2] == 30) parser.locations.emplace(w[1], w[3]);
         if (op == 4445) traces.push_back(w);
         if (op == 4446) return std::unexpected(unsupported()); // ExecuteCallableKHR.
+        if (op == 5334 && shader.stage != ShaderStage::intersection) return std::unexpected(unsupported()); // ReportIntersectionKHR.
         i += count;
     }
     for (const auto& [id, w] : parser.variables) {
@@ -79,8 +80,8 @@ Result<ShaderRayInterface> reflect_ray_interface(const CompiledShader& shader)
         const auto location = parser.locations.find(id);
         if (kind == RayInterfaceKind::outgoing_payload && location == parser.locations.end()) return std::unexpected(unsupported());
         if ((kind == RayInterfaceKind::outgoing_payload && shader.stage != ShaderStage::raygeneration) ||
-            (kind == RayInterfaceKind::incoming_payload && shader.stage == ShaderStage::raygeneration) ||
-            (kind == RayInterfaceKind::hit_attribute && (shader.stage != ShaderStage::closesthit && shader.stage != ShaderStage::anyhit)))
+            (kind == RayInterfaceKind::incoming_payload && (shader.stage == ShaderStage::raygeneration || shader.stage == ShaderStage::intersection)) ||
+            (kind == RayInterfaceKind::hit_attribute && (shader.stage != ShaderStage::closesthit && shader.stage != ShaderStage::anyhit && shader.stage != ShaderStage::intersection)))
             return std::unexpected(unsupported());
         result.payloads.push_back({kind, location == parser.locations.end() ? 0 : location->second, type->bytes, String{type->signature, memory::Allocator<char>{memory}}});
     }

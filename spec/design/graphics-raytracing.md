@@ -1,7 +1,7 @@
 ---
 module: graphics-raytracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-11-11T16:28:53+08:00"
+updated_at: "2026-11-12T11:53:00+08:00"
 status: accepted
 ---
 
@@ -9,7 +9,7 @@ status: accepted
 
 ## 目标与当前边界
 
-为[渐进式路径追踪](render-pathtracing.md)提供硬件三角形求交、加速结构、光追管线和 Graph 调度。
+为[渐进式路径追踪](render-pathtracing.md)提供硬件三角形及 procedural 求交、加速结构、光追管线和 Graph 调度。
 M16.2–5已提供能力、AS、管线/SBT与Graph构建/trace；实施契约见下文，阶段状态和任务顺序由[Roadmap](../roadmap.md)维护。
 沿用 Windows x64、Vulkan 1.4、Slang、Vulkan-Hpp RAII、VMA 和单提交队列，不新增跨 API RHI。
 
@@ -18,18 +18,18 @@ M16.2–5已提供能力、AS、管线/SBT与Graph构建/trace；实施契约见
 | 当前入口 | 已有能力 | 本轮需要补充 |
 | --- | --- | --- |
 | [Device.hpp](../../engine/graphics/device/include/dk/graphics/Device.hpp) | Vulkan 1.4、确定性选卡、同族共享设备；RT及独立纹理非一致索引三态请求、支持/启用/缺项与limits | 后续按Render需求扩展受支持子集 |
-| [ShaderArtifact.hpp](../../engine/graphics/shader-types/include/dk/graphics/ShaderArtifact.hpp) | graphics/compute、四种RT阶段、AS descriptor、payload/SBT及纹理非一致索引需求 | 后续按材质需求扩展能力组 |
+| [ShaderArtifact.hpp](../../engine/graphics/shader-types/include/dk/graphics/ShaderArtifact.hpp) | graphics/compute、五种RT阶段、AS descriptor、payload/SBT及纹理非一致索引需求 | 后续按材质需求扩展能力组 |
 | [Device](../../engine/graphics/device) | Buffer/Image、graphics/compute、提交保活；BDA/VMA、拥有型BLAS/TLAS、SBT与RT pipeline/encoder | 后续按Render需求扩展受支持子集 |
 | [Graph](../../engine/graphics/graph) | buffer/image/AS/SBT声明、构建/trace内容依赖、同步、导入导出与类型化回调 | GPU路径积分作为Graph客户端接入 |
 | [GpuAssets.cpp](../../engine/render/resources/src/GpuAssets.cpp) | vertex/index/transfer usage | RT 专用构建输入和着色数据；旧 buffer 不能事后追加 usage |
 
 Vulkan 版本满足不代表光追 feature 已启用。现有 CPU 几何 BVH 和云 ray marching 均不构成本页的硬件光追实现。
-首版只做设备端 BUILD 和三角形实例，不含 UPDATE/refit、压缩、序列化、程序化 AABB、motion blur、
+当前支持设备端 BUILD、triangle/AABB BLAS 与混合实例，不含 UPDATE/refit、压缩、序列化、motion blur、
 pipeline library、indirect trace、ray query、SER、异步 compute 或多 GPU。
 
-## M23.8 原生体素所需底座（设计）
+## M23.8 原生体素所需底座
 
-上述三角形/四阶段限制仍是当前实现；[M23](../roadmap.md#m23实体体素渲染)规划补齐通用 procedural 几何，尚未实施。
+本阶段实施通用 procedural 几何；验收状态见 [M23](../roadmap.md#m23实体体素渲染) 与 [0166](../development/0166-procedural-raytracing.md)。
 业务求交算法属于 [render-voxels](render-voxels.md)，Graphics 只提供类型、编译接口、资源与执行契约。
 
 - 增加 AABB 几何描述及 BLAS BUILD 路径，检查 buffer usage/BDA、offset/stride/count、乘加溢出、设备额度、有限 min/max 和范围合法性。
@@ -51,6 +51,18 @@ M23.8 另验 Render 提供的最小 PNanoVDB/Slang intersection 探针：读取�
 完整稀疏 HDDA、tile/leaf/块边界、材质和路径积分由 M23.9 另验。依据：
 [命中组](https://docs.vulkan.org/refpages/latest/refpages/source/VkRayTracingShaderGroupTypeKHR.html)、
 [intersection](https://docs.vulkan.org/spec/latest/chapters/shaders.html#shaders-intersection)。
+
+### M23.8 实施契约
+
+- `create_aabb_input` 接受 CPU `vk::AabbPositionsKHR`，逐项验证有限 min/max 与 min≤max，成功后返回完整初始化的 upload/BDA/build-input buffer。
+  `create_aabb_blas` 接受 buffer/offset/stride/count 描述，验证范围、usage、8 字节对齐、设备额度及地址；每个 BLAS 的几何类型一致，TLAS 可混合两种 BLAS。
+  与 triangle 原始 GPU 输入一样，直接提供或随后修改的 GPU 字节内容由调用方保证；不伪称 CPU 能检查 device-only 数据。M23 CPU 构建器使用受检上传入口。
+- 几何种类在 BUILD 后仍保留；TLAS 保存每个实例的 kind/count/SBT offset，trace 在发出 Vulkan 命令前校验所有 ray type 的 group kind。
+- intersection 只能输出 hit attributes，不能声明 incoming/outgoing payload 或发起 TraceRay；属性类型限定为既有 32-bit scalar/vector/struct/fixed-array 子集。
+  procedural 生产者与存在的消费者按结构和字节数匹配并检查设备限额，triangle 保留 float2 barycentrics。消费者未使用属性时允许省略。
+- 反射 JSON 升为 schema 4（新增 intersection stage）；旧枚举值及旧 triangle C++ 调用保持兼容，产物重新编译，不提供未知阶段的旧读取器兼容承诺。
+- AS/SBT 候选只在成功 submit 后发布；失败保留旧状态。Graph 沿用 typed AS/build/trace 路径；NanoVDB 按普通 storage-buffer 显式声明和保活，Graphics 不依赖 VDB。
+- 本阶段验收采用解析表面 + PNanoVDB 查值，覆盖 radiance/visibility、混合最近命中、有限区间、内部起点、错误属性/SBT、失败和关闭；不把解析探针当作实际体素积分。
 
 ## M16.2设备能力与BDA实施契约
 
@@ -185,16 +197,16 @@ opaque/mask 或单/双面影响构建/instance flags 时，按实际 key 失效�
 
 ### M16.4实施契约
 
-ShaderStage增加raygeneration/miss/closesthit/anyhit，descriptor增加acceleration_structure。
+ShaderStage支持raygeneration/miss/closesthit/anyhit/intersection，descriptor增加acceleration_structure。
 SPIR-V 1.5能力白名单按RT阶段允许RayTracingKHR；Device在native shader/layout创建前检查实际RT启用。
 Slang入口允许对应payload/hit-attribute参数类别，拒绝其他入口资源/uniform；全局AS绑定继续使用固定数组和set/binding。
-产物schema v3记录RT需求、profile、源/依赖内容指纹，以及从SPIR-V提取的payload结构和静态TraceRay SBT选择参数。
+产物schema v4记录RT需求、profile、源/依赖内容指纹，以及从SPIR-V提取的payload结构和静态TraceRay SBT选择参数。
 payload首版限32-bit标量/向量、固定数组和结构体；按结构类型匹配，不能仅比较总字节数；三角hit attribute为float2。
 不支持的接口和动态SBT选择明确拒绝，不通过手填元数据绕过原生SPIR-V检查。
 
 ResourceFactory创建RayTracingPipeline和与其一一绑定的ShaderBindingTable。管线含一个raygen、每射线类型一个miss、
-以ray-type交错排列的triangle hit groups（closest-hit必选、any-hit可选），允许同阶段多个入口；禁止混入graphics/compute。
-首版TraceRay只由raygen发出，native递归深度1，路径反弹在raygen循环实现；callable/intersection/local SBT参数暂不支持。
+以ray-type交错排列的triangle/procedural hit groups（closest-hit必选、any-hit可选，procedural必有intersection），允许同阶段多个入口；禁止混入graphics/compute。
+首版TraceRay只由raygen发出，native递归深度1，路径反弹在raygen循环实现；callable/local SBT参数暂不支持；intersection契约见M23.8。
 首版ray_type_count为1..15、hit groups最多120、布局入口最多256；push constant最多一个共享范围。
 pipeline创建前核对每个TraceRay的offset/stride/miss index及payload与对应miss/hit组；布局必须覆盖所有资源/阶段/push范围。
 TLAS保留实例SBT offset和BLAS geometry count，trace验证offset+(geometryCount-1)*rayTypeCount+rayType在hit区域内。
@@ -205,11 +217,11 @@ SBT保留pipeline/layout，BindingSet保留TLAS/BLAS，成功提交保留整个�
 沿M16.3 AS账本扩展trace-read，显式CommandBatch::prepare_trace准备SBT及TLAS/BLAS同步；普通buffer/image仍由prepare声明。
 RayTracingEncoder是带generation的批次借用，trace不隐式prepare；拒绝过期encoder、未准备/未构建AS、外来对象及不匹配SBT。
 
-验收包括四阶段编译/反射、CLI v3与失败保留旧输出、payload/布局/阶段/SBT范围拒绝，及required RT validation/sync真实射线：
+M16.4历史验收包括四阶段编译/反射、CLI v3与失败保留旧输出、payload/布局/阶段/SBT范围拒绝，及required RT validation/sync真实射线：
 命中/未命中、primitive/instance custom index、重心/距离、mask、any-hit忽略与visibility两类射线；覆盖提交失败和pending释放。
 不在本阶段实现Graph AS资源声明、路径积分或编辑器功能。
 
-扩展阶段为 raygeneration、miss、closesthit、anyhit；intersection/callable 留待实际需求。
+扩展阶段为 raygeneration、miss、closesthit、anyhit、intersection；callable 尚不支持。
 增加 AS descriptor 的类型化反射/绑定，跨阶段合并仍拒绝 binding/type/count 冲突。
 编译产物保存 feature/profile/源依赖指纹，离线 JSON schema 在实施时版本化；同步 shaderc 参考和发现接口。
 保持逐入口编译和现有固定 SPIR-V 1.5 策略，显式核验 `SPV_KHR_ray_tracing` 产物及 payload 布局。

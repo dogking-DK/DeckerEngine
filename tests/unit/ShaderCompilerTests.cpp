@@ -97,6 +97,23 @@ TEST_CASE("ray artifacts reject forged metadata unsupported capabilities and dyn
     REQUIRE_FALSE(dynamic); CHECK(dynamic.error().message.find("static")!=std::string::npos);
 }
 
+TEST_CASE("intersection reflects attributes and rejects forged payload stages", "[shaders]")
+{
+    Fixture fixture;
+    auto shader=fixture.compile("procedural.slang","intersectionMain",ShaderStage::intersection); require_success(shader);
+    check_entry(*shader,5314,"intersectionMain"); REQUIRE(validate_shader_artifact(*shader));
+    REQUIRE(shader->ray_interface.payloads.size()==1);
+    const auto& attr=shader->ray_interface.payloads[0];
+    CHECK(attr.kind==RayInterfaceKind::hit_attribute); CHECK(attr.bytes==8); CHECK(attr.signature=="s(i32;f32;)");
+    shader->ray_interface.payloads[0].bytes=4; CHECK_FALSE(validate_shader_artifact(*shader));
+    shader->stage=ShaderStage::closesthit; CHECK_FALSE(reflect_ray_interface(*shader)); // ReportHit is intersection-only.
+    for (const auto entry : {"rayMain","missMain"}) {
+        auto other=fixture.compile("raytracing.slang",entry,entry==std::string_view{"rayMain"} ? ShaderStage::raygeneration : ShaderStage::miss);
+        require_success(other); other->stage=ShaderStage::intersection;
+        CHECK_FALSE(reflect_ray_interface(*other)); // Incoming/outgoing payloads forbidden independently of metadata.
+    }
+}
+
 TEST_CASE("compute reflects storage bindings and push constants", "[shaders]")
 {
     Fixture fixture;
@@ -117,7 +134,7 @@ TEST_CASE("compute reflects storage bindings and push constants", "[shaders]")
         CHECK(shader->thread_group_size == std::array<std::uint32_t, 3>{64, 1, 1});
         CHECK(shader->spirv.get_allocator().resource() == fixture.heap);
         auto json = nlohmann::json::parse(shader_reflection_json(*shader));
-        CHECK(json.at("schema_version") == 3);
+        CHECK(json.at("schema_version") == 4);
         CHECK(json.at("entry") == "computeMain");
         CHECK(json.at("push_constants")[0].at("size") == 16);
         CHECK(fixture.heap.snapshot().live_allocations > 0);
@@ -196,7 +213,9 @@ TEST_CASE("unsupported shader layouts are rejected explicitly", "[shaders]")
 TEST_CASE("Memory allocation failure cleans partial compiler results", "[shaders]")
 {
     Fixture fixture;
-    const auto limited = fixture.system.create_heap({"limited-shaders", dk::memory::DomainCategory::render, 128}).value();
+    // MSVC Debug container proxies alone exceed 128 bytes. Leave room for noexcept
+    // empty-container construction, then fail a fallible reflection/vector growth.
+    const auto limited = fixture.system.create_heap({"limited-shaders", dk::memory::DomainCategory::render, 512}).value();
     CHECK_THROWS_AS(compile_shader({std::filesystem::path{DK_TEST_SHADER_DIR} / "bindings.slang", "computeMain"}, limited), std::bad_alloc);
     CHECK(limited.snapshot().live_allocations == 0);
     REQUIRE(limited.snapshot().failure_count > 0);

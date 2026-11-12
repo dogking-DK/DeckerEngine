@@ -57,11 +57,45 @@ Result<void> ray_payload_compatible(const ShaderRayInterface& caller, const Shad
             ++incoming;
             if (payload.signature!=outgoing->signature || payload.bytes!=outgoing->bytes)
                 return std::unexpected(invalid("ray payload structural type mismatch"));
-        } else if (payload.kind==RayInterfaceKind::hit_attribute &&
-            (payload.bytes!=8 || (payload.signature!="v2(f32)" && payload.signature!="s(v2(f32);)")))
-            return std::unexpected(invalid("triangle hit attribute must contain float2 barycentrics"));
+        }
     }
     if (incoming>1 || !callee.traces.empty()) return std::unexpected(invalid("only raygen may TraceRay; callee requires at most one incoming payload"));
+    return {};
+}
+Result<void> ray_hit_kinds(const AccelerationHitRange& range, std::uint32_t ray_types, std::span<const RayGeometryKind> kinds)
+{
+    if (auto valid=ray_hit_range(range.offset,range.count,ray_types,static_cast<std::uint32_t>(kinds.size())); !valid) return valid;
+    for (std::uint64_t i=range.offset; i<std::uint64_t{range.offset}+std::uint64_t{range.count}*ray_types; ++i)
+        if (kinds[i]!=range.kind) return std::unexpected(invalid("BLAS geometry kind does not match SBT hit group"));
+    return {};
+}
+Result<void> ray_hit_attributes(RayGeometryKind kind, const ShaderRayInterface* intersection,
+    const ShaderRayInterface& closest, const ShaderRayInterface* any, std::uint32_t max_bytes)
+{
+    if ((kind!=RayGeometryKind::triangles && kind!=RayGeometryKind::procedural) ||
+        (kind==RayGeometryKind::procedural)!=bool(intersection))
+        return std::unexpected(invalid("procedural groups require intersection; triangle groups forbid it"));
+    const ShaderRayPayload* produced=nullptr;
+    if (intersection) {
+        if (!intersection->traces.empty()) return std::unexpected(invalid("intersection cannot TraceRay"));
+        for (const auto& value : intersection->payloads) {
+            if (value.kind!=RayInterfaceKind::hit_attribute || produced || !value.bytes || value.bytes>max_bytes)
+                return std::unexpected(invalid("intersection must only produce bounded hit attributes"));
+            produced=&value;
+        }
+    }
+    for (const auto* consumer : {&closest,any}) if (consumer) {
+        const ShaderRayPayload* consumed=nullptr;
+        for (const auto& value : consumer->payloads) if (value.kind==RayInterfaceKind::hit_attribute) {
+            if (consumed || !value.bytes || value.bytes>max_bytes) return std::unexpected(invalid("invalid hit attribute size/count"));
+            consumed=&value;
+            if (intersection) {
+                if (!produced || value.bytes!=produced->bytes || value.signature!=produced->signature)
+                    return std::unexpected(invalid("intersection/consumer hit attribute structural mismatch"));
+            } else if (value.bytes!=8 || (value.signature!="v2(f32)" && value.signature!="s(v2(f32);)"))
+                return std::unexpected(invalid("triangle hit attribute must contain float2 barycentrics"));
+        }
+    }
     return {};
 }
 } // namespace dk::graphics::detail
@@ -91,6 +125,11 @@ Result<RayTracingPipeline> ResourceFactory::create_ray_tracing_pipeline(const Ra
     for (const auto& hit : desc.hits) {
         if (auto valid=detail::check_pipeline_stage(queue,hit.closest_hit,desc.layout,ShaderStage::closesthit); !valid) return std::unexpected(valid.error());
         if (hit.any_hit) if (auto valid=detail::check_pipeline_stage(queue,hit.any_hit,desc.layout,ShaderStage::anyhit); !valid) return std::unexpected(valid.error());
+        if (hit.intersection) if (auto valid=detail::check_pipeline_stage(queue,hit.intersection,desc.layout,ShaderStage::intersection); !valid) return std::unexpected(valid.error());
+        if (auto valid=detail::ray_hit_attributes(hit.kind,
+            hit.intersection ? &detail::ObjectAccess::state(*hit.intersection)->ray_interface : nullptr,
+            detail::ObjectAccess::state(*hit.closest_hit)->ray_interface,
+            hit.any_hit ? &detail::ObjectAccess::state(*hit.any_hit)->ray_interface : nullptr,rt.maxRayHitAttributeSize); !valid) return std::unexpected(valid.error());
     }
     for (const auto& trace : ray->ray_interface.traces) {
         if (trace.stride!=desc.ray_type_count || trace.offset>=desc.ray_type_count || trace.miss>=desc.misses.size())
@@ -105,6 +144,7 @@ Result<RayTracingPipeline> ResourceFactory::create_ray_tracing_pipeline(const Ra
     auto state=memory::make_shared_in<detail::RayTracingState>(queue.resource,queue.owner,queue.resource,layout);
     state->point=vk::PipelineBindPoint::eRayTracingKHR; state->ray_types=desc.ray_type_count;
     state->miss_count=static_cast<std::uint32_t>(desc.misses.size()); state->hit_count=static_cast<std::uint32_t>(desc.hits.size());
+    for (std::size_t i=0; i<desc.hits.size(); ++i) state->hit_kinds[i]=desc.hits[i].kind;
     Vector<vk::PipelineShaderStageCreateInfo> stages{memory::Allocator<vk::PipelineShaderStageCreateInfo>{queue.resource}};
     Vector<vk::RayTracingShaderGroupCreateInfoKHR> groups{memory::Allocator<vk::RayTracingShaderGroupCreateInfoKHR>{queue.resource}};
     const auto stage=[&](const ShaderModule* shader) {
@@ -116,7 +156,8 @@ Result<RayTracingPipeline> ResourceFactory::create_ray_tracing_pipeline(const Ra
     };
     groups.emplace_back(vk::RayTracingShaderGroupTypeKHR::eGeneral,stage(desc.raygeneration),VK_SHADER_UNUSED_KHR,VK_SHADER_UNUSED_KHR,VK_SHADER_UNUSED_KHR);
     for (const auto* miss : desc.misses) groups.emplace_back(vk::RayTracingShaderGroupTypeKHR::eGeneral,stage(miss),VK_SHADER_UNUSED_KHR,VK_SHADER_UNUSED_KHR,VK_SHADER_UNUSED_KHR);
-    for (const auto& hit : desc.hits) groups.emplace_back(vk::RayTracingShaderGroupTypeKHR::eTrianglesHitGroup,VK_SHADER_UNUSED_KHR,stage(hit.closest_hit),stage(hit.any_hit),VK_SHADER_UNUSED_KHR);
+    for (const auto& hit : desc.hits) groups.emplace_back(hit.kind==RayGeometryKind::procedural ? vk::RayTracingShaderGroupTypeKHR::eProceduralHitGroup : vk::RayTracingShaderGroupTypeKHR::eTrianglesHitGroup,
+        VK_SHADER_UNUSED_KHR,stage(hit.closest_hit),stage(hit.any_hit),stage(hit.intersection));
     vk::RayTracingPipelineCreateInfoKHR info{};
     info.setStages(stages).setGroups(groups).setMaxPipelineRayRecursionDepth(1).setLayout(*layout->layout);
     try { state->pipeline=vk::raii::Pipeline{queue.owner->device.logical_device(),nullptr,nullptr,info}; }

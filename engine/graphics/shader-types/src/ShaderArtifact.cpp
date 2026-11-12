@@ -3,7 +3,7 @@
 
 namespace dk::graphics {
 bool is_ray_tracing_stage(ShaderStage stage) noexcept
-{ return stage == ShaderStage::raygeneration || stage == ShaderStage::miss || stage == ShaderStage::closesthit || stage == ShaderStage::anyhit; }
+{ return stage == ShaderStage::raygeneration || stage == ShaderStage::miss || stage == ShaderStage::closesthit || stage == ShaderStage::anyhit || stage == ShaderStage::intersection; }
 std::string_view shader_stage_name(ShaderStage stage) noexcept
 {
     switch (stage) {
@@ -14,6 +14,7 @@ std::string_view shader_stage_name(ShaderStage stage) noexcept
     case ShaderStage::miss: return "miss";
     case ShaderStage::closesthit: return "closesthit";
     case ShaderStage::anyhit: return "anyhit";
+    case ShaderStage::intersection: return "intersection";
     }
     return "unknown";
 }
@@ -64,7 +65,7 @@ Result<void> validate_shader_artifact(const CompiledShader& shader)
     if (words.size() < 5 || words[0] != 0x07230203U || words[1] != 0x00010500U || !words[3] || words[4])
         return std::unexpected(invalid("expected a Slang SPIR-V 1.5 artifact"));
     const std::uint32_t model = stage == ShaderStage::vertex ? 0U : stage == ShaderStage::fragment ? 4U : stage == ShaderStage::compute ? 5U :
-        stage == ShaderStage::raygeneration ? 5313U : stage == ShaderStage::anyhit ? 5315U : stage == ShaderStage::closesthit ? 5316U : 5317U;
+        stage == ShaderStage::intersection ? 5314U : stage == ShaderStage::raygeneration ? 5313U : stage == ShaderStage::anyhit ? 5315U : stage == ShaderStage::closesthit ? 5316U : 5317U;
     unsigned entries = 0;
     bool ray_capability = false, ray_extension = false;
     bool non_uniform = false, sampled_indexing = false;

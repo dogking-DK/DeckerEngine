@@ -2,12 +2,13 @@
 #include "ObjectInternal.hpp"
 
 namespace dk::graphics::detail {
+struct AccelerationHitRange { std::uint32_t offset=0, count=0; RayGeometryKind kind=RayGeometryKind::triangles; };
 struct AccelerationState : ObjectState {
     AccelerationState(std::shared_ptr<DeviceLifetime> device, memory::ResourceHandle resource, AccelerationStructureKind value)
         : ObjectState(std::move(device)), kind(value), inputs(memory::Allocator<Buffer>{resource}),
           children(memory::Allocator<std::shared_ptr<AccelerationState>>{resource}),
           geometries(memory::Allocator<vk::AccelerationStructureGeometryKHR>{resource}),
-          ranges(memory::Allocator<vk::AccelerationStructureBuildRangeInfoKHR>{resource}), hit_ranges(memory::Allocator<std::array<std::uint32_t,2>>{resource}) {}
+          ranges(memory::Allocator<vk::AccelerationStructureBuildRangeInfoKHR>{resource}), hit_ranges(memory::Allocator<AccelerationHitRange>{resource}) {}
     AccelerationStructureKind kind;
     AccelerationStructureSizes sizes;
     AccelerationStructureState state;
@@ -18,7 +19,8 @@ struct AccelerationState : ObjectState {
     Vector<vk::AccelerationStructureGeometryKHR> geometries;
     Vector<vk::AccelerationStructureBuildRangeInfoKHR> ranges;
     std::uint32_t geometry_count = 0;
-    Vector<std::array<std::uint32_t,2>> hit_ranges; // Instance SBT offset, referenced BLAS geometry count.
+    RayGeometryKind geometry_kind = RayGeometryKind::triangles;
+    Vector<AccelerationHitRange> hit_ranges; // Retained after build inputs/ranges are released.
     vk::DeviceAddress address = 0;
     // Declared last: destroyed before storage, children and Device.
     vk::raii::AccelerationStructureKHR acceleration{nullptr};

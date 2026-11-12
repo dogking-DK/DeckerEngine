@@ -13,6 +13,7 @@ vk::ShaderStageFlagBits native_stage(ShaderStage stage) noexcept
     case ShaderStage::miss: return vk::ShaderStageFlagBits::eMissKHR;
     case ShaderStage::closesthit: return vk::ShaderStageFlagBits::eClosestHitKHR;
     case ShaderStage::anyhit: return vk::ShaderStageFlagBits::eAnyHitKHR;
+    case ShaderStage::intersection: return vk::ShaderStageFlagBits::eIntersectionKHR;
     }
     return static_cast<vk::ShaderStageFlagBits>(0);
 }
@@ -102,9 +103,9 @@ Result<LayoutDescription> merge_interfaces(memory::ResourceHandle resource, std:
     const std::array<std::uint32_t, 6> stage_limits{limits.maxPerStageDescriptorUniformBuffers, limits.maxPerStageDescriptorStorageBuffers,
         limits.maxPerStageDescriptorSampledImages, limits.maxPerStageDescriptorStorageImages, limits.maxPerStageDescriptorSamplers, acceleration_limits.maxPerStageDescriptorAccelerationStructures};
     std::array<std::uint64_t, 6> totals{};
-    std::array<std::array<std::uint64_t, 6>, 7> per_stage{};
+    std::array<std::array<std::uint64_t, 6>, 8> per_stage{};
     constexpr std::array stages{vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment, vk::ShaderStageFlagBits::eCompute,
-        vk::ShaderStageFlagBits::eRaygenKHR, vk::ShaderStageFlagBits::eMissKHR, vk::ShaderStageFlagBits::eClosestHitKHR, vk::ShaderStageFlagBits::eAnyHitKHR};
+        vk::ShaderStageFlagBits::eRaygenKHR, vk::ShaderStageFlagBits::eMissKHR, vk::ShaderStageFlagBits::eClosestHitKHR, vk::ShaderStageFlagBits::eAnyHitKHR, vk::ShaderStageFlagBits::eIntersectionKHR};
     for (const auto& binding : result.bindings) {
         const auto type = static_cast<std::size_t>(binding.type);
         totals[type] += binding.count;

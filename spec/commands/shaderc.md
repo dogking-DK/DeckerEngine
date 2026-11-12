@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T19:03:00+08:00"
-updated_at: "2026-10-14T16:57:16+08:00"
+updated_at: "2026-11-12T11:53:00+08:00"
 ---
 
 # dk-shaderc 离线工具
@@ -22,7 +22,7 @@ dk-shaderc --help
 | --- | --- |
 | `--source FILE` | 必填；UTF-8 Slang 源文件，最多 64 MiB；拒绝 NUL |
 | `--entry NAME` | 必填；ASCII 标识符，具名入口需能由 Slang 识别阶段 |
-| `--stage` | 必填；vertex、fragment、compute、raygeneration、miss、closesthit、anyhit；必须与源码实际阶段相同 |
+| `--stage` | 必填；vertex、fragment、compute、raygeneration、miss、closesthit、anyhit、intersection；必须与源码实际阶段相同 |
 | `--output FILE.spv` | 必填；父目录已存在且可写，不能覆盖源/include/import 文件或其硬链接别名 |
 | `--include DIR` | 可重复；按参数顺序提供 include/import 搜索目录，默认无额外目录 |
 | `--define NAME=VALUE` | 可重复；宏名是 ASCII 标识符且不能重复；VALUE 可为空，默认无额外宏 |
@@ -35,7 +35,7 @@ dk-shaderc --help
 
 ## 返回、错误与副作用
 
-成功 stdout 是一个 JSON 对象（schema_version=3），stderr 可包含 Slang 警告：
+成功 stdout 是一个 JSON 对象（schema_version=4），stderr 可包含 Slang 警告：
 
 | JSON 字段 | 内容 |
 | --- | --- |
@@ -44,7 +44,7 @@ dk-shaderc --help
 | thread_group_size | compute 的三个本地维度；其他阶段为 `[0,0,0]` |
 | bindings | 按 set/binding 排序；每项含 name、set、binding、type、count、block_size、image_shape |
 | push_constants | offset/size 字节范围；当前最多一个 offset=0 的块 |
-| requires_ray_tracing | 四个RT阶段为true，基线阶段为false；执行时必须启用RT设备能力组 |
+| requires_ray_tracing | 五个RT阶段为true，基线阶段为false；执行时必须启用RT设备能力组 |
 | requires_sampled_image_indexing | 实际SPIR-V含ShaderNonUniform/SampledImageArrayNonUniformIndexing时为true；执行时必须独立启用纹理非一致索引 |
 | source_fingerprint | 编译器/profile/matrix、入口/阶段、宏与依赖路径及内容的FNV-1a 64-bit标记；不是安全散列或跨机器缓存key |
 | ray_payloads | kind（outgoing/incoming/hit_attribute）、location、bytes、signature；基线为空 |
@@ -57,7 +57,7 @@ block_size 仅 uniform_buffer 有效，其余为 0。反射包含组合程序声
 ParameterBlock、嵌套资源、未定长 descriptor 数组、入口 uniform、typed buffer、1D/cube/MSAA图像等当前无法表达的布局明确拒绝。
 RT payload支持32-bit标量/向量/结构体/固定数组；bytes是逻辑字节数，signature表达结构类型，不能用同字节数替代类型匹配。
 incoming payload无Location时记0，callee按类型匹配调用；三角hit attribute须为float2。
-TraceRay限raygeneration并使用静态SBT选择器；动态选择、callee递归TraceRay、callable/intersection不在首版范围。
+TraceRay限raygeneration并使用静态SBT选择器；动态选择、callee递归TraceRay、callable不在支持范围。intersection仅输出hit_attribute并报告交点，不能读写payload；Device按组匹配属性结构并检查maxRayHitAttributeSize。
 RT阶段能力白名单追加RayTracingKHR；固定纹理数组另允许ShaderNonUniform/SampledImageArrayNonUniformIndexing。
 runtimeDescriptorArray、其他非一致descriptor类别及未支持的可选SPIR-V能力仍拒绝。
 

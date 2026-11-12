@@ -41,17 +41,39 @@ TEST_CASE("ray payload compatibility compares structural types not just byte siz
     hit.payloads[0].signature="s(u32;f32;)"; REQUIRE_FALSE(policy::ray_payload_compatible(ray,hit,trace));
     hit.payloads[0].signature="s(f32;u32;)";
     hit.payloads.push_back({RayInterfaceKind::hit_attribute,0,8,dk::String{"v2(u32)",dk::memory::Allocator<char>{heap}}});
-    REQUIRE_FALSE(policy::ray_payload_compatible(ray,hit,trace));
-    hit.payloads.back().signature="v2(f32)"; REQUIRE(policy::ray_payload_compatible(ray,hit,trace));
+    REQUIRE_FALSE(policy::ray_hit_attributes(RayGeometryKind::triangles,nullptr,hit,nullptr,32));
+    hit.payloads.back().signature="v2(f32)"; REQUIRE(policy::ray_hit_attributes(RayGeometryKind::triangles,nullptr,hit,nullptr,32));
     REQUIRE_FALSE(policy::ray_payload_compatible(ray,hit,{0,2,0,3}));
+}
+TEST_CASE("procedural attributes require structural producer consumer and device bounds") {
+    auto system=dk::memory::MemorySystem::create().value(); auto heap=system.create_heap({"rt-attributes",dk::memory::DomainCategory::render}).value();
+    ShaderRayInterface producer{heap},consumer{heap};
+    producer.payloads.push_back({RayInterfaceKind::hit_attribute,0,8,dk::String{"s(i32;f32;)",dk::memory::Allocator<char>{heap}}});
+    consumer.payloads=producer.payloads;
+    REQUIRE(policy::ray_hit_attributes(RayGeometryKind::procedural,&producer,consumer,&consumer,8));
+    CHECK_FALSE(policy::ray_hit_attributes(RayGeometryKind::procedural,&producer,consumer,nullptr,7));
+    CHECK_FALSE(policy::ray_hit_attributes(RayGeometryKind::procedural,nullptr,consumer,nullptr,32));
+    CHECK_FALSE(policy::ray_hit_attributes(RayGeometryKind::triangles,&producer,consumer,nullptr,32));
+    consumer.payloads[0].signature="s(u32;f32;)";
+    CHECK_FALSE(policy::ray_hit_attributes(RayGeometryKind::procedural,&producer,consumer,nullptr,32));
+    consumer.payloads.clear(); REQUIRE(policy::ray_hit_attributes(RayGeometryKind::procedural,&producer,consumer,nullptr,32));
+    producer.payloads[0].kind=RayInterfaceKind::incoming_payload;
+    CHECK_FALSE(policy::ray_hit_attributes(RayGeometryKind::procedural,&producer,consumer,nullptr,32));
+    const std::array kinds{RayGeometryKind::triangles,RayGeometryKind::triangles,RayGeometryKind::procedural,RayGeometryKind::procedural};
+    CHECK(policy::ray_hit_kinds({2,1,RayGeometryKind::procedural},2,kinds));
+    CHECK_FALSE(policy::ray_hit_kinds({0,1,RayGeometryKind::procedural},2,kinds));
+    CHECK_FALSE(policy::ray_hit_kinds({1,1,RayGeometryKind::triangles},2,kinds));
+    CHECK_FALSE(policy::ray_hit_kinds({3,1,RayGeometryKind::procedural},2,kinds));
 }
 TEST_CASE("RT layout merges repeated stages and enforces acceleration descriptor limits") {
     auto system=dk::memory::MemorySystem::create().value(); auto heap=system.create_heap({"rt-layout",dk::memory::DomainCategory::render}).value();
     vk::PhysicalDeviceLimits limits{}; limits.maxBoundDescriptorSets=4; limits.maxPerStageResources=16;
     vk::PhysicalDeviceAccelerationStructurePropertiesKHR as{}; as.maxDescriptorSetAccelerationStructures=2; as.maxPerStageDescriptorAccelerationStructures=2;
     const std::array bindings{policy::ReflectedBinding{0,0,ShaderDescriptorType::acceleration_structure,2,0}};
-    std::array views{policy::ShaderLayoutView{ShaderStage::miss,bindings,{}},policy::ShaderLayoutView{ShaderStage::miss,bindings,{}}};
+    std::array views{policy::ShaderLayoutView{ShaderStage::miss,bindings,{}},policy::ShaderLayoutView{ShaderStage::miss,bindings,{}},
+        policy::ShaderLayoutView{ShaderStage::intersection,bindings,{}}};
     auto merged=policy::merge_interfaces(heap,views,limits,as); REQUIRE(merged); CHECK(merged->bindings.size()==1);
+    CHECK(bool(merged->bindings[0].stages & vk::ShaderStageFlagBits::eIntersectionKHR));
     as.maxPerStageDescriptorAccelerationStructures=1; REQUIRE_FALSE(policy::merge_interfaces(heap,views,limits,as));
     as.maxPerStageDescriptorAccelerationStructures=2; as.maxDescriptorSetAccelerationStructures=1; REQUIRE_FALSE(policy::merge_interfaces(heap,views,limits,as));
     views[1].stage=ShaderStage::compute; REQUIRE_FALSE(policy::merge_interfaces(heap,views,limits,as));

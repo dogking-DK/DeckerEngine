@@ -1,7 +1,7 @@
 ---
 module: graphics-shaders
 created_at: "2026-09-28T19:00:00+08:00"
-updated_at: "2026-11-11T18:45:00+08:00"
+updated_at: "2026-11-12T11:53:00+08:00"
 status: accepted
 ---
 
@@ -107,13 +107,13 @@ set 0 binding 0 为 96-byte uniform，1/2/3 为 NanoVDB/ray/result storage；ray
 32-bit 模式同时受 buffer 长度、device storage range 与 payload 预算约束；未开放 64-bit 地址，不要求 CUDA/NVCC、RT/BDA 或 shaderFloat64。
 上述证据仅覆盖 compute；intersection 继续执行下一节独立门禁。
 
-## M23.8 intersection 产物扩展（设计）
+## M23.8 intersection 产物扩展
 
-当前仍仅实现下文四类 RT 阶段；[原生体素底座](graphics-raytracing.md#m238-原生体素所需底座设计)计划增加 intersection。
+实施 intersection 第五类 RT 阶段，见[原生体素底座](graphics-raytracing.md#m238-实施契约)。反射 JSON 升为 schema 4；旧阶段枚举和 C++ 接口兼容，重新生成离线产物。
 扩展 stage 枚举、Slang 入口、SPIR-V 阶段/属性反射和 shaderc 输出，实际结构作为校验依据，不能仅比较总字节数。
 三角形 hit attribute 保持 float2；procedural 属性采用受支持的固定 32-bit 类型，生产/消费签名按同一 hit group 核对。
 intersection 允许产生属性/报告交点，不获得 payload 读写权限；现有“只有 raygen 发射 TraceRay”限制保持。
-新增产物字段须在实施时升版并定义旧产物读取或明确拒绝策略，原 graphics/compute/四类 RT 用例继续回归。
+当前输出 schema 4，新增 intersection stage；重新编译旧离线产物，原 graphics/compute/四类 RT 用例保持回归。
 共享 HDDA/PNanoVDB 的 include 内容、编译选项和布局版本进入 source_fingerprint；材质/身份的整数位不能经过有损 float 数值转换。
 验证无需 GPU 的编译/反射/坏属性拒绝、shaderc 失败保留旧输出及 RT required 管线兼容；
 不因文档增加阶段名就宣称编译器/Device 已支持，具体实施状态见 [M23](../roadmap.md#m23实体体素渲染)。
@@ -124,7 +124,7 @@ intersection 允许产生属性/报告交点，不获得 payload 读写权限；
 
 增加raygeneration、miss、closesthit、anyhit和acceleration_structure descriptor；编译仍无需GPU。
 RT入口允许payload/hit attribute参数，全局AS使用普通set/binding与固定数组规则。
-schema_version=3新增requires_ray_tracing、source_fingerprint、ray_payloads和ray_traces，基线入口输出false及空RT接口。
+schema_version=3时新增requires_ray_tracing、source_fingerprint、ray_payloads和ray_traces，基线入口输出false及空RT接口。
 source_fingerprint为FNV-1a 64-bit来源标记，包含编译器build tag、固定profile/matrix、入口/阶段、宏与依赖路径及内容；
 它不是安全散列，不承诺跨路径/机器一致。JSON不直接输出依赖路径清单。
 RayInterface.cpp从SPIR-V提取结构签名、逻辑字节数、payload location和TraceRay静态offset/stride/miss选择器；

@@ -4,7 +4,12 @@
 
 namespace dk::graphics {
 namespace detail { struct RayTracingState; struct ShaderTableState; }
-struct RayTracingHitGroup { const ShaderModule* closest_hit = nullptr; const ShaderModule* any_hit = nullptr; };
+struct RayTracingHitGroup {
+    const ShaderModule* closest_hit = nullptr;
+    const ShaderModule* any_hit = nullptr;
+    RayGeometryKind kind = RayGeometryKind::triangles;
+    const ShaderModule* intersection = nullptr;
+};
 struct RayTracingPipelineDesc {
     const PipelineLayout* layout = nullptr;
     const ShaderModule* raygeneration = nullptr;

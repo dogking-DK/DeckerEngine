@@ -90,6 +90,7 @@
 | CPU 射线、AABB、三角形 BVH 和仿射实例 | dk_geometry_tests | `^dk\.geometry\.` |
 | M23.2 稠密体素 DDA、独立面 oracle、边界/仿射/额度 | dk_voxel_tests | `^dk\.voxels\.dense `；`windows-voxels-dense` 无 VDB/GPU |
 | M23.2 OpenVDB→NanoVDB CPU 转换、稀疏查询、tile/负坐标/失败/快照 | dk_voxel_tests、dk_voxel_sparse_tests | `^dk\.voxels\.`；`windows-voxels` 无 CUDA/Vulkan；不表示 Slang/GPU 已通过 |
+| M23.8 AABB/procedural SBT、PNanoVDB intersection、Graph 同步/失败/寿命 | dk_voxel_intersection_probe | `^dk\.voxels\.(slang_intersection\|intersection_spirv_validation\|intersection_gpu_required)$`；`windows-voxel-editor`，required RT/validation/sync，不允许跳过；同时按受影响范围选 AS/RT CPU、shaderc 和旧 triangle/Graph 探针 |
 | M23.3 NanoVDB 上传、PNanoVDB/Slang、共享 HDDA、离屏与在途寿命 | dk_voxel_gpu_probe | `^dk\.voxels\.(slang_compute\|spirv_validation\|gpu_.*_required)$`；`windows-voxels-gpu`，需 spirv-val；真实 GPU/validation/sync，禁跳过，不要求 RT |
 | M23.4 mesh/voxel 深度/HDR、方向光、曝光/tone 与失败发布 | dk_voxel_raster_probe | `^dk\.voxels\.raster_.*_required$`；`windows-voxels-raster`，真实 GPU/validation/sync，禁跳过；旧 mesh 回归另选 dk_render_pipeline_probe |
 | M23.5 体素文件/版本化产物/缓存/Scene/异步快照、独立进程 CPU 重载 | dk_voxel_asset_tests、dk_voxel_asset_process_probe | `^dk\.voxels\.assets[._]`；`windows-voxel-assets` 无 CUDA/Vulkan/Slang；支持 Jobs 的 CPU 快照生命周期 |

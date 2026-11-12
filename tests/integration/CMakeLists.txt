@@ -915,6 +915,21 @@ if(TARGET dk_render_voxels AND TARGET dk_asset_voxel_importers)
         endforeach()
     endif()
     add_executable(dk_voxel_gpu_probe VoxelGpuProbe.cpp)
+    add_executable(dk_voxel_intersection_probe VoxelIntersectionProbe.cpp)
+    target_link_libraries(dk_voxel_intersection_probe PRIVATE dk::graphics_graph dk::graphics_shaders dk::asset_voxel_importers)
+    target_include_directories(dk_voxel_intersection_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
+    target_compile_definitions(dk_voxel_intersection_probe PRIVATE
+        DK_RT_SHADER="${PROJECT_SOURCE_DIR}/tests/fixtures/shaders/procedural.slang"
+        DK_VOXEL_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/voxels/shaders"
+        DK_VOXEL_NANO_INCLUDE_DIR="${DK_NANOVDB_INCLUDE_DIR}"
+        DK_VOXEL_ARTIFACT_DIR="${CMAKE_CURRENT_BINARY_DIR}/voxel-artifacts")
+    dk_target_defaults(dk_voxel_intersection_probe)
+    dk_deploy_slang(dk_voxel_intersection_probe)
+    add_test(NAME dk.voxels.slang_intersection COMMAND dk_voxel_intersection_probe compile)
+    set_tests_properties(dk.voxels.slang_intersection PROPERTIES TIMEOUT 120 LABELS "cpu" FIXTURES_SETUP voxel_intersection_spirv)
+    add_test(NAME dk.voxels.intersection_gpu_required COMMAND dk_voxel_intersection_probe)
+    set_tests_properties(dk.voxels.intersection_gpu_required PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
+        ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
     target_link_libraries(dk_voxel_gpu_probe PRIVATE dk::render_voxels dk::asset_voxel_importers dk::graphics_shaders)
     target_include_directories(dk_voxel_gpu_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src" "${PROJECT_SOURCE_DIR}/tests/unit")
     target_compile_definitions(dk_voxel_gpu_probe PRIVATE
@@ -927,6 +942,8 @@ if(TARGET dk_render_voxels AND TARGET dk_asset_voxel_importers)
     add_test(NAME dk.voxels.slang_compute COMMAND dk_voxel_gpu_probe compile)
     set_tests_properties(dk.voxels.slang_compute PROPERTIES TIMEOUT 120 LABELS "cpu" FIXTURES_SETUP voxel_spirv)
     find_program(DK_VOXEL_SPIRV_VALIDATOR NAMES spirv-val REQUIRED)
+    add_test(NAME dk.voxels.intersection_spirv_validation COMMAND "${DK_VOXEL_SPIRV_VALIDATOR}" --target-env vulkan1.3 "${CMAKE_CURRENT_BINARY_DIR}/voxel-artifacts/voxel-intersection.spv")
+    set_tests_properties(dk.voxels.intersection_spirv_validation PROPERTIES TIMEOUT 60 LABELS "cpu" FIXTURES_REQUIRED voxel_intersection_spirv)
     add_test(NAME dk.voxels.spirv_validation COMMAND "${DK_VOXEL_SPIRV_VALIDATOR}" --target-env vulkan1.3 "${CMAKE_CURRENT_BINARY_DIR}/voxel-artifacts/voxel-query.spv")
     set_tests_properties(dk.voxels.spirv_validation PROPERTIES TIMEOUT 60 LABELS "cpu" FIXTURES_REQUIRED voxel_spirv)
     foreach(mode numeric offscreen lifetime)

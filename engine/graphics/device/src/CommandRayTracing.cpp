@@ -122,7 +122,7 @@ Result<void> RayTracingEncoder::trace(const RayTracingPipeline& pipeline,const S
                 if (auto valid=readable_as(batch,bound.acceleration,true); !valid) return valid;
                 for (const auto& child : bound.acceleration->children) if (auto valid=readable_as(batch,child,true); !valid) return valid;
                 for (const auto& range : bound.acceleration->hit_ranges)
-                    if (auto valid=ray_hit_range(range[0],range[1],program->ray_types,program->hit_count); !valid) return valid;
+                    if (auto valid=ray_hit_kinds(range,program->ray_types,{program->hit_kinds.data(),program->hit_count}); !valid) return valid;
                 continue;
             }
             const auto resource=bound.buffer ? bound.buffer : bound.view->image;

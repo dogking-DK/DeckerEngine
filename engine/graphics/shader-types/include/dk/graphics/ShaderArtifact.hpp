@@ -5,7 +5,7 @@
 #include <string_view>
 
 namespace dk::graphics {
-enum class ShaderStage { vertex, fragment, compute, raygeneration, miss, closesthit, anyhit };
+enum class ShaderStage { vertex, fragment, compute, raygeneration, miss, closesthit, anyhit, intersection };
 [[nodiscard]] bool is_ray_tracing_stage(ShaderStage stage) noexcept;
 enum class ShaderImageShape { none, image_2d, image_2d_array, image_3d };
 [[nodiscard]] std::string_view shader_image_shape_name(ShaderImageShape shape) noexcept;

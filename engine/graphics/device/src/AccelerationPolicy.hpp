@@ -57,6 +57,28 @@ inline Result<void> triangle_description(const TriangleGeometry& geometry, const
     }
     return {};
 }
+inline Result<void> aabb_bounds(std::span<const vk::AabbPositionsKHR> bounds)
+{
+    if (bounds.empty()) return std::unexpected(Error{ErrorCode::invalid_argument, "AABB bounds are empty"});
+    for (const auto& b : bounds) {
+        if (!std::isfinite(b.minX) || !std::isfinite(b.minY) || !std::isfinite(b.minZ) ||
+            !std::isfinite(b.maxX) || !std::isfinite(b.maxY) || !std::isfinite(b.maxZ) ||
+            b.minX>b.maxX || b.minY>b.maxY || b.minZ>b.maxZ)
+            return std::unexpected(Error{ErrorCode::invalid_argument, "AABB bounds must be finite and ordered"});
+    }
+    return {};
+}
+inline Result<void> aabb_description(const AabbGeometry& geometry, const BufferDesc& buffer, std::uint64_t limit)
+{
+    if (auto count=acceleration_count(geometry.primitive_count,limit); !count) return count;
+    if (geometry.stride<sizeof(vk::AabbPositionsKHR) || geometry.stride>UINT32_MAX || geometry.stride%8 || geometry.offset%8 ||
+        (buffer.usage&acceleration_input_usage)!=acceleration_input_usage)
+        return std::unexpected(Error{ErrorCode::invalid_argument,"invalid AABB stride offset or input usage"});
+    const auto last=vk::DeviceSize{geometry.primitive_count-1}*geometry.stride;
+    if (last>UINT64_MAX-sizeof(vk::AabbPositionsKHR) || !valid_range(buffer.size,geometry.offset,last+sizeof(vk::AabbPositionsKHR)))
+        return std::unexpected(Error{ErrorCode::invalid_argument,"AABB range exceeds buffer"});
+    return {};
+}
 inline Result<void> instance_description(const AccelerationStructureInstance& instance)
 {
     constexpr auto allowed = vk::GeometryInstanceFlagBitsKHR::eTriangleFacingCullDisable | vk::GeometryInstanceFlagBitsKHR::eTriangleFlipFacing |

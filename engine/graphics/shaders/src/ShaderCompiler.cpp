@@ -34,6 +34,7 @@ SlangStage slang_stage(ShaderStage stage)
     case ShaderStage::miss: return SLANG_STAGE_MISS;
     case ShaderStage::closesthit: return SLANG_STAGE_CLOSEST_HIT;
     case ShaderStage::anyhit: return SLANG_STAGE_ANY_HIT;
+    case ShaderStage::intersection: return SLANG_STAGE_INTERSECTION;
     }
     return SLANG_STAGE_NONE;
 }
@@ -341,7 +342,7 @@ Result<Vector<CompiledShader>> compile_shaders(std::span<const ShaderCompileRequ
 
 String shader_reflection_json(const CompiledShader& shader)
 {
-    nlohmann::ordered_json json{{"schema_version", 3}, {"compiler", std::string_view{shader.compiler}},
+    nlohmann::ordered_json json{{"schema_version", 4}, {"compiler", std::string_view{shader.compiler}},
         {"target", "spirv_1_5"}, {"matrix_layout", "row_major"}, {"entry", std::string_view{shader.entry}},
         {"stage", shader_stage_name(shader.stage)}, {"spirv_bytes", shader.spirv.size() * sizeof(std::uint32_t)},
         {"thread_group_size", shader.thread_group_size}, {"bindings", nlohmann::ordered_json::array()},
