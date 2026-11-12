@@ -1,0 +1,29 @@
+{
+  "parent_commit": "41844ec74942d041604faf40911d76cd05a22e86",
+  "state": "parent plus M23.7 changes in this delivery commit",
+  "measurement_version": 2,
+  "cpu": "AMD Ryzen 9 7940HX",
+  "platform": "Windows x64",
+  "gpu_reported_memory_mib": 8188,
+  "validation": "required Khronos and synchronization for acceptance; disabled for timing",
+  "source_sha256": {
+    "tests/integration/VoxelBenchmark.cpp": "f092f0f1a8196c782adbb08757858cd873c96ab6e12af048215d416c7b5563c7",
+    "tests/integration/VoxelBenchmarkSupport.hpp": "0619ba8e95bcc4cb1f4229ff67cb8e504906ce5036d79a09a91ac36603c94205",
+    "tests/integration/VoxelBenchmarkTest.py": "d61d6781c89e015968075e7fef9de790bf70c5f196ec49553276c905f898765e",
+    "scripts/benchmark-voxels.py": "2f28e37377df6eb7f8fd9912896f7f05465a1ec93d1f2af18bf079a987ae6275",
+    "tests/integration/CMakeLists.txt": "466b1cf286bcca23348225e7df5a714c9e453754c4f93fff04befbdc2c8a4f54",
+    "engine/render/voxels/shaders/voxel-hdda.slang": "bf349804db8feebb4eca4172e20bd21204bb1fb3f93b94fdb547c1208ba83d82",
+    "engine/render/voxels/shaders/voxel-query.slang": "9cc16a427455103a5eb405e9119afbd79ca742885f863d57091790ede2c5c8b1",
+    "engine/render/voxels/shaders/pnano-adapter.slang": "6d115af0af88dba37f58e538a2fd9c6d9c3506ab8a2f6005de8477fde11ddb94",
+    "engine/assets/importers/voxels/src/VoxelBuilder.cpp": "0fc5c77d6631579ca857d6b5ba91038e548c0f0ba8f4b680aadebea2674ba401",
+    "shaders/render/voxel-raster.slang": "b2e26f76633d5bb7e1980fadf1eb1c1345453fd8e59aa4252b846186b08d4103"
+  },
+  "executable_sha256": "d278346ebf5f39b80efc19fccd5478d4388df34475d64cb52ee5805278534c0e",
+  "nanovdb_header_sha256": "eed582ab74878225c05bb5e3f08c92ca5a06cfd6075490f873607086f21fe7b9",
+  "vcpkg_baseline": "33d78c1ed898a06938f31312167c7abefd229455",
+  "acceptance": [
+    "20261112-110854-96999967",
+    "20261112-111044-f4c2ef15",
+    "20261112-112141-dedaab96"
+  ]
+}

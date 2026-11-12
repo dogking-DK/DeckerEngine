@@ -166,5 +166,6 @@
 | 0162 | [M23.4 mesh/voxel 深度与 HDR 合成](0162-voxel-raster-composition.md) | render-voxels、render-pipeline | completed |
 | 0163 | [M23.5 体素文件资产与版本缓存](0163-voxel-assets.md) | render-voxels、assets-types、assets-runtime、assets-importers、render-resources、scene | completed |
 | 0164 | [M23.6 体素 Editor 与独立截图闭环](0164-voxel-editor-capture.md) | render-voxels、editor、application-services、render-disk、render-capture、render-data、render-pipeline | completed |
+| 0165 | [M23.7 光栅稀疏基线与 HDDA 调优](0165-voxel-raster-baseline.md) | render-voxels | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

@@ -881,6 +881,25 @@ if(TARGET dk_editor_app AND TARGET dk_render_atmosphere AND TARGET dk_scripting_
 endif()
 
 if(TARGET dk_render_voxels AND TARGET dk_asset_voxel_importers)
+    if(WIN32 AND TARGET dk_render_pipeline)
+        find_package(nlohmann_json CONFIG REQUIRED)
+        add_executable(dk_voxel_benchmark VoxelBenchmark.cpp)
+        set_target_properties(dk_voxel_benchmark PROPERTIES OUTPUT_NAME dk-voxel-benchmark)
+        target_link_libraries(dk_voxel_benchmark PRIVATE dk::render_pipeline dk::render_voxels dk::asset_voxel_importers dk::profiling OpenVDB::openvdb nlohmann_json::nlohmann_json Psapi)
+        target_include_directories(dk_voxel_benchmark PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src" "${PROJECT_SOURCE_DIR}/engine/assets/importers/voxels/src")
+        target_compile_definitions(dk_voxel_benchmark PRIVATE DK_RENDER_SHADER_DIR="${PROJECT_SOURCE_DIR}/shaders/render"
+            DK_VOXEL_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/voxels/shaders"
+            DK_BENCH_CONFIG="$<CONFIG>" DK_BENCH_COMPILER="${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}")
+        dk_target_defaults(dk_voxel_benchmark)
+        dk_deploy_slang(dk_voxel_benchmark)
+        add_test(NAME dk.voxels.benchmark_gpu_required COMMAND dk_voxel_benchmark --smoke --validation
+            --output "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/voxel-benchmark/smoke.json")
+        set_tests_properties(dk.voxels.benchmark_gpu_required PROPERTIES TIMEOUT 600 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1;DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1=1")
+        find_package(Python3 3.11 COMPONENTS Interpreter REQUIRED)
+        add_test(NAME dk.voxels.benchmark_aggregation COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/VoxelBenchmarkTest.py")
+        set_tests_properties(dk.voxels.benchmark_aggregation PROPERTIES TIMEOUT 30 LABELS "cpu")
+    endif()
     if(TARGET dk_render_pipeline)
         add_executable(dk_voxel_raster_probe VoxelRasterProbe.cpp)
         target_link_libraries(dk_voxel_raster_probe PRIVATE dk::render_pipeline dk::render_voxels dk::asset_voxel_importers)

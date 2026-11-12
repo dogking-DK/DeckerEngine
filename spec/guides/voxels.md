@@ -1,7 +1,7 @@
 ---
 module: guide-voxels
 created_at: "2026-11-12T09:48:00+08:00"
-updated_at: "2026-11-12T10:31:11+08:00"
+updated_at: "2026-11-12T11:32:53+08:00"
 status: accepted
 ---
 
@@ -50,3 +50,22 @@ python examples/render/voxel_capture.py --endpoint voxel-demo --client out/build
 
 示例使用 eye=(0,0,-2)、target=(0,0,0)；实际工程按物体位置传 `--eye x y z --target x y z`。
 输出父目录必须存在，覆盖同名 PPM；示例只读取已加载 Scene，不修改工程。
+
+## 光栅质量与性能基线
+
+M23.7 基准目标 `dk_voxel_benchmark` 使用生产转换器和渲染路径；固定程序输入不计磁盘 VDB 解码、资产缓存或 Editor GUI 开销。
+覆盖 64³/128³/256³ 的空/稀疏/实心输入、64³ 交错 leaf、大跨度多岛和 root 常量 tile；两种分辨率与投影。
+Windows 进程峰值是额外观测，不冒充 OpenVDB 内部 scratch 精确上界；详细口径见[设计](../design/render-voxels.md#m237-光栅基线实施契约)。
+
+```powershell
+cmake --preset windows-voxels-raster
+$env:DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1 = '1'
+./scripts/verify.ps1 -BuildDir out/build/windows-voxels-raster -Target dk_voxel_benchmark -TestRegex '^dk\.voxels\.benchmark_(gpu_required|aggregation)$' -Reason 'M23.7 required validation and evidence checks'
+./scripts/verify.ps1 -BuildDir out/build/windows-voxels-raster -Configuration Release -Target dk_voxel_benchmark -TestRegex '^dk\.voxels\.benchmark_aggregation$' -Reason 'M23.7 optimized performance executable'
+python scripts/benchmark-voxels.py --exe out/build/windows-voxels-raster/bin/Release/dk-voxel-benchmark.exe --output out/benchmarks/voxels
+```
+
+正确性检查要求真实 GPU、Khronos/sync validation；性能脚本使用 Release、关闭 validation、三轮串行，先固定 64 帧设备预热，再记录每个视图首帧/2 预热/8 采样帧。
+性能采集期间不要并发运行其他 GPU 测试；结果写入 `round-0/1/2.json`、`summary.json` 和 `summary.md`，失败不会被汇总成通过。
+已有原始数据可用 `--aggregate-only <round-0.json> <round-1.json> <round-2.json> --output <目录>` 独立复算，也支持 `.json.gz`；`--plot` 可选生成 SVG/PNG（需 matplotlib）。
+已归档的设备条件、完整表格和能力边界见 [2026-11-12 基线报告](../benchmarks/2026-11-12-voxel-raster.md)。

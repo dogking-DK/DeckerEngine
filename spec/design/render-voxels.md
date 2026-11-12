@@ -1,7 +1,7 @@
 ---
 module: render-voxels
 created_at: "2026-11-11T14:51:58+08:00"
-updated_at: "2026-11-12T10:31:11+08:00"
+updated_at: "2026-11-12T11:32:53+08:00"
 status: accepted
 ---
 
@@ -343,6 +343,28 @@ M23.5 验收包括 CPU-only 描述→VDB→产物→缓存→Scene 保存重载�
   GUI/Console/IPC 设置一致和旧 mesh 回归；39 CPU/8 GPU 定向检查和无 VDB 构建回归已通过，详见 [0164](../development/0164-voxel-editor-capture.md)。
   使用方式见[实体体素光栅工作流](../guides/voxels.md)，性能基线与原生路径仍按后续阶段推进。
 
+### M23.7 光栅基线实施契约
+
+固定版本化程序输入：64³/128³/256³ 的空域、低占用 8³ 岛、实心 tile，另设 64³ 交错 leaf、负坐标大跨度多岛与 4096³ 常量 tile。
+每个输入记录域/占用比例、leaf/lower/upper 与 active tile 数；小域生成独立 DenseGrid，对照确定性非退化射线；大域使用解析盒体，不分配同尺度稠密数据。
+640×480、1280×720 均测透视/正交。小域抽样像素对照独立稠密查询，完整尺寸检查颜色；受现有 65536 像素诊断读回上限约束，深度使用同投影/宽高比、宽 256 的诊断帧。
+保持 1 byte 和 2e-6 深度门槛；既有 64³ 全像素 oracle 与 M23.4 混合合成门禁继续回归，不为基准放宽生产读回额度。
+正交反投影恰在平行格面时，CPU 参考只归零不超过 64×double epsilon×坐标尺度的矩阵舍入残差，恢复既定正侧单元归属；计数这些射线但仍全部比较，不扩大浮点误差门槛或排除边缘像素。
+
+基准复用 M11 Submission GPU profiling 与 VMA 统计，不引入新运行时服务/命令。Release 三轮串行，每视图首帧、2 帧预热、8 帧采样分列；validation 正确性运行与关闭 validation 的性能运行分离。
+协议 v1 观察到首输入各 GPU 区间同时出现跨轮慢态，不能当作体素算法差异；v2 增加固定 64 帧 1280×720 设备预热，全部预热耗时另行保留，不剔除后续慢样本。不锁频，仍报告每轮分布与残余波动。
+记录设备/驱动/构建/源码指纹、转换墙钟、上传 CPU/完成等待/GPU 时间、帧提交/等待/读回/端到端和 GPU 各区间，缺少计时/用例/质量/回收证据必须拒绝汇总。
+转换内存列 source/normalized tree、NanoVDB 和三者同时存活的已知 payload；Windows 采样进程 working set/private bytes 及 OS 生命周期峰值另外列出，注明采样不能保证捕获所有内部暂存峰值。
+GPU 列网格/调色板/查询/图像 payload、VMA allocation/block、旧帧+新帧/旧代+新代上传样本及释放后计数；AS/AABB/SBT 为本阶段不适用，不填作已验证的 RT 能力。
+
+HDDA 调优限于不改变表面语义的冗余查值消除：单轴表面转换不再重复读取已知为空的邻格。
+第一轮候选还在每次转换前检查无跨格点，但三轮测量显示稀疏多岛退化，移除该额外判断；候选与最终数据分别保留。
+测试专用 shader 变体保留旧转换及逐格步进，对相同射线比较结果、区域数和 GPU 时间；大跨度逐格对照只测明确标记的有界局部区间。
+不因噪声宣称速度提升，不以退化输入或增加误差容限掩盖失败；旧转换与新转换的 hit/cell/value/face 必须一致，距离/法线沿用 M23.3 门槛。
+只修改每次查询私有状态，资源发布/失败/在途所有权不变。输入、结果/图像摘要在三轮一致，旧代保活后回收至初始 allocation 数。
+基线和调优数据可复算后关闭 M23.7；M23 父阶段以及 M23.8/9 原生路径继续开放。
+实际验收已完成：10 项最终定向检查、12 输入/48 视图的三轮协议 v2，以及原始数据独立复算；详见 [0165](../development/0165-voxel-raster-baseline.md)和[基线报告](../benchmarks/2026-11-12-voxel-raster.md)。
+
 ## Slang 兼容性门禁
 
 [PNanoVDB v12.0.1](https://github.com/AcademySoftwareFoundation/openvdb/blob/v12.0.1/nanovdb/nanovdb/PNanoVDB.h)
@@ -406,7 +428,7 @@ RT 路线 required 用例不得以缺少硬件静默跳过；非 RT 配置另外
 依赖的 CUDA 打包问题在 M23.2 解决，CPU 格式/语义先冻结；Slang compute 与 intersection 分别在 M23.3/8 设阻断门禁。
 完整源描述/产物 v1 在 M23.5 冻结，包含两后端共同材质；中间资源布局/精度在 M23.3 固定，
 intersection 属性/SBT 与 shader 产物版本在 M23.8 固定，RT 块布局/通用命中在 M23.9 固定，信号身份版本在 M23.10 固定；
-CPU、GPU compute 与 mesh 深度/HDR 合成分别见 M23.2/3/4；下一步 M23.5 接正式文件资产，compute/合成通过不替代 intersection 或路径积分验收。
+CPU、GPU compute 与 mesh 深度/HDR 合成分别见 M23.2/3/4；文件资产、上层闭环与光栅基线已完成 M23.5/6/7，下一步 M23.8 接原生 intersection 门禁，compute/合成通过不替代路径积分验收。
 阶段开始若发现底座缺口，应更新设计和必要前置，不隐式扩成全引擎重构。
 
 ## 相关记录
@@ -415,6 +437,8 @@ CPU、GPU compute 与 mesh 深度/HDR 合成分别见 M23.2/3/4；下一步 M23.
 - [0160 M23.2 CPU 体素参考与稀疏转换](../development/0160-voxel-cpu-sparse.md)
 - [0161 M23.3 NanoVDB GPU 上传与共享 HDDA](../development/0161-voxel-gpu-hdda.md)
 - [0162 M23.4 mesh/voxel 深度与 HDR 合成](../development/0162-voxel-raster-composition.md)
+- [0163 M23.5 文件资产](../development/0163-voxel-assets.md)、[0164 M23.6 Editor/capture](../development/0164-voxel-editor-capture.md)
+- [0165 M23.7 光栅基线与 HDDA 调优](../development/0165-voxel-raster-baseline.md)
 - [架构](architecture.md)、[场景管线](render-pipeline.md)、[3D 资源](graphics-resources.md)、[Slang](graphics-shaders.md)
 - [原生 RT 底座](graphics-raytracing.md)、[路径追踪](render-pathtracing.md)、[ReSTIR](render-restir.md)、[信号](render-denoising.md)
 - [OpenVDB 数据/坐标语义](https://www.openvdb.org/documentation/doxygen/overview.html)、[NanoVDB FAQ](https://www.openvdb.org/documentation/doxygen/NanoVDB_FAQ.html)：上游能力说明不替代固定版本的引擎验收。

@@ -26,6 +26,11 @@ bool dkTransition(inout DkVoxelBuffer buf, inout pnanovdb_readaccessor_t acc, fl
     if (axis == 3) return false;
     bool leaving = a != 0;
     // Prefer a genuinely exposed face over a simultaneous internal cell plane.
+#ifndef DK_VOXEL_BASELINE_TRANSITION
+    // For one crossed axis the opposite cell was already read above and is empty.
+    // Keep the original exposed-face search for simultaneous edge/corner crossings.
+    if (countbits(uint(before.x != after.x) | (uint(before.y != after.y)<<1) | (uint(before.z != after.z)<<2)) > 1)
+#endif
     for(uint candidate=axis;candidate<3;++candidate) {
         if(before[candidate]==after[candidate]) continue;
         int3 neighbor=leaving ? before : after;
@@ -75,6 +80,10 @@ DkVoxelResult dkTraceVoxel(inout DkVoxelBuffer buf, inout pnanovdb_readaccessor_
         ++result.metrics.x;
         int dim = int(pnanovdb_readaccessor_get_dim(PNANOVDB_GRID_TYPE_INT32,buf,acc,cell));
         if (dim != 1 && dim != 8 && dim != 128 && dim != 4096) { result.meta.x=5; return result; }
+#ifdef DK_VOXEL_DISABLE_HDDA
+        // Test-only ablation: identical value/transition semantics, one cell per step.
+        dim = 1;
+#endif
         result.metrics.y += dim > 1 ? 1 : 0;
         float3 next, plane;
         for (uint axis=0; axis<3; ++axis) {
