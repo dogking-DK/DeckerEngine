@@ -126,7 +126,8 @@ void voxel_state(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueu
     check(r.configure_view(q,239,gpu,view,s,schedule));
     require(take(r.status(239)).generation==generation,"unchanged voxel view reset history");
     auto medium=take(PathMediumSnapshot::create(f.document->environment()));
-    require(!r.configure_medium_view(q,239,gpu,medium,view),"voxel medium accepted before M23.11");
+    auto media_schedule=schedule; media_schedule.signals.enabled=true;
+    require(!r.configure_medium_view(q,239,gpu,medium,view,{},media_schedule),"media signals unexpectedly accepted");
     require(take(r.status(239)).generation==generation && take(r.status(239)).completed_spp==7,"unsupported mode damaged completed state");
     f.voxel.voxel->palette[0].base_color={.1f,.7f,.3f}; auto changed=take(r.prepare_scene(q,f.scene()));
     check(r.configure_view(q,239,changed,view,s,schedule)); require(take(r.status(239)).generation>generation && take(r.status(239)).completed_spp==0,"palette change retained old samples");

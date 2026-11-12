@@ -312,6 +312,7 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
 #include "PathSignalCases.hpp"
 #ifdef DK_PATH_VOXEL_TESTS
 #include "PathVoxelRestirCases.hpp"
+#include "PathVoxelMediumCases.hpp"
 #endif
 int main(int argc,char** argv) {
     try {
@@ -338,6 +339,10 @@ int main(int argc,char** argv) {
               else if(mode=="voxel_restir_numeric") voxel_restir_numeric(memory.heap,renderer,queue);
               else if(mode=="voxel_restir_reuse") voxel_restir_reuse(memory.heap,renderer,queue);
               else if(mode=="voxel_signals") voxel_signals(memory.heap,renderer,queue);
+              else if(mode=="voxel_medium_numeric") voxel_medium_numeric(memory.heap,renderer,queue);
+              else if(mode=="voxel_medium_schedule") voxel_medium_schedule(memory.heap,renderer,queue);
+              else if(mode=="voxel_medium_reuse") voxel_medium_reuse(memory.heap,renderer,queue);
+              else if(mode=="voxel_medium_state") voxel_medium_state(memory.heap,renderer,queue);
               else if(mode=="voxel_restir_state") voxel_restir_state(memory.heap,renderer,queue);
 #endif
               else if(mode=="signal_geometry") signal_geometry(memory.heap,renderer,queue);

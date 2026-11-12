@@ -265,7 +265,6 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     const bool empty=!scene.geometry->tlas;
     const bool air=info.medium.has_value();
     const bool restir=info.restir.has_value();
-    if(scene.source.voxel_count() && air) throw Error{ErrorCode::not_supported,"Voxel medium paths require M23.11"};
     const auto& program=signals ? *state.signal_program : state;
     if(restir) p[32][0]=std::bit_cast<float>(info.restir->initial_candidates);
     const auto dispatches=grouped.empty() ? std::span<const Parameters>{&p,1} : grouped;
@@ -274,7 +273,7 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     const auto parameter_stride=aligned(sizeof(Parameters));
     const auto count=std::uint64_t{info.width}*info.height,bytes=count*sizeof(PathGpuPixel);
     auto frame=memory::make_shared_in<PathGpuFrame>(state.heap,state.heap); frame->source=scene.source; frame->info=std::move(info);
-    if(frame->info.fixed_rays && scene.source.voxel_count()) for(std::size_t i=0;i<rays.size();i+=2) {
+    if(frame->info.fixed_rays && scene.source.voxel_count()) for(std::size_t i=0;i<rays.size();i+=air ? 6 : 2) {
         const Vec3f d{rays[i+1][0],rays[i+1][1],rays[i+1][2]};
         frame->fixed_rays.push_back({Vec3d{rays[i][0],rays[i][1],rays[i][2]},d.normalized().cast<double>(),rays[i][3],rays[i+1][3]});
     }
@@ -1364,8 +1363,12 @@ Result<std::optional<PathTraceGpuImage>> PathTraceFrame::read(SubmissionQueue& q
             if(image->info.fixed_rays) { if(i>=state_->fixed_rays.size()) throw path_invalid("Missing fixed voxel ray"); ray=state_->fixed_rays[i]; }
             else {
                 auto view=take(RenderView::create(scene.source,image->info.view));
-                const auto sample=state_->stride==128 ? 0u : image->info.samples.first;
-                const Vec2d subpixel{path_trace_sample(image->info.settings.seed,std::uint32_t(i),sample,0,0),path_trace_sample(image->info.settings.seed,std::uint32_t(i),sample,0,1)};
+                const auto sample=state_->stride==128 ? image->info.sampling_first_epoch : image->info.samples.first;
+                const auto jitter=[&](std::uint32_t dimension) {
+                    return image->info.medium ? volume_path_sample(image->info.settings.seed,std::uint32_t(i),sample,0,VolumeSampleStream::pixel,dimension)
+                        : path_trace_sample(image->info.settings.seed,std::uint32_t(i),sample,0,dimension);
+                };
+                const Vec2d subpixel{jitter(0),jitter(1)};
                 ray=take(gpu_path_camera_ray(view,std::uint32_t(i)%image->info.width,std::uint32_t(i)/image->info.width,subpixel));
             }
             h.position=ray.origin+ray.direction*h.distance;

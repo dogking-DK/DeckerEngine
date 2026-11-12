@@ -64,7 +64,7 @@ if(TARGET dk_render_pathtracing)
     if(TARGET dk_asset_voxel_importers)
         target_link_libraries(dk_pathtracing_probe PRIVATE dk::asset_voxel_importers)
         target_compile_definitions(dk_pathtracing_probe PRIVATE DK_PATH_VOXEL_TESTS=1)
-        foreach(case IN ITEMS voxel_numeric voxel_lighting voxel_state voxel_restir_numeric voxel_restir_reuse voxel_signals voxel_restir_state)
+        foreach(case IN ITEMS voxel_numeric voxel_lighting voxel_state voxel_restir_numeric voxel_restir_reuse voxel_signals voxel_restir_state voxel_medium_numeric voxel_medium_schedule voxel_medium_state voxel_medium_reuse)
             add_test(NAME dk.pathtracing.${case}_gpu_required COMMAND dk_pathtracing_probe ${case})
             set_tests_properties(dk.pathtracing.${case}_gpu_required PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE LABELS "gpu"
                 ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")

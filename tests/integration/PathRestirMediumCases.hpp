@@ -300,8 +300,8 @@ void restir_medium_failure(memory::ResourceHandle heap,SubmissionQueue& q) {
     require(take(r.status(126)).generation==generation && q.stats().submitted==submitted && r.memory_stats(q).owned.current==before,"rejected medium RIS mutated accepted state");
     compare_images(complete(q,take(held.read_linear(q))),old,0); check(r.release_view(126));
     // Held complete owners, ping-pong and spatial output all count toward the same limit.
-    auto bounded=medium_down_view(f,32,true,2000); // Use a view with the original scene identity/revision.
-    check(f.document->set_environment(e)); bounded=medium_down_view(f,32,true,2000);
+    auto bounded=medium_down_view(f,30,true,2000); // Surface v2 is 96 B; keep the 1 MiB held-owner boundary.
+    check(f.document->set_environment(e)); bounded=medium_down_view(f,30,true,2000);
     gpu=take(r.prepare_scene(q,f.scene())); schedule.target_spp=2;
     check(r.configure_restir_medium_view(q,126,gpu,m,bounded,s,ris,schedule)); advance_view(r,q,126); auto a=r.completed_frame(126);
     check(r.reset(126)); advance_view(r,q,126); auto b=r.completed_frame(126);

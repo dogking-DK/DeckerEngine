@@ -38,7 +38,9 @@ PreparedRestir prepare_restir(const Vertex& v,std::uint32_t pixel,std::uint32_t 
     PreparedRestir result;
     if(settings.max_bounces==0 || (!v.hit && !v.ground)) return result;
     result.surface=true;
-    if(v.ground) ++restir_stats->prepared_ground; else ++restir_stats->prepared_mesh;
+    if(v.ground) ++restir_stats->prepared_ground;
+    else if(v.hit->kind==PathGeometryKind::voxel) ++restir_stats->prepared_voxel;
+    else ++restir_stats->prepared_mesh;
     if(class_pdf==0) return result;
     RisReservoir reservoir;
     for(std::uint32_t i=0;i<restir->initial_candidates;++i) {

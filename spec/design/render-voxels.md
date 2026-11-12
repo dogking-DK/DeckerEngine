@@ -1,7 +1,7 @@
 ---
 module: render-voxels
 created_at: "2026-11-11T14:51:58+08:00"
-updated_at: "2026-11-12T15:11:34+08:00"
+updated_at: "2026-11-12T16:06:43+08:00"
 status: accepted
 ---
 
@@ -142,7 +142,7 @@ NanoVDB 字节偏移、树节点序号或 RT 块 primitive 均不作为持久单
 几何、占用、材质或实例变更按既有策略失效累积/采样历史；相机运动仅在现有规则允许时复用。
 表面 fresh/lobe/guide/运动信号重组保持 M20.2 契约，布局/来源已升级 v2 并核对预算；不新增降噪算法。
 
-M23.11 把已有空气/云路径中的最近表面和阴影查询接入混合几何，保持自由程、透射和首表面条件 RIS 的分工，
+M23.11 将已有空气/云路径中的最近表面和阴影查询接入混合几何，保持自由程、透射和首表面条件 RIS 的分工，
 体素不是新的密度介质。表面信号适配不自动放开 Scene media 降噪组合，仍遵循 M20.10 的能力边界。
 M23.12 接入同一资产的两种视口/独立截图，复用既有相机和采样服务；后端/算法/介质/信号组合按已完成阶段报告能力。
 
@@ -375,17 +375,26 @@ HDDA 调优限于不改变表面语义的冗余查值消除：单轴表面转换
 - CPU 稀疏查询对独立外露面/三角化 oracle 验证。GPU 原点偏移在角坐标中按命中面与浮点误差推进，再变换到世界；拒绝 float 中塌缩的实例/坐标，不用固定世界 epsilon 跳过小单元。
 - CPU 体素上限及默认值为 256 个实例、256 MiB Nano 内容及 1M 代理块，可配置更低额度；每条稀疏查询最多 65536 regions，CPU 累计 region 工作另受现有 `max_triangle_tests` 额度约束。GPU 还受 AS/descriptor/storage 设备上限约束；域需可编码为 signed 21-bit，物体射线分量绝对值不超过 2²⁰，世界域不超过 1e6；float 往返误差不超过 1/16 cell，保守偏移需小于 1/8 cell，否则准备/整帧明确失败。这是数值域限制，编码范围不代表所有变换都受支持。
 - 首命中诊断保持既有 64-byte pixel/128-byte history；voxel 使用负的 instance/face tag，两个 float 槽以位模式无损保存三个 signed 21-bit cell。CPU 解码为类型化命中，不能把编码槽做浮点数值检查或 triangle 寻址。此编码仅属于帧诊断，不是 M23.10 持久表面身份。
-- voxel-only 以全部几何判断空场景；mesh-only 保持既有代码路径。Classic 固定射线、视图及渐进累积支持体素，内容/调色板/实例变化使累积失效。M23.9 交付时拒绝体素 ReSTIR、介质与表面信号；M23.10 已开放表面 DI/信号，介质与上层 Editor/capture 装配分别待 M23.11/12。
+- voxel-only 以全部几何判断空场景；mesh-only 保持既有代码路径。Classic 固定射线、视图及渐进累积支持体素，内容/调色板/实例变化使累积失效。M23.9 交付时拒绝体素 ReSTIR、介质与表面信号；M23.10 已开放表面 DI/信号，M23.11 接入既有空气/云组合，上层 Editor/capture 装配仍待 M23.12。
 - 验收包含 voxel-only/mesh-only/混合最近表面、两类射线和双向间接反弹，Lambert/GGX/环境/太阳/mesh 面积灯，tile/leaf/RT block 边界、负坐标/变换/内部起点/自相交、内容替换与提交失败保留旧结果。
 
 ## M23.10 ReSTIR 与信号实施契约
 
-- 沿用同一 Classic/DI 积分器、混合 TLAS 和完整 epoch 发布点，开放 CPU initial RIS、GPU initial/temporal/spatial/combined Surface DI，以及 Classic/ReSTIR 的渐进表面信号。体素不成为发光体；Scene media 与体素组合仍明确拒绝，待 M23.11。
+- 沿用同一 Classic/DI 积分器、混合 TLAS 和完整 epoch 发布点，开放 CPU initial RIS、GPU initial/temporal/spatial/combined Surface DI，以及 Classic/ReSTIR 的渐进表面信号。体素不成为发光体；Scene media 与体素组合在 M23.11 独立验收。
 - 每份 CPU 冻结几何拥有不回绕的 64-bit `content_version`，create 创建新版本，rebind 共享原几何版本及 owner。版本不是内容哈希；消费端的哈希仍用于快速筛选，不能替代 owner/完整内容比较。持久表面身份由版本、kind、entity/asset、triangle primitive/triangle 或 signed cell/face/value 组成。
 - GPU 局部身份为两组整数四元组：kind/index/face/value 与 signed cell.xyz/reserved。triangle index 与 voxel instance index 分属不同 kind，并通过当前冻结场景映射；Nano 地址、树节点及 AABB primitive 不进入身份。ReSTIR surface layout v2 为 6 float4（96 B/像素）：原 hit/normal/position/wo+epoch 加上述两组身份。时间复用比较完整单元身份与位置/法线；空间仍允许跨表面/材质，按各来源的真实 BSDF 重算目标和支持，最后在当前混合场景追踪可见性。
 - 信号 layout/source v2 为 23 float4（368 B/像素）：原 21 槽语义保留，追加上述类型化整数身份；旧 triangle 槽在 voxel/miss 为 UINT_MAX。读回提供解析后的稳定身份。版本 1 reference 明确拒绝；reference 附带私有冻结几何 owner 凭据，不能仅靠改写 hash/version 把旧内容伪装为当前来源。凭据保活 CPU 快照，不保活 GPU history。
 - ReSTIR temporal 完成平面为 256 B/像素（raw 128 + surface 96 + reservoir 32）；时间多 epoch 暂存同步增加，信号按 368 B 与 ping-pong/外持 owner 完整计费。先校验/分配候选，诊断成功且 generation 匹配后再同时发布 raw、采样历史和信号；取消/提交/预算失败保留最后完整 epoch。
 - 验收包含四种 DI 配置对独立三角化/CPU 的均值和来源支持、Lambert/GGX、薄体素遮挡与显露、负 cell/跨种类身份、相机运动、占用/材质/实例替换、信号重组与透视/正交 motion、版本/预算拒绝、阶段失败/取消/旧帧保活；保留 mesh-only 和 M23.9 定向回归。
+
+## M23.11 既有介质组合实施契约
+
+- 空气/云 model 4、sampler 2 保持原有事件深度、hero channel、自由程和 ratio-tracking 随机域。最近表面及所有阴影统一查询 mesh/voxel；材质、偏移、发光与面积 PDF 按类型解释。体素为实体不透明表面，不是密度网格或发光体；行星 ground 仍作为独立解析端点，按距离与几何竞争。
+- CPU Classic 与 initial RIS 共用类型化命中；`max_triangle_tests` 同时约束三角形测试和稀疏区域访问总量，统计追加 `voxel_regions`，RIS 追加 `prepared_voxel`，不将其计入 mesh。超限只返回失败，不发布部分图像。
+- GPU 复用 surface v2 的 kind/index/cell/face/value；ground kind=3，不能解释成 triangle 或 voxel。首表面 RGB reservoir 在 hero channel/自由程前准备，仅无真实介质事件到达首表面时应用。续段真实散射解除发光抑制，最终混合阴影与透射使用独立 stream 11；复用阶段不追踪透射。
+- 固定射线/单次视图开放 Classic 与 initial RIS，透视/正交渐进入口另支持 temporal/spatial/combined 三种 Scene media DI。固定射线读回使用介质 6 float4 步长；视图诊断使用 volume pixel 随机域及实际 sampling epoch 重建体素位置。无/零介质按现有 volume 采样器退化，不声称与 surface sampler 逐样本相同。
+- 冻结几何/介质/场数据共同构成来源。占用、材质、变换、空气/云参数、field/time 变化清空累积与复用；完整 epoch 是唯一发布点。失败、取消、旧 generation 和外持 owner 沿用原保护。Scene media 仍不提供 M20 表面信号；Editor/Console/IPC/capture 装配留给 M23.12。
+- 验收：CPU 独立外露三角面 oracle、零介质、表面/体积/ground 顺序、彩色吸收散射和云阴影、条件 RIS；required GPU 固定射线数值、四 DI 透视/正交/分批一致、混合遮挡及编辑/失败/取消/旧 owner；旧 mesh 介质定向回归。
 
 ## Slang 兼容性门禁
 

@@ -59,7 +59,7 @@ TEST_CASE("Voxel content palette and limits are immutable scene identity", "[vox
     CHECK(original.content_version()!=changed.content_version());
     CHECK(original.rebind(memory.heap,f.source())->content_version()==original.content_version());
     auto medium=PathMediumSnapshot::create(f.document->environment()).value();
-    CHECK_FALSE(estimate_volume_path_reference(original,medium,ray));
+    CHECK(estimate_volume_path_reference(original,medium,ray));
     f.voxel.voxel->palette[0].metallic=.7f; CHECK_FALSE(PathTraceScene::create(memory.heap,f.source(),assets));
     CHECK(f.scene(PathTraceMaterialModel::metallic_roughness));
     Fixture work{memory.heap}; std::vector<dk::assets::VoxelBlock> strip;
@@ -105,4 +105,58 @@ TEST_CASE("Voxel initial RIS uses native material visibility and frozen content"
             CHECK(a->candidate_evaluations==256*8); CHECK(native.nearest(ray).value()->kind==PathGeometryKind::voxel);
         }
     }
+}
+
+TEST_CASE("Voxel medium paths preserve event order and conditional RIS", "[voxels][path][medium]") {
+    RenderMemory memory; Fixture f{memory.heap}; const std::array cells{assets::VoxelBlock{{0,0,0},1,1}}; f.grid(cells);
+    f.quad(-2,2,2,{0,0,0},{2,3,4}); CloudFieldCache cache;
+    const PathTraceRay ray{{.3,.6,1.5},{0,0,-1}};
+    for(unsigned mode=0;mode<5;++mode) {
+        auto e=path_voxel_test::medium_environment(mode); REQUIRE(f.document->set_environment(e));
+        auto fields=e.clouds.enabled ? cache.prepare(e.clouds).value() : std::shared_ptr<const CloudFieldData>{};
+        PathMediumSettings ms; ms.time_seconds=17;
+        auto medium=PathMediumSnapshot::create(e,ms,fields).value();
+        INFO("medium mode=" << mode << " cloud scatter=" << medium.sample({.3,.6,1.25})->cloud_scattering);
+        if(mode>=3) CHECK(medium.sample({.3,.6,1.25})->cloud_scattering>0);
+        const auto scene=f.scene(),oracle=f.oracle(); VolumePathSettings settings; settings.max_bounces=3; settings.rr_start=0;
+        settings.sun=false; settings.environment_rgb={.3,.5,.7};
+        for(bool ris:{false,true}) {
+            VolumePathEstimate actual,expected;
+            if(ris) {
+                const auto a=estimate_restir_volume_reference(scene,medium,ray,settings,{}, {0,512}); REQUIRE(a);
+                const auto b=estimate_restir_volume_reference(oracle,medium,ray,settings,{}, {0,512}); REQUIRE(b);
+                actual=*a; expected=*b; const auto& stats=a->restir_statistics;
+                CHECK(stats.prepared_voxel==512); CHECK(stats.prepared_mesh==0); CHECK(stats.prepared_ground==0);
+                CHECK(stats.applied_surface+stats.primary_scatter+stats.primary_absorption==512);
+                if(mode>=2) { CHECK(stats.primary_scatter>0); CHECK(stats.primary_absorption>0); CHECK(stats.applied_surface<512); }
+            } else {
+                auto a=estimate_volume_path_reference(scene,medium,ray,settings,{0,512}); REQUIRE(a); actual=*a;
+                auto b=estimate_volume_path_reference(oracle,medium,ray,settings,{0,512}); REQUIRE(b); expected=*b;
+            }
+            CHECK((actual.mean-expected.mean).norm()<2e-4);
+            CHECK((actual.second_moment-expected.second_moment).norm()<2e-3);
+            if(mode>=2) { CHECK(actual.statistics.medium_scatter>0); CHECK(actual.statistics.absorption>0); }
+        }
+    }
+}
+TEST_CASE("Voxel zero medium and ground compete at the nearest endpoint", "[voxels][path][medium]") {
+    RenderMemory memory; Fixture f{memory.heap}; const std::array cube{assets::VoxelBlock{{0,0,0},1,1}}; f.grid(cube);
+    const auto e=path_voxel_test::medium_environment(1); REQUIRE(f.document->set_environment(e));
+    auto medium=PathMediumSnapshot::create(e).value(); auto scene=f.scene();
+    VolumePathSettings s; s.max_bounces=1; s.rr_start=0; s.sun=false; s.environment_rgb=Vec3d::Ones();
+    const PathTraceRay above{{.3,2,.7},{0,-1,0}},aside{{2,2,.7},{0,-1,0}};
+    auto a=estimate_restir_volume_reference(scene,medium,above,s,{}, {0,128}); REQUIRE(a);
+    CHECK(a->restir_statistics.prepared_voxel==128); CHECK(a->restir_statistics.primary_scatter==0);
+    CHECK(a->restir_statistics.applied_surface==128);
+    auto b=estimate_restir_volume_reference(scene,medium,aside,s,{}, {0,128}); REQUIRE(b); CHECK(b->restir_statistics.prepared_ground==128);
+    Trsd below; below.translation={0,-2,0}; f.transform(below); scene=f.scene();
+    auto c=estimate_restir_volume_reference(scene,medium,above,s,{}, {0,128}); REQUIRE(c);
+    CHECK(c->restir_statistics.prepared_ground==128); CHECK(c->restir_statistics.prepared_voxel==0);
+    std::vector<assets::VoxelBlock> strip; for(int x=0;x<64;++x) strip.push_back({{x,0,0},1,1+x%2});
+    Fixture bounded{memory.heap}; bounded.grid(strip); scene=bounded.scene(); medium=PathMediumSnapshot::create({}).value();
+    const PathTraceRay inside{{.3,.4,.7},{1,0,0}}; s.max_triangle_tests=16;
+    CHECK_FALSE(estimate_volume_path_reference(scene,medium,inside,s,{0,1}));
+    CHECK_FALSE(estimate_restir_volume_reference(scene,medium,inside,s,{}, {0,1}));
+    s.max_triangle_tests=4096; auto work=estimate_volume_path_reference(scene,medium,inside,s,{0,1}); REQUIRE(work); CHECK(work->statistics.voxel_regions>16);
+    std::stop_source stopped; stopped.request_stop(); CHECK_FALSE(estimate_volume_path_reference(scene,medium,inside,s,{0,1},0,stopped.get_token()));
 }

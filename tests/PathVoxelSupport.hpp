@@ -7,6 +7,21 @@
 namespace path_voxel_test {
 using namespace dk;
 using namespace dk::render;
+// Small physical domain keeps analog and shadow tracking observable and bounded.
+inline EnvironmentDescription medium_environment(unsigned mode) {
+    EnvironmentDescription e; e.enabled=mode==1 || mode==2 || mode==4; e.clouds.enabled=mode>=3;
+    auto& a=e.atmosphere; a.ground_radius_m=1000; a.planet_center_m={0,-1000,0}; a.atmosphere_height_m=10;
+    a.rayleigh_scale_height_m=a.mie_scale_height_m=10; a.absorption_center_height_m=5; a.absorption_half_width_m=2;
+    a.rayleigh_scattering_per_m=a.absorption_extinction_per_m={0,0,0};
+    a.mie_extinction_per_m=mode==2 || mode==4 ? EnvironmentVector{.3,.5,.7} : EnvironmentVector{0,0,0};
+    a.mie_scattering_per_m=mode==2 || mode==4 ? EnvironmentVector{.15,.25,.35} : EnvironmentVector{0,0,0};
+    a.mie_anisotropy=0; a.ground_albedo={.2,.3,.4};
+    e.clouds.weather_resolution=e.clouds.base_resolution=e.clouds.detail_resolution=16;
+    e.clouds.seed=10; e.clouds.bottom_height_m=.1; e.clouds.top_height_m=8; e.clouds.coverage=1; e.clouds.extinction_per_m=.5;
+    e.clouds.weather_scale_m=100; e.clouds.shape_scale_m=100; e.clouds.detail_scale_m=10;
+    e.clouds.bottom_fade_fraction=.01; e.clouds.top_fade_fraction=.1; e.clouds.wind_velocity_mps={.1,.05};
+    e.sun.direction={0,0,1}; e.sun.angular_radius_rad=.1; e.sun.irradiance={1,2,3}; return e;
+}
 struct Fixture {
     memory::ResourceHandle heap;
     std::unique_ptr<SceneDocument> document=SceneDocument::create().value();

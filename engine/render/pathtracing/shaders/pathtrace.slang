@@ -353,6 +353,7 @@ void runRestirPixel(uint2 coordinate) {
                 record=float4(v.ground ? segment.y : hit.distance,hit.barycentric,v.ground ? -1.0 : float(hit.index+1));
                 normal=float4(v.normal,1); position=float4(v.position,1);
                 key=v.ground ? uint4(3,0xffffffffu,0,0) : surfaceKey(hit);
+                cell=v.ground ? int4(0) : surfaceCell(hit);
                 if(asuint(parameters[1]).z!=0) {
                     reservoir=initialRestir(hit,v.position,v.normal,v.bsdf,-ray.Direction,counter,epoch); restirStat(pixel,14);
                 }

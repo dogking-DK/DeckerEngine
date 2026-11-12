@@ -103,6 +103,7 @@
 | 原生稀疏体素 Classic GPU 数值/混合光照/间接反弹/渐进失效与失败保护 | dk_pathtracing_probe | `^dk\.pathtracing\.voxel_(numeric\|lighting\|state)_gpu_required$`（required RT/validation/sync；共享 HDDA 改动另选 compute numeric） |
 | M23.10 体素 ReSTIR initial/temporal/spatial/combined、独立三角化与 GGX 支持域/显露/失败保护 | dk_voxel_path_tests、dk_pathtracing_probe | `^dk\.voxels\.path_cpu\.`；`^dk\.pathtracing\.voxel_restir_(numeric\|reuse\|state)_gpu_required$`（required RT/validation/sync；共享布局另选 mesh ReSTIR/media reuse 回归） |
 | M23.10 体素表面信号 v2、混合身份/分量/guide/透视正交 reference | dk_pathtracing_probe | `^dk\.pathtracing\.voxel_signals_gpu_required$`；旧 mesh 信号 `^dk\.pathtracing\.signal_(numeric\|geometry\|textures\|state)_gpu_required$`；v1/伪造来源拒绝、预算/完整 epoch 见 voxel_restir_state |
+| M23.11 原生体素与既有空气/云、首表面条件 RIS、阴影透射/四 DI/透视正交/失败保护 | dk_voxel_path_tests、dk_pathtracing_probe | `^dk\.voxels\.path_cpu\.`；`^dk\.pathtracing\.voxel_medium_(numeric\|schedule\|reuse\|state)_gpu_required$`（required RT/validation/sync；旧 mesh 定向 medium 回归；无 VDB CPU 按影响选 volume 的端点/材质/投影/失败项；全量旧介质统计含超过 240 秒的 Debug 长测，不作为默认门禁） |
 | CPU路径追踪解析/收敛、MIS/RR、采样/相机/输入快照与预算/取消/内存失败 | dk_pathtracing_reference_tests | `^dk\.pathtracing\.[a-z]+ `（CPU-only，单元测试名首词后的空格排除demo_cpu） |
 | ReSTIR CPU reservoir/RIS、支持校正合并数学、首表面光能与状态 | dk_pathtracing_reference_tests | `^dk\.pathtracing\.RESTIR `（CPU-only；不表示 GPU/时空/RTXDI 已接入） |
 | ReSTIR CPU Scene media 首表面条件 RIS、hero/存活/阴影、云/行星/有限太阳与失败保护 | dk_pathtracing_reference_tests | `^dk\.pathtracing\.RESTIR volume `（CPU-only 初始 RIS，无介质时空会话） |

@@ -162,7 +162,7 @@ PathBsdf restirMaterial(float4 hit,uint4 key) {
 }
 PathPayload restirPayload(uint pixel) {
     float4 record=restirSurfaces[pixel*6]; uint4 key=asuint(restirSurfaces[pixel*6+4]);
-    PathPayload hit={}; hit.distance=record.x; hit.barycentric=record.yz; hit.found=key.x!=0 ? 1u : 0u; hit.index=key.y;
+    PathPayload hit={}; hit.distance=record.x; hit.barycentric=record.yz; hit.found=(key.x==1 || key.x==2) ? 1u : 0u; hit.index=key.y;
 #if DK_PATH_VOXELS
     if(key.x==2) {
         hit.kind=1; hit.instance=key.y; hit.face=key.z; hit.value=key.w;

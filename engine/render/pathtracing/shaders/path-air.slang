@@ -143,7 +143,7 @@ struct AirVertex {
     float3 position,normal,incoming;
     AirLocation location;
     PathBsdf bsdf;
-    uint index;
+    PathPayload hit;
     bool volume,ground;
     float3 phaseWeights;
 };
@@ -151,7 +151,7 @@ float3 airOrigin(AirVertex vertex,float3 direction,out AirLocation location) {
     location=vertex.location; if(vertex.volume) return vertex.position;
     float3 origin=vertex.position;
 #if !DK_PATH_EMPTY
-    if(!vertex.ground) origin=offsetOrigin(vertex.index,origin,direction);
+    if(!vertex.ground) origin=surfaceOffset(vertex.hit,origin,direction);
 #endif
     location=airMove(location,origin-vertex.position);
     if(asuint(parameters[12]).y!=0 && location.height<.0001) {
@@ -256,7 +256,7 @@ AirVertex airEndpoint(RayDesc ray,AirLocation location,float3 segment,PathPayloa
     }
 #if !DK_PATH_EMPTY
     else if(hit.found!=0) {
-        v.index=hit.index; v.position=positionOf(hit); v.normal=normalOf(hit,ray.Direction); v.bsdf=materialAt(hit.index,hit.barycentric);
+        v.hit=hit; v.position=positionOf(hit); v.normal=normalOf(hit,ray.Direction); v.bsdf=surfaceMaterial(hit);
         v.location=airAlong(location,ray.Direction,hit.distance);
     }
 #endif
@@ -280,8 +280,7 @@ float3 traceAir(RayDesc ray,AirLocation location,uint pixel,uint sample,inout ui
     PathPayload primary={};
     bool saved=asuint(parameters[32]).y==1;
     if(saved) {
-        float4 record=restirSurfaces[restirPixel*6]; primary.distance=record.x; primary.barycentric=record.yz;
-        primary.found=record.w>0 ? 1u : 0u; primary.index=primary.found!=0 ? uint(record.w)-1 : 0; ++rays;
+        primary=restirPayload(restirPixel); ++rays;
     } else primary=airNearest(ray,rays);
     float3 primarySegment=airSegment(location,ray.Direction,primary.found!=0 ? primary.distance : infinity);
     AirVertex receiver=airEndpoint(ray,location,primarySegment,primary);
@@ -319,9 +318,15 @@ float3 traceAir(RayDesc ray,AirLocation location,uint pixel,uint sample,inout ui
             v=airEndpoint(ray,location,segment,hit);
 #if !DK_PATH_EMPTY
             if(!ground) {
-                if(!suppressEmission || triangles[hit.index*9+1].w==0)
-                    value+=beta*triangles[hit.index*9+5][channel]*(depth!=0 && flags.x==0 ? weight(previousPdf,areaPdf(hit.index,previous,v.position)) : 1);
-                if(depth==0) { firstHit=float4(hit.distance,hit.barycentric,float(hit.index+1)); firstNormal=float4(v.normal,dot(ray.Direction,triangles[hit.index*9+3].xyz)<0 ? 1 : -1); }
+                if(!suppressEmission || !surfaceLight(hit))
+                    value+=beta*surfaceEmission(hit)[channel]*(depth!=0 && flags.x==0 ? weight(previousPdf,surfaceAreaPdf(hit,previous,v.position)) : 1);
+                if(depth==0) {
+#if DK_PATH_VOXELS
+                    if(hit.kind==1) { firstHit=voxelDiagnostic(hit); firstNormal=float4(v.normal,dot(ray.Direction,voxelNormal(hit.instance,hit.face))<0 ? 1 : -1); }
+                    else
+#endif
+                    { firstHit=float4(hit.distance,hit.barycentric,float(hit.index+1)); firstNormal=float4(v.normal,dot(ray.Direction,triangles[hit.index*9+3].xyz)<0 ? 1 : -1); }
+                }
             }
 #endif
         }

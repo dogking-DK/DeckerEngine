@@ -30,7 +30,6 @@ std::uint32_t mix(std::uint32_t x) { x^=x>>16; x*=0x7feb352du; x^=x>>15; x*=0x84
 double power(double a,double b) { if(a<=0) return 0; if(b<=0) return 1; const double q=b/a; return 1/(1+q*q); }
 const PathSceneState& validate(const PathTraceScene& scene,const PathMediumSnapshot& medium,const VolumePathSettings& s,
     PathTraceSamples samples,std::uint64_t pixels,bool cpu_geometry=true) {
-    if(scene.voxel_count()) throw Error{ErrorCode::not_supported,"Voxel media paths require M23.11"};
     const auto* state=PathReferenceAccess::get(scene);
     if(!state || !medium) throw path_invalid("Volume path requires valid frozen scene and medium");
     if(state->source.environment()!=medium.environment()) throw path_invalid("Volume scene and medium environment mismatch");
@@ -102,10 +101,12 @@ struct Context {
     }
     std::optional<PathTraceHit> nearest(const PathTraceRay& ray) {
         cancellation();
-        if(stats.rays==settings.max_rays || scene.triangles.size()>settings.max_triangle_tests-stats.triangle_tests)
+        if(stats.rays==settings.max_rays || scene.triangles.size()>settings.max_triangle_tests-stats.triangle_tests-stats.voxel_regions)
             throw path_invalid("CPU volume geometry work budget exceeded");
         PathTraceStatistics count; auto hit=nearest_path(scene,ray,count);
-        stats.rays+=count.rays; stats.triangle_tests+=count.triangle_tests; return hit;
+        if(count.triangle_tests+count.voxel_regions>settings.max_triangle_tests-stats.triangle_tests-stats.voxel_regions)
+            throw path_invalid("CPU volume geometry work budget exceeded");
+        stats.rays+=count.rays; stats.triangle_tests+=count.triangle_tests; stats.voxel_regions+=count.voxel_regions; return hit;
     }
     PathMediumSegments intervals(const PathTraceRay& ray,double maximum) const {
         if(!planet) return {};
@@ -139,7 +140,7 @@ struct Context {
     }
     Vec3d origin(const Vertex& v,const Vec3d& wi) const {
         if(v.volume) return v.position;
-        return above_ground(v.hit ? offset_path_origin(scene.triangles[v.hit->index],v.position,wi) : v.position);
+        return above_ground(v.hit ? offset_surface_origin(scene,*v.hit,wi) : v.position);
     }
     double area_pdf(std::size_t index,const Vec3d& from,const Vec3d& point) const {
         const auto& t=scene.triangles[index]; if(t.light_weight<=0) return 0;
@@ -243,7 +244,7 @@ struct Context {
             v.normal=(v.position-vector(medium.environment().atmosphere.planet_center_m)).normalized();
             v.bsdf={vector(medium.environment().atmosphere.ground_albedo),0,1,PathTraceMaterialModel::lambert};
         } else if(hit) {
-            v.hit=hit; v.position=hit->position; v.normal=hit->normal; const auto& t=scene.triangles[hit->index];
+            v.hit=hit; v.position=hit->position; v.normal=hit->normal; PathTriangle temporary; const auto& t=path_surface(scene,*hit,temporary);
             v.bsdf={path_base_color(scene,t,hit->barycentric).head<3>(),t.metallic,t.roughness,scene.material_model};
         }
         return v;
@@ -285,9 +286,9 @@ struct Context {
                 v=endpoint(ray,hit,segments);
                 if(ground) ++stats.ground_hits;
                 else {
-                    const auto& t=scene.triangles[hit->index];
+                    PathTriangle temporary; const auto& t=path_surface(scene,*hit,temporary);
                     if(!suppress_emission || t.light_weight==0)
-                        value+=beta*t.emission[channel]*(depth && mis ? power(previous_pdf,area_pdf(hit->index,previous,hit->position)) : 1);
+                        value+=beta*t.emission[channel]*(depth && mis ? power(previous_pdf,hit->kind==PathGeometryKind::triangle ? area_pdf(hit->index,previous,hit->position) : 0) : 1);
                 }
             }
             if(depth==settings.max_bounces) break;

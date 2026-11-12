@@ -12,6 +12,7 @@ struct VolumePathSettings {
     Vec3d environment_rgb=Vec3d::Zero(); // Distant boundary radiance, excludes the sun.
     bool sun=true;
     PathTraceEstimator estimator=PathTraceEstimator::mis;
+    // max_triangle_tests bounds triangle tests plus sparse voxel region visits on CPU.
     std::uint64_t max_rays=1ull<<24, max_triangle_tests=1ull<<29, max_tracking_steps=1ull<<26;
     std::uint32_t max_steps_per_path=1u<<16;
 };
@@ -26,6 +27,7 @@ struct VolumePathStatistics {
     std::uint64_t rays=0, triangle_tests=0, tracking_steps=0, null_collisions=0;
     std::uint64_t medium_scatter=0, absorption=0, surface_scatter=0, ground_hits=0;
     std::uint64_t multiple_scatter_paths=0; // Paths with at least two real medium scatter events.
+    std::uint64_t voxel_regions=0;
 };
 struct VolumePathEstimate {
     Vec3d mean=Vec3d::Zero(), second_moment=Vec3d::Zero();
@@ -35,6 +37,7 @@ struct RestirVolumeStatistics {
     std::uint64_t prepared_mesh=0,prepared_ground=0,candidate_evaluations=0;
     std::uint64_t applied_surface=0,selected_shadow_rays=0;
     std::uint64_t primary_scatter=0,primary_absorption=0,continuation_scatter=0;
+    std::uint64_t prepared_voxel=0;
 };
 struct RestirVolumeEstimate : VolumePathEstimate {
     RestirDiSettings restir;

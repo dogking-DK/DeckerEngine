@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-11-12T15:11:34+08:00"
+updated_at: "2026-11-12T16:06:43+08:00"
 status: accepted
 ---
 
@@ -41,7 +41,7 @@ CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、
 
 [体素设计](render-voxels.md#m239-classic-路径实施契约)扩展本积分器的几何输入；M23.9 实施 CPU/GPU Classic 混合几何，状态与证据见 [0167](../development/0167-voxel-classic-pathtracing.md)。ReSTIR、介质、信号和上层装配仍分阶段实施。
 M23.8 先扩展 [RT 底座](graphics-raytracing.md)，M23.9 接通 CPU/GPU Classic 混合几何，
-M23.10 已适配 ReSTIR 四种 DI 与表面信号 v2（[0168](../development/0168-voxel-restir-signals.md)），M23.11 验证已有介质组合，M23.12/13 完成消费者与联合交付。
+M23.10 已适配 ReSTIR 四种 DI 与表面信号 v2（[0168](../development/0168-voxel-restir-signals.md)），M23.11 接入已有空气/云和首表面条件 DI（[0169](../development/0169-voxel-scene-media.md)），M23.12/13 完成消费者与联合交付。
 
 - PathTraceScene/上传/缓存支持 triangle 与 voxel 实例；OpenVDB CPU 构建/导入后使用 NanoVDB 只读快照，原生体素用块 AABB BLAS/TLAS + intersection HDDA。
   与 compute 共用 PNanoVDB/Slang accessor；M23.8 单独验证 intersection 兼容性。不转 mesh 或密集展开，不在输出图上叠加光栅颜色。
@@ -57,6 +57,8 @@ M23.10 已适配 ReSTIR 四种 DI 与表面信号 v2（[0168](../development/016
 - 网格/块布局/材质/实例、着色模型及命中布局版本纳入来源与失效判断；同代 AS、体素数据和身份映射一起发布。
   palette-only 复用 AS 不等于可以保留旧图像/采样历史；失败/取消保留最后完整 owner 和 completed_spp。
 - ReSTIR 与信号字段按对应主题适配，空气/云的最近表面、事件区间和阴影透射必须看到体素。
+  CPU/GPU 介质积分器通过类型化表面完成 BSDF、偏移与发光 PDF；自由程裁剪至最近 mesh/voxel/ground。CPU `max_triangle_tests` 计入三角形测试与稀疏区域访问之和，`voxel_regions` 和 `prepared_voxel` 独立统计。
+  介质首表面 reservoir 先于 hero/自由程创建，仅无真实事件到达首表面时消费；时空复用不缓存透射，阴影重新查询混合场景及当前介质。保持 model 4/sampler 2 和 Scene media 信号拒绝，详见[实施契约](render-voxels.md#m2311-既有介质组合实施契约)。
   尚未验收组合明确拒绝，不能默认切换算法、关闭介质或漏画几何；M20 的滤波器完成状态保持独立。
 
 验收先做 CPU/required GPU 的主射线、阴影和反弹，再做 Lambert/GGX、mesh↔voxel 间接光、
