@@ -54,6 +54,11 @@ if(DK_BUILD_RENDER_CAPTURE)
         target_link_libraries(dk_render_services PRIVATE dk::geometry_voxels_sparse)
     endif()
     if(TARGET dk_render_pathtracing)
+        if(TARGET dk_geometry_voxels_sparse)
+            target_compile_definitions(dk_render_services PRIVATE
+                DK_CAPTURE_VOXEL_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/voxels/shaders"
+                DK_CAPTURE_NANO_INCLUDE_DIR="${DK_NANOVDB_INCLUDE_DIR}")
+        endif()
         target_sources(dk_render_services PRIVATE src/PathCapture.cpp)
         target_link_libraries(dk_render_services PRIVATE dk::render_pathtracing dk::rtxdi_shaders)
         target_compile_definitions(dk_render_services PUBLIC DK_CAPTURE_PATHTRACING=1 PRIVATE

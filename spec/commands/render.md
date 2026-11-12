@@ -1,7 +1,7 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-11-12T10:31:11+08:00"
+updated_at: "2026-11-12T16:55:54+08:00"
 status: accepted
 ---
 
@@ -24,13 +24,16 @@ status: accepted
 | voxel_irradiance | `[1,1,1]`，有限 RGB，每通道 [0,1000000] |
 | unlit_inspection | false；true 仅在渲染快照忽略 Scene 的大气/云 |
 
-含体素场景的大气/云组合、路径追踪和 `render.sequence` 尚不支持，返回 not_supported。
+含体素场景的光栅大气/云组合和 `render.sequence` 尚不支持，返回 not_supported。
+原生路径截图支持同一 voxel/mesh 资产，使用下述 pathtrace v1/v2/v3；Surface only 与 Scene media、Classic MIS 与四种 ReSTIR DI 均可用。
+需要路径构建及设备 RT 能力，不支持时明确失败，不自动切换后端。
 未显式 inspection 时不自动关闭环境；非法光方向/能量整体拒绝。
 含 voxel 的 CPU 资产在接受请求前冻结（包括同场景 mesh），最多 64 MiB，计入 Jobs 输入预算。
 因此缺文件/坏 metadata/预算错误可能直接拒绝请求；不生成 JobId、不消耗 frame、不改旧输出。
 接受后源文件、场景编辑与 Editor 会话设置均不影响任务。准备阶段为同步 CPU 工作，较大导入可能阻塞宿主。
 provenance 增加上述实际参数，含体素任务另含 `asset_snapshot:"accepted"`、`asset_cpu_bytes`；
-quality 为 `voxel_unlit_v1` / `voxel_directional_v1`，完成时 shader_fingerprint 覆盖 HDDA 与 PNanoVDB include；
+光栅 quality 为 `voxel_unlit_v1` / `voxel_directional_v1`，路径保留 `pathtrace_v1/v2/v3`；
+完成时 shader_fingerprint 覆盖共享 HDDA 与 PNanoVDB include，路径还包含 path-voxel.slang；
 成功结果增加 `voxel_count`（实例数，mesh-only 为 0），`draw_count` 仍表示 mesh draw。
 结果仍通过 jobs 查询，只有 succeeded 代表输出已经原子发布。
 
@@ -81,11 +84,11 @@ temporal使用半尺寸重建和每作业独立历史，输出最多1920×1080�
 frame 在当前 Runtime 内从 1 递增，拒绝请求不消耗帧号。输出路径规范化为工程相对路径。
 提交时复制 Scene 与 Project 映射，所以随后的编辑、撤销或场景替换不会影响该次截图。
 纯 mesh 任务的资产文件在 worker 执行时读取；不保证外部资产文件被同时修改时的内容快照。
-含 voxel 的光栅任务按下述契约在接受前冻结 CPU 资产。
+含 voxel 的光栅和路径任务按上述契约在接受前冻结 CPU 资产。
 
 使用 [jobs.get / jobs.wait / jobs.cancel](jobs.md) 查询、等待和取消。
 succeeded 的 result 为 `{kind:"capture",document_id,scene_id,revision,frame,width,height,output,draw_count,provenance}`。
-路径结果draw_count=0（无光栅draw），采样数见provenance.actual_spp。其余状态 result=null；failed 的 error 记录导入、GPU 或 IO 错误；提交响应提供失败任务的原始版本关联。
+结果还含 voxel_count（实例数，mesh-only 为 0）。路径结果draw_count=0（无光栅draw），采样数见provenance.actual_spp。其余状态 result=null；failed 的 error 记录导入、GPU 或 IO 错误；提交响应提供失败任务的原始版本关联。
 任务成功表示 GPU 已完成、读回和原子文件替换已完成。PPM 为 P6、RGB8/sRGB，覆盖同名文件。
 取消先被 owner 接受则不会发布；失败保留既有输出。之后的另一次成功截图仍可替换该文件。
 

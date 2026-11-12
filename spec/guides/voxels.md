@@ -1,13 +1,13 @@
 ---
 module: guide-voxels
 created_at: "2026-11-12T09:48:00+08:00"
-updated_at: "2026-11-12T11:32:53+08:00"
+updated_at: "2026-11-12T16:55:54+08:00"
 status: accepted
 ---
 
-# 实体体素光栅工作流
+# 实体体素双后端工作流
 
-M23.6 使用 OpenVDB/NanoVDB 实体材质索引，不是密度云或 SDF。文件格式、有限域、palette 与单位变换见
+M23.6/12 使用 OpenVDB/NanoVDB 实体材质索引，不是密度云或 SDF。文件格式、有限域、palette 与单位变换见
 [体素设计](../design/render-voxels.md#m235-资产实施契约)。需要 `windows-voxel-editor` 预设；无 CUDA 依赖。
 
 ## 加载、编辑与刷新
@@ -32,13 +32,22 @@ editor.viewport.set guard={"view_id":"<查询值>","document_id":"<查询值>","
 ```
 
 使用实际返回的 guard。显示设置不改变 Scene dirty/revision/history；设置接受后还需等待 `presentation.current=true`。
-混合场景方向光要求 mesh 材质与 voxel palette 均非金属；大气/云组合暂不支持，需主动启用 Unlit inspection，Scene 的环境数据仍保留。
-路径追踪暂不支持体素，相关后端在 M23.8/9 接入。
+混合场景方向光要求 mesh 材质与 voxel palette 均非金属；光栅大气/云组合暂不支持，需主动启用 Unlit inspection，Scene 的环境数据仍保留。
+具备 RT 能力时可在同一视口切到 Path tracing，拾取、Frame、Gizmo 和 Undo 继续使用同一资产。
+路径支持 Surface only / Scene media、Classic MIS / ReSTIR DI 及初始/时间/空间/联合复用；影响渲染内容的设置、相机、Scene、资产刷新改变后从空历史重算。
+Console/IPC 示例（guard 取最新 query，`classic` 是视口枚举）：
+
+```text
+editor.viewport.set guard={"view_id":"<查询值>","document_id":"<查询值>","revision":0} renderer=pathtrace target_spp=16 medium_mode=surface_only direct_lighting=restir_di temporal_reuse=true spatial_reuse=true
+```
+
+先检查 `editor.viewport.query.capabilities`；设备不支持 RT 时路径请求拒绝，光栅仍可用。
+设置接受只说明会话配置已提交；须等待 `presentation.current=true` 和目标 spp 完成再比较画面。
 
 ## 独立截图
 
 `render.capture` 明确接收相机、尺寸、曝光与相同体素参数；不会读取 Editor 当前相机、显示参数或未提交 Gizmo。
-含体素任务在接受前冻结最多 64 MiB 的 CPU 资产；`provenance.asset_snapshot=accepted`，后续源文件替换不影响该任务。
+含体素的光栅和原生路径任务在接受前冻结最多 64 MiB 的全部 CPU 资产（包括 mesh）；`provenance.asset_snapshot=accepted`，后续源文件替换不影响该任务。
 任务 succeeded 表示 GPU 完成、读回和原子文件替换均完成。详见[截图命令](../commands/render.md#实体体素光栅截图)。
 
 已打开/加载工程的 Editor 或 dk-run（例如 `--pipe voxel-demo`）可运行：
@@ -49,7 +58,16 @@ python examples/render/voxel_capture.py --endpoint voxel-demo --client out/build
 ```
 
 示例使用 eye=(0,0,-2)、target=(0,0,0)；实际工程按物体位置传 `--eye x y z --target x y z`。
-输出父目录必须存在，覆盖同名 PPM；示例只读取已加载 Scene，不修改工程。
+输出父目录必须存在，覆盖同名输出；示例只读取已加载 Scene，不修改工程。
+原生路径示例（JSON 为线性 RGB，PPM 为 tone 后图像）：
+
+```powershell
+python examples/render/voxel_capture.py --endpoint voxel-demo --client out/build/windows-voxel-editor/bin/Debug/dk-ctl.exe --pathtrace --restir joint --orthographic --spp 16 --output voxel-path.json
+```
+
+加 `--media` 使用已有 Scene 空气/云，时间固定为 0；相机近面须处于地面以上的支持域。
+截图独立从空历史开始，不复用 Editor 的历史或相机；对照时须显式匹配尺寸、相机、spp、seed、光照和介质参数。
+provenance 保留 pathtrace 版本质量标识，报告接受时资产快照、输入/几何/环境/场/shader 指纹与实际采样；结果含 `voxel_count`。
 
 ## 光栅质量与性能基线
 

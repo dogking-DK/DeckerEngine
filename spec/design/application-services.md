@@ -1,7 +1,7 @@
 ---
 module: application-services
 created_at: "2026-09-22T13:28:00+08:00"
-updated_at: "2026-11-12T10:31:11+08:00"
+updated_at: "2026-11-12T16:55:54+08:00"
 status: accepted
 ---
 
@@ -9,6 +9,8 @@ status: accepted
 
 M23.6 在既有 EditorViewportService 中增加 CPU `VoxelDisplaySettings`，GUI 和 viewport 命令共享校验/guard/no-op。
 显示配置不进入 Scene 或历史；CaptureService 独立接收相同值并冻结含 voxel 的 CPU 输入。
+M23.12 将冻结包复用于原生路径 worker；接受失败不创建 Job/消耗 frame，成功仍由 owner 原子发布。
+Editor 复用会话 viewport/camera guard 和设备 RT 能力，不新增命令或 GPU/VDB 依赖到 CPU 服务。
 新增能力不反向引入 GPU/VDB 到 CPU editor_services；详见[体素实施契约](render-voxels.md#m236-使用闭环实施契约)。
 
 services 提供 dk::scene_services，PUBLIC 依赖 Scene；operations 提供 dk::scene_operations，

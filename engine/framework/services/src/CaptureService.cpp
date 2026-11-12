@@ -313,8 +313,7 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
         const bool has_voxels=std::ranges::any_of(snapshot.scene.entities(),[](const auto& entity){
             return std::ranges::any_of(entity.assets,[](const auto& ref){return ref.kind==AssetKind::voxel;});
         });
-        if(has_voxels) {
-            require(!request.pathtrace,"Native voxel path tracing is not implemented",ErrorCode::not_supported);
+        if(has_voxels && !request.pathtrace) {
             require(request.samples.empty(),"Voxel render.sequence is not implemented",ErrorCode::not_supported);
             require(request.unlit_inspection || (!snapshot.scene.environment().enabled && !snapshot.scene.environment().clouds.enabled),
                 "Voxel capture with atmosphere/clouds is unsupported; use explicit unlit_inspection",ErrorCode::not_supported);
@@ -347,13 +346,14 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
         view.frame=s.next_frame;
         CaptureInfo info{snapshot.state.document_id,{snapshot.scene.id(),snapshot.scene.revision(),view.frame,request.width,request.height,0},output_name,provenance(request,snapshot.scene.environment())};
         if(frozen) {
-            auto value=nlohmann::json::parse(info.provenance); value["quality"]=request.voxel.directional ? "voxel_directional_v1" : "voxel_unlit_v1";
+            auto value=nlohmann::json::parse(info.provenance);
+            if(!request.pathtrace) value["quality"]=request.voxel.directional ? "voxel_directional_v1" : "voxel_unlit_v1";
             value["asset_snapshot"]="accepted"; value["asset_cpu_bytes"]=frozen.cpu_bytes();
             info.provenance=value.dump();
         }
         auto work=[input=std::move(snapshot),frozen,request,info,view,resource=s.render_heap,shaders=s.shaders,output](std::stop_token stop,const JobQueue::Reporter& report)->Result<JobQueue::Payload> {
 #ifdef DK_CAPTURE_PATHTRACING
-            if(request.pathtrace) return capture_detail::render_path_capture(resource,input,request,info,view,output,stop,report);
+            if(request.pathtrace) return capture_detail::render_path_capture(resource,input,request,info,view,output,stop,report,frozen);
 #endif
             return render_capture(resource,input,request,info,view,shaders,output,stop,frozen);
         };

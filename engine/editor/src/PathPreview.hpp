@@ -15,6 +15,7 @@ struct PathPreviewRequest {
     PathPreviewSettings settings;
     bool read_linear=false; // Explicit acceptance-only readback, never normal presentation.
     bool observe_memory=false; // Explicit benchmark-only VMA snapshot.
+    std::uint64_t activation=0; // Stamped by request(), survives coalesced suspend/resume.
 };
 struct PathPreviewStatus {
     std::uint64_t sequence=0;
@@ -29,6 +30,8 @@ struct PathPreviewResult {
     render::PathTraceGpuImageInfo info;
     render::RenderScene scene;
     std::vector<PickMesh> meshes;
+    std::vector<std::shared_ptr<const CpuAsset>> voxels;
+    std::size_t voxel_count=0;
     graphics::ImageTransfer image;
     render::PathTraceGpuImage linear;
     render::PathTraceMemoryStats memory;
@@ -55,7 +58,7 @@ private:
     PathPreviewStatus status_;
     std::stop_source cancel_;
     bool enabled_=false;
-    std::uint64_t wanted_=0;
+    std::uint64_t wanted_=0,activation_=0;
     std::jthread thread_;
 };
 }

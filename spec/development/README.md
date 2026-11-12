@@ -171,5 +171,6 @@
 | 0167 | [M23.9 原生稀疏体素 Classic 路径](0167-voxel-classic-pathtracing.md) | render-voxels、render-pathtracing | completed |
 | 0168 | [M23.10 体素 ReSTIR 与表面信号](0168-voxel-restir-signals.md) | render-voxels、render-pathtracing、render-restir、render-denoising | completed |
 | 0169 | [M23.11 体素与既有 Scene media 路径](0169-voxel-scene-media.md) | render-voxels、render-pathtracing、render-restir | completed |
+| 0170 | [M23.12 原生体素路径消费者](0170-voxel-path-consumers.md) | render-voxels、editor、render-capture、application-services | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

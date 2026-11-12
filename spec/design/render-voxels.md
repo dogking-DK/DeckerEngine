@@ -1,7 +1,7 @@
 ---
 module: render-voxels
 created_at: "2026-11-11T14:51:58+08:00"
-updated_at: "2026-11-12T16:06:43+08:00"
+updated_at: "2026-11-12T16:55:54+08:00"
 status: accepted
 ---
 
@@ -375,7 +375,7 @@ HDDA 调优限于不改变表面语义的冗余查值消除：单轴表面转换
 - CPU 稀疏查询对独立外露面/三角化 oracle 验证。GPU 原点偏移在角坐标中按命中面与浮点误差推进，再变换到世界；拒绝 float 中塌缩的实例/坐标，不用固定世界 epsilon 跳过小单元。
 - CPU 体素上限及默认值为 256 个实例、256 MiB Nano 内容及 1M 代理块，可配置更低额度；每条稀疏查询最多 65536 regions，CPU 累计 region 工作另受现有 `max_triangle_tests` 额度约束。GPU 还受 AS/descriptor/storage 设备上限约束；域需可编码为 signed 21-bit，物体射线分量绝对值不超过 2²⁰，世界域不超过 1e6；float 往返误差不超过 1/16 cell，保守偏移需小于 1/8 cell，否则准备/整帧明确失败。这是数值域限制，编码范围不代表所有变换都受支持。
 - 首命中诊断保持既有 64-byte pixel/128-byte history；voxel 使用负的 instance/face tag，两个 float 槽以位模式无损保存三个 signed 21-bit cell。CPU 解码为类型化命中，不能把编码槽做浮点数值检查或 triangle 寻址。此编码仅属于帧诊断，不是 M23.10 持久表面身份。
-- voxel-only 以全部几何判断空场景；mesh-only 保持既有代码路径。Classic 固定射线、视图及渐进累积支持体素，内容/调色板/实例变化使累积失效。M23.9 交付时拒绝体素 ReSTIR、介质与表面信号；M23.10 已开放表面 DI/信号，M23.11 接入既有空气/云组合，上层 Editor/capture 装配仍待 M23.12。
+- voxel-only 以全部几何判断空场景；mesh-only 保持既有代码路径。Classic 固定射线、视图及渐进累积支持体素，内容/调色板/实例变化使累积失效。M23.9 交付时拒绝体素 ReSTIR、介质与表面信号；M23.10 已开放表面 DI/信号，M23.11 接入既有空气/云组合，上层 Editor/capture 装配见 M23.12 消费者契约。
 - 验收包含 voxel-only/mesh-only/混合最近表面、两类射线和双向间接反弹，Lambert/GGX/环境/太阳/mesh 面积灯，tile/leaf/RT block 边界、负坐标/变换/内部起点/自相交、内容替换与提交失败保留旧结果。
 
 ## M23.10 ReSTIR 与信号实施契约
@@ -393,8 +393,18 @@ HDDA 调优限于不改变表面语义的冗余查值消除：单轴表面转换
 - CPU Classic 与 initial RIS 共用类型化命中；`max_triangle_tests` 同时约束三角形测试和稀疏区域访问总量，统计追加 `voxel_regions`，RIS 追加 `prepared_voxel`，不将其计入 mesh。超限只返回失败，不发布部分图像。
 - GPU 复用 surface v2 的 kind/index/cell/face/value；ground kind=3，不能解释成 triangle 或 voxel。首表面 RGB reservoir 在 hero channel/自由程前准备，仅无真实介质事件到达首表面时应用。续段真实散射解除发光抑制，最终混合阴影与透射使用独立 stream 11；复用阶段不追踪透射。
 - 固定射线/单次视图开放 Classic 与 initial RIS，透视/正交渐进入口另支持 temporal/spatial/combined 三种 Scene media DI。固定射线读回使用介质 6 float4 步长；视图诊断使用 volume pixel 随机域及实际 sampling epoch 重建体素位置。无/零介质按现有 volume 采样器退化，不声称与 surface sampler 逐样本相同。
-- 冻结几何/介质/场数据共同构成来源。占用、材质、变换、空气/云参数、field/time 变化清空累积与复用；完整 epoch 是唯一发布点。失败、取消、旧 generation 和外持 owner 沿用原保护。Scene media 仍不提供 M20 表面信号；Editor/Console/IPC/capture 装配留给 M23.12。
+- 冻结几何/介质/场数据共同构成来源。占用、材质、变换、空气/云参数、field/time 变化清空累积与复用；完整 epoch 是唯一发布点。失败、取消、旧 generation 和外持 owner 沿用原保护。Scene media 仍不提供 M20 表面信号；Editor/Console/IPC/capture 装配见下节 M23.12。
 - 验收：CPU 独立外露三角面 oracle、零介质、表面/体积/ground 顺序、彩色吸收散射和云阴影、条件 RIS；required GPU 固定射线数值、四 DI 透视/正交/分批一致、混合遮挡及编辑/失败/取消/旧 owner；旧 mesh 介质定向回归。
+
+## M23.12 原生路径消费者实施契约
+
+- Editor 使用同一 DiskScene 资产集合创建混合 PathTraceScene；路径 completed result 同时持有 mesh 拾取结构和 voxel CPU 快照，显示纹理、Scene、相机及拾取/Frame 数据只在匹配请求的完整完成帧处发布。切换光栅/路径不得沿用另一代体素查询。路径每次重新启用都携带单调启用代号（包括 worker 尚未观察到暂停的合并请求），配置成功后从空累积/复用历史开始；降低目标 spp 的同周期调度语义保持。持久编辑走既有 guard/undo，显示设置不修改 Scene revision/dirty。
+- 继续使用 `editor.viewport.set/query`、相机命令和 Console/IPC 的同一注册表。Surface only 和 Scene media 支持 Classic 与四 DI，透视/正交保持既有相机语义；未装配/禁用 RT 时报告不可用、拒绝路径设置且光栅仍可用。无新增体素着色命令；体素光栅显示参数不控制路径 BSDF。
+- `render.capture` 的 pathtrace v1/v2/v3 接受实体体素；含体素的全部 CPU 资产在接受 Job 前按 64 MiB 冻结并计入输入额度，worker 消费同一 owner，不重新读源文件。失败不创建票据/消耗 frame；接受后编辑或删除源文件不改变任务输入。每次 capture 从空采样历史运行固定 spp，不借用视口累积；取消/失败/关闭不覆盖输出，原子文件替换仍是唯一外部提交点。
+- 保持 pathtrace quality/version，增加完成结果 `voxel_count`；来源报告 accepted 资产及字节量。输入/几何指纹覆盖体素内容/材质/变换，shader 指纹另覆盖原生 intersection、共享 HDDA/adapter/PNanoVDB。捕获前后核对 shader 闭包。路径模型不套用光栅的空气/云拒绝；体素 raster sequence/光栅介质及 Scene media denoising 信号边界保持。
+- 验收使用后台真实 Editor GUI、Console、IPC 和独立 runner：同资产双后端、体素/mesh 混合拾取与 Frame/Gizmo/undo、透视/正交、四 DI/介质与固定 capture 线性结果对照、来源/内容替换失效、接受后源破坏、失败/取消/迟到/关闭保护。禁用设备 RT 验证能力拒绝及光栅可用，不能冒充非 RT 物理卡验收。同步命令参考和可执行示例，旧 mesh 与 M23.6 定向回归。
+
+实施和五项定向 GPU 验收证据见 [0170](../development/0170-voxel-path-consumers.md)，联合性能交付继续由 M23.13 承担。
 
 ## Slang 兼容性门禁
 

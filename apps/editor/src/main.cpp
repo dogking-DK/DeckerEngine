@@ -35,6 +35,8 @@ int main(int argc,char** argv) {
             else if (arg=="--settings-help-smoke") options.settings_help_smoke=true;
             else if (arg=="--console-workflow-smoke") options.console_workflow_smoke=true;
             else if (arg=="--viewport-command-smoke") options.viewport_command_smoke=true;
+            else if (arg=="--voxel-path-smoke") options.voxel_path_smoke=true;
+            else if (arg=="--voxel-path-no-rt") { options.voxel_path_smoke=true; options.voxel_path_no_rt=true; }
             else if (arg=="--voxel-workflow-smoke") options.voxel_workflow_smoke=true;
             else if (arg=="--desktop-render-smoke") options.desktop_render_smoke=true;
             else if (arg=="--smoke") options.smoke=true;

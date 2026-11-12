@@ -31,8 +31,12 @@ void Viewport::update_path(const SceneReadSnapshot& snapshot,std::uint32_t width
             if(descriptor_) ImGui_ImplVulkan_RemoveTexture(descriptor_);
             image_=std::move(image); view_=std::move(view); descriptor_=descriptor;
             info_={result->info.scene,result->info.revision,result->sequence,result->info.width,result->info.height,0};
+            info_.voxel_count=result->voxel_count;
             published_=attempted_; published_session_=result->document.document_id; published_camera_=result->camera.revision();
             camera_=result->camera; scene_=std::move(result->scene); meshes_=std::move(result->meshes);
+#ifdef DK_DISK_VOXELS
+            voxel_queries_=std::move(result->voxels);
+#endif
             path_info_=result->info; published_path_=true;
             path_samples_=result->info.samples.count; error_.clear();
             path_published_request_=path_requested_at_;

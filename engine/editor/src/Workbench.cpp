@@ -8,6 +8,9 @@
 #include "ResponseProbe.hpp"
 #ifdef DK_DISK_VOXELS
 #include "VoxelWorkflowSmoke.hpp"
+#ifdef DK_EDITOR_PATHTRACING
+#include "VoxelPathSmoke.hpp"
+#endif
 #endif
 #ifdef DK_EDITOR_PATHTRACING
 #include "PathSmoke.hpp"
@@ -62,8 +65,8 @@ void write_capture(const std::filesystem::path& output,const graphics::ReadbackR
     check(write_file_bytes_atomic(output,ppm));
 }
 int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory::ResourceHandle heap,Diagnostics& diagnostics) {
-    if(options.voxel_workflow_smoke || options.smoke || options.settings_help_smoke || options.console_workflow_smoke) std::setvbuf(stdout,nullptr,_IONBF,0); // Preserve the last acceptance stage on native crashes.
-    const bool path_acceptance=options.pathtrace_smoke || options.desktop_render_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke;
+    if(options.voxel_path_smoke || options.voxel_workflow_smoke || options.smoke || options.settings_help_smoke || options.console_workflow_smoke) std::setvbuf(stdout,nullptr,_IONBF,0); // Preserve the last acceptance stage on native crashes.
+    const bool path_acceptance=options.voxel_path_smoke || options.pathtrace_smoke || options.desktop_render_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke;
     if ((options.voxel_workflow_smoke || path_acceptance || options.settings_help_smoke || options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe) && !std::filesystem::is_regular_file(options.root/".dk-editor-smoke"))
         throw std::runtime_error("--smoke requires a disposable project with .dk-editor-smoke marker");
     ShutdownProbe shutdown{options.simulation_response_probe};
@@ -87,7 +90,8 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
         graphics::ValidationMode::disabled : default_validation;
 #ifdef DK_EDITOR_PATHTRACING
     device.ray_tracing=(options.pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke) ? graphics::RayTracingMode::required : graphics::RayTracingMode::if_available;
-    device.sampled_image_indexing=(options.pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke) ? graphics::SampledImageIndexingMode::required : graphics::SampledImageIndexingMode::if_available;
+    if(options.voxel_path_smoke) device.ray_tracing=options.voxel_path_no_rt ? graphics::RayTracingMode::disabled : graphics::RayTracingMode::required;
+    device.sampled_image_indexing=(options.voxel_path_smoke || options.pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke) ? graphics::SampledImageIndexingMode::required : graphics::SampledImageIndexingMode::if_available;
 #endif
     device.diagnostic_sink=diagnostic; device.diagnostic_user_data=&diagnostics;
 #if defined(DK_SIMULATION_GPU) || defined(DK_EDITOR_PATHTRACING)
@@ -133,12 +137,16 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
         Workspace& model;
         ~ViewportHostScope() { model.detach_editor_viewport(); }
     } viewport_host{*model};
-    WorkbenchUi ui{*model,options.fixture_camera,take(window.native_sdl_window()),(options.voxel_workflow_smoke || options.media_pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke) ? 96u : 0u};
+    WorkbenchUi ui{*model,options.fixture_camera,take(window.native_sdl_window()),(options.voxel_path_smoke || options.voxel_workflow_smoke || options.media_pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke) ? 96u : 0u};
 #ifdef DK_DISK_VOXELS
+#ifdef DK_EDITOR_PATHTRACING
+    std::optional<VoxelPathSmoke> voxel_path_smoke;
+    if(options.voxel_path_smoke) voxel_path_smoke.emplace(options.root);
+#endif
     std::optional<VoxelWorkflowSmoke> voxel_smoke;
     if(options.voxel_workflow_smoke) voxel_smoke.emplace(options.root);
 #else
-    if(options.voxel_workflow_smoke) throw std::runtime_error("Voxel support is disabled");
+    if(options.voxel_workflow_smoke || options.voxel_path_smoke) throw std::runtime_error("Voxel support is disabled");
 #endif
     SmokeDriver smoke{options.interaction_smoke,options.simulation_smoke};
     std::optional<SettingsHelpSmoke> settings_smoke;
@@ -170,7 +178,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
 #ifdef DK_EDITOR_PATHTRACING
             if(path_smoke) path_smoke->poll_window(window,status.minimized);
 #endif
-            if(path_acceptance && std::chrono::steady_clock::now()-start>std::chrono::seconds(240)) throw std::runtime_error("Path smoke timed out");
+            if(path_acceptance && std::chrono::steady_clock::now()-start>std::chrono::seconds(options.voxel_path_smoke ? 900 : 240)) throw std::runtime_error("Path smoke timed out");
             if (options.smoke) smoke.poll_window(window,status.minimized);
             if (status.close_requested) { check(window.clear_close_request()); ui.request_close(); }
             model->pump();
@@ -194,6 +202,9 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
             gui.new_frame([&] {
 #ifdef DK_DISK_VOXELS
                 if(voxel_smoke) voxel_smoke->input(ui,*model);
+#ifdef DK_EDITOR_PATHTRACING
+                if(voxel_path_smoke) voxel_path_smoke->input(ui,*model);
+#endif
 #endif
 #ifdef DK_EDITOR_PATHTRACING
                 if(path_smoke) path_smoke->input(ui,*model,viewport,window);
@@ -230,6 +241,9 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
             if (consistency) consistency->presented(*model,ui,viewport);
 #ifdef DK_DISK_VOXELS
             if(voxel_smoke) voxel_smoke->presented(ui,*model,viewport);
+#ifdef DK_EDITOR_PATHTRACING
+            if(voxel_path_smoke) voxel_path_smoke->presented(ui,*model,viewport);
+#endif
 #endif
             if (simulation_consistency) simulation_consistency->presented(*model,ui,viewport);
 #ifdef DK_EDITOR_PATHTRACING

@@ -9,6 +9,8 @@ PathPreview::PathPreview(memory::MemorySystem& memory,memory::ResourceHandle hea
 PathPreview::~PathPreview() { thread_.request_stop(); suspend(); condition_.notify_all(); thread_.join(); }
 void PathPreview::request(PathPreviewRequest request) {
     std::lock_guard lock(mutex_); cancel_.request_stop(); cancel_=std::stop_source{};
+    if(!enabled_) ++activation_;
+    request.activation=activation_;
     wanted_=request.sequence; enabled_=true; request_=std::move(request); result_.reset();
     status_.sequence=wanted_; status_.phase="Queued"; status_.error.clear(); condition_.notify_all();
 }
@@ -26,10 +28,11 @@ void PathPreview::run(std::stop_token stop) {
     render::PathTraceRenderer renderer; bool initialized=false,configured=false,terminal=false,suspended=true,busy=false,pending_config=false;
     std::optional<PathPreviewRequest> active;
     std::optional<DocumentId> asset_session;
-    std::uint64_t asset_reload=0,scene_revision=0,scene_preview=0,applied_reset=0,session=0;
+    std::uint64_t asset_reload=0,scene_revision=0,scene_preview=0,applied_reset=0,applied_activation=0,session=0;
     std::shared_ptr<const render::CloudFieldData> cloud_field;
     render::DiskScene disk; render::RenderScene scene; render::PathTraceGpuScene gpu;
     std::vector<PickMesh> meshes;
+    std::vector<std::shared_ptr<const CpuAsset>> voxels;
     std::optional<render::PathTraceDisplayFrame> display;
     std::optional<render::PathTraceFrame> linear;
     std::uint64_t display_sequence=0;
@@ -63,6 +66,7 @@ void PathPreview::run(std::stop_token stop) {
                 if(active && enabled && display_sequence==active->sequence && !cancel.stop_requested()) {
                     PathPreviewResult result; result.sequence=display_sequence; result.document=active->snapshot.state;
                     result.camera=active->camera; result.info=display_info; result.scene=scene; result.meshes=meshes;
+                    result.voxels=voxels; result.voxel_count=gpu.source().voxel_count();
                     if(active->observe_memory) result.memory=renderer.memory_stats(*queue);
                     if(linear) {
                         auto value=take(linear->read(*queue,cancel));
@@ -107,7 +111,7 @@ void PathPreview::run(std::stop_token stop) {
                     std::lock_guard lock(mutex_); status_.gpu_memory_limit=limit;
                 }
                 const auto old_generation=configured ? take(renderer.status(1)).generation : 0;
-                std::string reset_reason=!configured ? "New view" : asset_session!=active->snapshot.state.document_id ? "Document changed" :
+                std::string reset_reason=!configured ? "New view" : applied_activation!=active->activation ? "Path view resumed" : asset_session!=active->snapshot.state.document_id ? "Document changed" :
                     asset_reload!=active->reload ? "Assets refreshed" : scene_preview!=active->preview ? "Edit gesture" :
                     scene_revision!=active->snapshot.state.revision ? "Scene changed" :
                     applied_width!=active->width || applied_height!=active->height ? "View size changed" :
@@ -129,15 +133,17 @@ void PathPreview::run(std::stop_token stop) {
                     limits.image_dimension=queue->device().adapter().properties.limits.maxImageDimension2D;
                     auto candidate=take(render::DiskScene::load_snapshot(heap_,active->snapshot.project,active->snapshot.scene,options));
                     std::vector<PickMesh> queries;
+                    std::vector<std::shared_ptr<const CpuAsset>> voxel_queries;
                     for(const auto& asset:candidate.assets()) {
                         if(cancel.stop_requested()) throw std::runtime_error("Path preview cancelled");
+                        if(asset->voxel) {voxel_queries.push_back(asset); continue;}
                         std::vector<geometry::Triangle> triangles;
                         for(const auto& primitive:asset->mesh.primitives) for(std::size_t i=0;i+2<primitive.indices.size();i+=3)
                             triangles.push_back({primitive.positions[primitive.indices[i]].cast<double>(),primitive.positions[primitive.indices[i+1]].cast<double>(),primitive.positions[primitive.indices[i+2]].cast<double>()});
                         if(triangles.size()>render::desktop_path_scene_limits().max_triangles) throw std::runtime_error("Path geometry exceeds shader address capacity");
                         queries.push_back({asset->mesh.id,take(geometry::MeshQuery::build(triangles))});
                     }
-                    disk=std::move(candidate); meshes=std::move(queries);
+                    disk=std::move(candidate); meshes=std::move(queries); voxels=std::move(voxel_queries);
                 }
                 if(reload || !gpu || scene_revision!=active->snapshot.state.revision || scene_preview!=active->preview) {
                     phase(active->sequence,"Building scene");
@@ -197,12 +203,12 @@ void PathPreview::run(std::stop_token stop) {
                     cloud_field=std::move(candidate);
                 } else { check(active->settings.restir_di ? renderer.configure_restir_view(*queue,1,gpu,view,settings,restir,schedule) :
                     renderer.configure_view(*queue,1,gpu,view,settings,schedule)); cloud_field.reset(); }
-                if(configured && applied_reset!=active->settings.reset) check(renderer.reset(1));
+                if(configured && (applied_reset!=active->settings.reset || applied_activation!=active->activation)) check(renderer.reset(1));
                 if(!configured || take(renderer.status(1)).generation!=old_generation) {
                     std::lock_guard lock(mutex_); if(wanted_==active->sequence) status_.reset_reason=std::move(reset_reason);
                 }
                 applied_settings=active->settings; applied_camera=active->camera; applied_width=active->width; applied_height=active->height;
-                configured=true; applied_reset=active->settings.reset; pending_config=false;
+                configured=true; applied_reset=active->settings.reset; applied_activation=active->activation; pending_config=false;
             }
             if(!active || !configured || cancel.stop_requested()) continue;
             const auto progress=take(renderer.status(1));

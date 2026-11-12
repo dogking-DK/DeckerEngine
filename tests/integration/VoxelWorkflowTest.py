@@ -183,8 +183,12 @@ def main():
             assert (root / "example.ppm").read_bytes() == (evidence / "base.ppm").read_bytes()
             report["example"] = json.loads(example.stdout)
             current = guard(call("scene.query")["state"])
-            reject("render.capture", dict(guard=current, output="path.ppm", camera=base["camera"], renderer="pathtrace",
-                pathtrace=dict(version=1, target_spp=1, surface_only=True)))
+            path_params = dict(guard=current, output="path.ppm", width=16, height=16, camera=base["camera"], renderer="pathtrace",
+                pathtrace=dict(version=1, target_spp=1, surface_only=True))
+            if call("runtime.capabilities")["pathtrace_capture"]:
+                finish(call("render.capture", path_params))
+            else:
+                reject("render.capture", path_params)
             reject("render.sequence", dict(guard=current, output="sequence.json", samples=[dict(camera=base["camera"], time_seconds=0)]))
             environment = call("environment.query")["environment"]
             environment["enabled"] = True

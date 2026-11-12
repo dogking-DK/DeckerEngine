@@ -16,7 +16,7 @@ template<class T> T take(Result<T> r) { if(!r) throw std::move(r.error()); retur
 void check(Result<void> r) { if(!r) throw std::move(r.error()); }
 void require(bool v,const char* message) { if(!v) throw Error{ErrorCode::invalid_state,message}; }
 void checkpoint(std::stop_token stop) { require(!stop.stop_requested(),"Path capture cancelled"); }
-std::string fingerprint(const std::filesystem::path& directory,bool restir) {
+std::string fingerprint(const std::filesystem::path& directory,bool restir,bool voxels) {
     std::uint64_t hash=14695981039346656037ull;
     const auto append=[&](const std::filesystem::path& root,const std::string& name) {
         for(char c:name) { hash^=static_cast<unsigned char>(c); hash*=1099511628211ull; }
@@ -35,19 +35,29 @@ std::string fingerprint(const std::filesystem::path& directory,bool restir) {
             for(const auto& name:names) append(root,name);
         }
     }
+    if(voxels) {
+#ifdef DK_CAPTURE_VOXEL_SHADER_DIR
+        append(directory,"path-voxel.slang");
+        append(DK_CAPTURE_VOXEL_SHADER_DIR,"voxel-hdda.slang");
+        append(DK_CAPTURE_VOXEL_SHADER_DIR,"pnano-adapter.slang");
+        append(DK_CAPTURE_NANO_INCLUDE_DIR,"nanovdb/PNanoVDB.h");
+#else
+        throw Error{ErrorCode::not_supported,"Voxel path capture shader support was not built"};
+#endif
+    }
     return std::format("fnv1a64:{:016x}",hash);
 }
 }
 Result<JobQueue::Payload> render_path_capture(memory::ResourceHandle resource,const SceneReadSnapshot& input,
     const CaptureRequest& request,const CaptureInfo& info,render::ViewDescription view,const std::filesystem::path& output,
-    std::stop_token stop,const JobQueue::Reporter& report) try {
+    std::stop_token stop,const JobQueue::Reporter& report,render::DiskScene frozen) try {
     const auto start=std::chrono::steady_clock::now(); const auto& p=*request.path;
     auto progress=[&](std::string phase,std::uint64_t completed=0,std::uint64_t submitted=0) {
         report({std::move(phase),"spp",completed,submitted,p.target_spp}); checkpoint(stop);
     };
     progress("preparing");
     render::DiskSceneOptions options; options.stop=stop;
-    auto disk=take(render::DiskScene::load_snapshot(resource,input.project,input.scene,options));
+    auto disk=frozen ? std::move(frozen) : take(render::DiskScene::load_snapshot(resource,input.project,input.scene,options));
     std::vector<const CpuAsset*> assets; for(const auto& asset:disk.assets()) assets.push_back(asset.get());
     auto source=take(render::PathTraceScene::create(resource,disk.scene(),assets,{},render::PathTraceMaterialModel::metallic_roughness));
     graphics::DeviceOptions device_options; device_options.cancel=stop;
@@ -61,9 +71,9 @@ Result<JobQueue::Payload> render_path_capture(memory::ResourceHandle resource,co
     {
         progress("building");
         const std::filesystem::path shaders=DK_CAPTURE_PATH_SHADER_DIR;
-        const auto shader=fingerprint(shaders,p.restir_di);
+        const auto shader=fingerprint(shaders,p.restir_di,source.voxel_count()!=0);
         auto renderer=take(render::PathTraceRenderer::create(resource,queue,shaders,stop));
-        require(shader==fingerprint(shaders,p.restir_di),"Path shaders changed while compiling");
+        require(shader==fingerprint(shaders,p.restir_di,source.voxel_count()!=0),"Path shaders changed while compiling");
         auto gpu=take(renderer.prepare_scene(queue,source,stop));
         auto render_view=take(render::RenderView::create(disk.scene(),view));
         render::PathTraceSettings settings; settings.seed=p.seed; settings.max_bounces=p.max_bounces; settings.rr_start=p.rr_start;
@@ -137,7 +147,7 @@ Result<JobQueue::Payload> render_path_capture(memory::ResourceHandle resource,co
             const auto text=nlohmann::json{{"schema_version",p.version==3 ? 2 : 1},{"kind","decker.pathtrace_capture"},{"status","succeeded"},
                 {"document_id",info.document.to_string()},{"scene_id",info.frame.scene.to_string()},{"revision",info.frame.revision},
                 {"frame",info.frame.frame},{"width",request.width},{"height",request.height},{"provenance",provenance},
-                {"sample_first",0},{"sample_count",p.target_spp},{"linear_rgb",std::move(linear)},{"rgba8",std::move(encoded)},
+                {"voxel_count",source.voxel_count()},{"sample_first",0},{"sample_count",p.target_spp},{"linear_rgb",std::move(linear)},{"rgba8",std::move(encoded)},
                 {"device",{{"name",adapter.properties.deviceName.data()},{"driver",adapter.driver.driverInfo.data()}}},
                 {"build",DK_CAPTURE_BUILD},{"validation",queue.device().validation_enabled()},
                 {"memory",{{"limit_bytes",memory.owned.limit},{"peak_bytes",memory.owned.peak}}},
@@ -151,13 +161,13 @@ Result<JobQueue::Payload> render_path_capture(memory::ResourceHandle resource,co
             completion->ppm.reserve(bytes.size()+rgba.size()/4*3);
             for(std::size_t i=0;i<rgba.size();i+=4) completion->ppm.insert(completion->ppm.end(),rgba.begin()+i,rgba.begin()+i+3);
         }
-        require(shader==fingerprint(shaders,p.restir_di),"Path shaders changed during capture");
+        require(shader==fingerprint(shaders,p.restir_di,source.voxel_count()!=0),"Path shaders changed during capture");
     }
     check(queue.close());
     require(queue.device().validation_errors()==0 && queue.device().validation_warnings()==0,"Path capture Vulkan validation failed");
     completion->summary=nlohmann::json{{"kind","capture"},{"document_id",info.document.to_string()},
         {"scene_id",info.frame.scene.to_string()},{"revision",info.frame.revision},{"frame",info.frame.frame},
-        {"width",request.width},{"height",request.height},{"output",info.output},{"draw_count",0},{"provenance",completion->provenance}}.dump();
+        {"width",request.width},{"height",request.height},{"output",info.output},{"draw_count",0},{"voxel_count",source.voxel_count()},{"provenance",completion->provenance}}.dump();
     require(completion->summary.size()<=4096,"Path capture summary exceeds Job metadata limit");
     progress("publishing",p.target_spp,p.target_spp);
     return completion;

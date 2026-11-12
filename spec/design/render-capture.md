@@ -1,7 +1,7 @@
 ---
 module: render-capture
 created_at: "2026-10-03T21:21:47+08:00"
-updated_at: "2026-11-12T10:31:11+08:00"
+updated_at: "2026-11-12T16:55:54+08:00"
 status: accepted
 ---
 
@@ -26,18 +26,20 @@ AssetOperations 默认仍注册资产 jobs；启用截图的 Runtime 改为一�
 
 ## 输入、快照与身份
 
-M23.6：含 voxel 的光栅 capture 在接受前用 DiskScene 冻结整个 CPU 资产集合，最多 64 MiB，
+M23.6/12：含 voxel 的光栅和原生路径 capture 在接受前用 DiskScene 冻结整个 CPU 资产集合，最多 64 MiB，
 占用计入 Job input_bytes；失败不提交、不消耗 frame、不触碰旧输出。该准备阶段同步执行，可能阻塞 owner，未新增异步导入线程。
 worker 只消费拥有型冻结包，独立建立 GPU cache/设备；`asset_snapshot=accepted` 和 `asset_cpu_bytes` 明确该来源。
 参数 `voxel_shading / voxel_light_direction / voxel_irradiance / unlit_inspection` 与 Editor 共用 CPU 值校验，
 相机/曝光始终显式提供，不借用 viewport。shader fingerprint 包含 voxel raster/composite、HDDA/adapter/PNanoVDB 头。
-pathtrace、voxel sequence、大气/云混合暂拒绝；Unlit inspection 是显式忽略环境的渲染快照选项。
+路径复用 v1/v2/v3，支持 Surface only / Scene media、Classic MIS / 四种 ReSTIR DI，空历史固定 spp。
+路径 quality 保留 pathtrace_v1/v2/v3，结果含 voxel_count；shader 指纹额外覆盖 path-voxel 与共享 HDDA/PNanoVDB 闭包。
+voxel sequence 与光栅大气/云混合仍拒绝；Unlit inspection 是光栅显式忽略环境的渲染快照选项。
 普通 mesh 资产维持 worker 读取契约；详见[体素闭环](render-voxels.md#m236-使用闭环实施契约)。
 
 `SceneService::read_snapshot(guard)` 在 owner 线程复制 Project 映射和 SceneSnapshot，
 保留 document_id、scene_id、revision；worker 不访问 ECS 或 SceneService。
 `DiskScene::load_snapshot` 使用该快照解析资产，不重新加载磁盘 Scene，因此未保存编辑可截图。
-文件资产在 worker 执行时读取，不承诺外部文件热修改的时间点快照。
+纯 mesh 文件资产在 worker 执行时读取，不承诺外部文件热修改的时间点快照；含 voxel 的任务采用上述接受时冻结契约。
 每次接受 capture 分配递增非零 frame（Runtime 会话内唯一，拒绝不消耗）；返回 JobId 和固定
 文档/场景/revision/frame/尺寸/相对输出路径。后续编辑、撤销、换场景不会改变该输入。
 终态 succeeded 的 result 返回同一身份及 draw_count；失败/取消 result 为 null，提交响应保留关联。
