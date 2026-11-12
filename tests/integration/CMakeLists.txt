@@ -64,7 +64,7 @@ if(TARGET dk_render_pathtracing)
     if(TARGET dk_asset_voxel_importers)
         target_link_libraries(dk_pathtracing_probe PRIVATE dk::asset_voxel_importers)
         target_compile_definitions(dk_pathtracing_probe PRIVATE DK_PATH_VOXEL_TESTS=1)
-        foreach(case IN ITEMS voxel_numeric voxel_lighting voxel_state)
+        foreach(case IN ITEMS voxel_numeric voxel_lighting voxel_state voxel_restir_numeric voxel_restir_reuse voxel_signals voxel_restir_state)
             add_test(NAME dk.pathtracing.${case}_gpu_required COMMAND dk_pathtracing_probe ${case})
             set_tests_properties(dk.pathtracing.${case}_gpu_required PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE LABELS "gpu"
                 ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
@@ -84,6 +84,12 @@ if(TARGET dk_render_pathtracing)
     endforeach()
     # Eight independent medium chains include hero/visibility variance at mixed receivers.
     set_tests_properties(dk.pathtracing.restir_medium_support_gpu_required PROPERTIES TIMEOUT 1200)
+    # Eight 4096-epoch chains plus a 65536-spp CPU oracle reach/exceed 240s in Debug.
+    # Keep the statistical work and thresholds intact; this is not a performance test.
+    set_tests_properties(dk.pathtracing.restir_spatial_support_gpu_required
+        dk.pathtracing.restir_temporal_support_gpu_required PROPERTIES TIMEOUT 600)
+    # Low-roughness GGX uses 8 x 65536 paths x 64 CPU RIS candidates, in addition to other materials.
+    set_tests_properties(dk.pathtracing.restir_materials_gpu_required PROPERTIES TIMEOUT 1200)
 endif()
 if(TARGET dk_render_pathtracing_reference)
     find_package(nlohmann_json CONFIG REQUIRED)

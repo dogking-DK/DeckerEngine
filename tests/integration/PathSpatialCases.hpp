@@ -164,7 +164,8 @@ void spatial_budget(memory::ResourceHandle heap,SubmissionQueue& q) {
     auto s=settings(); s.environment_rgb=Vec3d::Ones(); auto ris=spatial_settings(true);
     PathTraceSchedule schedule; schedule.target_spp=2; schedule.batch_spp=2;
     require(!r.configure_restir_view(q,106,gpu,temporal_view(f,64),s,ris,schedule),"independent spatial planes bypassed budget");
-    auto view=temporal_view(f,32);
+    // v2 surfaces use 96 bytes: two held owners plus the next candidate must fit 1 MiB.
+    auto view=temporal_view(f,30);
     check(r.configure_restir_view(q,106,gpu,view,s,ris,schedule)); advance_view(r,q,106); auto a=r.completed_frame(106);
     check(r.reset(106)); advance_view(r,q,106); auto b=r.completed_frame(106);
     check(r.reset(106)); advance_view(r,q,106); auto before=r.completed_frame(106).linear_buffer();
@@ -172,7 +173,7 @@ void spatial_budget(memory::ResourceHandle heap,SubmissionQueue& q) {
     require(!r.submit_batch(q,106) && r.completed_frame(106).linear_buffer()==before,"spatial held-owner rejection published");
     a={}; b={}; advance_view(r,q,106); check(r.release_view(106));
     // The spatial intermediate is required even for a one-epoch tail, but no temporal ping-pong is needed.
-    schedule.target_spp=1; schedule.batch_spp=16; auto fits=temporal_view(f,60);
+    schedule.target_spp=1; schedule.batch_spp=16; auto fits=temporal_view(f,56);
     check(r.configure_restir_view(q,106,gpu,fits,s,ris,schedule)); advance_view(r,q,106); check(r.release_view(106));
     require(!r.configure_restir_view(q,106,gpu,temporal_view(f,64),s,ris,schedule),"single-epoch spatial plane missing from preflight");
     // Exact minimum candidate budget permits bounded one-pixel tiles, not a zero-size tile/division.

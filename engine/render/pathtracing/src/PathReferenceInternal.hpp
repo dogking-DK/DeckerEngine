@@ -60,6 +60,7 @@ struct PathSceneState {
     std::size_t masked_emitters = 0;
     std::uint64_t fingerprint = 0;
     std::uint64_t geometry_fingerprint = 0;
+    std::uint64_t content_version = 0;
 };
 struct PathImageState {
     explicit PathImageState(memory::ResourceHandle heap) : pixels(0, memory::Allocator<Vec3d>{heap}) {}
@@ -68,6 +69,9 @@ struct PathImageState {
 };
 struct PathReferenceAccess {
     static const PathSceneState* get(const PathTraceScene& s) { return s.state_.get(); }
+    static std::shared_ptr<const PathSceneState> geometry_owner(const PathTraceScene& s) {
+        return s.state_ && s.state_->geometry_owner ? s.state_->geometry_owner : s.state_;
+    }
     static PathTraceImage image(std::shared_ptr<const PathImageState> s) { return PathTraceImage{std::move(s)}; }
 };
 inline Error path_invalid(std::string message) { return {ErrorCode::invalid_argument, std::move(message)}; }

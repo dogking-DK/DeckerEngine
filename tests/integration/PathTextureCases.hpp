@@ -35,7 +35,7 @@ void texture_numeric(memory::ResourceHandle heap,PathTraceRenderer& renderer,Sub
         t.rgba8={std::byte(i*4),std::byte(255-i*3),std::byte(i*2),std::byte(i%2 ? 255 : 0)};
         if(i==63) {
             const auto pixel=t.rgba8; t.width=4097; t.rgba8.resize(4*t.width);
-            for(unsigned x=0;x<t.width;++x) std::copy(pixel.begin(),pixel.end(),t.rgba8.begin()+4*x);
+            for(unsigned column=0;column<t.width;++column) std::copy(pixel.begin(),pixel.end(),t.rgba8.begin()+4*column);
         }
         f.asset.materials[i].alpha_mode=AlphaMode::mask; rays.push_back({{x,0,1},{0,0,-1}});
     }

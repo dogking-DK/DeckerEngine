@@ -13,6 +13,16 @@ struct PathTraceRay {
     double minimum = 0, maximum = std::numeric_limits<double>::max();
 };
 enum class PathGeometryKind { triangle, voxel };
+struct PathSurfaceIdentity {
+    PathGeometryKind kind=PathGeometryKind::triangle;
+    EntityId entity;
+    AssetId asset;
+    std::size_t primitive=0, triangle=0;
+    std::array<std::int32_t,3> cell{};
+    std::uint32_t face=0, value=0;
+    std::uint64_t content_version=0;
+    bool operator==(const PathSurfaceIdentity&) const = default;
+};
 struct PathTraceHit {
     EntityId entity;
     AssetId mesh; // Asset identity; also identifies the voxel asset when kind == voxel.
@@ -56,6 +66,8 @@ public:
     [[nodiscard]] std::uint64_t fingerprint() const noexcept;
     // Consumed geometry/material/texture identity, excluding scene revision and environment.
     [[nodiscard]] std::uint64_t geometry_fingerprint() const noexcept;
+    // Process-local, non-recycled identity of the immutable geometry owner. Rebind preserves it.
+    [[nodiscard]] std::uint64_t content_version() const noexcept;
     [[nodiscard]] std::size_t triangle_count() const noexcept;
     [[nodiscard]] std::size_t voxel_count() const noexcept;
     [[nodiscard]] std::size_t degenerate_count() const noexcept;

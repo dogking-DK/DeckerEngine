@@ -1,7 +1,7 @@
 ---
 module: render-denoising
 created_at: "2026-10-23T16:58:00+08:00"
-updated_at: "2026-11-11T16:28:53+08:00"
+updated_at: "2026-11-12T15:11:34+08:00"
 status: accepted
 ---
 
@@ -26,12 +26,12 @@ M20.1 确定公共边界与固定依赖；M20.2 实现共享信号类型和路�
 相机运动支持不隐含动态物体/形变运动向量。Scene media 在 M20.10 独立验收；DLSS、OptiX、官方 OIDN 运行时、
 降分辨率重建、异步 compute、训练网络和新材质不属于本轮实现。
 
-## M23.10 体素表面信号扩展（设计）
+## M23.10 体素表面信号扩展
 
-[M23 原生路径](render-voxels.md)将表面信号生产适配到 triangle/voxel 的共同命中模型，尚未实现。
+[M23 原生路径](render-voxels.md)已将表面信号生产适配到 triangle/voxel 的共同命中模型，验收记录见 [0168](../development/0168-voxel-restir-signals.md)。
 identity/reference 必须区分几何种类、实例、单元/面与内容/材质版本，不能沿用裸 triangle index 判断相同表面。
 NanoVDB 稀疏单元使用有符号坐标，不能将树节点/字节偏移当作身份；重打包/替换后核对版本失效及旧帧保活。
-共享 types、GPU 布局、读回、provenance 与预算在实施时一起版本化，旧布局须明确兼容或拒绝；SDK 类型仍不进入 Scene。
+共享 types、GPU 布局、读回、provenance 与预算同步升级为 v2，明确拒绝 v1 motion reference；SDK 类型仍不进入 Scene。
 fresh 样本区间、diffuse/specular 分量重组、baseColor/normal/roughness、轴向深度、运动和后续 hit distance 沿现有定义。
 体素增删/占用/材质/实例变更使对应来源和历史失效，不能把新单元误认为旧表面；纯相机运动沿已有 reference 契约。
 验收 Surface Classic/ReSTIR 的信号开关、分量重组、mixed geometry 身份、相机/内容变更和旧帧保活。
@@ -130,7 +130,7 @@ albedo 明确定义为已采样纹理的线性 baseColor，GGX 的 metallic/roug
 `signal_reference()` 返回显式运动来源描述；同一 renderer/view/session/场景、有效 serial/尺寸/有限矩阵才可用于 configure。
 raw settings、view 与源身份一并存于 frame；随机 epoch 与累计 sample index 分列，ReSTIR 移动相机后两者可能不同。
 
-布局版本 1 为 21 个 float4（336 字节/像素），与 `DenoisingSignalPixel` 一致：
+M23.10 当前布局版本 2 为 23 个 float4（368 字节/像素），与 `DenoisingSignalPixel` 一致；M20.2 原 v1 的21槽前缀保留，旧数据不作为 v2 输入：
 
 | float4 槽 | xyz / 主要字段 | w / 额外约定 |
 | --- | --- | --- |
@@ -138,14 +138,22 @@ raw settings、view 与源身份一并存于 frame；随机 epoch 与累计 samp
 | 6–7 | 从样本 0 起累计的 baseColor、世界法线之和 | uint32 位模式：总样本数、命中样本数；均值均除以总样本数，包含 miss 零贡献 |
 | 8–10 | 本批首样本世界法线、世界位置、baseColor | 线性 roughness、正轴向 viewZ、metallic；Lambert 为 roughness=1、metallic=0 |
 | 11 | motion.xy、首条后续射线命中距离 | 主射线距离；无效/未命中由 flags 区分，不能只检查数值 |
-| 12 | uint4：triangle index、代表样本随机 epoch、有效 flags、fresh count | miss triangle 为 UINT_MAX；flags 位依次是 surface/motion/continuation-traced/continuation-hit |
+| 12 | uint4：triangle index、代表样本随机 epoch、有效 flags、fresh count | voxel/miss triangle 为 UINT_MAX；flags 位依次是 surface/motion/continuation-traced/continuation-hit |
 | 13–20 | 前述六个 fresh 和及两个累计 guide 和的补偿项 | 生产者状态，消费端不自行修改 |
+| 21 | uint4：kind（0 miss、1 triangle、2 voxel）、冻结 triangle/instance index、face、palette value | miss index 为 UINT_MAX；整数位模式不作浮点 finite 检查 |
+| 22 | int4：signed cell.xyz、保留零 | triangle/miss 为全零 |
 
-Classic 的信号候选增量为 `336 * pixels`，ReSTIR 多 epoch 批次额外需要相同大小 ping-pong；
+`signal_identities()` 将代表样本的局部 GPU key 解析为 `PathSurfaceIdentity`（kind、entity、asset、primitive/triangle 或 cell/face/value、content_version），
+独立于诊断 primary_hits 的样本0。CPU 读回校验类型、索引、cell 占用及 palette 值；不能跨内容版本解释 key。
+`DenoisingSignalIdentity` 增加 content_version；`signal_reference()` 私有持有冻结 CPU 几何 owner，
+configure 同时核对 owner、内容版本与既有 renderer/view/session/serial/尺寸/场景规则，禁止仅复制公开 hash/version 伪造来源。
+该 token 不持有 GPU history；只保活冻结 CPU 网格、材质和身份映射。
+
+Classic 的信号候选增量为 `368 * pixels`，ReSTIR 多 epoch 批次额外需要相同大小 ping-pong；
 外持旧帧、raw 平面、读回副本、资源对齐和程序资源另按实际 owner 计入同一 AllocationBudget。
 不对 1 spp 的零样本方差作无噪声承诺；此处 RGB 二阶矩不是 SVGF 的时域亮度矩。
 
-每批首样本另外保存当前 normal/roughness、position/正 viewZ、albedo/metallic、triangle identity、
+每批首样本另外保存当前 normal/roughness、position/正 viewZ、albedo/metallic、typed surface identity、
 有效位和随机 sample/epoch。代表性首条后续射线命中距离使用独立有效标记；未追踪、miss 和零距离分开，
 它不是已编码的 NRD lobe hit-distance，NRD 具体统计与编码仍在 M20.6 验收。
 相机运动使用调用方显式提供的上一份已消费完整帧的投影描述，记录其 source serial；

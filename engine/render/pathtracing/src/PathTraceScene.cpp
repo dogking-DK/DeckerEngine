@@ -3,10 +3,19 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <atomic>
 
 namespace dk::render {
 namespace {
 using namespace detail;
+std::uint64_t next_content_version() {
+    static std::atomic<std::uint64_t> counter{0};
+    auto old=counter.load(std::memory_order_relaxed);
+    do {
+        if(old==std::numeric_limits<std::uint64_t>::max()) throw Error{ErrorCode::invalid_state,"Path content identity exhausted"};
+    } while(!counter.compare_exchange_weak(old,old+1,std::memory_order_relaxed));
+    return old+1;
+}
 struct Fingerprint {
     std::uint64_t value = 14695981039346656037ull;
     void byte(std::uint8_t b) { value = (value ^ b) * 1099511628211ull; }
@@ -197,6 +206,7 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
             }
         }
         state->triangles=state->owned_triangles; state->textures=state->owned_textures; state->voxels=state->owned_voxels;
+        state->content_version=next_content_version();
         state->geometry_fingerprint=hash.value;
         state->fingerprint=input_fingerprint(source,model,hash.value);
         return PathTraceScene{std::move(state)};
@@ -224,6 +234,7 @@ Result<PathTraceScene> PathTraceScene::rebind(memory::ResourceHandle heap,const 
         next->source=source; next->material_model=state_->material_model;
         next->triangles=state_->triangles; next->textures=state_->textures; next->voxels=state_->voxels;
         next->light_weight=state_->light_weight; next->degenerate=state_->degenerate; next->masked_emitters=state_->masked_emitters;
+        next->content_version=state_->content_version;
         next->geometry_fingerprint=state_->geometry_fingerprint;
         next->fingerprint=input_fingerprint(source,next->material_model,next->geometry_fingerprint);
         return PathTraceScene{std::move(next)};
@@ -232,6 +243,7 @@ Result<PathTraceScene> PathTraceScene::rebind(memory::ResourceHandle heap,const 
 SceneId PathTraceScene::id() const noexcept { return state_ ? state_->source.id() : SceneId{}; }
 std::uint64_t PathTraceScene::revision() const noexcept { return state_ ? state_->source.revision() : 0; }
 std::uint64_t PathTraceScene::fingerprint() const noexcept { return state_ ? state_->fingerprint : 0; }
+std::uint64_t PathTraceScene::content_version() const noexcept { return state_ ? state_->content_version : 0; }
 std::uint64_t PathTraceScene::geometry_fingerprint() const noexcept { return state_ ? state_->geometry_fingerprint : 0; }
 std::size_t PathTraceScene::triangle_count() const noexcept { return state_ ? state_->triangles.size() : 0; }
 std::size_t PathTraceScene::voxel_count() const noexcept { return state_ ? state_->voxels.size() : 0; }

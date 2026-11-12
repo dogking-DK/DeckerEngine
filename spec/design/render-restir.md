@@ -1,7 +1,7 @@
 ---
 module: render-restir
 created_at: "2026-10-19T12:50:00+08:00"
-updated_at: "2026-11-11T16:28:53+08:00"
+updated_at: "2026-11-12T15:11:34+08:00"
 status: accepted
 ---
 
@@ -19,18 +19,24 @@ CPU 数学、GPU 初始 RIS、时间与空间复用的现行契约见 M19.1–M1
 状态、依赖和下一项统一见 [Roadmap M19](../roadmap.md#m19restir-直接光重采样)。
 下文记录现行采样与消费者契约；M19.8 已完成测量与默认策略判定，保持 Classic MIS 默认，ReSTIR 显式可选，证据与限制见下文。
 
-## M23.10 原生体素接收面（设计）
+## M23.10 原生体素接收面
 
-当前首表面仍以 triangle index/重心记录。[M23](../roadmap.md#m23实体体素渲染)计划以通用命中适配
-mesh/voxel 首表面，复用既有 RTXDI 数学和 DI 分工，不新增 ReSTIR GI/PT。
-身份比较包括 geometry kind、实例、primitive 或 cell/face、内容/材质版本；短期 GPU 索引必须映射回同一冻结来源，
-不能让体素单元号与三角编号碰撞。邻域/时间复用同时检查位置、法线、材质与支持域，不能仅比较 ID。
-稀疏体素使用有符号 cell 坐标，NanoVDB 节点序号/字节偏移或 AABB 块编号不能替代持久身份；重打包/规范化后依内容版本失效。
-候选评估、来源支持校正和最终 visibility 均消费混合几何；几何/材质变化按现有规则失效，失败仍保留完整 epoch。
-体素不自发光，灯分布仍为现有环境/太阳/mesh 面积灯，不伪造体素灯采样 PDF。
-验收初始/时间/空间/组合模式对 Classic 与独立参考的均值、薄体素遮挡、相机运动/显露、占用/材质替换和失败恢复。
-M23.11 再验证空气/云的首表面条件 RIS 与当前阴影透射；不因表面 DI 通过就开放介质组合。
-本节仅为扩展设计，不改变 M19 当前已完成的实现边界或 Classic MIS 默认策略。
+CPU initial RIS 与 GPU initial/temporal/spatial/combined Surface DI 接入原生 voxel hit；
+首表面 v2 为六个 float4（96 bytes/pixel），后两个槽保位保存 kind/index/face/value 与 signed cell。
+triangle、voxel、介质 ground 分别为不同 kind；GPU 局部索引只在同一冻结几何 owner 内解释。
+`PathTraceScene::content_version()` 为不回绕的进程内 64 位版本，create 分配、rebind 共享；不以 hash 独自认证来源。
+持久解析身份为内容版本、entity/asset、kind 与 triangle primitive/triangle 或 voxel cell/face/value。
+NanoVDB 节点/字节偏移、代理块号不参与表面身份，替换或重打包通过新 owner 使历史失效。
+
+temporal 检查完整类型化身份、位置和法线；冻结 owner 先在宿主侧核验。
+spatial 允许不同表面/材质的来源，按来源自己的 BSDF 重算目标和支持域，不能把“同材质”误作支持校正的替代。
+全部最终 visibility 使用当前 mixed TLAS 和类型相关偏移；体素 emission=0，灯分布仍为环境/太阳/mesh 面积灯。
+保存首命中后重建完整 voxel payload，后续反弹和 RR 使用同一原生路径，不把 voxel index 当作 triangle index。
+
+当前预算统一按 v2 计算：完成 temporal owner 为 raw128 + surface96 + reservoir32 = 256 bytes/pixel；
+多 epoch temporal 暂存另为 256，非 temporal raw 暂存128，spatial 独立 reservoir32；信号增量见降噪设计。
+四阶段 prepare/temporal/spatial/shade 保留完整 epoch 提交点；失败、取消和迟到结果不推进 completed spp/source serial。
+验收记录见 [0168](../development/0168-voxel-restir-signals.md)。M23.11 再开放体素空气/云组合；Classic MIS 默认策略不变。
 
 ## 目标与范围
 
@@ -150,15 +156,15 @@ GPU target 私有使用 RTXDI v3.1.0 对应 RTXDI-Library commit `f12037fa8e97eb
 每 epoch 对应一个新路径样本，batch 1..16 依次推进 epoch，全批完成才发布图像/最后表面/reservoir/spp。
 同一计数器域与光能分工用于两个入口。首表面保存命中、位置、法线和观察方向；尾部从保存的首命中继续，避免重复查询主射线。
 
-首表面 64 bytes/pixel，初始 reservoir 32 bytes/pixel，线性累积 128 bytes/pixel；temporal 完成 owner 共 224 bytes/pixel。
+首表面 96 bytes/pixel，初始 reservoir 32 bytes/pixel，线性累积 128 bytes/pixel；temporal 完成 owner 共 256 bytes/pixel。
 无 temporal 时完成发布前释放首表面/reservoir，完成 owner 为128 bytes/pixel；spatial 私有输出同批次回收。
 外持线性图像和来源/诊断不变，下一 epoch 仍重新生成初始候选，不改变采样或光能分工。
-当前批次候选 224 bytes/pixel，batch>1 另需 128 bytes/pixel 的私有累积 ping-pong。两视图/外持旧帧按真实 owner 另计。
-初始 RIS 峰值 payload 为 `128*sum(held_complete_pixels) + (224 + (batch>1 ? 128 : 0))*candidate_pixels`，
+当前批次候选 256 bytes/pixel，batch>1 另需 128 bytes/pixel 的私有累积 ping-pong。两视图/外持旧帧按真实 owner 另计。
+初始 RIS 峰值 payload 为 `128*sum(held_complete_pixels) + (256 + (batch>1 ? 128 : 0))*candidate_pixels`，
 再加场景/纹理/AS/SBT、每 tile 参数/诊断和显式读回；读回单独为 128 bytes/pixel，固定射线结果为 64 bytes/pixel。
-渐进 RIS tile 临时 payload 现为参数 672、dummy ray 48、诊断 64、诊断读回 64 bytes，首次无历史时另有 128 bytes 零输入。
+渐进 RIS 每 dispatch 临时 payload 当前为参数784、dummy ray48、分片诊断16384、诊断读回16384 bytes，首次无历史时另有128 bytes零输入；合并tile组的参数/诊断按dispatch数与设备对齐计费。
 固定射线批次还持有 32 bytes/ray 输入、64 bytes/pixel GPU 输出及同尺寸读回（加 4 bytes 诊断），
-以及参数 672、占位采样面 96、零历史 128、诊断 64 bytes；上述均为 payload，实际分配需对齐。
+以及参数784、占位surface/reservoir合128、零历史128、分片诊断16384 bytes；上述均为payload，实际分配需对齐。
 实际 Vulkan memory requirements（含对齐）由同一 AllocationBudget 准入，payload 预检不替代实际额度；不包括 driver 隐藏管线开销。
 每路径最多 `2*max_bounces+2` 射线，候选数乘 tile 像素数/样本数受 2^24 预算限制；渐进目标通过多次提交完成，不设总射线额度。
 tile 1..256（调用默认64），候选和射线预算共同限宽。状态报告区分阶段和 epoch；只在完整批次发布时推进完成计数。
@@ -205,9 +211,9 @@ age=全部参与来源的最大祖先年龄+1，与最终选中哪个来源无�
 这些只在整批成功时发布，链内二阶矩不是独立样本误差估计。reused 指通过几何/age 校验参与合并，
 不等于最终选中旧样本；rejected 包含无历史、未命中和重投影失配。
 
-完成 owner 仍为 224 bytes/pixel。时间模式多 epoch 批次增加表面/reservoir 的 96 bytes/pixel ping-pong，
-峰值候选为 `224+(batch>1 ? 224 : 0)` bytes/pixel；所有旧 owner（包括相机移动保留的采样 owner）独立计费。
-当前参数为 42 float4（672 bytes），RIS tile 状态/读回各 64 bytes（含 M19.4 扩展）；无历史前源绑定已初始化参数缓冲作占位，has_history=0 禁止读取。
+完成 owner 仍为 256 bytes/pixel。时间模式多 epoch 批次增加表面/reservoir 的 128 bytes/pixel ping-pong，
+峰值候选为 `256+(batch>1 ? 256 : 0)` bytes/pixel；所有旧 owner（包括相机移动保留的采样 owner）独立计费。
+当前参数为49 float4（784 bytes），RIS 每dispatch状态/读回各16384 bytes（0144的256×16-word分片）；无历史前源绑定已初始化参数缓冲作占位，has_history=0 禁止读取。
 每像素最多两次额外目标评估（history 在当前、最终样本在前源），候选工作预算按 `initial_candidates+2` 预检；
 不增加校正射线，因为支持使用未遮挡目标；射线界仍 `2*bounces+2`。
 首次配置或 batch 准入失败不覆盖旧图/历史。批内交换均为私有缓冲，GPU 完成、诊断有效且 generation 匹配后同时提交。
@@ -243,8 +249,8 @@ Z(Y)=sum(m_i*indicator(p_i(Y)>0))，W=sum_weights/(p_current(Y)*Z(Y))。
 最多每像素每 epoch 一次连续灯阴影；delta 太阳与路径尾部维持原预算，最坏总界仍 2*bounces+2。
 候选工作预检每像素 initial_candidates+(temporal?2:0)+2*neighbor_count+1 次目标评估。
 
-完成 owner 仍 224 bytes/pixel。空间批次额外独立 reservoir 32 bytes/pixel；
-候选峰值为 224+(spatial?32:0)+(batch>1?(temporal?224:128):0) bytes/pixel，
+完成 owner 仍 256 bytes/pixel。空间批次额外独立 reservoir 32 bytes/pixel；
+候选峰值为 256+(spatial?32:0)+(batch>1?(temporal?256:128):0) bytes/pixel，
 再加所有外持/历史 owner、场景、读回与 tile 临时资源。参数为 42 float4（672 bytes），
 状态和渐进诊断读回各 64 bytes；按真实 Vulkan requirements 对齐计费，不静默关闭空间或校正。
 空间诊断记录参与/拒绝邻居、支持校正次数、最大 M/age 和当前阴影查询数；与图像及历史一起整批提交。

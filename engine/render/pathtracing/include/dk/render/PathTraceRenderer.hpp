@@ -58,6 +58,7 @@ public:
     [[nodiscard]] std::span<const Vec3d> linear_rgb() const noexcept;
     [[nodiscard]] std::span<const Vec3d> second_moment() const noexcept;
     [[nodiscard]] std::span<const DenoisingSignalPixel> denoising_signals() const noexcept;
+    [[nodiscard]] std::span<const std::optional<PathSurfaceIdentity>> signal_identities() const noexcept;
     // First sample's primary hit per pixel; indices refer to the prepared scene's CPU source.
     [[nodiscard]] std::span<const std::optional<PathTraceHit>> primary_hits() const noexcept;
     [[nodiscard]] const PathTraceGpuImageInfo& info() const noexcept;
@@ -106,7 +107,7 @@ public:
     [[nodiscard]] const PathTraceGpuImageInfo& info() const noexcept;
     // Eight float4 per pixel: mean, moment, hit, normal, sum/count, correction, moment sum/correction.
     [[nodiscard]] const graphics::Buffer* linear_buffer() const noexcept;
-    [[nodiscard]] const graphics::Buffer* signal_buffer() const noexcept; // 21 float4/pixel, or nullptr when Off.
+    [[nodiscard]] const graphics::Buffer* signal_buffer() const noexcept; // v2: 23 float4/pixel, or nullptr when Off.
     [[nodiscard]] std::optional<DenoisingMotionReference> signal_reference() const;
     [[nodiscard]] Result<PathTraceFrame> read_linear(graphics::SubmissionQueue&, std::stop_token = {}) const;
 private:

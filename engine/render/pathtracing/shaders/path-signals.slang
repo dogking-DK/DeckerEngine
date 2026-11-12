@@ -4,18 +4,19 @@
 #if DK_PATH_SIGNALS
 [[vk::binding(15,0)]] RWStructuredBuffer<float4> signalOutput;
 [[vk::binding(16,0)]] StructuredBuffer<float4> signalHistory;
-static const uint signalStride=21;
+static const uint signalStride=23;
 struct SignalSample {
     float3 diffuse,specular,emission,background;
     float4 normalRoughness,positionDepth,albedoMetallic,motionDistance;
     uint triangle,flags;
+    uint4 surface; int4 cell;
 };
-SignalSample emptySignal() { SignalSample s={}; s.triangle=0xffffffffu; return s; }
-struct SignalAccum { float4 data[21]; bool invalid; };
+SignalSample emptySignal() { SignalSample s={}; s.triangle=0xffffffffu; s.surface=uint4(0,0xffffffffu,0,0); return s; }
+struct SignalAccum { float4 data[23]; bool invalid; };
 SignalAccum beginSignals(uint pixel) {
     SignalAccum a={}; uint first=asuint(parameters[0]).z;
     if(first!=0) {
-        for(uint i=0;i<21;++i) a.data[i]=signalHistory[pixel*signalStride+i];
+        for(uint i=0;i<23;++i) a.data[i]=signalHistory[pixel*signalStride+i];
         if(asuint(a.data[6].w)!=first) a.invalid=true;
     }
     if(first==asuint(parameters[42]).x) {
@@ -45,6 +46,7 @@ void addSignals(inout SignalAccum a,float3 radiance,SignalSample s,uint sample,u
         }
         a.data[8]=s.normalRoughness; a.data[9]=s.positionDepth; a.data[10]=s.albedoMetallic; a.data[11]=s.motionDistance;
         a.data[12]=asfloat(uint4(s.triangle,randomSample,s.flags,0));
+        a.data[21]=asfloat(s.surface); a.data[22]=asfloat(s.cell);
     }
     a.data[12].w=asfloat(sample-asuint(parameters[42]).x+1);
 }
@@ -54,8 +56,8 @@ void finishSignals(inout SignalAccum a,uint pixel) {
         a.data[8].w<0 || a.data[8].w>1 || a.data[10].w<0 || a.data[10].w>1)) a.invalid=true;
     if(identity.w!=asuint(parameters[0]).z+asuint(parameters[0]).w-asuint(parameters[42]).x ||
         asuint(a.data[6].w)!=asuint(parameters[0]).z+asuint(parameters[0]).w || asuint(a.data[7].w)>asuint(a.data[6].w)) a.invalid=true;
-    for(uint i=0;i<21;++i) {
-        if(i!=12 && (!all(isfinite(a.data[i].xyz)) || (i!=6 && i!=7 && !isfinite(a.data[i].w)))) a.invalid=true;
+    for(uint i=0;i<23;++i) {
+        if(i!=12 && i<21 && (!all(isfinite(a.data[i].xyz)) || (i!=6 && i!=7 && !isfinite(a.data[i].w)))) a.invalid=true;
         signalOutput[pixel*signalStride+i]=a.data[i];
     }
     for(uint i=0;i<7;++i) if(any(a.data[i].xyz<0)) a.invalid=true;

@@ -280,7 +280,7 @@ float3 traceAir(RayDesc ray,AirLocation location,uint pixel,uint sample,inout ui
     PathPayload primary={};
     bool saved=asuint(parameters[32]).y==1;
     if(saved) {
-        float4 record=restirSurfaces[restirPixel*4]; primary.distance=record.x; primary.barycentric=record.yz;
+        float4 record=restirSurfaces[restirPixel*6]; primary.distance=record.x; primary.barycentric=record.yz;
         primary.found=record.w>0 ? 1u : 0u; primary.index=primary.found!=0 ? uint(record.w)-1 : 0; ++rays;
     } else primary=airNearest(ray,rays);
     float3 primarySegment=airSegment(location,ray.Direction,primary.found!=0 ? primary.distance : infinity);

@@ -310,6 +310,9 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
 #include "PathRestirMediumSupportCases.hpp"
 #include "PathTileGroupCases.hpp"
 #include "PathSignalCases.hpp"
+#ifdef DK_PATH_VOXEL_TESTS
+#include "PathVoxelRestirCases.hpp"
+#endif
 int main(int argc,char** argv) {
     try {
         require(argc==2,"expected analytic/statistics/images/lifetime case");
@@ -332,6 +335,10 @@ int main(int argc,char** argv) {
               else if(mode=="voxel_numeric") voxel_numeric(memory.heap,renderer,queue);
               else if(mode=="voxel_lighting") voxel_lighting(memory.heap,renderer,queue);
               else if(mode=="voxel_state") voxel_state(memory.heap,renderer,queue);
+              else if(mode=="voxel_restir_numeric") voxel_restir_numeric(memory.heap,renderer,queue);
+              else if(mode=="voxel_restir_reuse") voxel_restir_reuse(memory.heap,renderer,queue);
+              else if(mode=="voxel_signals") voxel_signals(memory.heap,renderer,queue);
+              else if(mode=="voxel_restir_state") voxel_restir_state(memory.heap,renderer,queue);
 #endif
               else if(mode=="signal_geometry") signal_geometry(memory.heap,renderer,queue);
               else if(mode=="signal_textures") signal_textures(memory.heap,renderer,queue);

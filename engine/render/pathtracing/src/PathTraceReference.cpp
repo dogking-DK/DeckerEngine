@@ -246,10 +246,9 @@ Result<PathTraceEstimate> estimate_path_reference(const PathTraceScene& scene,co
     return result;
 } catch(const Error& error) { return std::unexpected(error); }
 Result<RestirReferenceEstimate> estimate_restir_reference(const PathTraceScene& scene,const PathTraceRay& ray,
-    const PathTraceSettings& s,const RestirDiSettings& r,PathTraceSamples samples,std::uint32_t pixel,std::stop_token cancel) {
+    const PathTraceSettings& s,const RestirDiSettings& r,PathTraceSamples samples,std::uint32_t pixel,std::stop_token cancel) try {
     const auto* state=detail::PathReferenceAccess::get(scene);
     if(!state) return std::unexpected(Error{ErrorCode::invalid_state,"Empty RIS path scene"});
-    if(!state->voxels.empty()) return std::unexpected(Error{ErrorCode::not_supported,"Voxel ReSTIR requires M23.10"});
     if(auto valid=validate_path_ray(ray);!valid) return std::unexpected(valid.error());
     if(auto valid=work_valid(*state,1,s,samples);!valid) return std::unexpected(valid.error());
     if(r.temporal || r.spatial || r.version!=1 || r.initial_candidates<1 || r.initial_candidates>64 ||
@@ -272,7 +271,7 @@ Result<RestirReferenceEstimate> estimate_restir_reference(const PathTraceScene& 
         return std::unexpected(Error{ErrorCode::internal_error,"Nonfinite RIS estimate moments"});
     if(cancel.stop_requested()) return std::unexpected(path_cancelled());
     return result;
-}
+} catch(const Error& error) { return std::unexpected(error); }
 Result<PathTraceImage> render_path_reference(memory::ResourceHandle heap,const PathTraceScene& scene,const RenderView& view,
     const PathTraceSettings& s,PathTraceSamples samples,std::stop_token cancel) {
     const auto* state=detail::PathReferenceAccess::get(scene);

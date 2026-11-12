@@ -4,7 +4,7 @@ Vec3d signal_rgb(const DenoisingSignalPixel::Float4& v) { return {v[0],v[1],v[2]
 void signal_recompose(const PathTraceGpuImage& image) {
     require(image.info().signals.has_value(),"signal provenance missing");
     const auto& source=image.info().signals->source;
-    require(source.version==1 && source.source_serial && source.renderer_id && source.width==image.info().width &&
+    require(source.version==2 && source.content_version && source.source_serial && source.renderer_id && source.width==image.info().width &&
         source.height==image.info().height && source.fingerprint==image.info().fingerprint &&
         source.sample_first+source.sample_count==source.accumulated_spp,"signal source identity mismatch");
     require(image.denoising_signals().size()==image.linear_rgb().size(),"partial signal image published");

@@ -55,7 +55,9 @@ TEST_CASE("Voxel content palette and limits are immutable scene identity", "[vox
     CHECK_FALSE(f.scene().nearest(ray).value()); CHECK(original.nearest(ray).value());
     const std::array<const CpuAsset*,2> assets{&f.voxel,&f.mesh}; PathTraceSceneLimits limits; limits.max_voxel_blocks=0;
     CHECK_FALSE(PathTraceScene::create(memory.heap,f.source(),assets,limits));
-    CHECK_FALSE(estimate_restir_reference(original,ray));
+    CHECK(estimate_restir_reference(original,ray));
+    CHECK(original.content_version()!=changed.content_version());
+    CHECK(original.rebind(memory.heap,f.source())->content_version()==original.content_version());
     auto medium=PathMediumSnapshot::create(f.document->environment()).value();
     CHECK_FALSE(estimate_volume_path_reference(original,medium,ray));
     f.voxel.voxel->palette[0].metallic=.7f; CHECK_FALSE(PathTraceScene::create(memory.heap,f.source(),assets));
@@ -65,6 +67,7 @@ TEST_CASE("Voxel content palette and limits are immutable scene identity", "[vox
     work.grid(strip); auto work_scene=work.scene(); auto bounded=s; bounded.max_bounces=1; bounded.max_triangle_tests=16;
     const PathTraceRay inside{{.3,.4,.7},{1,0,0}};
     CHECK_FALSE(estimate_path_reference(work_scene,inside,bounded,{0,1}));
+    bounded.estimator=PathTraceEstimator::mis; CHECK_FALSE(estimate_restir_reference(work_scene,inside,bounded,{}, {0,1}));
     bounded.max_triangle_tests=1024; CHECK(estimate_path_reference(work_scene,inside,bounded,{0,1}));
 }
 TEST_CASE("Voxel scene allocation failure unwinds all candidate owners", "[voxels][path]") {
@@ -83,4 +86,23 @@ TEST_CASE("Voxel scene allocation failure unwinds all candidate owners", "[voxel
         small.deallocate(held.back(),256); held.pop_back();
     }
     CHECK(failure); CHECK(success);
+}
+
+TEST_CASE("Voxel initial RIS uses native material visibility and frozen content", "[voxels][path][restir]") {
+    RenderMemory memory; Fixture f{memory.heap};
+    const std::array blocks{assets::VoxelBlock{{-1,0,0},1,1},assets::VoxelBlock{{0,0,0},1,2}}; f.grid(blocks);
+    f.quad(-2,2,2,{0,0,0},{2,3,4});
+    for(const auto model:{PathTraceMaterialModel::lambert,PathTraceMaterialModel::metallic_roughness}) {
+        if(model==PathTraceMaterialModel::metallic_roughness) {f.voxel.voxel->palette[0].metallic=.6f; f.voxel.voxel->palette[0].roughness=.35f;}
+        const auto native=f.scene(model),triangles=f.oracle(model),copy=f.scene(model);
+        CHECK(native.geometry_fingerprint()==copy.geometry_fingerprint()); CHECK(native.content_version()!=copy.content_version());
+        PathTraceSettings s; s.max_bounces=3; s.rr_start=0; s.environment_rgb={.2,.3,.4};
+        for(const double x:{-.3,.3}) {
+            const PathTraceRay ray{{x,.6,1.5},{0,0,-1}};
+            const auto a=estimate_restir_reference(native,ray,s,{}, {0,256});
+            const auto b=estimate_restir_reference(triangles,ray,s,{}, {0,256});
+            REQUIRE(a); REQUIRE(b); CHECK((a->mean-b->mean).norm()<2e-5);
+            CHECK(a->candidate_evaluations==256*8); CHECK(native.nearest(ray).value()->kind==PathGeometryKind::voxel);
+        }
+    }
 }

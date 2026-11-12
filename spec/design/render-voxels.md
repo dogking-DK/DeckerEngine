@@ -1,7 +1,7 @@
 ---
 module: render-voxels
 created_at: "2026-11-11T14:51:58+08:00"
-updated_at: "2026-11-12T13:30:34+08:00"
+updated_at: "2026-11-12T15:11:34+08:00"
 status: accepted
 ---
 
@@ -136,11 +136,11 @@ M23.8–13 将体素作为既有路径追踪器的一种几何输入；不先转
 CPU 路径参考消费同一资产/材质并独立查询小网格外露面，提供直接光、遮挡、间接反弹和 GGX 的统计 oracle。
 首期体素不自发光，沿用既有环境、太阳和 mesh 面积灯分布；体素可接收/反射/遮挡这些光源，不增加未定义的体素灯 PDF。
 
-M23.10 将首表面身份与 ReSTIR reservoir/guide/reference 解耦于三角索引：
+M23.10 已将首表面身份与 ReSTIR reservoir/guide/reference 解耦于三角索引：
 使用类型化稳定身份、有符号 cell 坐标/face 与完整内容/材质版本判定来源，局部 GPU 索引由当前帧映射，不能把哈希碰撞当作身份相同。
 NanoVDB 字节偏移、树节点序号或 RT 块 primitive 均不作为持久单元身份；重打包后仍须按版本正确拒绝旧历史。
 几何、占用、材质或实例变更按既有策略失效累积/采样历史；相机运动仅在现有规则允许时复用。
-表面 fresh/lobe/guide/运动信号重组保持 M20.2 契约，布局/来源版本在实施时显式升级并核对预算；不新增降噪算法。
+表面 fresh/lobe/guide/运动信号重组保持 M20.2 契约，布局/来源已升级 v2 并核对预算；不新增降噪算法。
 
 M23.11 把已有空气/云路径中的最近表面和阴影查询接入混合几何，保持自由程、透射和首表面条件 RIS 的分工，
 体素不是新的密度介质。表面信号适配不自动放开 Scene media 降噪组合，仍遵循 M20.10 的能力边界。
@@ -375,8 +375,17 @@ HDDA 调优限于不改变表面语义的冗余查值消除：单轴表面转换
 - CPU 稀疏查询对独立外露面/三角化 oracle 验证。GPU 原点偏移在角坐标中按命中面与浮点误差推进，再变换到世界；拒绝 float 中塌缩的实例/坐标，不用固定世界 epsilon 跳过小单元。
 - CPU 体素上限及默认值为 256 个实例、256 MiB Nano 内容及 1M 代理块，可配置更低额度；每条稀疏查询最多 65536 regions，CPU 累计 region 工作另受现有 `max_triangle_tests` 额度约束。GPU 还受 AS/descriptor/storage 设备上限约束；域需可编码为 signed 21-bit，物体射线分量绝对值不超过 2²⁰，世界域不超过 1e6；float 往返误差不超过 1/16 cell，保守偏移需小于 1/8 cell，否则准备/整帧明确失败。这是数值域限制，编码范围不代表所有变换都受支持。
 - 首命中诊断保持既有 64-byte pixel/128-byte history；voxel 使用负的 instance/face tag，两个 float 槽以位模式无损保存三个 signed 21-bit cell。CPU 解码为类型化命中，不能把编码槽做浮点数值检查或 triangle 寻址。此编码仅属于帧诊断，不是 M23.10 持久表面身份。
-- voxel-only 以全部几何判断空场景；mesh-only 保持既有代码路径。Classic 固定射线、视图及渐进累积支持体素，内容/调色板/实例变化使累积失效。体素 ReSTIR、介质与表面信号明确拒绝，分别待 M23.10/11；上层 Editor/capture 装配待 M23.12。
+- voxel-only 以全部几何判断空场景；mesh-only 保持既有代码路径。Classic 固定射线、视图及渐进累积支持体素，内容/调色板/实例变化使累积失效。M23.9 交付时拒绝体素 ReSTIR、介质与表面信号；M23.10 已开放表面 DI/信号，介质与上层 Editor/capture 装配分别待 M23.11/12。
 - 验收包含 voxel-only/mesh-only/混合最近表面、两类射线和双向间接反弹，Lambert/GGX/环境/太阳/mesh 面积灯，tile/leaf/RT block 边界、负坐标/变换/内部起点/自相交、内容替换与提交失败保留旧结果。
+
+## M23.10 ReSTIR 与信号实施契约
+
+- 沿用同一 Classic/DI 积分器、混合 TLAS 和完整 epoch 发布点，开放 CPU initial RIS、GPU initial/temporal/spatial/combined Surface DI，以及 Classic/ReSTIR 的渐进表面信号。体素不成为发光体；Scene media 与体素组合仍明确拒绝，待 M23.11。
+- 每份 CPU 冻结几何拥有不回绕的 64-bit `content_version`，create 创建新版本，rebind 共享原几何版本及 owner。版本不是内容哈希；消费端的哈希仍用于快速筛选，不能替代 owner/完整内容比较。持久表面身份由版本、kind、entity/asset、triangle primitive/triangle 或 signed cell/face/value 组成。
+- GPU 局部身份为两组整数四元组：kind/index/face/value 与 signed cell.xyz/reserved。triangle index 与 voxel instance index 分属不同 kind，并通过当前冻结场景映射；Nano 地址、树节点及 AABB primitive 不进入身份。ReSTIR surface layout v2 为 6 float4（96 B/像素）：原 hit/normal/position/wo+epoch 加上述两组身份。时间复用比较完整单元身份与位置/法线；空间仍允许跨表面/材质，按各来源的真实 BSDF 重算目标和支持，最后在当前混合场景追踪可见性。
+- 信号 layout/source v2 为 23 float4（368 B/像素）：原 21 槽语义保留，追加上述类型化整数身份；旧 triangle 槽在 voxel/miss 为 UINT_MAX。读回提供解析后的稳定身份。版本 1 reference 明确拒绝；reference 附带私有冻结几何 owner 凭据，不能仅靠改写 hash/version 把旧内容伪装为当前来源。凭据保活 CPU 快照，不保活 GPU history。
+- ReSTIR temporal 完成平面为 256 B/像素（raw 128 + surface 96 + reservoir 32）；时间多 epoch 暂存同步增加，信号按 368 B 与 ping-pong/外持 owner 完整计费。先校验/分配候选，诊断成功且 generation 匹配后再同时发布 raw、采样历史和信号；取消/提交/预算失败保留最后完整 epoch。
+- 验收包含四种 DI 配置对独立三角化/CPU 的均值和来源支持、Lambert/GGX、薄体素遮挡与显露、负 cell/跨种类身份、相机运动、占用/材质/实例替换、信号重组与透视/正交 motion、版本/预算拒绝、阶段失败/取消/旧帧保活；保留 mesh-only 和 M23.9 定向回归。
 
 ## Slang 兼容性门禁
 
@@ -441,7 +450,7 @@ RT 路线 required 用例不得以缺少硬件静默跳过；非 RT 配置另外
 依赖的 CUDA 打包问题在 M23.2 解决，CPU 格式/语义先冻结；Slang compute 与 intersection 分别在 M23.3/8 设阻断门禁。
 完整源描述/产物 v1 在 M23.5 冻结，包含两后端共同材质；中间资源布局/精度在 M23.3 固定，
 intersection 属性/SBT 与 shader 产物版本在 M23.8 固定，RT 块布局/通用命中在 M23.9 固定，信号身份版本在 M23.10 固定；
-CPU、GPU compute 与 mesh 深度/HDR 合成分别见 M23.2/3/4；文件资产、光栅闭环/基线见 M23.5/6/7。原生 intersection 与 Classic 路径分别见 M23.8/9，后续 ReSTIR/信号、介质、路径消费者与联合交付按 Roadmap 推进。
+CPU、GPU compute 与 mesh 深度/HDR 合成分别见 M23.2/3/4；文件资产、光栅闭环/基线见 M23.5/6/7。原生 intersection、Classic 路径与 ReSTIR/信号分别见 M23.8/9/10，后续介质、路径消费者与联合交付按 Roadmap 推进。
 阶段开始若发现底座缺口，应更新设计和必要前置，不隐式扩成全引擎重构。
 
 ## 相关记录

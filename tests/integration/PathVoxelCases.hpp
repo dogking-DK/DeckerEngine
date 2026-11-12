@@ -125,9 +125,6 @@ void voxel_state(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueu
     auto same=take(r.prepare_scene(q,f.scene())); require(same.submission().value()==gpu.submission().value(),"equal voxel geometry rebuilt AS");
     check(r.configure_view(q,239,gpu,view,s,schedule));
     require(take(r.status(239)).generation==generation,"unchanged voxel view reset history");
-    auto signal=schedule; signal.signals.enabled=true;
-    require(!r.configure_view(q,239,gpu,view,s,signal),"voxel signals accepted before M23.10");
-    require(!r.configure_restir_view(q,239,gpu,view,s,{},schedule),"voxel ReSTIR accepted before M23.10");
     auto medium=take(PathMediumSnapshot::create(f.document->environment()));
     require(!r.configure_medium_view(q,239,gpu,medium,view),"voxel medium accepted before M23.11");
     require(take(r.status(239)).generation==generation && take(r.status(239)).completed_spp==7,"unsupported mode damaged completed state");

@@ -12,6 +12,14 @@ namespace dk::render {
 using namespace graphics;
 namespace detail {
 using Float4=std::array<float,4>;
+struct SignalReferenceAccess {
+    static DenoisingMotionReference make(const DenoisingSignalIdentity& source,const Mat4d& matrix,const PathTraceScene& scene) {
+        DenoisingMotionReference r; r.source=source; r.world_to_clip=matrix; r.geometry_owner_=PathReferenceAccess::geometry_owner(scene); return r;
+    }
+    static bool matches(const DenoisingMotionReference& r,const PathTraceScene& scene) {
+        return r.geometry_owner_ && r.geometry_owner_==PathReferenceAccess::geometry_owner(scene);
+    }
+};
 struct PathGpuPixel { Float4 mean,second,hit,normal; };
 static_assert(sizeof(PathGpuPixel)==64);
 struct PathGpuView;
@@ -120,11 +128,13 @@ struct PathGpuBatch {
 struct PathGpuImage {
     explicit PathGpuImage(memory::ResourceHandle heap) : colors(0,memory::Allocator<Vec3d>{heap}),
         moments(0,memory::Allocator<Vec3d>{heap}),hits(0,memory::Allocator<std::optional<PathTraceHit>>{heap}),
-        signals(0,memory::Allocator<DenoisingSignalPixel>{heap}) {}
+        signals(0,memory::Allocator<DenoisingSignalPixel>{heap}),
+        signal_identities(0,memory::Allocator<std::optional<PathSurfaceIdentity>>{heap}) {}
     PathTraceGpuImageInfo info;
     Vector<Vec3d> colors,moments;
     Vector<std::optional<PathTraceHit>> hits;
     Vector<DenoisingSignalPixel> signals;
+    Vector<std::optional<PathSurfaceIdentity>> signal_identities;
 };
 }
 namespace {
@@ -255,7 +265,7 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     const bool empty=!scene.geometry->tlas;
     const bool air=info.medium.has_value();
     const bool restir=info.restir.has_value();
-    if(scene.source.voxel_count() && (air || restir || signals)) throw Error{ErrorCode::not_supported,"Voxel paths currently support Classic surface paths without signals"};
+    if(scene.source.voxel_count() && air) throw Error{ErrorCode::not_supported,"Voxel medium paths require M23.11"};
     const auto& program=signals ? *state.signal_program : state;
     if(restir) p[32][0]=std::bit_cast<float>(info.restir->initial_candidates);
     const auto dispatches=grouped.empty() ? std::span<const Parameters>{&p,1} : grouped;
@@ -270,7 +280,7 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     }
     const auto storage=vk::BufferUsageFlagBits::eStorageBuffer;
     Buffer dummy_surface,dummy_reservoir;
-    if(restir && !surface) { dummy_surface=take(state.factory.create_buffer({64,storage})); surface=&dummy_surface; }
+    if(restir && !surface) { dummy_surface=take(state.factory.create_buffer({96,storage})); surface=&dummy_surface; }
     if(restir && !reservoir) { dummy_reservoir=take(state.factory.create_buffer({32,storage})); reservoir=&dummy_reservoir; }
     Vector<std::byte> parameter_bytes(parameter_stride*dispatches.size(),memory::Allocator<std::byte>{state.heap});
     for(std::size_t i=0;i<dispatches.size();++i) {
@@ -594,9 +604,9 @@ void prepare_program(PathGpuState& state,const std::filesystem::path& directory,
     const std::array<const ShaderModule*,1> air_empty{&shaders[7]};
     program.air_empty_layout=take(program.factory.create_pipeline_layout(air_empty));
     program.air_empty_pipeline=take(program.factory.create_compute_pipeline({&shaders[7],&program.air_empty_layout}));
-    const std::array<const ShaderModule*,5> restir_entries{&shaders[8],&shaders[1],&shaders[2],&shaders[3],&shaders[4]};
+    auto restir_entries=entries; restir_entries[0]=&shaders[8];
     program.restir_layout=take(program.factory.create_pipeline_layout(restir_entries));
-    program.restir_pipeline=take(program.factory.create_ray_tracing_pipeline({&program.restir_layout,&shaders[8],misses,hits,2}));
+    program.restir_pipeline=take(program.factory.create_ray_tracing_pipeline({&program.restir_layout,&shaders[8],misses,mixed,2}));
     program.restir_table=take(program.factory.create_shader_binding_table(program.restir_pipeline));
     const std::array<const ShaderModule*,1> restir_empty{&shaders[9]};
     program.restir_empty_layout=take(program.factory.create_pipeline_layout(restir_empty));
@@ -876,13 +886,14 @@ void validate_signals(PathGpuState& state,const Device& device,std::uint64_t id,
     if(!s.enabled) { if(s.previous) throw path_invalid("Motion reference requires enabled path signals"); return; }
     const auto n=std::uint64_t{d.width}*d.height;
     if(n>device.adapter().properties.limits.maxStorageBufferRange/sizeof(DenoisingSignalPixel) ||
-        n>std::numeric_limits<std::uint32_t>::max()/21)
+        n>std::numeric_limits<std::uint32_t>::max()/23)
         throw Error{ErrorCode::not_supported,"Path signals exceed device storage buffer/address capacity"};
     if(s.previous) {
         const auto& r=*s.previous; const auto& source=r.source;
-        if(source.version!=1 || source.renderer_id!=state.renderer_id || source.view_id!=id || source.session!=schedule.session ||
+        if(source.version!=2 || source.renderer_id!=state.renderer_id || source.view_id!=id || source.session!=schedule.session ||
             !source.source_serial || source.source_serial>state.source_serial || source.width!=d.width || source.height!=d.height ||
-            source.fingerprint!=scene.fingerprint() || !r.world_to_clip.allFinite())
+            source.fingerprint!=scene.fingerprint() || source.geometry_fingerprint!=scene.geometry_fingerprint() ||
+            source.content_version!=scene.content_version() || !SignalReferenceAccess::matches(r,scene) || !r.world_to_clip.allFinite())
             throw path_invalid("Motion reference does not match the path signal source");
         for(unsigned row=0;row<4;++row) (void)pack(r.world_to_clip.block<1,3>(row,0).transpose(),r.world_to_clip(row,3));
     }
@@ -897,7 +908,6 @@ Result<void> PathTraceRenderer::configure_view(SubmissionQueue& queue,std::uint6
     if(state_->terminal) return std::unexpected(Error{ErrorCode::invalid_state,"Path session device lost"});
     if(!scene || scene.state_->program.lock()!=state_) return std::unexpected(path_invalid("Path scene belongs to a different renderer"));
     validate_progressive(queue.device(),*PathReferenceAccess::get(scene.source()),view,settings,schedule);
-    if(scene.source().voxel_count() && (schedule.signals.enabled || schedule.signals.previous)) throw Error{ErrorCode::not_supported,"Voxel surface signals require M23.10"};
     validate_signals(*state_,queue.device(),id,scene.source(),view,schedule);
     auto* slot=view_slot(*state_,id);
     if(slot) {
@@ -1031,9 +1041,9 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
         if(view->schedule.signals.enabled) {
             if(state_->source_serial==std::numeric_limits<std::uint64_t>::max()) throw path_invalid("Signal source serial exhausted");
             DenoisingSignalInfo signal;
-            signal.source={1,state_->renderer_id,view->id,view->schedule.session,view->generation,0,
+            signal.source={2,state_->renderer_id,view->id,view->schedule.session,view->generation,0,
                 frame.info.fingerprint,frame.info.geometry_fingerprint,d.width,d.height,batch->first,batch->count,
-                completed+batch->count,view->epoch_origin+batch->first};
+                completed+batch->count,view->epoch_origin+batch->first,frame.source.content_version()};
             signal.previous=view->schedule.signals.previous; frame.info.signals=std::move(signal);
             const auto bytes=std::uint64_t{d.width}*d.height*sizeof(DenoisingSignalPixel);
             frame.signals=take(state_->factory.create_buffer({bytes,vk::BufferUsageFlagBits::eStorageBuffer|vk::BufferUsageFlagBits::eTransferSrc}));
@@ -1051,12 +1061,12 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
             vk::BufferUsageFlagBits::eStorageBuffer|vk::BufferUsageFlagBits::eTransferSrc}));
         if(view->restir) {
             const auto n=std::uint64_t{d.width}*d.height;
-            frame.surface=take(state_->factory.create_buffer({n*64,vk::BufferUsageFlagBits::eStorageBuffer}));
+            frame.surface=take(state_->factory.create_buffer({n*96,vk::BufferUsageFlagBits::eStorageBuffer}));
             frame.reservoir=take(state_->factory.create_buffer({n*32,vk::BufferUsageFlagBits::eStorageBuffer}));
             if(view->restir->spatial) batch->spatial_output=take(state_->factory.create_buffer({n*32,vk::BufferUsageFlagBits::eStorageBuffer}));
             if(batch->count>1) batch->scratch=take(state_->factory.create_buffer({n*128,vk::BufferUsageFlagBits::eStorageBuffer|vk::BufferUsageFlagBits::eTransferSrc}));
             if(batch->count>1 && view->restir->temporal) {
-                batch->scratch_surface=take(state_->factory.create_buffer({n*64,vk::BufferUsageFlagBits::eStorageBuffer}));
+                batch->scratch_surface=take(state_->factory.create_buffer({n*96,vk::BufferUsageFlagBits::eStorageBuffer}));
                 batch->scratch_reservoir=take(state_->factory.create_buffer({n*32,vk::BufferUsageFlagBits::eStorageBuffer}));
             }
         }
@@ -1283,8 +1293,8 @@ const Buffer* PathTraceCompletedFrame::linear_buffer() const noexcept { return s
 const Buffer* PathTraceCompletedFrame::signal_buffer() const noexcept { return state_ && state_->signals ? &state_->signals : nullptr; }
 std::optional<DenoisingMotionReference> PathTraceCompletedFrame::signal_reference() const {
     if(!state_ || !state_->info.signals) return {};
-    return DenoisingMotionReference{state_->info.signals->source,
-        state_->info.view.projection*state_->info.view.camera_world.matrix().inverse()};
+    return SignalReferenceAccess::make(state_->info.signals->source,
+        state_->info.view.projection*state_->info.view.camera_world.matrix().inverse(),state_->source);
 }
 Result<PathTraceFrame> PathTraceCompletedFrame::read_linear(SubmissionQueue& queue,std::stop_token stop) const try {
     cancelled(stop);
@@ -1381,6 +1391,7 @@ Result<std::optional<PathTraceGpuImage>> PathTraceFrame::read(SubmissionQueue& q
     }
     if(state_->signal_offset) {
         image->signals.resize(count);
+        image->signal_identities.reserve(count);
         check(state_->readback.read(state_->signal_offset,std::as_writable_bytes(std::span{image->signals})));
         const auto& source=image->info.signals->source;
         for(const auto& s:image->signals) {
@@ -1392,8 +1403,30 @@ Result<std::optional<PathTraceGpuImage>> PathTraceFrame::read(SubmissionQueue& q
             for(const auto* v:{&s.normal_roughness,&s.position_view_depth,&s.albedo_metallic,&s.motion_distance})
                 for(const auto x:*v) valid=valid && std::isfinite(x);
             for(const auto& v:s.compensation) for(const auto x:v) valid=valid && std::isfinite(x);
-            if(s.identity[2]&DenoisingSignalPixel::surface_valid) valid=valid && s.identity[0]<scene.triangles.size() && s.position_view_depth[3]>0;
-            else valid=valid && s.identity[0]==std::numeric_limits<std::uint32_t>::max();
+            std::optional<PathSurfaceIdentity> resolved;
+            valid=valid && source.version==2 && source.content_version==state_->source.content_version();
+            if(s.identity[2]&DenoisingSignalPixel::surface_valid) {
+                valid=valid && s.position_view_depth[3]>0;
+                PathSurfaceIdentity key; key.content_version=source.content_version;
+                if(s.surface[0]==1 && s.surface[1]<scene.triangles.size()) {
+                    const auto& t=scene.triangles[s.surface[1]];
+                    key.entity=t.entity; key.asset=t.mesh; key.primitive=t.primitive; key.triangle=t.triangle;
+                    valid=valid && s.identity[0]==s.surface[1] && s.surface[2]==0 && s.surface[3]==0 && s.cell==std::array<std::int32_t,4>{};
+                    resolved=key;
+                }
+#if DK_PATH_VOXELS
+                else if(s.surface[0]==2 && s.surface[1]<scene.voxels.size()) {
+                    const auto& v=scene.voxels[s.surface[1]];
+                    key.kind=PathGeometryKind::voxel; key.entity=v.entity; key.asset=v.asset;
+                    key.cell={s.cell[0],s.cell[1],s.cell[2]}; key.face=s.surface[2]; key.value=s.surface[3];
+                    valid=valid && s.identity[0]==0xffffffffu && key.face<6 && key.value>0 && key.value<=v.palette.size() &&
+                        s.cell[3]==0 && v.grid->value(key.cell)==key.value;
+                    resolved=key;
+                }
+#endif
+                else valid=false;
+            } else valid=valid && s.identity[0]==0xffffffffu && s.surface==std::array<std::uint32_t,4>{0,0xffffffffu,0,0} && s.cell==std::array<std::int32_t,4>{};
+            image->signal_identities.push_back(resolved);
             if(!valid) return std::unexpected(Error{ErrorCode::internal_error,"Invalid GPU denoising signal provenance or value"});
         }
     }
@@ -1402,6 +1435,7 @@ Result<std::optional<PathTraceGpuImage>> PathTraceFrame::read(SubmissionQueue& q
 catch (const std::exception& error) { return std::unexpected(Error{ErrorCode::internal_error,error.what()}); }
 std::span<const Vec3d> PathTraceGpuImage::linear_rgb() const noexcept { return state_ ? std::span<const Vec3d>{state_->colors} : std::span<const Vec3d>{}; }
 std::span<const Vec3d> PathTraceGpuImage::second_moment() const noexcept { return state_ ? std::span<const Vec3d>{state_->moments} : std::span<const Vec3d>{}; }
+std::span<const std::optional<PathSurfaceIdentity>> PathTraceGpuImage::signal_identities() const noexcept { return state_ ? std::span<const std::optional<PathSurfaceIdentity>>{state_->signal_identities} : std::span<const std::optional<PathSurfaceIdentity>>{}; }
 std::span<const DenoisingSignalPixel> PathTraceGpuImage::denoising_signals() const noexcept { return state_ ? std::span<const DenoisingSignalPixel>{state_->signals} : std::span<const DenoisingSignalPixel>{}; }
 std::span<const std::optional<PathTraceHit>> PathTraceGpuImage::primary_hits() const noexcept { return state_ ? std::span<const std::optional<PathTraceHit>>{state_->hits} : std::span<const std::optional<PathTraceHit>>{}; }
 const PathTraceGpuImageInfo& PathTraceGpuImage::info() const noexcept { static const PathTraceGpuImageInfo empty; return state_ ? state_->info : empty; }

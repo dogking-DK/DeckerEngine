@@ -12,6 +12,19 @@ struct PathPayload { float distance; float2 barycentric; uint index; uint found;
     uint kind; uint instance; int3 cell; uint face; uint value; float3 position;
 #endif
 };
+uint4 surfaceKey(PathPayload hit) {
+    if(hit.found==0) return uint4(0,0xffffffffu,0,0);
+#if DK_PATH_VOXELS
+    if(hit.kind==1) return uint4(2,hit.instance,hit.face,hit.value);
+#endif
+    return uint4(1,hit.index,0,0);
+}
+int4 surfaceCell(PathPayload hit) {
+#if DK_PATH_VOXELS
+    if(hit.kind==1) return int4(hit.cell,0);
+#endif
+    return 0;
+}
 #if !DK_PATH_EMPTY
 [[vk::binding(0,0)]] RaytracingAccelerationStructure scene;
 [[vk::binding(1,0)]] StructuredBuffer<float4> triangles;
@@ -84,6 +97,12 @@ PathBsdf surfaceMaterial(PathPayload hit) {
     if(hit.kind==1) return voxelMaterial(hit);
 #endif
     return materialAt(hit.index,hit.barycentric);
+}
+bool surfaceLight(PathPayload hit) {
+#if DK_PATH_VOXELS
+    if(hit.kind==1) return false;
+#endif
+    return triangles[hit.index*9+1].w>0;
 }
 float3 surfaceEmission(PathPayload hit) {
 #if DK_PATH_VOXELS
@@ -225,8 +244,7 @@ float3 tracePath(RayDesc ray,uint pixel,uint sample,inout uint rays,out float4 f
 #if DK_PATH_RESTIR
         bool saved=depth==0 && asuint(parameters[32]).y==1;
         if(saved) {
-            float4 record=restirSurfaces[restirPixel*4]; hit.distance=record.x; hit.barycentric=record.yz;
-            hit.found=record.w!=0 ? 1u : 0u; hit.index=hit.found!=0 ? uint(record.w)-1 : 0;
+            hit=restirPayload(restirPixel);
         } else
 #endif
         TraceRay(scene,RAY_FLAG_NONE,255,0,2,0,ray,hit);
@@ -246,7 +264,7 @@ float3 tracePath(RayDesc ray,uint pixel,uint sample,inout uint rays,out float4 f
         }
         float3 position=positionOf(hit),normal=normalOf(hit,ray.Direction);
 #if DK_PATH_RESTIR
-        if(saved) { position=restirSurfaces[restirPixel*4+2].xyz; normal=restirSurfaces[restirPixel*4+1].xyz; }
+        if(saved) { position=restirSurfaces[restirPixel*6+2].xyz; normal=restirSurfaces[restirPixel*6+1].xyz; }
 #endif
         if(depth==0) {
 #if DK_PATH_VOXELS
@@ -258,18 +276,19 @@ float3 tracePath(RayDesc ray,uint pixel,uint sample,inout uint rays,out float4 f
         PathBsdf bsdf=surfaceMaterial(hit); float3 emission=surfaceEmission(hit);
 #if DK_PATH_SIGNALS
         if(depth==0) {
-            signal.flags|=1; signal.triangle=hit.index;
+            signal.flags|=1; signal.surface=surfaceKey(hit); signal.cell=surfaceCell(hit);
+            signal.triangle=signal.surface.x==1 ? hit.index : 0xffffffffu;
             signal.normalRoughness=float4(normal,bsdf.ggx ? bsdf.roughness : 1);
             signal.albedoMetallic=float4(bsdf.color,bsdf.ggx ? bsdf.metallic : 0);
             signal.positionDepth=float4(position,dot(parameters[43],float4(position,1)));
             signal.motionDistance.w=hit.distance;
         }
-        float3 emitted=throughput*emission*(DK_PATH_RESTIR && depth==1 ? (triangles[hit.index*9+1].w>0 ? 0 : 1) : (depth!=0 && flags.x==0 ? weight(bsdfPdf,surfaceAreaPdf(hit,previous,position)) : 1));
+        float3 emitted=throughput*emission*(DK_PATH_RESTIR && depth==1 ? (surfaceLight(hit) ? 0 : 1) : (depth!=0 && flags.x==0 ? weight(bsdfPdf,surfaceAreaPdf(hit,previous,position)) : 1));
         radiance+=emitted;
         if(depth==0) signal.emission+=emitted;
         else { signal.diffuse+=emitted*firstDiffuse; signal.specular+=emitted*(1-firstDiffuse); }
 #else
-        radiance+=throughput*emission*(DK_PATH_RESTIR && depth==1 ? (triangles[hit.index*9+1].w>0 ? 0 : 1) : (depth!=0 && flags.x==0 ? weight(bsdfPdf,surfaceAreaPdf(hit,previous,position)) : 1));
+        radiance+=throughput*emission*(DK_PATH_RESTIR && depth==1 ? (surfaceLight(hit) ? 0 : 1) : (depth!=0 && flags.x==0 ? weight(bsdfPdf,surfaceAreaPdf(hit,previous,position)) : 1));
 #endif
         if(depth==counts.z || (!bsdf.ggx && largest(bsdf.color)==0)) break;
 #if DK_PATH_SIGNALS
@@ -323,6 +342,7 @@ void runRestirPixel(uint2 coordinate) {
         uint epoch=image.z+epochOffset;
         float3 offset; RayDesc ray=primaryRay(coordinate,pixel,epoch,offset);
         float4 record=float4(-1,0,0,0),normal=0,position=0;
+        uint4 key=uint4(0,0xffffffffu,0,0); int4 cell=0;
         RestirSample reservoir=emptyRestir();
         if(asuint(parameters[12]).x!=0) {
             uint rays=0; PathPayload hit=airNearest(ray,rays);
@@ -332,6 +352,7 @@ void runRestirPixel(uint2 coordinate) {
             if(v.ground || hit.found!=0) {
                 record=float4(v.ground ? segment.y : hit.distance,hit.barycentric,v.ground ? -1.0 : float(hit.index+1));
                 normal=float4(v.normal,1); position=float4(v.position,1);
+                key=v.ground ? uint4(3,0xffffffffu,0,0) : surfaceKey(hit);
                 if(asuint(parameters[1]).z!=0) {
                     reservoir=initialRestir(hit,v.position,v.normal,v.bsdf,-ray.Direction,counter,epoch); restirStat(pixel,14);
                 }
@@ -340,17 +361,19 @@ void runRestirPixel(uint2 coordinate) {
 #if !DK_PATH_EMPTY
         PathPayload hit={}; TraceRay(scene,RAY_FLAG_NONE,255,0,2,0,ray,hit);
         if(hit.found!=0) {
-            record=float4(hit.distance,hit.barycentric,float(hit.index+1));
-            normal=float4(normalOf(hit,ray.Direction),dot(ray.Direction,triangles[hit.index*9+3].xyz)<0 ? 1 : -1);
-            position=float4(positionOf(hit),1); PathBsdf bsdf=materialAt(hit.index,hit.barycentric);
+            key=surfaceKey(hit); cell=surfaceCell(hit);
+            record=float4(hit.distance,hit.barycentric,1);
+            normal=float4(normalOf(hit,ray.Direction),1);
+            position=float4(positionOf(hit),1); PathBsdf bsdf=surfaceMaterial(hit);
             if(asuint(parameters[1]).z!=0 && (bsdf.ggx || largest(bsdf.color)>0))
                 reservoir=initialRestir(hit,position.xyz,normal.xyz,bsdf,-ray.Direction,counter,epoch);
         }
 #endif
         }
         if(!all(isfinite(record)) || !all(isfinite(normal)) || !all(isfinite(position)) || !all(isfinite(ray.Direction))) restirError();
-        restirSurfaces[pixel*4]=record; restirSurfaces[pixel*4+1]=normal;
-        restirSurfaces[pixel*4+2]=position; restirSurfaces[pixel*4+3]=float4(-ray.Direction,asfloat(epoch));
+        restirSurfaces[pixel*6]=record; restirSurfaces[pixel*6+1]=normal;
+        restirSurfaces[pixel*6+2]=position; restirSurfaces[pixel*6+3]=float4(-ray.Direction,asfloat(epoch));
+        restirSurfaces[pixel*6+4]=asfloat(key); restirSurfaces[pixel*6+5]=asfloat(cell);
         storeRestir(pixel,reservoir,epoch); return;
     }
     Accumulation a=beginAccumulation(pixel);

@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-11-12T13:30:34+08:00"
+updated_at: "2026-11-12T15:11:34+08:00"
 status: accepted
 ---
 
@@ -41,7 +41,7 @@ CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、
 
 [体素设计](render-voxels.md#m239-classic-路径实施契约)扩展本积分器的几何输入；M23.9 实施 CPU/GPU Classic 混合几何，状态与证据见 [0167](../development/0167-voxel-classic-pathtracing.md)。ReSTIR、介质、信号和上层装配仍分阶段实施。
 M23.8 先扩展 [RT 底座](graphics-raytracing.md)，M23.9 接通 CPU/GPU Classic 混合几何，
-M23.10 适配 ReSTIR/表面信号，M23.11 验证已有介质组合，M23.12/13 完成消费者与联合交付。
+M23.10 已适配 ReSTIR 四种 DI 与表面信号 v2（[0168](../development/0168-voxel-restir-signals.md)），M23.11 验证已有介质组合，M23.12/13 完成消费者与联合交付。
 
 - PathTraceScene/上传/缓存支持 triangle 与 voxel 实例；OpenVDB CPU 构建/导入后使用 NanoVDB 只读快照，原生体素用块 AABB BLAS/TLAS + intersection HDDA。
   与 compute 共用 PNanoVDB/Slang accessor；M23.8 单独验证 intersection 兼容性。不转 mesh 或密集展开，不在输出图上叠加光栅颜色。
@@ -71,7 +71,7 @@ M19.1 在 CPU reference target 中增加独立 `estimate_restir_reference`：首
 后续普通 MIS/RR，以及支持域校正的 reservoir 合并数学；旧入口和 model=3/sampler=1 保持原行为。
 M19.2 增加 GPU 独立 `submit_restir_rays/view`、`configure_restir_view`，使用固定 RTXDI-Library shader 数学。
 渐进采样按全图首表面/RIS、全图着色两个阶段推进 epoch；每批 1..16 epoch 完整成功后发布，失败保留旧 owner。
-完成 owner 的线性/首表面/reservoir 共 224 bytes/pixel，多 epoch 候选另加 128 bytes/pixel ping-pong；实际 owner 仍计入共享额度。
+完成 owner 的线性/首表面/reservoir 共 256 bytes/pixel（M23.10 表面布局 v2），多 epoch 候选另加 128 bytes/pixel ping-pong；实际 owner 仍计入共享额度。
 详细光能/接口/精确预算和失败行为见 [M19.2 契约](render-restir.md#m192-gpu-初始-ris-实施契约)。
 M19.3 通过可选 temporal 配置增加静态表面重投影、支持校正和有限祖先历史；相机姿态变化只清空图像并继续采样序号。
 初始/时间/着色按完整平面推进，旧 owner、当前候选和时间 ping-pong 独立计费；失败保持最后完整图像和采样状态。
@@ -88,7 +88,7 @@ M19.6 增加 GPU `submit_restir_medium_rays/view` 和 `configure_restir_medium_v
 固定射线上传统一将合法的 -0 TMin 转成 +0，避免硬件遍历漏命中；其他裁剪语义不变，三个入口均有回归。
 M20 [降噪设计](render-denoising.md)由独立模块消费路径信号，当前没有滤波器实现。
 M20.2 提供渐进表面 Classic/ReSTIR 的可选 `schedule.signals`，独立 shader 变体生成本批 fresh 分量、
-累计 baseColor/normal guides、首样本几何/运动 reference 与来源身份；具体 336 字节/像素布局和均值约定见降噪设计。
+累计 baseColor/normal guides、首样本几何/运动 reference 与来源身份；具体 v2 的 368 字节/像素布局和均值约定见降噪设计。
 原始样本/累积和完整发布保持；首样本 hit/normal 仍为原有诊断。开关改变重建共同样本起点，
 reference/曝光/调度更新只影响后续批次；信号候选、ping-pong、外持旧帧与读回均计入原资源额度。
 降噪结果不回写本模块的 raw 累积或 ReSTIR reservoir，Scene media 组合在 M20.10 单独验收。
