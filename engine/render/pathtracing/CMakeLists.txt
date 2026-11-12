@@ -6,6 +6,10 @@ add_library(dk::render_pathtracing_reference ALIAS dk_render_pathtracing_referen
 target_sources(dk_render_pathtracing_reference PUBLIC FILE_SET HEADERS BASE_DIRS include
     FILES include/dk/render/PathTraceReference.hpp include/dk/render/PathMediumReference.hpp include/dk/render/VolumePathReference.hpp include/dk/render/RestirReference.hpp)
 target_link_libraries(dk_render_pathtracing_reference PUBLIC dk::render_data dk::asset_data dk::render_cloud_fields)
+if(TARGET dk::geometry_voxels_sparse)
+    target_link_libraries(dk_render_pathtracing_reference PRIVATE dk::geometry_voxels_sparse)
+    target_compile_definitions(dk_render_pathtracing_reference PRIVATE DK_PATH_VOXELS=1)
+endif()
 dk_target_defaults(dk_render_pathtracing_reference)
 if(DK_BUILD_RENDER_PATHTRACING)
     include(Rtxdi)
@@ -19,4 +23,10 @@ if(DK_BUILD_RENDER_PATHTRACING)
     target_link_libraries(dk_render_pathtracing PUBLIC dk::render_pathtracing_reference dk::graphics_device dk::render_denoising_types
         PRIVATE dk::graphics_graph dk::graphics_shaders dk::rtxdi_shaders)
     dk_target_defaults(dk_render_pathtracing)
+    if(TARGET dk::geometry_voxels_sparse)
+        target_link_libraries(dk_render_pathtracing PRIVATE dk::geometry_voxels_sparse)
+        target_compile_definitions(dk_render_pathtracing PRIVATE DK_PATH_VOXELS=1
+            DK_PATH_VOXEL_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/voxels/shaders"
+            DK_PATH_NANO_INCLUDE_DIR="${DK_NANOVDB_INCLUDE_DIR}")
+    endif()
 endif()

@@ -23,6 +23,9 @@ public:
     [[nodiscard]] const SparseStatistics& statistics() const noexcept;
     // Borrowed immutable bytes, valid while this grid or a copy is alive.
     [[nodiscard]] std::span<const std::byte> bytes() const noexcept;
+    // Layout v1: one conservative block per nonempty leaf or nonzero constant tile.
+    // Inclusive cells, clipped to domain; does not expand constant tiles to voxels.
+    [[nodiscard]] Result<std::vector<Domain>> surface_blocks(std::size_t maximum_blocks = 1024*1024) const;
 private:
     friend struct detail::SparseFactory;
     explicit SparseGrid(std::shared_ptr<const detail::SparseStorage> storage) : storage_(std::move(storage)) {}

@@ -66,7 +66,7 @@ double area_pdf(const PathSceneState& scene,const PathTriangle& t,const Vec3d& f
 }
 bool visible(const PathSceneState& scene,const PathTraceHit& hit,const Vec3d& direction,PathTraceStatistics& stats,
     const PathTriangle* light=nullptr,const Vec3d& point=Vec3d::Zero()) {
-    PathTraceRay ray; ray.origin=offset_path_origin(scene.triangles[hit.index],hit.position,direction);
+    PathTraceRay ray; ray.origin=offset_surface_origin(scene,hit,direction);
     ray.direction=direction;
     if (light) {
         const Vec3d end=offset_path_origin(*light,point,-direction),delta=end-ray.origin;
@@ -117,13 +117,15 @@ Result<Vec3d> trace_one(const PathSceneState& scene,PathTraceRay ray,const PathT
     for (std::uint32_t depth=0;depth<=s.max_bounces;++depth) {
         if (cancel.stop_requested()) return std::unexpected(path_cancelled());
         const auto hit=nearest_path(scene,ray,stats);
+        if(stats.voxel_regions>s.max_triangle_tests) return std::unexpected(path_invalid("CPU voxel traversal work budget exceeded"));
         if (!hit) {
             const double weight=restir && depth==1 ? 0 :
                 (depth && s.estimator==PathTraceEstimator::mis ? power_weight(bsdf_pdf,lights.class_pdf/(4*path_pi)) : 1);
             radiance+=throughput.cwiseProduct(s.environment_rgb)*weight;
             break;
         }
-        const auto& t=scene.triangles[hit->index];
+        PathTriangle voxel_material;
+        const auto& t=path_surface(scene,*hit,voxel_material);
         const Vec3d albedo=path_base_color(scene,t,hit->barycentric).head<3>();
         const PathBsdf bsdf{albedo,t.metallic,t.roughness,scene.material_model};
         const double weight=restir && depth==1 ? (t.light_weight>0 ? 0 : 1) :
@@ -148,8 +150,9 @@ Result<Vec3d> trace_one(const PathSceneState& scene,PathTraceRay ray,const PathT
             if (path_trace_sample(s.seed,pixel,sample,depth,8)>=survival) break;
             throughput/=survival;
         }
-        ray={offset_path_origin(t,hit->position,wi),wi};
+        ray={offset_surface_origin(scene,*hit,wi),wi};
     }
+    if(stats.voxel_regions>s.max_triangle_tests) return std::unexpected(path_invalid("CPU voxel traversal work budget exceeded"));
     if (!radiance.allFinite() || (radiance.array()<0).any())
         return std::unexpected(Error{ErrorCode::internal_error,"Nonfinite path radiance"});
     return radiance;
@@ -225,7 +228,7 @@ Result<PathTraceRay> detail::gpu_path_camera_ray(const RenderView& view,std::uin
     return ray;
 }
 Result<PathTraceEstimate> estimate_path_reference(const PathTraceScene& scene,const PathTraceRay& ray,const PathTraceSettings& s,
-    PathTraceSamples samples,std::uint32_t pixel,std::stop_token cancel) {
+    PathTraceSamples samples,std::uint32_t pixel,std::stop_token cancel) try {
     const auto* state=detail::PathReferenceAccess::get(scene);
     if (!state) return std::unexpected(Error{ErrorCode::invalid_state,"Empty path scene"});
     if (auto valid=validate_path_ray(ray);!valid) return std::unexpected(valid.error());
@@ -241,11 +244,12 @@ Result<PathTraceEstimate> estimate_path_reference(const PathTraceScene& scene,co
         return std::unexpected(Error{ErrorCode::internal_error,"Nonfinite path estimate moments"});
     if (cancel.stop_requested()) return std::unexpected(path_cancelled());
     return result;
-}
+} catch(const Error& error) { return std::unexpected(error); }
 Result<RestirReferenceEstimate> estimate_restir_reference(const PathTraceScene& scene,const PathTraceRay& ray,
     const PathTraceSettings& s,const RestirDiSettings& r,PathTraceSamples samples,std::uint32_t pixel,std::stop_token cancel) {
     const auto* state=detail::PathReferenceAccess::get(scene);
     if(!state) return std::unexpected(Error{ErrorCode::invalid_state,"Empty RIS path scene"});
+    if(!state->voxels.empty()) return std::unexpected(Error{ErrorCode::not_supported,"Voxel ReSTIR requires M23.10"});
     if(auto valid=validate_path_ray(ray);!valid) return std::unexpected(valid.error());
     if(auto valid=work_valid(*state,1,s,samples);!valid) return std::unexpected(valid.error());
     if(r.temporal || r.spatial || r.version!=1 || r.initial_candidates<1 || r.initial_candidates>64 ||
@@ -297,7 +301,7 @@ Result<PathTraceImage> render_path_reference(memory::ResourceHandle heap,const P
         }
         if (cancel.stop_requested()) return std::unexpected(path_cancelled());
         return detail::PathReferenceAccess::image(std::move(image));
-    } catch (const std::bad_alloc&) {
+    } catch(const Error& error) { return std::unexpected(error); } catch (const std::bad_alloc&) {
         return std::unexpected(Error{ErrorCode::internal_error,"Path image allocation failed"});
     }
 }

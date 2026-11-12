@@ -51,8 +51,11 @@ struct PathGpuGeometry {
     PathTraceScene source;
     Buffer triangles;
     AccelerationStructure blas,tlas;
+    std::array<Buffer,4> voxel_data;
+    Vector<AccelerationStructure> voxel_blas;
     Submission built;
-    explicit PathGpuGeometry(memory::ResourceHandle heap) : textures(memory::Allocator<PathGpuTexture>{heap}) {}
+    explicit PathGpuGeometry(memory::ResourceHandle heap)
+        : voxel_blas(0,memory::Allocator<AccelerationStructure>{heap}),textures(0,memory::Allocator<PathGpuTexture>{heap}) {}
     Vector<PathGpuTexture> textures;
     std::size_t texture_count = 0;
 };
@@ -62,10 +65,12 @@ struct PathGpuScene {
     std::shared_ptr<PathGpuGeometry> geometry;
 };
 struct PathGpuFrame {
+    explicit PathGpuFrame(memory::ResourceHandle resource) : heap(resource),fixed_rays(0,memory::Allocator<PathTraceRay>{resource}) {}
     memory::ResourceHandle heap;
     PathTraceScene source;
     PathTraceGpuImageInfo info;
     Buffer readback;
+    Vector<PathTraceRay> fixed_rays;
     Submission ticket;
     std::size_t stride = 64;
     std::uint64_t diagnostic_offset=0;
@@ -131,6 +136,7 @@ constexpr std::size_t restir_status_bytes=restir_status_words*sizeof(std::uint32
 template<class T> T take(Result<T> result) { if (!result) throw result.error(); return std::move(*result); }
 void check(Result<void> result) { if (!result) throw result.error(); }
 Error sample_error(std::uint32_t diagnostic) {
+    if(diagnostic&32) return {ErrorCode::invalid_state,"Voxel intersection traversal/address/numeric limit exceeded",{"voxel diagnostic mask="+std::to_string(diagnostic>>8)}};
     if(diagnostic&2) return {ErrorCode::invalid_argument,"GPU medium tracking budget exhausted",{"render.pathtracing.tracking_budget"}};
     if(diagnostic&4) return {ErrorCode::invalid_argument,"GPU medium path exceeds numerical domain",{"render.pathtracing.medium_domain"}};
     if(diagnostic&8) return {ErrorCode::internal_error,"GPU medium extinction exceeds majorant"};
@@ -178,18 +184,18 @@ graph::Use use(graph::BufferId id,vk::PipelineStageFlags2 stage,vk::AccessFlags2
 graph::PassId add(graph::Graph& graph,std::string_view name,std::span<const graph::Use> uses) { return take(graph.add_pass({name,uses})); }
 graph::AccelerationId declare(graph::Graph& graph,std::string_view name,AccelerationStructureKind kind,
     std::span<const graph::ResourceId> deps,bool built=false) { return take(graph.declare_acceleration(name,kind,deps,built)); }
-struct BuildContext { vk::DeviceSize bytes; const PathGpuScene& scene; };
+struct BuildContext { vk::DeviceSize bytes; const PathGpuScene& scene; std::size_t voxel_inputs=0; std::vector<std::size_t> builds; };
 Result<void> build_record(graph::PassContext& pass,void* context) {
     const auto& c=*static_cast<BuildContext*>(context); const auto count=c.scene.geometry->texture_count;
     if (pass.pass_index()==0) {
         if(auto copied=pass.copy_buffer(0,1,c.bytes);!copied) return copied;
         for(std::size_t i=0;i<count;++i) {
             const auto d=c.scene.geometry->textures[i].image.description();
-            if(auto copied=pass.copy_to_image(2+i,2+count+i,{0,0,0,0,d.width,d.height});!copied) return copied;
+            if(auto copied=pass.copy_to_image(2+i,2+count+c.voxel_inputs+i,{0,0,0,0,d.width,d.height});!copied) return copied;
         }
         return {};
     }
-    return pass.build(2*count+pass.pass_index()+1);
+    return pass.build(c.builds[pass.pass_index()-1]);
 }
 using Parameters=std::array<Float4,49>;
 struct TraceContext {
@@ -246,9 +252,10 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     const Buffer* surface=nullptr,const Buffer* reservoir=nullptr,const Buffer* old_surface=nullptr,const Buffer* old_reservoir=nullptr,
     const Buffer* spatial_input=nullptr,std::span<const Parameters> grouped={},std::stop_token batch_stop={},
     const Buffer* signals=nullptr,const Buffer* previous_signals=nullptr) {
-    const bool empty=scene.source.triangle_count()==0;
+    const bool empty=!scene.geometry->tlas;
     const bool air=info.medium.has_value();
     const bool restir=info.restir.has_value();
+    if(scene.source.voxel_count() && (air || restir || signals)) throw Error{ErrorCode::not_supported,"Voxel paths currently support Classic surface paths without signals"};
     const auto& program=signals ? *state.signal_program : state;
     if(restir) p[32][0]=std::bit_cast<float>(info.restir->initial_candidates);
     const auto dispatches=grouped.empty() ? std::span<const Parameters>{&p,1} : grouped;
@@ -256,7 +263,11 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     const auto aligned=[&](vk::DeviceSize n) { return ((n+alignment-1)/alignment)*alignment; };
     const auto parameter_stride=aligned(sizeof(Parameters));
     const auto count=std::uint64_t{info.width}*info.height,bytes=count*sizeof(PathGpuPixel);
-    auto frame=memory::make_shared_in<PathGpuFrame>(state.heap); frame->heap=state.heap; frame->source=scene.source; frame->info=std::move(info);
+    auto frame=memory::make_shared_in<PathGpuFrame>(state.heap,state.heap); frame->source=scene.source; frame->info=std::move(info);
+    if(frame->info.fixed_rays && scene.source.voxel_count()) for(std::size_t i=0;i<rays.size();i+=2) {
+        const Vec3f d{rays[i+1][0],rays[i+1][1],rays[i+1][2]};
+        frame->fixed_rays.push_back({Vec3d{rays[i][0],rays[i][1],rays[i][2]},d.normalized().cast<double>(),rays[i][3],rays[i+1][3]});
+    }
     const auto storage=vk::BufferUsageFlagBits::eStorageBuffer;
     Buffer dummy_surface,dummy_reservoir;
     if(restir && !surface) { dummy_surface=take(state.factory.create_buffer({64,storage})); surface=&dummy_surface; }
@@ -293,6 +304,9 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
     if (!empty) { writes.push_back({0,0,AccelerationStructureBinding{&scene.geometry->tlas}}); writes.push_back({1,0,BufferBinding{&scene.geometry->triangles}}); }
     if(!empty || air || restir) { writes.push_back({4,0,BufferBinding{&input}});
         writes.push_back({9,0,BufferBinding{cloud ? &cloud->data : &uniform}}); }
+#if DK_PATH_VOXELS
+    if(!empty) for(std::uint32_t i=0;i<4;++i) writes.push_back({48+i,0,BufferBinding{&scene.geometry->voxel_data[i]}});
+#endif
     const auto parameter_binding=writes.size(); writes.push_back({2,0,BufferBinding{&uniform,0,sizeof(Parameters)}}); writes.push_back({3,0,BufferBinding{&output}});
     writes.push_back({7,0,BufferBinding{&history}}); const auto diagnostic_binding=writes.size(); writes.push_back({8,0,BufferBinding{&status,0,status_bytes}});
     if(signals) { writes.push_back({15,0,BufferBinding{signals}}); writes.push_back({16,0,BufferBinding{previous_signals}}); }
@@ -365,26 +379,40 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
         }
     }
     if(empty && (air || restir)) { uses.push_back(use(ray_input,stage,vk::AccessFlagBits2::eShaderRead)); imports.push_back({2,&input}); }
+    std::size_t voxel_buffers=0;
+#if DK_PATH_VOXELS
+    if(!empty) for(const auto& buffer:scene.geometry->voxel_data) {
+        const auto id=take(g.declare_buffer("voxel data-"+std::to_string(voxel_buffers),buffer.description(),graph::Lifetime::external,true));
+        uses.push_back(use(id,stage,vk::AccessFlagBits2::eShaderRead)); imports.push_back({7+restir_buffers+signal_buffers+voxel_buffers,&buffer}); ++voxel_buffers;
+    }
+#endif
+    std::size_t table_index=0;
     // Compiled Graph resources are grouped by type: buffers (including clouds), images, AS, SBT.
     for(std::size_t i=0;i<scene.geometry->texture_count;++i) {
         const auto& texture=scene.geometry->textures[i];
         auto id=take(g.declare_image("baseColor-"+std::to_string(i),texture.image.description(),graph::Lifetime::external,true));
         uses.push_back({id,{{stage,vk::AccessFlagBits2::eShaderSampledRead,vk::ImageLayout::eShaderReadOnlyOptimal}}});
-        imports.push_back({7+i+(cloud ? 1u : 0u)+restir_buffers+signal_buffers,nullptr,&texture.image});
+        imports.push_back({7+i+(cloud ? 1u : 0u)+restir_buffers+signal_buffers+voxel_buffers,nullptr,&texture.image});
     }
     if (!empty) {
-        const auto blas=declare(g,"BLAS",AccelerationStructureKind::bottom_level,{},true);
-        const std::array<graph::ResourceId,1> children{blas}; const auto tlas=declare(g,"TLAS",AccelerationStructureKind::top_level,children,true);
-        const auto sbt=take(g.declare_shader_table("SBT"));
+        std::vector<graph::ResourceId> children;
+        const auto base=7+scene.geometry->texture_count+(cloud ? 1u : 0u)+restir_buffers+signal_buffers+voxel_buffers;
+        const auto child=[&](const AccelerationStructure& as) {
+            if(!as) return;
+            const auto id=declare(g,"BLAS-"+std::to_string(children.size()),AccelerationStructureKind::bottom_level,{},true);
+            imports.push_back({base+children.size(),nullptr,nullptr,{},&as}); children.push_back(id); uses.push_back(graph::acceleration_read(id));
+        };
+        child(scene.geometry->blas); for(const auto& as:scene.geometry->voxel_blas) child(as);
+        const auto tlas=declare(g,"TLAS",AccelerationStructureKind::top_level,children,true);
+        const auto sbt=take(g.declare_shader_table("SBT")); table_index=base+children.size()+1;
         uses.push_back(use(geometry,stage,vk::AccessFlagBits2::eShaderRead)); uses.push_back(use(ray_input,stage,vk::AccessFlagBits2::eShaderRead));
-        uses.push_back(graph::acceleration_read(blas)); uses.push_back(graph::acceleration_read(tlas)); uses.push_back(graph::shader_table_read(sbt));
+        uses.push_back(graph::acceleration_read(tlas)); uses.push_back(graph::shader_table_read(sbt));
         imports.push_back({1,&scene.geometry->triangles}); imports.push_back({2,&input});
-        const auto base=7+scene.geometry->texture_count+(cloud ? 1u : 0u)+restir_buffers+signal_buffers;
-        imports.push_back({base,nullptr,nullptr,{},&scene.geometry->blas}); imports.push_back({base+1,nullptr,nullptr,{},&scene.geometry->tlas}); imports.push_back({base+2,nullptr,nullptr,{},nullptr,restir ? &program.restir_table : &program.table});
+        imports.push_back({base+children.size(),nullptr,nullptr,{},&scene.geometry->tlas}); imports.push_back({table_index,nullptr,nullptr,{},nullptr,restir ? &program.restir_table : &program.table});
     }
     if(cloud) {
         const auto id=take(g.declare_buffer("immutable cloud fields",cloud->data.description(),graph::Lifetime::external,true));
-        uses.push_back(use(id,stage,vk::AccessFlagBits2::eShaderRead)); imports.push_back({7+restir_buffers+signal_buffers,&cloud->data});
+        uses.push_back(use(id,stage,vk::AccessFlagBits2::eShaderRead)); imports.push_back({7+restir_buffers+signal_buffers+voxel_buffers,&cloud->data});
     }
     const std::array clear{use(diagnostic,vk::PipelineStageFlagBits2::eClear,vk::AccessFlagBits2::eTransferWrite,true)};
     add(g,"clear path status",clear);
@@ -403,7 +431,7 @@ std::shared_ptr<const PathGpuFrame> submit(PathGpuState& state,SubmissionQueue& 
         add(g,"path diagnostic readback",copy);
     }
     check(g.mark_output(readback)); check(g.mark_output(result));
-    auto plan=take(g.compile(stop)); TraceContext context{program,bindings,dispatches,frame->info.width,frame->info.height,empty,9+scene.geometry->texture_count+(cloud ? 1u : 0u)+restir_buffers+signal_buffers,candidate!=nullptr,air,restir,frame->diagnostic_bytes,stop,batch_stop};
+    auto plan=take(g.compile(stop)); TraceContext context{program,bindings,dispatches,frame->info.width,frame->info.height,empty,table_index,candidate!=nullptr,air,restir,frame->diagnostic_bytes,stop,batch_stop};
     Vector<graph::PassCallback> callbacks(0,memory::Allocator<graph::PassCallback>{state.heap});
     for(std::size_t i=0;i<dispatches.size()+(candidate ? 2 : 3);++i) callbacks.push_back({i,trace_record,&context});
     const std::array final{graph::FinalAccess{4,{{vk::PipelineStageFlagBits2::eHost,vk::AccessFlagBits2::eHostRead}}}};
@@ -522,24 +550,41 @@ void prepare_program(PathGpuState& state,const std::filesystem::path& directory,
     PathGpuState program; program.factory=state.factory;
     const std::array names{"pathMain","pathMiss","shadowMiss","pathHit","pathAnyHit"};
     const std::array stages{ShaderStage::raygeneration,ShaderStage::miss,ShaderStage::miss,ShaderStage::closesthit,ShaderStage::anyhit};
-    std::array<ShaderCompileRequest,10> requests;
-    const std::array<std::filesystem::path,1> rtxdi_includes{DK_RTXDI_INCLUDE_DIR};
+    std::vector<ShaderCompileRequest> requests(10);
+    std::vector<std::filesystem::path> rtxdi_includes{DK_RTXDI_INCLUDE_DIR};
+#if DK_PATH_VOXELS
+    rtxdi_includes.emplace_back(DK_PATH_VOXEL_SHADER_DIR); rtxdi_includes.emplace_back(DK_PATH_NANO_INCLUDE_DIR);
+#endif
     const auto capacity_text=std::to_string(capacity);
-    const std::array defines{ShaderDefine{"DK_PATH_TEXTURES",state.textured ? "1" : "0"},ShaderDefine{"DK_PATH_TEXTURE_CAPACITY",capacity_text},ShaderDefine{"DK_PATH_SIGNALS",signals ? "1" : "0"}};
-    for (std::size_t i=0;i<5;++i) requests[i]={directory/"pathtrace.slang",names[i],stages[i],{},defines};
+    std::vector defines{ShaderDefine{"DK_PATH_TEXTURES",state.textured ? "1" : "0"},ShaderDefine{"DK_PATH_TEXTURE_CAPACITY",capacity_text},ShaderDefine{"DK_PATH_SIGNALS",signals ? "1" : "0"}};
+#if DK_PATH_VOXELS
+    defines.push_back({"DK_PATH_VOXELS","1"});
+#endif
+    for (std::size_t i=0;i<5;++i) requests[i]={directory/"pathtrace.slang",names[i],stages[i],rtxdi_includes,defines};
     requests[5]={directory/"pathtrace-empty.slang","emptyMain",ShaderStage::compute,{},defines};
     requests[6]={directory/"pathtrace-tone.slang","toneMain",ShaderStage::compute};
     requests[7]={directory/"path-air-empty.slang","airEmptyMain",ShaderStage::compute};
     requests[8]={directory/"path-restir.slang","restirMain",ShaderStage::raygeneration,rtxdi_includes,defines};
     requests[9]={directory/"path-restir-empty.slang","restirEmptyMain",ShaderStage::compute,rtxdi_includes,defines};
+#if DK_PATH_VOXELS
+    requests.push_back({directory/"pathtrace.slang","voxelIntersection",ShaderStage::intersection,rtxdi_includes,defines});
+    requests.push_back({directory/"pathtrace.slang","voxelHit",ShaderStage::closesthit,rtxdi_includes,defines});
+#endif
     for(auto& request:requests) request.precise_floating_point=true;
     auto compiled=take(compile_shaders(requests,state.heap,stop));
-    std::array<ShaderModule,10> shaders; for (std::size_t i=0;i<shaders.size();++i) { cancelled(stop); shaders[i]=take(program.factory.create_shader(compiled[i])); }
-    const std::array<const ShaderModule*,5> entries{&shaders[0],&shaders[1],&shaders[2],&shaders[3],&shaders[4]};
+    std::vector<ShaderModule> shaders(requests.size()); for (std::size_t i=0;i<shaders.size();++i) { cancelled(stop); shaders[i]=take(program.factory.create_shader(compiled[i])); }
+    std::vector<const ShaderModule*> entries{&shaders[0],&shaders[1],&shaders[2],&shaders[3],&shaders[4]};
+#if DK_PATH_VOXELS
+    entries.push_back(&shaders[10]); entries.push_back(&shaders[11]);
+#endif
     program.layout=take(program.factory.create_pipeline_layout(entries));
     const std::array<const ShaderModule*,2> misses{&shaders[1],&shaders[2]};
     const std::array hits{RayTracingHitGroup{&shaders[3],&shaders[4]},RayTracingHitGroup{&shaders[3],&shaders[4]}};
-    program.pipeline=take(program.factory.create_ray_tracing_pipeline({&program.layout,&shaders[0],misses,hits,2}));
+    std::vector<RayTracingHitGroup> mixed(hits.begin(),hits.end());
+#if DK_PATH_VOXELS
+    mixed.push_back({&shaders[11],nullptr,RayGeometryKind::procedural,&shaders[10]}); mixed.push_back(mixed.back());
+#endif
+    program.pipeline=take(program.factory.create_ray_tracing_pipeline({&program.layout,&shaders[0],misses,mixed,2}));
     program.table=take(program.factory.create_shader_binding_table(program.pipeline));
     const std::array<const ShaderModule*,1> empty{&shaders[5]}; program.empty_layout=take(program.factory.create_pipeline_layout(empty));
     program.empty_pipeline=take(program.factory.create_compute_pipeline({&shaders[5],&program.empty_layout}));
@@ -594,6 +639,8 @@ Result<PathTraceRenderer> PathTraceRenderer::create(memory::ResourceHandle heap,
 } catch (const Error& error) { return std::unexpected(error); }
 catch (const std::exception& error) { return std::unexpected(Error{ErrorCode::internal_error,error.what()}); }
 
+#include "PathVoxelGpu.inl"
+
 Result<PathTraceGpuScene> PathTraceRenderer::prepare_scene(SubmissionQueue& queue,const PathTraceScene& source,std::stop_token stop) const try {
     ready(state_,queue,stop); const auto* cpu=PathReferenceAccess::get(source);
     if (!cpu) return std::unexpected(path_invalid("Empty path scene"));
@@ -618,7 +665,7 @@ Result<PathTraceGpuScene> PathTraceRenderer::prepare_scene(SubmissionQueue& queu
         }
     }
     scene->geometry=memory::make_shared_in<PathGpuGeometry>(state_->heap,state_->heap); scene->geometry->source=source;
-    if (cpu->triangles.empty()) {
+    if (cpu->triangles.empty() && std::ranges::all_of(cpu->voxels,[](const auto& v){return v.blocks.empty();})) {
         state_->geometry_cache[1]=state_->geometry_cache[0]; state_->geometry_cache[0]=scene->geometry;
         return PathTraceGpuScene{std::move(scene)};
     }
@@ -636,18 +683,26 @@ Result<PathTraceGpuScene> PathTraceRenderer::prepare_scene(SubmissionQueue& queu
             Float4{float(t.uv_a.x()),float(t.uv_a.y()),float(t.uv_b.x()),float(t.uv_b.y())},
             Float4{float(t.uv_c.x()),float(t.uv_c.y()),std::bit_cast<float>(t.texture),t.mask ? 1.f : 0.f},Float4{t.metallic,t.roughness,cpu->material_model==PathTraceMaterialModel::metallic_roughness ? 1.f : 0.f,0}}) packed.push_back(value);
     }
+    if(packed.empty()) packed.push_back({});
+    if(vertices.empty()) vertices.resize(9);
     scene->geometry->triangles=upload(state_->factory,std::as_bytes(std::span{packed}),vk::BufferUsageFlagBits::eStorageBuffer);
     auto staging=upload(state_->factory,std::as_bytes(std::span{vertices}),vk::BufferUsageFlagBits::eTransferSrc);
     auto geometry=take(state_->factory.create_buffer({staging.size(),vk::BufferUsageFlagBits::eTransferDst|
         vk::BufferUsageFlagBits::eShaderDeviceAddress|vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR}));
     TriangleGeometry description; description.vertices=&geometry; description.vertex_count=std::uint32_t(vertices.size()/3);
     description.primitive_count=std::uint32_t(cpu->triangles.size()); description.opaque=false;
-    scene->geometry->blas=take(state_->factory.create_blas(std::span{&description,1}));
-    AccelerationStructureInstance instance; instance.blas=&scene->geometry->blas; instance.flags=vk::GeometryInstanceFlagBitsKHR::eTriangleFacingCullDisable;
-    scene->geometry->tlas=take(state_->factory.create_tlas(std::span{&instance,1}));
+    if(!cpu->triangles.empty()) scene->geometry->blas=take(state_->factory.create_blas(std::span{&description,1}));
+    auto voxel_build=prepare_voxels(*state_,queue,*scene->geometry,*cpu,stop);
+    std::vector<AccelerationStructureInstance> instances;
+    if(scene->geometry->blas) { AccelerationStructureInstance instance; instance.blas=&scene->geometry->blas; instance.flags=vk::GeometryInstanceFlagBitsKHR::eTriangleFacingCullDisable; instances.push_back(instance); }
+    instances.insert(instances.end(),voxel_build.instances.begin(),voxel_build.instances.end());
+    scene->geometry->tlas=take(state_->factory.create_tlas(instances));
     auto graph=take(graph::Graph::create(state_->heap));
     const auto input=take(graph.declare_buffer("geometry upload",staging.description(),graph::Lifetime::external,true));
     const auto vertex=take(graph.declare_buffer("world geometry",geometry.description(),graph::Lifetime::external));
+    // The common copy pass also uploads textures. A voxel-only scene has no
+    // triangle BLAS consumer; retain its small placeholder copy explicitly.
+    if(!scene->geometry->blas) check(graph.mark_output(vertex));
     Vector<Buffer> texture_staging(0,memory::Allocator<Buffer>{state_->heap});
     Vector<graph::Use> copy(0,memory::Allocator<graph::Use>{state_->heap});
     copy.push_back(use(input,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead));
@@ -686,16 +741,32 @@ Result<PathTraceGpuScene> PathTraceRenderer::prepare_scene(SubmissionQueue& queu
         const auto image=take(graph.declare_image("baseColor-"+std::to_string(i),image_desc,graph::Lifetime::external));
         copy.push_back(use(buffer,vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferRead));
         copy.push_back({image,{{vk::PipelineStageFlagBits2::eCopy,vk::AccessFlagBits2::eTransferWrite,vk::ImageLayout::eTransferDstOptimal},0,VK_WHOLE_SIZE,{vk::ImageAspectFlagBits::eColor,0,1,0,1},true}});
-        check(graph.mark_output(image)); imports.push_back({2+i,&staging_texture}); imports.push_back({2+scene->geometry->texture_count+i,nullptr,&out.image});
+        check(graph.mark_output(image)); imports.push_back({2+i,&staging_texture}); imports.push_back({2+scene->geometry->texture_count+voxel_build.bounds.size()+i,nullptr,&out.image});
     }
-    const std::array<graph::ResourceId,1> buffers{vertex}; const auto blas=declare(graph,"BLAS",AccelerationStructureKind::bottom_level,buffers);
-    const std::array<graph::ResourceId,1> children{blas}; const auto tlas=declare(graph,"TLAS",AccelerationStructureKind::top_level,children);
-    const std::array bottom{graph::build_input(vertex),graph::acceleration_build(blas)},top{graph::acceleration_read(blas,false),graph::acceleration_build(tlas)};
-    add(graph,"upload",copy); add(graph,"BLAS",bottom); add(graph,"TLAS",top); check(graph.mark_output(tlas));
-    auto plan=take(graph.compile(stop)); BuildContext context{staging.size(),*scene};
-    const std::array callbacks{graph::PassCallback{0,build_record,&context},graph::PassCallback{1,build_record,&context},graph::PassCallback{2,build_record,&context}};
-    imports.push_back({2+2*scene->geometry->texture_count,nullptr,nullptr,{},&scene->geometry->blas});
-    imports.push_back({3+2*scene->geometry->texture_count,nullptr,nullptr,{},&scene->geometry->tlas});
+    add(graph,"upload",copy);
+    BuildContext context{staging.size(),*scene,voxel_build.bounds.size(),{}};
+    const auto as_base=2+2*scene->geometry->texture_count+voxel_build.bounds.size();
+    std::vector<graph::ResourceId> children;
+    std::vector<graph::Use> top;
+    const auto add_blas=[&](const AccelerationStructure& as,graph::BufferId buffer) {
+        const std::array<graph::ResourceId,1> inputs{buffer};
+        const auto id=declare(graph,"BLAS-"+std::to_string(children.size()),AccelerationStructureKind::bottom_level,inputs);
+        const std::array uses{graph::build_input(buffer),graph::acceleration_build(id)}; add(graph,"build-"+std::to_string(children.size()),uses);
+        context.builds.push_back(as_base+children.size()); imports.push_back({as_base+children.size(),nullptr,nullptr,{},&as});
+        children.push_back(id); top.push_back(graph::acceleration_read(id,false));
+    };
+    if(scene->geometry->blas) add_blas(scene->geometry->blas,vertex);
+    for(std::size_t i=0;i<voxel_build.bounds.size();++i) {
+        const auto& bounds=voxel_build.bounds[i];
+        auto input_id=take(graph.declare_buffer("AABB input-"+std::to_string(i),bounds.description(),graph::Lifetime::external,true));
+        imports.push_back({2+scene->geometry->texture_count+i,&bounds});
+        add_blas(scene->geometry->voxel_blas[i],input_id);
+    }
+    const auto tlas=declare(graph,"TLAS",AccelerationStructureKind::top_level,children); top.push_back(graph::acceleration_build(tlas));
+    add(graph,"TLAS",top); check(graph.mark_output(tlas)); context.builds.push_back(as_base+children.size());
+    imports.push_back({as_base+children.size(),nullptr,nullptr,{},&scene->geometry->tlas});
+    auto plan=take(graph.compile(stop));
+    std::vector<graph::PassCallback> callbacks; for(std::size_t i=0;i<context.builds.size()+1;++i) callbacks.push_back({i,build_record,&context});
     cancelled(stop); auto execution=take(graph::execute(plan,queue,{imports,callbacks,{}})); scene->geometry->built=execution.submission();
     state_->geometry_cache[1]=state_->geometry_cache[0]; state_->geometry_cache[0]=scene->geometry;
     return PathTraceGpuScene{std::move(scene)};
@@ -717,7 +788,8 @@ Result<PathTraceFrame> PathTraceRenderer::submit_rays(SubmissionQueue& queue,con
     }
     const auto width=std::uint32_t(rays.size()); auto p=parameters(cpu,settings,samples,width,1,true,first_pixel);
     auto info=info_for(scene.source(),width,1,settings,samples); info.fixed_rays=true; info.first_pixel=first_pixel;
-    return PathTraceFrame{submit(*state_,queue,*scene.state_,p,packed,std::move(info),stop)};
+    auto frame=submit(*state_,queue,*scene.state_,p,packed,std::move(info),stop);
+    return PathTraceFrame{std::move(frame)};
 } catch (const Error& error) { return std::unexpected(error); }
 catch (const std::exception& error) { return std::unexpected(Error{ErrorCode::internal_error,error.what()}); }
 
@@ -825,6 +897,7 @@ Result<void> PathTraceRenderer::configure_view(SubmissionQueue& queue,std::uint6
     if(state_->terminal) return std::unexpected(Error{ErrorCode::invalid_state,"Path session device lost"});
     if(!scene || scene.state_->program.lock()!=state_) return std::unexpected(path_invalid("Path scene belongs to a different renderer"));
     validate_progressive(queue.device(),*PathReferenceAccess::get(scene.source()),view,settings,schedule);
+    if(scene.source().voxel_count() && (schedule.signals.enabled || schedule.signals.previous)) throw Error{ErrorCode::not_supported,"Voxel surface signals require M23.10"};
     validate_signals(*state_,queue.device(),id,scene.source(),view,schedule);
     auto* slot=view_slot(*state_,id);
     if(slot) {
@@ -1216,7 +1289,7 @@ std::optional<DenoisingMotionReference> PathTraceCompletedFrame::signal_referenc
 Result<PathTraceFrame> PathTraceCompletedFrame::read_linear(SubmissionQueue& queue,std::stop_token stop) const try {
     cancelled(stop);
     if(!state_) return std::unexpected(path_invalid("Empty completed path frame"));
-    auto frame=memory::make_shared_in<PathGpuFrame>(state_->heap); frame->heap=state_->heap;
+    auto frame=memory::make_shared_in<PathGpuFrame>(state_->heap,state_->heap);
     frame->source=state_->source; frame->info=state_->info; frame->stride=128;
     const auto signal_bytes=state_->signals ? state_->signals.size() : 0;
     frame->signal_offset=signal_bytes ? state_->buffer.size() : 0;
@@ -1248,8 +1321,10 @@ Result<std::optional<PathTraceGpuImage>> PathTraceFrame::read(SubmissionQueue& q
     for (std::size_t i=0;i<count;++i) {
         const auto& pixel=pixels[i*(state_->stride/sizeof(PathGpuPixel))];
         cancelled(stop);
-        for (const auto& block:{pixel.mean,pixel.second,pixel.hit,pixel.normal}) for (const auto value:block)
+        for (const auto& block:{pixel.mean,pixel.second,pixel.normal}) for (const auto value:block)
             if (!std::isfinite(value)) return std::unexpected(Error{ErrorCode::internal_error,"Nonfinite GPU path result"});
+        if(!std::isfinite(pixel.hit[0]) || !std::isfinite(pixel.hit[3]) || (pixel.hit[3]>=0 && (!std::isfinite(pixel.hit[1]) || !std::isfinite(pixel.hit[2]))))
+            return std::unexpected(Error{ErrorCode::internal_error,"Nonfinite GPU hit result"});
         const Vec3d color{pixel.mean[0],pixel.mean[1],pixel.mean[2]},moment{pixel.second[0],pixel.second[1],pixel.second[2]};
         double rays=pixel.mean[3];
         if(state_->stride==128) {
@@ -1262,6 +1337,32 @@ Result<std::optional<PathTraceGpuImage>> PathTraceFrame::read(SubmissionQueue& q
             return std::unexpected(Error{ErrorCode::internal_error,"Invalid GPU path HDR/statistics"});
         image->info.statistics.rays+=std::uint64_t(rays); image->colors.push_back(color); image->moments.push_back(moment);
         std::optional<PathTraceHit> hit;
+#if DK_PATH_VOXELS
+        if(pixel.hit[3]<0) {
+            const double tag=-double(pixel.hit[3])-1;
+            if(tag<0 || tag!=std::floor(tag) || tag>=scene.voxels.size()*8 || pixel.hit[0]<0) throw path_invalid("Invalid voxel primary identity");
+            PathTraceHit h; h.kind=PathGeometryKind::voxel; h.voxel_instance=std::size_t(tag)/8; h.face=std::uint32_t(tag)%8;
+            if(h.face>=6) throw path_invalid("Invalid voxel primary face");
+            const auto low=std::bit_cast<std::uint32_t>(pixel.hit[1]),high=std::bit_cast<std::uint32_t>(pixel.hit[2]);
+            const auto signed21=[](std::uint32_t value) {return std::bit_cast<std::int32_t>((value&0x1fffff)<<11)>>11;};
+            h.cell={signed21(low),signed21((low>>21)|(high<<11)),signed21(high>>10)};
+            const auto& voxel=scene.voxels[h.voxel_instance]; h.value=voxel.grid->value(h.cell);
+            if(!h.value || h.value>voxel.palette.size()) throw path_invalid("GPU primary voxel is unoccupied");
+            h.entity=voxel.entity; h.mesh=voxel.asset; h.distance=pixel.hit[0];
+            h.normal={pixel.normal[0],pixel.normal[1],pixel.normal[2]}; h.front_face=pixel.normal[3]>0;
+            PathTraceRay ray;
+            if(image->info.fixed_rays) { if(i>=state_->fixed_rays.size()) throw path_invalid("Missing fixed voxel ray"); ray=state_->fixed_rays[i]; }
+            else {
+                auto view=take(RenderView::create(scene.source,image->info.view));
+                const auto sample=state_->stride==128 ? 0u : image->info.samples.first;
+                const Vec2d subpixel{path_trace_sample(image->info.settings.seed,std::uint32_t(i),sample,0,0),path_trace_sample(image->info.settings.seed,std::uint32_t(i),sample,0,1)};
+                ray=take(gpu_path_camera_ray(view,std::uint32_t(i)%image->info.width,std::uint32_t(i)/image->info.width,subpixel));
+            }
+            h.position=ray.origin+ray.direction*h.distance;
+            if(std::abs(h.normal.squaredNorm()-1)>1e-4 || std::abs(pixel.normal[3])!=1) throw path_invalid("Invalid voxel primary normal");
+            hit=std::move(h);
+        } else
+#endif
         if (pixel.hit[3]!=0) {
             const double index=pixel.hit[3]-1;
             if (index<0 || index>=scene.triangles.size() || index!=std::floor(index) || pixel.hit[0]<0 ||

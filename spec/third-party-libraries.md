@@ -292,7 +292,7 @@ Imath 3.2.2/OpenEXR 3.4.15/Blosc 1.21.6（BSD-3-Clause）及其压缩库；许�
 [port 构建选项](https://github.com/microsoft/vcpkg/blob/f38855d514df2b21c2e911a6c6865703abb8da15/ports/openvdb/portfile.cmake)、
 [上游 NanoVDB FAQ](https://www.openvdb.org/documentation/doxygen/NanoVDB_FAQ.html)、
 [同版本 PNanoVDB](https://github.com/AcademySoftwareFoundation/openvdb/blob/v12.0.1/nanovdb/nanovdb/PNanoVDB.h)。
-上游 HLSL/GLSL 支持仅是选型依据；工程固定 Slang 的 compute 编译/反射/真实 GPU 读取已在 M23.3 验收，intersection/SBT 在 M23.8 通过独立 required GPU 验收，见 [0166](development/0166-procedural-raytracing.md)。原生 HDDA 路径整合仍待 M23.9。
+上游 HLSL/GLSL 支持仅是选型依据；工程固定 Slang 的 compute 编译/反射/真实 GPU 读取已在 M23.3 验收，intersection/SBT 在 M23.8 通过独立 required GPU 验收，见 [0166](development/0166-procedural-raytracing.md)。M23.9 原生 Classic HDDA 路径复用这些固定依赖和无 CUDA 配置，CPU/GPU path targets 仅在 sparse target 存在时 PRIVATE 接入，不新增/升级厂商依赖，见 [0167](development/0167-voxel-classic-pathtracing.md)。
 
 ## 后续维护
 

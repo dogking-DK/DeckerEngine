@@ -49,25 +49,61 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
         return std::unexpected(Error{ErrorCode::invalid_state,"Path scene requires an open heap and render scene"});
     constexpr auto hard=desktop_path_scene_limits();
     if ((model!=PathTraceMaterialModel::lambert && model!=PathTraceMaterialModel::metallic_roughness) || !limits.max_triangles || limits.max_triangles>hard.max_triangles ||
+        !limits.max_voxel_instances || limits.max_voxel_instances>hard.max_voxel_instances || !limits.max_voxel_bytes || limits.max_voxel_bytes>hard.max_voxel_bytes || !limits.max_voxel_blocks || limits.max_voxel_blocks>hard.max_voxel_blocks ||
         !limits.max_primitive_instances || limits.max_primitive_instances>hard.max_primitive_instances || limits.max_textures>hard.max_textures || limits.max_texture_bytes>hard.max_texture_bytes)
         return std::unexpected(path_invalid("Invalid path scene limits"));
     try {
         for (std::size_t i=0;i<assets.size();++i) {
-            if (!assets[i] || assets[i]->mesh.id.is_nil()) return std::unexpected(path_invalid("Invalid CPU asset identity"));
-            for (std::size_t j=0;j<i;++j) if (assets[i]->mesh.id==assets[j]->mesh.id)
+            if (!assets[i] || root_asset_id(*assets[i]).is_nil()) return std::unexpected(path_invalid("Invalid CPU asset identity"));
+            for (std::size_t j=0;j<i;++j) if (root_asset_id(*assets[i])==root_asset_id(*assets[j]))
                 return std::unexpected(path_invalid("Duplicate CPU mesh identity"));
         }
         auto state = memory::make_shared_in<detail::PathSceneState>(heap,heap);
         state->source=source; state->material_model=model;
         Fingerprint hash; hash.integer(1); hash.integer(std::uint32_t(model)); hash.id(source.id());
         std::size_t primitive_count=0, triangle_count=0, texture_bytes=0;
+#if DK_PATH_VOXELS
+        std::size_t voxel_bytes=0, voxel_blocks=0;
+#endif
         for (std::size_t ei=0;ei<source.entities().size();++ei) {
             const auto& entity=source.entities()[ei];
             const auto refs=source.assets(ei); if (!refs) return std::unexpected(refs.error());
             for (const auto& ref:*refs) {
-                if(ref.kind==AssetKind::voxel) return std::unexpected(Error{ErrorCode::not_supported,"Native voxel path tracing requires M23.8/9"});
+                if(ref.kind==AssetKind::voxel) {
+#if DK_PATH_VOXELS
+                    const auto found=std::ranges::find_if(assets,[&](const CpuAsset* a){return a->voxel && a->voxel->id==ref.id;});
+                    if(found==assets.end() || !(*found)->voxel->grid) return std::unexpected(Error{ErrorCode::not_found,"Path voxel asset missing"});
+                    const auto& input=*(*found)->voxel;
+                    if(input.palette.empty() || input.grid->maximum_value()>input.palette.size() || state->owned_voxels.size()>=limits.max_voxel_instances ||
+                        input.grid->bytes().size()>limits.max_voxel_bytes-voxel_bytes) return std::unexpected(path_invalid("Path voxel palette/count/byte budget exceeded"));
+                    auto blocks=input.grid->surface_blocks(limits.max_voxel_blocks); if(!blocks) return std::unexpected(blocks.error());
+                    if(blocks->size()>limits.max_voxel_blocks-voxel_blocks) return std::unexpected(path_invalid("Path voxel block budget exceeded"));
+                    PathVoxel voxel{heap}; voxel.entity=entity.id; voxel.asset=ref.id; voxel.world=entity.world; voxel.grid=input.grid;
+                    auto world=entity.world.compose(input.grid->corner_to_local()); if(!world) return std::unexpected(world.error());
+                    auto inverse=world->inverse(); if(!inverse) return std::unexpected(inverse.error());
+                    voxel.corner_world=*world; voxel.inverse=*inverse;
+                    for(const auto& m:input.palette) {
+                        if(!m.base_color.allFinite() || (m.base_color.array()<0).any() || (m.base_color.array()>1).any() ||
+                            !std::isfinite(m.metallic) || m.metallic<0 || m.metallic>1 || !std::isfinite(m.roughness) || m.roughness<0 || m.roughness>1 ||
+                            (model==PathTraceMaterialModel::lambert && m.metallic!=0)) return std::unexpected(path_invalid("Invalid voxel path material"));
+                        voxel.palette.push_back(m); hash.vector(m.base_color.cast<double>()); hash.number(m.metallic); hash.number(m.roughness);
+                    }
+                    hash.integer(0x766f78656c01ull); hash.id(entity.id); hash.id(ref.id);
+                    for(int r=0;r<4;++r) for(int c=0;c<4;++c) hash.number(world->matrix()(r,c));
+                    for(auto byte:input.grid->bytes()) hash.byte(std::to_integer<std::uint8_t>(byte));
+                    for(const auto& block:*blocks) {
+                        voxel.blocks.push_back({block.minimum[0],block.minimum[1],block.minimum[2],0,block.maximum[0],block.maximum[1],block.maximum[2],0});
+                        for(auto n:voxel.blocks.back()) hash.integer(std::uint32_t(n));
+                    }
+                    for(int axis=0;axis<3;++axis) {hash.integer(std::uint32_t(input.grid->domain().minimum[axis]));hash.integer(std::uint32_t(input.grid->domain().maximum[axis]));}
+                    voxel_bytes+=input.grid->bytes().size(); voxel_blocks+=blocks->size(); state->owned_voxels.push_back(std::move(voxel));
+                    continue;
+#else
+                    return std::unexpected(Error{ErrorCode::not_supported,"Native voxel paths require voxel-vdb build support"});
+#endif
+                }
                 if (ref.kind!=AssetKind::mesh) continue;
-                const auto found=std::ranges::find_if(assets,[&](const CpuAsset* a) { return a->mesh.id==ref.id; });
+                const auto found=std::ranges::find_if(assets,[&](const CpuAsset* a) { return !a->voxel && a->mesh.id==ref.id; });
                 if (found==assets.end()) return std::unexpected(Error{ErrorCode::not_found,"Path scene mesh missing"});
                 const auto& asset=**found;
                 if (!entity.world.inverse()) return std::unexpected(path_invalid("Path instance transform is singular"));
@@ -160,7 +196,7 @@ Result<PathTraceScene> PathTraceScene::create(memory::ResourceHandle heap, const
                 }
             }
         }
-        state->triangles=state->owned_triangles; state->textures=state->owned_textures;
+        state->triangles=state->owned_triangles; state->textures=state->owned_textures; state->voxels=state->owned_voxels;
         state->geometry_fingerprint=hash.value;
         state->fingerprint=input_fingerprint(source,model,hash.value);
         return PathTraceScene{std::move(state)};
@@ -186,7 +222,7 @@ Result<PathTraceScene> PathTraceScene::rebind(memory::ResourceHandle heap,const 
         auto next=memory::make_shared_in<detail::PathSceneState>(heap,heap);
         next->geometry_owner=state_->geometry_owner ? state_->geometry_owner : state_;
         next->source=source; next->material_model=state_->material_model;
-        next->triangles=state_->triangles; next->textures=state_->textures;
+        next->triangles=state_->triangles; next->textures=state_->textures; next->voxels=state_->voxels;
         next->light_weight=state_->light_weight; next->degenerate=state_->degenerate; next->masked_emitters=state_->masked_emitters;
         next->geometry_fingerprint=state_->geometry_fingerprint;
         next->fingerprint=input_fingerprint(source,next->material_model,next->geometry_fingerprint);
@@ -198,6 +234,7 @@ std::uint64_t PathTraceScene::revision() const noexcept { return state_ ? state_
 std::uint64_t PathTraceScene::fingerprint() const noexcept { return state_ ? state_->fingerprint : 0; }
 std::uint64_t PathTraceScene::geometry_fingerprint() const noexcept { return state_ ? state_->geometry_fingerprint : 0; }
 std::size_t PathTraceScene::triangle_count() const noexcept { return state_ ? state_->triangles.size() : 0; }
+std::size_t PathTraceScene::voxel_count() const noexcept { return state_ ? state_->voxels.size() : 0; }
 std::size_t PathTraceScene::degenerate_count() const noexcept { return state_ ? state_->degenerate : 0; }
 std::size_t PathTraceScene::texture_count() const noexcept { return state_ ? state_->textures.size() : 0; }
 std::size_t PathTraceScene::masked_emitter_count() const noexcept { return state_ ? state_->masked_emitters : 0; }
@@ -206,15 +243,15 @@ Result<PathTraceTextureInfo> PathTraceScene::texture_info(std::size_t index) con
     if(!state_ || index>=state_->textures.size()) return std::unexpected(path_invalid("Path texture index out of range"));
     const auto& t=state_->textures[index]; return PathTraceTextureInfo{t.mesh,t.id,t.origin,t.width,t.height};
 }
-Result<std::optional<PathTraceHit>> PathTraceScene::nearest(const PathTraceRay& ray) const {
+Result<std::optional<PathTraceHit>> PathTraceScene::nearest(const PathTraceRay& ray) const try {
     if (!state_) return std::unexpected(Error{ErrorCode::invalid_state,"Empty path scene"});
     if (auto valid=detail::validate_path_ray(ray);!valid) return std::unexpected(valid.error());
     PathTraceStatistics statistics; return detail::nearest_path(*state_,ray,statistics);
-}
+} catch(const Error& error) { return std::unexpected(error); }
 namespace detail {
 bool same_path_geometry(const PathSceneState& a,const PathSceneState& b) {
     if(a.geometry_fingerprint!=b.geometry_fingerprint || a.source.id()!=b.source.id() || a.material_model!=b.material_model ||
-        a.triangles.size()!=b.triangles.size() || a.textures.size()!=b.textures.size() || a.degenerate!=b.degenerate) return false;
+        a.voxels.size()!=b.voxels.size() || a.triangles.size()!=b.triangles.size() || a.textures.size()!=b.textures.size() || a.degenerate!=b.degenerate) return false;
     if((a.geometry_owner ? a.geometry_owner.get() : &a)==(b.geometry_owner ? b.geometry_owner.get() : &b)) return true;
     for(std::size_t i=0;i<a.triangles.size();++i) {
         const auto& x=a.triangles[i]; const auto& y=b.triangles[i];
@@ -229,6 +266,15 @@ bool same_path_geometry(const PathSceneState& a,const PathSceneState& b) {
             x.sampler.wrap_s!=y.sampler.wrap_s || x.sampler.wrap_t!=y.sampler.wrap_t ||
             x.sampler.min_filter!=y.sampler.min_filter || x.sampler.mag_filter!=y.sampler.mag_filter) return false;
     }
+#if DK_PATH_VOXELS
+    for(std::size_t i=0;i<a.voxels.size();++i) {
+        const auto& x=a.voxels[i]; const auto& y=b.voxels[i];
+        if(x.entity!=y.entity || x.asset!=y.asset || x.corner_world.matrix()!=y.corner_world.matrix() || x.blocks!=y.blocks ||
+            x.grid->domain().minimum!=y.grid->domain().minimum || x.grid->domain().maximum!=y.grid->domain().maximum ||
+            x.palette.size()!=y.palette.size() || !std::ranges::equal(x.grid->bytes(),y.grid->bytes())) return false;
+        for(std::size_t j=0;j<x.palette.size();++j) if(x.palette[j].base_color!=y.palette[j].base_color || x.palette[j].metallic!=y.palette[j].metallic || x.palette[j].roughness!=y.palette[j].roughness) return false;
+    }
+#endif
     return true;
 }
 Result<void> validate_path_ray(const PathTraceRay& ray) {
@@ -256,6 +302,20 @@ std::optional<PathTraceHit> nearest_path(const PathSceneState& scene,const PathT
         hit.front_face=det>0; hit.normal=hit.front_face ? t.normal : -t.normal;
         best=hit;
     }
+#if DK_PATH_VOXELS
+    for(std::size_t i=0;i<scene.voxels.size();++i) {
+        const auto& v=scene.voxels[i];
+        auto result=v.grid->nearest({ray.origin,ray.direction,ray.minimum,best ? best->distance : ray.maximum},v.world,{65536});
+        if(!result) throw result.error();
+        stats.voxel_regions+=result->visited_regions;
+        if(!result->hit || (best && result->hit->distance>=best->distance)) continue;
+        const auto& value=*result->hit; PathTraceHit hit;
+        hit.kind=PathGeometryKind::voxel; hit.entity=v.entity; hit.mesh=v.asset; hit.voxel_instance=i;
+        hit.cell=value.cell; hit.face=std::uint32_t(value.face); hit.value=value.value; hit.distance=value.distance;
+        hit.position=ray.origin+ray.direction*hit.distance; hit.front_face=ray.direction.dot(value.normal)<0;
+        hit.normal=hit.front_face ? value.normal : -value.normal; best=hit;
+    }
+#endif
     return best;
 }
 Vec3d offset_path_origin(const PathTriangle& t,const Vec3d& position,const Vec3d& direction) {
@@ -265,6 +325,23 @@ Vec3d offset_path_origin(const PathTriangle& t,const Vec3d& position,const Vec3d
     Vec3d p=position+normal*error;
     for (int k=0;k<3;++k) if (normal[k]!=0) p[k]=std::nextafter(p[k],std::copysign(std::numeric_limits<double>::infinity(),normal[k]));
     return p;
+}
+const PathTriangle& path_surface(const PathSceneState& scene,const PathTraceHit& hit,PathTriangle& result) {
+    if(hit.kind==PathGeometryKind::triangle) return scene.triangles[hit.index];
+    const auto& v=scene.voxels[hit.voxel_instance]; const auto& m=v.palette[hit.value-1];
+    result.normal=hit.front_face ? hit.normal : -hit.normal; result.albedo=m.base_color.cast<double>(); result.emission=Vec3d::Zero();
+    result.metallic=m.metallic; result.roughness=m.roughness; result.double_sided=true; return result;
+}
+Vec3d offset_surface_origin(const PathSceneState& scene,const PathTraceHit& hit,const Vec3d& direction) {
+    if(hit.kind==PathGeometryKind::triangle) return offset_path_origin(scene.triangles[hit.index],hit.position,direction);
+    const auto& v=scene.voxels[hit.voxel_instance];
+    Vec3d local=(v.inverse.matrix()*Vec4d{hit.position.x(),hit.position.y(),hit.position.z(),1}).head<3>();
+    const int axis=int(hit.face/2); const double side=hit.face%2 ? 1.0 : -1.0;
+    const Vec3d local_direction=v.inverse.matrix().block<3,3>(0,0)*direction;
+    const double sign=local_direction[axis]>=0 ? 1.0 : -1.0;
+    local[axis]=double(hit.cell[axis])+(side>0 ? 1 : 0);
+    local[axis]+=sign*8*std::numeric_limits<double>::epsilon()*std::max(1.0,std::abs(local[axis]));
+    return (v.corner_world.matrix()*Vec4d{local.x(),local.y(),local.z(),1}).head<3>();
 }
 } // namespace detail
 } // namespace dk::render

@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-11-11T16:28:53+08:00"
+updated_at: "2026-11-12T13:30:34+08:00"
 status: accepted
 ---
 
@@ -37,9 +37,9 @@ batch=1，表面与介质预览统一使用256 tile，保留原样本序号、�
 CPU 数值参考、Vulkan RT、直接/间接光、受限金属粗糙度材质、确定性样本编号、每视图累积、
 后台交互预览和固定 spp 截图。M16.1、M16.6、M16.7.1/2、M16.8、M16.9和M16.10实施契约见下文；capture集成契约见M16.10，阶段状态见[Roadmap](../roadmap.md)。
 
-## M23 原生体素几何接入（设计）
+## M23 原生体素几何接入
 
-[体素设计](render-voxels.md)扩展本积分器的几何输入；现有代码仍为三角形输入，下列能力均待实施。
+[体素设计](render-voxels.md#m239-classic-路径实施契约)扩展本积分器的几何输入；M23.9 实施 CPU/GPU Classic 混合几何，状态与证据见 [0167](../development/0167-voxel-classic-pathtracing.md)。ReSTIR、介质、信号和上层装配仍分阶段实施。
 M23.8 先扩展 [RT 底座](graphics-raytracing.md)，M23.9 接通 CPU/GPU Classic 混合几何，
 M23.10 适配 ReSTIR/表面信号，M23.11 验证已有介质组合，M23.12/13 完成消费者与联合交付。
 

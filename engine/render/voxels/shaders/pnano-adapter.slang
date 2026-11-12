@@ -8,6 +8,9 @@ struct DkVoxelBuffer {
     StructuredBuffer<uint> words;
     uint byteSize;
     bool fault;
+#ifdef DK_PNANO_SUBRANGE
+    uint baseWord;
+#endif
 };
 #define pnanovdb_buf_t inout DkVoxelBuffer
 #define pnanovdb_grid_type_t uint
@@ -16,7 +19,11 @@ uint pnanovdb_buf_read_uint32(inout DkVoxelBuffer buf, uint offset) {
     if ((offset & 3u) != 0 || buf.byteSize < 4 || offset > buf.byteSize - 4) {
         buf.fault = true; return 0;
     }
+#ifdef DK_PNANO_SUBRANGE
+    return buf.words[buf.baseWord+(offset >> 2u)];
+#else
     return buf.words[offset >> 2u];
+#endif
 }
 uint2 pnanovdb_buf_read_uint64(inout DkVoxelBuffer buf, uint offset) {
     if ((offset & 3u) != 0 || buf.byteSize < 8 || offset > buf.byteSize - 8) {

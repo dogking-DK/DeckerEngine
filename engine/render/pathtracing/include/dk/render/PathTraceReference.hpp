@@ -1,6 +1,7 @@
 #pragma once
 #include <dk/assets/CpuData.hpp>
 #include <dk/render/RenderScene.hpp>
+#include <array>
 #include <limits>
 #include <stop_token>
 
@@ -11,17 +12,23 @@ struct PathTraceRay {
     Vec3d origin = Vec3d::Zero(), direction = -Vec3d::UnitZ();
     double minimum = 0, maximum = std::numeric_limits<double>::max();
 };
+enum class PathGeometryKind { triangle, voxel };
 struct PathTraceHit {
     EntityId entity;
-    AssetId mesh;
+    AssetId mesh; // Asset identity; also identifies the voxel asset when kind == voxel.
     std::size_t primitive = 0, triangle = 0, index = 0;
     double distance = 0;
     Vec3d barycentric = Vec3d::Zero(), position = Vec3d::Zero(), normal = Vec3d::Zero();
     bool front_face = true;
+    PathGeometryKind kind = PathGeometryKind::triangle;
+    std::size_t voxel_instance = 0;
+    std::array<std::int32_t,3> cell{};
+    std::uint32_t face = 0, value = 0;
 };
 struct PathTraceSceneLimits {
     std::size_t max_triangles = 4096, max_primitive_instances = 4096;
     std::size_t max_textures = 64, max_texture_bytes = 64*1024*1024;
+    std::size_t max_voxel_instances = 256, max_voxel_bytes = 256*1024*1024, max_voxel_blocks = 1024*1024;
 };
 // Explicit desktop geometry capacity. CPU integration retains its separate work budget.
 [[nodiscard]] constexpr PathTraceSceneLimits desktop_path_scene_limits() {
@@ -50,6 +57,7 @@ public:
     // Consumed geometry/material/texture identity, excluding scene revision and environment.
     [[nodiscard]] std::uint64_t geometry_fingerprint() const noexcept;
     [[nodiscard]] std::size_t triangle_count() const noexcept;
+    [[nodiscard]] std::size_t voxel_count() const noexcept;
     [[nodiscard]] std::size_t degenerate_count() const noexcept;
     [[nodiscard]] std::size_t texture_count() const noexcept;
     [[nodiscard]] std::size_t masked_emitter_count() const noexcept;
@@ -75,7 +83,7 @@ struct PathTraceSettings {
     std::uint64_t max_triangle_tests = std::uint64_t{1} << 29;
 };
 struct PathTraceSamples { std::uint32_t first = 0, count = 256; };
-struct PathTraceStatistics { std::uint64_t rays = 0, triangle_tests = 0; };
+struct PathTraceStatistics { std::uint64_t rays = 0, triangle_tests = 0, voxel_regions = 0; }; // Traversal counters are CPU-only.
 struct PathTraceEstimate {
     Vec3d mean = Vec3d::Zero(), second_moment = Vec3d::Zero();
     PathTraceStatistics statistics;

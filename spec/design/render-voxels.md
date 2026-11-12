@@ -1,7 +1,7 @@
 ---
 module: render-voxels
 created_at: "2026-11-11T14:51:58+08:00"
-updated_at: "2026-11-12T11:53:00+08:00"
+updated_at: "2026-11-12T13:30:34+08:00"
 status: accepted
 ---
 
@@ -365,6 +365,19 @@ HDDA 调优限于不改变表面语义的冗余查值消除：单轴表面转换
 基线和调优数据可复算后关闭 M23.7；M23 父阶段以及 M23.8/9 原生路径继续开放。
 实际验收已完成：10 项最终定向检查、12 输入/48 视图的三轮协议 v2，以及原始数据独立复算；详见 [0165](../development/0165-voxel-raster-baseline.md)和[基线报告](../benchmarks/2026-11-12-voxel-raster.md)。
 
+## M23.9 Classic 路径实施契约
+
+- CPU `PathTraceScene::create` 消费已有 `CpuAsset::voxel`，冻结 grid/palette/实例变换；公开命中增加 geometry kind、voxel instance、signed cell/face/value。原 triangle 索引仅在 triangle 分支有效。共享材质/位置/法线适配器接入既有 NEE/BSDF/MIS/RR，不另建积分器。
+- RT block layout v1：非零常量 tile 保留其 8/128/4096 尺度，非空 leaf 产生一个 8³ 保守块；按规范化 NanoVDB 树枚举，不展开 tile。块坐标与网格域取交集。块的表面所有权按命中实心侧 cell 判定；HDDA 使用全网格邻格语义与块裁剪后的 t 区间，跨块不产生内部面。
+- 每个 grid 的角坐标 AABB 进入 BLAS，`entity * corner_to_local` 进入 TLAS；多个实例共享 CPU 不可变网格。GPU 打包 NanoVDB 为受限 32-bit 字节子区间，独立 instance/block/palette storage buffers，所有范围、数量与分配预算先验检查。每次内容替换整份重建，成功提交后才发布缓存候选。
+- intersection 复用 `voxel-hdda.slang`，属性为 signed cell/face/value；radiance closest-hit 写入统一命中，visibility 只在真实表面提前终止。查询/地址/工作上限异常写入既有提交诊断，整帧失败，不当作背景。
+- RT 块入口先重定位并吸附实际穿越的 slab 平面，避免旧原点加裁剪 t 的舍入令 HDDA 停滞；只有起点表面属于邻块时，使用共享查询 mode 2 跳过该起点转换，随后仍按全网格占用遍历。compute 的 mode 0/1 保持不变。
+- CPU 稀疏查询对独立外露面/三角化 oracle 验证。GPU 原点偏移在角坐标中按命中面与浮点误差推进，再变换到世界；拒绝 float 中塌缩的实例/坐标，不用固定世界 epsilon 跳过小单元。
+- CPU 体素上限及默认值为 256 个实例、256 MiB Nano 内容及 1M 代理块，可配置更低额度；每条稀疏查询最多 65536 regions，CPU 累计 region 工作另受现有 `max_triangle_tests` 额度约束。GPU 还受 AS/descriptor/storage 设备上限约束；域需可编码为 signed 21-bit，物体射线分量绝对值不超过 2²⁰，世界域不超过 1e6；float 往返误差不超过 1/16 cell，保守偏移需小于 1/8 cell，否则准备/整帧明确失败。这是数值域限制，编码范围不代表所有变换都受支持。
+- 首命中诊断保持既有 64-byte pixel/128-byte history；voxel 使用负的 instance/face tag，两个 float 槽以位模式无损保存三个 signed 21-bit cell。CPU 解码为类型化命中，不能把编码槽做浮点数值检查或 triangle 寻址。此编码仅属于帧诊断，不是 M23.10 持久表面身份。
+- voxel-only 以全部几何判断空场景；mesh-only 保持既有代码路径。Classic 固定射线、视图及渐进累积支持体素，内容/调色板/实例变化使累积失效。体素 ReSTIR、介质与表面信号明确拒绝，分别待 M23.10/11；上层 Editor/capture 装配待 M23.12。
+- 验收包含 voxel-only/mesh-only/混合最近表面、两类射线和双向间接反弹，Lambert/GGX/环境/太阳/mesh 面积灯，tile/leaf/RT block 边界、负坐标/变换/内部起点/自相交、内容替换与提交失败保留旧结果。
+
 ## Slang 兼容性门禁
 
 [PNanoVDB v12.0.1](https://github.com/AcademySoftwareFoundation/openvdb/blob/v12.0.1/nanovdb/nanovdb/PNanoVDB.h)
@@ -379,7 +392,7 @@ HDDA 调优限于不改变表面语义的冗余查值消除：单轴表面转换
 | M23.8 intersection | 同一 accessor/布局另行编译到 intersection，验证 descriptor stage、属性生产/消费和设备 maxRayHitAttributeSize；required GPU 在混合 triangle/procedural SBT 中读 NanoVDB 并报告解析交点，覆盖辐射/visibility；compute 通过不能替代本项 |
 | M23.9 路径整合 | 共享 HDDA 接入真实多次反弹/阴影，与 CPU/三角化验证 oracle 对照；tile/leaf/RT 块边界保持同一实体表面，上传/AS/历史版本一致 |
 
-M23.2 依赖/CPU 门禁见 [0160](../development/0160-voxel-cpu-sparse.md)；M23.3 compute 编译/反射、SPIR-V 和真实 GPU 门禁见 [0161](../development/0161-voxel-gpu-hdda.md)。M23.8 intersection/SBT 实施与独立门禁见 [0166](../development/0166-procedural-raytracing.md)：同一 PNanoVDB 32.7.0 适配、32-bit 地址/uint stride 4，混合 SBT 中读取 leaf 与 inactive constant tile，并经 ReportHit 向 closest-hit/any-hit 传属性；完整 HDDA 路径整合仍属 M23.9。
+M23.2 依赖/CPU 门禁见 [0160](../development/0160-voxel-cpu-sparse.md)；M23.3 compute 编译/反射、SPIR-V 和真实 GPU 门禁见 [0161](../development/0161-voxel-gpu-hdda.md)。M23.8 intersection/SBT 独立门禁见 [0166](../development/0166-procedural-raytracing.md)；M23.9 完整 Classic HDDA 路径实施与数值/光照/状态验收见 [0167](../development/0167-voxel-classic-pathtracing.md)。两者复用 PNanoVDB 32.7.0 适配、32-bit 地址/uint stride 4，经 ReportHit 向命中组传递属性。
 
 首期优先验证 32-bit buffer 字节地址，网格长度和所有偏移必须同时受地址表示、descriptor/device 限制和预算约束；
 不得将超范围 offset 截断后继续读。若需要 64-bit 地址，单独验证 Slang 整数操作、SPIR-V capabilities 和设备特性后再开放，
@@ -428,7 +441,7 @@ RT 路线 required 用例不得以缺少硬件静默跳过；非 RT 配置另外
 依赖的 CUDA 打包问题在 M23.2 解决，CPU 格式/语义先冻结；Slang compute 与 intersection 分别在 M23.3/8 设阻断门禁。
 完整源描述/产物 v1 在 M23.5 冻结，包含两后端共同材质；中间资源布局/精度在 M23.3 固定，
 intersection 属性/SBT 与 shader 产物版本在 M23.8 固定，RT 块布局/通用命中在 M23.9 固定，信号身份版本在 M23.10 固定；
-CPU、GPU compute 与 mesh 深度/HDR 合成分别见 M23.2/3/4；文件资产、上层闭环与光栅基线已完成 M23.5/6/7，下一步 M23.8 接原生 intersection 门禁，compute/合成通过不替代路径积分验收。
+CPU、GPU compute 与 mesh 深度/HDR 合成分别见 M23.2/3/4；文件资产、光栅闭环/基线见 M23.5/6/7。原生 intersection 与 Classic 路径分别见 M23.8/9，后续 ReSTIR/信号、介质、路径消费者与联合交付按 Roadmap 推进。
 阶段开始若发现底座缺口，应更新设计和必要前置，不隐式扩成全引擎重构。
 
 ## 相关记录

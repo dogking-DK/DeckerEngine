@@ -297,6 +297,9 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
 #include "PathTextureCases.hpp"
 #include "PathGgxCases.hpp"
 #include "PathProgressiveCases.hpp"
+#ifdef DK_PATH_VOXEL_TESTS
+#include "PathVoxelCases.hpp"
+#endif
 #include "PathAirCases.hpp"
 #include "PathCloudCases.hpp"
 #include "PathOrthographicCases.hpp"
@@ -325,6 +328,11 @@ int main(int argc,char** argv) {
             { auto renderer=take(PathTraceRenderer::create(memory.heap,queue,DK_PATH_SHADER_DIR));
               const std::string_view mode=argv[1];
               if(mode=="signal_numeric") signal_numeric(memory.heap,renderer,queue);
+#ifdef DK_PATH_VOXEL_TESTS
+              else if(mode=="voxel_numeric") voxel_numeric(memory.heap,renderer,queue);
+              else if(mode=="voxel_lighting") voxel_lighting(memory.heap,renderer,queue);
+              else if(mode=="voxel_state") voxel_state(memory.heap,renderer,queue);
+#endif
               else if(mode=="signal_geometry") signal_geometry(memory.heap,renderer,queue);
               else if(mode=="signal_textures") signal_textures(memory.heap,renderer,queue);
               else if(mode=="signal_state") signal_state(memory.heap,renderer,queue);

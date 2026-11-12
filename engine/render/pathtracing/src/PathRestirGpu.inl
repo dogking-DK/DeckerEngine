@@ -38,6 +38,7 @@ void restir_memory(const PathGpuState& state,std::uint64_t pixels,std::uint32_t 
 Result<PathTraceFrame> PathTraceRenderer::submit_restir_rays(SubmissionQueue& queue,const PathTraceGpuScene& scene,
     std::span<const PathTraceRay> rays,const PathTraceSettings& settings,const RestirDiSettings& restir,
     PathTraceSamples samples,std::uint32_t first_pixel,std::stop_token stop) const try {
+    if(scene.source().voxel_count()) return std::unexpected(Error{ErrorCode::not_supported,"Voxel ReSTIR requires M23.10"});
     ready(state_,queue,stop);
     if(!scene || scene.state_->program.lock()!=state_) throw path_invalid("Path scene belongs to a different renderer");
     const auto& cpu=*PathReferenceAccess::get(scene.source()); check(validate_path_work(cpu,rays.size(),settings,samples,false));
@@ -60,6 +61,7 @@ catch(const std::exception& error) { return std::unexpected(Error{ErrorCode::int
 
 Result<PathTraceFrame> PathTraceRenderer::submit_restir_view(SubmissionQueue& queue,const PathTraceGpuScene& scene,
     const RenderView& view,const PathTraceSettings& settings,const RestirDiSettings& restir,PathTraceSamples samples,std::stop_token stop) const try {
+    if(scene.source().voxel_count()) return std::unexpected(Error{ErrorCode::not_supported,"Voxel ReSTIR requires M23.10"});
     ready(state_,queue,stop);
     if(!scene || scene.state_->program.lock()!=state_) throw path_invalid("Path scene belongs to a different renderer");
     const auto& cpu=*PathReferenceAccess::get(scene.source()); check(validate_path_view(cpu,view));
@@ -75,6 +77,7 @@ catch(const std::exception& error) { return std::unexpected(Error{ErrorCode::int
 
 Result<void> PathTraceRenderer::configure_restir_view(SubmissionQueue& queue,std::uint64_t id,const PathTraceGpuScene& scene,
     const RenderView& view,const PathTraceSettings& settings,const RestirDiSettings& restir,const PathTraceSchedule& schedule) try {
+    if(scene.source().voxel_count()) return std::unexpected(Error{ErrorCode::not_supported,"Voxel ReSTIR requires M23.10"});
     ready(state_,queue,{});
     if(state_->terminal) throw Error{ErrorCode::invalid_state,"Path session device lost"};
     if(!scene || scene.state_->program.lock()!=state_) throw path_invalid("Path scene belongs to a different renderer");

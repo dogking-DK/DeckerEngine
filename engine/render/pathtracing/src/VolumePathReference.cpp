@@ -30,6 +30,7 @@ std::uint32_t mix(std::uint32_t x) { x^=x>>16; x*=0x7feb352du; x^=x>>15; x*=0x84
 double power(double a,double b) { if(a<=0) return 0; if(b<=0) return 1; const double q=b/a; return 1/(1+q*q); }
 const PathSceneState& validate(const PathTraceScene& scene,const PathMediumSnapshot& medium,const VolumePathSettings& s,
     PathTraceSamples samples,std::uint64_t pixels,bool cpu_geometry=true) {
+    if(scene.voxel_count()) throw Error{ErrorCode::not_supported,"Voxel media paths require M23.11"};
     const auto* state=PathReferenceAccess::get(scene);
     if(!state || !medium) throw path_invalid("Volume path requires valid frozen scene and medium");
     if(state->source.environment()!=medium.environment()) throw path_invalid("Volume scene and medium environment mismatch");

@@ -4,7 +4,14 @@
 #ifndef DK_PATH_RESTIR
 #define DK_PATH_RESTIR 0
 #endif
-struct PathPayload { float distance; float2 barycentric; uint index; uint found; };
+#ifndef DK_PATH_VOXELS
+#define DK_PATH_VOXELS 0
+#endif
+struct PathPayload { float distance; float2 barycentric; uint index; uint found;
+#if DK_PATH_VOXELS
+    uint kind; uint instance; int3 cell; uint face; uint value; float3 position;
+#endif
+};
 #if !DK_PATH_EMPTY
 [[vk::binding(0,0)]] RaytracingAccelerationStructure scene;
 [[vk::binding(1,0)]] StructuredBuffer<float4> triangles;
@@ -55,6 +62,9 @@ float nextFloat(float v,float direction) {
     uint bits=asuint(v); return asfloat((v>0)==(direction>0) ? bits+1 : bits-1);
 }
 #if !DK_PATH_EMPTY
+#if DK_PATH_VOXELS
+#include "path-voxel.slang"
+#endif
 float3 offsetOrigin(uint index,float3 position,float3 direction) {
     float3 extent=max(max(abs(triangles[index*9].xyz),abs(triangles[index*9+1].xyz)),abs(triangles[index*9+2].xyz))+abs(position);
     float error=64*1.1920928955078125e-7*largest(extent);
@@ -63,11 +73,35 @@ float3 offsetOrigin(uint index,float3 position,float3 direction) {
     for(uint k=0;k<3;++k) if(n[k]!=0) result[k]=nextFloat(result[k],n[k]);
     return result;
 }
+float3 surfaceOffset(PathPayload hit,float3 position,float3 direction) {
+#if DK_PATH_VOXELS
+    if(hit.kind==1) return voxelOffset(hit,direction);
+#endif
+    return offsetOrigin(hit.index,position,direction);
+}
+PathBsdf surfaceMaterial(PathPayload hit) {
+#if DK_PATH_VOXELS
+    if(hit.kind==1) return voxelMaterial(hit);
+#endif
+    return materialAt(hit.index,hit.barycentric);
+}
+float3 surfaceEmission(PathPayload hit) {
+#if DK_PATH_VOXELS
+    if(hit.kind==1) return 0;
+#endif
+    return triangles[hit.index*9+5].xyz;
+}
 float3 positionOf(PathPayload hit) {
+#if DK_PATH_VOXELS
+    if(hit.kind==1) return hit.position;
+#endif
     return triangles[hit.index*9].xyz*(1-hit.barycentric.x-hit.barycentric.y)+
         triangles[hit.index*9+1].xyz*hit.barycentric.x+triangles[hit.index*9+2].xyz*hit.barycentric.y;
 }
 float3 normalOf(PathPayload hit,float3 direction) {
+#if DK_PATH_VOXELS
+    if(hit.kind==1) { float3 n=voxelNormal(hit.instance,hit.face); return dot(n,direction)<0 ? n : -n; }
+#endif
     float3 normal=normalize(triangles[hit.index*9+3].xyz); return dot(normal,direction)<0 ? normal : -normal;
 }
 float areaPdf(uint index,float3 from,float3 point) {
@@ -78,8 +112,14 @@ float areaPdf(uint index,float3 from,float3 point) {
     if(cosine<=0) return 0;
     return parameters[4].w*(b.w/parameters[3].w)*distance2/(a.w*cosine);
 }
-bool visible(uint index,float3 position,float3 direction,uint lightIndex,float3 point,inout uint rays) {
-    RayDesc ray; ray.Origin=offsetOrigin(index,position,direction); ray.Direction=direction; ray.TMin=0; ray.TMax=infinity;
+float surfaceAreaPdf(PathPayload hit,float3 from,float3 point) {
+#if DK_PATH_VOXELS
+    if(hit.kind==1) return 0;
+#endif
+    return areaPdf(hit.index,from,point);
+}
+bool visible(PathPayload hit,float3 position,float3 direction,uint lightIndex,float3 point,inout uint rays) {
+    RayDesc ray; ray.Origin=surfaceOffset(hit,position,direction); ray.Direction=direction; ray.TMin=0; ray.TMax=infinity;
     if(lightIndex!=0xffffffffu) {
         float3 end=offsetOrigin(lightIndex,point,-direction),delta=end-ray.Origin; float distance=length(delta);
         if(distance<=0 || dot(delta,direction)<=0) return false;
@@ -88,6 +128,9 @@ bool visible(uint index,float3 position,float3 direction,uint lightIndex,float3 
     PathPayload payload={}; payload.found=1; ++rays;
     TraceRay(scene,RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH|RAY_FLAG_SKIP_CLOSEST_HIT_SHADER,255,1,2,1,ray,payload);
     return payload.found==0;
+}
+bool visible(uint index,float3 position,float3 direction,uint lightIndex,float3 point,inout uint rays) {
+    PathPayload hit={}; hit.index=index; return visible(hit,position,direction,lightIndex,point,rays);
 }
 float3 directLight(PathPayload hit,float3 position,float3 normal,PathBsdf bsdf,float3 wo,uint pixel,uint sample,uint depth,inout uint rays
 #if DK_PATH_SIGNALS
@@ -117,7 +160,7 @@ float3 directLight(PathPayload hit,float3 position,float3 normal,PathBsdf bsdf,f
         wi=normalize(displacement); radiance=triangles[light*9+5].xyz; pdf=areaPdf(light,position,point);
     }
     float cosine=dot(normal,wi);
-    if(cosine<=0 || pdf<=0 || !visible(hit.index,position,wi,light,point,rays)) return 0;
+    if(cosine<=0 || pdf<=0 || !visible(hit,position,wi,light,point,rays)) return 0;
     BsdfEval evaluated=evalBsdf(bsdf,normal,wo,wi);
 #if DK_PATH_SIGNALS
     float3 value=evaluated.value*radiance*(cosine*(delta ? 1 : weight(pdf,evaluated.pdf))/pdf);
@@ -205,8 +248,14 @@ float3 tracePath(RayDesc ray,uint pixel,uint sample,inout uint rays,out float4 f
 #if DK_PATH_RESTIR
         if(saved) { position=restirSurfaces[restirPixel*4+2].xyz; normal=restirSurfaces[restirPixel*4+1].xyz; }
 #endif
-        if(depth==0) { firstHit=float4(hit.distance,hit.barycentric,float(hit.index+1)); firstNormal=float4(normal,dot(ray.Direction,triangles[hit.index*9+3].xyz)<0 ? 1 : -1); }
-        PathBsdf bsdf=materialAt(hit.index,hit.barycentric); float3 emission=triangles[hit.index*9+5].xyz;
+        if(depth==0) {
+#if DK_PATH_VOXELS
+            if(hit.kind==1) { firstHit=voxelDiagnostic(hit); firstNormal=float4(normal,dot(ray.Direction,voxelNormal(hit.instance,hit.face))<0 ? 1 : -1); }
+            else
+#endif
+            { firstHit=float4(hit.distance,hit.barycentric,float(hit.index+1)); firstNormal=float4(normal,dot(ray.Direction,triangles[hit.index*9+3].xyz)<0 ? 1 : -1); }
+        }
+        PathBsdf bsdf=surfaceMaterial(hit); float3 emission=surfaceEmission(hit);
 #if DK_PATH_SIGNALS
         if(depth==0) {
             signal.flags|=1; signal.triangle=hit.index;
@@ -215,12 +264,12 @@ float3 tracePath(RayDesc ray,uint pixel,uint sample,inout uint rays,out float4 f
             signal.positionDepth=float4(position,dot(parameters[43],float4(position,1)));
             signal.motionDistance.w=hit.distance;
         }
-        float3 emitted=throughput*emission*(DK_PATH_RESTIR && depth==1 ? (triangles[hit.index*9+1].w>0 ? 0 : 1) : (depth!=0 && flags.x==0 ? weight(bsdfPdf,areaPdf(hit.index,previous,position)) : 1));
+        float3 emitted=throughput*emission*(DK_PATH_RESTIR && depth==1 ? (triangles[hit.index*9+1].w>0 ? 0 : 1) : (depth!=0 && flags.x==0 ? weight(bsdfPdf,surfaceAreaPdf(hit,previous,position)) : 1));
         radiance+=emitted;
         if(depth==0) signal.emission+=emitted;
         else { signal.diffuse+=emitted*firstDiffuse; signal.specular+=emitted*(1-firstDiffuse); }
 #else
-        radiance+=throughput*emission*(DK_PATH_RESTIR && depth==1 ? (triangles[hit.index*9+1].w>0 ? 0 : 1) : (depth!=0 && flags.x==0 ? weight(bsdfPdf,areaPdf(hit.index,previous,position)) : 1));
+        radiance+=throughput*emission*(DK_PATH_RESTIR && depth==1 ? (triangles[hit.index*9+1].w>0 ? 0 : 1) : (depth!=0 && flags.x==0 ? weight(bsdfPdf,surfaceAreaPdf(hit,previous,position)) : 1));
 #endif
         if(depth==counts.z || (!bsdf.ggx && largest(bsdf.color)==0)) break;
 #if DK_PATH_SIGNALS
@@ -255,7 +304,7 @@ float3 tracePath(RayDesc ray,uint pixel,uint sample,inout uint rays,out float4 f
             float survival=clamp(largest(throughput),.05,.95);
             if(randomValue(pixel,sample,depth,8)>=survival) break; throughput/=survival;
         }
-        ray.Origin=offsetOrigin(hit.index,position,wi); ray.Direction=wi; ray.TMin=0; ray.TMax=infinity;
+        ray.Origin=surfaceOffset(hit,position,wi); ray.Direction=wi; ray.TMin=0; ray.TMax=infinity;
     }
     return radiance;
 }
@@ -393,6 +442,9 @@ void shadowMiss(inout PathPayload payload) { payload.found=0; }
 [shader("closesthit")]
 void pathHit(inout PathPayload payload,BuiltInTriangleIntersectionAttributes attributes) {
     payload.distance=RayTCurrent(); payload.barycentric=attributes.barycentrics; payload.index=PrimitiveIndex(); payload.found=1;
+#if DK_PATH_VOXELS
+    payload.kind=0;
+#endif
 }
 [shader("anyhit")]
 void pathAnyHit(inout PathPayload payload,BuiltInTriangleIntersectionAttributes attributes) {

@@ -3,6 +3,9 @@
 #include <dk/render/VolumePathReference.hpp>
 #include <dk/memory/SmartPtr.hpp>
 #include <numbers>
+#if DK_PATH_VOXELS
+#include <dk/geometry/SparseVoxels.hpp>
+#endif
 
 namespace dk::render::detail {
 inline constexpr double path_pi = std::numbers::pi;
@@ -27,14 +30,30 @@ struct PathTexture {
     Vector<std::byte> rgba8;
     String origin;
 };
+struct PathVoxel {
+    explicit PathVoxel(memory::ResourceHandle heap) : palette(0,memory::Allocator<VoxelMaterialData>{heap}),blocks(0,memory::Allocator<std::array<std::int32_t,8>>{heap}) {}
+    EntityId entity;
+    AssetId asset;
+    Transformd world, corner_world, inverse;
+    std::shared_ptr<const geometry::voxels::SparseGrid> grid;
+    Vector<VoxelMaterialData> palette;
+    Vector<std::array<std::int32_t,8>> blocks;
+};
 struct PathSceneState {
-    explicit PathSceneState(memory::ResourceHandle heap) : owned_triangles(0, memory::Allocator<PathTriangle>{heap}),owned_textures(memory::Allocator<PathTexture>{heap}) {}
+    // Range/list constructors may propagate Debug iterator-proxy allocation failure;
+    // MSVC's allocator-only vector constructor is noexcept and would terminate.
+    explicit PathSceneState(memory::ResourceHandle heap)
+        : owned_triangles(0,memory::Allocator<PathTriangle>{heap}),
+          owned_textures(std::initializer_list<PathTexture>{},memory::Allocator<PathTexture>{heap}),
+          owned_voxels(std::initializer_list<PathVoxel>{},memory::Allocator<PathVoxel>{heap}) {}
     RenderScene source;
     PathTraceMaterialModel material_model = PathTraceMaterialModel::lambert;
     Vector<PathTriangle> owned_triangles;
     Vector<PathTexture> owned_textures;
+    Vector<PathVoxel> owned_voxels;
     std::span<const PathTriangle> triangles;
     std::span<const PathTexture> textures;
+    std::span<const PathVoxel> voxels;
     std::shared_ptr<const PathSceneState> geometry_owner;
     double light_weight = 0;
     std::size_t degenerate = 0;
@@ -60,6 +79,8 @@ inline double luminance(const Vec3d& c) { return c.dot(Vec3d{.2126,.7152,.0722})
 [[nodiscard]] Result<PathTraceRay> gpu_path_camera_ray(const RenderView&, std::uint32_t, std::uint32_t, const Vec2d&);
 [[nodiscard]] std::optional<PathTraceHit> nearest_path(const PathSceneState&, const PathTraceRay&, PathTraceStatistics&);
 [[nodiscard]] Vec3d offset_path_origin(const PathTriangle&, const Vec3d& position, const Vec3d& direction);
+[[nodiscard]] const PathTriangle& path_surface(const PathSceneState&,const PathTraceHit&,PathTriangle& voxel_material);
+[[nodiscard]] Vec3d offset_surface_origin(const PathSceneState&,const PathTraceHit&,const Vec3d& direction);
 [[nodiscard]] Vec4d path_base_color(const PathSceneState&,const PathTriangle&,const Vec3d& barycentric);
 [[nodiscard]] Result<void> validate_path_texture(const TextureData&);
 [[nodiscard]] bool same_path_geometry(const PathSceneState&,const PathSceneState&);

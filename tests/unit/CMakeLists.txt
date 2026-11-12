@@ -11,6 +11,13 @@ endif()
 dk_target_defaults(dk_core_tests)
 
 include(Catch)
+if(TARGET dk_asset_voxel_importers AND TARGET dk_render_pathtracing_reference)
+    add_executable(dk_voxel_path_tests PathVoxelTests.cpp)
+    target_link_libraries(dk_voxel_path_tests PRIVATE dk::asset_voxel_importers dk::render_pathtracing_reference Catch2::Catch2WithMain)
+    dk_target_defaults(dk_voxel_path_tests)
+    catch_discover_tests(dk_voxel_path_tests TEST_PREFIX "dk.voxels.path_cpu."
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}" DISCOVERY_MODE PRE_TEST PROPERTIES TIMEOUT 120 LABELS "cpu")
+endif()
 if(TARGET dk_geometry_voxels)
     add_executable(dk_voxel_tests VoxelTests.cpp)
     target_link_libraries(dk_voxel_tests PRIVATE dk::geometry_voxels Catch2::Catch2WithMain)

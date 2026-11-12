@@ -186,7 +186,11 @@ TEST_CASE("desktop scene capacity keeps default and CPU work budgets bounded") {
     CHECK_FALSE(estimate_path_reference(*desktop,down,work,{0,1}));
     auto lower=desktop_path_scene_limits(); lower.max_triangles=4999;
     CHECK_FALSE(PathTraceScene::create(f.heap,source,inputs,lower));
-    auto oversized=desktop_path_scene_limits(); ++oversized.max_texture_bytes;
+    // The desktop texture-byte ceiling is SIZE_MAX; incrementing it wraps to
+    // zero, which is a valid budget for this untextured scene, not an oversize.
+    auto no_textures=desktop_path_scene_limits(); no_textures.max_texture_bytes=0;
+    CHECK(PathTraceScene::create(f.heap,source,inputs,no_textures));
+    auto oversized=desktop_path_scene_limits(); ++oversized.max_triangles;
     CHECK_FALSE(PathTraceScene::create(f.heap,source,inputs,oversized));
     CHECK(desktop->triangle_count()==5000);
 }

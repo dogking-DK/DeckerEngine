@@ -72,7 +72,9 @@ DkVoxelResult dkTraceVoxel(inout DkVoxelBuffer buf, inout pnanovdb_readaccessor_
         if (time == entries[axis]) point[axis] = direction[axis] > 0 ? float(params.lower[axis]) : float(params.upper[axis])+1;
         if (time == exits[axis]) point[axis] = direction[axis] > 0 ? float(params.upper[axis])+1 : float(params.lower[axis]);
     }
-    if (dkTransition(buf,acc,point,time,direction,params,result)) return result;
+    // Mode 2 is used by a clipped RT block after rejecting a start surface
+    // owned by its neighbor. Traversal still sees the full-grid occupancy.
+    if (params.control.w != 2 && dkTransition(buf,acc,point,time,direction,params,result)) return result;
     int3 cell = dkCells(point,direction,true);
     while (dkContains(cell,params) && time < end) {
         if (buf.fault) { result.meta.x=6; return result; }
