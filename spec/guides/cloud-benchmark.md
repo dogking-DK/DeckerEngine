@@ -41,6 +41,7 @@ python scripts/benchmark-clouds.py --build-dir out/build/windows-editor
 24 个独立进程 = 3 轮 × clear/sparse/overcast/sunset × timestamp OFF/ON；轮换预设和开关顺序。
 每进程依次采集 combined-static、combined-motion、air-static、air-motion、unlit-static、unlit-motion：
 每段首帧单列，combined 预热 32 帧、其他段 5 帧，各取 20 稳态帧，共 210 个计时帧；每段另有两个不计时显存诊断帧。
+0175 起，非零云 combined 段在这些采样之后另加一个不计时的工作量诊断帧；启用额外统计读回，不纳入时间或显存采样。
 所有 motion 段同索引使用相同 x=0.25m/步、yaw=0.0005rad/步、time=1/30s/步；每段先释放旧视图历史。
 时间变化重建云影，相机位置变化重建 Sky；静态命中缓存不会重复加入旧 Submission 耗时。
 
@@ -68,3 +69,36 @@ CPU 分列快照提取、同步 prepare、record/submit、wait、RGBA8 读回与
 device-local/host-visible 类型可能重叠，不相加；allocation 与 block 分列。CPU heap 不是进程 RSS。
 采样峰值不包含驱动私有内存，也不保证覆盖冷初始化内部所有瞬时峰值；所有引擎资源释放后检查 VMA 回到设备初值、CPU 活分配为零。
 无效计时、缺帧、重复区间、错误缓存/历史、配置变化或关闭泄漏都拒绝汇总；候选目标未达与采集失败分别报告。
+
+## 性能归因与 Tracy
+
+[2026-11-16 性能报告](../benchmarks/2026-11-16-environment-performance.md)扩展默认协议，生产 shader 和默认质量不变。
+完成上述优化构建和定向验证后执行：
+
+```powershell
+python scripts/benchmark-environment-diagnostics.py --build-dir out/build/windows-graphics --output out/benchmarks/environment-cloud-new
+python scripts/benchmark-atmosphere.py --build-dir out/build/windows-graphics --output out/benchmarks/environment-atmosphere-new
+```
+
+前者运行42进程：四预设基线、厚云输出尺寸/噪声场/步数/自阴影/地面云影单因素对照及timestamp OFF，每条件三轮。
+默认使用RelWithDebInfo；性能构建必须关闭Tracy与validation。目录须不存在；结果包含完整参数、源码/二进制摘要、GPU遥测及逐帧原始数据。
+
+原生 `dk-cloud-benchmark` 支持 `--width` / `--height`（各至少32，总像素不超过1080p）、`--samples`（1–120）、
+`--steps`（8–1024）、`--sun-steps`（1–256）、`--field-divisor`（1/2/4，统一缩小weather/base/detail）、
+`--shadow-resolution`（16–512且须满足底层2的幂契约）、`--shadow-steps`（8–1024）、`--no-shadow`、`--no-self-shadow`。
+`--mode`可筛选既有六模式之一；默认不筛选，所有默认值保持原1080p协议。`--quality`拒绝非默认诊断参数。
+步数设置仍受生产自适应下限与额外密度采样规则约束，不能按配置数字直接推算工作量。
+
+Tracy是单独采集，普通性能构建不提供其数据。使用既有固定依赖和profiling工具：
+
+```powershell
+cmake --preset windows-graphics-profiling
+& ./scripts/verify.ps1 -BuildDir out/build/windows-graphics-profiling -Configuration RelWithDebInfo `
+  -Target dk_cloud_benchmark -TestRegex '^dk\.clouds\.benchmark_gpu_validation$' `
+  -Reason '验证启用Tracy的真实云工作负载'
+python scripts/capture-cloud-profiling.py --output out/benchmarks/cloud-tracy-new
+```
+
+采集脚本使用`out/profiling-tools/vcpkg_installed/x64-windows/tools/tracy`的0.14.1工具，默认本地端口18089，支持`--tools-dir`、`--build-dir`、`--port`。
+需要允许127.0.0.1 TCP；原生探针`--wait-tracy`最多等待30秒且拒绝profiling OFF构建。脚本有界等待、清理子进程，失败保存日志，成功导出CPU/GPU CSV并核对计时叶pass与原生时间相差不超过2ns。
+轨迹用于热点和CPU/GPU关联，不能混入Tracy OFF性能基线或代替VMA/硬件occupancy测量。工具安装与通用采集见[GPU性能观测](gpu-profiling.md)。

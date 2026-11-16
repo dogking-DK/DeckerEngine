@@ -1,7 +1,16 @@
 #include "CloudBenchmarkSupport.hpp"
+#include <thread>
 
 namespace {
 using Pixel=std::array<float,4>;
+struct DiagnosticOptions {
+    unsigned width=1920,height=1080,samples=20,steps=96,sun_steps=8,field_divisor=1,shadow_resolution=256,shadow_steps=256;
+    bool shadows=true,self_shadow=true,wait_tracy=false;
+    std::string mode;
+    Json json() const { return {{"width",width},{"height",height},{"samples",samples},{"steps",steps},{"sun_steps",sun_steps},
+        {"field_divisor",field_divisor},{"ground_shadows",shadows},{"self_shadow",self_shadow},
+        {"shadow_resolution",shadow_resolution},{"shadow_steps",shadow_steps},{"mode",mode.empty() ? "all" : mode}}; }
+};
 struct Fixture {
     memory::ResourceHandle heap;
     std::unique_ptr<SceneDocument> scene=take(SceneDocument::create());
@@ -18,6 +27,8 @@ struct Fixture {
     CloudOptimizedSettings optimized;
     RenderSettings settings=unlit_preview_settings();
     unsigned width=1920,height=1080;
+    bool ground_shadows=true;
+    CloudShadowSettings shadow_settings;
     Vec3d eye{0,100,0};
     double angle=.16,yaw=0,time=0;
     Fixture(memory::ResourceHandle h,SubmissionQueue& queue,std::string_view preset):heap(h),
@@ -65,14 +76,14 @@ struct Fixture {
     }
     void prepare(SubmissionQueue& q,const EnvironmentDescription& e) {
         if(e.enabled) sky=take(atmosphere.prepare(q,e,eye));
-        if(e.clouds.enabled) {
-            CloudShadowSettings s; s.time_seconds=time;
+        if(e.clouds.enabled && ground_shadows) {
+            auto s=shadow_settings; s.time_seconds=time;
             shadow=take(shadows.prepare(q,e,*texture,s));
         } else shadow={};
         optimized.composition.reference.time_seconds=time;
     }
     RenderFrame render(SubmissionQueue& q,const RenderView& v,const EnvironmentDescription& e) {
-        if(e.clouds.enabled) return take(pipeline.render_clouds_optimized(q,v,assets,sky,*texture,optimized,settings,&shadow));
+        if(e.clouds.enabled) return take(pipeline.render_clouds_optimized(q,v,assets,sky,*texture,optimized,settings,shadow ? &shadow : nullptr));
         if(e.enabled) return take(pipeline.render_atmosphere(q,v,assets,sky,settings));
         return take(pipeline.render(q,v,assets,settings));
     }
@@ -81,7 +92,7 @@ struct Fixture {
             {"eye_m",{0,100,0}},{"elevation_rad",.16},{"yaw_rad",0},{"vertical_fov_rad",1.15},{"near_m",1},{"far_m",10000},{"exposure",8},
             {"geometry_distances_m",{500,3000}},{"second_receiver","checker alpha mask"},{"time_seconds",0},
             {"motion_step_m",.25},{"motion_yaw_step_rad",.0005},{"motion_time_step_seconds",1./30},
-            {"quality","cloud_temporal_v1"},{"warmup",32},{"shadow",{{"center_m",{0,0,0}},{"extent_m",8192},{"resolution",256},{"steps",256}}}};
+            {"quality","cloud_temporal_v1"},{"warmup",32},{"shadow",{{"center_m",{0,0,0}},{"extent_m",8192},{"resolution",shadow_settings.resolution},{"steps",shadow_settings.steps}}}};
     }
 };
 std::vector<Pixel> linear(const RenderFrame& frame) {
@@ -91,10 +102,11 @@ void image(const RenderFrame& frame,const std::filesystem::path& path) {
     std::vector<std::byte> p(std::size_t{frame.info().width}*frame.info().height*4); check(frame.read_rgba8(p));
     ppm(path,p,frame.info().width,frame.info().height);
 }
-void performance(Fixture& f,SubmissionQueue& q,Json& output,bool timestamps,unsigned samples,const std::filesystem::path& report) {
+void performance(Fixture& f,SubmissionQueue& q,Json& output,bool timestamps,unsigned samples,const std::filesystem::path& report,const DiagnosticOptions& tuning) {
     output["preset"]=f.input(output["preset_name"].get<std::string>());
     output["frames"]=Json::array(); output["memory_samples"]=Json::array();
     for(const std::string mode:{"combined-static","combined-motion","air-static","air-motion","unlit-static","unlit-motion"}) {
+        if(!tuning.mode.empty() && mode!=tuning.mode) continue;
         const bool combined=mode.starts_with("combined"),air=!mode.starts_with("unlit"),motion=mode.ends_with("motion");
         auto e=f.environment; e.enabled=air; e.clouds.enabled=combined && f.environment.clouds.enabled;
         check(f.scene->set_environment(e)); f.reset(q);
@@ -129,15 +141,26 @@ void performance(Fixture& f,SubmissionQueue& q,Json& output,bool timestamps,unsi
             return frame;
         };
         for(unsigned i=0;i<count;++i) { auto frame=draw(i,true); }
-        // Untimed diagnostic with both an external completed Frame and the next candidate alive.
+        // Untimed tuning with both an external completed Frame and the next candidate alive.
         auto prior=draw(count,false); require(take(prior.wait(q)),"prior memory wait failed");
         auto pending=draw(count+1,false); const auto inflight=memory_sample(q);
         require(take(pending.wait(q)),"inflight memory wait failed"); prior={}; pending={}; check(f.pipeline.poll_cloud_history(q));
         output["memory_samples"].push_back({{"mode",mode},{"inflight_with_old_frame",inflight},{"steady_cache_history",memory_sample(q)}});
+        // Extra diagnostic readbacks are deliberately outside timing and memory samples.
+        if(combined && e.clouds.enabled) {
+            f.optimized.composition.diagnostics=true;
+            auto diagnostic_frame=draw(count+2,false); require(take(diagnostic_frame.wait(q)),"statistics wait failed");
+            const auto stats=take(diagnostic_frame.read_cloud_statistics());
+            output["work_diagnostics"][mode]={{"logical_index",samples+2},{"primary_steps",stats.primary_steps},
+                {"cloud_lighting_steps",stats.cloud_lighting_steps},{"empty_steps",stats.empty_steps},{"terminated_steps",stats.terminated_steps},
+                {"density_samples",stats.density_samples},{"reconstructed_pixels",stats.reconstructed_pixels},{"fallback_pixels",stats.fallback_pixels},
+                {"history_accepted",stats.history_accepted},{"history_rejected",stats.history_rejected}};
+            f.optimized.composition.diagnostics=false;
+        }
     }
 }
 #include "CloudQualityCases.hpp"
-void run(Json& output,std::string_view preset,bool smoke,bool quality,bool timestamps,bool validation,const std::filesystem::path& report) {
+void run(Json& output,std::string_view preset,bool smoke,bool quality,bool timestamps,bool validation,const std::filesystem::path& report,const DiagnosticOptions& tuning) {
     auto system=take(memory::MemorySystem::create()); auto heap=take(system.create_heap({"cloud-benchmark",memory::DomainCategory::render}));
     Diagnostics diagnostics;
     {
@@ -150,12 +173,21 @@ void run(Json& output,std::string_view preset,bool smoke,bool quality,bool times
         output["memory_device_only"]=memory_sample(q);
         {
             start=Clock::now(); Fixture f(heap,q,preset); output["program_geometry_create_ms"]=elapsed(start);
+            f.width=tuning.width; f.height=tuning.height;
+            f.optimized.composition.reference.steps=tuning.steps; f.optimized.composition.reference.sun_steps=tuning.sun_steps;
+            f.optimized.composition.reference.self_shadow=tuning.self_shadow; f.ground_shadows=tuning.shadows;
+            f.shadow_settings.resolution=tuning.shadow_resolution; f.shadow_settings.steps=tuning.shadow_steps;
+            auto& clouds=f.environment.clouds; clouds.weather_resolution/=tuning.field_divisor;
+            clouds.base_resolution/=tuning.field_divisor; clouds.detail_resolution/=tuning.field_divisor;
             output["memory_geometry_only"]=memory_sample(q);
-            start=Clock::now(); const auto data=take(f.fields.prepare(f.environment.clouds)); output["cpu_field_ms"]=elapsed(start);
+            start=Clock::now(); std::shared_ptr<const CloudFieldData> data;
+            { DK_PROFILE_ZONE("CloudBenchmark.field_prepare"); data=take(f.fields.prepare(f.environment.clouds)); }
+            output["cpu_field_ms"]=elapsed(start);
             start=Clock::now(); f.texture=take(f.textures->prepare(q,*data)); output["texture_upload_wall_ms"]=elapsed(start);
+            output["memory_field_textures"]=memory_sample(q);
             output["field"]={{"hash",data->hash()},{"bytes",data->bytes()},{"gpu_upload_ms",nullptr}};
             if(quality) quality_cases(f,q,output,report);
-            else { if(smoke) { f.width=160; f.height=90; } performance(f,q,output,timestamps,smoke ? 2 : 20,report); }
+            else { if(smoke) { f.width=160; f.height=90; } performance(f,q,output,timestamps,smoke ? 2 : tuning.samples,report,tuning); }
         }
         check(q.poll()); output["memory_after_release"]=memory_sample(q);
         require(output["memory_after_release"]["all_allocations"]==output["memory_device_only"]["all_allocations"],"GPU resources leaked"); check(q.close());
@@ -163,13 +195,14 @@ void run(Json& output,std::string_view preset,bool smoke,bool quality,bool times
     output["cpu_heap_peak_bytes"]=heap.snapshot().peak_backing_bytes;
     output["cpu_heap_live_allocations"]=heap.snapshot().live_allocations;
     output["diagnostics"]={{"errors",diagnostics.errors.load()},{"warnings",diagnostics.warnings.load()}};
-    require(!diagnostics.errors && !diagnostics.warnings && !heap.snapshot().live_allocations,"diagnostic or CPU lifetime failure");
+    require(!diagnostics.errors && !diagnostics.warnings && !heap.snapshot().live_allocations,"tuning or CPU lifetime failure");
     require(system.try_close().closed(),"memory close failed");
 }
 }
 int main(int argc,char** argv) {
     Json output={{"schema",1},{"status","failed"}}; std::filesystem::path report;
     try {
+        DiagnosticOptions tuning;
         std::string preset="sparse"; bool timestamps=false,validation=false,smoke=false,quality=false;
         for(int i=1;i<argc;++i) {
             const std::string_view arg=argv[i];
@@ -179,16 +212,43 @@ int main(int argc,char** argv) {
             else if(arg=="--quality") quality=true;
             else if(arg=="--preset" && i+1<argc) preset=argv[++i];
             else if(arg=="--output" && i+1<argc) report=argv[++i];
+            else if(arg=="--mode" && i+1<argc) tuning.mode=argv[++i];
+            else if(arg=="--no-shadow") tuning.shadows=false;
+            else if(arg=="--no-self-shadow") tuning.self_shadow=false;
+            else if(arg=="--wait-tracy") tuning.wait_tracy=true;
+            else if((arg=="--width" || arg=="--height" || arg=="--samples" || arg=="--steps" || arg=="--sun-steps" ||
+                arg=="--field-divisor" || arg=="--shadow-resolution" || arg=="--shadow-steps") && i+1<argc) {
+                const std::string text=argv[++i]; std::size_t consumed=0; const auto value=std::stoul(text,&consumed);
+                require(consumed==text.size() && value<=65536 && !text.starts_with('-'),"invalid tuning integer");
+                if(arg=="--width") tuning.width=unsigned(value); else if(arg=="--height") tuning.height=unsigned(value);
+                else if(arg=="--samples") tuning.samples=unsigned(value); else if(arg=="--steps") tuning.steps=unsigned(value);
+                else if(arg=="--sun-steps") tuning.sun_steps=unsigned(value); else if(arg=="--field-divisor") tuning.field_divisor=unsigned(value);
+                else if(arg=="--shadow-resolution") tuning.shadow_resolution=unsigned(value); else tuning.shadow_steps=unsigned(value);
+            }
             else throw std::runtime_error("unknown or incomplete cloud benchmark option");
         }
         require(!report.empty() && !(smoke && quality),"output and one run mode required");
         take(environment_preset(preset)); require(!quality || validation,"quality requires validation");
+        require(tuning.width>=32 && tuning.height>=32 && std::uint64_t(tuning.width)*tuning.height<=1920u*1080u &&
+            tuning.samples>=1 && tuning.samples<=120 && tuning.steps>=8 && tuning.steps<=1024 &&
+            tuning.sun_steps>=1 && tuning.sun_steps<=256 && (tuning.field_divisor==1 || tuning.field_divisor==2 || tuning.field_divisor==4) &&
+            tuning.shadow_resolution>=16 && tuning.shadow_resolution<=512 && tuning.shadow_steps>=8 && tuning.shadow_steps<=1024,
+            "tuning parameter exceeds supported budget");
+        require(tuning.mode.empty() || tuning.mode=="combined-static" || tuning.mode=="combined-motion" || tuning.mode=="air-static" ||
+            tuning.mode=="air-motion" || tuning.mode=="unlit-static" || tuning.mode=="unlit-motion","unknown tuning mode");
+        require(!quality || tuning.json()==DiagnosticOptions{}.json(),"quality uses the fixed production configuration");
+        if(tuning.wait_tracy) {
+            require(profiling::enabled(),"Tracy capture requires a profiling build");
+            const auto start=Clock::now(); while(!profiling::is_connected() && elapsed(start)<30000) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            require(profiling::is_connected(),"Tracy connection timed out");
+        }
+        DK_PROFILE_THREAD_NAME("Cloud benchmark");
         if(!report.parent_path().empty()) std::filesystem::create_directories(report.parent_path());
         output.update({{"preset_name",preset},{"kind",quality ? "quality" : "performance"},{"compiler",DK_BENCH_COMPILER},{"configuration",DK_BENCH_CONFIG},
-            {"timestamps",timestamps},{"validation",validation},{"smoke",smoke},{"steady_samples",smoke ? 2 : 20},
+            {"timestamps",timestamps},{"validation",validation},{"smoke",smoke},{"steady_samples",smoke ? 2 : tuning.samples},{"diagnostic_options",tuning.json()},
             {"tracy_compiled",profiling::enabled()},{"tracy_connected",profiling::is_connected()},
             {"shader_fingerprint",take(shader_fingerprint(DK_RENDER_SHADER_DIR,true))}});
-        run(output,preset,smoke,quality,timestamps,validation,report);
+        run(output,preset,smoke,quality,timestamps,validation,report,tuning);
         require(output["shader_fingerprint"]==take(shader_fingerprint(DK_RENDER_SHADER_DIR,true)),"shader changed during run"); output["status"]="passed";
     } catch(const std::exception& e) { output["error"]=e.what(); std::fprintf(stderr,"cloud benchmark: %s\n",e.what()); }
     if(!report.empty()) { std::ofstream stream(report); stream<<output.dump(2)<<'\n'; if(!stream) return 1; }
