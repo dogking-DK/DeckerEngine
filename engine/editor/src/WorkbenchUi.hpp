@@ -34,6 +34,7 @@ private:
     void request(PendingAction);
     void perform();
     void toolbar();
+    void view_settings(Viewport&);
     void hierarchy();
     void inspector();
     void assets();
@@ -68,6 +69,7 @@ private:
     std::map<std::string,ImVec2> controls_;
     std::vector<std::string> log_;
     std::string viewport_error_;
+    std::optional<EntityId> inspected_entity_;
     VoxelDisplaySettings voxel_draft_;
     std::optional<EditorViewportGuard> voxel_draft_guard_;
     std::string simulation_error_;

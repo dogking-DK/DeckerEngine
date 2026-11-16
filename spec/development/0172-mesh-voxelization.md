@@ -36,7 +36,7 @@ python scripts/benchmark-mesh-voxels.py --assetc out/build/windows-voxel-editor/
 
 通过的证据：
 
-- `20261116-143137-07723e22`：4 项 mesh voxelizer 与 `dk.assetc.voxelize_process` 通过；该 scope 的旧 mesh GUI 失败归 0173 后续修复。旧 `dk.assetc.process` 在 `20261116-141910-023ac2f3` 中通过。
+- `20261116-143137-07723e22`：4 项 mesh voxelizer 与 `dk.assetc.voxelize_process` 通过；该 scope 的旧 mesh GUI 失败归 [0173](0173-editor-view-settings.md) 后续修复。旧 `dk.assetc.process` 在 `20261116-141910-023ac2f3` 中通过。
 - `20261116-151444-9919a3fe`：上述最终 GPU scope 全部 5 项通过，包含 compute 的 6144 条独立参考射线、1296 读值，以及原生数值/光照/状态、GUI/capture 四 DI 和介质消费端。
 - 两个最小解析盒回归分别在去掉对应修复时复现 status 3 / 4；恢复最终源码后均通过。构造的大偏移等时刻射线会被 CPU DDA 数值保护拒绝，测试独立采用解析单位盒交点，不以被拒绝的 CPU 查询作为通过参考。
 - Sponza 64/128/256 各 3 个独立 Release 转换及 GPU 进程；每个覆盖 640×480、1280×720 与透视/正交，32 spp 预热、每视图 11 spp，最终统计各含 24 个稳态样本。128 短测及 256 完整长测另开 required validation，通过且 0 错误/警告。
@@ -48,7 +48,7 @@ python scripts/benchmark-mesh-voxels.py --assetc out/build/windows-voxel-editor/
 
 ## 偏差与决策
 
-依赖版本/baseline 未变；无 CUDA、mesh 三角化渲染替代或新的 Runtime Command。性能发现的共享 HDDA 缺陷必须修复后才能交付文件输入，因此纳入本记录。UI 布局单独记录/提交 0173。
+依赖版本/baseline 未变；无 CUDA、mesh 三角化渲染替代或新的 Runtime Command。性能发现的共享 HDDA 缺陷必须修复后才能交付文件输入，因此纳入本记录。UI 布局单独记录/提交 [0173](0173-editor-view-settings.md)。
 
 ## 遗留问题与下一步
 

@@ -4,7 +4,7 @@
 namespace dk::editor::detail {
 bool CameraSettingsUi::draw(Camera& camera,bool fixture,double aspect,std::map<std::string,ImVec2>& controls,const char* prefix,SettingsHelpUi* help) {
     ImGui::PushID(prefix);
-    if(help && help->reveal("Viewport","Camera/") && !ImGui::IsPopupOpen("Camera settings")) {
+    if(help && help->reveal("View settings","Camera/") && !ImGui::IsPopupOpen("Camera settings")) {
         draft_=camera.settings(); error_.clear(); ImGui::OpenPopup("Camera settings");
     }
     const auto mark=[&](const char* name) {
@@ -42,7 +42,7 @@ bool CameraSettingsUi::draw(Camera& camera,bool fixture,double aspect,std::map<s
         ImGui::InputDouble("Wheel sensitivity",&draft_.navigation.wheel_sensitivity,0,0,"%.3f"); if(help) help->item("camera.wheel_sensitivity");
         ImGui::Checkbox("Invert mouse Y",&draft_.navigation.invert_y); if(help) help->item("camera.invert_y");
         ImGui::InputDouble("Move speed (m/s)",&draft_.navigation.move_speed,0,0,"%.3f"); mark("speed"); if(help) help->item("camera.move_speed");
-        if(help && help->reveal("Viewport","Camera/Preferences")) ImGui::SetNextItemOpen(true);
+        if(help && help->reveal("View settings","Camera/Preferences")) ImGui::SetNextItemOpen(true);
         if(ImGui::TreeNode("Fly/Walk preferences")) {
             ImGui::InputDouble("Fast multiplier",&draft_.navigation.fast_multiplier,0,0,"%.3f"); if(help) help->item("camera.fast_multiplier");
             ImGui::InputDouble("Slow multiplier",&draft_.navigation.slow_multiplier,0,0,"%.3f"); if(help) help->item("camera.slow_multiplier");

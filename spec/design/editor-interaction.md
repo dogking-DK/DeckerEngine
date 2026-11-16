@@ -1,7 +1,7 @@
 ---
 module: editor-interaction
 created_at: "2026-10-08T11:35:00+08:00"
-updated_at: "2026-11-03T17:13:21+08:00"
+updated_at: "2026-11-16T15:25:58+08:00"
 status: accepted
 ---
 
@@ -275,3 +275,9 @@ GPU 正确性使用 required validation；持续导航分别记录 GUI 呈现与
 Edit Camera 由 CPU EditorViewportService 持有；GUI 每次构造候选并经服务提交，Simulation 保持独立。
 Camera 值模型下移至 framework/services，旧公开头作为兼容入口；相机导航数学和输入规则不变。
 相机/视口共享 guard 与阻止原因，命令单位、Frame 来源及原子失败规则见 [M22.9 契约](editor-console.md#m229-实施契约edit-相机命令)。
+
+## 右侧设置入口（0173）
+
+Edit 视口的相机、投影、导航和 Gizmo 模式由中央上方移动到右侧 View settings 的 Camera and navigation 区；
+渲染入口同面板 Rendering 区。相机草稿与服务 guard、快捷键、拾取及拖拽提交语义不变。
+Inspector Apply/Revert 位于属性区顶部，实体切换重置滚动。验证与布局见[编辑器设计](editor.md#右侧视图设置0173)。

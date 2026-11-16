@@ -127,10 +127,19 @@ void WorkbenchUi::hierarchy() {
 void WorkbenchUi::inspector() {
     settings_help_.panel("Inspector"); ImGui::Begin("Inspector");
     auto* draft=model_.draft();
+    const auto inspected=draft ? std::optional{draft->entity.id} : std::nullopt;
+    if(inspected!=inspected_entity_) { ImGui::SetScrollY(0); inspected_entity_=inspected; }
     if (!draft) { ImGui::TextWrapped("Select an entity in Hierarchy to inspect or edit it."); settings_help_.unavailable_panel("Inspector"); ImGui::End(); return; }
     ImGui::TextUnformatted("ENTITY"); ImGui::TextWrapped("%s",draft->entity.id.to_string().c_str());
     ImGui::Separator();
     ImGui::BeginDisabled(input_.active() || (model_.environment_draft() && model_.environment_draft()->modified));
+    ImGui::BeginDisabled(!model_.pending());
+    if (ImGui::Button("Apply")) report("Apply",model_.apply()); mark("apply"); help("inspector.apply");
+    ImGui::SameLine();
+    if (ImGui::Button("Revert")) report("Revert",model_.revert()); mark("revert"); help("inspector.revert");
+    ImGui::EndDisabled();
+    draft=model_.draft();
+    if(!draft) { ImGui::EndDisabled(); ImGui::End(); return; }
     bool modified=false;
     ImGui::SetNextItemWidth(-1);
     modified|=ImGui::InputText("##Name",&draft->entity.name); mark("name"); help("inspector.name");
@@ -149,11 +158,6 @@ void WorkbenchUi::inspector() {
     ImGui::TextDisabled("Scale  X / Y / Z");
     draft->modified|=modified;
     ImGui::Spacing();
-    ImGui::BeginDisabled(!model_.pending());
-    if (ImGui::Button("Apply")) report("Apply",model_.apply()); mark("apply"); help("inspector.apply");
-    ImGui::SameLine();
-    if (ImGui::Button("Revert")) report("Revert",model_.revert()); mark("revert"); help("inspector.revert");
-    ImGui::EndDisabled();
     ImGui::EndDisabled();
     // Commands may replace the draft; reacquire before displaying it.
     draft=model_.draft();
@@ -232,6 +236,65 @@ void WorkbenchUi::confirmation() {
         ImGui::EndPopup();
     }
 }
+void WorkbenchUi::view_settings(Viewport& preview) {
+    settings_help_.panel("View settings");
+    if(ImGui::Begin("View settings")) {
+    ImGui::SeparatorText("Rendering");
+    auto viewport_settings=model_.editor_viewport()->settings();
+#ifdef DK_EDITOR_PATHTRACING
+    ImGui::BeginDisabled(model_.pending() || input_.active() || input_.navigating());
+    if(ImGui::RadioButton("Raster",!path_mode())) { viewport_settings.path_trace=false; if(viewport_settings_changed(viewport_settings)) preview.suspend_path(); } mark("path_raster"); help("viewport.renderer"); ImGui::SameLine();
+    ImGui::BeginDisabled(!preview.path_unavailable().empty());
+    if(ImGui::RadioButton("Path trace",path_mode())) { viewport_settings.path_trace=true; if(viewport_settings_changed(viewport_settings)) ImGui::SetWindowFocus("Path tracing"); } mark("path_mode"); help("viewport.renderer",preview.path_unavailable());
+    ImGui::EndDisabled();
+    ImGui::EndDisabled();
+    ImGui::SameLine(); if(ImGui::SmallButton("Settings")) ImGui::SetWindowFocus("Path tracing"); mark("path_settings");
+#else
+    ImGui::TextWrapped("Path trace unavailable (module disabled)"); help("viewport.renderer","Path tracing module is unavailable.");
+#endif
+    ImGui::BeginDisabled(input_.active());
+    if (ImGui::SmallButton("Refresh")) preview.retry(); mark("path_refresh");
+    ImGui::EndDisabled();
+    if(ImGui::GetItemRectMax().x+ImGui::CalcTextSize("Unlit inspection").x+50<ImGui::GetWindowPos().x+ImGui::GetWindowContentRegionMax().x)
+        ImGui::SameLine();
+    bool path_projection=false;
+#ifdef DK_EDITOR_PATHTRACING
+    path_projection=path_mode();
+#endif
+    ImGui::BeginDisabled(model_.pending() || input_.active() || input_.navigating() || path_projection);
+    if(ImGui::Checkbox("Unlit inspection",&viewport_settings.unlit_inspection)) viewport_settings_changed(viewport_settings);
+    mark("unlit_inspection"); help("viewport.unlit_inspection"); ImGui::EndDisabled();
+    ImGui::BeginDisabled(model_.pending() || input_.active() || input_.navigating() || path_projection);
+    const auto open_voxel=[&] {
+        const auto state=model_.editor_viewport()->query();
+        if(!state) { report("Voxel settings",std::unexpected(state.error())); return; }
+        voxel_draft_=state->settings.voxel; voxel_draft_guard_=state->guard; ImGui::OpenPopup("Voxel display");
+    };
+    if(settings_help_.reveal("View settings","Voxel") && !ImGui::IsPopupOpen("Voxel display")) open_voxel();
+    if(ImGui::SmallButton("Voxel settings")) open_voxel(); mark("voxel_settings");
+    if(ImGui::BeginPopup("Voxel display")) {
+        ImGui::Checkbox("Directional light",&voxel_draft_.directional);
+        mark("voxel_directional"); help("viewport.voxel_shading");
+        ImGui::InputScalarN("Light direction",ImGuiDataType_Double,voxel_draft_.light_direction.data(),3,nullptr,nullptr,"%.6f");
+        help("viewport.voxel_light_direction");
+        ImGui::InputScalarN("Irradiance",ImGuiDataType_Double,voxel_draft_.irradiance.data(),3,nullptr,nullptr,"%.4f");
+        help("viewport.voxel_irradiance");
+        if(ImGui::Button("Apply") && voxel_draft_guard_) {
+            auto candidate=model_.editor_viewport()->settings(); candidate.voxel=voxel_draft_;
+            const auto applied=model_.editor_viewport()->set(*voxel_draft_guard_,candidate);
+            report("Voxel settings",applied ? Result<void>{} : std::unexpected(applied.error()));
+            if(applied) { voxel_draft_guard_=applied->guard; viewport_settings=applied->settings; }
+        }
+        mark("voxel_apply"); ImGui::SameLine();
+        if(ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+        mark("voxel_cancel"); ImGui::EndPopup();
+    }
+    ImGui::EndDisabled();
+    ImGui::SeparatorText("Camera and navigation");
+    input_.toolbar(model_,preview,controls_,[&](const char* action,Result<void> result) { return report(action,std::move(result)); },&settings_help_);
+    }
+    ImGui::End();
+}
 void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     input_.begin_frame(); simulation_navigation_.begin_frame();
     controls_.clear();
@@ -248,7 +311,9 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
         auto center=dock;
         auto left=ImGui::DockBuilderSplitNode(center,ImGuiDir_Left,0.24f,nullptr,&center);
         const auto simulation=ImGui::DockBuilderSplitNode(left,ImGuiDir_Down,0.65f,nullptr,&left);
-        const auto right=ImGui::DockBuilderSplitNode(center,ImGuiDir_Right,0.31f,nullptr,&center);
+        auto right=ImGui::DockBuilderSplitNode(center,ImGuiDir_Right,0.34f,nullptr,&center);
+        const auto view_settings=ImGui::DockBuilderSplitNode(right,ImGuiDir_Up,0.50f,nullptr,&right);
+        ImGui::DockBuilderDockWindow("View settings",view_settings);
         auto bottom=ImGui::DockBuilderSplitNode(center,ImGuiDir_Down,0.26f,nullptr,&center);
         const auto log=ImGui::DockBuilderSplitNode(bottom,ImGuiDir_Right,0.48f,nullptr,&bottom);
         ImGui::DockBuilderDockWindow("Hierarchy",left); ImGui::DockBuilderDockWindow("Inspector",right);
@@ -277,63 +342,8 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
     if(simulation_displayed) { model_.camera_draft(false); settings_help_.unavailable_panel("Viewport"); }
     if (!simulation_displayed) {
     preview.show_edit();
-    auto viewport_settings=model_.editor_viewport()->settings();
-#ifdef DK_EDITOR_PATHTRACING
-    ImGui::BeginDisabled(model_.pending() || input_.active() || input_.navigating());
-    if(ImGui::RadioButton("Raster",!path_mode())) { viewport_settings.path_trace=false; if(viewport_settings_changed(viewport_settings)) preview.suspend_path(); } mark("path_raster"); help("viewport.renderer"); ImGui::SameLine();
-    ImGui::BeginDisabled(!preview.path_unavailable().empty());
-    if(ImGui::RadioButton("Path trace",path_mode())) { viewport_settings.path_trace=true; if(viewport_settings_changed(viewport_settings)) ImGui::SetWindowFocus("Path tracing"); } mark("path_mode"); help("viewport.renderer",preview.path_unavailable());
-    ImGui::EndDisabled();
-    ImGui::EndDisabled();
-    ImGui::SameLine(); if(ImGui::SmallButton("Settings")) ImGui::SetWindowFocus("Path tracing"); mark("path_settings");
-    ImGui::SameLine();
-#else
-    ImGui::TextDisabled("Path trace unavailable (module disabled)"); help("viewport.renderer","Path tracing module is unavailable."); ImGui::SameLine();
-#endif
-    ImGui::BeginDisabled(input_.active());
-    if (ImGui::SmallButton("Refresh")) preview.retry(); mark("path_refresh");
-    ImGui::EndDisabled();
-    if(ImGui::GetItemRectMax().x+ImGui::CalcTextSize("Unlit inspection").x+50<ImGui::GetWindowPos().x+ImGui::GetWindowContentRegionMax().x)
-        ImGui::SameLine();
-    bool environment_projection=model_.snapshot() && (model_.snapshot()->scene.environment().enabled || model_.snapshot()->scene.environment().clouds.enabled);
-    bool path_projection=false;
-#ifdef DK_EDITOR_PATHTRACING
-    path_projection=path_mode();
-#endif
-    ImGui::BeginDisabled(model_.pending() || input_.active() || input_.navigating() || path_projection);
-    if(ImGui::Checkbox("Unlit inspection",&viewport_settings.unlit_inspection)) viewport_settings_changed(viewport_settings);
-    mark("unlit_inspection"); help("viewport.unlit_inspection"); ImGui::EndDisabled();
-    ImGui::BeginDisabled(model_.pending() || input_.active() || input_.navigating() || path_projection);
-    const auto open_voxel=[&] {
-        const auto state=model_.editor_viewport()->query();
-        if(!state) { report("Voxel settings",std::unexpected(state.error())); return; }
-        voxel_draft_=state->settings.voxel; voxel_draft_guard_=state->guard; ImGui::OpenPopup("Voxel display");
-    };
-    if(settings_help_.reveal("Viewport","Voxel") && !ImGui::IsPopupOpen("Voxel display")) open_voxel();
-    if(ImGui::SmallButton("Voxel settings")) open_voxel(); mark("voxel_settings");
-    if(ImGui::BeginPopup("Voxel display")) {
-        ImGui::Checkbox("Directional light",&voxel_draft_.directional);
-        mark("voxel_directional"); help("viewport.voxel_shading");
-        ImGui::InputScalarN("Light direction",ImGuiDataType_Double,voxel_draft_.light_direction.data(),3,nullptr,nullptr,"%.6f");
-        help("viewport.voxel_light_direction");
-        ImGui::InputScalarN("Irradiance",ImGuiDataType_Double,voxel_draft_.irradiance.data(),3,nullptr,nullptr,"%.4f");
-        help("viewport.voxel_irradiance");
-        if(ImGui::Button("Apply") && voxel_draft_guard_) {
-            auto candidate=model_.editor_viewport()->settings(); candidate.voxel=voxel_draft_;
-            const auto applied=model_.editor_viewport()->set(*voxel_draft_guard_,candidate);
-            report("Voxel settings",applied ? Result<void>{} : std::unexpected(applied.error()));
-            if(applied) { voxel_draft_guard_=applied->guard; viewport_settings=applied->settings; }
-        }
-        mark("voxel_apply"); ImGui::SameLine();
-        if(ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
-        mark("voxel_cancel"); ImGui::EndPopup();
-    }
-    ImGui::EndDisabled();
-    // Keep one line in all modes so toggling a preference does not resize the image.
-    ImGui::TextDisabled(path_projection ? "Path trace supports Perspective and Orthographic" :
-        environment_projection && !viewport_settings.unlit_inspection ? "Atmosphere and clouds support Perspective and Orthographic" :
-        "Unlit inspection skips scene lighting for this viewport");
-    input_.toolbar(model_,preview,controls_,[&](const char* action,Result<void> result) { return report(action,std::move(result)); },&settings_help_);
+    view_settings(preview);
+    const auto viewport_settings=model_.editor_viewport()->settings();
     if (const auto* s=model_.snapshot(); s && visible) {
         if (preview.texture()) {
 #ifdef DK_EDITOR_PATHTRACING

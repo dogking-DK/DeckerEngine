@@ -52,7 +52,7 @@ void ViewportInput::toolbar(Workspace& model,Viewport&,std::map<std::string,ImVe
     ImGui::BeginDisabled(active());
     if (ImGui::RadioButton("Move",mode_==Mode::translate)) mode_=Mode::translate; mark(controls,"mode_move"); ImGui::SameLine();
     if (ImGui::RadioButton("Rotate",mode_==Mode::rotate)) mode_=Mode::rotate; mark(controls,"mode_rotate"); ImGui::SameLine();
-    if (ImGui::RadioButton("Scale",mode_==Mode::scale)) mode_=Mode::scale; mark(controls,"mode_scale"); ImGui::SameLine();
+    if (ImGui::RadioButton("Scale",mode_==Mode::scale)) mode_=Mode::scale; mark(controls,"mode_scale");
     if (ImGui::SmallButton("Reset")) { navigation_.cancel(); camera_.reset(fixture_); } mark(controls,"camera_reset"); if(help) help->item("camera.reset");
     ImGui::SameLine();
     ImGui::BeginDisabled(!model.selection());

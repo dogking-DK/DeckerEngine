@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-11-12T16:55:54+08:00"
+updated_at: "2026-11-16T15:25:58+08:00"
 status: accepted
 ---
 
@@ -401,3 +401,11 @@ Suspend 通知立即唤醒 worker；排空在途提交后才报告 Suspended，�
 Path tracing 面板将 Classic MIS / ReSTIR DI 与 Surface only / Scene media 分开，提供候选数和 temporal/spatial 开关，保留可切回经典路径的会话配置。worker 选择相应 renderer 配置入口，不持久化到 Scene/Undo。配置变化沿已有历史契约失效；曝光/暂停/target 保留累计，姿态变化仅在时间复用有效时保留采样历史。
 
 面板从实际完成帧显示算法、候选/复用配置、采样 epoch 起点、历史年龄、有效 M 与复用统计，并单列 worker 最近重置原因。完整 epoch 才推进 spp；旧帧在错误时继续显示其实际来源。验证使用后台窗口与同配置独立 capture 对照，详见 [0140](../development/0140-editor-restir-capture.md)。
+
+## 右侧视图设置（0173）
+
+中央 Viewport 保留图像、交互和状态；原顶部渲染模式、Refresh、Unlit inspection、Voxel settings 与相机/导航/Gizmo 工具
+移到右侧 View settings 面板，按 Rendering 和 Camera 分组。默认右侧上方视图设置，下方 Inspector/Environment/Path tracing。
+Inspector 的 Apply/Revert 放到属性区顶部，切换实体时重置滚动，避免窄/短侧栏留下不可见草稿操作。
+保持原 EditorViewport/EditorCamera 服务、guard、草稿 Apply/Cancel、撤销与会话语义；设置搜索定位跟随新面板。
+验证右侧实际控件、中央可用高度、透视/正交、路径切换、体素设置、相机草稿/搜索、旧 mesh 交互；自动窗口使用 --background。

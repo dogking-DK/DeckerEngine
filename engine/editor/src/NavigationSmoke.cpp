@@ -82,6 +82,7 @@ bool NavigationSmoke::input(Workspace& model,WorkbenchUi& ui,platform::Window& w
         io.AddFocusEvent(true);
     }
     if(phase<11) return false;
+    if(action=="revert") require(!model.pending(),"Revert did not clear the Inspector draft");
     require(!ui.input().navigating() && !SDL_GetWindowRelativeMouseMode(native),"mouse release did not end capture");
     require(model.snapshot()->state.revision==scene_revision_ && model.history().undo_count==history_ && model.snapshot()->state.dirty==dirty_,"navigation changed scene/history");
     if(action=="camera_fly" || action=="camera_walk" || action=="camera_orbit") {

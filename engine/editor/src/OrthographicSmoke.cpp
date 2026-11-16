@@ -6,7 +6,7 @@
 namespace dk::editor::detail {
 bool SmokeDriver::orthographic_input(Workspace& model,WorkbenchUi& ui,Viewport& viewport) {
     constexpr std::array actions={"camera_orthographic","camera_front","camera_back","camera_left","camera_right","camera_top","camera_bottom",
-        "camera_reset","camera_frame","viewport_empty","viewport","mode_move",":move","undo","redo",":cancel","mode_rotate",":rotate","mode_scale",":scale",
+        "camera_reset","camera_frame",":zoom_out","viewport_empty","viewport","mode_move",":move","undo","redo",":cancel","mode_rotate",":rotate","mode_scale",":scale",
         ":orbit",":pan",":zoom","camera_frame",":external_environment","unlit_inspection",":disable_unlit",
         "camera_perspective",":restore_environment"};
     if(ortho_stage_>=actions.size()) return true;
@@ -17,6 +17,7 @@ bool SmokeDriver::orthographic_input(Workspace& model,WorkbenchUi& ui,Viewport& 
     const auto& camera=ui.input().camera();
     const bool gizmo=action==":move" || action==":rotate" || action==":scale" || action==":cancel";
     const bool navigation=action==":orbit" || action==":pan";
+    const bool zoom=action==":zoom" || action==":zoom_out";
     const int button=action==":orbit" ? 1 : action==":pan" ? 2 : 0;
     if(phase==0) {
         std::printf("Orthographic begin %s\n",actions[ortho_stage_]);
@@ -29,10 +30,12 @@ bool SmokeDriver::orthographic_input(Workspace& model,WorkbenchUi& ui,Viewport& 
             check(model.apply_environment());
         } else if(action==":restore_environment") { check(model.undo()); }
         else {
-            pointer_=control(gizmo ? (action==":rotate" ? "gizmo_2" : "gizmo_0") : navigation || action==":zoom" ? "viewport_empty" :
+            pointer_=control(gizmo ? (action==":rotate" ? "gizmo_2" : "gizmo_0") : navigation || zoom ? "viewport_empty" :
                 action==":disable_unlit" ? "unlit_inspection" : actions[ortho_stage_]);
             start_pointer_=pointer_; io.AddMousePosEvent(pointer_.x,pointer_.y);
-            if(action==":zoom") io.AddMouseWheelEvent(0,2); else io.AddMouseButtonEvent(button,true);
+            // Taller viewport: framing the foreground can include the large background
+            // plane at the corner. Zoom out before testing empty-space selection.
+            if(zoom) io.AddMouseWheelEvent(0,action==":zoom_out" ? -4.f : 2.f); else io.AddMouseButtonEvent(button,true);
         }
     }
     if(phase==2 && (gizmo || navigation)) {
@@ -71,9 +74,9 @@ bool SmokeDriver::orthographic_input(Workspace& model,WorkbenchUi& ui,Viewport& 
             model.history().undo_count==history_+(action==":cancel" ? 0 : 1),"Gizmo did not commit exactly once/cancel");
         require((viewport.pixel_signature()==stage_pixels_)==(action==":cancel"),"Gizmo image did not follow commit/cancel");
     }
-    if(navigation || action==":zoom") {
+    if(navigation || zoom) {
         require(viewport.pixel_signature()!=stage_pixels_,"orthographic navigation did not change pixels");
-        if(action==":zoom") require(camera.world().matrix()==navigation_pose_ && camera.settings().lens.ortho_height!=ortho_height_,"zoom changed pose or ignored height");
+        if(zoom) require(camera.world().matrix()==navigation_pose_ && camera.settings().lens.ortho_height!=ortho_height_,"zoom changed pose or ignored height");
         if(action==":orbit") require(camera.standard_view()==StandardView::none,"Orbit retained fixed view");
     }
     if(!gizmo && action!="undo" && action!="redo" && action!=":external_environment" && action!=":restore_environment")

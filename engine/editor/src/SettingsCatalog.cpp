@@ -145,11 +145,11 @@ std::vector<SettingInfo> build_settings_catalog(const CommandCatalogSnapshot& ca
     add("environment.apply","Environment","Draft","Apply environment","应用 环境","environment.set","environment","Replace the complete scene environment using the guarded draft.",scene);
     add("environment.revert","Environment","Draft","Revert environment","撤回 环境 草稿","","","Restore the committed scene environment without changing the document.","Discards the environment draft only; no Undo entry.");
     add("viewport.raster_exposure","Environment","Viewport","Raster exposure","光栅 曝光","editor.viewport.set","raster_exposure","Linear raster exposure multiplier; independent from path tracing EV.",view);
-    add("viewport.renderer","Viewport","View","Renderer","渲染器 光线追踪 光栅","editor.viewport.set","renderer","Raster or Path trace. Path trace requires the module and compatible GPU.",view);
-    add("viewport.unlit_inspection","Viewport","View","Unlit inspection","无光照 检查","editor.viewport.set","unlit_inspection","Inspect raster geometry without scene atmosphere/light.",view);
-    add("viewport.voxel_shading","Viewport","Voxel","Voxel shading","体素 光照","editor.viewport.set","voxel_shading","Unlit or nonmetallic directional solid voxel shading.",view);
-    add("viewport.voxel_light_direction","Viewport","Voxel","Voxel light direction","体素 光源 方向","editor.viewport.set","voxel_light_direction","Unit world direction towards the light.",view);
-    add("viewport.voxel_irradiance","Viewport","Voxel","Voxel irradiance","体素 辐照度","editor.viewport.set","voxel_irradiance","Linear RGB irradiance for directional voxel shading.",view);
+    add("viewport.renderer","View settings","View","Renderer","渲染器 光线追踪 光栅","editor.viewport.set","renderer","Raster or Path trace. Path trace requires the module and compatible GPU.",view);
+    add("viewport.unlit_inspection","View settings","View","Unlit inspection","无光照 检查","editor.viewport.set","unlit_inspection","Inspect raster geometry without scene atmosphere/light.",view);
+    add("viewport.voxel_shading","View settings","Voxel","Voxel shading","体素 光照","editor.viewport.set","voxel_shading","Unlit or nonmetallic directional solid voxel shading.",view);
+    add("viewport.voxel_light_direction","View settings","Voxel","Voxel light direction","体素 光源 方向","editor.viewport.set","voxel_light_direction","Unit world direction towards the light.",view);
+    add("viewport.voxel_irradiance","View settings","Voxel","Voxel irradiance","体素 辐照度","editor.viewport.set","voxel_irradiance","Linear RGB irradiance for directional voxel shading.",view);
     for(const auto& [key,label,info]:std::initializer_list<std::array<const char*,3>>{
         {"mode","Cloud render mode","Temporal progressively refines while stationary; Reference requires at most 4096 viewport pixels."},
         {"time_seconds","Cloud render time","Fixed time in seconds; changes reset cloud history. Initial UI value 0."},
@@ -167,12 +167,12 @@ std::vector<SettingInfo> build_settings_catalog(const CommandCatalogSnapshot& ca
         {"slow_multiplier","Slow multiplier","减速 倍率"},{"look_sensitivity","Look sensitivity","观察 灵敏度"}}) {
         const bool mode=key==std::string_view("navigation_mode") || key==std::string_view("projection") || key==std::string_view("standard_view");
         const bool prefs=key==std::string_view("fast_multiplier") || key==std::string_view("slow_multiplier") || key==std::string_view("look_sensitivity");
-        add("camera."+std::string(key),"Viewport",mode ? "View" : prefs ? "Camera/Preferences" : "Camera/Lens and navigation",label,alias,"editor.camera.set",key,"Camera popup changes remain a draft until Apply. Mode/projection buttons take effect immediately.",camera);
+        add("camera."+std::string(key),"View settings",mode ? "View" : prefs ? "Camera/Preferences" : "Camera/Lens and navigation",label,alias,"editor.camera.set",key,"Camera popup changes remain a draft until Apply. Mode/projection buttons take effect immediately.",camera);
     }
-    for(const auto* action:{"frame","reset"}) add("camera."+std::string(action),"Viewport","View",action,"相机 聚焦 重置","editor.camera."+std::string(action),action==std::string_view("frame") ? "entity" : "defaults",action==std::string_view("frame") ? "Frame the selected entity and subtree using current published Edit geometry." : "Reset pose; defaults=true also restores lens/navigation preferences.",camera);
-    add("camera.apply","Viewport","Camera/Lens and navigation","Apply camera","应用 相机","","","Validate and commit the complete camera draft; failures retain the draft and current camera.",camera);
-    add("camera.cancel","Viewport","Camera/Lens and navigation","Cancel camera","取消 相机","","","Close the popup and discard its unapplied values.","No camera/Scene/Undo change.");
-    add("camera.defaults","Viewport","Camera/Lens and navigation","Restore camera defaults","恢复 默认 相机","editor.camera.reset","defaults","Restore pose, projection, navigation mode and all preferences; use defaults=true in the command.",camera);
+    for(const auto* action:{"frame","reset"}) add("camera."+std::string(action),"View settings","View",action,"相机 聚焦 重置","editor.camera."+std::string(action),action==std::string_view("frame") ? "entity" : "defaults",action==std::string_view("frame") ? "Frame the selected entity and subtree using current published Edit geometry." : "Reset pose; defaults=true also restores lens/navigation preferences.",camera);
+    add("camera.apply","View settings","Camera/Lens and navigation","Apply camera","应用 相机","","","Validate and commit the complete camera draft; failures retain the draft and current camera.",camera);
+    add("camera.cancel","View settings","Camera/Lens and navigation","Cancel camera","取消 相机","","","Close the popup and discard its unapplied values.","No camera/Scene/Undo change.");
+    add("camera.defaults","View settings","Camera/Lens and navigation","Restore camera defaults","恢复 默认 相机","editor.camera.reset","defaults","Restore pose, projection, navigation mode and all preferences; use defaults=true in the command.",camera);
     for(const auto& [key,label,alias]:std::initializer_list<std::array<const char*,3>>{
         {"medium_mode","Medium mode","介质 表面 大气 云"},{"direct_lighting","Direct lighting","直接光照 ReSTIR 算法"},{"initial_candidates","Initial candidates","候选数量 ReSTIR"},
         {"temporal_reuse","Temporal reuse","时间复用 ReSTIR"},{"spatial_reuse","Spatial reuse","空间复用 ReSTIR"},{"target_spp","Target spp","采样 目标 次数"},

@@ -22,7 +22,7 @@ M23.6/12 使用 OpenVDB/NanoVDB 实体材质索引，不是密度云或 SDF。�
 
 ## 显示设置
 
-Viewport 的 Voxel settings 弹层支持 Unlit/Directional、单位世界光方向及线性 RGB irradiance。
+右侧 View settings → Rendering 的 Voxel settings 弹层支持 Unlit/Directional、单位世界光方向及线性 RGB irradiance。
 编辑完各分量后点击 Apply 整体校验，Cancel 丢弃草稿；弹层打开后其他入口更新视口会使旧草稿 Apply 返回 conflict，重新打开即可读取新值。
 GUI、Console、IPC 使用同一 [editor.viewport.set](../commands/editor-viewport.md) 服务：
 
