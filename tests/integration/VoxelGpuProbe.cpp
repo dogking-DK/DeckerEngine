@@ -107,6 +107,38 @@ void address_checks(memory::ResourceHandle heap,SubmissionQueue& q) {
 }
 void numeric(memory::ResourceHandle heap,SubmissionQueue& q) {
     auto query=take(VoxelGpuQuery::create(heap,q)); auto cache=take(VoxelGpuCache::create(q));
+    {
+        // Entering an occupied leaf from an empty 8-cell tile: X=8 and Y=2
+        // cross at the same float t, while FMA reconstructs both just below
+        // their planes. Recomputing an equal-t point used to alternate forever.
+        const std::array blocks{VoxelBlock{{9,2,0},1,1,true}};
+        VoxelBuildOptions options;options.sample_to_local=centered();options.domain=vx::Domain{{0,0,0},{15,7,7}};
+        auto source=take(build_voxel_grid(blocks,options));auto gpu=take(cache->prepare(q,source));
+        const std::array rays{geometry::Ray{{-1000,-250,.5},{.7,.175,0},0,2000}};
+        const auto result=read(q,take(query.trace(q,gpu,rays,{}, {1024*1024,128})));
+        // Independent analytic face of the unit box at [9,10] x [2,3] x [0,1].
+        // The double CPU DDA deliberately rejects equal-time steps at this scale.
+        vx::Hit expected;expected.cell={9,2,0};expected.value=1;expected.face=vx::Face::negative_x;
+        expected.normal={-1,0,0};expected.distance=1009./.7;
+        compare(result[0],expected,0);
+        require(result[0].status==VoxelGpuStatus::hit && result[0].cell==vx::Coord{9,2,0},"Equal-t sparse leaf transition lost the surface");
+        std::printf("equal-t sparse leaf transition regression passed\n");
+    }
+    {
+        // Captured from Sponza 256: after crossing Z=156, the independent
+        // X=4 division rounds one ULP below t although X is still >4.
+        const std::array blocks{VoxelBlock{{3,81,155},1,1,true}};
+        VoxelBuildOptions options;options.sample_to_local=centered();options.domain=vx::Domain{{-1,-1,-1},{256,107,157}};
+        auto source=take(build_voxel_grid(blocks,options));auto gpu=take(cache->prepare(q,source));
+        const std::array rays{geometry::Ray{{330.38043212890625,240.53518676757812,408.5908508300781},
+            {-63.47754669189453,-30.874135971069336,-49.12625503540039},0.10615061968564987,21.23012351989746}};
+        const auto result=read(q,take(query.trace(q,gpu,rays)));
+        vx::Hit expected;expected.cell={3,81,155};expected.value=1;expected.face=vx::Face::positive_x;
+        expected.normal={1,0,0};expected.distance=(4-rays[0].origin.x())/rays[0].direction.x();
+        compare(result[0],expected,0);
+        require(result[0].status==VoxelGpuStatus::hit,"Rounded-forward plane lost the surface");
+        std::printf("rounded-forward plane regression passed\n");
+    }
     std::mt19937 random(230303); std::uniform_real_distribution<float> point(-4.7f,4.3f), direction(-1,1);
     for (int fixture=0;fixture<6;++fixture) {
         std::vector<std::uint32_t> cells(64); std::vector<VoxelBlock> blocks;

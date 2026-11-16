@@ -2,6 +2,7 @@
 #include "../PathVoxelSupport.hpp"
 #include <dk/render/PathTraceRenderer.hpp>
 #include <dk/graphics/Transfer.hpp>
+#include <dk/assets/VoxelImporter.hpp>
 namespace {
 std::uint64_t shader_identity() {
     std::uint64_t hash=14695981039346656037ull;
@@ -51,6 +52,7 @@ struct JointScene {
     RenderScene scene;
     Transformd world;
     EntityId entity;
+    PathTraceMaterialModel material_model=PathTraceMaterialModel::lambert;
     JointScene(memory::ResourceHandle heap,const Input& in,const vx::SparseGrid& grid) {
         document=take(SceneDocument::create(take(SceneId::parse("01000000-0000-4000-8000-000000000013"))));
         asset.voxel.emplace();asset.voxel->id=take(AssetId::parse("02000000-0000-4000-8000-000000000013"));
@@ -62,7 +64,21 @@ struct JointScene {
     }
     PathTraceScene path(memory::ResourceHandle heap,unsigned edge) const {
         auto limits=desktop_path_scene_limits();limits.voxel_block_edge=edge;const std::array<const CpuAsset*,1> assets{&asset};
-        return take(PathTraceScene::create(heap,scene,assets,limits));
+        return take(PathTraceScene::create(heap,scene,assets,limits,material_model));
+    }
+    JointScene(memory::ResourceHandle heap,const CpuAsset& imported)
+        : JointScene(heap,Input{"asset",0,imported.voxel->grid->domain()},*imported.voxel->grid) {
+        asset=imported;material_model=PathTraceMaterialModel::metallic_roughness;
+        const auto& g=*asset.voxel->grid; Vec3d lo=Vec3d::Constant(1e30),hi=-lo;
+        for(int bits=0;bits<8;++bits) {
+            Vec3d p; for(int a=0;a<3;++a) p[a]=bits&(1<<a) ? double(g.domain().maximum[a])+1 : g.domain().minimum[a];
+            p=take(g.corner_to_local().transform_point(p));lo=lo.cwiseMin(p);hi=hi.cwiseMax(p);
+        }
+        const double scale=3./(hi-lo).maxCoeff(); Trsd trs;trs.scale=Vec3d::Constant(scale);
+        trs.rotation=Eigen::AngleAxisd(.45,Vec3d::UnitX())*Eigen::AngleAxisd(-.55,Vec3d::UnitY());
+        trs.translation=Vec3d{0,0,-5}-trs.rotation*((lo+hi)*(.5*scale));world=take(Transformd::from_trs(trs));
+        check(document->set_local_transform(entity,trs));check(document->set_asset_references(entity,{{asset.voxel->id,AssetKind::voxel}}));
+        scene=take(RenderScene::extract(heap,take(document->snapshot())));
     }
 };
 std::vector<geometry::Ray> joint_rays(const Input& in) {
@@ -238,16 +254,20 @@ void run(Json& output,bool smoke,bool validation,unsigned round,const std::files
     require(!diagnostics.errors && !diagnostics.warnings && !heap.snapshot().live_allocations && memory.try_close().closed(),"joint validation/CPU lifetime failure");
 }
 }
+#include "VoxelFileBenchmark.inl"
 int main(int argc,char** argv) {
     Json output={{"schema",1},{"kind","voxel-joint-baseline"},{"matrix_version",2},{"measurement_version",1},{"status","failed"}};std::filesystem::path path;
     try {
-        bool smoke=false,validation=false;unsigned round=0;
+        bool smoke=false,validation=false;unsigned round=0;std::filesystem::path asset_root;
         for(int i=1;i<argc;++i) {const std::string_view arg=argv[i];if(arg=="--smoke") smoke=true;else if(arg=="--validation") validation=true;
+            else if(arg=="--asset" && i+1<argc) asset_root=argv[++i];
             else if(arg=="--output" && i+1<argc) path=argv[++i];else if(arg=="--round" && i+1<argc) {const std::string s=argv[++i];require(s.size()==1 && s[0]>='0' && s[0]<='2',"round must be 0..2");round=unsigned(s[0]-'0');}else throw std::runtime_error("unknown argument");}
         require(!path.empty(),"--output required");std::filesystem::create_directories(path.parent_path());
         output.update({{"smoke",smoke},{"validation",validation},{"round",round},{"configuration",DK_BENCH_CONFIG},{"compiler",DK_BENCH_COMPILER},
             {"steady_samples",smoke ? 2 : 8},{"warmup",2},{"max_bounces",4},{"seed",2313},{"tracy_connected",profiling::is_connected()}});
-        output["shader_fingerprint"]=shader_identity();run(output,smoke,validation,round,path);require(output["shader_fingerprint"]==shader_identity(),"shader closure changed during run");output["status"]="passed";
+        output["shader_fingerprint"]=shader_identity();
+        if(asset_root.empty()) run(output,smoke,validation,round,path);else run_file(output,asset_root,validation,smoke,path);
+        require(output["shader_fingerprint"]==shader_identity(),"shader closure changed during run");output["status"]="passed";
     } catch(const std::exception& error) {output["error"]=error.what();std::fprintf(stderr,"joint benchmark: %s\n",error.what());}
     if(!path.empty()) {try {save_json(path,output);}catch(...) {return 1;}}return output["status"]=="passed" ? 0 : 1;
 }

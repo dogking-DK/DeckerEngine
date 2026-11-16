@@ -1,0 +1,10 @@
+GPU=NVIDIA GeForce RTX 4070 Laptop GPU driver=NVIDIA RT=disabled validation=required
+equal-t sparse leaf transition regression passed
+rounded-forward plane regression passed
+six fixtures: 6144 independent-oracle rays and 1296 normalized samples passed
+root tiles: domain=8192x4096x4096 nano=864 nodes=0 visited=2 skipped=2
+sparse islands: span=1048577 nano=613664 leaves=2 visited=307 skipped=301
+validation errors=0 warnings=0 known=0 live=0
+
+Warning in GridStats: input tree only contained inactive root tiles!
+While not strictly an error it's rather suspicious!

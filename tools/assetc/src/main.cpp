@@ -7,6 +7,9 @@
 #include <iostream>
 #include <map>
 #include <vector>
+#ifdef DK_ASSETC_VOXELIZE
+int voxelize(const dk::ProjectPaths&,const std::map<std::string,std::string>&,double);
+#endif
 
 namespace {
 void diagnostic(const dk::Error& error) { std::cerr << dk::error_code_name(error.code) << ": " << error.message; for (const auto& context : error.context) { std::cerr << " [" << context << "]"; } std::cerr << '\n'; }
@@ -14,18 +17,26 @@ int run(const std::vector<std::string>& args)
 {
     constexpr auto usage = "Usage: dk-assetc import --project-root ROOT --source REL --output REL [--unit-scale NUMBER]\n"
         "       dk-assetc cache --project-root ROOT --source REL [--unit-scale NUMBER]\n"
-        "       dk-assetc cache-clean --project-root ROOT\n";
+        "       dk-assetc cache-clean --project-root ROOT\n"
+#ifdef DK_ASSETC_VOXELIZE
+        "       dk-assetc voxelize --project-root ROOT --source REL --output NEW_REL_DIR [--resolution 128] [--unit-scale 1] [--colors texture|material]\n"
+#endif
+        ;
     if (args.size() == 1 && args[0] == "--help") { std::cerr << usage; return 0; }
-    if (args.empty() || (args[0] != "import" && args[0] != "cache" && args[0] != "cache-clean") || args.size() % 2 != 1) { std::cerr << usage; return 2; }
+    const bool voxels = !args.empty() && args[0] == "voxelize";
+#ifndef DK_ASSETC_VOXELIZE
+    if(voxels) { std::cerr << "Voxelization requires DK_BUILD_VOXEL_VDB\n"; return 2; }
+#endif
+    if (args.empty() || (!voxels && args[0] != "import" && args[0] != "cache" && args[0] != "cache-clean") || args.size() % 2 != 1) { std::cerr << usage; return 2; }
     std::map<std::string, std::string> options;
     for (std::size_t i = 1; i < args.size(); i += 2) {
         const auto& key = args[i];
-        if ((key != "--project-root" && key != "--source" && key != "--output" && key != "--unit-scale")
+        if ((key != "--project-root" && key != "--source" && key != "--output" && key != "--unit-scale" && !(voxels && (key == "--resolution" || key == "--colors")))
             || args[i + 1].empty() || !options.emplace(key, args[i + 1]).second) { std::cerr << usage; return 2; }
     }
     const bool clean = args[0] == "cache-clean";
     if (!options.contains("--project-root") || (options.contains("--source") != !clean)
-        || (options.contains("--output") != (args[0] == "import")) || (clean && options.size() != 1)) { std::cerr << usage; return 2; }
+        || (options.contains("--output") != (args[0] == "import" || voxels)) || (clean && options.size() != 1)) { std::cerr << usage; return 2; }
     std::optional<double> scale;
     if (options.contains("--unit-scale")) {
         const auto& text = options.at("--unit-scale"); double value = 0;
@@ -44,6 +55,9 @@ int run(const std::vector<std::string>& args)
     if (!root) { diagnostic(root.error()); return 1; }
     const auto paths = dk::ProjectPaths::create(*root);
     if (!paths) { diagnostic(paths.error()); return 1; }
+#ifdef DK_ASSETC_VOXELIZE
+    if(voxels) return voxelize(*paths,options,scale.value_or(1));
+#endif
     if (clean) {
         const auto result = dk::clean_asset_cache(*paths);
         if (!result) { diagnostic(result.error()); return 1; }

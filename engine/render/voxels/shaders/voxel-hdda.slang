@@ -96,13 +96,22 @@ DkVoxelResult dkTraceVoxel(inout DkVoxelBuffer buf, inout pnanovdb_readaccessor_
             plane[axis] = float(direction[axis] > 0 ? high : low);
             next[axis] = direction[axis] == 0 ? 3.402823466e38f : (plane[axis]-origin[axis])/direction[axis];
         }
-        float nextTime = min(next.x,min(next.y,next.z));
+        float candidateTime = min(next.x,min(next.y,next.z));
+        float nextTime = max(candidateTime,time);
         // Equal float t can still cross an integer cell plane; snapping below
         // advances that coordinate and the existing region budget remains bounded.
-        if (!isfinite(nextTime) || nextTime < time) { result.meta.x=4; return result; }
+        if (!isfinite(candidateTime)) { result.meta.x=4; return result; }
+        // Independent float divisions can place a forward plane just before
+        // the current t. Accept it at the current representable t only when
+        // its coordinate still advances along the ray; never step backwards.
+        if (candidateTime < time) for(uint axis=0;axis<3;++axis)
+            if(next[axis]==candidateTime && (plane[axis]-point[axis])*direction[axis]<0) { result.meta.x=4; return result; }
         if (nextTime > end) return result;
-        point = mad(direction,float3(nextTime),origin);
-        for (uint axis=0; axis<3; ++axis) if (next[axis] == nextTime) point[axis]=plane[axis];
+        // Several axes can cross at the same representable t. Recomputing the
+        // point would discard an earlier axis' exact plane snap and can cycle
+        // between adjacent cells forever (observed with voxelized Sponza).
+        if (nextTime != time) point = mad(direction,float3(nextTime),origin);
+        for (uint axis=0; axis<3; ++axis) if (next[axis] == candidateTime) point[axis]=plane[axis];
         if (dkTransition(buf,acc,point,nextTime,direction,params,result)) return result;
         cell=dkCells(point,direction,true); time=nextTime;
     }

@@ -70,7 +70,14 @@ def main():
                     if process.poll() is not None or time.monotonic() > deadline:
                         raise RuntimeError("Missing " + name + ": " + (directory / "stderr.log").read_text(errors="replace"))
                     time.sleep(.03)
-                value = json.loads((evidence / (name + ".json")).read_text())
+                while True:
+                    try:
+                        value = json.loads((evidence / (name + ".json")).read_text(encoding="utf-8"))
+                        break
+                    except PermissionError:  # Windows publication/virus scanner sharing window.
+                        if time.monotonic() > deadline:
+                            raise
+                        time.sleep(.01)
                 if fields.get("expect", "complete") == "complete":
                     q = call("editor.viewport.query")
                     assert q["guard"] == value["guard"] and q["settings"] == value["settings"]

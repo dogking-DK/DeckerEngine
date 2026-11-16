@@ -1,0 +1,645 @@
+{
+  "status": "passed",
+  "cpu": [
+    {
+      "occupied": 39276,
+      "palette_size": 109,
+      "nano_bytes": 1993920,
+      "vdb_bytes": 128315,
+      "distance_and_index_tree_bytes": 5114216,
+      "solid_tree_bytes": 1993680,
+      "voxel_size": 0.4651067405939102,
+      "triangles": 262267,
+      "resolution": 64,
+      "domain": {
+        "maximum": [
+          64,
+          27,
+          39
+        ],
+        "minimum": [
+          -1,
+          -1,
+          -1
+        ]
+      },
+      "dense_int32_bytes": 313896,
+      "import_ms": {
+        "mean": 398.2859666666667,
+        "min": 388.2873,
+        "max": 403.9726
+      },
+      "distance_ms": {
+        "mean": 104.54766666666667,
+        "min": 91.6873,
+        "max": 114.5745
+      },
+      "bake_ms": {
+        "mean": 18.8396,
+        "min": 18.072,
+        "max": 19.6984
+      },
+      "serialize_ms": {
+        "mean": 3.4155,
+        "min": 3.197,
+        "max": 3.7479
+      },
+      "total_ms": {
+        "mean": 143.9492,
+        "min": 130.1899,
+        "max": 155.6993
+      },
+      "compile_nano_ms": {
+        "mean": 120.84649999999999,
+        "min": 116.6901,
+        "max": 122.9587
+      },
+      "elapsed_ms": {
+        "mean": 671.3761333333333,
+        "min": 658.924,
+        "max": 682.1152
+      },
+      "process_peak_working_max": 229289984,
+      "process_peak_commit_max": 266825728,
+      "as_wall_ms_mean": 5.409,
+      "as_gpu_ms_mean": 0.988128,
+      "upload_gpu_ms_mean": 0.6011093333333334,
+      "geometry": {
+        "aabb_input": 5280,
+        "as_scratch_requirement": 21248,
+        "blas_storage": 10112,
+        "blocks": 7040,
+        "instances": 208,
+        "nano": 1993920,
+        "palette": 3488,
+        "tlas_storage": 2048,
+        "triangles": 16
+      }
+    },
+    {
+      "occupied": 164916,
+      "palette_size": 153,
+      "nano_bytes": 4372864,
+      "vdb_bytes": 460870,
+      "distance_and_index_tree_bytes": 8783632,
+      "solid_tree_bytes": 4372520,
+      "voxel_size": 0.2325533702969551,
+      "triangles": 262267,
+      "resolution": 128,
+      "domain": {
+        "maximum": [
+          128,
+          53,
+          79
+        ],
+        "minimum": [
+          -1,
+          -1,
+          -1
+        ]
+      },
+      "dense_int32_bytes": 2316600,
+      "import_ms": {
+        "mean": 400.9697,
+        "min": 394.7098,
+        "max": 408.4245
+      },
+      "distance_ms": {
+        "mean": 139.08346666666665,
+        "min": 127.7614,
+        "max": 145.9784
+      },
+      "bake_ms": {
+        "mean": 69.68509999999999,
+        "min": 65.3788,
+        "max": 76.8954
+      },
+      "serialize_ms": {
+        "mean": 11.744966666666667,
+        "min": 11.4365,
+        "max": 12.1225
+      },
+      "total_ms": {
+        "mean": 237.60186666666667,
+        "min": 223.6772,
+        "max": 251.7477
+      },
+      "compile_nano_ms": {
+        "mean": 152.32093333333333,
+        "min": 145.9932,
+        "max": 161.424
+      },
+      "elapsed_ms": {
+        "mean": 801.8574666666667,
+        "min": 794.1833,
+        "max": 808.7487
+      },
+      "process_peak_working_max": 260579328,
+      "process_peak_commit_max": 298229760,
+      "as_wall_ms_mean": 6.942033333333333,
+      "as_gpu_ms_mean": 0.6636373333333333,
+      "upload_gpu_ms_mean": 0.6550186666666666,
+      "geometry": {
+        "aabb_input": 31152,
+        "as_scratch_requirement": 103424,
+        "blas_storage": 50560,
+        "blocks": 41536,
+        "instances": 208,
+        "nano": 4372864,
+        "palette": 4896,
+        "tlas_storage": 2048,
+        "triangles": 16
+      }
+    },
+    {
+      "occupied": 802223,
+      "palette_size": 187,
+      "nano_bytes": 15901408,
+      "vdb_bytes": 2035009,
+      "distance_and_index_tree_bytes": 32669512,
+      "solid_tree_bytes": 15900596,
+      "voxel_size": 0.11627668514847755,
+      "triangles": 262267,
+      "resolution": 256,
+      "domain": {
+        "maximum": [
+          256,
+          107,
+          157
+        ],
+        "minimum": [
+          -1,
+          -1,
+          -1
+        ]
+      },
+      "dense_int32_bytes": 17885592,
+      "import_ms": {
+        "mean": 402.6656,
+        "min": 391.2359,
+        "max": 413.242
+      },
+      "distance_ms": {
+        "mean": 268.4055,
+        "min": 255.0806,
+        "max": 277.088
+      },
+      "bake_ms": {
+        "mean": 320.31356666666665,
+        "min": 304.5169,
+        "max": 335.727
+      },
+      "serialize_ms": {
+        "mean": 52.199333333333335,
+        "min": 50.6088,
+        "max": 54.8296
+      },
+      "total_ms": {
+        "mean": 659.0966666666667,
+        "min": 627.8599,
+        "max": 685.3682
+      },
+      "compile_nano_ms": {
+        "mean": 266.11696666666666,
+        "min": 256.1809,
+        "max": 275.0678
+      },
+      "elapsed_ms": {
+        "mean": 1352.5030000000002,
+        "min": 1300.6626,
+        "max": 1381.8124
+      },
+      "process_peak_working_max": 359936000,
+      "process_peak_commit_max": 398532608,
+      "as_wall_ms_mean": 22.091533333333334,
+      "as_gpu_ms_mean": 1.6430933333333333,
+      "upload_gpu_ms_mean": 4.705546666666667,
+      "geometry": {
+        "aabb_input": 156792,
+        "as_scratch_requirement": 502144,
+        "blas_storage": 246400,
+        "blocks": 209056,
+        "instances": 208,
+        "nano": 15901408,
+        "palette": 5984,
+        "tlas_storage": 2048,
+        "triangles": 16
+      }
+    }
+  ],
+  "views": [
+    {
+      "resolution": 64,
+      "width": 640,
+      "height": 480,
+      "projection": "perspective",
+      "raster_gpu_ms": {
+        "median": 0.239792,
+        "p95": 0.554016,
+        "min": 0.233376,
+        "max": 0.555552,
+        "n": 24
+      },
+      "raster_wall_ms": {
+        "median": 3.3139000000000003,
+        "p95": 4.1513,
+        "min": 2.7818,
+        "max": 4.1728,
+        "n": 24
+      },
+      "path_gpu_ms": {
+        "median": 3.581888,
+        "p95": 13.256768000000001,
+        "min": 3.07552,
+        "max": 15.459424,
+        "n": 24
+      },
+      "path_wall_ms": {
+        "median": 6.9383,
+        "p95": 24.6227,
+        "min": 5.5802,
+        "max": 27.8768,
+        "n": 24
+      }
+    },
+    {
+      "resolution": 64,
+      "width": 640,
+      "height": 480,
+      "projection": "orthographic",
+      "raster_gpu_ms": {
+        "median": 0.277952,
+        "p95": 0.555744,
+        "min": 0.275136,
+        "max": 0.556224,
+        "n": 24
+      },
+      "raster_wall_ms": {
+        "median": 3.2104,
+        "p95": 4.3201,
+        "min": 2.7382,
+        "max": 16.9123,
+        "n": 24
+      },
+      "path_gpu_ms": {
+        "median": 6.5999680000000005,
+        "p95": 13.090976,
+        "min": 5.440448,
+        "max": 13.623296,
+        "n": 24
+      },
+      "path_wall_ms": {
+        "median": 9.5965,
+        "p95": 17.7327,
+        "min": 7.899,
+        "max": 32.5499,
+        "n": 24
+      }
+    },
+    {
+      "resolution": 64,
+      "width": 1280,
+      "height": 720,
+      "projection": "perspective",
+      "raster_gpu_ms": {
+        "median": 0.763808,
+        "p95": 1.741216,
+        "min": 0.74016,
+        "max": 1.91936,
+        "n": 24
+      },
+      "raster_wall_ms": {
+        "median": 9.38055,
+        "p95": 12.187,
+        "min": 8.1253,
+        "max": 12.426,
+        "n": 24
+      },
+      "path_gpu_ms": {
+        "median": 6.591504,
+        "p95": 11.175648,
+        "min": 5.021504,
+        "max": 11.509727999999999,
+        "n": 24
+      },
+      "path_wall_ms": {
+        "median": 13.4137,
+        "p95": 21.679,
+        "min": 10.3379,
+        "max": 21.9071,
+        "n": 24
+      }
+    },
+    {
+      "resolution": 64,
+      "width": 1280,
+      "height": 720,
+      "projection": "orthographic",
+      "raster_gpu_ms": {
+        "median": 0.80216,
+        "p95": 0.924704,
+        "min": 0.754272,
+        "max": 0.927648,
+        "n": 24
+      },
+      "raster_wall_ms": {
+        "median": 8.1676,
+        "p95": 9.6832,
+        "min": 7.4266,
+        "max": 9.922,
+        "n": 24
+      },
+      "path_gpu_ms": {
+        "median": 8.859632,
+        "p95": 12.729664,
+        "min": 8.23344,
+        "max": 13.805472,
+        "n": 24
+      },
+      "path_wall_ms": {
+        "median": 14.577549999999999,
+        "p95": 19.3039,
+        "min": 13.5951,
+        "max": 20.9196,
+        "n": 24
+      }
+    },
+    {
+      "resolution": 128,
+      "width": 640,
+      "height": 480,
+      "projection": "perspective",
+      "raster_gpu_ms": {
+        "median": 0.25747200000000003,
+        "p95": 0.56192,
+        "min": 0.254112,
+        "max": 0.565504,
+        "n": 24
+      },
+      "raster_wall_ms": {
+        "median": 3.45445,
+        "p95": 3.8902,
+        "min": 2.8507,
+        "max": 4.2617,
+        "n": 24
+      },
+      "path_gpu_ms": {
+        "median": 12.911200000000001,
+        "p95": 33.462272,
+        "min": 11.124576,
+        "max": 36.37648,
+        "n": 24
+      },
+      "path_wall_ms": {
+        "median": 16.7868,
+        "p95": 37.9188,
+        "min": 14.4392,
+        "max": 40.6349,
+        "n": 24
+      }
+    },
+    {
+      "resolution": 128,
+      "width": 640,
+      "height": 480,
+      "projection": "orthographic",
+      "raster_gpu_ms": {
+        "median": 0.273744,
+        "p95": 0.321632,
+        "min": 0.257248,
+        "max": 0.323616,
+        "n": 24
+      },
+      "raster_wall_ms": {
+        "median": 3.25,
+        "p95": 3.836,
+        "min": 2.7683,
+        "max": 4.0061,
+        "n": 24
+      },
+      "path_gpu_ms": {
+        "median": 13.504432000000001,
+        "p95": 18.71712,
+        "min": 11.915904000000001,
+        "max": 18.96368,
+        "n": 24
+      },
+      "path_wall_ms": {
+        "median": 16.42615,
+        "p95": 21.8696,
+        "min": 14.7681,
+        "max": 22.4082,
+        "n": 24
+      }
+    },
+    {
+      "resolution": 128,
+      "width": 1280,
+      "height": 720,
+      "projection": "perspective",
+      "raster_gpu_ms": {
+        "median": 0.725456,
+        "p95": 0.735936,
+        "min": 0.678496,
+        "max": 0.766144,
+        "n": 24
+      },
+      "raster_wall_ms": {
+        "median": 8.1847,
+        "p95": 9.3582,
+        "min": 7.4455,
+        "max": 9.6828,
+        "n": 24
+      },
+      "path_gpu_ms": {
+        "median": 11.831568,
+        "p95": 13.147423999999999,
+        "min": 10.186464,
+        "max": 13.525312,
+        "n": 24
+      },
+      "path_wall_ms": {
+        "median": 17.37715,
+        "p95": 18.5901,
+        "min": 15.6442,
+        "max": 19.4152,
+        "n": 24
+      }
+    },
+    {
+      "resolution": 128,
+      "width": 1280,
+      "height": 720,
+      "projection": "orthographic",
+      "raster_gpu_ms": {
+        "median": 0.824432,
+        "p95": 0.865344,
+        "min": 0.785504,
+        "max": 0.966112,
+        "n": 24
+      },
+      "raster_wall_ms": {
+        "median": 7.8386,
+        "p95": 8.5162,
+        "min": 7.4033,
+        "max": 8.8124,
+        "n": 24
+      },
+      "path_gpu_ms": {
+        "median": 27.367808000000004,
+        "p95": 29.849792000000004,
+        "min": 25.803583999999997,
+        "max": 30.275904,
+        "n": 24
+      },
+      "path_wall_ms": {
+        "median": 33.32625,
+        "p95": 35.9003,
+        "min": 31.3182,
+        "max": 36.3215,
+        "n": 24
+      }
+    },
+    {
+      "resolution": 256,
+      "width": 640,
+      "height": 480,
+      "projection": "perspective",
+      "raster_gpu_ms": {
+        "median": 0.641168,
+        "p95": 1.17376,
+        "min": 0.28672,
+        "max": 1.198592,
+        "n": 24
+      },
+      "raster_wall_ms": {
+        "median": 6.811,
+        "p95": 13.446,
+        "min": 5.2877,
+        "max": 15.4437,
+        "n": 24
+      },
+      "path_gpu_ms": {
+        "median": 24.911344,
+        "p95": 37.855072,
+        "min": 21.28048,
+        "max": 39.679199999999994,
+        "n": 24
+      },
+      "path_wall_ms": {
+        "median": 35.7091,
+        "p95": 41.4564,
+        "min": 24.0469,
+        "max": 43.8054,
+        "n": 24
+      }
+    },
+    {
+      "resolution": 256,
+      "width": 640,
+      "height": 480,
+      "projection": "orthographic",
+      "raster_gpu_ms": {
+        "median": 0.28136,
+        "p95": 0.37904,
+        "min": 0.278752,
+        "max": 0.379328,
+        "n": 24
+      },
+      "raster_wall_ms": {
+        "median": 5.18625,
+        "p95": 5.8011,
+        "min": 4.4031,
+        "max": 6.4914,
+        "n": 24
+      },
+      "path_gpu_ms": {
+        "median": 36.980992,
+        "p95": 45.7376,
+        "min": 32.317504,
+        "max": 47.79872,
+        "n": 24
+      },
+      "path_wall_ms": {
+        "median": 41.172,
+        "p95": 48.2958,
+        "min": 34.7349,
+        "max": 50.7311,
+        "n": 24
+      }
+    },
+    {
+      "resolution": 256,
+      "width": 1280,
+      "height": 720,
+      "projection": "perspective",
+      "raster_gpu_ms": {
+        "median": 0.7079679999999999,
+        "p95": 0.742208,
+        "min": 0.70192,
+        "max": 0.789984,
+        "n": 24
+      },
+      "raster_wall_ms": {
+        "median": 8.2567,
+        "p95": 8.8606,
+        "min": 7.539,
+        "max": 8.9328,
+        "n": 24
+      },
+      "path_gpu_ms": {
+        "median": 35.292384,
+        "p95": 43.313056,
+        "min": 29.854368,
+        "max": 45.060704,
+        "n": 24
+      },
+      "path_wall_ms": {
+        "median": 40.9336,
+        "p95": 49.2793,
+        "min": 35.399,
+        "max": 51.6041,
+        "n": 24
+      }
+    },
+    {
+      "resolution": 256,
+      "width": 1280,
+      "height": 720,
+      "projection": "orthographic",
+      "raster_gpu_ms": {
+        "median": 0.860368,
+        "p95": 1.280352,
+        "min": 0.854368,
+        "max": 1.37728,
+        "n": 24
+      },
+      "raster_wall_ms": {
+        "median": 8.446349999999999,
+        "p95": 12.0804,
+        "min": 7.7295,
+        "max": 15.7537,
+        "n": 24
+      },
+      "path_gpu_ms": {
+        "median": 78.734208,
+        "p95": 97.152352,
+        "min": 71.462496,
+        "max": 104.3992,
+        "n": 24
+      },
+      "path_wall_ms": {
+        "median": 84.54724999999999,
+        "p95": 104.2298,
+        "min": 76.8542,
+        "max": 110.8208,
+        "n": 24
+      }
+    }
+  ],
+  "device": {
+    "driver": "596.49",
+    "name": "NVIDIA GeForce RTX 4070 Laptop GPU"
+  },
+  "shader_fingerprint": 15266676565728068514
+}

@@ -1,7 +1,7 @@
 ---
 module: assets-importers
 created_at: "2026-09-22T18:20:46+08:00"
-updated_at: "2026-11-11T20:28:55+08:00"
+updated_at: "2026-11-16T15:25:58+08:00"
 status: accepted
 ---
 
@@ -261,3 +261,19 @@ SDF/fog/浮点/非零背景、非线性或非法变换、越域及超 palette �
 加载不重新读取源 VDB。Nano loader 先验证区域、相对地址、节点归属与坐标、规范化值/域、map 和完整校验和，再发布可查询快照。
 输入描述 2 MiB、VDB 64 MiB、总输入 128 MiB、解码树合计 256 MiB、NanoVDB 256 MiB、转换存活载荷默认 896 MiB。
 OpenVDB 解码树预算在解码后检查，内部 scratch/allocator/RSS 不是硬上限；诊断报告解码树与转换载荷，不能据此声称整个进程峰值受控。
+
+## 网格体素化扩展（0172）
+
+离线 `dk-assetc voxelize` 复用 glTF 单 mesh 局部坐标导入（不展开 node 场景；unit-scale 显式应用一次），
+PRIVATE 使用现有锁定 OpenVDB `meshToVolume<FloatGrid>` 的 unsigned distance 与 polygon index grid。
+以最长轴 resolution（16–512，默认 128）确定立方体素；中心距表面不超过 sqrt(3)/2 个体素的单元组成表面壳，
+不执行闭合内填充，不把建筑空腔当实体。最近三角形用于 UV/材质插值；Alpha MASK 过滤占用，BLEND 拒绝。
+基础颜色按 sRGB 解码后乘线性因子，RGB 量化为每通道 4 bit 调色板；保留材质金属度/粗糙度因子，
+法线/金属粗糙贴图及发光不烘焙并报告诊断。使用已导入 sampler 的 wrap 和双线性基础颜色采样。
+输出 `grid.vdb`（solid Int32Grid、背景 0）、`solid.dkvoxel`、可打开的 project/scene 和转换统计。
+公开转换接口只返回拥有型候选字节/JSON/统计，不暴露 OpenVDB；依赖保持 CPU-only，无 CUDA。
+CLI 仅发布到新目录：在同父目录唯一 staging 中完成写入，最后 rename 提交；失败不替换已有目录或源资产，
+进程中断可留下 staging，不能宣称跨进程/断电事务。预算限制分辨率、三角形、候选体素、输出树及字节；
+OpenVDB 内部 scratch 峰值采用进程观测，不声明硬限制。
+验证：闭合/开放三角形、空腔、负坐标/缩放、颜色/MASK、非法参数/失败保护、文件重载；
+Sponza Release 64/128/256 转换三轮、记录耗时/占用/字节/进程峰值，并对生成资产进行真实 GPU 双后端显示和计时。

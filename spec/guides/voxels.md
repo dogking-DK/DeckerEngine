@@ -1,7 +1,7 @@
 ---
 module: guide-voxels
 created_at: "2026-11-12T09:48:00+08:00"
-updated_at: "2026-11-12T18:22:13+08:00"
+updated_at: "2026-11-16T15:25:58+08:00"
 status: accepted
 ---
 
@@ -106,3 +106,36 @@ python scripts/benchmark-voxel-joint.py --exe out/build/windows-voxel-editor/bin
 131072 格双岛仍记录原生路径精度域拒绝，完整联合矩阵采用 16384 格双岛；大跨度光栅证据继续见 M23.7，不能据此宣称任意跨度 RT 支持。
 
 `--plot` 需要 matplotlib，采集/聚合本身只用 Python 标准库；离线复算与最终边界见[联合交付报告](../benchmarks/2026-11-12-voxel-joint.md)。required 质量矩阵包含 9 输入，以及 sparse64/128/256、solid256 的两分辨率 11 spp 斜向边界回归。
+
+## glTF 网格体素化
+
+启用 VDB 的 `dk-assetc voxelize` 使用 OpenVDB 无符号距离场把单 mesh 的局部几何转换成有厚度的表面体素壳，
+不填充建筑空腔。输出包含 `.vdb`、`.dkvoxel`、meta/缓存、project.json 和 scene.json，可直接打开。
+目录必须尚不存在，父目录必须存在；不会修改源工程。
+
+```powershell
+$bin = "$PWD/out/build/windows-voxel-editor/bin/Release"
+& "$bin/dk-assetc.exe" voxelize --project-root "$PWD" --source projects/demo/assets/gltf/Sponza/glTF/Sponza.gltf --output out/sponza-voxels --resolution 128 --unit-scale 0.008
+& "$bin/dk-editor.exe" --root "$PWD/out/sponza-voxels" --manifest project.json
+```
+
+选择 Hierarchy 中的 Voxelized mesh，再点 Frame；光栅 Unlit 可直接检查贴图颜色，Path trace 使用同一资产。
+128 表示最长轴格数，另外两轴按比例确定；允许 16–512，建议先 64/128 再 256。
+默认 `--colors texture` 烘焙 UV0 基础颜色，线性 RGB 每通道 4 bit；`--colors material` 只用材质颜色因子，
+两种模式均采样 Alpha MASK。透明 BLEND 拒绝，法线/发光/金属粗糙贴图不烘焙，保留金属度与粗糙度因子。
+沿用当前 glTF 单 mesh 局部坐标契约，不展开 node 放置；`--unit-scale` 只应用一次。
+表面占用取最近三角形及其 UV；多层重合的透明裁剪是近似，不提供亚体素过滤或精确三角形盒相交。
+详见 [离线命令](../commands/assetc.md) 和 [0172](../development/0172-mesh-voxelization.md)。
+
+Release 三轮转换和真实 GPU 测试（新输出目录）：
+
+```powershell
+$env:DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1 = '1'
+python scripts/benchmark-mesh-voxels.py --assetc "$bin/dk-assetc.exe" --benchmark "$bin/dk-voxel-joint-benchmark.exe" --output out/sponza-benchmark
+```
+
+转换记录各阶段 CPU 耗时、占用、VDB/NanoVDB 字节和进程内存；GPU 测试记录上传、AS 构建、
+640×480/1280×720 与双投影下的光栅提交和四反弹路径每增量 spp 时间。每个 GPU 进程先进行 32 spp 路径预热；各视图首帧/两次预热/八次稳定样本分开保存。
+截图和原始 JSON 保存在各轮 GPU 子目录；GPU submission 时间与端到端时间不能互换，也不等同交互 FPS。
+
+已完成的 Sponza 三轮测量、完整表格、图像和限制见 [2026-11-16 报告](../benchmarks/2026-11-16-sponza-voxels.md)。

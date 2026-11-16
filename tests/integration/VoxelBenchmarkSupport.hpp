@@ -26,7 +26,10 @@ using Clock=std::chrono::steady_clock;
 namespace vx=dk::geometry::voxels;
 namespace {
 template<class T,class E> T take(std::expected<T,E> r) {
-    if(!r) { if constexpr(std::is_same_v<E,Error>) throw std::runtime_error(r.error().message); else throw std::bad_alloc{}; }
+    if(!r) { if constexpr(std::is_same_v<E,Error>) {
+        std::string message=r.error().message;for(const auto& context:r.error().context) message+=" ["+context+"]";
+        throw std::runtime_error(message);
+    } else throw std::bad_alloc{}; }
     return std::move(*r);
 }
 void require(bool v,const char* s) { if(!v) throw std::runtime_error(s); }

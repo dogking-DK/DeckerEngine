@@ -350,6 +350,13 @@ if(TARGET dk_shaderc)
     endif()
 endif()
 if(TARGET dk_assetc)
+    if(TARGET dk_asset_voxel_importers)
+        add_test(NAME dk.assetc.voxelize_process COMMAND "${CMAKE_COMMAND}"
+            "-DASSETC=$<TARGET_FILE:dk_assetc>" "-DFIXTURES=${PROJECT_SOURCE_DIR}/tests/fixtures/assets"
+            "-DWORK_DIR=${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/MeshVoxelizeProcessTest.cmake")
+        set_tests_properties(dk.assetc.voxelize_process PROPERTIES TIMEOUT 120)
+    endif()
     add_test(NAME dk.assetc.process COMMAND "${CMAKE_COMMAND}"
         "-DASSETC=$<TARGET_FILE:dk_assetc>"
         "-DFIXTURES=${PROJECT_SOURCE_DIR}/tests/fixtures/assets"

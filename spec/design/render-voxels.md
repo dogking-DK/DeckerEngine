@@ -1,7 +1,7 @@
 ---
 module: render-voxels
 created_at: "2026-11-11T14:51:58+08:00"
-updated_at: "2026-11-12T18:22:13+08:00"
+updated_at: "2026-11-16T15:25:58+08:00"
 status: accepted
 ---
 
@@ -21,6 +21,7 @@ OpenVDB 负责 CPU 稀疏构建和 `.vdb` 导入，NanoVDB 连续缓冲区作为
 路径侧复用现有 Lambert/GGX、MIS/RR、环境/太阳/mesh 面积灯，使体素参与主射线、反弹和阴影。
 ReSTIR DI、已有空气/云的路径组合及表面信号适配分别验收，不能因 Classic 可用就隐含宣布支持所有模式。
 烟雾密度体素积分、透明体素、体素发光面采样、网格体素化、编辑笔刷、SVO/LOD、无限地形和流式世界不在 M23 范围。
+M23 关闭后的网格体素化扩展见 [0172](../development/0172-mesh-voxelization.md) 和[导入器契约](assets-importers.md#网格体素化扩展0172)，复用本模块整数网格及双后端。
 不引入物理求解器，不等待 M20 的降噪滤波器或 M21 流体；复用 M20.2 已有信号生产契约。
 M23 包含显式占用/材质整数网格的 OpenVDB 导入；不把任意 `.vdb` 中的 SDF、fog density、速度或点网格视为实体体素。
 USD 和其他体素文件格式仍后置。库版本、打包限制和接入状态见[三方库说明](../third-party-libraries.md#m23-openvdbnanovdb-稀疏网格选型)。
@@ -497,3 +498,11 @@ CPU、GPU compute 与 mesh 深度/HDR 合成分别见 M23.2/3/4；文件资产�
 - [原生 RT 底座](graphics-raytracing.md)、[路径追踪](render-pathtracing.md)、[ReSTIR](render-restir.md)、[信号](render-denoising.md)
 - [OpenVDB 数据/坐标语义](https://www.openvdb.org/documentation/doxygen/overview.html)、[NanoVDB FAQ](https://www.openvdb.org/documentation/doxygen/NanoVDB_FAQ.html)：上游能力说明不替代固定版本的引擎验收。
 - [0095 体积图像底座](../development/0095-volume-images.md)：已有资源能力的历史证据，不是体素渲染实现证据。
+
+## 真实网格输入的等时刻 HDDA 推进（0172）
+
+Sponza 256 表面壳暴露 GPU float 同 t 跨轴边界反复重访：重新 mad 计算会丢失上一轴已吸附的整数平面，最终耗尽 traversal budget。
+同一 float t 的下一次跨轴必须保留已有 point 的吸附坐标，只更新本次跨越轴；t 增长时仍按原始射线重新计算。
+独立除法可能把仍在 point 前方的整数平面算成略小于当前 t：只有平面坐标沿射线前进时，才在当前可表示 t 吸附该平面；后退仍报数值错误。
+不扩大预算、不跳过诊断、不引入任意 epsilon，也不改变空/实体转换和边界所有权。
+验收包括真实 256 Sponza 双后端/双投影多反弹及已有 compute/原生路径数值门禁。
