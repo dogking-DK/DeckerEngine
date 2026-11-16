@@ -42,6 +42,27 @@ Result<void> background_visibility(SDL_Window* window, UINT command = SW_SHOWNA)
     const auto failure = [](const char* operation) -> Result<void> {
         return std::unexpected(Error{ErrorCode::internal_error, std::string(operation) + ": Win32 error " + std::to_string(GetLastError())});
     };
+    if (command == SW_SHOWMAXIMIZED) {
+        // ShowWindow/SetWindowPlacement(SW_MAXIMIZE) activate even a
+        // WS_EX_NOACTIVATE window. Apply the maximized style/monitor bounds
+        // with SetWindowPos instead, retaining the original restore placement.
+        WINDOWPLACEMENT restore{}; restore.length=sizeof(restore);
+        if (!GetWindowPlacement(hwnd,&restore)) return failure("GetWindowPlacement");
+        MONITORINFO monitor{}; monitor.cbSize=sizeof(monitor);
+        if (!GetMonitorInfoW(MonitorFromWindow(hwnd,MONITOR_DEFAULTTONEAREST),&monitor)) return failure("GetMonitorInfoW");
+        const auto dpi=GetDpiForWindow(hwnd);
+        const int x=GetSystemMetricsForDpi(SM_CXSIZEFRAME,dpi)+GetSystemMetricsForDpi(SM_CXPADDEDBORDER,dpi);
+        const int y=GetSystemMetricsForDpi(SM_CYSIZEFRAME,dpi)+GetSystemMetricsForDpi(SM_CXPADDEDBORDER,dpi);
+        if (!SetWindowLongPtrW(hwnd,GWL_STYLE,GetWindowLongPtrW(hwnd,GWL_STYLE)|WS_MAXIMIZE)) return failure("SetWindowLongPtrW");
+        const auto& area=monitor.rcWork;
+        if (!SetWindowPos(hwnd,HWND_BOTTOM,area.left-x,area.top-y,area.right-area.left+2*x,area.bottom-area.top+2*y,
+            SWP_SHOWWINDOW|SWP_FRAMECHANGED|SWP_NOACTIVATE)) return failure("SetWindowPos maximized");
+        restore.showCmd=SW_SHOWNA;
+        if (!SetWindowPlacement(hwnd,&restore)) return failure("SetWindowPlacement restore bounds");
+        if (!SetWindowPos(hwnd,HWND_BOTTOM,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE))
+            return failure("SetWindowPos background order");
+        return {};
+    }
     if (command != SW_SHOWNA) {
         WINDOWPLACEMENT placement{}; placement.length = sizeof(placement);
         if (!GetWindowPlacement(hwnd, &placement)) return failure("GetWindowPlacement");
@@ -80,8 +101,8 @@ std::shared_ptr<void> WindowAccess::lifetime(const Window& window) { return wind
 Result<Window> Window::create(memory::ResourceHandle resource, const WindowDesc& description)
 {
     if (!resource || resource.state() != memory::ResourceState::open || !valid_size(description.width, description.height) ||
-        description.title.find('\0') != std::string::npos)
-        return std::unexpected(Error{ErrorCode::invalid_argument, "window requires open Memory, positive int dimensions and a NUL-free title"});
+        description.title.find('\0') != std::string::npos || (description.maximized && !description.resizable))
+        return std::unexpected(Error{ErrorCode::invalid_argument, "window requires open Memory, positive int dimensions, a NUL-free title and resizable maximization"});
     if (!SDL_IsMainThread()) return std::unexpected(Error{ErrorCode::invalid_state, "SDL window creation requires the main thread"});
 #ifndef _WIN32
     if (description.background) return std::unexpected(Error{ErrorCode::not_supported, "Background windows currently require Windows"});
@@ -101,13 +122,14 @@ Result<Window> Window::create(memory::ResourceHandle resource, const WindowDesc&
     if (description.resizable) flags |= SDL_WINDOW_RESIZABLE;
     if (description.vulkan) flags |= SDL_WINDOW_VULKAN;
     if (description.hidden || description.background) flags |= SDL_WINDOW_HIDDEN;
+    if (description.maximized) flags |= SDL_WINDOW_MAXIMIZED;
     state->handle = SDL_CreateWindow(description.title.c_str(), static_cast<int>(description.width), static_cast<int>(description.height), flags);
     if (!state->handle) return std::unexpected(sdl_error("SDL_CreateWindow"));
     if (!SDL_SetPointerProperty(SDL_GetWindowProperties(state->handle), window_key, state.get()))
         return std::unexpected(sdl_error("SDL_SetPointerProperty"));
 #ifdef _WIN32
     if (description.background && !description.hidden) {
-        auto shown = background_visibility(state->handle);
+        auto shown = background_visibility(state->handle, description.maximized ? SW_SHOWMAXIMIZED : SW_SHOWNA);
         if (!shown) return std::unexpected(shown.error());
     }
 #endif

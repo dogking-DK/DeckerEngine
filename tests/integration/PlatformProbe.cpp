@@ -76,6 +76,7 @@ int main()
         require(!Window::create(resource, {"invalid", 0, 100}), "zero width accepted");
         for (int round = 0; round < 3; ++round) {
             WindowDesc description{"DeckerEngine platform probe", 320, 240, true, false, false};
+            description.maximized = round == 2;
 #ifdef _WIN32
             description.background = true;
 #endif
@@ -84,6 +85,23 @@ int main()
             auto window = std::move(*created);
             auto second = take(Window::create(resource, {"Second", 200, 160, true, false, true}));
             until(window, [](auto state) { return state.pixel_width && state.pixel_height; });
+            if (description.maximized) {
+                auto* native = take(window.native_sdl_window());
+                const auto maximized = until(window, [&](auto state) {
+                    return (SDL_GetWindowFlags(native) & SDL_WINDOW_MAXIMIZED) && state.pixel_width && state.pixel_height;
+                });
+#ifdef _WIN32
+                check_background(window);
+                auto hwnd = static_cast<HWND>(SDL_GetPointerProperty(SDL_GetWindowProperties(native), SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
+                require(IsZoomed(hwnd), "maximized SDL window is not maximized by Windows");
+#endif
+                check(window.restore());
+                until(window, [&](auto) { return !(SDL_GetWindowFlags(native) & SDL_WINDOW_MAXIMIZED); });
+                int width=0,height=0;
+                require(SDL_GetWindowSize(native,&width,&height), "restore size query failed");
+                std::printf("maximized startup: %ux%u; restored to %dx%d\n",maximized.pixel_width,maximized.pixel_height,width,height);
+                require(width==320 && height==240, "maximized startup lost restore dimensions");
+            }
 #ifdef _WIN32
             check_background(window);
             auto hidden_description = description; hidden_description.hidden = true;

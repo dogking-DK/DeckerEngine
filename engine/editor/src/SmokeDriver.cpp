@@ -110,7 +110,10 @@ void SmokeDriver::interaction_input(Workspace& model,WorkbenchUi& ui,platform::W
             event.window.windowID=SDL_GetWindowID(take(window.native_sdl_window()));
             require(SDL_PushEvent(&event),"focus event injection failed");
         }
-        else if (action==":resize_cancel") check(window.resize(1360,820));
+        else if (action==":resize_cancel") {
+            // A size request on a maximized window only changes restore bounds.
+            check(window.restore()); check(window.resize(1360,820));
+        }
         else if (action==":minimize_cancel") { check(window.minimize()); SDL_Delay(20); check(window.restore()); }
         else if (gizmo || navigation) io.AddMouseButtonEvent(button,false);
     }

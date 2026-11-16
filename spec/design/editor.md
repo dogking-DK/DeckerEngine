@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-11-16T15:25:58+08:00"
+updated_at: "2026-11-16T16:38:57+08:00"
 status: accepted
 ---
 
@@ -403,6 +403,9 @@ Path tracing 面板将 Classic MIS / ReSTIR DI 与 Surface only / Scene media �
 面板从实际完成帧显示算法、候选/复用配置、采样 epoch 起点、历史年龄、有效 M 与复用统计，并单列 worker 最近重置原因。完整 epoch 才推进 spp；旧帧在错误时继续显示其实际来源。验证使用后台窗口与同配置独立 capture 对照，详见 [0140](../development/0140-editor-restir-capture.md)。
 
 ## 右侧视图设置（0173）
+
+编辑器默认以系统最大化状态启动，适配所在显示器工作区；1440×900 仅作为还原尺寸。后台启动同样最大化，保留不抢焦点及手动切入能力。
+默认左右侧栏宽度分别不超过 18/20 个字体单位，避免从最大化还原时挤压中央视口。含体素的光栅预览采用编辑器 512 Ki 像素默认预算，等比例取整缩放，再按面板空间等比例显示；状态行显示实际图像尺寸。普通 mesh 与路径尺寸规则保持原样，不提高底层额度。
 
 中央 Viewport 保留图像、交互和状态；原顶部渲染模式、Refresh、Unlit inspection、Voxel settings 与相机/导航/Gizmo 工具
 移到右侧 View settings 面板，按 Rendering 和 Camera 分组。默认右侧上方视图设置，下方 Inspector/Environment/Path tracing。

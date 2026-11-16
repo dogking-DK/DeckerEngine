@@ -1,7 +1,7 @@
 ---
 module: platform
 created_at: "2026-10-02T21:40:00+08:00"
-updated_at: "2026-10-19T09:48:00+08:00"
+updated_at: "2026-11-16T16:38:57+08:00"
 status: accepted
 ---
 
@@ -20,11 +20,13 @@ Window 是共享窗口寿命的值句柄，create 接收 Memory resource 和 Win
 提供 poll_events、status、resize、minimize、restore。WindowStatus 返回实际像素尺寸、
 最小化与关闭请求；事件泵处理进程内所有本模块窗口，SDL_QUIT 置全部窗口关闭请求。
 WindowDesc 用 UTF-8 标题、逻辑尺寸、可调整尺寸/Vulkan/隐藏开关。
+maximized 默认 false；启用时按系统工作区最大化，width/height 保留为还原尺寸。
 最小化输出零绘制尺寸，恢复后重新读取像素尺寸；关闭事件只标记请求，不隐式销毁。
 
 WindowDesc.background默认false，普通窗口沿用SDL显示/恢复行为。Windows后台窗口先隐藏创建，
 再以原生NOACTIVATE方式显示在其他窗口后方；最小化/恢复也使用不激活的显示状态，恢复后放到后方。
 此设置属于单个窗口，不修改进程级SDL hint，不设始终置顶，不禁用焦点或用户主动切入。
+后台最大化使用原生最大化样式、所在显示器工作区/DPI 边框与 NOACTIVATE 定位，保留还原 placement 和正常可聚焦状态；不调用会激活的 ShowWindow/SetWindowPlacement 最大化路径，创建失败不发布半配置窗口。
 后台窗口仍可呈现、截图和处理注入输入，不等同隐藏或headless；hidden=true仍保持隐藏创建。
 当前非Windows明确拒绝background请求，不承诺其他窗口管理器行为。Win32细节和user32依赖封装于Platform。
 创建失败不发布窗口；恢复失败返回实际错误，已被操作系统应用的窗口状态不承诺回滚。

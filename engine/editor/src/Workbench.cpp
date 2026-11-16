@@ -79,6 +79,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     ShutdownPhase window_phase{shutdown,"window"};
     platform::WindowDesc window_desc{"DeckerEngine | Scene Workbench",1440,900};
     window_desc.background=options.background;
+    window_desc.maximized=true;
     auto window=take(platform::Window::create(heap,window_desc));
     graphics::DeviceOptions device;
 #ifdef NDEBUG

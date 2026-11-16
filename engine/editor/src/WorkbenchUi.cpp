@@ -4,6 +4,7 @@
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
 #include <algorithm>
+#include <cmath>
 #include <unordered_map>
 
 namespace dk::editor::detail {
@@ -309,9 +310,14 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
         ImGui::DockBuilderAddNode(dock,ImGuiDockNodeFlags_DockSpace);
         ImGui::DockBuilderSetNodeSize(dock,ImGui::GetMainViewport()->WorkSize);
         auto center=dock;
-        auto left=ImGui::DockBuilderSplitNode(center,ImGuiDir_Left,0.24f,nullptr,&center);
+        // Bound sidebars in font units so a maximized start can later restore
+        // to a smaller window without leaving the central viewport squeezed.
+        const auto width=ImGui::GetMainViewport()->WorkSize.x;
+        const auto left_fraction=std::min(0.24f,18*ImGui::GetFontSize()/width);
+        const auto right_fraction=std::min(0.34f,20*ImGui::GetFontSize()/(width*(1-left_fraction)));
+        auto left=ImGui::DockBuilderSplitNode(center,ImGuiDir_Left,left_fraction,nullptr,&center);
         const auto simulation=ImGui::DockBuilderSplitNode(left,ImGuiDir_Down,0.65f,nullptr,&left);
-        auto right=ImGui::DockBuilderSplitNode(center,ImGuiDir_Right,0.34f,nullptr,&center);
+        auto right=ImGui::DockBuilderSplitNode(center,ImGuiDir_Right,right_fraction,nullptr,&center);
         const auto view_settings=ImGui::DockBuilderSplitNode(right,ImGuiDir_Up,0.50f,nullptr,&right);
         ImGui::DockBuilderDockWindow("View settings",view_settings);
         auto bottom=ImGui::DockBuilderSplitNode(center,ImGuiDir_Down,0.26f,nullptr,&center);
@@ -353,6 +359,7 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
 #endif
             ImGui::Text("rev %llu  /  %zu draws  /  %s",static_cast<unsigned long long>(preview.info().revision),preview.info().draw_count,
                 preview.current(s->state) ? "Current scene" : "STALE PREVIEW");
+            ImGui::SameLine(); ImGui::TextDisabled("%u x %u",preview.info().width,preview.info().height);
         } else ImGui::TextUnformatted("Preparing scene...");
         if(preview.texture() && !viewport_settings.unlit_inspection && (s->scene.environment().enabled || s->scene.environment().clouds.enabled)
 #ifdef DK_EDITOR_PATHTRACING
@@ -370,6 +377,23 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
             auto height=static_cast<std::uint32_t>(std::clamp(available.y,32.0f,1200.0f));
 #ifdef DK_EDITOR_PATHTRACING
             if(path_mode()) { width=static_cast<std::uint32_t>(available.x); height=static_cast<std::uint32_t>(available.y); }
+#endif
+#ifdef DK_DISK_VOXELS
+            const bool has_voxels=std::ranges::any_of(s->scene.entities(),[](const auto& entity) {
+                return std::ranges::any_of(entity.assets,[](const auto& asset) { return asset.kind==AssetKind::voxel; });
+            });
+            // Keep the interactive voxel preview within its measured GPU budget;
+            // the image is fitted to the panel independently of its extent.
+            constexpr std::uint64_t voxel_preview_pixels=512u*1024u;
+            if(has_voxels && std::uint64_t(width)*height>voxel_preview_pixels
+#ifdef DK_EDITOR_PATHTRACING
+                && !path_mode()
+#endif
+            ) {
+                const auto scale=std::sqrt(double(voxel_preview_pixels)/(double(width)*height));
+                width=static_cast<std::uint32_t>(std::floor(width*scale));
+                height=static_cast<std::uint32_t>(std::floor(height*scale));
+            }
 #endif
             input_.aspect(double(width)/height);
             environment_settings_.camera_revision=input_.camera().revision();

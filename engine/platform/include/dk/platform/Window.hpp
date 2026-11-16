@@ -14,6 +14,8 @@ struct WindowDesc {
     bool resizable = true, vulkan = true, hidden = false;
     // Windows: show/restore behind other windows without activation; manual focus remains available.
     bool background = false;
+    // Initial system maximization; width/height remain the restore size.
+    bool maximized = false;
 };
 struct WindowStatus {
     std::uint32_t pixel_width = 0, pixel_height = 0;
