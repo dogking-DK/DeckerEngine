@@ -151,7 +151,7 @@ def main():
             capture = client.capture(params(gizmo, "gizmo-capture"), timeout=120)
             validate_capture(gizmo, capture.submission.value, capture.job)
             advance("gizmo")
-            for name in ("orthographic", "ortho_height", "perspective"):
+            for name in ("orthographic", "ortho_height", "perspective", "sun", "sun_undo", "sun_redo", "disabled", "enabled", "sun_cancel", "sun_numeric"):
                 point = checkpoint(name)
                 capture = client.capture(params(point, name+"-capture"), timeout=120)
                 validate_capture(point, capture.submission.value, capture.job)

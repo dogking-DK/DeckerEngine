@@ -222,13 +222,14 @@ VS2026 用户打开 `out/build/windows-editor/DeckerEngine.slnx`，选择 Debug/
 
 环境面板、后台大气视口、near/far与曝光约定、capture冻结信息和跨入口验收见
 [大气使用指南](atmosphere.md#编辑器和脚本m146)。它使用同一Scene环境和Undo/Redo历史；
-未应用草稿不改变视口，外部编辑导致旧guard冲突时先Revert再编辑。
+开关和预设即时生效，参数编辑结束或太阳盘松开自动应用，每次操作可 Undo。拖动中的输入不改变视口；外部编辑导致旧 guard 冲突时用 Discard edits 取最新值再编辑。
+太阳盘中心为头顶，内圈为地平线，外缘为下方；方位以 +Z 为 0°、+X 为 90°，也可数字精调。高级物理参数折叠；面板显示当前渲染模式跳过环境的原因。
 
 云面板预设、固定时间/质量/阴影区域与序列截图的一致性设置见[云指南](clouds.md)。
 
 ## Scene media与Console（M17.5）
 
-在 Viewport 选择 **Path trace**，Path tracing 面板选择 **Scene media**，再在 Environment 面板开启/应用空气或云。
+在 Viewport 选择 **Path trace**，Path tracing 面板选择 **Scene media**，再在 Environment 面板开启空气或云（立即应用）。
 **Surface only** 是默认模式，明确忽略场景空气和云。介质时间使用 Path tracing 面板的 **Time (s)**，不随墙钟推进，
 与 Raster 的时间设置独立；云反照率和各向异性控制散射。相机、介质、种子、模式与会话变化重置累积，曝光只改变显示。
 面板的 Shown 来源来自最后完整帧，显示模式、模型/采样版本、固定时间和场 hash；失败时旧图保留并标 STALE PREVIEW。

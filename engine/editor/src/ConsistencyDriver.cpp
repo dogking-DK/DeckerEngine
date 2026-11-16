@@ -6,7 +6,7 @@
 
 namespace dk::editor::detail {
 namespace {
-constexpr std::array names={"initial","gui","external","draft","conflict","undo","redo","saved","reloaded","gizmo","orthographic","ortho_height","perspective"};
+constexpr std::array names={"initial","gui","external","draft","conflict","undo","redo","saved","reloaded","gizmo","orthographic","ortho_height","perspective","sun","sun_undo","sun_redo","disabled","enabled","sun_cancel","sun_numeric"};
 void require(bool value,const char* message) {
     if (!value) throw std::runtime_error{std::string{"Consistency smoke: "}+message};
 }
@@ -21,13 +21,23 @@ std::span<const char* const> actions(std::size_t stage,bool environment,bool clo
         static constexpr std::array ortho={"camera_orthographic"},perspective={"camera_perspective"};
         static constexpr std::array height={"camera_settings","camera_ortho_height",":all",":height",":enter","camera_apply"};
         if(stage==10) return ortho; if(stage==11) return height; if(stage==12) return perspective;
-        static constexpr std::array env_gui={"environment_open","environment_enabled","environment_apply"};
-        static constexpr std::array env_draft={"environment_open","environment_enabled"};
-        static constexpr std::array env_conflict={"environment_apply","environment_revert"};
+        static constexpr std::array env_gui={"environment_open","environment_enabled"};
+        static constexpr std::array env_draft={"environment_open","environment_sun_disk",":sun_drag"};
+        static constexpr std::array env_conflict={":release","environment_revert"};
         static constexpr std::array env_gizmo={"viewport","gizmo_0",":drag",":release"};
         static constexpr std::array cloud_gizmo={"entity","camera_frame","gizmo_0",":drag",":release"};
         if(stage==9) return clouds ? std::span<const char* const>{cloud_gizmo} : std::span<const char* const>{env_gizmo};
-        static constexpr std::array cloud_gui={"environment_open","cloud_preset_sparse","environment_apply"};
+        static constexpr std::array cloud_gui={"environment_open","cloud_preset_sparse"};
+        static constexpr std::array sun={"environment_open","environment_sun_disk",":sun_drag",":release"};
+        static constexpr std::array atmosphere_switch={"environment_open","environment_enabled"},cloud_switch={"environment_open","cloud_enabled"};
+        static constexpr std::array cancel_sun={"environment_open","environment_sun_disk",":sun_drag",":escape",":release"};
+        static constexpr std::array numeric_sun={"environment_sun_elevation",":all",":elevation",":enter"};
+        if(stage==18) return cancel_sun;
+        if(stage==19) return numeric_sun;
+        if(stage==13) return sun;
+        if(stage==14) return undo;
+        if(stage==15) return redo;
+        if(stage==16 || stage==17) return clouds ? std::span<const char* const>{cloud_switch} : std::span<const char* const>{atmosphere_switch};
         if(stage==1) return clouds ? std::span<const char* const>{cloud_gui} : std::span<const char* const>{env_gui};
         if(stage==3) return env_draft;
         if(stage==4) return env_conflict;
@@ -84,11 +94,16 @@ void ConsistencyDriver::input(WorkbenchUi& ui,const Workspace& model,const Viewp
         (!viewport.current(model.snapshot()->state) || !viewport.camera_current(ui.input().camera()))) { --tick_; return; }
     if (phase==0) {
         io.AddFocusEvent(true);
+        if(action=="environment_sun_elevation") io.AddKeyEvent(ImGuiMod_Ctrl,false);
+        if(action==":escape") io.AddKeyEvent(ImGuiKey_Escape,false);
         if (action==":all") { io.AddKeyEvent(ImGuiMod_Ctrl,true); io.AddKeyEvent(ImGuiKey_A,true); }
         else if (action==":drag") pointer_.x+=40;
+        else if (action==":sun_drag") { pointer_.x+=30; pointer_.y-=15; }
         else if (action==":release") io.AddMouseButtonEvent(0,false);
         else if (action==":name") io.AddInputCharactersUTF8("GUI consistency");
         else if (action==":height") io.AddInputCharactersUTF8("3");
+        else if (action==":elevation") io.AddInputCharactersUTF8("10");
+        else if (action==":escape") io.AddKeyEvent(ImGuiKey_Escape,true);
         else if (action==":fov") io.AddInputCharactersUTF8("55");
         else if (action==":enter") io.AddKeyEvent(ImGuiKey_Enter,true);
         else if (action==":translation") io.AddInputCharactersUTF8("0.25");
@@ -96,14 +111,17 @@ void ConsistencyDriver::input(WorkbenchUi& ui,const Workspace& model,const Viewp
         else {
             const auto control=ui.controls().find(std::string{action});
             require(control!=ui.controls().end(),"missing GUI control");
+            if(action=="environment_sun_elevation") io.AddKeyEvent(ImGuiMod_Ctrl,true);
             pointer_=control->second; io.AddMousePosEvent(pointer_.x,pointer_.y); io.AddMouseButtonEvent(0,true);
         }
     }
     io.AddMousePosEvent(pointer_.x,pointer_.y);
     if (phase==1) {
+        if(action=="environment_sun_elevation") io.AddKeyEvent(ImGuiMod_Ctrl,false);
+        if(action==":escape") io.AddKeyEvent(ImGuiKey_Escape,false);
         if (action==":all") { io.AddKeyEvent(ImGuiKey_A,false); io.AddKeyEvent(ImGuiMod_Ctrl,false); }
         else if(action==":enter") io.AddKeyEvent(ImGuiKey_Enter,false);
-        else if (!action.starts_with(":") && !(environment_ && stage_==9 && action=="gizmo_0")) io.AddMouseButtonEvent(0,false);
+        else if (!action.starts_with(":") && !(environment_ && stage_==9 && action=="gizmo_0") && action!="environment_sun_disk") io.AddMouseButtonEvent(0,false);
     }
 }
 void ConsistencyDriver::verify(const Workspace& model,const WorkbenchUi& ui,const Viewport& viewport) const {
@@ -150,10 +168,10 @@ void ConsistencyDriver::verify_environment(const Workspace& model,const Workbenc
     const auto sig=[&](std::size_t i) { return checkpoints_[i]["viewport"]["rgba_signature"].get<std::uint64_t>(); };
     switch(stage_) {
     case 0: require(!model.dirty() && !snapshot->scene.environment().enabled,"environment fixture must start saved/disabled"); break;
-    case 1: require(snapshot->scene.environment().enabled && !model.pending() && revision==rev(0)+1 && history.undo_count==1 && pixels!=sig(0),"GUI environment Apply failed"); break;
+    case 1: require(snapshot->scene.environment().enabled && !model.pending() && revision==rev(0)+1 && history.undo_count==1 && pixels!=sig(0),"GUI environment did not apply immediately"); break;
     case 2: require(!model.pending() && revision==rev(1)+1 && history.undo_count==2 && pixels!=sig(1),"external environment not visible"); break;
-    case 3: require(model.pending() && !model.environment_draft()->value["enabled"].get<bool>() && revision==rev(2) && pixels==sig(2),"environment draft changed committed frame"); break;
-    case 4: require(!model.pending() && model.environment_draft()->value["enabled"].get<bool>() && revision==rev(3)+1 && history.undo_count==3 && pixels!=sig(3),"stale environment Apply or Revert failed"); break;
+    case 3: require(model.pending() && model.environment_draft()->value["sun"]["direction"]!=checkpoints_[2]["environment_draft"]["sun"]["direction"] && revision==rev(2) && pixels==sig(2),"environment draft changed committed frame"); break;
+    case 4: require(!model.pending() && model.environment_draft()->value["enabled"].get<bool>() && revision==rev(3)+1 && history.undo_count==3 && pixels!=sig(3),"stale automatic environment commit or discard failed"); break;
     case 5: require(revision==rev(4)+1 && history.undo_count==2 && history.redo_count==1 && pixels==sig(2),"environment Undo failed"); break;
     case 6: require(revision==rev(5)+1 && history.undo_count==3 && history.redo_count==0 && pixels==sig(4),"environment Redo failed"); break;
     case 7: require(!model.dirty() && revision==rev(6) && pixels==sig(6),"environment Save failed"); break;
@@ -162,6 +180,24 @@ void ConsistencyDriver::verify_environment(const Workspace& model,const Workbenc
         require(ui.input().camera().projection_mode()==(stage_==12 ? ProjectionMode::perspective : ProjectionMode::orthographic),"environment projection control failed");
         if(stage_==11) require(ui.input().camera().settings().lens.ortho_height==3,"environment orthographic height failed");
         break;
+    case 13: {
+        const auto& d=snapshot->scene.environment().sun.direction;
+        const Vec3d direction{d[0],d[1],d[2]};
+        require(!model.pending() && revision==rev(12)+1 && history.undo_count==checkpoints_[12]["history"]["undo_count"].get<std::size_t>()+1,
+            "sun drag must commit once on release");
+        require(std::abs(direction.norm()-1)<1e-12 && pixels!=sig(12),"sun disk failed to change normalized direction and image"); break;
+    }
+    case 14: require(!model.pending() && pixels==sig(12) && history.redo_count==1,"sun drag Undo did not restore image"); break;
+    case 15: require(!model.pending() && pixels==sig(13) && history.redo_count==0,"sun drag Redo did not restore image"); break;
+    case 16: case 17:
+        require(!model.pending() && revision==rev(stage_-1)+1 &&
+            (clouds_ ? snapshot->scene.environment().clouds.enabled : snapshot->scene.environment().enabled)==(stage_==17),
+            "environment/cloud switch needs an extra Apply");
+        require(pixels!=sig(stage_-1),"environment/cloud switch did not change image"); break;
+    case 18: require(!model.pending() && revision==rev(17) && pixels==sig(17) && history.undo_count==checkpoints_[17]["history"]["undo_count"].get<std::size_t>(),
+        "cancelled sun drag changed the scene or history"); break;
+    case 19: require(!model.pending() && revision==rev(18)+1 && std::abs(snapshot->scene.environment().sun.direction[1]-std::sin(10*3.141592653589793/180))<1e-6,
+        "typed sun elevation did not apply on Enter"); break;
     case 9: require(revision==gizmo_revision_+1 && !model.pending() && model.draft() && model.draft()->entity.local.translation.x()!=0,"asynchronous environment Gizmo did not commit"); break;
     case 8: require(snapshot->state.document_id.to_string()!=checkpoints_[7]["state"]["document_id"].get<std::string>() && !model.dirty() && !model.pending() && history.undo_count==0 && revision==rev(7) && pixels==sig(7),"environment Reload failed"); break;
     }

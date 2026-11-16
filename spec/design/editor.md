@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-11-16T16:38:57+08:00"
+updated_at: "2026-11-16T17:15:31+08:00"
 status: accepted
 ---
 
@@ -314,11 +314,14 @@ GUI设备required validation同时覆盖模拟队列；实例/设备创建属于
 
 ## M14.6 环境面板与异步大气视口
 
-Environment面板拥有EnvironmentDraft（完整CPU参数、读取时guard、modified），所有Apply使用environment.set，
-与IPC/Python/Luau共用同一Scene/历史；外部编辑保留有修改草稿和旧guard，Apply冲突，Revert取最新。
-Undo/Redo/切换文档前处理任一草稿；Save先提交草稿再保存；两个面板不同时编辑；API若出现两份已修改草稿，在提交任何一份前拒绝Save/Apply，要求先Revert其中一份。
-面板可编辑启用、太阳方向/线性RGB/角半径，以及球面、大气散射/消光/密度与地面反照率；曝光为视口会话参数，不写环境。
-未应用草稿不渲染。面板使用原子完整Apply，不每次拖动重建LUT。
+Environment 面板保留 EnvironmentDraft（完整 CPU 参数、读取时 guard、modified）作为输入缓冲，持久修改仍统一调用 environment.set。
+大气/云开关和预设点击后立即提交；数值输入结束、滑条或太阳盘松开时自动提交完整候选，一次手势只产生一次撤销，不再要求常规 Apply。
+拖动中更新控件与角度，松开后更新视口；不在每个鼠标移动帧提交或重建 LUT。无变化沿用后端 no-op，不产生历史。
+提交在面板绘制完成后执行，避免 refresh 替换草稿后继续使用失效引用。失败保留草稿、guard 和真实 Scene/历史，并在面板顶部显示原因及 Retry changes / Discard edits；修正输入后自动重试，外部修改冲突需丢弃后基于最新值编辑。
+Undo/Redo/切换文档前处理未完成输入；Save 仍先提交草稿再保存。Inspector 草稿和活动视口手势期间禁用环境编辑，UI 显示原因；服务层保留既有双草稿保护。
+太阳使用圆形方向盘：角度为世界 X/Z 方位（0° 朝 +Z，90° 朝 +X），半径线性映射高度角（中心 +90°、半径中点 0° 地平线、边缘 -90°）。拖出边界夹到圆周，覆盖夜间方向；同时提供方位/高度角数字滑条，XYZ 和角半径归入高级太阳设置。盘保持单位方向，零向量/非有限高级输入仍由原环境校验拒绝。
+常用云开关、覆盖率、密度和带单位的高度/风速优先展示；复杂散射/消光与纹理生成参数折叠。预设窄栏自动换行。曝光标为光栅视口参数，路径模式不提供无效编辑。
+面板显示已应用/编辑中/失败状态，以及 Unlit inspection、Path Surface only、体素光栅与环境不兼容等实际原因；提供已有视口模式/设置入口，不静默改 Scene 或渲染模式。Settings help 的提交时机、单位、分组与控件同步。
 
 启用环境的Edit视口采用独立后台worker/Device/Queue，复用ScenePipeline的环境绑定入口和最近LUT。
 Surface only 的连续相机输入等待当前完整图像发布后再提交最新姿态，避免每帧取消导致显示饥饿；
@@ -334,7 +337,7 @@ worker只发布最新已提交请求的序号；GUI在首帧完成前合并相�
 M18.1 的 Auto 裁剪在光栅环境使用near=1m、far=10000m，以满足M14.5深度精度域；基础光栅、模拟和路径使用near=.05m/far=10000m。
 Camera 面板允许改 FOV/手动裁剪及导航偏好；编辑与模拟分别保存，设置/失败规则见[交互设计](editor-interaction.md#m181-实施契约)。
 绘制、拾取、投影和检查点使用同一相机状态；UI明确显示裁剪面。不能通过静默改动capture参数匹配画面。
-真实GUI自动化使用--background，验证环境Apply、IPC/脚本交替修改、旧草稿冲突、Undo/Redo、Save/Reload与同设置截图逐字节一致。
+真实GUI自动化使用--background，验证环境自动应用、太阳盘单次撤销、IPC/脚本交替修改、旧草稿冲突、Undo/Redo、Save/Reload与同设置截图逐字节一致。
 独立后台worker测试验证连续改参、resize、取消、失败恢复及在途关闭不发布旧结果；
 相机导航允许在旧帧上继续发送新请求，拾取/Gizmo启动仅在完整匹配当前帧时启用；已捕获手势按原guard继续接收输入并提交，
 不因自身异步预览尚未返回而取消，外部revision或尺寸变化仍取消。单独CPU模型验收草稿/历史保护；CPU-only不引入GPU依赖。

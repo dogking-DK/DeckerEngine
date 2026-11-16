@@ -118,8 +118,9 @@ disabled环境走原unlit，旧render/render_sunlight不自动添加天空或空
 
 ## 编辑器和脚本（M14.6）
 
-编辑器顶部Environment按钮切换到环境面板。修改草稿后Apply environment创建一个撤销单元；
-Revert丢弃本地草稿并取当前环境。外部命令修改时保留草稿及原guard，过期Apply显示冲突，
+编辑器顶部 Environment 按钮切换到环境面板。大气/云开关和预设立即应用；数值输入结束、滑条或太阳盘松开时自动创建一个撤销单元，无需再次 Apply。
+太阳盘的圆周角控制世界 X/Z 方位：上方 +Z、右侧 +X；中心为头顶 +90°，内圈为地平线，外缘为 -90°。可用方位/高度滑条精调，Esc 取消拖动。
+Discard edits 丢弃未完成或失败的输入并取当前环境；错误会直接显示在本面板。外部命令修改时保留输入及原 guard，过期提交显示冲突，
 不会覆盖外部结果。Undo/Redo/Save/Reload与命令操作同一Scene；Save也会应用草稿。
 环境关闭时仍校验参数，但保持原unlit预览。曝光只属于视口会话，截图需显式传相同值。
 环境模式near=1m/far=10000m，关闭模式near=.05m；近于1m的几何会被裁剪。
@@ -154,7 +155,7 @@ Python输出包含Job来源元数据；脚本分别生成environment-python.ppm�
   -TestRegex '^dk\.editor\.environment_(worker|consistency)_gpu_validation$' -Reason 'M14.6环境集成'
 ```
 
-真实GUI流程验证面板Apply、外部修改、草稿冲突、Undo/Redo、Save/Reload；
+真实GUI流程验证面板自动应用、太阳拖动及撤销、外部修改、草稿冲突、Undo/Redo、Save/Reload；
 冻结旧版本capture与GUI原图、重载capture与GUI新图逐字节比较，实际运行Python/Luau示例并比较图像。
 GUI另验证异步预览期间Gizmo提交与截图；后台测试单独验证错队列恢复、尺寸替换、旧代丢弃、取消、失败恢复和在途关闭。产物位于构建目录test-artifacts/Debug/environment-*。
 同设备/驱动的固定夹具验收不代表跨GPU像素恒等。证据见[0099](../development/0099-environment-integration.md)。

@@ -1,3 +1,4 @@
+#include "SunDirection.hpp"
 #include "SceneTestFiles.hpp"
 #include <dk/editor/Workspace.hpp>
 #include <dk/editor/Camera.hpp>
@@ -519,4 +520,21 @@ TEST_CASE("camera navigation follows viewing axes independently of lens") {
         const Vec3d horizontal=Vec3d{-before(0,2),0,-before(2,2)}.normalized();
         CHECK(Vec3d{camera.world().matrix().block<3,1>(0,3)-start}.isApprox(horizontal*.12,1e-10));
     }
+}
+
+
+TEST_CASE("sun direction disk covers azimuth elevation poles and clamped drag") {
+    using namespace dk::editor::detail;
+    for(double azimuth:{-180.,-120.,-90.,0.,45.,90.,179.}) for(double elevation:{-89.,-45.,0.,37.,89.}) {
+        const SunAngles angles{azimuth,elevation}; const auto direction=sun_direction(angles);
+        CHECK(std::abs(direction.norm()-1)<1e-12);
+        const auto roundtrip=sun_direction(sun_angles(direction)); CHECK((roundtrip-direction).norm()<1e-12);
+        const auto from_disk=sun_direction(sun_from_disk(sun_disk(angles))); CHECK((from_disk-direction).norm()<1e-12);
+    }
+    CHECK((sun_direction(sun_from_disk({0,0}))-Vec3d::UnitY()).norm()<1e-12);
+    CHECK((sun_direction(sun_from_disk({.5,0}))-Vec3d::UnitX()).norm()<1e-12);
+    CHECK((sun_direction(sun_from_disk({0,-.5}))-Vec3d::UnitZ()).norm()<1e-12);
+    CHECK((sun_direction(sun_from_disk({3,4}))+Vec3d::UnitY()).norm()<1e-12);
+    CHECK(sun_angles({0,10,0}).elevation==90);
+    CHECK(std::isfinite(sun_angles({0,0,0}).elevation)); // Invalid raw draft stays editable.
 }

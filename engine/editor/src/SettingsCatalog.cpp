@@ -86,8 +86,8 @@ std::vector<SettingInfo> build_settings_catalog(const CommandCatalogSnapshot& ca
         add("inspector."+std::string(key),"Inspector","Local transform",label,aliases,key==std::string_view("name") ? "entity.set_name" : "entity.set_transform",key==std::string_view("name") ? "name" : "transform."+std::string(key),info,scene);
     add("inspector.apply","Inspector","Draft","Apply Inspector","应用 变换","","","Commit the current Inspector draft through the guarded scene edit path.",scene);
     add("inspector.revert","Inspector","Draft","Revert Inspector","撤回 草稿","","","Discard the current Inspector draft and restore committed values.","Does not create Undo or modify the Scene.");
-    add("environment.enabled","Environment","General","Enable atmosphere","大气 启用","environment.set","environment.enabled","Enable the scene atmosphere; cloud enable is separate.",scene);
-    add("environment.preset","Environment","General","Environment preset","预设 晴天 阴天 日落","environment.preset","name","GUI loads a preset into the draft; Apply is still required. The related query command returns preset values only.",scene);
+    add("environment.enabled","Environment","General","Atmosphere","大气 启用","environment.set","environment.enabled","Apply the scene atmosphere switch immediately; cloud enable is separate.",scene);
+    add("environment.preset","Environment","General","Environment preset","预设 晴天 阴天 日落","environment.preset","name","GUI applies the complete preset immediately as one undo step. The related query command returns preset values only.",scene);
     const auto env=[&](const char* group,const char* key,const char* label,const char* alias,const char* info) {
         // Additional physical constraints live in Scene validation, beyond the JSON shape schema.
         static const std::map<std::string,std::string> bounds={
@@ -103,10 +103,17 @@ std::vector<SettingInfo> build_settings_catalog(const CommandCatalogSnapshot& ca
             {"weather_scale_m","[1,1e7]."},{"shape_scale_m","[1,1e7]."},{"detail_scale_m","[1,1e7]."},
             {"bottom_fade_fraction","[0.001,0.5]."},{"top_fade_fraction","[0.001,0.5]."},{"wind_velocity_mps","Each component [-1000,1000]."}};
         std::string explanation=info;
-        if(const auto it=bounds.find(key);it!=bounds.end()) explanation+=" Apply validation: "+it->second;
-        add("environment."+std::string(group)+"."+key,"Environment",group==std::string_view("sun") ? "Sun" : group==std::string_view("atmosphere") ? "Atmosphere parameters" : "Cloud physical parameters",label,alias,"environment.set","environment."+std::string(group)+"."+key,explanation,scene);
+        if(const auto it=bounds.find(key);it!=bounds.end()) explanation+=" Commit validation: "+it->second;
+        std::string section=group==std::string_view("sun") ? "Sun" : group==std::string_view("atmosphere") ? "Atmosphere parameters" : "Cloud physical parameters";
+        const std::string_view field=key;
+        if(group==std::string_view("sun") && field=="angular_radius_rad") section+="/Advanced";
+        if(group==std::string_view("clouds")) {
+            if(field=="enabled") section="General";
+            else if(field!="coverage" && field!="density" && field!="bottom_height_m" && field!="top_height_m" && field!="wind_velocity_mps") section+="/Advanced";
+        }
+        add("environment."+std::string(group)+"."+key,"Environment",section,label,alias,"environment.set","environment."+std::string(group)+"."+key,explanation,scene);
     };
-    env("sun","direction","Sun direction","太阳 方向 光照","World direction toward the sun; finite nonzero XYZ, normalized on commit.");
+    env("sun","direction","Sun direction","太阳 方向 光照","World direction toward the sun. Drag the disk or edit azimuth/elevation; release to apply once. Center +90 degrees, inner ring horizon, edge -90 degrees; azimuth 0 toward +Z, 90 toward +X. XYZ is normalized on commit.");
     env("sun","irradiance","Sun irradiance","太阳 强度 光照","Scene-linear RGB normal irradiance, not lux.");
     env("sun","angular_radius_rad","Sun angular radius","太阳 角半径 光照","Angular radius in radians.");
     for(const auto& [key,alias,info]:std::initializer_list<std::array<const char*,3>>{
@@ -125,7 +132,7 @@ std::vector<SettingInfo> build_settings_catalog(const CommandCatalogSnapshot& ca
         {"ground_albedo","大气 地面 反照率","Dimensionless linear RGB ground reflectance used by atmosphere lighting."}})
         env("atmosphere",key,key,alias,info);
     for(const auto& [key,alias,info]:std::initializer_list<std::array<const char*,3>>{
-        {"enabled","云 启用","Enable the physical cloud layer independently from atmosphere enable."},
+        {"enabled","云 启用","Apply the physical cloud switch immediately, independently from atmosphere enable."},
         {"seed","云 种子","Unsigned deterministic generator seed; changing it rebuilds cloud textures."},
         {"weather_resolution","云 天气 分辨率","2D weather texture edge length in texels; power of two required."},
         {"base_resolution","云 基础 分辨率","3D base-noise texture edge length in texels; power of two required."},
@@ -142,8 +149,8 @@ std::vector<SettingInfo> build_settings_catalog(const CommandCatalogSnapshot& ca
         {"top_fade_fraction","云 顶部 渐变","Top density fade thickness as a fraction of cloud shell thickness."},
         {"wind_velocity_mps","云 风 速度","World X/Z cloud translation velocity in meters per second; time is a separate render input."}})
         env("clouds",key,key,alias,info);
-    add("environment.apply","Environment","Draft","Apply environment","应用 环境","environment.set","environment","Replace the complete scene environment using the guarded draft.",scene);
-    add("environment.revert","Environment","Draft","Revert environment","撤回 环境 草稿","","","Restore the committed scene environment without changing the document.","Discards the environment draft only; no Undo entry.");
+    add("environment.apply","Environment","Draft","Retry environment changes","重试 应用 环境","environment.set","environment","Normally automatic on click or edit completion. Retry a failed complete environment draft using its original guard.",scene);
+    add("environment.revert","Environment","Draft","Discard environment edits","丢弃 撤回 环境 草稿","","","Restore the committed scene environment without changing the document.","Discards the environment draft only; no Undo entry.");
     add("viewport.raster_exposure","Environment","Viewport","Raster exposure","光栅 曝光","editor.viewport.set","raster_exposure","Linear raster exposure multiplier; independent from path tracing EV.",view);
     add("viewport.renderer","View settings","View","Renderer","渲染器 光线追踪 光栅","editor.viewport.set","renderer","Raster or Path trace. Path trace requires the module and compatible GPU.",view);
     add("viewport.unlit_inspection","View settings","View","Unlit inspection","无光照 检查","editor.viewport.set","unlit_inspection","Inspect raster geometry without scene atmosphere/light.",view);
@@ -219,7 +226,7 @@ std::string setting_unavailable(const SettingInfo& s,const SettingsContext& c) {
     if(id.starts_with("inspector.")) {
         if(!c.selection) return "Select an entity in Hierarchy first.";
         if(c.gizmo) return "Finish the active Gizmo first.";
-        if(c.environment_draft) return "Apply or Revert the Environment draft first.";
+        if(c.environment_draft) return "Finish or discard the Environment edits first.";
         if((id=="inspector.apply" || id=="inspector.revert") && !c.inspector_draft) return "No modified Inspector draft.";
     } else if(id.starts_with("environment.")) {
         if(!c.scene) return "Open a scene first.";

@@ -6,7 +6,7 @@
 ## 编辑器
 
 使用启用 `DK_BUILD_RENDER_CLOUDS` 的 windows-editor 配置。Environment 面板提供 Clear、Sparse、Overcast、Sunset 四个预设；
-按钮只替换草稿，Apply 提交一次可撤销的 environment.set。外部命令修改场景后，旧草稿的 Apply 会报告 guard 冲突，Revert 读取最新值。
+按钮立即提交一次可撤销的 environment.set；云开关同样立即生效，数值/滑条在编辑结束或松开时自动应用。外部命令修改场景后，旧输入的提交会报告 guard 冲突，Discard edits 读取最新值。
 物理云区域可编辑 seed、分辨率、覆盖率/密度、消光、高度/衰减、尺度与水平风速；generator_version 固定为 1。
 
 会话区域选择 Reference 或 Temporal，填写固定秒数，或点击 +1 second。
@@ -86,5 +86,5 @@ wall_ms 是注明范围的墙钟耗时（帧渲染/等待/读回，序列含预�
   -Reason '云序列报告、脚本与后台GUI一致性'
 ```
 
-GUI 测试以 `--background` 启动，比较预设/Apply、IPC、Undo/Redo、保存重载、截图与脚本结果。
+GUI 测试以 `--background` 启动，比较预设即时应用、IPC、Undo/Redo、保存重载、截图与脚本结果。
 验收条件和实际证据见[云设计](../design/render-clouds.md)、[0106](../development/0106-cloud-integration.md)。

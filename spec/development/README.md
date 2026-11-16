@@ -175,5 +175,6 @@
 | 0171 | [M23.13 稀疏体素联合交付](0171-voxel-joint-delivery.md) | render-voxels、render-pathtracing | completed |
 | 0172 | [OpenVDB 网格体素化与 Sponza 性能验证](0172-mesh-voxelization.md) | assets-importers、render-voxels | completed |
 | 0173 | [右侧相机与渲染设置](0173-editor-view-settings.md) | editor、editor-interaction、platform、render-voxels | completed |
+| 0174 | [环境面板即时应用与太阳方向盘](0174-environment-panel.md) | editor | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

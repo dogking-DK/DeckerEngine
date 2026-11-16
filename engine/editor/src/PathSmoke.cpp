@@ -13,8 +13,8 @@ constexpr std::array desktop_names={"path","atmosphere","air_motion","clouds_ena
 void require(bool value,const char* message) { if(!value) throw std::runtime_error(std::string{"Path smoke: "}+message); }
 std::span<const char* const> actions(std::size_t stage,bool desktop,bool media,bool restir) {
     static constexpr std::array desktop_path={"path_mode","path_target",":all",":one",":enter"};
-    static constexpr std::array desktop_air={"path_raster","environment_open","environment_enabled","environment_apply","camera_fly"};
-    static constexpr std::array desktop_clouds={"cloud_preset_sparse","environment_apply"};
+    static constexpr std::array desktop_air={"path_raster","environment_open","environment_enabled","camera_fly"};
+    static constexpr std::array desktop_clouds={"cloud_preset_sparse"};
     static constexpr std::array desktop_return={"path_settings","path_surface","path_mode","camera_walk"};
     static constexpr std::array underground={"camera_orbit",":orbit",":down",":release"};
     static constexpr std::array home={":home"};
@@ -22,7 +22,7 @@ std::span<const char* const> actions(std::size_t stage,bool desktop,bool media,b
     static constexpr std::array height={"camera_settings","camera_ortho_height",":all",":three",":enter","camera_apply","path_settings"};
     if(media && restir) {
         static constexpr std::array initial={"path_mode","path_restir","path_target",":all",":two",":enter"};
-        static constexpr std::array air={"path_media","path_temporal","environment_open","environment_enabled","environment_apply","path_settings"};
+        static constexpr std::array air={"path_media","path_temporal","environment_open","environment_enabled","path_settings"};
         static constexpr std::array joint={"path_spatial"};
         static constexpr std::array time={"path_time",":all",":two",":enter","path_temporal"};
         static constexpr std::array classic={"path_surface","path_classic"}, medium={"path_media","path_restir"};
@@ -30,7 +30,7 @@ std::span<const char* const> actions(std::size_t stage,bool desktop,bool media,b
     }
     if(media) {
         static constexpr std::array media_orthographic={"camera_orthographic","path_raster","path_mode"};
-        static constexpr std::array air={"path_media","environment_open","environment_enabled","environment_apply","path_settings"};
+        static constexpr std::array air={"path_media","environment_open","environment_enabled","path_settings"};
         static constexpr std::array time={"path_time",":all",":two",":enter"}, exposure={"path_exposure",":all",":two",":enter"};
         static constexpr std::array surface={"path_surface"}, medium={"path_media"};
         static constexpr std::array console={"path_refresh","console_input",":all",":command",":enter"};

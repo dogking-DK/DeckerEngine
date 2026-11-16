@@ -1,7 +1,7 @@
 ---
 module: command-reference-environment
 created_at: "2026-10-12T15:10:00+08:00"
-updated_at: "2026-11-03T13:06:50+08:00"
+updated_at: "2026-11-16T17:04:50+08:00"
 status: accepted
 ---
 
@@ -28,7 +28,7 @@ status: accepted
 参数`{name}`必填，name为`clear`、`sparse`、`overcast`或`sunset`。effect=query、undoable=false，
 无需活动场景或guard，不修改内容/历史、不保存、不初始化GPU，也不允许放入scene.transaction。
 返回`{version:1,environment:<完整v2对象>}`；未知名称/字段或错误类型为invalid_argument。
-可将返回环境交给environment.set；GUI先放入草稿，再由Apply提交。
+可将返回环境交给environment.set；GUI 点选预设后立即调用该写命令，形成一个撤销单元。
 
 | 名称 | 云参数差异 | 太阳 |
 | --- | --- | --- |
@@ -38,7 +38,7 @@ status: accepted
 | sunset | enabled、coverage=.55、density=1 | 归一化[1,.08,0] |
 
 所有预设开启空气，seed=1729、generator_version=1，其余字段取下表默认值；返回对象完整显式包含它们。
-预设原点在地表，选择后如需改变行星中心应在同一草稿内修改。质量、时间及阴影覆盖属于渲染请求，不进入预设物理环境。
+预设原点在地表。GUI 选择后可继续编辑行星中心，编辑结束自动提交；程序调用方可先调整返回对象再一次性 environment.set。质量、时间及阴影覆盖属于渲染请求，不进入预设物理环境。
 
 ```json
 {"jsonrpc":"2.0","id":1,"method":"environment.preset","params":{"name":"sparse"}}
