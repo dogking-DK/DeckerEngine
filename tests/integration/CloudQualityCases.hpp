@@ -41,16 +41,16 @@ Json error_metrics(const std::vector<Pixel>& actual,const std::vector<Pixel>& ex
     std::ranges::sort(errors);
     return {{"scale",normalization},{"nrmse",std::sqrt(squares/errors.size())},{"p99",errors[std::size_t(.99*(errors.size()-1))]},{"maximum",maximum}};
 }
-void quality_cases(Fixture& f,SubmissionQueue& q,Json& output,const std::filesystem::path& report) {
-    f.width=f.height=31; f.settings.linear_readback=true; f.optimized.composition.diagnostics=true;
+void quality_cases(Fixture& f,SubmissionQueue& q,Json& output,const std::filesystem::path& report,bool detailed=false) {
+    f.width=f.height=detailed ? 48 : 31; f.settings.linear_readback=true; f.optimized.composition.diagnostics=true;
     check(f.scene->set_environment(f.environment));
     output["preset"]=f.input(output["preset_name"].get<std::string>()); output["cases"]=Json::array();
     output["thresholds"]={{"nrmse",.05},{"p99",.12},{"edge_maximum",.12},{"cloud_T",.02},{"static_nrms",.01},
         {"convergence_nrmse",.02},{"convergence_p99",.04}};
     auto prepared=[&]() { f.prepare(q,f.environment); auto frame=f.render(q,f.view(),f.environment); require(take(frame.wait(q)),"quality wait"); return frame; };
     auto record=[&](const char* name,const RenderFrame& frame,bool tile_check=false) {
-        const auto reference=reference_image(f,q,1024,256);
-        const auto middle=reference_image(f,q,512,128);
+        const auto reference=reference_image(f,q,1024,256,detailed);
+        const auto middle=reference_image(f,q,512,128,detailed);
         const auto actual=linear(frame); std::vector<std::uint8_t> solar(actual.size());
         const auto projection=f.view().description().projection; const Vec3d sun{f.environment.sun.direction.data()};
         const auto disk=take(solar_disk_radiance(f.environment.sun)); double solar_error=0,solar_convergence=0;
@@ -91,6 +91,49 @@ void quality_cases(Fixture& f,SubmissionQueue& q,Json& output,const std::filesys
         if(tile_check) require(row["tile_equivalence"]["nrmse"]<=.001 && row["tile_equivalence"]["p99"]<=.002,"cropped reference differs from full projection");
         require(quality["nrmse"]<=.05 && quality["p99"]<=.12 && quality["maximum"]<=.12 && cloud_error<=.02,"cloud quality or edge threshold");
     };
+    if(detailed) {
+        for(unsigned state=0;state<3;++state) {
+            if(state!=1) f.reset(q);
+            f.eye={state==1 ? 8. : 0.,state==2 ? 2200. : 100.,0};
+            f.yaw=state==1 ? .001 : 0; f.time=state==1 ? 1./30 : 0;
+            RenderFrame frame; for(unsigned i=0;i<(state==1 ? 1u : 33u);++i) frame=prepared();
+            if(state==1) require(frame.cloud_optimization().history_available,"dense motion lost history");
+            record(state==0 ? "detail-static" : state==1 ? "detail-motion" : "detail-inside",frame);
+        }
+        // The high-sample oracle has bounded work and off-axis projection. Probe
+        // finer angular resolution with paired production/previous reconstruction,
+        // without weakening either bound or treating sRGB output as linear evidence.
+        output["detail_pairs"]=Json::array();
+        f.width=255; f.height=143; f.vertical_fov=.16;
+        const auto modern=f.optimized; auto legacy=modern;
+        legacy.view_id=2; legacy.smooth_reconstruction=false; legacy.sparse_sunlight=false;
+        for(unsigned state=0;state<5;++state) {
+            if(state!=1) {
+                f.reset(q); check(f.pipeline.poll_cloud_history(q));
+                if(f.pipeline.cloud_history(2)) check(f.pipeline.release_cloud_history(q,2));
+            }
+            f.eye={state==1 ? 8. : 0.,state==4 ? 2200. : 100.,0}; f.angle=.16;
+            f.yaw=state==1 ? .001 : state==3 ? std::atan(.38) : 0; f.time=state==1 ? 1./30 : 0;
+            if(state==2) { f.angle=std::asin(f.environment.sun.direction[1]); f.yaw=std::atan2(f.environment.sun.direction[2],f.environment.sun.direction[0]); }
+            RenderFrame a,b;
+            for(unsigned i=0;i<(state==1 ? 1u : 33u);++i) {
+                f.optimized=legacy; a=prepared(); f.optimized=modern; b=prepared();
+            }
+            if(state==1) require(a.cloud_optimization().history_available && b.cloud_optimization().history_available,"fine motion lost history");
+            const auto ar=linear(a),br=linear(b); const auto metric=error_metrics(br,ar);
+            std::vector<Pixel> ac(ar.size()),bc(br.size()); check(a.read_cloud_rgba32f(ac)); check(b.read_cloud_rgba32f(bc));
+            double transmission=0; for(std::size_t i=0;i<ac.size();++i) transmission=std::max(transmission,std::abs(double(ac[i][3])-bc[i][3]));
+            const auto as=take(a.read_cloud_statistics()),bs=take(b.read_cloud_statistics());
+            output["detail_pairs"].push_back({{"state",state},{"width",f.width},{"height",f.height},{"vertical_fov_rad",f.vertical_fov},
+                {"eye_m",{f.eye.x(),f.eye.y(),f.eye.z()}},{"elevation_rad",f.angle},{"yaw_rad",f.yaw},{"time_seconds",f.time},
+                {"quality",metric},{"cloud_T_maximum",transmission},{"old_fallback",as.fallback_pixels},{"new_fallback",bs.fallback_pixels},
+                {"linear_rgba",br},{"baseline_linear_rgba",ar}});
+            require(metric["nrmse"]<=.005 && metric["p99"]<=.005 && metric["maximum"]<=.005 && transmission<=.002,"fine paired reconstruction changed quality");
+            require(bs.fallback_pixels<=as.fallback_pixels,"smooth reconstruction increased fallback");
+        }
+        output["detail_pair_thresholds"]={{"nrmse",.005},{"p99",.005},{"maximum",.005},{"cloud_T",.002}};
+        return;
+    }
     f.reset(q); std::vector<Pixel> previous; double maximum_nrms=0; RenderFrame frame;
     for(unsigned i=0;i<152;++i) {
         frame=prepared(); const auto current=linear(frame);

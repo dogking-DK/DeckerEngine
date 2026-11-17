@@ -6,10 +6,11 @@ using Pixel=std::array<float,4>;
 struct DiagnosticOptions {
     unsigned resolution_divisor=2;
     unsigned width=1920,height=1080,samples=20,steps=96,sun_steps=8,field_divisor=1,shadow_resolution=256,shadow_steps=256;
+    bool smooth=true,sparse_sun=true,detailed=false;
     bool shadows=true,self_shadow=true,wait_tracy=false,compact=false;
     std::string mode;
     Json json() const { return {{"width",width},{"height",height},{"samples",samples},{"steps",steps},{"sun_steps",sun_steps},
-        {"compact_reconstruction",compact},{"resolution_divisor",resolution_divisor},{"field_divisor",field_divisor},{"ground_shadows",shadows},{"self_shadow",self_shadow},
+        {"detailed_quality",detailed},{"smooth_reconstruction",smooth},{"sparse_sunlight",sparse_sun},{"compact_reconstruction",compact},{"resolution_divisor",resolution_divisor},{"field_divisor",field_divisor},{"ground_shadows",shadows},{"self_shadow",self_shadow},
         {"shadow_resolution",shadow_resolution},{"shadow_steps",shadow_steps},{"mode",mode.empty() ? "all" : mode}}; }
 };
 struct Fixture {
@@ -31,7 +32,7 @@ struct Fixture {
     bool ground_shadows=true;
     CloudShadowSettings shadow_settings;
     Vec3d eye{0,100,0};
-    double angle=.16,yaw=0,time=0;
+    double angle=.16,yaw=0,time=0,vertical_fov=1.15;
     Fixture(memory::ResourceHandle h,SubmissionQueue& queue,std::string_view preset):heap(h),
         assets(take(GpuAssets::create(h))),pipeline(take(ScenePipeline::create(h,queue,DK_RENDER_SHADER_DIR))),
         atmosphere(take(AtmosphereRenderer::create(h,queue,DK_ATMOSPHERE_SHADER_DIR))),
@@ -67,7 +68,7 @@ struct Fixture {
     RenderView view() {
         ViewDescription d{width,height}; Trsd camera; camera.translation=eye; camera.rotation=camera_rotation();
         d.camera_world=take(Transformd::from_trs(camera)); d.projection=Mat4d::Zero();
-        const double y=1/std::tan(1.15/2); d.projection(0,0)=y*height/width; d.projection(1,1)=-y;
+        const double y=1/std::tan(vertical_fov/2); d.projection(0,0)=y*height/width; d.projection(1,1)=-y;
         d.projection(2,2)=10000./(1-10000); d.projection(2,3)=10000./(1-10000); d.projection(3,2)=-1;
         return take(RenderView::create(take(RenderScene::extract(heap,take(scene->snapshot()))),d));
     }
@@ -90,7 +91,7 @@ struct Fixture {
     }
     Json input(std::string_view preset) const {
         return {{"name",preset},{"environment",environment_json(environment)},{"width",width},{"height",height},
-            {"eye_m",{0,100,0}},{"elevation_rad",.16},{"yaw_rad",0},{"vertical_fov_rad",1.15},{"near_m",1},{"far_m",10000},{"exposure",8},
+            {"eye_m",{0,100,0}},{"elevation_rad",.16},{"yaw_rad",0},{"vertical_fov_rad",vertical_fov},{"near_m",1},{"far_m",10000},{"exposure",8},
             {"geometry_distances_m",{500,3000}},{"second_receiver","checker alpha mask"},{"time_seconds",0},
             {"motion_step_m",.25},{"motion_yaw_step_rad",.0005},{"motion_time_step_seconds",1./30},
             {"quality","cloud_temporal_v1"},{"warmup",32},{"shadow",{{"center_m",{0,0,0}},{"extent_m",8192},{"resolution",shadow_settings.resolution},{"steps",shadow_settings.steps}}}};
@@ -154,6 +155,8 @@ void performance(Fixture& f,SubmissionQueue& q,Json& output,bool timestamps,unsi
             const auto stats=take(diagnostic_frame.read_cloud_statistics());
             output["work_diagnostics"][mode]={{"logical_index",samples+2},{"primary_steps",stats.primary_steps},
                 {"cloud_lighting_steps",stats.cloud_lighting_steps},{"empty_steps",stats.empty_steps},{"terminated_steps",stats.terminated_steps},
+                {"sun_density_samples",stats.sun_density_samples},{"sun_weather_samples",stats.sun_weather_samples},
+                {"sun_base_samples",stats.sun_base_samples},{"sun_detail_samples",stats.sun_detail_samples},
                 {"density_samples",stats.density_samples},{"reconstructed_pixels",stats.reconstructed_pixels},{"fallback_pixels",stats.fallback_pixels},
                 {"history_accepted",stats.history_accepted},{"history_rejected",stats.history_rejected}};
             f.optimized.composition.diagnostics=false;
@@ -174,6 +177,7 @@ void run(Json& output,std::string_view preset,bool smoke,bool quality,bool times
         output["memory_device_only"]=memory_sample(q);
         {
             start=Clock::now(); Fixture f(heap,q,preset); output["program_geometry_create_ms"]=elapsed(start);
+            f.optimized.smooth_reconstruction=tuning.smooth; f.optimized.sparse_sunlight=tuning.sparse_sun;
             f.optimized.compact_reconstruction=tuning.compact; f.optimized.resolution_divisor=tuning.resolution_divisor;
             f.width=tuning.width; f.height=tuning.height;
             f.optimized.composition.reference.steps=tuning.steps; f.optimized.composition.reference.sun_steps=tuning.sun_steps;
@@ -188,7 +192,7 @@ void run(Json& output,std::string_view preset,bool smoke,bool quality,bool times
             start=Clock::now(); f.texture=take(f.textures->prepare(q,*data)); output["texture_upload_wall_ms"]=elapsed(start);
             output["memory_field_textures"]=memory_sample(q);
             output["field"]={{"hash",data->hash()},{"bytes",data->bytes()},{"gpu_upload_ms",nullptr}};
-            if(quality) quality_cases(f,q,output,report);
+            if(quality) quality_cases(f,q,output,report,tuning.detailed);
             else { if(smoke) { f.width=160; f.height=90; } performance(f,q,output,timestamps,smoke ? 2 : tuning.samples,report,tuning); }
         }
         check(q.poll()); output["memory_after_release"]=memory_sample(q);
@@ -212,9 +216,12 @@ int main(int argc,char** argv) {
             else if(arg=="--validation") validation=true;
             else if(arg=="--smoke") smoke=true;
             else if(arg=="--quality") quality=true;
+            else if(arg=="--sunset-quality") { quality=true; tuning.detailed=true; }
             else if(arg=="--preset" && i+1<argc) preset=argv[++i];
             else if(arg=="--output" && i+1<argc) report=argv[++i];
             else if(arg=="--mode" && i+1<argc) tuning.mode=argv[++i];
+            else if(arg=="--no-smooth-reconstruction") tuning.smooth=false;
+            else if(arg=="--no-sparse-sunlight") tuning.sparse_sun=false;
             else if(arg=="--compact-reconstruction") tuning.compact=true;
             else if(arg=="--legacy-reconstruction") tuning.compact=false;
             else if(arg=="--no-shadow") tuning.shadows=false;
@@ -232,7 +239,7 @@ int main(int argc,char** argv) {
             else throw std::runtime_error("unknown or incomplete cloud benchmark option");
         }
         require(!report.empty() && !(smoke && quality),"output and one run mode required");
-        take(environment_preset(preset)); require(!quality || validation,"quality requires validation");
+        take(environment_preset(preset)); require(!tuning.detailed || preset=="sunset","detailed quality requires sunset preset"); require(!quality || validation,"quality requires validation");
         require((tuning.resolution_divisor==2 || tuning.resolution_divisor==4) && tuning.width>=32 && tuning.height>=32 && std::uint64_t(tuning.width)*tuning.height<=1920u*1080u &&
             tuning.samples>=1 && tuning.samples<=120 && tuning.steps>=8 && tuning.steps<=1024 &&
             tuning.sun_steps>=1 && tuning.sun_steps<=256 && (tuning.field_divisor==1 || tuning.field_divisor==2 || tuning.field_divisor==4) &&
@@ -240,7 +247,7 @@ int main(int argc,char** argv) {
             "tuning parameter exceeds supported budget");
         require(tuning.mode.empty() || tuning.mode=="combined-static" || tuning.mode=="combined-motion" || tuning.mode=="air-static" ||
             tuning.mode=="air-motion" || tuning.mode=="unlit-static" || tuning.mode=="unlit-motion","unknown tuning mode");
-        auto quality_defaults=DiagnosticOptions{}; quality_defaults.resolution_divisor=tuning.resolution_divisor; quality_defaults.compact=tuning.compact;
+        auto quality_defaults=DiagnosticOptions{}; quality_defaults.resolution_divisor=tuning.resolution_divisor; quality_defaults.compact=tuning.compact; quality_defaults.detailed=tuning.detailed; quality_defaults.smooth=tuning.smooth; quality_defaults.sparse_sun=tuning.sparse_sun;
         require(!quality || tuning.json()==quality_defaults.json(),"quality uses the fixed production configuration");
         if(tuning.wait_tracy) {
             require(profiling::enabled(),"Tracy capture requires a profiling build");

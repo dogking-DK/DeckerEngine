@@ -1057,6 +1057,12 @@ if(TARGET dk_render_clouds AND TARGET dk_render_pipeline AND TARGET dk_render_at
         set_tests_properties(dk.clouds.quality_${preset}_gpu_validation PROPERTIES TIMEOUT 1200 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
     endforeach()
+    foreach(divisor IN ITEMS 2 4)
+        add_test(NAME dk.clouds.quality_sunset_detail_${divisor}_gpu_validation COMMAND dk_cloud_benchmark --sunset-quality --validation
+            --preset sunset --resolution-divisor ${divisor} --output "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/cloud-quality-sunset-detail-${divisor}.json")
+        set_tests_properties(dk.clouds.quality_sunset_detail_${divisor}_gpu_validation PROPERTIES TIMEOUT 1200 RUN_SERIAL TRUE LABELS "gpu"
+            ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
+    endforeach()
     add_executable(dk_cloud_composition_probe CloudCompositionProbe.cpp)
     target_link_libraries(dk_cloud_composition_probe PRIVATE dk::render_pipeline dk::render_clouds dk::render_atmosphere)
     target_include_directories(dk_cloud_composition_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
@@ -1064,7 +1070,7 @@ if(TARGET dk_render_clouds AND TARGET dk_render_pipeline AND TARGET dk_render_at
         DK_ATMOSPHERE_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/atmosphere/shaders")
     dk_target_defaults(dk_cloud_composition_probe)
     dk_deploy_slang(dk_cloud_composition_probe)
-    foreach(case IN ITEMS numeric composition failures orthographic orthographic_shadow resolution optimization optimization_switches optimization_boundaries temporal history shadow_numeric shadow_surface shadow_failures)
+    foreach(case IN ITEMS numeric composition failures orthographic orthographic_shadow resolution sunset_optimization optimization optimization_switches optimization_boundaries temporal history shadow_numeric shadow_surface shadow_failures)
         add_test(NAME dk.clouds.${case}_gpu_composition COMMAND dk_cloud_composition_probe ${case})
         set_tests_properties(dk.clouds.${case}_gpu_composition PROPERTIES TIMEOUT 240 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")

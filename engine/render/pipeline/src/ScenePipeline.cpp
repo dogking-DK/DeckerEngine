@@ -317,7 +317,7 @@ Buffer prepare_reconstruction(detail::PipelineState& state,const RenderView& vie
     static_assert(sizeof(Parameters)==128);
     Parameters p{}; const auto& v=view.description();
     p.size={(v.width+settings.resolution_divisor-1)/settings.resolution_divisor,(v.height+settings.resolution_divisor-1)/settings.resolution_divisor,previous ? 1u : 0u,settings.empty_space_skipping ? 1u : 0u};
-    p.controls={settings.termination_transmittance,settings.history_weight,float(settings.resolution_divisor),0};
+    p.controls={settings.termination_transmittance,settings.history_weight,float(settings.resolution_divisor),float((settings.smooth_reconstruction ? 1u : 0u) | (settings.sparse_sunlight ? 2u : 0u) | (settings.composition.diagnostics ? 4u : 0u))};
     if(previous) {
         const auto& old=previous->view; const auto& environment=view.scene().environment();
         const Vec3d delta=v.camera_world.matrix().topRightCorner<3,1>()-old.camera_world.matrix().topRightCorner<3,1>();
@@ -1408,7 +1408,7 @@ CloudFrameInfo RenderFrame::cloud_optimization() const noexcept { return state_ 
 Result<CloudTraceStatistics> RenderFrame::read_cloud_statistics() const {
     if(!state_ || !state_->cloud_statistics) return std::unexpected(Error{ErrorCode::invalid_state,"Cloud statistics were not requested"});
     auto buffer=state_->execution.buffer(state_->cloud_statistics); if(!buffer) return std::unexpected(buffer.error());
-    CloudTraceStatistics value; static_assert(sizeof(value)==40);
+    CloudTraceStatistics value; static_assert(sizeof(value)==72);
     auto read=(*buffer)->read(0,std::as_writable_bytes(std::span{&value,1})); if(!read) return std::unexpected(read.error()); return value;
 }
 Submission RenderFrame::submission() const noexcept { return state_ ? state_->execution.submission() : Submission{}; }

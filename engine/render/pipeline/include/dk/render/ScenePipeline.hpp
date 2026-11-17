@@ -41,6 +41,7 @@ struct CloudTraceStatistics {
     std::uint32_t primary_steps=0,cloud_lighting_steps=0,empty_steps=0,terminated_steps=0;
     std::uint32_t reconstructed_pixels=0,fallback_pixels=0,history_accepted=0,history_rejected=0;
     std::uint64_t density_samples=0;
+    std::uint64_t sun_density_samples=0, sun_weather_samples=0, sun_base_samples=0, sun_detail_samples=0;
 };
 namespace detail { struct PipelineState; struct FrameState; }
 struct RenderSettings {

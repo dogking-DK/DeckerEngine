@@ -1,0 +1,5916 @@
+{
+  "status": "passed",
+  "cases": [
+    {
+      "file": "cloud-quality-clear.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "static",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "tile_equivalence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-clear.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "eye_m": [
+        8.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-1",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.03333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "yaw_rad": 0.001
+    },
+    {
+      "file": "cloud-quality-clear.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "eye_m": [
+        16.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-2",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.06666666666666667,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "yaw_rad": 0.002
+    },
+    {
+      "file": "cloud-quality-clear.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "eye_m": [
+        24.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-3",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.1,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "yaw_rad": 0.003
+    },
+    {
+      "file": "cloud-quality-clear.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "eye_m": [
+        32.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-4",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.13333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "yaw_rad": 0.004
+    },
+    {
+      "file": "cloud-quality-clear.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "eye_m": [
+        40.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-5",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.16666666666666666,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "yaw_rad": 0.005
+    },
+    {
+      "file": "cloud-quality-clear.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "eye_m": [
+        48.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-6",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.2,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "yaw_rad": 0.006
+    },
+    {
+      "file": "cloud-quality-clear.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416592031718
+      },
+      "eye_m": [
+        56.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-7",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416592031718
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.23333333333333334,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416592031718
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416592031718
+      },
+      "yaw_rad": 0.007
+    },
+    {
+      "file": "cloud-quality-clear.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "eye_m": [
+        64.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-8",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.26666666666666666,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "yaw_rad": 0.008
+    },
+    {
+      "file": "cloud-quality-clear.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "eye_m": [
+        72.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-9",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "yaw_rad": 0.009000000000000001
+    },
+    {
+      "file": "cloud-quality-clear.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "eye_m": [
+        80.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-10",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "yaw_rad": 0.01
+    },
+    {
+      "file": "cloud-quality-clear.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "eye_m": [
+        88.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-11",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.36666666666666664,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "yaw_rad": 0.011
+    },
+    {
+      "file": "cloud-quality-clear.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416861891746
+      },
+      "eye_m": [
+        96.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-12",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416861891746
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.4,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416861891746
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416861891746
+      },
+      "yaw_rad": 0.012
+    },
+    {
+      "file": "cloud-quality-sparse.json",
+      "cloud_T_maximum": 0.00010204315185546875,
+      "convergence": {
+        "maximum": 0.00021142552227479912,
+        "nrmse": 1.0772163638852737e-05,
+        "p99": 3.004820368038515e-05,
+        "scale": 0.08901558518260716
+      },
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "static",
+      "quality": {
+        "maximum": 0.0005811089278784374,
+        "nrmse": 9.076436382108418e-05,
+        "p99": 0.000495375554259546,
+        "scale": 0.08901558518260716
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "tile_equivalence": {
+        "maximum": 1.9249509009239026e-05,
+        "nrmse": 1.0583068155077204e-06,
+        "p99": 4.352062906436649e-06,
+        "scale": 0.08902219461649656
+      },
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.00021142552227479912,
+        "nrmse": 1.0772163638852737e-05,
+        "p99": 3.004820368038515e-05,
+        "scale": 0.08901558518260716
+      },
+      "unmasked_quality": {
+        "maximum": 0.0005811089278784374,
+        "nrmse": 9.076436382108418e-05,
+        "p99": 0.000495375554259546,
+        "scale": 0.08901558518260716
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-sparse.json",
+      "cloud_T_maximum": 0.00010752677917480469,
+      "convergence": {
+        "maximum": 0.0001916752228819178,
+        "nrmse": 1.0497968417387581e-05,
+        "p99": 2.9437032484483012e-05,
+        "scale": 0.08909200924038886
+      },
+      "eye_m": [
+        8.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-1",
+      "quality": {
+        "maximum": 0.0005806548738989118,
+        "nrmse": 9.065146011935483e-05,
+        "p99": 0.0004949375490609501,
+        "scale": 0.08909200924038886
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.03333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.0001916752228819178,
+        "nrmse": 1.0497968417387581e-05,
+        "p99": 2.9437032484483012e-05,
+        "scale": 0.08909200924038886
+      },
+      "unmasked_quality": {
+        "maximum": 0.0005806548738989118,
+        "nrmse": 9.065146011935483e-05,
+        "p99": 0.0004949375490609501,
+        "scale": 0.08909200924038886
+      },
+      "yaw_rad": 0.001
+    },
+    {
+      "file": "cloud-quality-sparse.json",
+      "cloud_T_maximum": 0.00014477968215942383,
+      "convergence": {
+        "maximum": 0.00015845149575078959,
+        "nrmse": 1.0382380674419313e-05,
+        "p99": 2.9986339997118323e-05,
+        "scale": 0.08919922986775637
+      },
+      "eye_m": [
+        16.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-2",
+      "quality": {
+        "maximum": 0.0005799595164467034,
+        "nrmse": 9.063697040818155e-05,
+        "p99": 0.0004943661087155487,
+        "scale": 0.08919922986775637
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.06666666666666667,
+      "unmasked_convergence": {
+        "maximum": 0.00015845149575078959,
+        "nrmse": 1.0382380674419313e-05,
+        "p99": 2.9986339997118323e-05,
+        "scale": 0.08919922986775637
+      },
+      "unmasked_quality": {
+        "maximum": 0.0005799595164467034,
+        "nrmse": 9.063697040818155e-05,
+        "p99": 0.0004943661087155487,
+        "scale": 0.08919922986775637
+      },
+      "yaw_rad": 0.002
+    },
+    {
+      "file": "cloud-quality-sparse.json",
+      "cloud_T_maximum": 0.0001575946807861328,
+      "convergence": {
+        "maximum": 0.00014935731956997787,
+        "nrmse": 8.565300765492007e-06,
+        "p99": 2.8452986577297462e-05,
+        "scale": 0.08929284019619226
+      },
+      "eye_m": [
+        24.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-3",
+      "quality": {
+        "maximum": 0.000579372374683157,
+        "nrmse": 9.056203807088537e-05,
+        "p99": 0.0004938582689925633,
+        "scale": 0.08929284019619226
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.1,
+      "unmasked_convergence": {
+        "maximum": 0.00014935731956997787,
+        "nrmse": 8.565300765492007e-06,
+        "p99": 2.8452986577297462e-05,
+        "scale": 0.08929284019619226
+      },
+      "unmasked_quality": {
+        "maximum": 0.000579372374683157,
+        "nrmse": 9.056203807088537e-05,
+        "p99": 0.0004938582689925633,
+        "scale": 0.08929284019619226
+      },
+      "yaw_rad": 0.003
+    },
+    {
+      "file": "cloud-quality-sparse.json",
+      "cloud_T_maximum": 0.00013816356658935547,
+      "convergence": {
+        "maximum": 5.41041392279581e-05,
+        "nrmse": 7.806442767714605e-06,
+        "p99": 2.8427598577401713e-05,
+        "scale": 0.08937258546948432
+      },
+      "eye_m": [
+        32.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-4",
+      "quality": {
+        "maximum": 0.0005788423870887909,
+        "nrmse": 9.040660078504739e-05,
+        "p99": 0.0004934436613587216,
+        "scale": 0.08937258546948432
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.13333333333333333,
+      "unmasked_convergence": {
+        "maximum": 5.41041392279581e-05,
+        "nrmse": 7.806442767714605e-06,
+        "p99": 2.8427598577401713e-05,
+        "scale": 0.08937258546948432
+      },
+      "unmasked_quality": {
+        "maximum": 0.0005788423870887909,
+        "nrmse": 9.040660078504739e-05,
+        "p99": 0.0004934436613587216,
+        "scale": 0.08937258546948432
+      },
+      "yaw_rad": 0.004
+    },
+    {
+      "file": "cloud-quality-sparse.json",
+      "cloud_T_maximum": 3.1054019927978516e-05,
+      "convergence": {
+        "maximum": 0.00010265131288567634,
+        "nrmse": 8.062083888671595e-06,
+        "p99": 2.8245775217730746e-05,
+        "scale": 0.08942033995836972
+      },
+      "eye_m": [
+        40.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-5",
+      "quality": {
+        "maximum": 0.0005785645045105279,
+        "nrmse": 9.033408701666334e-05,
+        "p99": 0.0004931541024475105,
+        "scale": 0.08942033995836972
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.16666666666666666,
+      "unmasked_convergence": {
+        "maximum": 0.00010265131288567634,
+        "nrmse": 8.062083888671595e-06,
+        "p99": 2.8245775217730746e-05,
+        "scale": 0.08942033995836972
+      },
+      "unmasked_quality": {
+        "maximum": 0.0005785645045105279,
+        "nrmse": 9.033408701666334e-05,
+        "p99": 0.0004931541024475105,
+        "scale": 0.08942033995836972
+      },
+      "yaw_rad": 0.005
+    },
+    {
+      "file": "cloud-quality-sparse.json",
+      "cloud_T_maximum": 9.72747802734375e-05,
+      "convergence": {
+        "maximum": 0.00026112866009088566,
+        "nrmse": 9.811142291968682e-06,
+        "p99": 2.849585250513175e-05,
+        "scale": 0.08941998010724783
+      },
+      "eye_m": [
+        48.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-6",
+      "quality": {
+        "maximum": 0.0005785486063027914,
+        "nrmse": 9.001273092994555e-05,
+        "p99": 0.0004931951438535524,
+        "scale": 0.08941998010724783
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.2,
+      "unmasked_convergence": {
+        "maximum": 0.00026112866009088566,
+        "nrmse": 9.811142291968682e-06,
+        "p99": 2.849585250513175e-05,
+        "scale": 0.08941998010724783
+      },
+      "unmasked_quality": {
+        "maximum": 0.0005785486063027914,
+        "nrmse": 9.001273092994555e-05,
+        "p99": 0.0004931951438535524,
+        "scale": 0.08941998010724783
+      },
+      "yaw_rad": 0.006
+    },
+    {
+      "file": "cloud-quality-sparse.json",
+      "cloud_T_maximum": 0.00015801191329956055,
+      "convergence": {
+        "maximum": 8.357171531186394e-05,
+        "nrmse": 7.697407913576707e-06,
+        "p99": 2.816275152084747e-05,
+        "scale": 0.08941939639300107
+      },
+      "eye_m": [
+        56.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-7",
+      "quality": {
+        "maximum": 0.0005785680057954724,
+        "nrmse": 8.98624858572064e-05,
+        "p99": 0.0004931632119822514,
+        "scale": 0.08941939639300107
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.23333333333333334,
+      "unmasked_convergence": {
+        "maximum": 8.357171531186394e-05,
+        "nrmse": 7.697407913576707e-06,
+        "p99": 2.816275152084747e-05,
+        "scale": 0.08941939639300107
+      },
+      "unmasked_quality": {
+        "maximum": 0.0005785680057954724,
+        "nrmse": 8.98624858572064e-05,
+        "p99": 0.0004931632119822514,
+        "scale": 0.08941939639300107
+      },
+      "yaw_rad": 0.007
+    },
+    {
+      "file": "cloud-quality-sparse.json",
+      "cloud_T_maximum": 9.632110595703125e-05,
+      "convergence": {
+        "maximum": 9.448756631500732e-05,
+        "nrmse": 8.229815452798641e-06,
+        "p99": 2.9079506740685675e-05,
+        "scale": 0.0894187322884798
+      },
+      "eye_m": [
+        64.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-8",
+      "quality": {
+        "maximum": 0.0005785514721734574,
+        "nrmse": 8.996746367395564e-05,
+        "p99": 0.0004931955167233842,
+        "scale": 0.0894187322884798
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.26666666666666666,
+      "unmasked_convergence": {
+        "maximum": 9.448756631500732e-05,
+        "nrmse": 8.229815452798641e-06,
+        "p99": 2.9079506740685675e-05,
+        "scale": 0.0894187322884798
+      },
+      "unmasked_quality": {
+        "maximum": 0.0005785514721734574,
+        "nrmse": 8.996746367395564e-05,
+        "p99": 0.0004931955167233842,
+        "scale": 0.0894187322884798
+      },
+      "yaw_rad": 0.008
+    },
+    {
+      "file": "cloud-quality-sparse.json",
+      "cloud_T_maximum": 9.042024612426758e-05,
+      "convergence": {
+        "maximum": 4.649416013123792e-05,
+        "nrmse": 7.613954982866957e-06,
+        "p99": 2.8329774990360022e-05,
+        "scale": 0.08941819706708193
+      },
+      "eye_m": [
+        72.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-9",
+      "quality": {
+        "maximum": 0.0005786044081027465,
+        "nrmse": 8.989221574163124e-05,
+        "p99": 0.0004931932611143467,
+        "scale": 0.08941819706708193
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3,
+      "unmasked_convergence": {
+        "maximum": 4.649416013123792e-05,
+        "nrmse": 7.613954982866957e-06,
+        "p99": 2.8329774990360022e-05,
+        "scale": 0.08941819706708193
+      },
+      "unmasked_quality": {
+        "maximum": 0.0005786044081027465,
+        "nrmse": 8.989221574163124e-05,
+        "p99": 0.0004931932611143467,
+        "scale": 0.08941819706708193
+      },
+      "yaw_rad": 0.009000000000000001
+    },
+    {
+      "file": "cloud-quality-sparse.json",
+      "cloud_T_maximum": 7.575750350952148e-05,
+      "convergence": {
+        "maximum": 0.00016747965682668142,
+        "nrmse": 9.81055311953132e-06,
+        "p99": 2.9663063597163475e-05,
+        "scale": 0.08941782711744307
+      },
+      "eye_m": [
+        80.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-10",
+      "quality": {
+        "maximum": 0.0005786380481755668,
+        "nrmse": 9.02805041979007e-05,
+        "p99": 0.0004932044150861415,
+        "scale": 0.08941782711744307
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.00016747965682668142,
+        "nrmse": 9.81055311953132e-06,
+        "p99": 2.9663063597163475e-05,
+        "scale": 0.08941782711744307
+      },
+      "unmasked_quality": {
+        "maximum": 0.0005786380481755668,
+        "nrmse": 9.02805041979007e-05,
+        "p99": 0.0004932044150861415,
+        "scale": 0.08941782711744307
+      },
+      "yaw_rad": 0.01
+    },
+    {
+      "file": "cloud-quality-sparse.json",
+      "cloud_T_maximum": 4.118680953979492e-05,
+      "convergence": {
+        "maximum": 8.890639014743345e-05,
+        "nrmse": 8.03162372114614e-06,
+        "p99": 2.849670612035824e-05,
+        "scale": 0.08941730154305695
+      },
+      "eye_m": [
+        88.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-11",
+      "quality": {
+        "maximum": 0.0005786180144860568,
+        "nrmse": 9.003356073270194e-05,
+        "p99": 0.0004932294468869241,
+        "scale": 0.08941730154305695
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.36666666666666664,
+      "unmasked_convergence": {
+        "maximum": 8.890639014743345e-05,
+        "nrmse": 8.03162372114614e-06,
+        "p99": 2.849670612035824e-05,
+        "scale": 0.08941730154305695
+      },
+      "unmasked_quality": {
+        "maximum": 0.0005786180144860568,
+        "nrmse": 9.003356073270194e-05,
+        "p99": 0.0004932294468869241,
+        "scale": 0.08941730154305695
+      },
+      "yaw_rad": 0.011
+    },
+    {
+      "file": "cloud-quality-sparse.json",
+      "cloud_T_maximum": 0.00010460615158081055,
+      "convergence": {
+        "maximum": 0.0001131542647367148,
+        "nrmse": 8.653081156110784e-06,
+        "p99": 2.8830173489619528e-05,
+        "scale": 0.08941676634252071
+      },
+      "eye_m": [
+        96.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-12",
+      "quality": {
+        "maximum": 0.0005786449127128983,
+        "nrmse": 9.004379163720648e-05,
+        "p99": 0.0004932519282019402,
+        "scale": 0.08941676634252071
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.4,
+      "unmasked_convergence": {
+        "maximum": 0.0001131542647367148,
+        "nrmse": 8.653081156110784e-06,
+        "p99": 2.8830173489619528e-05,
+        "scale": 0.08941676634252071
+      },
+      "unmasked_quality": {
+        "maximum": 0.0005786449127128983,
+        "nrmse": 9.004379163720648e-05,
+        "p99": 0.0004932519282019402,
+        "scale": 0.08941676634252071
+      },
+      "yaw_rad": 0.012
+    },
+    {
+      "file": "cloud-quality-sparse.json",
+      "cloud_T_maximum": 8.45193862915039e-05,
+      "convergence": {
+        "maximum": 0.0040354480548457266,
+        "nrmse": 0.00013999902712074087,
+        "p99": 2.5903091473334183e-05,
+        "scale": 0.08226300142258405
+      },
+      "eye_m": [
+        0.0,
+        2200.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "inside",
+      "quality": {
+        "maximum": 0.001099613404118008,
+        "nrmse": 9.59773972312334e-05,
+        "p99": 0.0001902880950541088,
+        "scale": 0.08226300142258405
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0040354480548457266,
+        "nrmse": 0.00013999902712074087,
+        "p99": 2.5903091473334183e-05,
+        "scale": 0.08226300142258405
+      },
+      "unmasked_quality": {
+        "maximum": 0.001099613404118008,
+        "nrmse": 9.59773972312334e-05,
+        "p99": 0.0001902880950541088,
+        "scale": 0.08226300142258405
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-sparse.json",
+      "cloud_T_maximum": 0.00015491247177124023,
+      "convergence": {
+        "maximum": 0.0002021367920544713,
+        "nrmse": 1.1310156654832845e-05,
+        "p99": 2.6120717216498405e-05,
+        "scale": 0.08728235307484865
+      },
+      "eye_m": [
+        0.0,
+        5000.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "above",
+      "quality": {
+        "maximum": 0.0005115520526116693,
+        "nrmse": 9.677830415410643e-05,
+        "p99": 0.0002205749453837643,
+        "scale": 0.08728235307484865
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0002021367920544713,
+        "nrmse": 1.1310156654832845e-05,
+        "p99": 2.6120717216498405e-05,
+        "scale": 0.08728235307484865
+      },
+      "unmasked_quality": {
+        "maximum": 0.0005115520526116693,
+        "nrmse": 9.677830415410643e-05,
+        "p99": 0.0002205749453837643,
+        "scale": 0.08728235307484865
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-overcast.json",
+      "cloud_T_maximum": 0.0006620287895202637,
+      "convergence": {
+        "maximum": 0.0005010947112815749,
+        "nrmse": 2.3442387382624636e-05,
+        "p99": 7.483361641889972e-05,
+        "scale": 0.07437277486026286
+      },
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "static",
+      "quality": {
+        "maximum": 0.004149083243396874,
+        "nrmse": 0.0010919610096474588,
+        "p99": 0.0031667542819515918,
+        "scale": 0.07437277486026286
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "tile_equivalence": {
+        "maximum": 2.304092678190266e-05,
+        "nrmse": 1.3795225496674557e-06,
+        "p99": 6.160943465595711e-06,
+        "scale": 0.07437346394583583
+      },
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0005010947112815749,
+        "nrmse": 2.3442387382624636e-05,
+        "p99": 7.483361641889972e-05,
+        "scale": 0.07437277486026286
+      },
+      "unmasked_quality": {
+        "maximum": 0.004149083243396874,
+        "nrmse": 0.0010919610096474588,
+        "p99": 0.0031667542819515918,
+        "scale": 0.07437277486026286
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-overcast.json",
+      "cloud_T_maximum": 0.0007191598415374756,
+      "convergence": {
+        "maximum": 0.00034191269417575755,
+        "nrmse": 2.054579202010199e-05,
+        "p99": 8.40506154156052e-05,
+        "scale": 0.07437229447886347
+      },
+      "eye_m": [
+        8.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-1",
+      "quality": {
+        "maximum": 0.0041167771035624315,
+        "nrmse": 0.001093204491686118,
+        "p99": 0.003154352476270752,
+        "scale": 0.07437229447886347
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.03333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.00034191269417575755,
+        "nrmse": 2.054579202010199e-05,
+        "p99": 8.40506154156052e-05,
+        "scale": 0.07437229447886347
+      },
+      "unmasked_quality": {
+        "maximum": 0.0041167771035624315,
+        "nrmse": 0.001093204491686118,
+        "p99": 0.003154352476270752,
+        "scale": 0.07437229447886347
+      },
+      "yaw_rad": 0.001
+    },
+    {
+      "file": "cloud-quality-overcast.json",
+      "cloud_T_maximum": 0.0007999837398529053,
+      "convergence": {
+        "maximum": 0.00037016532708559785,
+        "nrmse": 2.12962857609126e-05,
+        "p99": 8.344999119412802e-05,
+        "scale": 0.0743718908585608
+      },
+      "eye_m": [
+        16.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-2",
+      "quality": {
+        "maximum": 0.004204857719557185,
+        "nrmse": 0.0011019961875431078,
+        "p99": 0.003190484507268898,
+        "scale": 0.0743718908585608
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.06666666666666667,
+      "unmasked_convergence": {
+        "maximum": 0.00037016532708559785,
+        "nrmse": 2.12962857609126e-05,
+        "p99": 8.344999119412802e-05,
+        "scale": 0.0743718908585608
+      },
+      "unmasked_quality": {
+        "maximum": 0.004204857719557185,
+        "nrmse": 0.0011019961875431078,
+        "p99": 0.003190484507268898,
+        "scale": 0.0743718908585608
+      },
+      "yaw_rad": 0.002
+    },
+    {
+      "file": "cloud-quality-overcast.json",
+      "cloud_T_maximum": 0.0007737874984741211,
+      "convergence": {
+        "maximum": 0.0002067729284994984,
+        "nrmse": 1.8249076608591067e-05,
+        "p99": 6.982593564154573e-05,
+        "scale": 0.07437142987549304
+      },
+      "eye_m": [
+        24.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-3",
+      "quality": {
+        "maximum": 0.004869131797638261,
+        "nrmse": 0.0011115891845521263,
+        "p99": 0.003229674929956918,
+        "scale": 0.07437142987549304
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.1,
+      "unmasked_convergence": {
+        "maximum": 0.0002067729284994984,
+        "nrmse": 1.8249076608591067e-05,
+        "p99": 6.982593564154573e-05,
+        "scale": 0.07437142987549304
+      },
+      "unmasked_quality": {
+        "maximum": 0.004869131797638261,
+        "nrmse": 0.0011115891845521263,
+        "p99": 0.003229674929956918,
+        "scale": 0.07437142987549304
+      },
+      "yaw_rad": 0.003
+    },
+    {
+      "file": "cloud-quality-overcast.json",
+      "cloud_T_maximum": 0.0006794482469558716,
+      "convergence": {
+        "maximum": 0.00041835730124979893,
+        "nrmse": 2.0070350580406935e-05,
+        "p99": 6.541841899332345e-05,
+        "scale": 0.07437093718647957
+      },
+      "eye_m": [
+        32.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-4",
+      "quality": {
+        "maximum": 0.005507719954372802,
+        "nrmse": 0.0011163653541150392,
+        "p99": 0.0032520868566022444,
+        "scale": 0.07437093718647957
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.13333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.00041835730124979893,
+        "nrmse": 2.0070350580406935e-05,
+        "p99": 6.541841899332345e-05,
+        "scale": 0.07437093718647957
+      },
+      "unmasked_quality": {
+        "maximum": 0.005507719954372802,
+        "nrmse": 0.0011163653541150392,
+        "p99": 0.0032520868566022444,
+        "scale": 0.07437093718647957
+      },
+      "yaw_rad": 0.004
+    },
+    {
+      "file": "cloud-quality-overcast.json",
+      "cloud_T_maximum": 0.0008006095886230469,
+      "convergence": {
+        "maximum": 0.0006967657274172804,
+        "nrmse": 2.5698598131651417e-05,
+        "p99": 8.325123213281956e-05,
+        "scale": 0.07437046056166291
+      },
+      "eye_m": [
+        40.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-5",
+      "quality": {
+        "maximum": 0.006007062281025343,
+        "nrmse": 0.0011186570027799797,
+        "p99": 0.003293232404676427,
+        "scale": 0.07437046056166291
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.16666666666666666,
+      "unmasked_convergence": {
+        "maximum": 0.0006967657274172804,
+        "nrmse": 2.5698598131651417e-05,
+        "p99": 8.325123213281956e-05,
+        "scale": 0.07437046056166291
+      },
+      "unmasked_quality": {
+        "maximum": 0.006007062281025343,
+        "nrmse": 0.0011186570027799797,
+        "p99": 0.003293232404676427,
+        "scale": 0.07437046056166291
+      },
+      "yaw_rad": 0.005
+    },
+    {
+      "file": "cloud-quality-overcast.json",
+      "cloud_T_maximum": 0.0009341686964035034,
+      "convergence": {
+        "maximum": 0.0002389358382750294,
+        "nrmse": 2.0259109057961555e-05,
+        "p99": 9.482296474939846e-05,
+        "scale": 0.07436990135908127
+      },
+      "eye_m": [
+        48.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-6",
+      "quality": {
+        "maximum": 0.006386599673842342,
+        "nrmse": 0.001105214670267452,
+        "p99": 0.0033077335733025766,
+        "scale": 0.07436990135908127
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.2,
+      "unmasked_convergence": {
+        "maximum": 0.0002389358382750294,
+        "nrmse": 2.0259109057961555e-05,
+        "p99": 9.482296474939846e-05,
+        "scale": 0.07436990135908127
+      },
+      "unmasked_quality": {
+        "maximum": 0.006386599673842342,
+        "nrmse": 0.001105214670267452,
+        "p99": 0.0033077335733025766,
+        "scale": 0.07436990135908127
+      },
+      "yaw_rad": 0.006
+    },
+    {
+      "file": "cloud-quality-overcast.json",
+      "cloud_T_maximum": 0.0010928213596343994,
+      "convergence": {
+        "maximum": 0.00028325263428516866,
+        "nrmse": 1.9841898302290218e-05,
+        "p99": 7.900993834219926e-05,
+        "scale": 0.07430783561617135
+      },
+      "eye_m": [
+        56.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-7",
+      "quality": {
+        "maximum": 0.0066884218934313636,
+        "nrmse": 0.0011073733229363526,
+        "p99": 0.0032774084449130295,
+        "scale": 0.07430783561617135
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.23333333333333334,
+      "unmasked_convergence": {
+        "maximum": 0.00028325263428516866,
+        "nrmse": 1.9841898302290218e-05,
+        "p99": 7.900993834219926e-05,
+        "scale": 0.07430783561617135
+      },
+      "unmasked_quality": {
+        "maximum": 0.0066884218934313636,
+        "nrmse": 0.0011073733229363526,
+        "p99": 0.0032774084449130295,
+        "scale": 0.07430783561617135
+      },
+      "yaw_rad": 0.007
+    },
+    {
+      "file": "cloud-quality-overcast.json",
+      "cloud_T_maximum": 0.0021457821130752563,
+      "convergence": {
+        "maximum": 0.0002541664846329459,
+        "nrmse": 1.7345228385955483e-05,
+        "p99": 6.231436871962647e-05,
+        "scale": 0.07436906168684364
+      },
+      "eye_m": [
+        64.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-8",
+      "quality": {
+        "maximum": 0.006923356787657342,
+        "nrmse": 0.0011082909821864405,
+        "p99": 0.003302260806650045,
+        "scale": 0.07436906168684364
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.26666666666666666,
+      "unmasked_convergence": {
+        "maximum": 0.0002541664846329459,
+        "nrmse": 1.7345228385955483e-05,
+        "p99": 6.231436871962647e-05,
+        "scale": 0.07436906168684364
+      },
+      "unmasked_quality": {
+        "maximum": 0.006923356787657342,
+        "nrmse": 0.0011082909821864405,
+        "p99": 0.003302260806650045,
+        "scale": 0.07436906168684364
+      },
+      "yaw_rad": 0.008
+    },
+    {
+      "file": "cloud-quality-overcast.json",
+      "cloud_T_maximum": 0.0030775219202041626,
+      "convergence": {
+        "maximum": 0.0003283047967570202,
+        "nrmse": 1.939891757683201e-05,
+        "p99": 7.76931247742048e-05,
+        "scale": 0.07436855281218886
+      },
+      "eye_m": [
+        72.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-9",
+      "quality": {
+        "maximum": 0.007104237288750514,
+        "nrmse": 0.0011086973515890132,
+        "p99": 0.003306841800109046,
+        "scale": 0.07436855281218886
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3,
+      "unmasked_convergence": {
+        "maximum": 0.0003283047967570202,
+        "nrmse": 1.939891757683201e-05,
+        "p99": 7.76931247742048e-05,
+        "scale": 0.07436855281218886
+      },
+      "unmasked_quality": {
+        "maximum": 0.007104237288750514,
+        "nrmse": 0.0011086973515890132,
+        "p99": 0.003306841800109046,
+        "scale": 0.07436855281218886
+      },
+      "yaw_rad": 0.009000000000000001
+    },
+    {
+      "file": "cloud-quality-overcast.json",
+      "cloud_T_maximum": 0.003883734345436096,
+      "convergence": {
+        "maximum": 0.00027920015827567854,
+        "nrmse": 1.9511446031628712e-05,
+        "p99": 7.733854402182413e-05,
+        "scale": 0.07437233650535345
+      },
+      "eye_m": [
+        80.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-10",
+      "quality": {
+        "maximum": 0.00723390880122268,
+        "nrmse": 0.0011063767315798042,
+        "p99": 0.0033185949203872497,
+        "scale": 0.07437233650535345
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.00027920015827567854,
+        "nrmse": 1.9511446031628712e-05,
+        "p99": 7.733854402182413e-05,
+        "scale": 0.07437233650535345
+      },
+      "unmasked_quality": {
+        "maximum": 0.00723390880122268,
+        "nrmse": 0.0011063767315798042,
+        "p99": 0.0033185949203872497,
+        "scale": 0.07437233650535345
+      },
+      "yaw_rad": 0.01
+    },
+    {
+      "file": "cloud-quality-overcast.json",
+      "cloud_T_maximum": 0.004890020936727524,
+      "convergence": {
+        "maximum": 0.00024185960566578283,
+        "nrmse": 1.8011219627015794e-05,
+        "p99": 7.166949932646804e-05,
+        "scale": 0.0746414711818099
+      },
+      "eye_m": [
+        88.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-11",
+      "quality": {
+        "maximum": 0.018820430486779345,
+        "nrmse": 0.0012903506892450796,
+        "p99": 0.0034196233184899797,
+        "scale": 0.0746414711818099
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.36666666666666664,
+      "unmasked_convergence": {
+        "maximum": 0.00024185960566578283,
+        "nrmse": 1.8011219627015794e-05,
+        "p99": 7.166949932646804e-05,
+        "scale": 0.0746414711818099
+      },
+      "unmasked_quality": {
+        "maximum": 0.018820430486779345,
+        "nrmse": 0.0012903506892450796,
+        "p99": 0.0034196233184899797,
+        "scale": 0.0746414711818099
+      },
+      "yaw_rad": 0.011
+    },
+    {
+      "file": "cloud-quality-overcast.json",
+      "cloud_T_maximum": 0.005231380462646484,
+      "convergence": {
+        "maximum": 0.00041262032570700763,
+        "nrmse": 2.1520720702368878e-05,
+        "p99": 7.581998248001107e-05,
+        "scale": 0.07468270327225328
+      },
+      "eye_m": [
+        96.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-12",
+      "quality": {
+        "maximum": 0.018842462803900856,
+        "nrmse": 0.001293681140539402,
+        "p99": 0.003472455434449665,
+        "scale": 0.07468270327225328
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.4,
+      "unmasked_convergence": {
+        "maximum": 0.00041262032570700763,
+        "nrmse": 2.1520720702368878e-05,
+        "p99": 7.581998248001107e-05,
+        "scale": 0.07468270327225328
+      },
+      "unmasked_quality": {
+        "maximum": 0.018842462803900856,
+        "nrmse": 0.001293681140539402,
+        "p99": 0.003472455434449665,
+        "scale": 0.07468270327225328
+      },
+      "yaw_rad": 0.012
+    },
+    {
+      "file": "cloud-quality-overcast.json",
+      "cloud_T_maximum": 0.0020690932869911194,
+      "convergence": {
+        "maximum": 0.0034705867879190992,
+        "nrmse": 0.00021053697971704972,
+        "p99": 0.001099274634190284,
+        "scale": 0.040463015137612815
+      },
+      "eye_m": [
+        0.0,
+        2200.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "inside",
+      "quality": {
+        "maximum": 0.021159425543498117,
+        "nrmse": 0.0023760832916028193,
+        "p99": 0.007684610985476938,
+        "scale": 0.040463015137612815
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0034705867879190992,
+        "nrmse": 0.00021053697971704972,
+        "p99": 0.001099274634190284,
+        "scale": 0.040463015137612815
+      },
+      "unmasked_quality": {
+        "maximum": 0.021159425543498117,
+        "nrmse": 0.0023760832916028193,
+        "p99": 0.007684610985476938,
+        "scale": 0.040463015137612815
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-overcast.json",
+      "cloud_T_maximum": 0.0012657223269343376,
+      "convergence": {
+        "maximum": 0.0009825821650719215,
+        "nrmse": 3.568884722531122e-05,
+        "p99": 9.67900527851699e-05,
+        "scale": 0.06850927900597453
+      },
+      "eye_m": [
+        0.0,
+        5000.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "above",
+      "quality": {
+        "maximum": 0.0020520034954797507,
+        "nrmse": 0.0002113839707438705,
+        "p99": 0.000682043613530554,
+        "scale": 0.06850927900597453
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0009825821650719215,
+        "nrmse": 3.568884722531122e-05,
+        "p99": 9.67900527851699e-05,
+        "scale": 0.06850927900597453
+      },
+      "unmasked_quality": {
+        "maximum": 0.0020520034954797507,
+        "nrmse": 0.0002113839707438705,
+        "p99": 0.000682043613530554,
+        "scale": 0.06850927900597453
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-sunset.json",
+      "cloud_T_maximum": 0.0008773207664489746,
+      "convergence": {
+        "maximum": 0.0015654065985874412,
+        "nrmse": 0.00010008874405721072,
+        "p99": 0.0004192473035663251,
+        "scale": 0.061897529210895294
+      },
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "static",
+      "quality": {
+        "maximum": 0.02655786622729248,
+        "nrmse": 0.0021166868679675715,
+        "p99": 0.009849001469913125,
+        "scale": 0.061897529210895294
+      },
+      "solar_normalized_convergence": 4.72714691046927e-06,
+      "solar_normalized_error": 2.371116774772618e-05,
+      "solar_pixels": 1,
+      "tile_equivalence": {
+        "maximum": 6.751930452464865e-05,
+        "nrmse": 4.3764513304495685e-06,
+        "p99": 1.805328997985258e-05,
+        "scale": 0.06190489881820977
+      },
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 1.112284401779988,
+        "nrmse": 0.022525169198706004,
+        "p99": 0.000460534075063095,
+        "scale": 0.061897529210895294
+      },
+      "unmasked_quality": {
+        "maximum": 5.57917122807728,
+        "nrmse": 0.11753046657803003,
+        "p99": 0.010174179934048764,
+        "scale": 0.061897529210895294
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-sunset.json",
+      "cloud_T_maximum": 0.0009140968322753906,
+      "convergence": {
+        "maximum": 0.0017224452315401369,
+        "nrmse": 0.0001017417504298913,
+        "p99": 0.0004101760256083995,
+        "scale": 0.06207212258949875
+      },
+      "eye_m": [
+        8.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-1",
+      "quality": {
+        "maximum": 0.02562590399041324,
+        "nrmse": 0.0020957286350438784,
+        "p99": 0.010039034970754175,
+        "scale": 0.06207212258949875
+      },
+      "solar_normalized_convergence": 4.291310670496926e-06,
+      "solar_normalized_error": 2.3614780886963065e-05,
+      "solar_pixels": 1,
+      "time_seconds": 0.03333333333333333,
+      "unmasked_convergence": {
+        "maximum": 1.0068932298856756,
+        "nrmse": 0.02171988586047503,
+        "p99": 0.0004220290894839806,
+        "scale": 0.06207212258949875
+      },
+      "unmasked_quality": {
+        "maximum": 5.540862646880647,
+        "nrmse": 0.11599077181522996,
+        "p99": 0.010107092562829665,
+        "scale": 0.06207212258949875
+      },
+      "yaw_rad": 0.001
+    },
+    {
+      "file": "cloud-quality-sunset.json",
+      "cloud_T_maximum": 0.0011243820190429688,
+      "convergence": {
+        "maximum": 0.0014494079672665975,
+        "nrmse": 9.625962025389768e-05,
+        "p99": 0.00036810551335393,
+        "scale": 0.0621580828949809
+      },
+      "eye_m": [
+        16.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-2",
+      "quality": {
+        "maximum": 0.02550667949011707,
+        "nrmse": 0.002090815394388255,
+        "p99": 0.00991481592163476,
+        "scale": 0.0621580828949809
+      },
+      "solar_normalized_convergence": 3.7548968366848103e-06,
+      "solar_normalized_error": 2.3794982409259323e-05,
+      "solar_pixels": 1,
+      "time_seconds": 0.06666666666666667,
+      "unmasked_convergence": {
+        "maximum": 0.8798131707568457,
+        "nrmse": 0.019106803964930093,
+        "p99": 0.00038932162402265205,
+        "scale": 0.0621580828949809
+      },
+      "unmasked_quality": {
+        "maximum": 5.575423195934564,
+        "nrmse": 0.11535369151733685,
+        "p99": 0.010045049278931746,
+        "scale": 0.0621580828949809
+      },
+      "yaw_rad": 0.002
+    },
+    {
+      "file": "cloud-quality-sunset.json",
+      "cloud_T_maximum": 0.0013118386268615723,
+      "convergence": {
+        "maximum": 0.0011078157647613713,
+        "nrmse": 9.487574036147031e-05,
+        "p99": 0.0003839274760547975,
+        "scale": 0.06202227522879839
+      },
+      "eye_m": [
+        24.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-3",
+      "quality": {
+        "maximum": 0.026406906600835358,
+        "nrmse": 0.0020920370946933657,
+        "p99": 0.009343636738115833,
+        "scale": 0.06202227522879839
+      },
+      "solar_normalized_convergence": 3.721370972071553e-06,
+      "solar_normalized_error": 2.3686023349266236e-05,
+      "solar_pixels": 1,
+      "time_seconds": 0.1,
+      "unmasked_convergence": {
+        "maximum": 0.8738669864989738,
+        "nrmse": 0.01940388920047538,
+        "p99": 0.0004161216448854251,
+        "scale": 0.06202227522879839
+      },
+      "unmasked_quality": {
+        "maximum": 5.562045278932658,
+        "nrmse": 0.11589615307926855,
+        "p99": 0.009619449468097629,
+        "scale": 0.06202227522879839
+      },
+      "yaw_rad": 0.003
+    },
+    {
+      "file": "cloud-quality-sunset.json",
+      "cloud_T_maximum": 0.0018930435180664062,
+      "convergence": {
+        "maximum": 0.002354387042427305,
+        "nrmse": 0.00011318740592346062,
+        "p99": 0.00043750473062900523,
+        "scale": 0.06188598201051354
+      },
+      "eye_m": [
+        32.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-4",
+      "quality": {
+        "maximum": 0.02616468508609551,
+        "nrmse": 0.0020904726700771577,
+        "p99": 0.009230458915059393,
+        "scale": 0.06188598201051354
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.13333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.002354387042427305,
+        "nrmse": 0.00011318740592346062,
+        "p99": 0.00043750473062900523,
+        "scale": 0.06188598201051354
+      },
+      "unmasked_quality": {
+        "maximum": 0.02616468508609551,
+        "nrmse": 0.0020904726700771577,
+        "p99": 0.009230458915059393,
+        "scale": 0.06188598201051354
+      },
+      "yaw_rad": 0.004
+    },
+    {
+      "file": "cloud-quality-sunset.json",
+      "cloud_T_maximum": 0.0024580955505371094,
+      "convergence": {
+        "maximum": 0.002112494712190632,
+        "nrmse": 0.0001009555097511664,
+        "p99": 0.0003806785936121455,
+        "scale": 0.061749155791103835
+      },
+      "eye_m": [
+        40.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-5",
+      "quality": {
+        "maximum": 0.02643514202043897,
+        "nrmse": 0.00210886542356794,
+        "p99": 0.009093512693146165,
+        "scale": 0.061749155791103835
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.16666666666666666,
+      "unmasked_convergence": {
+        "maximum": 0.002112494712190632,
+        "nrmse": 0.0001009555097511664,
+        "p99": 0.0003806785936121455,
+        "scale": 0.061749155791103835
+      },
+      "unmasked_quality": {
+        "maximum": 0.02643514202043897,
+        "nrmse": 0.00210886542356794,
+        "p99": 0.009093512693146165,
+        "scale": 0.061749155791103835
+      },
+      "yaw_rad": 0.005
+    },
+    {
+      "file": "cloud-quality-sunset.json",
+      "cloud_T_maximum": 0.0029569268226623535,
+      "convergence": {
+        "maximum": 0.0013345339074325759,
+        "nrmse": 0.00010079720066001637,
+        "p99": 0.0004172532358570759,
+        "scale": 0.06167997229322791
+      },
+      "eye_m": [
+        48.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-6",
+      "quality": {
+        "maximum": 0.027019842241496717,
+        "nrmse": 0.002075760811682569,
+        "p99": 0.009226499720991583,
+        "scale": 0.06167997229322791
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.2,
+      "unmasked_convergence": {
+        "maximum": 0.0013345339074325759,
+        "nrmse": 0.00010079720066001637,
+        "p99": 0.0004172532358570759,
+        "scale": 0.06167997229322791
+      },
+      "unmasked_quality": {
+        "maximum": 0.027019842241496717,
+        "nrmse": 0.002075760811682569,
+        "p99": 0.009226499720991583,
+        "scale": 0.06167997229322791
+      },
+      "yaw_rad": 0.006
+    },
+    {
+      "file": "cloud-quality-sunset.json",
+      "cloud_T_maximum": 0.0033509135246276855,
+      "convergence": {
+        "maximum": 0.0020296899529051674,
+        "nrmse": 0.00010388649263255798,
+        "p99": 0.00039388685682415403,
+        "scale": 0.06194837688077241
+      },
+      "eye_m": [
+        56.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-7",
+      "quality": {
+        "maximum": 0.027373573028931005,
+        "nrmse": 0.002089419749328363,
+        "p99": 0.009259317837568046,
+        "scale": 0.06194837688077241
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.23333333333333334,
+      "unmasked_convergence": {
+        "maximum": 0.0020296899529051674,
+        "nrmse": 0.00010388649263255798,
+        "p99": 0.00039388685682415403,
+        "scale": 0.06194837688077241
+      },
+      "unmasked_quality": {
+        "maximum": 0.027373573028931005,
+        "nrmse": 0.002089419749328363,
+        "p99": 0.009259317837568046,
+        "scale": 0.06194837688077241
+      },
+      "yaw_rad": 0.007
+    },
+    {
+      "file": "cloud-quality-sunset.json",
+      "cloud_T_maximum": 0.0036534667015075684,
+      "convergence": {
+        "maximum": 0.0011844115386030376,
+        "nrmse": 9.04460227595038e-05,
+        "p99": 0.0003570652432553275,
+        "scale": 0.06159690515268594
+      },
+      "eye_m": [
+        64.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-8",
+      "quality": {
+        "maximum": 0.028675169428623724,
+        "nrmse": 0.0021128991165478015,
+        "p99": 0.009880619419308245,
+        "scale": 0.06159690515268594
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.26666666666666666,
+      "unmasked_convergence": {
+        "maximum": 0.0011844115386030376,
+        "nrmse": 9.04460227595038e-05,
+        "p99": 0.0003570652432553275,
+        "scale": 0.06159690515268594
+      },
+      "unmasked_quality": {
+        "maximum": 0.028675169428623724,
+        "nrmse": 0.0021128991165478015,
+        "p99": 0.009880619419308245,
+        "scale": 0.06159690515268594
+      },
+      "yaw_rad": 0.008
+    },
+    {
+      "file": "cloud-quality-sunset.json",
+      "cloud_T_maximum": 0.00385284423828125,
+      "convergence": {
+        "maximum": 0.0016423982183039038,
+        "nrmse": 0.00011049202074042003,
+        "p99": 0.0004436544927723814,
+        "scale": 0.06119607969149947
+      },
+      "eye_m": [
+        72.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-9",
+      "quality": {
+        "maximum": 0.02937457824524842,
+        "nrmse": 0.0021331105794734446,
+        "p99": 0.00990174979217481,
+        "scale": 0.06119607969149947
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3,
+      "unmasked_convergence": {
+        "maximum": 0.0016423982183039038,
+        "nrmse": 0.00011049202074042003,
+        "p99": 0.0004436544927723814,
+        "scale": 0.06119607969149947
+      },
+      "unmasked_quality": {
+        "maximum": 0.02937457824524842,
+        "nrmse": 0.0021331105794734446,
+        "p99": 0.00990174979217481,
+        "scale": 0.06119607969149947
+      },
+      "yaw_rad": 0.009000000000000001
+    },
+    {
+      "file": "cloud-quality-sunset.json",
+      "cloud_T_maximum": 0.003951966762542725,
+      "convergence": {
+        "maximum": 0.0019513362857567107,
+        "nrmse": 0.00010289193797005769,
+        "p99": 0.00040064566695082983,
+        "scale": 0.06105674106255173
+      },
+      "eye_m": [
+        80.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-10",
+      "quality": {
+        "maximum": 0.02931000818064028,
+        "nrmse": 0.0021516165377907623,
+        "p99": 0.009916750553468775,
+        "scale": 0.06105674106255173
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.0019513362857567107,
+        "nrmse": 0.00010289193797005769,
+        "p99": 0.00040064566695082983,
+        "scale": 0.06105674106255173
+      },
+      "unmasked_quality": {
+        "maximum": 0.02931000818064028,
+        "nrmse": 0.0021516165377907623,
+        "p99": 0.009916750553468775,
+        "scale": 0.06105674106255173
+      },
+      "yaw_rad": 0.01
+    },
+    {
+      "file": "cloud-quality-sunset.json",
+      "cloud_T_maximum": 0.004420638084411621,
+      "convergence": {
+        "maximum": 0.0015645663901106034,
+        "nrmse": 0.0001034821070929692,
+        "p99": 0.0004048936200916286,
+        "scale": 0.06122122062668204
+      },
+      "eye_m": [
+        88.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-11",
+      "quality": {
+        "maximum": 0.02891995580512898,
+        "nrmse": 0.002149982202237423,
+        "p99": 0.009852959069145895,
+        "scale": 0.06122122062668204
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.36666666666666664,
+      "unmasked_convergence": {
+        "maximum": 0.0015645663901106034,
+        "nrmse": 0.0001034821070929692,
+        "p99": 0.0004048936200916286,
+        "scale": 0.06122122062668204
+      },
+      "unmasked_quality": {
+        "maximum": 0.02891995580512898,
+        "nrmse": 0.002149982202237423,
+        "p99": 0.009852959069145895,
+        "scale": 0.06122122062668204
+      },
+      "yaw_rad": 0.011
+    },
+    {
+      "file": "cloud-quality-sunset.json",
+      "cloud_T_maximum": 0.0016838908195495605,
+      "convergence": {
+        "maximum": 0.001912953751579006,
+        "nrmse": 0.00010877209180208812,
+        "p99": 0.00038278493417587777,
+        "scale": 0.06138990619704127
+      },
+      "eye_m": [
+        96.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-12",
+      "quality": {
+        "maximum": 0.02793037483165273,
+        "nrmse": 0.002121496855023817,
+        "p99": 0.009229771258034864,
+        "scale": 0.06138990619704127
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.4,
+      "unmasked_convergence": {
+        "maximum": 0.001912953751579006,
+        "nrmse": 0.00010877209180208812,
+        "p99": 0.00038278493417587777,
+        "scale": 0.06138990619704127
+      },
+      "unmasked_quality": {
+        "maximum": 0.02793037483165273,
+        "nrmse": 0.002121496855023817,
+        "p99": 0.009229771258034864,
+        "scale": 0.06138990619704127
+      },
+      "yaw_rad": 0.012
+    },
+    {
+      "file": "cloud-quality-sunset.json",
+      "cloud_T_maximum": 0.0019311904907226562,
+      "convergence": {
+        "maximum": 0.02540079708071207,
+        "nrmse": 0.0009151895100337735,
+        "p99": 0.002185853306895766,
+        "scale": 0.07175329270772636
+      },
+      "eye_m": [
+        0.0,
+        2200.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "inside",
+      "quality": {
+        "maximum": 0.07128741426106149,
+        "nrmse": 0.0031327727563832445,
+        "p99": 0.008283523232036944,
+        "scale": 0.07175329270772636
+      },
+      "solar_normalized_convergence": 5.0456426242952134e-05,
+      "solar_normalized_error": 0.00010262267158118039,
+      "solar_pixels": 1,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 10.241526953241413,
+        "nrmse": 0.21436718465027424,
+        "p99": 0.003116847594560363,
+        "scale": 0.07175329270772636
+      },
+      "unmasked_quality": {
+        "maximum": 20.830108972672402,
+        "nrmse": 0.5570272389071146,
+        "p99": 0.010998006019024219,
+        "scale": 0.07175329270772636
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-sunset.json",
+      "cloud_T_maximum": 0.0012845993041992188,
+      "convergence": {
+        "maximum": 0.003406785863795189,
+        "nrmse": 0.00013371925506452898,
+        "p99": 0.000248414413510578,
+        "scale": 0.05271939683035016
+      },
+      "eye_m": [
+        0.0,
+        5000.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "above",
+      "quality": {
+        "maximum": 0.00695786478188951,
+        "nrmse": 0.0005267711033163354,
+        "p99": 0.002576076193696951,
+        "scale": 0.05271939683035016
+      },
+      "solar_normalized_convergence": 3.15143127364618e-06,
+      "solar_normalized_error": 8.684875228064287e-05,
+      "solar_pixels": 1,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.8706176523168531,
+        "nrmse": 0.0163184578465701,
+        "p99": 0.00032649660009262567,
+        "scale": 0.05271939683035016
+      },
+      "unmasked_quality": {
+        "maximum": 23.992925833263914,
+        "nrmse": 0.5886671473566538,
+        "p99": 0.0027285131140626726,
+        "scale": 0.05271939683035016
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "clear-d4.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "static",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "tile_equivalence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "clear-d4.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "eye_m": [
+        8.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-1",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.03333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "yaw_rad": 0.001
+    },
+    {
+      "file": "clear-d4.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "eye_m": [
+        16.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-2",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.06666666666666667,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "yaw_rad": 0.002
+    },
+    {
+      "file": "clear-d4.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "eye_m": [
+        24.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-3",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.1,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08934886208623648
+      },
+      "yaw_rad": 0.003
+    },
+    {
+      "file": "clear-d4.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "eye_m": [
+        32.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-4",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.13333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "yaw_rad": 0.004
+    },
+    {
+      "file": "clear-d4.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "eye_m": [
+        40.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-5",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.16666666666666666,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "yaw_rad": 0.005
+    },
+    {
+      "file": "clear-d4.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "eye_m": [
+        48.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-6",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.2,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "yaw_rad": 0.006
+    },
+    {
+      "file": "clear-d4.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416592031718
+      },
+      "eye_m": [
+        56.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-7",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416592031718
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.23333333333333334,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416592031718
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416592031718
+      },
+      "yaw_rad": 0.007
+    },
+    {
+      "file": "clear-d4.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "eye_m": [
+        64.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-8",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.26666666666666666,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417124897242
+      },
+      "yaw_rad": 0.008
+    },
+    {
+      "file": "clear-d4.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "eye_m": [
+        72.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-9",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "yaw_rad": 0.009000000000000001
+    },
+    {
+      "file": "clear-d4.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "eye_m": [
+        80.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-10",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417657762766
+      },
+      "yaw_rad": 0.01
+    },
+    {
+      "file": "clear-d4.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "eye_m": [
+        88.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-11",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.36666666666666664,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933417178690434
+      },
+      "yaw_rad": 0.011
+    },
+    {
+      "file": "clear-d4.json",
+      "cloud_T_maximum": 0.0,
+      "convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416861891746
+      },
+      "eye_m": [
+        96.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": false,
+        "reset": "none"
+      },
+      "name": "motion-12",
+      "quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416861891746
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.4,
+      "unmasked_convergence": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416861891746
+      },
+      "unmasked_quality": {
+        "maximum": 0.0,
+        "nrmse": 0.0,
+        "p99": 0.0,
+        "scale": 0.08933416861891746
+      },
+      "yaw_rad": 0.012
+    },
+    {
+      "file": "sparse-d4.json",
+      "cloud_T_maximum": 0.00010204315185546875,
+      "convergence": {
+        "maximum": 0.00021142552227479912,
+        "nrmse": 1.0772163638852737e-05,
+        "p99": 3.004820368038515e-05,
+        "scale": 0.08901558518260716
+      },
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "static",
+      "quality": {
+        "maximum": 0.0023837461260815223,
+        "nrmse": 0.0002863908539675867,
+        "p99": 0.001976613629583567,
+        "scale": 0.08901558518260716
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "tile_equivalence": {
+        "maximum": 1.9249509009239026e-05,
+        "nrmse": 1.0583068155077204e-06,
+        "p99": 4.352062906436649e-06,
+        "scale": 0.08902219461649656
+      },
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.00021142552227479912,
+        "nrmse": 1.0772163638852737e-05,
+        "p99": 3.004820368038515e-05,
+        "scale": 0.08901558518260716
+      },
+      "unmasked_quality": {
+        "maximum": 0.0023837461260815223,
+        "nrmse": 0.0002863908539675867,
+        "p99": 0.001976613629583567,
+        "scale": 0.08901558518260716
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "sparse-d4.json",
+      "cloud_T_maximum": 0.00010752677917480469,
+      "convergence": {
+        "maximum": 0.0001916752228819178,
+        "nrmse": 1.0497968417387581e-05,
+        "p99": 2.9437032484483012e-05,
+        "scale": 0.08909200924038886
+      },
+      "eye_m": [
+        8.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-1",
+      "quality": {
+        "maximum": 0.002381722230694442,
+        "nrmse": 0.0002861364620262185,
+        "p99": 0.001974928523220552,
+        "scale": 0.08909200924038886
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.03333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.0001916752228819178,
+        "nrmse": 1.0497968417387581e-05,
+        "p99": 2.9437032484483012e-05,
+        "scale": 0.08909200924038886
+      },
+      "unmasked_quality": {
+        "maximum": 0.002381722230694442,
+        "nrmse": 0.0002861364620262185,
+        "p99": 0.001974928523220552,
+        "scale": 0.08909200924038886
+      },
+      "yaw_rad": 0.001
+    },
+    {
+      "file": "sparse-d4.json",
+      "cloud_T_maximum": 0.00014477968215942383,
+      "convergence": {
+        "maximum": 0.00015845149575078959,
+        "nrmse": 1.0382380674419313e-05,
+        "p99": 2.9986339997118323e-05,
+        "scale": 0.08919922986775637
+      },
+      "eye_m": [
+        16.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-2",
+      "quality": {
+        "maximum": 0.0023788554010353204,
+        "nrmse": 0.00028582451518112753,
+        "p99": 0.0019725846069874897,
+        "scale": 0.08919922986775637
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.06666666666666667,
+      "unmasked_convergence": {
+        "maximum": 0.00015845149575078959,
+        "nrmse": 1.0382380674419313e-05,
+        "p99": 2.9986339997118323e-05,
+        "scale": 0.08919922986775637
+      },
+      "unmasked_quality": {
+        "maximum": 0.0023788554010353204,
+        "nrmse": 0.00028582451518112753,
+        "p99": 0.0019725846069874897,
+        "scale": 0.08919922986775637
+      },
+      "yaw_rad": 0.002
+    },
+    {
+      "file": "sparse-d4.json",
+      "cloud_T_maximum": 0.0001575946807861328,
+      "convergence": {
+        "maximum": 0.00014935731956997787,
+        "nrmse": 8.565300765492007e-06,
+        "p99": 2.8452986577297462e-05,
+        "scale": 0.08929284019619226
+      },
+      "eye_m": [
+        24.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-3",
+      "quality": {
+        "maximum": 0.0023763771681664337,
+        "nrmse": 0.00028553218919941304,
+        "p99": 0.0019705270739316548,
+        "scale": 0.08929284019619226
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.1,
+      "unmasked_convergence": {
+        "maximum": 0.00014935731956997787,
+        "nrmse": 8.565300765492007e-06,
+        "p99": 2.8452986577297462e-05,
+        "scale": 0.08929284019619226
+      },
+      "unmasked_quality": {
+        "maximum": 0.0023763771681664337,
+        "nrmse": 0.00028553218919941304,
+        "p99": 0.0019705270739316548,
+        "scale": 0.08929284019619226
+      },
+      "yaw_rad": 0.003
+    },
+    {
+      "file": "sparse-d4.json",
+      "cloud_T_maximum": 0.00013816356658935547,
+      "convergence": {
+        "maximum": 5.41041392279581e-05,
+        "nrmse": 7.806442767714605e-06,
+        "p99": 2.8427598577401713e-05,
+        "scale": 0.08937258546948432
+      },
+      "eye_m": [
+        32.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-4",
+      "quality": {
+        "maximum": 0.002374281526033873,
+        "nrmse": 0.00028525607478098214,
+        "p99": 0.00196876099867332,
+        "scale": 0.08937258546948432
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.13333333333333333,
+      "unmasked_convergence": {
+        "maximum": 5.41041392279581e-05,
+        "nrmse": 7.806442767714605e-06,
+        "p99": 2.8427598577401713e-05,
+        "scale": 0.08937258546948432
+      },
+      "unmasked_quality": {
+        "maximum": 0.002374281526033873,
+        "nrmse": 0.00028525607478098214,
+        "p99": 0.00196876099867332,
+        "scale": 0.08937258546948432
+      },
+      "yaw_rad": 0.004
+    },
+    {
+      "file": "sparse-d4.json",
+      "cloud_T_maximum": 3.1054019927978516e-05,
+      "convergence": {
+        "maximum": 0.00010265131288567634,
+        "nrmse": 8.062083888671595e-06,
+        "p99": 2.8245775217730746e-05,
+        "scale": 0.08942033995836972
+      },
+      "eye_m": [
+        40.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-5",
+      "quality": {
+        "maximum": 0.002373036986760093,
+        "nrmse": 0.0002850980801551339,
+        "p99": 0.0019677486482884247,
+        "scale": 0.08942033995836972
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.16666666666666666,
+      "unmasked_convergence": {
+        "maximum": 0.00010265131288567634,
+        "nrmse": 8.062083888671595e-06,
+        "p99": 2.8245775217730746e-05,
+        "scale": 0.08942033995836972
+      },
+      "unmasked_quality": {
+        "maximum": 0.002373036986760093,
+        "nrmse": 0.0002850980801551339,
+        "p99": 0.0019677486482884247,
+        "scale": 0.08942033995836972
+      },
+      "yaw_rad": 0.005
+    },
+    {
+      "file": "sparse-d4.json",
+      "cloud_T_maximum": 9.72747802734375e-05,
+      "convergence": {
+        "maximum": 0.00026112866009088566,
+        "nrmse": 9.811142291968682e-06,
+        "p99": 2.849585250513175e-05,
+        "scale": 0.08941998010724783
+      },
+      "eye_m": [
+        48.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-6",
+      "quality": {
+        "maximum": 0.0023730894990245405,
+        "nrmse": 0.00028499936465581057,
+        "p99": 0.0019677747935756573,
+        "scale": 0.08941998010724783
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.2,
+      "unmasked_convergence": {
+        "maximum": 0.00026112866009088566,
+        "nrmse": 9.811142291968682e-06,
+        "p99": 2.849585250513175e-05,
+        "scale": 0.08941998010724783
+      },
+      "unmasked_quality": {
+        "maximum": 0.0023730894990245405,
+        "nrmse": 0.00028499936465581057,
+        "p99": 0.0019677747935756573,
+        "scale": 0.08941998010724783
+      },
+      "yaw_rad": 0.006
+    },
+    {
+      "file": "sparse-d4.json",
+      "cloud_T_maximum": 0.00015801191329956055,
+      "convergence": {
+        "maximum": 8.357171531186394e-05,
+        "nrmse": 7.697407913576707e-06,
+        "p99": 2.816275152084747e-05,
+        "scale": 0.08941939639300107
+      },
+      "eye_m": [
+        56.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-7",
+      "quality": {
+        "maximum": 0.0023730932730184006,
+        "nrmse": 0.00028495516102240785,
+        "p99": 0.0019677967521832236,
+        "scale": 0.08941939639300107
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.23333333333333334,
+      "unmasked_convergence": {
+        "maximum": 8.357171531186394e-05,
+        "nrmse": 7.697407913576707e-06,
+        "p99": 2.816275152084747e-05,
+        "scale": 0.08941939639300107
+      },
+      "unmasked_quality": {
+        "maximum": 0.0023730932730184006,
+        "nrmse": 0.00028495516102240785,
+        "p99": 0.0019677967521832236,
+        "scale": 0.08941939639300107
+      },
+      "yaw_rad": 0.007
+    },
+    {
+      "file": "sparse-d4.json",
+      "cloud_T_maximum": 9.632110595703125e-05,
+      "convergence": {
+        "maximum": 9.448756631500732e-05,
+        "nrmse": 8.229815452798641e-06,
+        "p99": 2.9079506740685675e-05,
+        "scale": 0.0894187322884798
+      },
+      "eye_m": [
+        64.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-8",
+      "quality": {
+        "maximum": 0.002373147351295507,
+        "nrmse": 0.00028499201852735464,
+        "p99": 0.001967823084032896,
+        "scale": 0.0894187322884798
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.26666666666666666,
+      "unmasked_convergence": {
+        "maximum": 9.448756631500732e-05,
+        "nrmse": 8.229815452798641e-06,
+        "p99": 2.9079506740685675e-05,
+        "scale": 0.0894187322884798
+      },
+      "unmasked_quality": {
+        "maximum": 0.002373147351295507,
+        "nrmse": 0.00028499201852735464,
+        "p99": 0.001967823084032896,
+        "scale": 0.0894187322884798
+      },
+      "yaw_rad": 0.008
+    },
+    {
+      "file": "sparse-d4.json",
+      "cloud_T_maximum": 9.042024612426758e-05,
+      "convergence": {
+        "maximum": 4.649416013123792e-05,
+        "nrmse": 7.613954982866957e-06,
+        "p99": 2.8329774990360022e-05,
+        "scale": 0.08941819706708193
+      },
+      "eye_m": [
+        72.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-9",
+      "quality": {
+        "maximum": 0.0023731576502425606,
+        "nrmse": 0.0002849714428526527,
+        "p99": 0.0019678530895084635,
+        "scale": 0.08941819706708193
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3,
+      "unmasked_convergence": {
+        "maximum": 4.649416013123792e-05,
+        "nrmse": 7.613954982866957e-06,
+        "p99": 2.8329774990360022e-05,
+        "scale": 0.08941819706708193
+      },
+      "unmasked_quality": {
+        "maximum": 0.0023731576502425606,
+        "nrmse": 0.0002849714428526527,
+        "p99": 0.0019678530895084635,
+        "scale": 0.08941819706708193
+      },
+      "yaw_rad": 0.009000000000000001
+    },
+    {
+      "file": "sparse-d4.json",
+      "cloud_T_maximum": 7.575750350952148e-05,
+      "convergence": {
+        "maximum": 0.00016747965682668142,
+        "nrmse": 9.81055311953132e-06,
+        "p99": 2.9663063597163475e-05,
+        "scale": 0.08941782711744307
+      },
+      "eye_m": [
+        80.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-10",
+      "quality": {
+        "maximum": 0.002373210432272588,
+        "nrmse": 0.0002850342045058031,
+        "p99": 0.0019678820619379277,
+        "scale": 0.08941782711744307
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.00016747965682668142,
+        "nrmse": 9.81055311953132e-06,
+        "p99": 2.9663063597163475e-05,
+        "scale": 0.08941782711744307
+      },
+      "unmasked_quality": {
+        "maximum": 0.002373210432272588,
+        "nrmse": 0.0002850342045058031,
+        "p99": 0.0019678820619379277,
+        "scale": 0.08941782711744307
+      },
+      "yaw_rad": 0.01
+    },
+    {
+      "file": "sparse-d4.json",
+      "cloud_T_maximum": 4.118680953979492e-05,
+      "convergence": {
+        "maximum": 8.890639014743345e-05,
+        "nrmse": 8.03162372114614e-06,
+        "p99": 2.849670612035824e-05,
+        "scale": 0.08941730154305695
+      },
+      "eye_m": [
+        88.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-11",
+      "quality": {
+        "maximum": 0.00237324260851893,
+        "nrmse": 0.00028502326614643066,
+        "p99": 0.0019679170634884727,
+        "scale": 0.08941730154305695
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.36666666666666664,
+      "unmasked_convergence": {
+        "maximum": 8.890639014743345e-05,
+        "nrmse": 8.03162372114614e-06,
+        "p99": 2.849670612035824e-05,
+        "scale": 0.08941730154305695
+      },
+      "unmasked_quality": {
+        "maximum": 0.00237324260851893,
+        "nrmse": 0.00028502326614643066,
+        "p99": 0.0019679170634884727,
+        "scale": 0.08941730154305695
+      },
+      "yaw_rad": 0.011
+    },
+    {
+      "file": "sparse-d4.json",
+      "cloud_T_maximum": 0.00010460615158081055,
+      "convergence": {
+        "maximum": 0.0001131542647367148,
+        "nrmse": 8.653081156110784e-06,
+        "p99": 2.8830173489619528e-05,
+        "scale": 0.08941676634252071
+      },
+      "eye_m": [
+        96.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-12",
+      "quality": {
+        "maximum": 0.0023732503037659815,
+        "nrmse": 0.00028502990015864344,
+        "p99": 0.001967940559844358,
+        "scale": 0.08941676634252071
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.4,
+      "unmasked_convergence": {
+        "maximum": 0.0001131542647367148,
+        "nrmse": 8.653081156110784e-06,
+        "p99": 2.8830173489619528e-05,
+        "scale": 0.08941676634252071
+      },
+      "unmasked_quality": {
+        "maximum": 0.0023732503037659815,
+        "nrmse": 0.00028502990015864344,
+        "p99": 0.001967940559844358,
+        "scale": 0.08941676634252071
+      },
+      "yaw_rad": 0.012
+    },
+    {
+      "file": "sparse-d4.json",
+      "cloud_T_maximum": 8.45193862915039e-05,
+      "convergence": {
+        "maximum": 0.0040354480548457266,
+        "nrmse": 0.00013999902712074087,
+        "p99": 2.5903091473334183e-05,
+        "scale": 0.08226300142258405
+      },
+      "eye_m": [
+        0.0,
+        2200.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "inside",
+      "quality": {
+        "maximum": 0.001099613404118008,
+        "nrmse": 9.236660522421153e-05,
+        "p99": 0.00018974467355466825,
+        "scale": 0.08226300142258405
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0040354480548457266,
+        "nrmse": 0.00013999902712074087,
+        "p99": 2.5903091473334183e-05,
+        "scale": 0.08226300142258405
+      },
+      "unmasked_quality": {
+        "maximum": 0.001099613404118008,
+        "nrmse": 9.236660522421153e-05,
+        "p99": 0.00018974467355466825,
+        "scale": 0.08226300142258405
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "sparse-d4.json",
+      "cloud_T_maximum": 0.00015491247177124023,
+      "convergence": {
+        "maximum": 0.0002021367920544713,
+        "nrmse": 1.1310156654832845e-05,
+        "p99": 2.6120717216498405e-05,
+        "scale": 0.08728235307484865
+      },
+      "eye_m": [
+        0.0,
+        5000.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "above",
+      "quality": {
+        "maximum": 0.00045715523219920653,
+        "nrmse": 9.19696090137099e-05,
+        "p99": 0.00021733119618694424,
+        "scale": 0.08728235307484865
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0002021367920544713,
+        "nrmse": 1.1310156654832845e-05,
+        "p99": 2.6120717216498405e-05,
+        "scale": 0.08728235307484865
+      },
+      "unmasked_quality": {
+        "maximum": 0.00045715523219920653,
+        "nrmse": 9.19696090137099e-05,
+        "p99": 0.00021733119618694424,
+        "scale": 0.08728235307484865
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "overcast-d4.json",
+      "cloud_T_maximum": 0.0006620287895202637,
+      "convergence": {
+        "maximum": 0.0005010947112815749,
+        "nrmse": 2.3442387382624636e-05,
+        "p99": 7.483361641889972e-05,
+        "scale": 0.07437277486026286
+      },
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "static",
+      "quality": {
+        "maximum": 0.004149083243396874,
+        "nrmse": 0.001139324839249444,
+        "p99": 0.0031667542819515918,
+        "scale": 0.07437277486026286
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "tile_equivalence": {
+        "maximum": 2.304092678190266e-05,
+        "nrmse": 1.3795225496674557e-06,
+        "p99": 6.160943465595711e-06,
+        "scale": 0.07437346394583583
+      },
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0005010947112815749,
+        "nrmse": 2.3442387382624636e-05,
+        "p99": 7.483361641889972e-05,
+        "scale": 0.07437277486026286
+      },
+      "unmasked_quality": {
+        "maximum": 0.004149083243396874,
+        "nrmse": 0.001139324839249444,
+        "p99": 0.0031667542819515918,
+        "scale": 0.07437277486026286
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "overcast-d4.json",
+      "cloud_T_maximum": 0.0022559762001037598,
+      "convergence": {
+        "maximum": 0.00034191269417575755,
+        "nrmse": 2.054579202010199e-05,
+        "p99": 8.40506154156052e-05,
+        "scale": 0.07437229447886347
+      },
+      "eye_m": [
+        8.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-1",
+      "quality": {
+        "maximum": 0.0041167771035624315,
+        "nrmse": 0.0011386977714519348,
+        "p99": 0.003154352476270752,
+        "scale": 0.07437229447886347
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.03333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.00034191269417575755,
+        "nrmse": 2.054579202010199e-05,
+        "p99": 8.40506154156052e-05,
+        "scale": 0.07437229447886347
+      },
+      "unmasked_quality": {
+        "maximum": 0.0041167771035624315,
+        "nrmse": 0.0011386977714519348,
+        "p99": 0.003154352476270752,
+        "scale": 0.07437229447886347
+      },
+      "yaw_rad": 0.001
+    },
+    {
+      "file": "overcast-d4.json",
+      "cloud_T_maximum": 0.003819108009338379,
+      "convergence": {
+        "maximum": 0.00037016532708559785,
+        "nrmse": 2.12962857609126e-05,
+        "p99": 8.344999119412802e-05,
+        "scale": 0.0743718908585608
+      },
+      "eye_m": [
+        16.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-2",
+      "quality": {
+        "maximum": 0.004204857719557185,
+        "nrmse": 0.001144906704200092,
+        "p99": 0.003165239131781599,
+        "scale": 0.0743718908585608
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.06666666666666667,
+      "unmasked_convergence": {
+        "maximum": 0.00037016532708559785,
+        "nrmse": 2.12962857609126e-05,
+        "p99": 8.344999119412802e-05,
+        "scale": 0.0743718908585608
+      },
+      "unmasked_quality": {
+        "maximum": 0.004204857719557185,
+        "nrmse": 0.001144906704200092,
+        "p99": 0.003165239131781599,
+        "scale": 0.0743718908585608
+      },
+      "yaw_rad": 0.002
+    },
+    {
+      "file": "overcast-d4.json",
+      "cloud_T_maximum": 0.005009174346923828,
+      "convergence": {
+        "maximum": 0.0002067729284994984,
+        "nrmse": 1.8249076608591067e-05,
+        "p99": 6.982593564154573e-05,
+        "scale": 0.07437142987549304
+      },
+      "eye_m": [
+        24.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-3",
+      "quality": {
+        "maximum": 0.004270702491246907,
+        "nrmse": 0.001151701974091106,
+        "p99": 0.0031861965137898723,
+        "scale": 0.07437142987549304
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.1,
+      "unmasked_convergence": {
+        "maximum": 0.0002067729284994984,
+        "nrmse": 1.8249076608591067e-05,
+        "p99": 6.982593564154573e-05,
+        "scale": 0.07437142987549304
+      },
+      "unmasked_quality": {
+        "maximum": 0.004270702491246907,
+        "nrmse": 0.001151701974091106,
+        "p99": 0.0031861965137898723,
+        "scale": 0.07437142987549304
+      },
+      "yaw_rad": 0.003
+    },
+    {
+      "file": "overcast-d4.json",
+      "cloud_T_maximum": 0.005715847015380859,
+      "convergence": {
+        "maximum": 0.00041835730124979893,
+        "nrmse": 2.0070350580406935e-05,
+        "p99": 6.541841899332345e-05,
+        "scale": 0.07437093718647957
+      },
+      "eye_m": [
+        32.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-4",
+      "quality": {
+        "maximum": 0.00459431653144535,
+        "nrmse": 0.0011537193923184916,
+        "p99": 0.0032000426473112317,
+        "scale": 0.07437093718647957
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.13333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.00041835730124979893,
+        "nrmse": 2.0070350580406935e-05,
+        "p99": 6.541841899332345e-05,
+        "scale": 0.07437093718647957
+      },
+      "unmasked_quality": {
+        "maximum": 0.00459431653144535,
+        "nrmse": 0.0011537193923184916,
+        "p99": 0.0032000426473112317,
+        "scale": 0.07437093718647957
+      },
+      "yaw_rad": 0.004
+    },
+    {
+      "file": "overcast-d4.json",
+      "cloud_T_maximum": 0.0005840957164764404,
+      "convergence": {
+        "maximum": 0.0006967657274172804,
+        "nrmse": 2.5698598131651417e-05,
+        "p99": 8.325123213281956e-05,
+        "scale": 0.07437046056166291
+      },
+      "eye_m": [
+        40.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-5",
+      "quality": {
+        "maximum": 0.004475480046552966,
+        "nrmse": 0.0011487508833764703,
+        "p99": 0.003252758881473468,
+        "scale": 0.07437046056166291
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.16666666666666666,
+      "unmasked_convergence": {
+        "maximum": 0.0006967657274172804,
+        "nrmse": 2.5698598131651417e-05,
+        "p99": 8.325123213281956e-05,
+        "scale": 0.07437046056166291
+      },
+      "unmasked_quality": {
+        "maximum": 0.004475480046552966,
+        "nrmse": 0.0011487508833764703,
+        "p99": 0.003252758881473468,
+        "scale": 0.07437046056166291
+      },
+      "yaw_rad": 0.005
+    },
+    {
+      "file": "overcast-d4.json",
+      "cloud_T_maximum": 0.0005843937397003174,
+      "convergence": {
+        "maximum": 0.0002389358382750294,
+        "nrmse": 2.0259109057961555e-05,
+        "p99": 9.482296474939846e-05,
+        "scale": 0.07436990135908127
+      },
+      "eye_m": [
+        48.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-6",
+      "quality": {
+        "maximum": 0.004608606470577737,
+        "nrmse": 0.0011326487923804514,
+        "p99": 0.003217869654253226,
+        "scale": 0.07436990135908127
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.2,
+      "unmasked_convergence": {
+        "maximum": 0.0002389358382750294,
+        "nrmse": 2.0259109057961555e-05,
+        "p99": 9.482296474939846e-05,
+        "scale": 0.07436990135908127
+      },
+      "unmasked_quality": {
+        "maximum": 0.004608606470577737,
+        "nrmse": 0.0011326487923804514,
+        "p99": 0.003217869654253226,
+        "scale": 0.07436990135908127
+      },
+      "yaw_rad": 0.006
+    },
+    {
+      "file": "overcast-d4.json",
+      "cloud_T_maximum": 0.0007424652576446533,
+      "convergence": {
+        "maximum": 0.00028325263428516866,
+        "nrmse": 1.9841898302290218e-05,
+        "p99": 7.900993834219926e-05,
+        "scale": 0.07430783561617135
+      },
+      "eye_m": [
+        56.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-7",
+      "quality": {
+        "maximum": 0.004675974593347251,
+        "nrmse": 0.0011316027994272648,
+        "p99": 0.003208725947750077,
+        "scale": 0.07430783561617135
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.23333333333333334,
+      "unmasked_convergence": {
+        "maximum": 0.00028325263428516866,
+        "nrmse": 1.9841898302290218e-05,
+        "p99": 7.900993834219926e-05,
+        "scale": 0.07430783561617135
+      },
+      "unmasked_quality": {
+        "maximum": 0.004675974593347251,
+        "nrmse": 0.0011316027994272648,
+        "p99": 0.003208725947750077,
+        "scale": 0.07430783561617135
+      },
+      "yaw_rad": 0.007
+    },
+    {
+      "file": "overcast-d4.json",
+      "cloud_T_maximum": 0.0006298720836639404,
+      "convergence": {
+        "maximum": 0.0002541664846329459,
+        "nrmse": 1.7345228385955483e-05,
+        "p99": 6.231436871962647e-05,
+        "scale": 0.07436906168684364
+      },
+      "eye_m": [
+        64.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-8",
+      "quality": {
+        "maximum": 0.004746912248670967,
+        "nrmse": 0.0011319718650835173,
+        "p99": 0.0032286757522697143,
+        "scale": 0.07436906168684364
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.26666666666666666,
+      "unmasked_convergence": {
+        "maximum": 0.0002541664846329459,
+        "nrmse": 1.7345228385955483e-05,
+        "p99": 6.231436871962647e-05,
+        "scale": 0.07436906168684364
+      },
+      "unmasked_quality": {
+        "maximum": 0.004746912248670967,
+        "nrmse": 0.0011319718650835173,
+        "p99": 0.0032286757522697143,
+        "scale": 0.07436906168684364
+      },
+      "yaw_rad": 0.008
+    },
+    {
+      "file": "overcast-d4.json",
+      "cloud_T_maximum": 0.0008126199245452881,
+      "convergence": {
+        "maximum": 0.0003283047967570202,
+        "nrmse": 1.939891757683201e-05,
+        "p99": 7.76931247742048e-05,
+        "scale": 0.07436855281218886
+      },
+      "eye_m": [
+        72.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-9",
+      "quality": {
+        "maximum": 0.004757213647118927,
+        "nrmse": 0.0011298680236766746,
+        "p99": 0.0032310020896589194,
+        "scale": 0.07436855281218886
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3,
+      "unmasked_convergence": {
+        "maximum": 0.0003283047967570202,
+        "nrmse": 1.939891757683201e-05,
+        "p99": 7.76931247742048e-05,
+        "scale": 0.07436855281218886
+      },
+      "unmasked_quality": {
+        "maximum": 0.004757213647118927,
+        "nrmse": 0.0011298680236766746,
+        "p99": 0.0032310020896589194,
+        "scale": 0.07436855281218886
+      },
+      "yaw_rad": 0.009000000000000001
+    },
+    {
+      "file": "overcast-d4.json",
+      "cloud_T_maximum": 0.0006425380706787109,
+      "convergence": {
+        "maximum": 0.00027920015827567854,
+        "nrmse": 1.9511446031628712e-05,
+        "p99": 7.733854402182413e-05,
+        "scale": 0.07437233650535345
+      },
+      "eye_m": [
+        80.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-10",
+      "quality": {
+        "maximum": 0.004739390128404764,
+        "nrmse": 0.001125371209942238,
+        "p99": 0.0031782434952906495,
+        "scale": 0.07437233650535345
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.00027920015827567854,
+        "nrmse": 1.9511446031628712e-05,
+        "p99": 7.733854402182413e-05,
+        "scale": 0.07437233650535345
+      },
+      "unmasked_quality": {
+        "maximum": 0.004739390128404764,
+        "nrmse": 0.001125371209942238,
+        "p99": 0.0031782434952906495,
+        "scale": 0.07437233650535345
+      },
+      "yaw_rad": 0.01
+    },
+    {
+      "file": "overcast-d4.json",
+      "cloud_T_maximum": 0.0005994737148284912,
+      "convergence": {
+        "maximum": 0.00024185960566578283,
+        "nrmse": 1.8011219627015794e-05,
+        "p99": 7.166949932646804e-05,
+        "scale": 0.0746414711818099
+      },
+      "eye_m": [
+        88.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-11",
+      "quality": {
+        "maximum": 0.004717160674680451,
+        "nrmse": 0.0011215936387952918,
+        "p99": 0.0031604951565797974,
+        "scale": 0.0746414711818099
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.36666666666666664,
+      "unmasked_convergence": {
+        "maximum": 0.00024185960566578283,
+        "nrmse": 1.8011219627015794e-05,
+        "p99": 7.166949932646804e-05,
+        "scale": 0.0746414711818099
+      },
+      "unmasked_quality": {
+        "maximum": 0.004717160674680451,
+        "nrmse": 0.0011215936387952918,
+        "p99": 0.0031604951565797974,
+        "scale": 0.0746414711818099
+      },
+      "yaw_rad": 0.011
+    },
+    {
+      "file": "overcast-d4.json",
+      "cloud_T_maximum": 0.0006894171237945557,
+      "convergence": {
+        "maximum": 0.00041262032570700763,
+        "nrmse": 2.1520720702368878e-05,
+        "p99": 7.581998248001107e-05,
+        "scale": 0.07468270327225328
+      },
+      "eye_m": [
+        96.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-12",
+      "quality": {
+        "maximum": 0.0047687277270207495,
+        "nrmse": 0.0011224798727418304,
+        "p99": 0.0031881305001496235,
+        "scale": 0.07468270327225328
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.4,
+      "unmasked_convergence": {
+        "maximum": 0.00041262032570700763,
+        "nrmse": 2.1520720702368878e-05,
+        "p99": 7.581998248001107e-05,
+        "scale": 0.07468270327225328
+      },
+      "unmasked_quality": {
+        "maximum": 0.0047687277270207495,
+        "nrmse": 0.0011224798727418304,
+        "p99": 0.0031881305001496235,
+        "scale": 0.07468270327225328
+      },
+      "yaw_rad": 0.012
+    },
+    {
+      "file": "overcast-d4.json",
+      "cloud_T_maximum": 0.00042578577995300293,
+      "convergence": {
+        "maximum": 0.0034705867879190992,
+        "nrmse": 0.00021053697971704972,
+        "p99": 0.001099274634190284,
+        "scale": 0.040463015137612815
+      },
+      "eye_m": [
+        0.0,
+        2200.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "inside",
+      "quality": {
+        "maximum": 0.021159425543498117,
+        "nrmse": 0.002435331026409423,
+        "p99": 0.0090230745224835,
+        "scale": 0.040463015137612815
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0034705867879190992,
+        "nrmse": 0.00021053697971704972,
+        "p99": 0.001099274634190284,
+        "scale": 0.040463015137612815
+      },
+      "unmasked_quality": {
+        "maximum": 0.021159425543498117,
+        "nrmse": 0.002435331026409423,
+        "p99": 0.0090230745224835,
+        "scale": 0.040463015137612815
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "overcast-d4.json",
+      "cloud_T_maximum": 0.0008424222469329834,
+      "convergence": {
+        "maximum": 0.0009825821650719215,
+        "nrmse": 3.568884722531122e-05,
+        "p99": 9.67900527851699e-05,
+        "scale": 0.06850927900597453
+      },
+      "eye_m": [
+        0.0,
+        5000.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "above",
+      "quality": {
+        "maximum": 0.0020520034954797507,
+        "nrmse": 0.00019918557664189854,
+        "p99": 0.000639466865591909,
+        "scale": 0.06850927900597453
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0009825821650719215,
+        "nrmse": 3.568884722531122e-05,
+        "p99": 9.67900527851699e-05,
+        "scale": 0.06850927900597453
+      },
+      "unmasked_quality": {
+        "maximum": 0.0020520034954797507,
+        "nrmse": 0.00019918557664189854,
+        "p99": 0.000639466865591909,
+        "scale": 0.06850927900597453
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "sunset-d4.json",
+      "cloud_T_maximum": 0.0008771419525146484,
+      "convergence": {
+        "maximum": 0.0015654065985874412,
+        "nrmse": 0.00010008874405721072,
+        "p99": 0.0004192473035663251,
+        "scale": 0.061897529210895294
+      },
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "static",
+      "quality": {
+        "maximum": 0.02655786622729248,
+        "nrmse": 0.0021234779751440384,
+        "p99": 0.009849001469913125,
+        "scale": 0.061897529210895294
+      },
+      "solar_normalized_convergence": 4.72714691046927e-06,
+      "solar_normalized_error": 2.371116774772618e-05,
+      "solar_pixels": 1,
+      "tile_equivalence": {
+        "maximum": 6.751930452464865e-05,
+        "nrmse": 4.3764513304495685e-06,
+        "p99": 1.805328997985258e-05,
+        "scale": 0.06190489881820977
+      },
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 1.112284401779988,
+        "nrmse": 0.022525169198706004,
+        "p99": 0.000460534075063095,
+        "scale": 0.061897529210895294
+      },
+      "unmasked_quality": {
+        "maximum": 5.57917122807728,
+        "nrmse": 0.11753058895240544,
+        "p99": 0.010174179934048764,
+        "scale": 0.061897529210895294
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "sunset-d4.json",
+      "cloud_T_maximum": 0.0009140968322753906,
+      "convergence": {
+        "maximum": 0.0017224452315401369,
+        "nrmse": 0.0001017417504298913,
+        "p99": 0.0004101760256083995,
+        "scale": 0.06207212258949875
+      },
+      "eye_m": [
+        8.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-1",
+      "quality": {
+        "maximum": 0.02562590399041324,
+        "nrmse": 0.0021025319143659453,
+        "p99": 0.010039034970754175,
+        "scale": 0.06207212258949875
+      },
+      "solar_normalized_convergence": 4.291310670496926e-06,
+      "solar_normalized_error": 2.3614780886963065e-05,
+      "solar_pixels": 1,
+      "time_seconds": 0.03333333333333333,
+      "unmasked_convergence": {
+        "maximum": 1.0068932298856756,
+        "nrmse": 0.02171988586047503,
+        "p99": 0.0004220290894839806,
+        "scale": 0.06207212258949875
+      },
+      "unmasked_quality": {
+        "maximum": 5.540862646880647,
+        "nrmse": 0.11599089480864794,
+        "p99": 0.010107092562829665,
+        "scale": 0.06207212258949875
+      },
+      "yaw_rad": 0.001
+    },
+    {
+      "file": "sunset-d4.json",
+      "cloud_T_maximum": 0.0011243820190429688,
+      "convergence": {
+        "maximum": 0.0014494079672665975,
+        "nrmse": 9.625962025389768e-05,
+        "p99": 0.00036810551335393,
+        "scale": 0.0621580828949809
+      },
+      "eye_m": [
+        16.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-2",
+      "quality": {
+        "maximum": 0.02550667949011707,
+        "nrmse": 0.0020976155528325364,
+        "p99": 0.00991481592163476,
+        "scale": 0.0621580828949809
+      },
+      "solar_normalized_convergence": 3.7548968366848103e-06,
+      "solar_normalized_error": 2.3794982409259323e-05,
+      "solar_pixels": 1,
+      "time_seconds": 0.06666666666666667,
+      "unmasked_convergence": {
+        "maximum": 0.8798131707568457,
+        "nrmse": 0.019106803964930093,
+        "p99": 0.00038932162402265205,
+        "scale": 0.0621580828949809
+      },
+      "unmasked_quality": {
+        "maximum": 5.575423195934564,
+        "nrmse": 0.11535381484386678,
+        "p99": 0.010045049278931746,
+        "scale": 0.0621580828949809
+      },
+      "yaw_rad": 0.002
+    },
+    {
+      "file": "sunset-d4.json",
+      "cloud_T_maximum": 0.0013118386268615723,
+      "convergence": {
+        "maximum": 0.0011078157647613713,
+        "nrmse": 9.487574036147031e-05,
+        "p99": 0.0003839274760547975,
+        "scale": 0.06202227522879839
+      },
+      "eye_m": [
+        24.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-3",
+      "quality": {
+        "maximum": 0.026406906600835358,
+        "nrmse": 0.002097812638770112,
+        "p99": 0.009343636738115833,
+        "scale": 0.06202227522879839
+      },
+      "solar_normalized_convergence": 3.721370972071553e-06,
+      "solar_normalized_error": 2.3686023349266236e-05,
+      "solar_pixels": 1,
+      "time_seconds": 0.1,
+      "unmasked_convergence": {
+        "maximum": 0.8738669864989738,
+        "nrmse": 0.01940388920047538,
+        "p99": 0.0004161216448854251,
+        "scale": 0.06202227522879839
+      },
+      "unmasked_quality": {
+        "maximum": 5.562045278932658,
+        "nrmse": 0.115896257368624,
+        "p99": 0.009619449468097629,
+        "scale": 0.06202227522879839
+      },
+      "yaw_rad": 0.003
+    },
+    {
+      "file": "sunset-d4.json",
+      "cloud_T_maximum": 0.001026928424835205,
+      "convergence": {
+        "maximum": 0.002354387042427305,
+        "nrmse": 0.00011318740592346062,
+        "p99": 0.00043750473062900523,
+        "scale": 0.06188598201051354
+      },
+      "eye_m": [
+        32.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-4",
+      "quality": {
+        "maximum": 0.02616468508609551,
+        "nrmse": 0.0020944564269006153,
+        "p99": 0.009230458915059393,
+        "scale": 0.06188598201051354
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.13333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.002354387042427305,
+        "nrmse": 0.00011318740592346062,
+        "p99": 0.00043750473062900523,
+        "scale": 0.06188598201051354
+      },
+      "unmasked_quality": {
+        "maximum": 0.02616468508609551,
+        "nrmse": 0.0020944564269006153,
+        "p99": 0.009230458915059393,
+        "scale": 0.06188598201051354
+      },
+      "yaw_rad": 0.004
+    },
+    {
+      "file": "sunset-d4.json",
+      "cloud_T_maximum": 0.0011892318725585938,
+      "convergence": {
+        "maximum": 0.002112494712190632,
+        "nrmse": 0.0001009555097511664,
+        "p99": 0.0003806785936121455,
+        "scale": 0.061749155791103835
+      },
+      "eye_m": [
+        40.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-5",
+      "quality": {
+        "maximum": 0.02643514202043897,
+        "nrmse": 0.002110869268016195,
+        "p99": 0.009093512693146165,
+        "scale": 0.061749155791103835
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.16666666666666666,
+      "unmasked_convergence": {
+        "maximum": 0.002112494712190632,
+        "nrmse": 0.0001009555097511664,
+        "p99": 0.0003806785936121455,
+        "scale": 0.061749155791103835
+      },
+      "unmasked_quality": {
+        "maximum": 0.02643514202043897,
+        "nrmse": 0.002110869268016195,
+        "p99": 0.009093512693146165,
+        "scale": 0.061749155791103835
+      },
+      "yaw_rad": 0.005
+    },
+    {
+      "file": "sunset-d4.json",
+      "cloud_T_maximum": 0.0010186433792114258,
+      "convergence": {
+        "maximum": 0.0013345339074325759,
+        "nrmse": 0.00010079720066001637,
+        "p99": 0.0004172532358570759,
+        "scale": 0.06167997229322791
+      },
+      "eye_m": [
+        48.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-6",
+      "quality": {
+        "maximum": 0.027019842241496717,
+        "nrmse": 0.0020756940594910413,
+        "p99": 0.009226499720991583,
+        "scale": 0.06167997229322791
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.2,
+      "unmasked_convergence": {
+        "maximum": 0.0013345339074325759,
+        "nrmse": 0.00010079720066001637,
+        "p99": 0.0004172532358570759,
+        "scale": 0.06167997229322791
+      },
+      "unmasked_quality": {
+        "maximum": 0.027019842241496717,
+        "nrmse": 0.0020756940594910413,
+        "p99": 0.009226499720991583,
+        "scale": 0.06167997229322791
+      },
+      "yaw_rad": 0.006
+    },
+    {
+      "file": "sunset-d4.json",
+      "cloud_T_maximum": 0.0010569095611572266,
+      "convergence": {
+        "maximum": 0.0020296899529051674,
+        "nrmse": 0.00010388649263255798,
+        "p99": 0.00039388685682415403,
+        "scale": 0.06194837688077241
+      },
+      "eye_m": [
+        56.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-7",
+      "quality": {
+        "maximum": 0.027373573028931005,
+        "nrmse": 0.002087439137325157,
+        "p99": 0.009259317837568046,
+        "scale": 0.06194837688077241
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.23333333333333334,
+      "unmasked_convergence": {
+        "maximum": 0.0020296899529051674,
+        "nrmse": 0.00010388649263255798,
+        "p99": 0.00039388685682415403,
+        "scale": 0.06194837688077241
+      },
+      "unmasked_quality": {
+        "maximum": 0.027373573028931005,
+        "nrmse": 0.002087439137325157,
+        "p99": 0.009259317837568046,
+        "scale": 0.06194837688077241
+      },
+      "yaw_rad": 0.007
+    },
+    {
+      "file": "sunset-d4.json",
+      "cloud_T_maximum": 0.0013770461082458496,
+      "convergence": {
+        "maximum": 0.0011844115386030376,
+        "nrmse": 9.04460227595038e-05,
+        "p99": 0.0003570652432553275,
+        "scale": 0.06159690515268594
+      },
+      "eye_m": [
+        64.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-8",
+      "quality": {
+        "maximum": 0.028675169428623724,
+        "nrmse": 0.0021093345808081967,
+        "p99": 0.009863201602564082,
+        "scale": 0.06159690515268594
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.26666666666666666,
+      "unmasked_convergence": {
+        "maximum": 0.0011844115386030376,
+        "nrmse": 9.04460227595038e-05,
+        "p99": 0.0003570652432553275,
+        "scale": 0.06159690515268594
+      },
+      "unmasked_quality": {
+        "maximum": 0.028675169428623724,
+        "nrmse": 0.0021093345808081967,
+        "p99": 0.009863201602564082,
+        "scale": 0.06159690515268594
+      },
+      "yaw_rad": 0.008
+    },
+    {
+      "file": "sunset-d4.json",
+      "cloud_T_maximum": 0.0014820098876953125,
+      "convergence": {
+        "maximum": 0.0016423982183039038,
+        "nrmse": 0.00011049202074042003,
+        "p99": 0.0004436544927723814,
+        "scale": 0.06119607969149947
+      },
+      "eye_m": [
+        72.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-9",
+      "quality": {
+        "maximum": 0.02937457824524842,
+        "nrmse": 0.0021284563245649313,
+        "p99": 0.009754980996610292,
+        "scale": 0.06119607969149947
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3,
+      "unmasked_convergence": {
+        "maximum": 0.0016423982183039038,
+        "nrmse": 0.00011049202074042003,
+        "p99": 0.0004436544927723814,
+        "scale": 0.06119607969149947
+      },
+      "unmasked_quality": {
+        "maximum": 0.02937457824524842,
+        "nrmse": 0.0021284563245649313,
+        "p99": 0.009754980996610292,
+        "scale": 0.06119607969149947
+      },
+      "yaw_rad": 0.009000000000000001
+    },
+    {
+      "file": "sunset-d4.json",
+      "cloud_T_maximum": 0.0013897418975830078,
+      "convergence": {
+        "maximum": 0.0019513362857567107,
+        "nrmse": 0.00010289193797005769,
+        "p99": 0.00040064566695082983,
+        "scale": 0.06105674106255173
+      },
+      "eye_m": [
+        80.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-10",
+      "quality": {
+        "maximum": 0.02931000818064028,
+        "nrmse": 0.002146448460537173,
+        "p99": 0.00988471842445801,
+        "scale": 0.06105674106255173
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.3333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.0019513362857567107,
+        "nrmse": 0.00010289193797005769,
+        "p99": 0.00040064566695082983,
+        "scale": 0.06105674106255173
+      },
+      "unmasked_quality": {
+        "maximum": 0.02931000818064028,
+        "nrmse": 0.002146448460537173,
+        "p99": 0.00988471842445801,
+        "scale": 0.06105674106255173
+      },
+      "yaw_rad": 0.01
+    },
+    {
+      "file": "sunset-d4.json",
+      "cloud_T_maximum": 0.0016138553619384766,
+      "convergence": {
+        "maximum": 0.0015645663901106034,
+        "nrmse": 0.0001034821070929692,
+        "p99": 0.0004048936200916286,
+        "scale": 0.06122122062668204
+      },
+      "eye_m": [
+        88.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-11",
+      "quality": {
+        "maximum": 0.02891995580512898,
+        "nrmse": 0.002138448542713667,
+        "p99": 0.009409730164915744,
+        "scale": 0.06122122062668204
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.36666666666666664,
+      "unmasked_convergence": {
+        "maximum": 0.0015645663901106034,
+        "nrmse": 0.0001034821070929692,
+        "p99": 0.0004048936200916286,
+        "scale": 0.06122122062668204
+      },
+      "unmasked_quality": {
+        "maximum": 0.02891995580512898,
+        "nrmse": 0.002138448542713667,
+        "p99": 0.009409730164915744,
+        "scale": 0.06122122062668204
+      },
+      "yaw_rad": 0.011
+    },
+    {
+      "file": "sunset-d4.json",
+      "cloud_T_maximum": 0.001797020435333252,
+      "convergence": {
+        "maximum": 0.001912953751579006,
+        "nrmse": 0.00010877209180208812,
+        "p99": 0.00038278493417587777,
+        "scale": 0.06138990619704127
+      },
+      "eye_m": [
+        96.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "motion-12",
+      "quality": {
+        "maximum": 0.02793037483165273,
+        "nrmse": 0.0021295972652852525,
+        "p99": 0.009229771258034864,
+        "scale": 0.06138990619704127
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.4,
+      "unmasked_convergence": {
+        "maximum": 0.001912953751579006,
+        "nrmse": 0.00010877209180208812,
+        "p99": 0.00038278493417587777,
+        "scale": 0.06138990619704127
+      },
+      "unmasked_quality": {
+        "maximum": 0.02793037483165273,
+        "nrmse": 0.0021295972652852525,
+        "p99": 0.009229771258034864,
+        "scale": 0.06138990619704127
+      },
+      "yaw_rad": 0.012
+    },
+    {
+      "file": "sunset-d4.json",
+      "cloud_T_maximum": 0.0019311904907226562,
+      "convergence": {
+        "maximum": 0.02540079708071207,
+        "nrmse": 0.0009151895100337735,
+        "p99": 0.002185853306895766,
+        "scale": 0.07175329270772636
+      },
+      "eye_m": [
+        0.0,
+        2200.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "inside",
+      "quality": {
+        "maximum": 0.07128741426106149,
+        "nrmse": 0.003132681937170216,
+        "p99": 0.008282173363005086,
+        "scale": 0.07175329270772636
+      },
+      "solar_normalized_convergence": 5.0456426242952134e-05,
+      "solar_normalized_error": 0.00010262267158118039,
+      "solar_pixels": 1,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 10.241526953241413,
+        "nrmse": 0.21436718465027424,
+        "p99": 0.003116847594560363,
+        "scale": 0.07175329270772636
+      },
+      "unmasked_quality": {
+        "maximum": 20.830108972672402,
+        "nrmse": 0.5570272383968782,
+        "p99": 0.010998006019024219,
+        "scale": 0.07175329270772636
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "sunset-d4.json",
+      "cloud_T_maximum": 0.0012845993041992188,
+      "convergence": {
+        "maximum": 0.003406785863795189,
+        "nrmse": 0.00013371925506452898,
+        "p99": 0.000248414413510578,
+        "scale": 0.05271939683035016
+      },
+      "eye_m": [
+        0.0,
+        5000.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "above",
+      "quality": {
+        "maximum": 0.00695786478188951,
+        "nrmse": 0.0005245973651113494,
+        "p99": 0.002576076193696951,
+        "scale": 0.05271939683035016
+      },
+      "solar_normalized_convergence": 3.15143127364618e-06,
+      "solar_normalized_error": 8.684875228064287e-05,
+      "solar_pixels": 1,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.8706176523168531,
+        "nrmse": 0.0163184578465701,
+        "p99": 0.00032649660009262567,
+        "scale": 0.05271939683035016
+      },
+      "unmasked_quality": {
+        "maximum": 23.992925833263914,
+        "nrmse": 0.5886671454175089,
+        "p99": 0.0027285131140626726,
+        "scale": 0.05271939683035016
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-sunset-detail-2.json",
+      "cloud_T_maximum": 0.0010532140731811523,
+      "convergence": {
+        "maximum": 0.0057201189480393716,
+        "nrmse": 0.0001371524985168072,
+        "p99": 0.00044264538120661405,
+        "scale": 0.05695928571820259
+      },
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "detail-static",
+      "quality": {
+        "maximum": 0.020971371377644918,
+        "nrmse": 0.00200646194430276,
+        "p99": 0.009134793202294295,
+        "scale": 0.05695928571820259
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0057201189480393716,
+        "nrmse": 0.0001371524985168072,
+        "p99": 0.00044264538120661405,
+        "scale": 0.05695928571820259
+      },
+      "unmasked_quality": {
+        "maximum": 0.020971371377644918,
+        "nrmse": 0.00200646194430276,
+        "p99": 0.009134793202294295,
+        "scale": 0.05695928571820259
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-sunset-detail-2.json",
+      "cloud_T_maximum": 0.0011674165725708008,
+      "convergence": {
+        "maximum": 0.0024353597337308823,
+        "nrmse": 0.0001133490117869603,
+        "p99": 0.00041086211822964635,
+        "scale": 0.05685467649623751
+      },
+      "eye_m": [
+        8.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "detail-motion",
+      "quality": {
+        "maximum": 0.02181274553590395,
+        "nrmse": 0.0020395832398823607,
+        "p99": 0.00950359035998156,
+        "scale": 0.05685467649623751
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.03333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.0024353597337308823,
+        "nrmse": 0.0001133490117869603,
+        "p99": 0.00041086211822964635,
+        "scale": 0.05685467649623751
+      },
+      "unmasked_quality": {
+        "maximum": 0.02181274553590395,
+        "nrmse": 0.0020395832398823607,
+        "p99": 0.00950359035998156,
+        "scale": 0.05685467649623751
+      },
+      "yaw_rad": 0.001
+    },
+    {
+      "file": "cloud-quality-sunset-detail-2.json",
+      "cloud_T_maximum": 0.0010281205177307129,
+      "convergence": {
+        "maximum": 0.0446333898211946,
+        "nrmse": 0.0013507152924125555,
+        "p99": 0.0036738104173950187,
+        "scale": 0.07206182417497038
+      },
+      "eye_m": [
+        0.0,
+        2200.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "detail-inside",
+      "quality": {
+        "maximum": 0.04356194363439741,
+        "nrmse": 0.002109130965592221,
+        "p99": 0.00845711509615457,
+        "scale": 0.07206182417497038
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0446333898211946,
+        "nrmse": 0.0013507152924125555,
+        "p99": 0.0036738104173950187,
+        "scale": 0.07206182417497038
+      },
+      "unmasked_quality": {
+        "maximum": 0.04356194363439741,
+        "nrmse": 0.002109130965592221,
+        "p99": 0.00845711509615457,
+        "scale": 0.07206182417497038
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-sunset-detail-4.json",
+      "cloud_T_maximum": 0.0010532140731811523,
+      "convergence": {
+        "maximum": 0.0057201189480393716,
+        "nrmse": 0.0001371524985168072,
+        "p99": 0.00044264538120661405,
+        "scale": 0.05695928571820259
+      },
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "detail-static",
+      "quality": {
+        "maximum": 0.020971371377644918,
+        "nrmse": 0.002012854011903094,
+        "p99": 0.009134793202294295,
+        "scale": 0.05695928571820259
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0057201189480393716,
+        "nrmse": 0.0001371524985168072,
+        "p99": 0.00044264538120661405,
+        "scale": 0.05695928571820259
+      },
+      "unmasked_quality": {
+        "maximum": 0.020971371377644918,
+        "nrmse": 0.002012854011903094,
+        "p99": 0.009134793202294295,
+        "scale": 0.05695928571820259
+      },
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-sunset-detail-4.json",
+      "cloud_T_maximum": 0.001090705394744873,
+      "convergence": {
+        "maximum": 0.0024353597337308823,
+        "nrmse": 0.0001133490117869603,
+        "p99": 0.00041086211822964635,
+        "scale": 0.05685467649623751
+      },
+      "eye_m": [
+        8.0,
+        100.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "detail-motion",
+      "quality": {
+        "maximum": 0.02181274553590395,
+        "nrmse": 0.0020452432572464784,
+        "p99": 0.00950359035998156,
+        "scale": 0.05685467649623751
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.03333333333333333,
+      "unmasked_convergence": {
+        "maximum": 0.0024353597337308823,
+        "nrmse": 0.0001133490117869603,
+        "p99": 0.00041086211822964635,
+        "scale": 0.05685467649623751
+      },
+      "unmasked_quality": {
+        "maximum": 0.02181274553590395,
+        "nrmse": 0.0020452432572464784,
+        "p99": 0.00950359035998156,
+        "scale": 0.05685467649623751
+      },
+      "yaw_rad": 0.001
+    },
+    {
+      "file": "cloud-quality-sunset-detail-4.json",
+      "cloud_T_maximum": 0.0010281205177307129,
+      "convergence": {
+        "maximum": 0.0446333898211946,
+        "nrmse": 0.0013507152924125555,
+        "p99": 0.0036738104173950187,
+        "scale": 0.07206182417497038
+      },
+      "eye_m": [
+        0.0,
+        2200.0,
+        0.0
+      ],
+      "history": {
+        "available": true,
+        "reset": "none"
+      },
+      "name": "detail-inside",
+      "quality": {
+        "maximum": 0.04356194363439741,
+        "nrmse": 0.002089944473002025,
+        "p99": 0.00845711509615457,
+        "scale": 0.07206182417497038
+      },
+      "solar_normalized_convergence": 0.0,
+      "solar_normalized_error": 0.0,
+      "solar_pixels": 0,
+      "time_seconds": 0.0,
+      "unmasked_convergence": {
+        "maximum": 0.0446333898211946,
+        "nrmse": 0.0013507152924125555,
+        "p99": 0.0036738104173950187,
+        "scale": 0.07206182417497038
+      },
+      "unmasked_quality": {
+        "maximum": 0.04356194363439741,
+        "nrmse": 0.002089944473002025,
+        "p99": 0.00845711509615457,
+        "scale": 0.07206182417497038
+      },
+      "yaw_rad": 0.0
+    }
+  ],
+  "detail_pairs": [
+    {
+      "file": "cloud-quality-sunset-detail-2.json",
+      "cloud_T_maximum": 0.0005179643630981445,
+      "elevation_rad": 0.16,
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "height": 143,
+      "new_fallback": 2438,
+      "old_fallback": 2777,
+      "quality": {
+        "maximum": 0.0020583490190853493,
+        "nrmse": 2.7162571818132848e-05,
+        "p99": 0.0,
+        "scale": 0.07913361218124627
+      },
+      "state": 0,
+      "time_seconds": 0.0,
+      "vertical_fov_rad": 0.16,
+      "width": 255,
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-sunset-detail-2.json",
+      "cloud_T_maximum": 0.00040340423583984375,
+      "elevation_rad": 0.16,
+      "eye_m": [
+        8.0,
+        100.0,
+        0.0
+      ],
+      "height": 143,
+      "new_fallback": 2446,
+      "old_fallback": 2746,
+      "quality": {
+        "maximum": 0.0011854742983156256,
+        "nrmse": 2.2180079704917712e-05,
+        "p99": 0.0,
+        "scale": 0.07913938835263253
+      },
+      "state": 1,
+      "time_seconds": 0.03333333333333333,
+      "vertical_fov_rad": 0.16,
+      "width": 255,
+      "yaw_rad": 0.001
+    },
+    {
+      "file": "cloud-quality-sunset-detail-2.json",
+      "cloud_T_maximum": 0.0,
+      "elevation_rad": 0.0798299857122373,
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "height": 143,
+      "new_fallback": 7659,
+      "old_fallback": 7746,
+      "quality": {
+        "maximum": 0.0001991970954930952,
+        "nrmse": 3.674055392335912e-06,
+        "p99": 0.0,
+        "scale": 0.16419942639991641
+      },
+      "state": 2,
+      "time_seconds": 0.0,
+      "vertical_fov_rad": 0.16,
+      "width": 255,
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-sunset-detail-2.json",
+      "cloud_T_maximum": 0.00020051002502441406,
+      "elevation_rad": 0.16,
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "height": 143,
+      "new_fallback": 2960,
+      "old_fallback": 2981,
+      "quality": {
+        "maximum": 0.00037097088057623084,
+        "nrmse": 2.9449145584802326e-06,
+        "p99": 0.0,
+        "scale": 0.04418480848893523
+      },
+      "state": 3,
+      "time_seconds": 0.0,
+      "vertical_fov_rad": 0.16,
+      "width": 255,
+      "yaw_rad": 0.36314700994617627
+    },
+    {
+      "file": "cloud-quality-sunset-detail-2.json",
+      "cloud_T_maximum": 0.0007660388946533203,
+      "elevation_rad": 0.16,
+      "eye_m": [
+        0.0,
+        2200.0,
+        0.0
+      ],
+      "height": 143,
+      "new_fallback": 3127,
+      "old_fallback": 3292,
+      "quality": {
+        "maximum": 0.0023906524857819174,
+        "nrmse": 3.446525510777864e-05,
+        "p99": 0.0,
+        "scale": 0.07872709127664565
+      },
+      "state": 4,
+      "time_seconds": 0.0,
+      "vertical_fov_rad": 0.16,
+      "width": 255,
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-sunset-detail-4.json",
+      "cloud_T_maximum": 0.0,
+      "elevation_rad": 0.16,
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "height": 143,
+      "new_fallback": 13964,
+      "old_fallback": 17429,
+      "quality": {
+        "maximum": 0.0003830350284871295,
+        "nrmse": 2.975390108127596e-05,
+        "p99": 0.00015967643219028148,
+        "scale": 0.07908953086286782
+      },
+      "state": 0,
+      "time_seconds": 0.0,
+      "vertical_fov_rad": 0.16,
+      "width": 255,
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-sunset-detail-4.json",
+      "cloud_T_maximum": 0.0,
+      "elevation_rad": 0.16,
+      "eye_m": [
+        8.0,
+        100.0,
+        0.0
+      ],
+      "height": 143,
+      "new_fallback": 13904,
+      "old_fallback": 17399,
+      "quality": {
+        "maximum": 0.0003856339123613231,
+        "nrmse": 2.986128972839387e-05,
+        "p99": 0.00015951092441429757,
+        "scale": 0.0790781759738922
+      },
+      "state": 1,
+      "time_seconds": 0.03333333333333333,
+      "vertical_fov_rad": 0.16,
+      "width": 255,
+      "yaw_rad": 0.001
+    },
+    {
+      "file": "cloud-quality-sunset-detail-4.json",
+      "cloud_T_maximum": 0.0,
+      "elevation_rad": 0.0798299857122373,
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "height": 143,
+      "new_fallback": 25570,
+      "old_fallback": 28690,
+      "quality": {
+        "maximum": 0.0001734693612915952,
+        "nrmse": 1.3200657808938387e-05,
+        "p99": 7.282718411535713e-05,
+        "scale": 0.16419942639991641
+      },
+      "state": 2,
+      "time_seconds": 0.0,
+      "vertical_fov_rad": 0.16,
+      "width": 255,
+      "yaw_rad": 0.0
+    },
+    {
+      "file": "cloud-quality-sunset-detail-4.json",
+      "cloud_T_maximum": 0.0,
+      "elevation_rad": 0.16,
+      "eye_m": [
+        0.0,
+        100.0,
+        0.0
+      ],
+      "height": 143,
+      "new_fallback": 13104,
+      "old_fallback": 13599,
+      "quality": {
+        "maximum": 0.00016178095785985454,
+        "nrmse": 7.79745992315417e-06,
+        "p99": 2.285851907196068e-05,
+        "scale": 0.04416531393416226
+      },
+      "state": 3,
+      "time_seconds": 0.0,
+      "vertical_fov_rad": 0.16,
+      "width": 255,
+      "yaw_rad": 0.36314700994617627
+    },
+    {
+      "file": "cloud-quality-sunset-detail-4.json",
+      "cloud_T_maximum": 0.00028079748153686523,
+      "elevation_rad": 0.16,
+      "eye_m": [
+        0.0,
+        2200.0,
+        0.0
+      ],
+      "height": 143,
+      "new_fallback": 19058,
+      "old_fallback": 19103,
+      "quality": {
+        "maximum": 0.0011576276294397738,
+        "nrmse": 1.3812542900300505e-05,
+        "p99": 0.0,
+        "scale": 0.07871965817287564
+      },
+      "state": 4,
+      "time_seconds": 0.0,
+      "vertical_fov_rad": 0.16,
+      "width": 255,
+      "yaw_rad": 0.0
+    }
+  ],
+  "files": [
+    {
+      "name": "cloud-quality-clear.json",
+      "sha256": "65d486f5ee6b287cd773f626165da3b7796b4d2a4e39fb954a6b8ef5ea10b44a",
+      "preset": "clear",
+      "options": {
+        "compact_reconstruction": false,
+        "detailed_quality": false,
+        "field_divisor": 1,
+        "ground_shadows": true,
+        "height": 1080,
+        "mode": "all",
+        "resolution_divisor": 2,
+        "samples": 20,
+        "self_shadow": true,
+        "shadow_resolution": 256,
+        "shadow_steps": 256,
+        "smooth_reconstruction": true,
+        "sparse_sunlight": true,
+        "steps": 96,
+        "sun_steps": 8,
+        "width": 1920
+      },
+      "thresholds": {
+        "cloud_T": 0.02,
+        "convergence_nrmse": 0.02,
+        "convergence_p99": 0.04,
+        "edge_maximum": 0.12,
+        "nrmse": 0.05,
+        "p99": 0.12,
+        "static_nrms": 0.01
+      },
+      "diagnostics": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    {
+      "name": "cloud-quality-sparse.json",
+      "sha256": "9f4e48d6aea04198383c3ca13751c707691fd273079e86a4288d8bef56c384e9",
+      "preset": "sparse",
+      "options": {
+        "compact_reconstruction": false,
+        "detailed_quality": false,
+        "field_divisor": 1,
+        "ground_shadows": true,
+        "height": 1080,
+        "mode": "all",
+        "resolution_divisor": 2,
+        "samples": 20,
+        "self_shadow": true,
+        "shadow_resolution": 256,
+        "shadow_steps": 256,
+        "smooth_reconstruction": true,
+        "sparse_sunlight": true,
+        "steps": 96,
+        "sun_steps": 8,
+        "width": 1920
+      },
+      "thresholds": {
+        "cloud_T": 0.02,
+        "convergence_nrmse": 0.02,
+        "convergence_p99": 0.04,
+        "edge_maximum": 0.12,
+        "nrmse": 0.05,
+        "p99": 0.12,
+        "static_nrms": 0.01
+      },
+      "diagnostics": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    {
+      "name": "cloud-quality-overcast.json",
+      "sha256": "4db7fca386722d921e2638a7548644fb39d6735be1316071bbe0e58ba30d140f",
+      "preset": "overcast",
+      "options": {
+        "compact_reconstruction": false,
+        "detailed_quality": false,
+        "field_divisor": 1,
+        "ground_shadows": true,
+        "height": 1080,
+        "mode": "all",
+        "resolution_divisor": 2,
+        "samples": 20,
+        "self_shadow": true,
+        "shadow_resolution": 256,
+        "shadow_steps": 256,
+        "smooth_reconstruction": true,
+        "sparse_sunlight": true,
+        "steps": 96,
+        "sun_steps": 8,
+        "width": 1920
+      },
+      "thresholds": {
+        "cloud_T": 0.02,
+        "convergence_nrmse": 0.02,
+        "convergence_p99": 0.04,
+        "edge_maximum": 0.12,
+        "nrmse": 0.05,
+        "p99": 0.12,
+        "static_nrms": 0.01
+      },
+      "diagnostics": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    {
+      "name": "cloud-quality-sunset.json",
+      "sha256": "f6d899fe59f5e787ddf90310dce5adc2661aaf5ebdb4b9892d76b170cab63775",
+      "preset": "sunset",
+      "options": {
+        "compact_reconstruction": false,
+        "detailed_quality": false,
+        "field_divisor": 1,
+        "ground_shadows": true,
+        "height": 1080,
+        "mode": "all",
+        "resolution_divisor": 2,
+        "samples": 20,
+        "self_shadow": true,
+        "shadow_resolution": 256,
+        "shadow_steps": 256,
+        "smooth_reconstruction": true,
+        "sparse_sunlight": true,
+        "steps": 96,
+        "sun_steps": 8,
+        "width": 1920
+      },
+      "thresholds": {
+        "cloud_T": 0.02,
+        "convergence_nrmse": 0.02,
+        "convergence_p99": 0.04,
+        "edge_maximum": 0.12,
+        "nrmse": 0.05,
+        "p99": 0.12,
+        "static_nrms": 0.01
+      },
+      "diagnostics": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    {
+      "name": "clear-d4.json",
+      "sha256": "bb1150a97aea255e73dbe6d6a18900a0c7a53473fadd72820eba7e607913ad17",
+      "preset": "clear",
+      "options": {
+        "compact_reconstruction": false,
+        "detailed_quality": false,
+        "field_divisor": 1,
+        "ground_shadows": true,
+        "height": 1080,
+        "mode": "all",
+        "resolution_divisor": 4,
+        "samples": 20,
+        "self_shadow": true,
+        "shadow_resolution": 256,
+        "shadow_steps": 256,
+        "smooth_reconstruction": true,
+        "sparse_sunlight": true,
+        "steps": 96,
+        "sun_steps": 8,
+        "width": 1920
+      },
+      "thresholds": {
+        "cloud_T": 0.02,
+        "convergence_nrmse": 0.02,
+        "convergence_p99": 0.04,
+        "edge_maximum": 0.12,
+        "nrmse": 0.05,
+        "p99": 0.12,
+        "static_nrms": 0.01
+      },
+      "diagnostics": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    {
+      "name": "sparse-d4.json",
+      "sha256": "3ce3a21b6b49421387b78d17c894f3faec2b0483805e76c3652b5980dc1157a4",
+      "preset": "sparse",
+      "options": {
+        "compact_reconstruction": false,
+        "detailed_quality": false,
+        "field_divisor": 1,
+        "ground_shadows": true,
+        "height": 1080,
+        "mode": "all",
+        "resolution_divisor": 4,
+        "samples": 20,
+        "self_shadow": true,
+        "shadow_resolution": 256,
+        "shadow_steps": 256,
+        "smooth_reconstruction": true,
+        "sparse_sunlight": true,
+        "steps": 96,
+        "sun_steps": 8,
+        "width": 1920
+      },
+      "thresholds": {
+        "cloud_T": 0.02,
+        "convergence_nrmse": 0.02,
+        "convergence_p99": 0.04,
+        "edge_maximum": 0.12,
+        "nrmse": 0.05,
+        "p99": 0.12,
+        "static_nrms": 0.01
+      },
+      "diagnostics": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    {
+      "name": "overcast-d4.json",
+      "sha256": "eab4702966a3e9e485e7cda66960ac88aa43c683623799f82c48fafef38f5c5d",
+      "preset": "overcast",
+      "options": {
+        "compact_reconstruction": false,
+        "detailed_quality": false,
+        "field_divisor": 1,
+        "ground_shadows": true,
+        "height": 1080,
+        "mode": "all",
+        "resolution_divisor": 4,
+        "samples": 20,
+        "self_shadow": true,
+        "shadow_resolution": 256,
+        "shadow_steps": 256,
+        "smooth_reconstruction": true,
+        "sparse_sunlight": true,
+        "steps": 96,
+        "sun_steps": 8,
+        "width": 1920
+      },
+      "thresholds": {
+        "cloud_T": 0.02,
+        "convergence_nrmse": 0.02,
+        "convergence_p99": 0.04,
+        "edge_maximum": 0.12,
+        "nrmse": 0.05,
+        "p99": 0.12,
+        "static_nrms": 0.01
+      },
+      "diagnostics": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    {
+      "name": "sunset-d4.json",
+      "sha256": "f117e5a45c2b7c287a4b3fb648b6cd92b1ac0f11a9cbc0319a1faf550ea87163",
+      "preset": "sunset",
+      "options": {
+        "compact_reconstruction": false,
+        "detailed_quality": false,
+        "field_divisor": 1,
+        "ground_shadows": true,
+        "height": 1080,
+        "mode": "all",
+        "resolution_divisor": 4,
+        "samples": 20,
+        "self_shadow": true,
+        "shadow_resolution": 256,
+        "shadow_steps": 256,
+        "smooth_reconstruction": true,
+        "sparse_sunlight": true,
+        "steps": 96,
+        "sun_steps": 8,
+        "width": 1920
+      },
+      "thresholds": {
+        "cloud_T": 0.02,
+        "convergence_nrmse": 0.02,
+        "convergence_p99": 0.04,
+        "edge_maximum": 0.12,
+        "nrmse": 0.05,
+        "p99": 0.12,
+        "static_nrms": 0.01
+      },
+      "diagnostics": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    {
+      "name": "cloud-quality-sunset-detail-2.json",
+      "sha256": "ea7252de4b1727963a0817a554cf197f948c2529b8aceca6edee3053d9856a93",
+      "preset": "sunset",
+      "options": {
+        "compact_reconstruction": false,
+        "detailed_quality": true,
+        "field_divisor": 1,
+        "ground_shadows": true,
+        "height": 1080,
+        "mode": "all",
+        "resolution_divisor": 2,
+        "samples": 20,
+        "self_shadow": true,
+        "shadow_resolution": 256,
+        "shadow_steps": 256,
+        "smooth_reconstruction": true,
+        "sparse_sunlight": true,
+        "steps": 96,
+        "sun_steps": 8,
+        "width": 1920
+      },
+      "thresholds": {
+        "cloud_T": 0.02,
+        "convergence_nrmse": 0.02,
+        "convergence_p99": 0.04,
+        "edge_maximum": 0.12,
+        "nrmse": 0.05,
+        "p99": 0.12,
+        "static_nrms": 0.01
+      },
+      "diagnostics": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    {
+      "name": "cloud-quality-sunset-detail-4.json",
+      "sha256": "2f15c22f67e2dc8ef3dbfa64dd129c2d44458d0e48e597f1d1ac6e8aca963faa",
+      "preset": "sunset",
+      "options": {
+        "compact_reconstruction": false,
+        "detailed_quality": true,
+        "field_divisor": 1,
+        "ground_shadows": true,
+        "height": 1080,
+        "mode": "all",
+        "resolution_divisor": 4,
+        "samples": 20,
+        "self_shadow": true,
+        "shadow_resolution": 256,
+        "shadow_steps": 256,
+        "smooth_reconstruction": true,
+        "sparse_sunlight": true,
+        "steps": 96,
+        "sun_steps": 8,
+        "width": 1920
+      },
+      "thresholds": {
+        "cloud_T": 0.02,
+        "convergence_nrmse": 0.02,
+        "convergence_p99": 0.04,
+        "edge_maximum": 0.12,
+        "nrmse": 0.05,
+        "p99": 0.12,
+        "static_nrms": 0.01
+      },
+      "diagnostics": {
+        "errors": 0,
+        "warnings": 0
+      }
+    }
+  ],
+  "shader_fingerprint": "fnv1a64:e3a2f8d0e7a2e35a",
+  "maxima": {
+    "nrmse": 0.0031327727563832445,
+    "p99": 0.010039034970754175,
+    "maximum": 0.07128741426106149,
+    "cloud_T": 0.005715847015380859
+  },
+  "pair_maxima": {
+    "nrmse": 3.446525510777864e-05,
+    "p99": 0.00015967643219028148,
+    "maximum": 0.0023906524857819174,
+    "cloud_T": 0.0007660388946533203
+  }
+}

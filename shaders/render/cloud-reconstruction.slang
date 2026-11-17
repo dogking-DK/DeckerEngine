@@ -12,7 +12,7 @@ struct CloudFrameParameters { CloudParameters model; CloudRayData origin; float4
 #include "CloudCamera.slang"
 struct ReconstructionParameters {
     uint4 size; // integration width/height, valid completed history, empty-space skipping
-    float4 controls; // termination T, history weight, resolution divisor, unused
+    float4 controls; // termination T, history weight, resolution divisor, optimization flags (smooth=1, sparse sun=2, sun counters=4)
     float4 previousClip[4]; // Current anchor-relative point, wind compensated, to previous clip.
     float4 cameraDelta; // Current minus previous anchor, without wind compensation.
     float4 previousForward; // Previous world forward and near distance.
@@ -89,6 +89,46 @@ float emptyDistance(CloudRayData ray,float t) {
         baseMax=max(baseMax,baseField.Load(int4((bi+int3(x,y,z))&int3(bx-1,by-1,bz-1),0)));
     return baseMax<=1-coverage ? min(limit,cellExit(base,ray.direction.xyz/cp.scales.y*float3(bx,by,bz))) : 0;
 }
+// Keep the reference quadrature exactly; only omit texture reads whose contribution is zero.
+float sunlightDensity(CloudRayData ray,float3 displacement,float height,inout uint4 reads) {
+    ++reads.x;
+    if(cp.flags.w!=0) return cp.cloud.y*cp.cloud.w;
+    if(height<=cp.geometry.z || height>=cp.geometry.w) return 0;
+    ++reads.y;
+    float2 weather=weatherField.SampleLevel(linearRepeat,ray.weather.xy+displacement.xz/cp.scales.x,0);
+    float coverage=saturate((weather.x-(1-cp.cloud.x))/cp.cloud.x);
+    float h=(height-cp.geometry.z)/(cp.geometry.w-cp.geometry.z);
+    float profile=cloudSmooth01(h/cp.scales.w)*cloudSmooth01((.6+.4*weather.y-h)/cp.lighting.w);
+    bool sparse=(uint(reconstruction.controls.w)&2u)!=0;
+    // Base and detail fields lie in [0,1]; profile cannot increase density.
+    if(sparse && profile<=1-coverage) return 0;
+    ++reads.z;
+    float base=baseField.SampleLevel(linearRepeat,ray.base.xyz+displacement/cp.scales.y,0);
+    float shaped=(base*profile-(1-coverage))/.35;
+    if(sparse && shaped<=0) return 0;
+    ++reads.w;
+    float detail=detailField.SampleLevel(linearRepeat,ray.detail.xyz+displacement/cp.scales.z,0);
+    return cp.cloud.y*saturate(shaped-.2*detail);
+}
+float sunlightOptical(CloudRayData ray,float3 position,float h,float mu,inout uint4 reads) {
+    uint steps=max(cp.counts.y,abs(mu)<.2 ? 32u : 0u);
+    float4 segments; bool ground; uint count=cloudShell(h,mu,segments,ground);
+    if(ground) return -1;
+    if(cp.flags.z==0) return 0;
+    float optical=0;
+    [loop] for(uint k=0;k<count;++k) {
+        float a=segments[2*k],b=segments[2*k+1],ds=(b-a)/float(steps);
+        [loop] for(uint j=0;j<steps;++j) {
+            float t=a+(float(j)+.5)*ds;
+            optical+=sunlightDensity(ray,position+cp.sun.xyz*t,cloudHeightAt(h,mu,t),reads)*cp.cloud.z*ds;
+        }
+    }
+    return optical;
+}
+void addCount64(uint index,uint count) {
+    uint prior; InterlockedAdd(statistics[index],count,prior);
+    if(prior>0xffffffffu-count) InterlockedAdd(statistics[index+1],1);
+}
 struct Medium { float4 L,T,cloud; };
 Medium trace(uint2 pixel) {
     float2 screen=(float2(pixel)+.5)/float2(p.frame.xy)*2-1;
@@ -107,6 +147,7 @@ Medium trace(uint2 pixel) {
     float3 phases=float3(cloudHG(cosine,cp.lighting.x),cloudHG(cosine,cp.lighting.x*.5),cloudHG(cosine,cp.lighting.x*.25));
     float3 sunDelta=direction-p.sunDirection.xyz;
     bool solar=p.frame.w!=0 && dot(sunDelta,sunDelta)<=p.sunDirection.w;
+    uint4 sunReads=0;
     bool stopped=false; uint visited=0,lighting=0,empty=0,terminated=0,densitySamples=0;
     [loop] for(uint k=1;k<count;++k) {
         float first=cuts[k-1],last=cuts[k]; if(last<=first) continue;
@@ -146,7 +187,7 @@ Medium trace(uint2 pixel) {
                 sigma*=cp.cloud.z/samples; densitySamples+=samples;
             }
             if(sigma>0) {
-                ++lighting; float tau=cloudSunlightOptical(ray,ray.direction.xyz*t,h,sunMu,abs(sunMu)<.2 ? 32u : 0u);
+                ++lighting; float tau=sunlightOptical(ray,ray.direction.xyz*t,h,sunMu,sunReads);
                 float3 source=cp.sky.xyz;
                 if(tau>=0) {
                     float phase=(1-cp.lighting.z)*phases.x*exp(-tau)+cp.lighting.z*(2.0/3*phases.y*exp(-tau*.5)+1.0/3*phases.z*exp(-tau*.25));
@@ -163,12 +204,38 @@ Medium trace(uint2 pixel) {
     }
     InterlockedAdd(statistics[0],visited); InterlockedAdd(statistics[1],lighting);
     InterlockedAdd(statistics[2],empty); InterlockedAdd(statistics[3],terminated);
-    uint priorSamples; InterlockedAdd(statistics[8],densitySamples,priorSamples);
-    if(priorSamples>0xffffffffu-densitySamples) InterlockedAdd(statistics[9],1);
+    addCount64(8,densitySamples);
+    if((uint(reconstruction.controls.w)&4u)!=0) {
+        addCount64(10,sunReads.x); addCount64(12,sunReads.y); addCount64(14,sunReads.z); addCount64(16,sunReads.w);
+    }
     Medium value; value.L=float4(L,geometry); value.T=float4(T,opacity>0 ? moment/opacity : 0); value.cloud=float4(cloudL,cloudT); return value;
 }
 #endif
 #if DK_CLOUD_STAGE >= 2
+// A large first difference can be a smooth ramp. Fit a local plane and require
+// small residual in BOTH transmission and HDR radiance before bypassing the range guard.
+bool smoothFootprint(int2 base,float geometry) {
+    float4 transmission[9]; float3 radiance[9]; float scale=0;
+    for(int y=-1;y<=1;++y) for(int x=-1;x<=1;++x) {
+        int2 point=clamp(base+int2(x,y),0,int2(reconstruction.size.xy)-1);
+        float4 a=currentL.Load(int3(point,0)),b=currentT.Load(int3(point,0)),c=currentCloud.Load(int3(point,0));
+        if(!matchingDepth(geometry,a.a)) return false;
+        uint i=(y+1)*3+x+1; transmission[i]=float4(b.rgb,c.a); radiance[i]=a.rgb;
+        scale=max(scale,max(a.x,max(a.y,a.z)));
+    }
+    float4 tx=(transmission[5]-transmission[3])*.5,ty=(transmission[7]-transmission[1])*.5;
+    float3 lx=(radiance[5]-radiance[3])*.5,ly=(radiance[7]-radiance[1])*.5;
+    float errorT=0,errorL=0;
+    for(int y=-1;y<=1;++y) for(int x=-1;x<=1;++x) {
+        uint i=(y+1)*3+x+1;
+        float4 t=abs(transmission[i]-(transmission[4]+x*tx+y*ty));
+        float3 l=abs(radiance[i]-(radiance[4]+x*lx+y*ly));
+        errorT=max(errorT,max(max(t.x,t.y),max(t.z,t.w))); errorL=max(errorL,max(l.x,max(l.y,l.z)));
+    }
+    // The quarter-resolution footprint spans twice the angle: use a tighter residual guard.
+    float tolerance=reconstruction.controls.z>2 ? .001 : .002;
+    return errorT<=tolerance && errorL<=tolerance*max(.001,scale);
+}
 void compose(uint2 pixel,float3 L,float3 T,float4 C,float representative,float geometry,CameraMediumRay camera) {
     float3 direction=camera.direction;
     float3 segment=path(camera.height,camera.mu),terminal=0;
@@ -276,7 +343,10 @@ void computeMain(uint3 id:SV_DispatchThreadID,uint3 local:SV_GroupThreadID) {
     if(camera.height<0) { outputL[id.xy]=float4(0,0,0,1); outputT[id.xy]=float4(0,0,0,1); outputCloud[id.xy]=0; return; }
     float3 direction=camera.direction,sunDelta=direction-p.sunDirection.xyz;
     bool solar=p.frame.w!=0 && dot(sunDelta,sunDelta)<=p.sunDirection.w;
-    if(total<.999 || solar || max(maxC-minC,max(maxT.x-minT.x,max(maxT.y-minT.y,maxT.z-minT.z)))>.02) {
+    bool rangeEdge=max(maxC-minC,max(maxT.x-minT.x,max(maxT.y-minT.y,maxT.z-minT.z)))>.02;
+    if(rangeEdge && total>=.999 && !solar && (uint(reconstruction.controls.w)&1u)!=0)
+        rangeEdge=!smoothFootprint(base,geometry);
+    if(total<.999 || solar || rangeEdge) {
 #if DK_CLOUD_COMPACT
         fallbackPixels[id.y*p.frame.x+id.x]=1;
         // Define every output texel before the queued partial writer preserves the image.

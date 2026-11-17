@@ -50,3 +50,47 @@ void compact_reconstruction(Fixture& f,SubmissionQueue& q) {
     }
     std::puts("legacy/compact paired HDR, transmission and exact work counts: 60 motion/projection/resolution cases passed");
 }
+
+
+void sunset_optimization(Fixture& f,SubmissionQueue& q) {
+    f.side=31; f.distance=3000;
+    auto sparse=optimized_settings(); sparse.temporal=false; sparse.view_id=1;
+    auto dense=sparse; dense.view_id=2; dense.sparse_sunlight=false;
+    std::uint64_t saved=0; unsigned cases=0;
+    for(const char* preset:{"sparse","overcast","sunset"}) for(double ortho:{0.,1500.})
+    for(unsigned divisor:{2u,4u}) for(double elevation:{-.02,.02,.4}) {
+        f.anchor={0,2200,0}; f.ortho_height=ortho; f.place();
+        auto e=take(environment_preset(preset)); e.sun.direction={0,elevation,-1}; e=take(normalize_environment(e));
+        auto sky=f.prepare(q,e); sparse.resolution_divisor=dense.resolution_divisor=divisor;
+        const auto a=optimized_frame(f,q,sky,dense),b=optimized_frame(f,q,sky,sparse);
+        compare(linear(a),linear(b),"sunlight strict-zero pruning",1e-6,1e-5);
+        const auto ac=diagnostic_pixels(a,false),bc=diagnostic_pixels(b,false);
+        for(std::size_t i=0;i<ac.size();++i) require(ac[i][3]==bc[i][3],"sunlight pruning changed transmission");
+        const auto x=take(a.read_cloud_statistics()),y=take(b.read_cloud_statistics());
+        require(x.sun_density_samples==y.sun_density_samples && x.sun_weather_samples==y.sun_weather_samples &&
+            x.sun_base_samples>=y.sun_base_samples && x.sun_detail_samples>=y.sun_detail_samples,"sunlight query accounting");
+        require(x.primary_steps==y.primary_steps && x.fallback_pixels==y.fallback_pixels,"sunlight pruning changed integration work");
+        saved+=x.sun_base_samples+x.sun_detail_samples-y.sun_base_samples-y.sun_detail_samples; ++cases;
+    }
+    require(saved>0,"sunlight pruning saved no texture queries");
+    sparse.temporal=true; auto sky=f.prepare(q,cloudy());
+    auto frame=optimized_frame(f,q,sky,sparse); frame=optimized_frame(f,q,sky,sparse);
+    require(frame.cloud_optimization().history_available,"optimization history missing");
+    for(unsigned flag=0;flag<2;++flag) {
+        if(flag==0) sparse.smooth_reconstruction=!sparse.smooth_reconstruction;
+        else sparse.sparse_sunlight=!sparse.sparse_sunlight;
+        frame=optimized_frame(f,q,sky,sparse);
+        require(!frame.cloud_optimization().history_available && frame.cloud_optimization().reset==CloudHistoryReset::quality,
+            "optimization switch did not invalidate completed history");
+        check(f.pipeline.poll_cloud_history(q)); const auto sequence=take(f.pipeline.cloud_history(sparse.view_id)).completed;
+        if(flag==0) sparse.smooth_reconstruction=!sparse.smooth_reconstruction;
+        else sparse.sparse_sunlight=!sparse.sparse_sunlight;
+        fail_submit=true;
+        require(!f.pipeline.render_clouds_optimized(q,f.view(),f.assets,sky,*f.texture,sparse,f.settings),"optimization submit fault ignored");
+        require(take(f.pipeline.cloud_history(sparse.view_id)).completed==sequence,"failed optimization replaced history");
+        frame=optimized_frame(f,q,sky,sparse);
+        require(!frame.cloud_optimization().history_available,"optimization switch reused history");
+        frame=optimized_frame(f,q,sky,sparse); require(frame.cloud_optimization().history_available,"optimization history did not recover");
+    }
+    std::printf("sunlight %u paired cases saved %llu texture queries; quality switches and failed submission preserved history\n",cases,saved);
+}
