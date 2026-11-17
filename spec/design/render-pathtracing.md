@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-11-17T13:37:55+08:00"
+updated_at: "2026-11-17T14:25:00+08:00"
 status: accepted
 ---
 
@@ -28,8 +28,16 @@ GPU场景检查设备AS、buffer、image和descriptor限制；纹理数组按需
 # 渐进式路径追踪管线设计
 
 编辑器worker在tile提交后以≤1ms的GPU完成票据等待推进，不在每块间固定sleep；GUI不等待该票据。
-batch=1，表面与介质预览统一使用256 tile，保留原样本序号、累积与取消约定；
+表面预览batch=1，介质预览batch=3，两者使用256 tile，保留真实样本序号、累积与取消约定；
 预算使用设备当前可用额度，早期等待优化见[0122](../development/0122-editor-render-performance.md)，桌面吞吐与预算调整见[0142](../development/0142-path-preview-throughput.md)。
+
+## Scene media 低样本颜色稳定性（0181）
+
+- `VolumePathSettings` 默认 sampler=3，model=4 不变；原 sampler=2 继续接受并保持原序列。v3 只改变 hero 通道选择：由 seed/pixel 的独立整数散列产生随机循环排列，按绝对 sample/epoch 编号循环 RGB，任意连续三个样本覆盖三个通道。其余 v2 随机流、单路径乘3权重、真实射线数和二阶矩语义不变。
+- 通道排列与像素抖动、自由程、阴影和完整 RGB reservoir 的随机流分离；ReSTIR 相机移动后的非零 epoch 起点同样保证三样本覆盖。相关样本的误差评估使用独立 seed 之间的方差，不把单路径二阶矩解释为独立样本均值误差。
+- CPU/GPU、Classic/四种 DI、固定捕获均使用实际 sampler 版本；版本变化沿 `same_integrator` 清空累积/复用，失败保留旧完成帧。固定 capture 的请求版本不变，来源 sampler_version 更新为3；旧 v2 序列通过原生设置显式选择。
+- Editor 的 Scene media 按3 spp完整批次发布，末批取剩余目标数；target=1/2仍按明确目标显示，暂停/曝光不额外采样。移动使用192长边，停止200ms恢复原尺寸；相机请求等待完整批次后合并最新姿态，物理变更/尺寸恢复/Refresh/关闭仍可取消。没有新增滤波器或宣称低spp介质已收敛。
+- 验证：v2冻结值；v3任意起点三样本真空/发光颜色、分批/尾数/CPU与GPU一致；彩色吸收与ReSTIR条件均值；版本切换清历史、失败/取消保护；真实后台GUI持续运动发布与独立capture线性一致。记录见[0181](../development/0181-media-preview-color.md)。
 
 ## 目标与范围
 
@@ -755,7 +763,7 @@ Editor Scene media 与固定 capture 直接调用 configure_medium_view，表面
 ### M17.6 测量与优化实施契约
 
 先保存 M17.5 实现的独立 benchmark 二进制/源闭包及三轮基线，再测最终实现，禁止并行占用 GPU。
-冻结 model=4/sampler=2、4 反弹/RR3、seed 集合 101+7919*i、time=17、曝光0；Sponza 庭院/天空分别 clear/sparse/overcast/低太阳，surface 为独立开销对照。
+原M17验收冻结 model=4/sampler=2、4 反弹/RR3、seed 集合 101+7919*i、time=17、曝光0；Sponza 庭院/天空分别 clear/sparse/overcast/低太阳，surface 为独立开销对照。0181之后重新采集使用sampler=3及同步聚合脚本，历史测量不得混为相同随机序列。
 同样本优化前后线性均值/二阶矩逐值比较（绝对误差<=1e-6），不得降低 spp/反弹/介质质量作为加速证据。
 小场景 CPU 参考 N=16384/4N=65536、8 seed，均值收敛<=0.5%，GPU/CPU 统计偏差<=2% 且<=5联合标准误差+1e-4；解析透射沿既有<=1e-4门槛。
 固定质量另用 Sponza 小图的8 seed GPU 参考与 spp 阶梯，报告真正达到误差门槛的耗时；未达到时记录 null，不以1spp或低尺寸预览代替质量收敛。

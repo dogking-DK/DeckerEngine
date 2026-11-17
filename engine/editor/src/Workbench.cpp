@@ -138,7 +138,8 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
         Workspace& model;
         ~ViewportHostScope() { model.detach_editor_viewport(); }
     } viewport_host{*model};
-    WorkbenchUi ui{*model,options.fixture_camera,take(window.native_sdl_window()),(options.voxel_path_smoke || options.voxel_workflow_smoke || options.media_pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke) ? 96u : 0u};
+    WorkbenchUi ui{*model,options.fixture_camera,take(window.native_sdl_window()),options.media_pathtrace_smoke ? 240u :
+        (options.voxel_path_smoke || options.voxel_workflow_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke) ? 96u : 0u};
 #ifdef DK_DISK_VOXELS
 #ifdef DK_EDITOR_PATHTRACING
     std::optional<VoxelPathSmoke> voxel_path_smoke;

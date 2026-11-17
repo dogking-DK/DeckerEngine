@@ -137,6 +137,28 @@ int restir_worker(const std::filesystem::path& root,const std::filesystem::path&
                     require(elapsed(start)<90000,"Single native queue worker timed out"); std::this_thread::sleep_for(1ms);
                 }
             }
+            // Scene media publishes RGB cycles, final remainders and explicit low targets.
+            for(bool restir:{false,true}) {
+                PathPreview medium_worker{system,heap,take(device.share_queue(0))};
+                PathPreviewRequest medium_request{*model->snapshot(),Camera{true}};
+                medium_request.width=16; medium_request.height=12; medium_request.settings.scene_media=true;
+                medium_request.settings.restir_di=restir;
+                for(unsigned target:{7u,1u,2u}) {
+                    medium_request.settings.target=target; ++medium_request.settings.reset; ++medium_request.sequence;
+                    medium_worker.request(medium_request); const auto started=Clock::now();
+                    for(;;) {
+                        if(auto frame=medium_worker.take_result()) {
+                            require(frame->info.settings.sampler_version==3,"Worker omitted RGB sampler version");
+                            const auto spp=frame->info.samples.count;
+                            require(spp==target || (target==7 && (spp==3 || spp==6)),"Worker published incomplete RGB cycle");
+                            if(spp==target) break;
+                        }
+                        require(medium_worker.status().error.empty(),"RGB worker failed");
+                        require(elapsed(started)<90000,"RGB worker timed out"); std::this_thread::sleep_for(1ms);
+                    }
+                }
+            }
+            evidence["checks"].push_back("Classic/ReSTIR media RGB cycle publication, final remainder, explicit 1/2 spp targets");
             check(consumer.close());
             evidence["checks"].push_back("in-flight suspend/recovery; transferred image survives live producer destruction; single native queue fallback");
             evidence["queues"]=device.queue_count();

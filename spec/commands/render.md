@@ -1,7 +1,7 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-11-17T09:32:00+08:00"
+updated_at: "2026-11-17T14:25:00+08:00"
 status: accepted
 ---
 
@@ -242,7 +242,9 @@ seed/目标/反弹/RR/环境/太阳/surface_only；GUI默认环境[.3,.4,.6]、�
 
 仍用 render.capture、renderer=pathtrace、format=ppm/linear_json，guard/effect/Jobs/原子发布与上文相同。
 pathtrace.version=2 时必须提供 medium_mode：surface_only 使用旧 model=3/sampler=1 并显式忽略 Scene 空气/云；
-scene_media 使用 model=4/sampler=2，联合追踪冻结 Scene 空气、非均匀云和表面光照。v2 禁止旧 surface_only 字段。
+scene_media 使用 model=4/sampler=3，联合追踪冻结 Scene 空气、非均匀云和表面光照。v2 禁止旧 surface_only 字段。
+sampler=3从0181起采用循环RGB分层，任意连续三个样本覆盖三个通道，target_spp仍计实际单通道路径数；请求version=2/3不变。
+旧记录的sampler=2代表独立通道序列，不能按逐像素相同结果重放为3；原生VolumePathSettings仍可显式选择2，当前capture接口不提供采样版本选择。
 公共字段 target_spp/seed/max_bounces/rr_start/environment_rgb/sun/exposure_ev 的范围和默认不变；以下字段仅 scene_media 可用：
 
 | 字段 | 默认 | 范围与语义 |

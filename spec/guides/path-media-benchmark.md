@@ -17,7 +17,7 @@
 改用`--desktop-media`覆盖Scene media四模式，对应`dk.editor.media_desktop_gpu_validation`。0143允许介质`--tile 256`并使用设备可用额度，汇总按报告中的实际额度检查；历史1GiB记录保持原始身份。
 该 worker 使用真实默认相机与 Editor 预算/调度，但没有窗口合成，不作为 GUI 帧率；有验证层的结果不作为关闭验证层的性能数据。
 
-冻结4反弹/RR3、model4/sampler2、时间17、曝光0、种子101+7919*i（i=0..7）；surface是model3/sampler1的独立开销对照。
+当前冻结4反弹/RR3、model4/sampler3、时间17、曝光0、种子101+7919*i（i=0..7）；surface是model3/sampler1的独立开销对照。0181之前的历史测量使用sampler2，应使用其归档版本的校验脚本复算；当前采集/聚合要求3，不能混用两种采样版本比较逐样本结果。
 负载涵盖庭院、天空、clear/sparse/overcast、低太阳、雾、云内、云上方。原始JSON保存环境、相机、几何hash和字段hash。
 优化前后另存32×18/4 spp线性RGB及二阶矩，绝对差不得超过1e-6。
 

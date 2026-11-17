@@ -158,7 +158,7 @@ public:
         const RenderView&, const PathTraceSettings& = {}, const RestirDiSettings& = {}, PathTraceSamples = {}, std::stop_token = {}) const;
     [[nodiscard]] Result<void> configure_restir_view(graphics::SubmissionQueue&, std::uint64_t view_id,
         const PathTraceGpuScene&, const RenderView&, const PathTraceSettings& = {}, const RestirDiSettings& = {}, const PathTraceSchedule& = {});
-    // Model 4 / sampler 2. Requires a matching frozen environment with clouds disabled.
+    // Model 4 / sampler 3 (legacy 2 accepted). Requires matching frozen environment, clouds disabled.
     [[nodiscard]] Result<PathTraceFrame> submit_air_rays(graphics::SubmissionQueue&,const PathTraceGpuScene&,
         const PathMediumSnapshot&,std::span<const PathTraceRay>,const VolumePathSettings& = {},PathTraceSamples = {},
         std::uint32_t first_pixel=0,std::stop_token = {}) const;
@@ -166,7 +166,7 @@ public:
         const PathMediumSnapshot&,const RenderView&,const VolumePathSettings& = {},PathTraceSamples = {},std::stop_token = {}) const;
     [[nodiscard]] Result<void> configure_air_view(graphics::SubmissionQueue&,std::uint64_t view_id,const PathTraceGpuScene&,
         const PathMediumSnapshot&,const RenderView&,const VolumePathSettings& = {},const PathTraceSchedule& = {});
-    // Model 4 / sampler 2, including nonuniform clouds; same frozen input and history rules.
+    // Model 4 / sampler 3 (legacy 2 accepted), including clouds; same frozen input/history rules.
     [[nodiscard]] Result<PathTraceFrame> submit_medium_rays(graphics::SubmissionQueue&,const PathTraceGpuScene&,
         const PathMediumSnapshot&,std::span<const PathTraceRay>,const VolumePathSettings& = {},PathTraceSamples = {},
         std::uint32_t first_pixel=0,std::stop_token = {}) const;
@@ -174,7 +174,7 @@ public:
         const PathMediumSnapshot&,const RenderView&,const VolumePathSettings& = {},PathTraceSamples = {},std::stop_token = {}) const;
     [[nodiscard]] Result<void> configure_medium_view(graphics::SubmissionQueue&,std::uint64_t view_id,const PathTraceGpuScene&,
         const PathMediumSnapshot&,const RenderView&,const VolumePathSettings& = {},const PathTraceSchedule& = {});
-    // Model 4/sampler 2. Full RGB reservoirs are independent of hero/free-flight survival.
+    // Model 4/sampler 3 (legacy 2 accepted). RGB reservoirs are independent of hero/free-flight survival.
     // Fixed work is initial RIS only; progressive views optionally reuse time/space.
     [[nodiscard]] Result<PathTraceFrame> submit_restir_medium_rays(graphics::SubmissionQueue&,const PathTraceGpuScene&,
         const PathMediumSnapshot&,std::span<const PathTraceRay>,const VolumePathSettings& = {},const RestirDiSettings& = {},

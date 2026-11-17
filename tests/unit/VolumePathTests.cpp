@@ -133,6 +133,38 @@ TEST_CASE("volume sampler has frozen stream and counter identity", "[volume]") {
     CHECK(base!=volume_path_sample(1,0,0,1,VolumeSampleStream::free_path));
     CHECK(base!=volume_path_sample(1ull<<32,0,0,0,VolumeSampleStream::free_path));
 }
+TEST_CASE("volume RGB cycles remove channel selection noise and preserve legacy partitions", "[volume]") {
+    Fixture f; const auto scene=f.scene(); const auto m=medium(); auto s=settings(0); s.environment_rgb={.2,.4,.8};
+    for(auto seed:{1ull,19ull,0x100000007ull}) {
+        s.seed=seed;
+        for(unsigned pixel=0;pixel<32;++pixel) for(unsigned first:{0u,1u,2u,7u,100u}) {
+            s.sampler_version=3;
+            const auto whole=estimate_volume_path_reference(scene,m,down,s,{first,3},pixel).value();
+            CHECK((whole.mean-s.environment_rgb).cwiseAbs().maxCoeff()<1e-14);
+            Vec3d split=Vec3d::Zero(),square=Vec3d::Zero();
+            for(unsigned sample=first;sample<first+3;++sample) {
+                const auto one=estimate_volume_path_reference(scene,m,down,s,{sample,1},pixel).value();
+                split+=one.mean/3; square+=one.second_moment/3;
+                s.sampler_version=2;
+                const auto legacy=estimate_volume_path_reference(scene,m,down,s,{sample,1},pixel).value();
+                Vec3d expected=Vec3d::Zero();
+                const auto channel=unsigned(3*volume_path_sample(seed,pixel,sample,0,VolumeSampleStream::channel));
+                expected[channel]=3*s.environment_rgb[channel];
+                CHECK(legacy.mean==expected); s.sampler_version=3;
+            }
+            CHECK((whole.mean-split).cwiseAbs().maxCoeff()<1e-14);
+            CHECK((whole.second_moment-square).cwiseAbs().maxCoeff()<1e-14);
+        }
+    }
+    // An incomplete cycle remains an unbiased random channel, not always red at sample zero.
+    for(unsigned sample=0;sample<3;++sample) {
+        std::array<unsigned,3> counts{};
+        for(unsigned pixel=0;pixel<65536;++pixel) ++counts[volume_path_channel(1,pixel,sample)];
+        for(auto n:counts) CHECK(std::abs(n/65536.-1./3)<.006);
+    }
+    auto invalid=s; invalid.sampler_version=4;
+    CHECK_FALSE(estimate_volume_path_reference(scene,m,down,invalid,{0,3}));
+}
 TEST_CASE("volume phase normalization and sampled angular moments agree", "[volume]") {
     for(const auto& phase:std::array<dk::render::detail::VolumePhase,6>{{{{1,0,0},0,0},{{0,1,0},.99,0},{{0,1,0},-.99,0},
         {{0,1,0},1e-8,0},{{0,0,1},0,-.95},{{.2,.3,.5},.8,-.6}}}) {
@@ -289,7 +321,7 @@ TEST_CASE("volume sample partitions and immutable image provenance preserve owne
     CHECK((all.mean-(a.mean+b.mean)*.5).norm()<1e-14); CHECK((all.second_moment-(a.second_moment+b.second_moment)*.5).norm()<1e-14);
     auto image=render_volume_path_reference(f.heap,scene,m,view,s,{0,128}).value();
     CHECK(image.info().scene_fingerprint==scene.fingerprint()); CHECK(image.info().environment==m.environment());
-    CHECK(image.info().settings.model_version==4); CHECK(image.info().settings.sampler_version==2);
+    CHECK(image.info().settings.model_version==4); CHECK(image.info().settings.sampler_version==3);
     CHECK(image.info().samples.count==128); CHECK(image.linear_rgb().size()==4); CHECK(image.second_moments().size()==4);
     const Vec3d old=image.linear_rgb()[0]; f.document.reset(); f.asset={}; f.heap.begin_close();
     CHECK_FALSE(render_volume_path_reference(f.heap,scene,m,view,s,{0,1}));

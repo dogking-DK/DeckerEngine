@@ -22,8 +22,22 @@ void air_numeric(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueu
     auto cpu=f.scene(); auto gpu=take(r.prepare_scene(q,cpu)); auto s=air_settings(0); s.environment_rgb={.2,.4,.8};
     auto image=air_image(r,q,gpu,m,s,4096,down);
     close_color(image.linear_rgb()[0],take(estimate_volume_path_reference(cpu,m,down,s,{0,4096})).mean,1e-7);
-    require(image.info().medium && image.info().settings.model_version==4 && image.info().settings.sampler_version==2,"air provenance missing");
+    require(image.info().medium && image.info().settings.model_version==4 && image.info().settings.sampler_version==3,"air provenance missing");
     require(!image.primary_hits()[0] && gpu.submission().value()==0,"empty air requires geometry");
+    // Actual low-spp HDR, arbitrary epoch starts, high seed bits, and the retained v2 sequence.
+    // Dyadic radiance isolates channel coverage from decimal-to-float input rounding.
+    s.environment_rgb={.25,.5,1};
+    for(unsigned version:{2u,3u}) for(unsigned first:{0u,1u,2u,7u}) for(unsigned count:{1u,3u}) {
+        s.sampler_version=version; s.seed=0x100000007ull;
+        const std::vector<PathTraceRay> rays(32,down);
+        const auto cycle=complete(q,take(r.submit_air_rays(q,gpu,m,rays,s,{first,count})));
+        require(cycle.info().settings.sampler_version==version,"wrong sampler provenance");
+        for(unsigned pixel=0;pixel<rays.size();++pixel) {
+            close_color(cycle.linear_rgb()[pixel],take(estimate_volume_path_reference(cpu,m,down,s,{first,count},pixel)).mean,1e-7);
+            if(version==3 && count==3) close_color(cycle.linear_rgb()[pixel],s.environment_rgb,1e-7);
+        }
+    }
+    s.sampler_version=3; s.seed=1;
     // A tiny solar cone must not expand to sqrt(float epsilon) on the GPU.
     e.sun.angular_radius_rad=.00001; e.sun.direction={0,1,0}; f.document->set_environment(e).value();
     cpu=f.scene(); gpu=take(r.prepare_scene(q,cpu)); m=take(PathMediumSnapshot::create(e)); s.sun=true; s.environment_rgb.setZero();
@@ -145,6 +159,10 @@ void air_progressive(memory::ResourceHandle heap,PathTraceRenderer& r,Submission
     require(take(r.status(11)).generation!=generation && take(r.status(11)).completed_spp==0,"air change did not reset history");
     auto updated=finish_view(r,q,11); require(updated.info().medium->environment==e && updated.info().revision==changed.revision(),"air result provenance stale");
     compare_images(complete(q,take(held.read_linear(q))),old,0);
+    generation=take(r.status(11)).generation; s.sampler_version=2;
+    check(r.configure_air_view(q,11,next,m,view,s,schedule));
+    require(take(r.status(11)).generation!=generation && !take(r.status(11)).completed_spp,"sampler change retained accumulation");
+    compare_images(finish_view(r,q,11),complete(q,take(r.submit_air_view(q,next,m,view,s,{0,schedule.target_spp}))),0);
     f.asset.materials[0].base_color.x()=.9f; auto material=f.scene(); const auto before=q.stats().submitted;
     auto rebuilt=take(r.prepare_scene(q,material)); require(material.geometry_fingerprint()!=geometry && q.stats().submitted>before,"material change reused stale geometry");
     require(take(q.wait(rebuilt.submission())),"rebuilt scene not ready"); check(r.release_view(11));

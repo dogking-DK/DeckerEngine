@@ -6,7 +6,7 @@
 namespace dk::render {
 namespace detail { struct VolumeImageState; struct VolumeReferenceAccess; }
 struct VolumePathSettings {
-    std::uint32_t model_version=4, sampler_version=2;
+    std::uint32_t model_version=4, sampler_version=3; // v2 independent RGB; v3 cyclic RGB stratification.
     std::uint64_t seed=1;
     std::uint32_t max_bounces=8, rr_start=3; // Counts surface and real medium scatter; 0 disables RR.
     Vec3d environment_rgb=Vec3d::Zero(); // Distant boundary radiance, excludes the sun.
@@ -25,6 +25,10 @@ enum class VolumeSampleStream : std::uint32_t {
 // Sampler v2: stream/counter are distinct from physical event depth.
 [[nodiscard]] double volume_path_sample(std::uint64_t seed,std::uint32_t pixel,std::uint32_t sample,
     std::uint32_t event,VolumeSampleStream stream,std::uint32_t counter=0) noexcept;
+// v3 uses a per-pixel permutation independent of all transport/reservoir streams.
+// Any three consecutive absolute sample indices cover RGB, including moved-view epochs.
+[[nodiscard]] std::uint32_t volume_path_channel(std::uint64_t seed,std::uint32_t pixel,
+    std::uint32_t sample,std::uint32_t sampler_version=3) noexcept;
 struct VolumePathStatistics {
     std::uint64_t rays=0, triangle_tests=0, tracking_steps=0, null_collisions=0;
     std::uint64_t medium_scatter=0, absorption=0, surface_scatter=0, ground_hits=0;

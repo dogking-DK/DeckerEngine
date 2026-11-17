@@ -41,7 +41,7 @@ def common(value, mode, kind):
     need(value['schema'] == 1 and value['status'] == 'passed' and value['kind'] == kind, 'Failed/mislabeled run')
     need(value['algorithm'] == mode and value['restir'] == expected_restir(mode), 'Changed algorithm/settings')
     need(not value['smoke'] and not value['validation'] and value['configuration'] == 'Release', 'Invalid timing configuration')
-    need((value['model'], value['sampler'], value['time'], value['bounces'], value['tile']) == (4, 2, 17, 4, 64), 'Changed workload')
+    need((value['model'], value['sampler'], value['time'], value['bounces'], value['tile']) == (4, 3, 17, 4, 64), 'Changed workload')
     need(value['rtxdi'] == '3.1.0/f12037fa8e97ebc08e9e3edfd2de528ed1772a4b' and value['reconstruction'] == 'none', 'Changed backend')
     need(value['quality_wait'] == 'active_poll_1ms_then_block', 'Changed quality waiting protocol')
     need(not value['cpu_live'] and not value['vma_live'] and value['diagnostics'] == dict(errors=0, warnings=0), 'Leak/diagnostic')
@@ -52,7 +52,7 @@ def common(value, mode, kind):
 def source(row, mode, samples, empty=True, seed=None):
     s = row['source']
     t = row['transport']
-    need((t['model'], t['sampler'], t['medium']) in ((3, 1, False), (4, 2, True)) and
+    need((t['model'], t['sampler'], t['medium']) in ((3, 1, False), (4, 3, True)) and
          t['max_bounces'] == 4 and t['rr_start'] == 3, 'Changed actual transport settings')
     if seed is not None:
         need(t['seed'] == seed, 'Actual seed differs from independent chain')

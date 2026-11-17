@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-14T14:37:00+08:00"
-updated_at: "2026-10-23T17:51:15+08:00"
+updated_at: "2026-11-17T14:25:00+08:00"
 ---
 
 # GPU表面、空气、云与渐进路径追踪
@@ -224,7 +224,7 @@ BLAS从世界顶点合并构建，尚无资产BLAS复用、UPDATE/refit、跨队
 ## 世界空间空气路径
 
 `submit_air_rays`、`submit_air_view`和`configure_air_view`消费同一冻结环境的PathTraceScene与PathMediumSnapshot，
-使用VolumePathSettings（model=4、sampler=2），反弹0..32；0仅保留无散射透射和终端发光。
+使用VolumePathSettings（model=4、默认sampler=3，保留显式sampler=2），反弹0..32；0仅保留无散射透射和终端发光。3采用任意连续三样本覆盖RGB的循环分层；2保留独立通道随机序列。
 空气专用接口要求clouds.enabled=false；零密度但enabled的云也明确拒绝，含云请使用下面的通用介质接口。
 空气关闭时可验证真空退化；开启但系数为零时行星仍不透明。相机地下、环境不匹配或超出支持域明确返回错误。
 
@@ -241,7 +241,7 @@ auto reference = renderer.submit_air_view(queue, scene, medium, view, air, {0, 6
 
 主网格查询遵守near/far，空气、后续反弹和阴影按物理边界继续。
 阴影同时检查几何/mask、行星及空气透射；Rayleigh/Mie真实散射、Lambert/GGX、有限太阳和面积灯共用NEE/MIS/RR。
-空气结果info.medium保存完整环境、介质和体积设置；公共settings报告model=4/sampler=2及公共字段。
+空气结果info.medium保存完整环境、介质和体积设置；公共settings报告model=4及实际sampler（默认3）和公共字段。
 primary_hits只记录第一个样本直接到达的网格，先发生介质事件或命中行星时为空。
 statistics.rays在空气模式计逻辑几何查询（含空几何）；triangle_tests仍不可得，不报告GPU介质事件统计。
 
@@ -254,7 +254,7 @@ tracking额度耗尽、无效系数/结果拒绝整个候选，保留旧complete
 
 ## 世界空间云路径
 
-`submit_medium_rays`、`submit_medium_view`和`configure_medium_view`使用同一model=4/sampler=2积分器，
+`submit_medium_rays`、`submit_medium_view`和`configure_medium_view`使用同一model=4积分器（默认sampler=3，兼容2），
 接受空气、非均匀云及二者组合。先由CloudFieldCache生成不可变场，再创建PathMediumSnapshot；时间显式冻结。
 
 ```cpp

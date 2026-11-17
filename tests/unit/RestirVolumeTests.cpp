@@ -231,7 +231,7 @@ TEST_CASE("RESTIR volume sample partitions jittered images and immutable provena
         auto result=render_restir_volume_reference(f.heap,scene,m,view,s,ris,{11,32}); REQUIRE(result); const auto image=*result;
         CHECK(image.info().restir->initial_candidates==4); CHECK(image.info().samples.first==11);
         CHECK(image.info().scene_fingerprint==scene.fingerprint()); CHECK(image.info().scene==scene.id()); CHECK(image.info().revision==scene.revision());
-        CHECK(image.info().environment==m.environment()); CHECK(image.info().settings.model_version==4); CHECK(image.info().settings.sampler_version==2);
+        CHECK(image.info().environment==m.environment()); CHECK(image.info().settings.model_version==4); CHECK(image.info().settings.sampler_version==3);
         CHECK(image.info().restir_statistics.applied_surface==128); CHECK(image.info().restir_statistics.candidate_evaluations==512);
         CHECK(image.info().statistics.rays<=128*3); // Cached primary geometry query, one fresh selected shadow.
         for(unsigned y=0;y<2;++y) for(unsigned x=0;x<2;++x) {

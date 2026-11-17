@@ -76,7 +76,7 @@ def analyze(out):
             summary['failures'].append({'name': run['name'], 'error': d.get('error')})
             continue
         assert d['diagnostics'] == {'errors': 0, 'warnings': 0} and not d['cpu_live'] and not d['vma_live']
-        assert (d['model'], d['sampler'], d['time'], d['bounces'], d['tile'], d['warmup_samples']) == (4, 2, 17, 4, 256, 256)
+        assert (d['model'], d['sampler'], d['time'], d['bounces'], d['tile'], d['warmup_samples']) == (4, 3, 17, 4, 256, 256)
         assert not d['validation'] and not d['smoke'] and d['tiles_per_submission'] == 4
         c = d['cases'][0]; frames = c['frames']; assert len(frames) == 20
         mode = run['name'].rsplit('-', 2)[-2]

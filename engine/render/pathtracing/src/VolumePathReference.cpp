@@ -33,7 +33,7 @@ const PathSceneState& validate(const PathTraceScene& scene,const PathMediumSnaps
     const auto* state=PathReferenceAccess::get(scene);
     if(!state || !medium) throw path_invalid("Volume path requires valid frozen scene and medium");
     if(state->source.environment()!=medium.environment()) throw path_invalid("Volume scene and medium environment mismatch");
-    if(s.model_version!=4 || s.sampler_version!=2 || s.max_bounces>32 || s.rr_start>s.max_bounces ||
+    if(s.model_version!=4 || (s.sampler_version!=2 && s.sampler_version!=3) || s.max_bounces>32 || s.rr_start>s.max_bounces ||
         !s.environment_rgb.allFinite() || (s.environment_rgb.array()<0).any() || (s.environment_rgb.array()>1e6).any() ||
         (s.estimator!=PathTraceEstimator::mis && s.estimator!=PathTraceEstimator::bsdf_only) ||
         !samples.count || samples.count>65536 || samples.first>65536-samples.count || !pixels || pixels>4096 ||
@@ -259,7 +259,7 @@ struct Context {
             prepared=prepare_restir(endpoint(ray,primary_hit,primary_segments),pixel,sample);
         }
         // Reservoir construction above is independent of hero, analog survival and shadow tracking.
-        const auto channel=unsigned(random(VolumeSampleStream::channel)*3);
+        const auto channel=volume_path_channel(settings.seed,pixel,sample,settings.sampler_version);
         double value=0,beta=1,previous_pdf=0; Vec3d previous=Vec3d::Zero();
         const bool mis=settings.estimator==PathTraceEstimator::mis;
         unsigned medium_events=0;
@@ -339,6 +339,11 @@ double volume_path_sample(std::uint64_t seed,std::uint32_t pixel,std::uint32_t s
     auto h=mix(std::uint32_t(seed)^0x3c6ef372u); h=mix(h^std::uint32_t(seed>>32));
     h=mix(h^pixel); h=mix(h^sample); h=mix(h^event); h=mix(h^std::uint32_t(stream)); h=mix(h^counter);
     return (double(h>>8)+.5)/16777216.;
+}
+std::uint32_t volume_path_channel(std::uint64_t seed,std::uint32_t pixel,std::uint32_t sample,std::uint32_t version) noexcept {
+    if(version==2) return std::uint32_t(volume_path_sample(seed,pixel,sample,0,VolumeSampleStream::channel)*3);
+    auto h=mix(std::uint32_t(seed)^0xbb67ae85u); h=mix(h^std::uint32_t(seed>>32)); h=mix(h^pixel);
+    return (h%3+(1+((h>>16)&1))*(sample%3))%3;
 }
 Result<VolumePathEstimate> estimate_volume_path_reference(const PathTraceScene& scene,const PathMediumSnapshot& medium,
     const PathTraceRay& ray,const VolumePathSettings& settings,PathTraceSamples samples,std::uint32_t pixel,std::stop_token stop) {

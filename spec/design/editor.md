@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-11-17T08:50:00+08:00"
+updated_at: "2026-11-17T14:25:00+08:00"
 status: accepted
 ---
 
@@ -62,7 +62,7 @@ Sponza worker探针分别记录首次与稳态完整帧、云首帧/收敛帧、
 
 编辑场景视口提供Raster/Path trace显式切换；Path trace显示实际completed/target spp、阶段、暂停/继续、
 Reset、seed、反弹、环境RGB、太阳和曝光EV。设置为会话状态，不写Scene/Undo；Surface only 明确忽略空气/云，Scene media 使用统一介质路径。
-构建未启用或设备RT未启用时显示原因，不退回光栅冒充路径图。默认目标64spp，batch=1；Surface only tile≤256，Scene media tile≤64。
+构建未启用或设备RT未启用时显示原因，不退回光栅冒充路径图。默认目标64spp；Surface only batch=1，Scene media batch=3（末批尊重目标）；两者tile≤256。
 窗口设备在启用模块的构建请求RT和纹理索引if_available，不切模式重建设备；windows-editor预设启用路径模块。
 
 正常启动的默认Sponza也属于预览验收范围。路径视口显式使用与光栅相同的unlit_preview导入配置，
@@ -325,7 +325,7 @@ Undo/Redo/切换文档前处理未完成输入；Save 仍先提交草稿再保�
 
 启用环境的Edit视口采用独立后台worker/Device/Queue，复用ScenePipeline的环境绑定入口和最近LUT。
 Surface only 的连续相机输入等待当前完整图像发布后再提交最新姿态，避免每帧取消导致显示饥饿；
-暂停、worker 失败、物理/设置/尺寸变化仍立即接纳。Scene media 继续使用既有低分辨率/100ms替换策略。
+暂停、worker 失败、物理/设置/尺寸变化仍立即接纳。Scene media 使用低分辨率预览，按0181等待完整RGB批次再合并相机请求。
 主线程只复制拥有型SceneReadSnapshot/相机/尺寸/曝光/preview身份；最多一个正在执行、一个合并待处理请求和一个完成结果。
 worker只发布最新已提交请求的序号；GUI在首帧完成前合并相机/尺寸输入，完成后提交最新视角，避免持续输入饿死画面。
 完成图必须匹配当前document/revision/exposure/preview和渲染设置；相机/尺寸允许落后但保留真实来源，不标为当前帧，拾取/Gizmo仍要求完全匹配。
@@ -394,7 +394,7 @@ M22.11 的 ConsoleWorkflowSmoke 与独立 Python 驱动把命令发现/补全、
 ## M17.6 缓存与交互调度
 
 同资产、相同世界实例/引用的环境版本复用 CPU 路径几何，并通过 renderer 相同几何owner复用 AS；源重绑失败不发布候选。相机变化不重建几何。
-Scene media 相机移动期间长边192像素，面板显示 Motion preview 和实际 Shown size；停动200ms恢复完整请求尺寸并从样本0累积。相机请求等待完整预览，渲染阶段最多100ms后替换；冷编译/导入期间合并相机输入，不反复取消准备工作，物理变更/刷新立即失效，不混合尺寸历史。
+Scene media 相机移动期间长边192像素，面板显示 Motion preview 和实际 Shown size；停动200ms恢复完整请求尺寸并从样本0累积。按[0181](../development/0181-media-preview-color.md)使用sampler=3均衡RGB及3 spp完整批次（末批尊重剩余目标）；相机请求等待完整预览后合并最新姿态，取消原100ms替换以避免三样本首帧饥饿。冷编译/导入期间同样合并输入，物理变更/刷新/尺寸变化立即失效，不混合尺寸历史。迟到图保留真实来源，不能作为当前相机拾取。
 请求合并和失效规则保持document/revision/物理参数边界，迟到帧保留实际相机与尺寸并标旧来源；完整新视角与GUI帧循环分别测量。
 性能观测使用独立开关，GPU时间戳/VMA统计只在测量时启用；初始化读取一次heap预算选择renderer额度，取消返回与GPU回收分别记录。
 

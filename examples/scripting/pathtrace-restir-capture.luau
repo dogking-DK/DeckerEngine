@@ -24,7 +24,7 @@ assert(job.state == "succeeded", "Path capture failed")
 assert(job.progress.completed == 3 and job.result.provenance.actual_spp == 3)
 assert(job.result.document_id == state.document_id and job.result.revision == state.revision)
 
-assert(job.result.provenance.model_version == 4 and job.result.provenance.sampler_version == 2)
+assert(job.result.provenance.model_version == 4 and job.result.provenance.sampler_version == 3)
 assert(job.result.provenance.cloud_field_hash ~= dk.null)
 
 assert(job.result.provenance.history.start == "empty" and job.result.provenance.history.epoch_first == 0)

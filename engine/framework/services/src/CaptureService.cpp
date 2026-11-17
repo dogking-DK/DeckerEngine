@@ -129,7 +129,7 @@ std::string provenance(const CaptureRequest& r,const EnvironmentDescription& env
                 value["time_seconds"]=p.time_seconds; value["medium_model_version"]=1; value["cloud_field_hash"]=nullptr;
             }
         }
-        value["model_version"]=p.scene_media ? 4 : 3; value["sampler_version"]=p.scene_media ? 2 : 1; value["material_model"]="metallic_roughness";
+        value["model_version"]=p.scene_media ? 4 : 3; value["sampler_version"]=p.scene_media ? 3 : 1; value["material_model"]="metallic_roughness";
         value["estimator"]="mis"; value["actual_spp"]=0; value["input_fingerprint"]=nullptr;
         value["input_fingerprint_version"]=3;
         if(p.version==3) {

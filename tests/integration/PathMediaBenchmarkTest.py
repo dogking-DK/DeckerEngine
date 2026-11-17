@@ -23,7 +23,7 @@ def performance():
                                        tiles=[dict(gpu=dict(period_ns=1, valid_bits=64, zones=[1], submission_ms=1))]*60)
                                   for i in range(1, 5)]))
     return dict(schema=1, status='passed', kind='performance', validation=False, smoke=False, configuration='Release',
-                model=4, sampler=2, time=17, bounces=4, cpu_live=0, vma_live=0, diagnostics=dict(errors=0, warnings=0),
+                model=4, sampler=3, time=17, bounces=4, cpu_live=0, vma_live=0, diagnostics=dict(errors=0, warnings=0),
                 device='test', driver='test', tile=64, cases=cases)
 
 

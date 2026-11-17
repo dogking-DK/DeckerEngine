@@ -1,9 +1,11 @@
 ---
 module: render-restir
 created_at: "2026-10-19T12:50:00+08:00"
-updated_at: "2026-11-12T16:06:43+08:00"
+updated_at: "2026-11-17T14:25:00+08:00"
 status: accepted
 ---
+
+0181将当前Scene media默认采样升级为model=4/sampler=3，原生设置仍支持2。循环RGB排列独立于全部reservoir/自由程/阴影随机流，任意连续三个epoch覆盖RGB；版本变更清除辐亮度和采样历史。下文M19及历史测量的sampler=2是原验收基线；新采样与交互发布契约见[路径设计](render-pathtracing.md#scene-media-低样本颜色稳定性0181)。
 
 
 当前容量扩展见[0143](../development/0143-path-capacity-media-throughput.md)：渐进介质与表面统一256 tile，不限制完整目标的射线总量。

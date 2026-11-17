@@ -176,6 +176,11 @@ def main():
             assert error <= 1e-5 and image["provenance"]["cloud_field_hash"] == console["field_hash"]
             report["console_capture_max_abs"] = error; advance("console")
             compare_projections(console)
+            motion = checkpoint("motion")
+            assert motion["motion_updates"] >= 2 and motion["width"] > 192 and motion["spp"] == 3
+            assert all(x["width"] == 192 and x["spp"] == 3 for x in motion["motion_samples"])
+            compare_capture(motion)
+            advance("motion")
             closing = checkpoint("closing")
             assert closing["pending"] and closing["spp"] < 64
             for _ in range(6):

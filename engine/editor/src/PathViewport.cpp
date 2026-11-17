@@ -45,11 +45,9 @@ void Viewport::update_path(const SceneReadSnapshot& snapshot,std::uint32_t width
         auto same_camera=key; if(attempted_) same_camera.camera=attempted_->camera;
         const bool camera_only=path_active_ && path_settings_==settings && attempted_==same_camera;
         const auto worker=path_->status();
-        const bool preparing=worker.phase=="Queued" || worker.phase=="Compiling" || worker.phase=="Loading assets" || worker.phase=="Building scene";
         // Let a short preview finish during a continuous gesture. Physical edits,
         // resize, refresh and idle restoration always invalidate immediately.
-        const bool ready=!camera_only || settings.paused || published_==attempted_ || worker.phase=="Failed" ||
-            (settings.scene_media && !preparing && now-path_requested_at_>=std::chrono::milliseconds(100));
+        const bool ready=!camera_only || settings.paused || published_==attempted_ || worker.phase=="Failed";
         if(ready && (!path_active_ || attempted_!=key || path_settings_!=settings)) {
             if(snapshot.scene.logical_bytes()>32U*1024U*1024U) throw std::runtime_error("Path preview snapshot exceeds 32 MiB");
             if(!path_active_) path_samples_=0;

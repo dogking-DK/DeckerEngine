@@ -17,13 +17,13 @@ def source(mode, spp):
 
 
 def transport(seed=101, name=None):
-    return dict(model=3 if name == 'surface' else 4, sampler=1 if name == 'surface' else 2,
+    return dict(model=3 if name == 'surface' else 4, sampler=1 if name == 'surface' else 3,
                 medium=name != 'surface', max_bounces=4, rr_start=3, seed=seed, fingerprint=2, geometry_fingerprint=1)
 
 
 def common(mode, kind, identity):
     return dict(schema=1, status='passed', algorithm=mode, restir=m.expected_restir(mode), kind=kind,
-                smoke=False, validation=False, configuration='Release', model=4, sampler=2, time=17, bounces=4, tile=64,
+                smoke=False, validation=False, configuration='Release', model=4, sampler=3, time=17, bounces=4, tile=64,
                 rtxdi='3.1.0/f12037fa8e97ebc08e9e3edfd2de528ed1772a4b', reconstruction='none',
                 quality_wait='active_poll_1ms_then_block',
                 cpu_live=0, vma_live=0, diagnostics=dict(errors=0, warnings=0), compile_ms=1, asset_load_ms=1, cpu_peak=1,

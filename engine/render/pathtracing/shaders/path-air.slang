@@ -1,4 +1,4 @@
-// Model 4, sampler 2: scalar hero-RGB analog transport. No view-dependent LUTs.
+// Model 4, sampler 2/3: scalar hero-RGB analog transport. No view-dependent LUTs.
 struct AirLocation { float3 radial; float height; float2 weather; float3 base,detail; };
 #include "path-cloud.slang"
 float airRandom(uint pixel,uint sample,uint event,uint stream,uint counter=0) {
@@ -7,6 +7,13 @@ float airRandom(uint pixel,uint sample,uint event,uint stream,uint counter=0) {
     return min((float(h>>8)+.5)/16777216.0,asfloat(0x3f7fffff));
 }
 void airError(uint code) { uint ignored; InterlockedOr(status[0],code,ignored); }
+uint airChannel(uint pixel,uint sample) {
+    if(asuint(parameters[12]).x==2) return min(2u,uint(airRandom(pixel,sample,0,0)*3));
+    // Integer-only permutation matches the CPU and remains balanced across moved-view epochs.
+    uint4 p=asuint(parameters[1]); uint h=mixBits(p.x^0xbb67ae85u);
+    h=mixBits(h^p.y); h=mixBits(h^pixel);
+    return (h%3+(1+((h>>16)&1))*(sample%3))%3;
+}
 float airOpticalDistance(float u) {
     // Preserve the smallest sampler values when float subtraction would round 1-u to 1.
     return u<.001 ? u*(1+u*(.5+u/3)) : -log(1-u);
@@ -315,7 +322,7 @@ float3 traceAir(RayDesc ray,AirLocation location,uint pixel,uint sample,inout ui
     else if(prepared) { reservoir=initialRestir(primary,receiver.position,receiver.normal,receiver.bsdf,-ray.Direction,pixel,sample); restirStat(pixel,14); }
 #endif
     // Every RGB reservoir, including history, is fixed independently of this hero and flight.
-    uint channel=min(2u,uint(airRandom(pixel,sample,0,0)*3));
+    uint channel=airChannel(pixel,sample);
     float value=0,beta=1,previousPdf=0; float3 previous=0;
     bool suppressEmission=false;
     firstHit=float4(-1,0,0,0); firstNormal=0;

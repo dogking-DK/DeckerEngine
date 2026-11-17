@@ -44,7 +44,7 @@ def nrmse(images, reference):
 def common(value, kind):
     need(value['schema'] == 1 and value['status'] == 'passed' and value['kind'] == kind, 'Failed or mislabeled run')
     need(not value['smoke'] and value['configuration'] == 'Release', 'Smoke/Debug is not acceptance evidence')
-    need((value['model'], value['sampler'], value['time'], value['bounces']) == (4, 2, 17, 4), 'Changed physical workload')
+    need((value['model'], value['sampler'], value['time'], value['bounces']) == (4, 3, 17, 4), 'Changed physical workload')
     need(not value['cpu_live'] and not value['vma_live'] and value['diagnostics'] == dict(errors=0, warnings=0), 'Leak or validation diagnostic')
     need([c['name'] for c in value['cases']] == list(CASES), 'Missing/duplicate case')
 
@@ -231,7 +231,7 @@ def verify_archive(directory):
             need(worker['status'] == 'passed' and not worker['validation'] and worker['profile'], 'Invalid worker evidence')
             need(not worker['diagnostics'] and not worker['live_allocations'], 'Worker leak/diagnostic')
             need((worker['width'], worker['height'], worker['model'], worker['sampler'], worker['seed'], worker['time'], worker['bounces']) ==
-                 (192, 108, 4, 2, 1, 17, 4), 'Changed worker workload')
+                 (192, 108, 4, 3, 1, 17, 4), 'Changed worker workload')
             need([c['preset'] for c in worker['media']] == ['clear', 'sparse', 'overcast'], 'Missing worker case')
             for case in worker['media']:
                 need(len(case['camera_ms']) == 12 and len(case['cancel_ms']) == 13, 'Missing worker trials')

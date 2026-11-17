@@ -172,7 +172,7 @@ def main():
             (root / "old.json").write_text("previous", encoding="utf-8")
             if args.media:
                 provenance = first["provenance"]
-                assert provenance["model_version"] == 4 and provenance["sampler_version"] == 2
+                assert provenance["model_version"] == 4 and provenance["sampler_version"] == 3
                 assert provenance["cloud_field_hash"] not in (None, "fnv1a64:0000000000000000")
                 shifted = read(submit("time.json", pathtrace=dict(path, time_seconds=2)))
                 assert shifted["linear_rgb"] != first["linear_rgb"]

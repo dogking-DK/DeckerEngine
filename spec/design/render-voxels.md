@@ -1,7 +1,7 @@
 ---
 module: render-voxels
 created_at: "2026-11-11T14:51:58+08:00"
-updated_at: "2026-11-16T15:25:58+08:00"
+updated_at: "2026-11-17T14:25:00+08:00"
 status: accepted
 ---
 
@@ -390,7 +390,7 @@ HDDA 调优限于不改变表面语义的冗余查值消除：单轴表面转换
 
 ## M23.11 既有介质组合实施契约
 
-- 空气/云 model 4、sampler 2 保持原有事件深度、hero channel、自由程和 ratio-tracking 随机域。最近表面及所有阴影统一查询 mesh/voxel；材质、偏移、发光与面积 PDF 按类型解释。体素为实体不透明表面，不是密度网格或发光体；行星 ground 仍作为独立解析端点，按距离与几何竞争。
+- 空气/云 model 4 保持原有事件深度、自由程和 ratio-tracking 随机域。0181起默认sampler 3按连续三样本均衡hero RGB，原生sampler 2继续支持；见[采样契约](render-pathtracing.md#scene-media-低样本颜色稳定性0181)。最近表面及所有阴影统一查询 mesh/voxel；材质、偏移、发光与面积 PDF 按类型解释。体素为实体不透明表面，不是密度网格或发光体；行星 ground 仍作为独立解析端点，按距离与几何竞争。
 - CPU Classic 与 initial RIS 共用类型化命中；`max_triangle_tests` 同时约束三角形测试和稀疏区域访问总量，统计追加 `voxel_regions`，RIS 追加 `prepared_voxel`，不将其计入 mesh。超限只返回失败，不发布部分图像。
 - GPU 复用 surface v2 的 kind/index/cell/face/value；ground kind=3，不能解释成 triangle 或 voxel。首表面 RGB reservoir 在 hero channel/自由程前准备，仅无真实介质事件到达首表面时应用。续段真实散射解除发光抑制，最终混合阴影与透射使用独立 stream 11；复用阶段不追踪透射。
 - 固定射线/单次视图开放 Classic 与 initial RIS，透视/正交渐进入口另支持 temporal/spatial/combined 三种 Scene media DI。固定射线读回使用介质 6 float4 步长；视图诊断使用 volume pixel 随机域及实际 sampling epoch 重建体素位置。无/零介质按现有 volume 采样器退化，不声称与 surface sampler 逐样本相同。

@@ -330,7 +330,7 @@ int main(int argc,char** argv) {
         output["medium_acceleration"]={{"density_culling",density_culling},{"local_majorants",local_majorants}};
         require(!root.empty() && !report.empty() && edge>0 && edge<=256,"Root/output/tile required"); std::filesystem::create_directories(report.parent_path());
         output.update({{"kind",quality ? "quality" : "performance"},{"validation",(quality && !timing_quality) || smoke},{"smoke",smoke},{"tile",edge},
-            {"model",4},{"sampler",2},{"time",17},{"bounces",4},{"configuration",DK_BENCH_CONFIG}});
+            {"model",4},{"sampler",VolumePathSettings{}.sampler_version},{"time",17},{"bounces",4},{"configuration",DK_BENCH_CONFIG}});
         run(root,shaders,output,quality,smoke,edge); output["status"]="passed";
     } catch(const std::exception& e) { output["error"]=e.what(); std::fprintf(stderr,"Media benchmark: %s\n",e.what()); }
     if(!report.empty()) { std::ofstream file(report); file<<output.dump(2)<<'\n'; if(!file) return 1; }

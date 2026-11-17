@@ -234,6 +234,7 @@ VS2026 用户打开 `out/build/windows-editor/DeckerEngine.slnx`，选择 Debug/
 与 Raster 的时间设置独立；云反照率和各向异性控制散射。相机、介质、种子、模式与会话变化重置累积，曝光只改变显示。
 面板的 Shown 来源来自最后完整帧，显示模式、模型/采样版本、固定时间和场 hash；失败时旧图保留并标 STALE PREVIEW。
 修改合法参数或按 Refresh 可恢复；GPU 不支持的尺度/工作额度仍会明确报错。Scene media 操作相机时使用长边192像素的临时预览，面板显示 Motion preview/Shown size；停动200ms恢复原尺寸并重新累积。
+Scene media采用循环RGB分层，通常每3 spp显示一个完整批次，降低首帧纯红/绿/蓝色块。持续移动会先交付当前小预览再合并最新相机；末批和显式1/2 spp目标仍尊重实际目标数。此策略不代替降噪，低样本光照/散射仍有噪点；提高Target spp主要改善静止后的最终质量。
 这只改善操作反馈，完整尺寸收敛仍需要等待；固定质量和性能边界见[测量指南](path-media-benchmark.md)。
 
 Console 输入 `{"method":"scene.query","params":{}}` 后按 Enter 或 Run，取得当前 document_id/revision。

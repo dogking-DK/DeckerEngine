@@ -176,6 +176,8 @@ void PathPreview::run(std::stop_token stop) {
                 settings.sun=active->settings.sun ? render::PathTraceSun::scene : render::PathTraceSun::none;
                 settings.surface_only=active->settings.surface_only;
                 render::PathTraceSchedule schedule; schedule.session=session; schedule.target_spp=active->settings.target; schedule.gesture=active->preview;
+                // Publish a complete RGB cycle; submit_batch clamps the final batch to the target.
+                schedule.batch_spp=active->settings.scene_media ? 3u : 1u;
                 schedule.tile_edge=256;
                 schedule.tiles_per_submission=4;
                 schedule.paused=active->settings.paused; schedule.exposure=active->settings.exposure;

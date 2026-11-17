@@ -51,7 +51,7 @@ int main(int argc,char** argv) {
         };
         const unsigned width=validation ? 320 : 1280,height=validation ? 180 : 720;
         report["width"]=media ? 192 : width; report["height"]=media ? 108 : height;
-        if(media) report.update({{"model",4},{"sampler",2},{"seed",1},{"time",17},{"bounces",4}});
+        if(media) report.update({{"model",4},{"sampler",render::VolumePathSettings{}.sampler_version},{"seed",1},{"time",17},{"bounces",4}});
         {
             memory::ThreadContext context{system,heap}; memory::ExecutionScope scope{context,heap};
             Camera camera; camera.set_environment(true);

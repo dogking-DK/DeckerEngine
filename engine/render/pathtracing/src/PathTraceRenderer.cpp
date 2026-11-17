@@ -482,7 +482,7 @@ Float4 radial_origin(const PathMediumSnapshot& m,const Vec3d& origin) {
 void medium_parameters(Parameters& p,const PathMediumSnapshot& medium,const VolumePathSettings& s) {
     const auto& e=medium.environment(); const auto& a=e.atmosphere;
     const auto rgb=[](const EnvironmentVector& v) { return Vec3d{v[0],v[1],v[2]}; };
-    p[12]=integers(1,(e.enabled || e.clouds.enabled) ? 1u : 0u,s.max_steps_per_path,std::uint32_t(s.max_tracking_steps));
+    p[12]=integers(s.sampler_version,(e.enabled || e.clouds.enabled) ? 1u : 0u,s.max_steps_per_path,std::uint32_t(s.max_tracking_steps));
     p[14]={float(a.ground_radius_m),float(a.atmosphere_height_m),float((s.gpu_density_culling ? 1u : 0u) | (s.gpu_local_majorants ? 2u : 0u)),float(detail::cloud_bound_edge)};
     p[15]=pack(rgb(a.rayleigh_scattering_per_m),a.rayleigh_scale_height_m);
     p[16]=pack(rgb(a.mie_scattering_per_m),a.mie_scale_height_m);
