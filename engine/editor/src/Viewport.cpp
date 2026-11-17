@@ -68,6 +68,7 @@ void Viewport::update(const SceneReadSnapshot& snapshot,std::uint32_t width,std:
                         publish(std::move(result->pixels),result->info,std::move(result->scene),environment_camera_,*environment_key_);
                         meshes_=std::move(result->meshes); published_environment_=result->environment; published_history_=result->history;
                         published_warmup_=result->warmup_frames; published_shadow_=result->shadow_generation;
+                        published_environment_complete_=result->refinement_complete;
                     }
                 }
             }
@@ -75,6 +76,7 @@ void Viewport::update(const SceneReadSnapshot& snapshot,std::uint32_t width,std:
                 if(snapshot.scene.logical_bytes()>32U*1024U*1024U) throw std::runtime_error("Environment preview snapshot exceeds 32 MiB");
                 environment_.request({snapshot,camera,width,height,edit,++environment_sequence_,exposure,environment});
                 environment_key_=key; environment_camera_=camera; environment_has_frame_=false;
+                published_environment_complete_=false;
                 attempted_=key; error_.clear();
             }
         } catch(const std::exception& error) { error_=error.what(); }
@@ -137,6 +139,7 @@ void Viewport::update(const SceneReadSnapshot& snapshot,std::uint32_t width,std:
         check(frame.read_rgba8(pixels));
         publish(std::move(pixels),frame.info(),std::move(scene),camera,key);
         published_environment_=environment; published_history_={}; published_warmup_=0; published_shadow_=0;
+        published_environment_complete_=true;
     } catch (const std::exception& error) { error_=error.what(); }
 }
 void Viewport::publish(std::vector<std::byte> pixels,const render::FrameInfo& info,render::RenderScene scene,const Camera& camera,const Key& key) {

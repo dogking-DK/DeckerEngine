@@ -10,7 +10,7 @@ EnvironmentPreview::~EnvironmentPreview() { thread_.request_stop(); condition_.n
 void EnvironmentPreview::request(EnvironmentPreviewRequest request) {
     std::lock_guard lock(mutex_); wanted_=request.sequence; request_=std::move(request); result_.reset(); condition_.notify_all();
 }
-void EnvironmentPreview::cancel() { std::lock_guard lock(mutex_); wanted_=0; request_.reset(); result_.reset(); }
+void EnvironmentPreview::cancel() { std::lock_guard lock(mutex_); wanted_=0; request_.reset(); result_.reset(); invalidate_history_=true; condition_.notify_all(); }
 bool EnvironmentPreview::current(std::uint64_t sequence) const { std::lock_guard lock(mutex_); return sequence==wanted_; }
 std::uint64_t EnvironmentPreview::active_sequence() const { std::lock_guard lock(mutex_); return active_; }
 std::uint64_t EnvironmentPreview::discarded() const { std::lock_guard lock(mutex_); return discarded_; }
@@ -22,6 +22,9 @@ void EnvironmentPreview::run(std::stop_token stop) {
     render::GpuAssets assets;
     std::optional<DocumentId> session;
     std::vector<PickMesh> meshes;
+    bool previous_edit=false,reset_history=false;
+    bool history_refined=false;
+    std::optional<Mat4d> previous_camera;
     for(;;) {
         std::optional<EnvironmentPreviewRequest> request;
         {
@@ -29,6 +32,7 @@ void EnvironmentPreview::run(std::stop_token stop) {
             condition_.wait(lock,stop,[&] { return request_.has_value(); });
             if(stop.stop_requested()) break;
             request=std::exchange(request_,{}); active_=request->sequence;
+            reset_history=std::exchange(invalidate_history_,false) || reset_history;
         }
         EnvironmentPreviewResult result; result.sequence=request->sequence; bool published=false;
         try {
@@ -46,6 +50,7 @@ void EnvironmentPreview::run(std::stop_token stop) {
             }
             auto& queue=*owned_queue;
             if(session!=request->snapshot.state.document_id) {
+                reset_history=true;
                 auto source=take(render::DiskScene::load_snapshot(heap_,request->snapshot.project,request->snapshot.scene,{GltfImportProfile::unlit_preview}));
                 std::vector<PickMesh> queries;
                 for(const auto& asset:source.assets()) {
@@ -67,14 +72,38 @@ void EnvironmentPreview::run(std::stop_token stop) {
                 const auto& clouds=request->snapshot.scene.environment().clouds;
                 const bool cloudy=clouds.enabled && clouds.coverage>0 && clouds.density>0 && clouds.extinction_per_m>0;
                 result.warmup_frames=cloudy && request->environment.mode==render::CloudRenderMode::temporal ? 32u : 0u;
-                if(pipeline.cloud_history(request->environment.view_id)) check(pipeline.release_cloud_history(queue,request->environment.view_id));
+                // Detached Gizmo overrides do not advance the Scene revision.
+                // Repeated stationary owner edits must reproduce a standalone capture.
+                // Only actual navigation reprojects across requests; a partial cold history
+                // remains eligible for reprojection, but not for the shorter refinement budget.
+                const auto camera_world=request->camera.world().matrix();
+                const bool stationary=previous_camera && (previous_camera->array()==camera_world.array()).all();
+                if((reset_history || previous_edit || request->edit || stationary) && pipeline.cloud_history(request->environment.view_id))
+                    check(pipeline.release_cloud_history(queue,request->environment.view_id));
+                reset_history=false;
+                previous_edit=request->edit.has_value();
+                bool reused=false;
                 for(unsigned i=0;i<=result.warmup_frames;++i) {
+                    if(i==1) {
+                        // Give the owner time to coalesce motion after publishing the first image.
+                        std::unique_lock lock(mutex_);
+                        condition_.wait_for(lock,stop,std::chrono::milliseconds(50),[&] { return wanted_!=request->sequence; });
+                    }
                     if(stop.stop_requested() || !current(request->sequence)) break;
                     auto frame=take(pipeline.render_environment(queue,view,assets,settings,request->environment));
                     if(!take(frame.wait(queue))) throw std::runtime_error("Environment preview did not complete");
+                    if(i==0) {
+                        reused=frame.cloud_optimization().history_available;
+                        if(!reused) history_refined=false;
+                        if(reused && history_refined) result.warmup_frames=8;
+                        previous_camera=camera_world;
+                    }
+                    if(i==result.warmup_frames) history_refined=true;
                     if(i%4==0 || i==result.warmup_frames) {
                         EnvironmentPreviewResult update; update.sequence=result.sequence; update.scene=result.scene;
                         update.environment=request->environment; update.warmup_frames=i;
+                        update.refinement_target=result.warmup_frames; update.refinement_complete=i==result.warmup_frames;
+                        update.history_reused=reused;
                         update.info=frame.info(); update.pixels.resize(std::size_t(request->width)*request->height*4);
                         check(frame.read_rgba8(update.pixels)); update.meshes=meshes;
                         update.history=frame.cloud_optimization(); update.shadow_generation=frame.cloud_shadow_generation();

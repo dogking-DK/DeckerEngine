@@ -28,6 +28,8 @@ struct EnvironmentPreviewResult {
     render::CloudFrameInfo history;
     std::uint64_t shadow_generation=0;
     std::uint32_t warmup_frames=0;
+    std::uint32_t refinement_target=0;
+    bool refinement_complete=false,history_reused=false;
     graphics::GpuProfile gpu_profile;
     std::uint64_t device_local_bytes=0;
 };
@@ -48,6 +50,7 @@ private:
     memory::ResourceHandle heap_;
     graphics::DeviceOptions options_;
     bool profile_gpu_=false;
+    bool invalidate_history_=false; // Protected by mutex_; consumed by the worker.
     mutable std::mutex mutex_;
     std::condition_variable_any condition_;
     std::optional<EnvironmentPreviewRequest> request_;

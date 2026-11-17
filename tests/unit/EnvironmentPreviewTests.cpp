@@ -89,7 +89,51 @@ TEST_CASE("environment worker drops superseded resize cancels and closes active 
         wait([&] { if(!failed) failed=worker.take_result(); return failed.has_value(); });
         CHECK(failed->sequence==6); CHECK_FALSE(failed->error.empty());
         camera.set_environment(true); request(7,40,32); { auto value=result(7); CHECK(value.pixels.size()==40*32*4); }
-        request(8,128,96); started(8);
+#ifdef DK_TEST_CLOUDS
+        model->environment_draft()->value["clouds"]["enabled"]=true; model->environment_draft()->modified=true;
+        REQUIRE(model->apply_environment());
+        render::EnvironmentRenderSettings cloud_settings; cloud_settings.mode=render::CloudRenderMode::temporal;
+        auto cloud_request=[&](std::uint64_t seq,unsigned width=40,std::optional<TransformEdit> edit={}) {
+            worker.request({*model->snapshot(),camera,width,32,edit,seq,1,cloud_settings});
+        };
+        auto complete=[&](std::uint64_t seq) {
+            std::optional<EnvironmentPreviewResult> value;
+            wait([&] {
+                if(auto update=worker.take_result()) { REQUIRE(update->sequence==seq); REQUIRE(update->error.empty()); value=std::move(update); }
+                return value && value->refinement_complete;
+            });
+            return std::move(*value);
+        };
+        cloud_request(10); { auto value=complete(10); CHECK_FALSE(value.history_reused); CHECK(value.warmup_frames==32); }
+        camera.orbit(.5,0); cloud_request(11);
+        { auto value=complete(11); CHECK(value.history_reused); CHECK(value.warmup_frames==8); CHECK(value.history.source_sequence>0); }
+        // An explicit camera cut still rejects a completed history.
+        cloud_settings.camera_revision=1; cloud_request(12);
+        { auto value=complete(12); CHECK_FALSE(value.history_reused); CHECK(value.warmup_frames==32); }
+        cloud_request(13,48); { auto value=complete(13); CHECK_FALSE(value.history_reused); CHECK(value.info.width==48); }
+        // Cancel during the quiet interval after the first frame; no stale completion survives.
+        cloud_request(14,48); { auto value=result(14); CHECK_FALSE(value.refinement_complete); }
+        worker.cancel(); wait([&] { return worker.active_sequence()==0; }); CHECK_FALSE(worker.take_result());
+        // A rejected request must not consume the cancellation invalidation.
+        camera.set_environment(false); cloud_request(15,48);
+        wait([&] { auto value=worker.take_result(); return value && !value->error.empty(); });
+        camera.set_environment(true); cloud_request(16,48);
+        { auto value=complete(16); CHECK_FALSE(value.history_reused); }
+        // A detached transform has the same Scene revision but must not reuse its geometry history.
+        TransformEdit edit{}; edit.entity=model->snapshot()->scene.entities().front().id;
+        edit.value=model->snapshot()->scene.entities().front().local; edit.value.translation.x()+=.25;
+        cloud_request(17,48,edit); { auto value=complete(17); CHECK_FALSE(value.history_reused); }
+        cloud_request(18,48); { auto value=complete(18); CHECK_FALSE(value.history_reused); }
+        camera.orbit(.5,0); cloud_request(19,48); { auto value=complete(19); CHECK(value.history_reused); }
+        cloud_request(20,48); { auto value=complete(20); CHECK_FALSE(value.history_reused); CHECK(value.warmup_frames==32); }
+        worker.cancel(); camera.orbit(.5,0); cloud_request(21,48);
+        { auto value=result(21); CHECK_FALSE(value.refinement_complete); CHECK_FALSE(value.history_reused); }
+        camera.orbit(.5,0); cloud_request(22,48);
+        { auto value=complete(22); CHECK(value.history_reused); CHECK(value.warmup_frames==32); }
+        model->environment_draft()->value["clouds"]["enabled"]=false; model->environment_draft()->modified=true;
+        REQUIRE(model->apply_environment());
+#endif
+        request(23,128,96); started(23);
         // Destruction joins active work before diagnostics, heap and snapshots leave scope.
     }
     CHECK(diagnostics.load()==0); CHECK(heap.snapshot().live_allocations==0); CHECK(system.try_close().closed());

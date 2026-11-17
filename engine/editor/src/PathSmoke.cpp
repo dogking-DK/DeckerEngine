@@ -166,7 +166,7 @@ void PathSmoke::presented(const Workspace& model,const WorkbenchUi& ui,Viewport&
     if(desktop_) {
         const bool raster=stage_>0 && stage_<10;
         if(!rejected && (!viewport.current(model.snapshot()->state) || !viewport.camera_current(ui.input().camera()))) return;
-        if(stage_>=3 && stage_<10 && !rejected && viewport.environment_warmup()<32) return;
+        if(stage_>=3 && stage_<10 && !rejected && !viewport.environment_complete()) return;
         if(!raster && (progress.completed_spp!=(restir_ ? 2u : 1u) || viewport.path_samples()!=(restir_ ? 2u : 1u))) return;
         require(ui.path_mode()!=raster,"desktop render mode did not change");
         require(stage_==0 || model.snapshot()->scene.environment().enabled,"atmosphere was not enabled through GUI");

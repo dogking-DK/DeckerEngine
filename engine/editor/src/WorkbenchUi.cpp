@@ -396,7 +396,8 @@ void WorkbenchUi::draw(Viewport& preview,bool srgb) {
             }
 #endif
             input_.aspect(double(width)/height);
-            environment_settings_.camera_revision=input_.camera().revision();
+            // Navigation revision identifies the request, not a temporal camera cut.
+            // The pipeline separately rejects projection changes and large pose jumps.
 #ifdef DK_EDITOR_PATHTRACING
             if(path_mode()) preview.update_path(*s,acceptance_path_extent_ ? std::min(width,acceptance_path_extent_) : width,acceptance_path_extent_ ? std::min(height,acceptance_path_extent_) : height,srgb,input_.camera(),input_.edit(),input_.revision(),path_settings());
             else

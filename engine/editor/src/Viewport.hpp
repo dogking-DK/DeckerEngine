@@ -49,9 +49,12 @@ public:
     [[nodiscard]] bool camera_current(const Camera& camera) const { return !simulation_run_ && published_camera_==camera.revision(); }
     void retry() { attempted_.reset(); asset_session_.reset(); ++path_reload_; }
     [[nodiscard]] std::uint64_t environment_discarded() const { return environment_.discarded(); }
+    [[nodiscard]] std::uint64_t environment_active() const { return environment_.active_sequence(); }
+    [[nodiscard]] std::uint64_t environment_requested() const { return environment_sequence_; }
     [[nodiscard]] const render::EnvironmentRenderSettings& environment_settings() const { return published_environment_; }
     [[nodiscard]] const render::CloudFrameInfo& environment_history() const { return published_history_; }
     [[nodiscard]] std::uint32_t environment_warmup() const { return published_warmup_; }
+    [[nodiscard]] bool environment_complete() const { return published_environment_complete_; }
     [[nodiscard]] std::uint64_t environment_shadow() const { return published_shadow_; }
     void release_texture();
     [[nodiscard]] ImTextureID texture() const { return reinterpret_cast<ImTextureID>(descriptor_); }
@@ -99,6 +102,7 @@ private:
     render::EnvironmentRenderSettings published_environment_;
     render::CloudFrameInfo published_history_;
     std::uint32_t published_warmup_=0;
+    bool published_environment_complete_=false;
     std::optional<DocumentId> asset_session_,published_session_;
     std::optional<Key> attempted_,published_;
     std::optional<Key> environment_key_;

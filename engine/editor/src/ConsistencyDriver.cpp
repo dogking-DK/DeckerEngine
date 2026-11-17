@@ -188,7 +188,19 @@ void ConsistencyDriver::verify_environment(const Workspace& model,const Workbenc
         require(std::abs(direction.norm()-1)<1e-12 && pixels!=sig(12),"sun disk failed to change normalized direction and image"); break;
     }
     case 14: require(!model.pending() && pixels==sig(12) && history.redo_count==1,"sun drag Undo did not restore image"); break;
-    case 15: require(!model.pending() && pixels==sig(13) && history.redo_count==0,"sun drag Redo did not restore image"); break;
+    case 15:
+        if(pixels!=sig(13)) {
+            std::fprintf(stderr,"sun redo mismatch: warmup=%u history=%llu scene=%llu request_revision=%llu extent=%ux%u environment_equal=%d camera_equal=%d\n",
+                viewport.environment_warmup(),static_cast<unsigned long long>(viewport.environment_history().source_sequence),
+                static_cast<unsigned long long>(snapshot->scene.revision()),static_cast<unsigned long long>(revision),viewport.info().width,viewport.info().height,
+                model.environment_draft()->value==checkpoints_[13]["environment_draft"],camera(viewport.published_camera())==checkpoints_[13]["viewport"]["camera"]);
+            const auto rgba=viewport.retained_pixels(); const auto& info=viewport.info();
+            const std::string header="P6\n"+std::to_string(info.width)+" "+std::to_string(info.height)+"\n255\n";
+            const auto bytes=std::as_bytes(std::span{header.data(),header.size()}); ByteBuffer image{bytes.begin(),bytes.end()};
+            for(std::size_t i=0;i<rgba.size();i+=4) image.insert(image.end(),rgba.begin()+i,rgba.begin()+i+3);
+            check(write_file_bytes_atomic(directory_/"sun-redo-mismatch.ppm",image));
+        }
+        require(!model.pending() && pixels==sig(13) && history.redo_count==0,"sun drag Redo did not restore image"); break;
     case 16: case 17:
         require(!model.pending() && revision==rev(stage_-1)+1 &&
             (clouds_ ? snapshot->scene.environment().clouds.enabled : snapshot->scene.environment().enabled)==(stage_==17),
@@ -203,11 +215,19 @@ void ConsistencyDriver::verify_environment(const Workspace& model,const Workbenc
     }
 }
 void ConsistencyDriver::presented(const Workspace& model,const WorkbenchUi& ui,const Viewport& viewport) {
+    if(environment_ && !waiting_ && !done_ && tick_ && tick_%240==0) {
+        const auto& state=model.snapshot()->state; const auto& environment=model.snapshot()->scene.environment();
+        std::printf("Environment acceptance waiting: stage=%zu ready=%d pending=%d air=%d cloud=%d scene=%llu shown=%llu current=%d camera=%d warmup=%u complete=%d active=%llu requested=%llu discarded=%llu error=%s\n",
+            stage_,ready_,model.pending(),environment.enabled,environment.clouds.enabled,static_cast<unsigned long long>(state.revision),
+            static_cast<unsigned long long>(viewport.info().revision),viewport.current(state),viewport.camera_current(ui.input().camera()),
+            viewport.environment_warmup(),viewport.environment_complete(),static_cast<unsigned long long>(viewport.environment_active()),
+            static_cast<unsigned long long>(viewport.environment_requested()),static_cast<unsigned long long>(viewport.environment_discarded()),viewport.error().c_str()); std::fflush(stdout);
+    }
     if (done_ || waiting_ || !ready_) return;
     if(environment_ && viewport.error().empty() && (!viewport.current(model.snapshot()->state) || !viewport.camera_current(ui.input().camera()))) return;
     const auto& clouds=model.snapshot()->scene.environment().clouds;
     if(environment_ && clouds.enabled && clouds.coverage>0 && clouds.density>0 && clouds.extinction_per_m>0 &&
-        viewport.environment_settings().mode==render::CloudRenderMode::temporal && viewport.environment_warmup()<32 && viewport.error().empty()) return;
+        viewport.environment_settings().mode==render::CloudRenderMode::temporal && !viewport.environment_complete() && viewport.error().empty()) return;
     verify(model,ui,viewport);
     const auto& snapshot=*model.snapshot(); const auto& info=viewport.info();
     const auto rgba=viewport.retained_pixels();
@@ -239,6 +259,7 @@ void ConsistencyDriver::presented(const Workspace& model,const WorkbenchUi& ui,c
             {"shadow_extent_m",settings.shadow_extent_m},{"shadow_resolution",settings.shadow_resolution}};
         report["viewport"]["time_seconds"]=settings.time_seconds;
         report["viewport"]["warmup_frames"]=viewport.environment_warmup();
+        report["viewport"]["refinement_complete"]=viewport.environment_complete();
         report["viewport"]["shadow_generation"]=viewport.environment_shadow();
         report["viewport"]["history_reset"]=render::cloud_history_reset_name(viewport.environment_history().reset);
     }

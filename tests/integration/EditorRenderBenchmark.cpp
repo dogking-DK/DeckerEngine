@@ -67,7 +67,6 @@ int main(int argc,char** argv) {
                         Camera render_camera=camera;
                         if(sky_view) { render_camera.pan(0,2000.*height/720,height); render_camera.orbit(0,-160); }
                         render::EnvironmentRenderSettings settings; settings.mode=render::CloudRenderMode::temporal;
-                        settings.camera_revision=render_camera.revision();
                         const auto start=Clock::now();
                         worker.request({*model->snapshot(),render_camera,width,height,{},++sequence,1,settings});
                         bool first=true; Json sample={{"preset",name},{"frame",frame},{"publications",0}};
@@ -78,8 +77,10 @@ int main(int argc,char** argv) {
                                 require(result->pixels.size()==std::size_t(width)*height*4,"Incomplete image published");
                                 if(first) { sample["first_ms"]=elapsed(start); first=false; }
                                 sample["publications"]=sample["publications"].get<unsigned>()+1;
-                                if(!cloudy || result->warmup_frames==32) {
+                                if(result->refinement_complete) {
                                     sample["complete_ms"]=elapsed(start); sample["warmup_frames"]=result->warmup_frames;
+                                    sample["history_reused"]=result->history_reused; sample["refinement_target"]=result->refinement_target;
+                                    if(cloudy && frame) require(result->history_reused && result->warmup_frames==8,"Continuous camera request did not reuse history");
                                     if(profile) {
                                         require(result->gpu_profile.status()==graphics::GpuProfileStatus::ready && !result->gpu_profile.dropped_zones(),"Missing GPU profile");
                                         sample["frame_gpu"]=Json::array();

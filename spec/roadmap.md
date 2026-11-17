@@ -923,6 +923,8 @@ M23.1–13 原始范围不包含体素密度场 ray marching、透明体素、�
 
 ## 当前执行边界与下一步
 
+**2026-11-17 当前用户任务：云优化第一批。** 基于[0175实测](benchmarks/2026-11-16-environment-performance.md)，依次推进[0176预览历史与渐进调度](development/0176-cloud-preview-scheduling.md)、独立云分辨率档位、保守重建回退优化；三项各自定向真实GPU/质量/性能验收并独立提交。具体接口与门槛见[实施计划](design/render-clouds.md#第一批优化实施计划2026-11-17)。不重开已关闭M15/M23，也不扩展到路径介质或新的光照近似。
+
 M0–M6、M1.7 Memory/Tracy 补充均已完成。当前可运行的 CPU 链路包括
 Foundation、Scene 持久化、命令/事务、batch/stdio、资产导入/缓存与异步 CPU Ready。
 各小阶段的验收条件与证据入口见上表；历史测试计数保留在[开发记录](development/README.md)，不作为日常固定回归套件。

@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-11-16T17:15:31+08:00"
+updated_at: "2026-11-17T08:50:00+08:00"
 status: accepted
 ---
 
@@ -346,7 +346,8 @@ Camera 面板允许改 FOV/手动裁剪及导航偏好；编辑与模拟分别�
 
 Environment面板提供clear/sparse/overcast/sunset版本化预设和完整云物理参数。预设查询只填草稿，Apply仍是一次environment.set，Revert/guard冲突/Undo/Redo/保存重载共用原契约。
 会话区提供reference/temporal、固定时间与单步、云影开关/固定覆盖区，不保存到Scene。后台请求携带全部设置；结果包含实际生效时间、mode、history和shadow generation，旧请求的迟到结果不能覆盖新请求。
-temporal每个请求独立重置视图、固定时间；先发布首帧，再每4次更新发布一次，至32次结束。实际warmup随结果变化，一致性测试等待32次后与序列截图比较。
+0176调整temporal预览为跨请求复用完成历史、固定时间。普通相机revision仅用于请求身份，不作为显式camera cut；大幅跳转、投影/尺寸、场景/环境/质量/时间失效继续由管线验证。显式取消、文档切换、进入/离开未提交Gizmo预览额外拒绝旧历史。
+先发布完整首帧，空闲50ms后继续有界细化；冷历史或尚未完成冷细化时最多32次、复用已细化历史时最多8次额外更新，每4次及末帧发布。跨请求仅连续相机移动复用历史；同姿态owner重新提交保留冷历史确定性，避免撤销/重做或冻结capture受到之前细化次数影响。新请求/取消/退出唤醒等待，发布前再核对序号；完成GPU历史可以用于后续合法重投影，但迟到结果不能覆盖当前请求。结果携带实际warmup、目标和完成标记，调用者不再用固定32判定完成。独立冻结capture仍执行其显式warmup，不依赖编辑器历史。
 空气或云启用时均走后台环境路径。UI显示当前scene revision与结果设置，常规视口禁用超过4096像素的reference选择；底层接口仍明确拒绝越界，temporal供常规视口。外部环境修改、取消、退出延续单active/单replaceable队列与完整资源释放规则。
 
 ## M17.5 Scene media 与 Console
