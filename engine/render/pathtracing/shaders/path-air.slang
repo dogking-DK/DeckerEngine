@@ -97,6 +97,7 @@ float4 airMediumCoefficients(AirLocation a,uint channel,float rate) {
     if(any(!isfinite(c)) || any(c<0) || c.w>rate) airError(8);
     return c;
 }
+#include "path-majorant.slang"
 float3 airTangent(float3 axis) {
     // Match the CPU reference's unitOrthogonal frame (double dummy precision 1e-12).
     return abs(axis.x)>1e-12*abs(axis.z) || abs(axis.y)>1e-12*abs(axis.z) ?
@@ -163,16 +164,25 @@ float3 airOrigin(AirVertex vertex,float3 direction,out AirLocation location) {
 uint airFlight(RayDesc ray,AirLocation location,float3 segment,uint channel,uint pixel,uint sample,uint event,inout uint steps,out AirVertex vertex) {
     vertex=(AirVertex)0; uint counter=0; AirIntervals intervals=airIntervals(location,ray.Direction,segment);
     for(uint k=0;k<intervals.count;++k) {
-        float3 interval=intervals.segment[k]; float rate=interval.z!=0 ? parameters[30][channel] : parameters[20][channel];
-        if(rate==0) continue;
+        float3 interval=intervals.segment[k];
+#if DK_PATH_LOCAL_MAJORANTS
+        for(float begin=interval.x;begin<interval.y;) {
+        MediumMajorant local=mediumMajorant(location,ray.Direction,begin,interval.y,interval.z!=0,channel);
+        float rate=local.rate,t=begin,correction=0;
+        begin=local.end;
+#else
+        MediumMajorant local; local.end=interval.y;
+        float rate=interval.z!=0 ? parameters[30][channel] : parameters[20][channel];
         float t=interval.x,correction=0;
-        while(t<interval.y) {
+#endif
+        if(rate==0) { if(DK_PATH_LOCAL_MAJORANTS!=0 && !airStep(steps)) return 3; continue; }
+        while(t<local.end) {
             if(!airStep(steps)) return 3;
             uint at=counter++; float optical=airOpticalDistance(airRandom(pixel,sample,event,2,at));
-            if(optical>=(interval.y-t)*rate) break;
+            if(optical>=(local.end-t)*rate) break;
             float adjusted=optical/rate-correction,next=t+adjusted; correction=(next-t)-adjusted;
             if(next<t || !isfinite(next)) { airError(4); return 3; }
-            t=next; if(t>=interval.y) break;
+            t=next; if(t>=local.end) break;
             AirLocation point=airAlong(location,ray.Direction,t); float4 c=airMediumCoefficients(point,channel,rate);
             if(status[0]!=0) return 3;
             float choice=airRandom(pixel,sample,event,3,at)*rate,scattering=c.x+c.y+c.z;
@@ -182,6 +192,9 @@ uint airFlight(RayDesc ray,AirLocation location,float3 segment,uint channel,uint
             }
             if(choice<c.w) return 2;
         }
+#if DK_PATH_LOCAL_MAJORANTS
+        }
+#endif
     }
     return 0;
 }
@@ -199,20 +212,32 @@ float airVisibility(AirVertex v,float3 wi,uint light,float3 point,uint channel,u
     float3 segment=airSegment(location,ray.Direction,ray.TMax); if(segment.z!=0) return 0;
     float T=1; uint counter=0; AirIntervals intervals=airIntervals(location,ray.Direction,segment);
     for(uint k=0;k<intervals.count;++k) {
-        float3 interval=intervals.segment[k]; float rate=interval.z!=0 ? parameters[30][channel] : parameters[20][channel];
-        if(rate==0) continue;
+        float3 interval=intervals.segment[k];
+#if DK_PATH_LOCAL_MAJORANTS
+        for(float begin=interval.x;begin<interval.y;) {
+        MediumMajorant local=mediumMajorant(location,ray.Direction,begin,interval.y,interval.z!=0,channel);
+        float rate=local.rate,t=begin,correction=0;
+        begin=local.end;
+#else
+        MediumMajorant local; local.end=interval.y;
+        float rate=interval.z!=0 ? parameters[30][channel] : parameters[20][channel];
         float t=interval.x,correction=0;
-        while(t<interval.y) {
+#endif
+        if(rate==0) { if(DK_PATH_LOCAL_MAJORANTS!=0 && !airStep(steps)) return 0; continue; }
+        while(t<local.end) {
             if(!airStep(steps)) return 0;
             float optical=airOpticalDistance(airRandom(pixel,sample,event,stream,counter++));
-            if(optical>=(interval.y-t)*rate) break;
+            if(optical>=(local.end-t)*rate) break;
             float adjusted=optical/rate-correction,next=t+adjusted; correction=(next-t)-adjusted;
             if(next<t || !isfinite(next)) { airError(4); return 0; }
-            t=next; if(t>=interval.y) break;
+            t=next; if(t>=local.end) break;
             float extinction=airMediumCoefficients(airAlong(location,ray.Direction,t),channel,rate).w;
             if(status[0]!=0) return 0;
             T*=1-extinction/rate; if(T==0) return 0;
         }
+#if DK_PATH_LOCAL_MAJORANTS
+        }
+#endif
     }
     return T;
 }

@@ -32,6 +32,7 @@ struct PathTraceGpuMediumInfo {
     PathMediumSettings medium;
     VolumePathSettings settings; // max_tracking_steps is per dispatch (per tile in a progressive batch).
     std::uint64_t field_hash=0;
+    std::uint64_t tracking_steps=0; // Completed GPU work, including local interval exits.
 };
 struct RestirTemporalStatistics {
     std::uint64_t reused=0, rejected=0, expired=0, support_corrected=0;

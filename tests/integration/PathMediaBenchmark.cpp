@@ -8,8 +8,9 @@ namespace {
 std::string algorithm="classic", selected_case;
 unsigned quality_width=4,quality_height=4,quality_limit=16384,reference_n=16384;
 unsigned performance_samples=4,preview_width=96,preview_height=54;
-unsigned submission_tiles=1;
+unsigned submission_tiles=1,warmup_samples=0;
 std::filesystem::path linear_directory;
+bool density_culling=true,local_majorants=false;
 bool skip_reference=false,timing_quality=false,full_preview=false;
 std::optional<RestirDiSettings> restir_config() {
     if(algorithm=="classic") return {};
@@ -41,7 +42,7 @@ void save_linear(const PathTraceGpuImage& value,const std::string& name,Json& ro
     row["source"]={{"sampling_first_epoch",info.sampling_first_epoch},{"empty_history",!info.temporal_history_epoch},
         {"restir",restir_json(info.restir)},{"samples",info.samples.count},
         {"history_epoch",info.temporal_history_epoch ? Json(*info.temporal_history_epoch) : Json(nullptr)},
-        {"rays",info.statistics.rays},{"tracking_steps",nullptr},
+        {"rays",info.statistics.rays},{"tracking_steps",info.medium ? Json(info.medium->tracking_steps) : Json(nullptr)},
         {"temporal_reused",info.temporal_statistics.reused},{"temporal_rejected",info.temporal_statistics.rejected},
         {"temporal_expired",info.temporal_statistics.expired},{"temporal_support_corrected",info.temporal_statistics.support_corrected},
         {"temporal_max_age",info.temporal_statistics.max_age},{"temporal_max_candidates",info.temporal_statistics.max_candidates},
@@ -105,7 +106,7 @@ RenderView view(const RenderScene& scene,const Case& c,unsigned w,unsigned h,dou
     return take(RenderView::create(scene,{w,h,0,look(c.eye+Vec3d{shift,0,0},c.target+Vec3d{shift,0,0}),projection.projection(double(w)/h)}));
 }
 VolumePathSettings volume(unsigned seed=101) {
-    VolumePathSettings s; s.seed=seed; s.max_bounces=4; s.rr_start=3; s.environment_rgb={.3,.4,.6}; s.sun=true;
+    VolumePathSettings s; s.gpu_density_culling=density_culling; s.gpu_local_majorants=local_majorants; s.seed=seed; s.max_bounces=4; s.rr_start=3; s.environment_rgb={.3,.4,.6}; s.sun=true;
     s.max_tracking_steps=1ull<<28; return s;
 }
 PathTraceSettings surface(unsigned seed=101) {
@@ -212,13 +213,15 @@ void run(const std::filesystem::path& root,const std::filesystem::path& shaders,
                         }
                         // Independent classic reference, never a reused candidate chain.
                         const auto saved_algorithm=algorithm; algorithm="classic";
+                        const bool saved_culling=density_culling,saved_majorants=local_majorants;
+                        density_culling=false; local_majorants=false;
                         for(unsigned target:skip_reference ? std::vector<unsigned>{} : std::vector<unsigned>{reference_n,4*reference_n}) {
                             schedule.target_spp=target; configure(r,q,gpu,m,v,c.surface,104729+101+7919*i,schedule); advance_quality(r,q);
                             auto value=read_image(q,take(r.completed_frame(1).read_linear(q)));
                             auto& reference=row[target==reference_n ? "reference_n" : "reference_4n"]; reference=image(value);
                             save_linear(value,std::string{c.name}+"-reference-seed"+std::to_string(i)+"-spp"+std::to_string(target),reference);
                         }
-                        algorithm=saved_algorithm;
+                        algorithm=saved_algorithm; density_culling=saved_culling; local_majorants=saved_majorants;
                         check(r.release_view(1));
                         std::printf("quality %s %s seed %u complete\n",c.name,algorithm.c_str(),i); std::fflush(stdout);
                         item["seeds"].push_back(std::move(row));
@@ -226,6 +229,13 @@ void run(const std::filesystem::path& root,const std::filesystem::path& shaders,
                 } else {
                     const unsigned w=smoke ? 96 : 640,h=smoke ? 54 : 360; const auto v=view(scene,c,w,h);
                     item["width"]=w; item["height"]=h; item["frames"]=Json::array();
+                    // Reuse a bounded sample prefix during warmup; every measured chain starts at zero.
+                    for(unsigned sample=0;sample<warmup_samples;++sample) {
+                        PathTraceSchedule warm; warm.target_spp=sample%16+1; warm.tile_edge=edge;
+                        configure(r,q,gpu,m,v,c.surface,101,warm); auto warmed=advance(r,q,1,false);
+                        if(sample==0) item["first_warmup_ms"]=warmed["wall_ms"];
+                        if(sample%16==15 || sample+1==warmup_samples) check(r.release_view(1));
+                    }
                     for(unsigned target=1;target<=(smoke ? 2u : performance_samples);++target) {
                         PathTraceSchedule schedule; schedule.target_spp=target; schedule.tile_edge=edge;
                         configure(r,q,gpu,m,v,c.surface,101,schedule); auto frame=advance(r,q,1,true); frame["memory"]=memory(r,q);
@@ -282,7 +292,10 @@ int main(int argc,char** argv) {
         bool quality=false,smoke=false; unsigned edge=64;
         for(int i=1;i<argc;++i) {
             std::string_view option=argv[i];
-            if(option=="--quality") quality=true; else if(option=="--smoke") smoke=true;
+            if(option=="--no-density-culling") density_culling=false;
+            else if(option=="--no-local-majorants") local_majorants=false;
+            else if(option=="--local-majorants") local_majorants=true;
+            else if(option=="--quality") quality=true; else if(option=="--smoke") smoke=true;
             else if(option=="--timing-quality") { quality=true; timing_quality=true; }
             else if(option=="--root" && i+1<argc) root=argv[++i]; else if(option=="--output" && i+1<argc) report=argv[++i];
             else if(option=="--shaders" && i+1<argc) shaders=argv[++i]; else if(option=="--tile" && i+1<argc) edge=unsigned(std::stoul(argv[++i]));
@@ -293,6 +306,7 @@ int main(int argc,char** argv) {
             else if(option=="--quality-height" && i+1<argc) quality_height=unsigned(std::stoul(argv[++i]));
             else if(option=="--quality-limit" && i+1<argc) quality_limit=unsigned(std::stoul(argv[++i]));
             else if(option=="--reference-n" && i+1<argc) reference_n=unsigned(std::stoul(argv[++i]));
+            else if(option=="--warmup-samples" && i+1<argc) warmup_samples=unsigned(std::stoul(argv[++i]));
             else if(option=="--performance-samples" && i+1<argc) performance_samples=unsigned(std::stoul(argv[++i]));
             else if(option=="--skip-reference") skip_reference=true;
             else if(option=="--full-preview") { preview_width=640; preview_height=360; full_preview=true; }
@@ -307,11 +321,13 @@ int main(int argc,char** argv) {
         output["quality_extent"]={quality_width,quality_height}; output["quality_limit"]=quality_limit;
         output["reference_n"]=reference_n; output["preview_extent"]={preview_width,preview_height};
         output["initial_candidates"]=algorithm=="classic" ? 0 : 8;
+        require(warmup_samples<=4096,"Invalid warmup count"); output["warmup_samples"]=warmup_samples;
         require(submission_tiles>=1 && submission_tiles<=8,"Invalid submission group size"); output["tiles_per_submission"]=submission_tiles;
         output["restir"]=restir_json(restir_config()); output["timing_quality"]=timing_quality;
         output["quality_wait"]="active_poll_1ms_then_block";
         output["skip_reference"]=skip_reference; output["performance_samples"]=performance_samples;
-        output["reconstruction"]="none"; output["tracking_observation"]="unavailable in GPU image diagnostics";
+        output["reconstruction"]="none"; output["tracking_observation"]="completed cumulative GPU tracking work including local interval exits";
+        output["medium_acceleration"]={{"density_culling",density_culling},{"local_majorants",local_majorants}};
         require(!root.empty() && !report.empty() && edge>0 && edge<=256,"Root/output/tile required"); std::filesystem::create_directories(report.parent_path());
         output.update({{"kind",quality ? "quality" : "performance"},{"validation",(quality && !timing_quality) || smoke},{"smoke",smoke},{"tile",edge},
             {"model",4},{"sampler",2},{"time",17},{"bounces",4},{"configuration",DK_BENCH_CONFIG}});

@@ -11,6 +11,8 @@ struct VolumePathSettings {
     std::uint32_t max_bounces=8, rr_start=3; // Counts surface and real medium scatter; 0 disables RR.
     Vec3d environment_rgb=Vec3d::Zero(); // Distant boundary radiance, excludes the sun.
     bool sun=true;
+    // GPU acceleration policy; the independent CPU oracle retains global tracking.
+    bool gpu_density_culling=true, gpu_local_majorants=false; // Piecewise tracking is experimental.
     PathTraceEstimator estimator=PathTraceEstimator::mis;
     // max_triangle_tests bounds triangle tests plus sparse voxel region visits on CPU.
     std::uint64_t max_rays=1ull<<24, max_triangle_tests=1ull<<29, max_tracking_steps=1ull<<26;

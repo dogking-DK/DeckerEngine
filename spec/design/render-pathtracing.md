@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-11-12T18:22:13+08:00"
+updated_at: "2026-11-17T13:37:55+08:00"
 status: accepted
 ---
 
@@ -236,6 +236,7 @@ GPU额度/取消/迟到/错误候选/外部owner寿命，required RT与validatio
 原air入口继续明确拒绝clouds.enabled；统一结果字段改为info.medium，记录完整环境/介质/体积设置及field_hash。
 PathMediumSnapshot只读公开已有CloudFieldData owner；不增加生成职责或GPU依赖。
 GPU把原始RG8/R8场压入一个uint storage buffer并显式执行repeat线性插值，复用CPU texel中心与密度公式。
+0180在同一buffer末尾附加edge=8的weather/base字节最大值，覆盖完整repeat插值支撑与边界halo。默认用保守局部上界粗筛、天气/高度及base非正剔除省略精细查询，保留原随机序列；`gpu_local_majorants=false`默认关闭分段实验，CPU参考保持全局上界。无有效云直接复用原程序，变体惰性缓存且创建完整后发布；两策略进入Classic/ReSTIR历史身份。
 选择buffer是为了统一AllocationBudget及CPU/GPU插值精度，不借M15光照/重建历史，也不要求新纹理功能。
 renderer保留最近成功使用的场，并检查视图/在途owner，按不可变key及hash复用；视图持有旧场，提交由queue保活buffer。
 上传候选使用renderer工厂；成功submit/configure后才替换缓存。失败保留旧缓存/视图/完成帧，候选全部计费。
@@ -765,3 +766,17 @@ Editor Scene media 与固定 capture 直接调用 configure_medium_view，表面
 当前候选目标仍为预览/取消p95<=100ms、tile p95<=8ms。未达时保留具体缺口与测量尺度，不能以旧图呈现冒充新视角完成。
 
 复现入口见[介质性能指南](../guides/path-media-benchmark.md)。
+
+
+## 0180 日落介质密度查询优化与分段实验
+
+GPU策略使用惰性编译的独立着色器变体，避免未启用局部上界的路径承担分支及寄存器压力。变体全部创建成功后才放入renderer缓存；纹理容量变化后失效，在途提交继续持有已有资源。冷启动编译时间与稳态每spp耗时分开报告；策略变化重置累积历史，不更改物理模型或CPU参考。
+
+已先冻结并完成改动前Sponza低太阳三轮真实GPU基线，再实现查询剔除与局部保守上界。默认启用查询粗筛及严格零剔除；分段重采样通过数值检查但性能未通过，默认关闭。最终三轮日落GPU每spp减少11.28%，云内减少22.44%，厚云增加2.30%；原始证据、长链未收敛与既有数值域限制见[0180](../development/0180-path-medium-majorants.md)及[报告](../benchmarks/2026-11-17-path-medium-optimization.md)。保持model4、物理介质、spp、反弹、曝光和场纹理，CPU参考维持原全局上界算法；局部上界会改变随机候选位置，不能要求它与旧估计器逐样本相同。
+
+- 零剔除：天气/纵向轮廓证明密度为零时不读base/detail，base整形值非正时不读detail；关闭分段重采样时沿用旧随机序列，检查线性均值/二阶矩绝对差≤1e-6。
+- 局部上界也用于单点密度查询前的粗筛：先读取包含插值支撑的weather/base最大值，只有保守整形上界非正才返回零；正值仍查询原连续场。这样使用局部空间信息仍保留原全局追踪随机序列。分段重采样若未通过性能门槛，保留显式原生实验开关并默认关闭，不影响已验收的查询粗筛。
+- 局部上界：不可变云GPU owner附加weather/base粗格最大值，覆盖repeat三线性/双线性插值的完整texel支撑及边界保护，不使用随意稀疏点采样最大值。场内容相同则复用，与太阳/时间/覆盖率/密度无关。GPU沿粗格边界拆分主路径与NEE追踪区间，采用weather覆盖上界、base最大值与高度轮廓上界；detail侵蚀可忽略以保持保守。空气使用区间最低高度和吸收层最大值构造解析上界；对浮点边界和大位移设置保守余量/全局回退。
+- 每个区间仍采用analog delta tracking和ratio tracking；边界穿越也必须有界计费，预算耗尽/无进展/消光超上界继续拒绝整个候选，不截断或夹小概率。GPU策略开关用于原生A/B，查询剔除默认启用，分段实验默认关闭；均参与渐进历史身份和来源，不混用异策略样本。
+- 新字段/上界buffer由PathTraceRenderer现有cache、AllocationBudget和在途owner管理，候选完成准入后才发布；失败保留旧缓存/完成代次，旧owner可读。无新持久Scene字段、第三方依赖或UI质量档。
+- 验收：CPU上界包含性、GPU数值/统计参考（8 seed、均值误差≤2%且≤5联合标准误差+1e-4；参考N/4N≤0.5%）、解析透射、云下/内/上、低太阳/切线/周期/零云；同策略batch/tile一致及失败预算/缓存寿命，四DI和mesh/voxel介质直接回归。先测日落，再扩展空气/厚云/云内回归，三轮同输入GPU每spp/逐tile/查询工作量，质量未收敛的时间明确记null，不放宽门槛。

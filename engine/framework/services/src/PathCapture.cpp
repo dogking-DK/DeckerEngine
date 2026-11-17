@@ -23,7 +23,7 @@ std::string fingerprint(const std::filesystem::path& directory,bool restir,bool 
         const auto bytes=take(read_file_bytes(root/name));
         for(auto b:bytes) { hash^=std::to_integer<unsigned char>(b); hash*=1099511628211ull; }
     };
-    for(const auto* name:{"pathtrace.slang","pathtrace-empty.slang","path-bsdf.slang","path-accumulate.slang","pathtrace-tone.slang","path-air.slang","path-air-empty.slang","path-cloud.slang"}) append(directory,name);
+    for(const auto* name:{"pathtrace.slang","pathtrace-empty.slang","path-bsdf.slang","path-accumulate.slang","pathtrace-tone.slang","path-air.slang","path-air-empty.slang","path-cloud.slang","path-majorant.slang"}) append(directory,name);
     if(restir) {
         // Stable relative names, never absolute build-machine paths. Cover the complete
         // private shader dependency closure, including the pinned SDK header contents.

@@ -19,9 +19,17 @@ CloudPopulation cloud_population(PathTraceRenderer& r,SubmissionQueue& q,const P
     const PathTraceRay& ray,VolumePathSettings s,unsigned samples,unsigned pixels,const Vec3d* expected=nullptr) {
     CloudPopulation result; std::array<Vec3d,8> values,reference; double difference=0,energy=0;
     for(unsigned seed=0;seed<8;++seed) {
-        s.seed=101+7919*seed; auto image=cloud_image(r,q,scene,m,s,samples,ray,pixels); values[seed].setZero(); reference[seed].setZero();
+        s.seed=101+7919*seed; values[seed].setZero(); reference[seed].setZero();
+        std::vector<Vec3d> colors(pixels,Vec3d::Zero()); const std::vector<PathTraceRay> rays(pixels,ray);
+        // Preserve all global sample numbers while bounding low-occupancy reference dispatches.
+        const unsigned batch=s.gpu_local_majorants ? 256u : samples;
+        for(unsigned first=0;first<samples;first+=batch) {
+            const unsigned count=std::min(batch,samples-first);
+            const auto image=complete(q,take(r.submit_medium_rays(q,scene,m,rays,s,{first,count})));
+            for(unsigned pixel=0;pixel<pixels;++pixel) colors[pixel]+=image.linear_rgb()[pixel]*(double(count)/samples);
+        }
         for(unsigned pixel=0;pixel<pixels;++pixel) {
-            const auto value=image.linear_rgb()[pixel]; values[seed]+=value/double(pixels);
+            const auto value=colors[pixel]; values[seed]+=value/double(pixels);
             Vec3d target;
             if(expected) target=*expected;
             else {
@@ -147,19 +155,22 @@ void cloud_surface(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQu
     require(lit.mean.maxCoeff()>1e-3,"cloud scattering geometry shadow fixture unlit");
     std::puts("cloud solar shadow/geometry occlusion at surface and volume/mask/GGX reflection=pass");
 }
-void cloud_progressive(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q) {
+void cloud_progressive(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q,bool local=false) {
     Fixture f{heap}; auto e=cloud_environment(); f.document->set_environment(e).value(); auto gpu=take(r.prepare_scene(q,f.scene()));
     CloudFieldCache cache; auto fields=take(cache.prepare(e.clouds)); PathMediumSettings ms; ms.time_seconds=23;
     auto m=take(PathMediumSnapshot::create(e,ms,fields)); auto description=f.view(f.source(),7).description();
     Trsd camera; camera.translation={700,2000,-500}; description.camera_world=take(Transformd::from_trs(camera)); auto view=take(RenderView::create(f.source(),description)); const auto initialView=view;
-    auto s=air_settings(4); s.environment_rgb={.2,.4,.6}; s.sun=true;
+    auto s=air_settings(4); s.environment_rgb={.2,.4,.6}; s.sun=true; s.gpu_local_majorants=local;
     auto once=complete(q,take(r.submit_medium_view(q,gpu,m,view,s,{0,19})));
-    const auto reference=take(render_volume_path_reference(heap,gpu.source(),m,view,s,{0,19}));
-    for(std::size_t i=0;i<once.linear_rgb().size();++i) close_color(once.linear_rgb()[i],reference.linear_rgb()[i],2e-4);
+    if(!local) {
+        const auto reference=take(render_volume_path_reference(heap,gpu.source(),m,view,s,{0,19}));
+        for(std::size_t i=0;i<once.linear_rgb().size();++i) close_color(once.linear_rgb()[i],reference.linear_rgb()[i],2e-4);
+    }
     PathTraceSchedule schedule; schedule.target_spp=19;
     for(unsigned batch:{3,7,16}) {
         schedule.batch_spp=batch; schedule.tile_edge=batch==3 ? 4 : 2;
-        check(r.configure_medium_view(q,1,gpu,m,view,s,schedule)); compare_images(finish_view(r,q,1),once,0); check(r.release_view(1));
+        check(r.configure_medium_view(q,1,gpu,m,view,s,schedule)); auto batched=finish_view(r,q,1); compare_images(batched,once,0);
+        require(batched.info().medium->tracking_steps==once.info().medium->tracking_steps,"tracking counter depends on batching"); check(r.release_view(1));
     }
     check(r.configure_medium_view(q,1,gpu,m,view,s,schedule)); auto old=finish_view(r,q,1); auto held=r.completed_frame(1);
     const auto generation=take(r.status(1)).generation; schedule.target_spp=20; schedule.exposure=2;
@@ -181,14 +192,23 @@ void cloud_progressive(memory::ResourceHandle heap,PathTraceRenderer& r,Submissi
     const auto both=r.memory_stats(q).owned.current; PathMediumSettings oldTime; oldTime.time_seconds=26;
     check(r.configure_medium_view(q,1,gpu,take(PathMediumSnapshot::create(m.environment(),oldTime,fields)),initialView,s,schedule));
     require(r.memory_stats(q).owned.current<=both,"wind edit duplicated a field still owned by another generation");
+    if(local) {
+        check(r.configure_medium_view(q,1,gpu,m,initialView,s,schedule));
+        const auto previous=take(r.status(1)).generation;
+        s.gpu_local_majorants=false; check(r.configure_medium_view(q,1,gpu,m,initialView,s,schedule));
+        require(take(r.status(1)).generation!=previous && take(r.status(1)).completed_spp==0,"local policy retained incompatible history");
+        const auto culling_generation=take(r.status(1)).generation;
+        s.gpu_density_culling=false; check(r.configure_medium_view(q,1,gpu,m,initialView,s,schedule));
+        require(take(r.status(1)).generation!=culling_generation,"culling policy retained incompatible history");
+    }
     check(r.release_view(1)); check(r.release_view(2));
     std::puts("cloud exact batches/tiles/wind reset/reuse/new field/late completion/old frame=pass");
 }
-void cloud_failure(memory::ResourceHandle heap,SubmissionQueue& q) {
+void cloud_failure(memory::ResourceHandle heap,SubmissionQueue& q,bool local=false) {
     auto r=take(PathTraceRenderer::create(heap,q,DK_PATH_SHADER_DIR,{},1u<<20)); Fixture f{heap}; auto e=cloud_environment();
     f.document->set_environment(e).value(); auto gpu=take(r.prepare_scene(q,f.scene())); CloudFieldCache cache;
     auto fields=take(cache.prepare(e.clouds)); auto m=take(PathMediumSnapshot::create(e,{},fields)); auto view=f.view(f.source(),4);
-    auto s=air_settings(3); s.environment_rgb=Vec3d::Ones(); PathTraceSchedule schedule; schedule.target_spp=2; schedule.batch_spp=2;
+    auto s=air_settings(3); s.gpu_local_majorants=local; s.environment_rgb=Vec3d::Ones(); PathTraceSchedule schedule; schedule.target_spp=2; schedule.batch_spp=2;
     check(r.configure_medium_view(q,1,gpu,m,view,s,schedule)); auto old=finish_view(r,q,1); auto held=r.completed_frame(1);
     const auto generation=take(r.status(1)).generation; schedule.target_spp=4; auto low=s; low.max_tracking_steps=1;
     check(r.configure_medium_view(q,1,gpu,m,view,low,schedule)); take(r.submit_batch(q,1)); q.device().logical_device().waitIdle();

@@ -45,7 +45,7 @@ void voxel_medium_schedule(memory::ResourceHandle heap,PathTraceRenderer& r,Subm
     for(int x=-2;x<3;++x) blocks.push_back({{x,0,0},1,1+x%2*(x>0 ? 1 : -1)}); f.grid(blocks);
     f.quad(-4,4,-1,{.2f,.6f,.4f}); auto e=path_voxel_test::medium_environment(4); check(f.document->set_environment(e));
     CloudFieldCache cache; const auto m=voxel_medium(e,cache); const auto gpu=take(r.prepare_scene(q,f.scene()));
-    auto s=air_settings(3); s.environment_rgb={.7,.8,.9};
+    auto s=air_settings(3); s.gpu_local_majorants=true; s.environment_rgb={.7,.8,.9};
     for(bool ortho:{false,true}) for(unsigned mode=0;mode<5;++mode) {
         auto view=voxel_signal_view(f,ortho,.5,4);
         if(ortho) {auto lens=view.description(); lens.projection=take(orthographic_projection({.4,.1,10},1)); view=take(RenderView::create(f.source(),lens));}

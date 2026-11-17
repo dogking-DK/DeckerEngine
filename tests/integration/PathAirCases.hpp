@@ -9,7 +9,8 @@ EnvironmentDescription air_environment(double extinction=2e-5,double scattering=
     a.mie_anisotropy=0; a.ground_albedo={0,0,0}; return e;
 }
 VolumePathSettings air_settings(unsigned depth=1) {
-    VolumePathSettings s; s.max_bounces=depth; s.rr_start=0; s.sun=false; return s;
+    VolumePathSettings s; s.gpu_local_majorants=false; // Preserve the paired CPU/global random-sequence oracle.
+    s.max_bounces=depth; s.rr_start=0; s.sun=false; return s;
 }
 PathTraceGpuImage air_image(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& scene,const PathMediumSnapshot& m,
     VolumePathSettings s,unsigned samples,const PathTraceRay& ray,unsigned pixels=1) {

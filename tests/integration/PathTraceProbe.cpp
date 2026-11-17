@@ -302,6 +302,7 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
 #endif
 #include "PathAirCases.hpp"
 #include "PathCloudCases.hpp"
+#include "PathMediumAccelerationCases.hpp"
 #include "PathOrthographicCases.hpp"
 #include "PathRestirCases.hpp"
 #include "PathTemporalCases.hpp"
@@ -376,6 +377,8 @@ int main(int argc,char** argv) {
               else if(mode=="restir_state") restir_state(memory.heap,renderer,queue);
               else if(mode=="orthographic") orthographic(memory.heap,renderer,queue);
               else if(mode=="orthographic_medium") orthographic_medium(memory.heap,renderer,queue);
+              else if(mode=="medium_acceleration_state") { cloud_progressive(memory.heap,renderer,queue,true); cloud_failure(memory.heap,queue,true); }
+              else if(mode=="medium_acceleration") medium_acceleration(memory.heap,renderer,queue);
               else if(mode=="cloud_numeric") cloud_numeric(memory.heap,renderer,queue);
               else if(mode=="cloud_statistics") cloud_statistics(memory.heap,renderer,queue);
               else if(mode=="cloud_surface") cloud_surface(memory.heap,renderer,queue);

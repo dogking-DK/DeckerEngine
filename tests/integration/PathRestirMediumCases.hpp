@@ -214,7 +214,7 @@ void restir_medium_state(memory::ResourceHandle heap,PathTraceRenderer& r,Submis
     check(r.configure_medium_view(q,123,rebound,light,light_view,s,schedule)); require(!r.completed_frame(123),"classic medium retained RIS result");
     require(!finish_view(r,q,123).info().restir,"classic medium incorrectly reports RIS");
     check(r.configure_restir_medium_view(q,123,rebound,light,light_view,s,ris,schedule)); require(!r.completed_frame(123),"RIS retained classic result"); finish_view(r,q,123);
-    for(unsigned change=0;change<9;++change) {
+    for(unsigned change=0;change<11;++change) {
         check(r.configure_restir_medium_view(q,123,rebound,light,light_view,s,ris,schedule)); finish_view(r,q,123);
         auto path=s; auto config=ris; auto scheduling=schedule; auto d=light_view.description(); auto medium_settings=ms;
         if(change==0) d.projection(0,0)*=1.1;
@@ -226,6 +226,8 @@ void restir_medium_state(memory::ResourceHandle heap,PathTraceRenderer& r,Submis
         if(change==6) ++scheduling.session;
         if(change==7) ++scheduling.gesture;
         if(change==8) medium_settings.cloud_albedo=.5;
+        if(change==9) path.gpu_density_culling=!path.gpu_density_culling;
+        if(change==10) path.gpu_local_majorants=!path.gpu_local_majorants;
         auto input=take(PathMediumSnapshot::create(e,medium_settings,fields)); auto lens=take(RenderView::create(f.source(),d));
         check(r.configure_restir_medium_view(q,123,rebound,input,lens,path,config,scheduling));
         require(!r.completed_frame(123),"physical or sampling edit retained medium radiance");

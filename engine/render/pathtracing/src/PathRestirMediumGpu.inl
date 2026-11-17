@@ -67,7 +67,8 @@ Result<void> PathTraceRenderer::configure_restir_medium_view(SubmissionQueue& qu
         if(previous.medium && same_restir(previous.restir,restir) && previous.scene==scene.state_ &&
             previous.medium->environment()==medium.environment() && previous.medium->settings()==medium.settings() &&
             previous.medium->field_hash()==medium.field_hash() && a.width==d.width && a.height==d.height && a.projection==d.projection &&
-            same_integrator(previous.settings,common) && previous.schedule.session==schedule.session && previous.schedule.gesture==schedule.gesture) {
+            same_integrator(previous.settings,common) && previous.medium_settings.gpu_density_culling==settings.gpu_density_culling &&
+            previous.medium_settings.gpu_local_majorants==settings.gpu_local_majorants && previous.schedule.session==schedule.session && previous.schedule.gesture==schedule.gesture) {
             if(a.camera_world.matrix()==d.camera_world.matrix()) {
                 if(std::uint64_t(previous.epoch_origin)+schedule.target_spp>std::numeric_limits<std::uint32_t>::max())
                     throw path_invalid("Medium RIS epoch counter overflow");

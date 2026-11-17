@@ -1,3 +1,4 @@
+#include "../../engine/render/pathtracing/src/CloudMajorants.hpp"
 #include <dk/render/PathMediumReference.hpp>
 #if DK_PATH_MEDIUM_CLOUD_REFERENCE
 #include <dk/render/CloudReference.hpp>
@@ -180,3 +181,29 @@ TEST_CASE("medium real cloud transmission agrees with independent M15 reference 
     }
 }
 #endif
+
+
+TEST_CASE("medium brick maxima bound interpolation and repeat halo") {
+    auto e=clouds(); e.clouds.weather_resolution=e.clouds.base_resolution=64;
+    CloudFieldCache cache; const auto field=cache.prepare(e.clouds); REQUIRE(field);
+    std::vector<std::uint32_t> packed(((*field)->bytes()+detail::cloud_bound_bytes((*field)->key())+3)/4);
+    detail::pack_cloud_bounds(**field,packed);
+    auto byte=[&](std::size_t index) { return double((packed[index/4]>>((index%4)*8))&255u)/255.; };
+    std::size_t offset=(*field)->bytes(); std::uint32_t random=12345;
+    for(const auto kind:{CloudField::weather,CloudField::base}) {
+        const bool volume=kind==CloudField::base; const unsigned n=64,coarse=detail::cloud_bound_size(n),edge=n/coarse,channels=volume ? 1 : 2;
+        for(unsigned z=0;z<(volume ? coarse : 1u);++z) for(unsigned y=0;y<coarse;++y) for(unsigned x=0;x<coarse;++x)
+        for(unsigned sample=0;sample<257;++sample) {
+            EnvironmentVector uv{};
+            for(unsigned axis=0;axis<3;++axis) {
+                random=random*1664525u+1013904223u;
+                const double fraction=sample<2 ? double(sample) : double(random)/4294967296.;
+                const unsigned index=axis==0 ? x : axis==1 ? y : z;
+                uv[axis]=(index*edge-.125+fraction*(edge+.25))/n-2;
+            }
+            const auto value=(*field)->sample(kind,uv); REQUIRE(value);
+            for(unsigned c=0;c<channels;++c) REQUIRE((*value)[c]<=byte(offset+(x+coarse*(y+(volume ? coarse*z : 0)))*channels+c)+1e-12);
+        }
+        offset+=coarse*coarse*(volume ? coarse : 1)*channels;
+    }
+}
