@@ -14,6 +14,7 @@
 #endif
 #ifdef DK_EDITOR_PATHTRACING
 #include "PathSmoke.hpp"
+#include "MediaMotionProbe.hpp"
 #include "ViewportCommandSmoke.hpp"
 #include "CameraCommandSmoke.hpp"
 #include "ConsoleWorkflowSmoke.hpp"
@@ -66,7 +67,7 @@ void write_capture(const std::filesystem::path& output,const graphics::ReadbackR
 }
 int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory::ResourceHandle heap,Diagnostics& diagnostics) {
     if(options.voxel_path_smoke || options.voxel_workflow_smoke || options.smoke || options.settings_help_smoke || options.console_workflow_smoke) std::setvbuf(stdout,nullptr,_IONBF,0); // Preserve the last acceptance stage on native crashes.
-    const bool path_acceptance=options.voxel_path_smoke || options.pathtrace_smoke || options.desktop_render_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke;
+    const bool path_acceptance=options.voxel_path_smoke || options.pathtrace_smoke || options.desktop_render_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke || options.media_motion_probe;
     if ((options.voxel_workflow_smoke || path_acceptance || options.settings_help_smoke || options.smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || options.simulation_response_probe) && !std::filesystem::is_regular_file(options.root/".dk-editor-smoke"))
         throw std::runtime_error("--smoke requires a disposable project with .dk-editor-smoke marker");
     ShutdownProbe shutdown{options.simulation_response_probe};
@@ -90,9 +91,9 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     device.validation=options.validation ? graphics::ValidationMode::required : options.disable_validation ?
         graphics::ValidationMode::disabled : default_validation;
 #ifdef DK_EDITOR_PATHTRACING
-    device.ray_tracing=(options.pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke) ? graphics::RayTracingMode::required : graphics::RayTracingMode::if_available;
+    device.ray_tracing=(options.pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke || options.media_motion_probe) ? graphics::RayTracingMode::required : graphics::RayTracingMode::if_available;
     if(options.voxel_path_smoke) device.ray_tracing=options.voxel_path_no_rt ? graphics::RayTracingMode::disabled : graphics::RayTracingMode::required;
-    device.sampled_image_indexing=(options.voxel_path_smoke || options.pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke) ? graphics::SampledImageIndexingMode::required : graphics::SampledImageIndexingMode::if_available;
+    device.sampled_image_indexing=(options.voxel_path_smoke || options.pathtrace_smoke || options.viewport_command_smoke || options.camera_command_smoke || options.console_workflow_smoke || options.media_motion_probe) ? graphics::SampledImageIndexingMode::required : graphics::SampledImageIndexingMode::if_available;
 #endif
     device.diagnostic_sink=diagnostic; device.diagnostic_user_data=&diagnostics;
 #if defined(DK_SIMULATION_GPU) || defined(DK_EDITOR_PATHTRACING)
@@ -123,7 +124,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     ShutdownPhase gui_phase{shutdown,"gui"};
     GuiRenderer gui{queue,window};
     ShutdownPhase viewport_phase{shutdown,"viewport"};
-    Viewport viewport{memory,heap,queue,device,options.voxel_workflow_smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || path_acceptance};
+    Viewport viewport{memory,heap,queue,device,options.voxel_workflow_smoke || options.consistency_smoke || options.environment_consistency_smoke || options.simulation_consistency_smoke || (path_acceptance && !options.media_motion_probe)};
     check(model->attach_editor_viewport({viewport.path_unavailable().empty(),viewport.path_unavailable()},options.fixture_camera));
     model->editor_viewport()->frame_bounds([&](EntityId entity,DocumentId document,std::uint64_t revision)->Result<geometry::Bounds> {
         const auto* snapshot=model->snapshot();
@@ -161,6 +162,8 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
     if (options.simulation_consistency_smoke) simulation_consistency.emplace(options.root);
 #ifdef DK_EDITOR_PATHTRACING
     std::optional<PathSmoke> path_smoke;
+    std::optional<MediaMotionProbe> media_probe;
+    if(options.media_motion_probe) media_probe.emplace(options.root);
     std::optional<ViewportCommandSmoke> viewport_smoke;
     std::optional<CameraCommandSmoke> camera_smoke;
     std::optional<ConsoleWorkflowSmoke> workflow_smoke;
@@ -210,6 +213,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
 #endif
 #ifdef DK_EDITOR_PATHTRACING
                 if(path_smoke) path_smoke->input(ui,*model,viewport,window);
+                if(media_probe) media_probe->input(ui,*model,viewport,window);
                 if(viewport_smoke) viewport_smoke->input(ui,*model);
                 if(camera_smoke) camera_smoke->input(ui,*model);
                 if(workflow_smoke) workflow_smoke->input(ui,*model);
@@ -228,6 +232,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
             const bool finish_requested=
 #ifdef DK_EDITOR_PATHTRACING
                 (path_smoke && path_smoke->done()) ||
+                (media_probe && media_probe->done()) ||
                 (workflow_smoke && workflow_smoke->done()) ||
 #endif
                 (settings_smoke && settings_smoke->done()) || (options.smoke && smoke.done()) || (consistency && consistency->done()) ||
@@ -250,6 +255,7 @@ int session(const WorkbenchOptions& options,memory::MemorySystem& memory,memory:
             if (simulation_consistency) simulation_consistency->presented(*model,ui,viewport);
 #ifdef DK_EDITOR_PATHTRACING
             if(path_smoke) path_smoke->presented(*model,ui,viewport);
+            if(media_probe) media_probe->presented(ui,viewport);
             if(viewport_smoke) viewport_smoke->presented(ui,*model,viewport);
             if(camera_smoke) camera_smoke->presented(ui,*model,viewport);
             if(workflow_smoke) workflow_smoke->presented(ui,*model,viewport);

@@ -177,7 +177,7 @@ void PathPreview::run(std::stop_token stop) {
                 settings.surface_only=active->settings.surface_only;
                 render::PathTraceSchedule schedule; schedule.session=session; schedule.target_spp=active->settings.target; schedule.gesture=active->preview;
                 // Publish a complete RGB cycle; submit_batch clamps the final batch to the target.
-                schedule.batch_spp=active->settings.scene_media ? 3u : 1u;
+                schedule.batch_spp=active->settings.scene_media && !active->legacy_media_probe ? 3u : 1u;
                 schedule.tile_edge=256;
                 schedule.tiles_per_submission=4;
                 schedule.paused=active->settings.paused; schedule.exposure=active->settings.exposure;
@@ -199,6 +199,7 @@ void PathPreview::run(std::stop_token stop) {
                     const auto medium=take(render::PathMediumSnapshot::create(environment,
                         {1,active->settings.time_seconds,active->settings.cloud_albedo,active->settings.cloud_anisotropy},candidate));
                     render::VolumePathSettings volume; volume.seed=settings.seed; volume.max_bounces=settings.max_bounces;
+                    if(active->legacy_media_probe) volume.sampler_version=2;
                     volume.rr_start=settings.rr_start; volume.environment_rgb=settings.environment_rgb; volume.sun=active->settings.sun;
                     check(active->settings.restir_di ? renderer.configure_restir_medium_view(*queue,1,gpu,medium,view,volume,restir,schedule) :
                         renderer.configure_medium_view(*queue,1,gpu,medium,view,volume,schedule));

@@ -39,6 +39,7 @@ int main(int argc,char** argv) {
             else if (arg=="--voxel-path-no-rt") { options.voxel_path_smoke=true; options.voxel_path_no_rt=true; }
             else if (arg=="--voxel-workflow-smoke") options.voxel_workflow_smoke=true;
             else if (arg=="--desktop-render-smoke") options.desktop_render_smoke=true;
+            else if (arg=="--media-motion-probe") options.media_motion_probe=true;
             else if (arg=="--smoke") options.smoke=true;
             else if (arg=="--interaction-smoke") { options.smoke=true; options.interaction_smoke=true; }
             else if (arg=="--simulation-smoke") { options.smoke=true; options.simulation_smoke=true; }
@@ -58,6 +59,7 @@ int main(int argc,char** argv) {
                 std::puts("dk-editor [--root PROJECT_ROOT] [--manifest RELATIVE_MANIFEST] [--validation|--no-validation] [--pipe NAME] [--background]\n"
                     "Window: --background shows/restores behind other windows without activation (Windows); default: normal foreground startup\n"
                     "            --desktop-render-smoke --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
+                    "            --media-motion-probe --root DISPOSABLE_PROJECT (requires .dk-media-motion.json)\n"
                     "Acceptance: --frames N --screenshot OUTPUT.ppm [--fixture-camera]\n"
                     "            --smoke/--interaction-smoke/--simulation-smoke --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
                     "            --settings-help-smoke --fixture-camera --root DISPOSABLE_PROJECT --screenshot OUTPUT.ppm\n"
@@ -98,6 +100,11 @@ int main(int argc,char** argv) {
             throw std::runtime_error("--simulation-consistency-smoke requires --pipe, --fixture-camera and --screenshot; incompatible with other acceptance modes");
         if (options.simulation_response_probe && (options.smoke || options.consistency_smoke || options.frames || options.pipe.empty()))
             throw std::runtime_error("--simulation-response-probe requires --pipe and is incompatible with smoke/frames");
+        if(options.media_motion_probe && (options.voxel_path_smoke || options.voxel_workflow_smoke || options.camera_command_smoke ||
+            options.viewport_command_smoke || options.pathtrace_smoke || options.desktop_render_smoke || options.settings_help_smoke ||
+            options.console_workflow_smoke || options.smoke || options.consistency_smoke || options.environment_consistency_smoke ||
+            options.simulation_consistency_smoke || options.simulation_response_probe || options.frames || options.fixture_camera || !options.pipe.empty()))
+            throw std::runtime_error("--media-motion-probe requires a normal camera and no other acceptance mode");
         return dk::editor::run_workbench(options);
     } catch (const std::exception& error) { std::fprintf(stderr,"editor: %s\n",error.what()); return 1; }
 }

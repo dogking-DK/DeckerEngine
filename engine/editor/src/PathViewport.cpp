@@ -47,11 +47,15 @@ void Viewport::update_path(const SceneReadSnapshot& snapshot,std::uint32_t width
         const auto worker=path_->status();
         // Let a short preview finish during a continuous gesture. Physical edits,
         // resize, refresh and idle restoration always invalidate immediately.
-        const bool ready=!camera_only || settings.paused || published_==attempted_ || worker.phase=="Failed";
+        const bool preparing=worker.phase=="Queued" || worker.phase=="Compiling" || worker.phase=="Loading assets" || worker.phase=="Building scene";
+        const bool legacy_timeout=legacy_media_probe_ && settings.scene_media && !preparing &&
+            now-path_requested_at_>=std::chrono::milliseconds(100);
+        const bool ready=!camera_only || settings.paused || published_==attempted_ || worker.phase=="Failed" || legacy_timeout;
         if(ready && (!path_active_ || attempted_!=key || path_settings_!=settings)) {
             if(snapshot.scene.logical_bytes()>32U*1024U*1024U) throw std::runtime_error("Path preview snapshot exceeds 32 MiB");
             if(!path_active_) path_samples_=0;
-            path_->request({snapshot,camera,width,height,srgb,edit,preview,path_reload_,++path_sequence_,settings,retain_pixels_});
+            PathPreviewRequest request{snapshot,camera,width,height,srgb,edit,preview,path_reload_,++path_sequence_,settings,retain_pixels_};
+            request.legacy_media_probe=legacy_media_probe_; path_->request(std::move(request));
             attempted_=key; published_.reset(); path_settings_=settings; path_active_=true; error_.clear(); path_requested_at_=now;
         }
         const auto status=path_->status(); if(status.sequence==path_sequence_ && !status.error.empty()) error_=status.error;

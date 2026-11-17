@@ -1,5 +1,6 @@
 #include "EnvironmentPreview.hpp"
 #include "PathPreview.hpp"
+#include "MediaProbeSupport.hpp"
 #include <dk/memory/Context.hpp>
 #include <fstream>
 #include <iostream>
@@ -22,17 +23,20 @@ void ppm(const std::filesystem::path& path,const EnvironmentPreviewResult& r) {
 }
 #include "RestirWorker.inl"
 #include "PathDesktopWorker.inl"
+#include "MediaColorProbe.inl"
 int main(int argc,char** argv) {
     if(argc<3) return 2;
-    bool validation=false,profile=false,media=false,restir=false,desktop_path=false,desktop_media=false;
+    bool validation=false,profile=false,media=false,restir=false,desktop_path=false,desktop_media=false,media_color=false;
     for(int i=3;i<argc;++i) {
         const std::string_view option=argv[i];
         if(option=="--validation") validation=true; else if(option=="--profile") profile=true;
         else if(option=="--media") media=true; else if(option=="--restir") restir=true;
         else if(option=="--desktop-path") desktop_path=true;
+        else if(option=="--media-color") media_color=true;
         else if(option=="--desktop-media") { desktop_path=true; desktop_media=true; } else return 2;
     }
     const std::filesystem::path output=argv[2]; std::filesystem::create_directories(output);
+    if(media_color) return media_color_probe(argv[1],output,validation);
     if(restir) return restir_worker(argv[1],output);
     if(desktop_path) return desktop_path_worker(argv[1],output,validation,desktop_media);
     Json report={{"status","failed"},{"validation",validation},{"profile",profile},{"environment",Json::array()},{"path",Json::array()}};

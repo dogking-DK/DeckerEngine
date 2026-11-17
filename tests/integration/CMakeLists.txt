@@ -1242,6 +1242,12 @@ if(TARGET dk_editor_app AND TARGET dk_render_pathtracing AND TARGET dk_ctl AND W
         set_tests_properties(dk.editor.pathtracing_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
             ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
         if(TARGET dk_render_atmosphere AND TARGET dk_render_clouds)
+            add_test(NAME dk.editor.media_motion_gpu_validation
+                COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/benchmark-media-preview.py"
+                    --editor "$<TARGET_FILE:dk_editor_app>" --project "${PROJECT_SOURCE_DIR}/projects/demo"
+                    --output "${PROJECT_BINARY_DIR}/test-artifacts/$<CONFIG>/media-motion-$<CONFIG>" --mode validate)
+            set_tests_properties(dk.editor.media_motion_gpu_validation PROPERTIES TIMEOUT 300 RUN_SERIAL TRUE LABELS "gpu"
+                ENVIRONMENT "VK_LAYER_VALIDATE_SYNC=1;VK_VALIDATION_VALIDATE_SYNC=1")
             add_test(NAME dk.editor.desktop_render_gpu_validation
                 COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/EditorDesktopRenderTest.py"
                     --editor "$<TARGET_FILE:dk_editor_app>" --project "${PROJECT_SOURCE_DIR}/projects/demo"

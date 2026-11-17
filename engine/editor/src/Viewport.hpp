@@ -6,6 +6,7 @@
 #include <dk/graphics/CommandEncoder.hpp>
 #include <imgui.h>
 #include <chrono>
+#include <stdexcept>
 #include "EnvironmentPreview.hpp"
 #ifdef DK_EDITOR_PATHTRACING
 #include "PathPreview.hpp"
@@ -30,6 +31,11 @@ public:
     [[nodiscard]] const render::PathTraceGpuImageInfo& path_info() const { return path_info_; }
     [[nodiscard]] std::uint32_t path_samples() const { return path_samples_; }
     [[nodiscard]] bool path_interactive() const { return path_interactive_; }
+    // Disposable probe only; freeze before the first path request.
+    void configure_media_probe(bool legacy,bool pixels) {
+        if(path_active_) throw std::logic_error("Media probe policy must precede path activation");
+        legacy_media_probe_=legacy; retain_pixels_=pixels;
+    }
     // Acceptance calls this after the GUI submission has completed.
     [[nodiscard]] double path_latency_ms() const {
         return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-path_published_request_).count();
@@ -91,6 +97,7 @@ private:
     render::PathTraceGpuImageInfo path_info_;
     bool path_active_=false;
     bool path_interactive_=false;
+    bool legacy_media_probe_=false;
     std::uint64_t path_observed_camera_=0;
     std::chrono::steady_clock::time_point path_motion_until_{},path_requested_at_{},path_published_request_{};
 #endif

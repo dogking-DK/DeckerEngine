@@ -23,6 +23,7 @@ struct WorkbenchOptions {
     bool media_pathtrace_smoke = false;
     bool restir_pathtrace_smoke = false;
     bool desktop_render_smoke = false;
+    bool media_motion_probe = false;
     bool interaction_smoke = false;
     bool simulation_smoke = false;
     bool consistency_smoke = false;
