@@ -60,8 +60,11 @@ def main():
             (output / f'{kind}-zones.csv').write_text(result.stdout, encoding='utf-8')
             tables[kind] = list(csv.DictReader(io.StringIO(result.stdout)))
             report[f'{kind}_zones'] = len(tables[kind])
-        for name in ('GPU submission', 'half resolution cloud transport', 'depth preserving cloud reconstruction',
-                     'completed cloud history reprojection'):
+        names = {z['name'] for z in tables['gpu']}
+        required = {'GPU submission', 'completed cloud history reprojection',
+                    'reduced resolution cloud transport' if 'reduced resolution cloud transport' in names else 'half resolution cloud transport'}
+        required |= ({'cloud reconstruction classification', 'compacted cloud fallback transport'} if native.get('diagnostic_options', {}).get('compact_reconstruction', False) else {'depth preserving cloud reconstruction'})
+        for name in required:
             if not any(z['name'] == name for z in tables['gpu']):
                 raise ValueError(f'Missing GPU zone: {name}')
         for name in ('Shader.compile', 'CloudBenchmark.field_prepare', 'graph.execute', 'graphics.submit', 'graphics.wait'):

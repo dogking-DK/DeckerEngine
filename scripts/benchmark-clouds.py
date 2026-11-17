@@ -54,6 +54,8 @@ def summarize(data):
         raise ValueError("failed, quality, smoke or validation-enabled performance run")
     if data["configuration"] != "RelWithDebInfo" or data["steady_samples"] != 20 or data["tracy_compiled"] or data["tracy_connected"]:
         raise ValueError("incompatible build or sample count")
+    if data.get("diagnostic_options", {}).get("resolution_divisor", 2) != 2:
+        raise ValueError("fixed baseline requires half-resolution integration")
     preset = data["preset"]
     if (preset["width"], preset["height"]) != (1920, 1080) or preset["name"] not in PRESETS or preset["quality"] != "cloud_temporal_v1":
         raise ValueError("incompatible preset or rendering quality")
@@ -99,8 +101,11 @@ def summarize(data):
             if data["timestamps"]:
                 total_gpu(row)
                 names = {z["name"] for z in row["gpu"]["zones"]}
-                needed = ({"half resolution cloud transport", "depth preserving cloud reconstruction"} if cloudy else
-                          {"aerial perspective volume", "sky and geometry composition"} if air else {"opaque"})
+                if cloudy:
+                    needed = {"reduced resolution cloud transport" if "reduced resolution cloud transport" in names else "half resolution cloud transport"}
+                    needed |= ({"cloud reconstruction classification", "compacted cloud fallback transport"} if data.get("diagnostic_options", {}).get("compact_reconstruction", False) else {"depth preserving cloud reconstruction"})
+                else:
+                    needed = {"aerial perspective volume", "sky and geometry composition"} if air else {"opaque"}
                 if not needed <= names:
                     raise ValueError("missing render passes")
             elif row["gpu"] is not None or row["shadow_gpu"] is not None or any(p is not None for p in row["lut_builds"].values()):
@@ -108,7 +113,7 @@ def summarize(data):
             if not shadow_update and row["shadow_gpu"] is not None:
                 raise ValueError("cached shadow counted as new work")
         groups[mode] = [r for r in rows if r["phase"] == "steady"]
-    result = dict(initialization_ms={k: data[k] for k in ("device_queue_ms", "program_geometry_create_ms", "cpu_field_ms", "texture_upload_wall_ms")},
+    result = dict(diagnostic_options=data.get("diagnostic_options", {}), initialization_ms={k: data[k] for k in ("device_queue_ms", "program_geometry_create_ms", "cpu_field_ms", "texture_upload_wall_ms")},
                   cold_frames=[r for r in frames if r["phase"] == "cold"], modes={}, increments={},
                   cpu_heap_peak_bytes=data["cpu_heap_peak_bytes"], memory_geometry_only=data["memory_geometry_only"], memory_samples=data["memory_samples"])
     for mode, rows in groups.items():
@@ -201,9 +206,10 @@ def main():
                     if completed.returncode:
                         raise RuntimeError(f"{name} failed: {completed.returncode}")
                     data = json.loads(path.read_text(encoding="utf-8")); summary = summarize(data)
-                    if preset in inputs and inputs[preset] != data["preset"]:
+                    input_signature = {**data["preset"], "diagnostic_options": data.get("diagnostic_options", {})}
+                    if preset in inputs and inputs[preset] != input_signature:
                         raise ValueError("preset physical inputs changed between runs")
-                    inputs[preset] = data["preset"]
+                    inputs[preset] = input_signature
                     entry.update(status="passed", raw_sha256=digest(path), image_sha256=digest(path.with_suffix(".ppm")))
                     summaries.append(dict(entry, **summary, device=data["device"], compiler=data["compiler"], shader_fingerprint=data["shader_fingerprint"]))
                     save_manifest()

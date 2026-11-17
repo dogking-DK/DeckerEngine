@@ -6,10 +6,10 @@ using Pixel=std::array<float,4>;
 struct DiagnosticOptions {
     unsigned resolution_divisor=2;
     unsigned width=1920,height=1080,samples=20,steps=96,sun_steps=8,field_divisor=1,shadow_resolution=256,shadow_steps=256;
-    bool shadows=true,self_shadow=true,wait_tracy=false;
+    bool shadows=true,self_shadow=true,wait_tracy=false,compact=false;
     std::string mode;
     Json json() const { return {{"width",width},{"height",height},{"samples",samples},{"steps",steps},{"sun_steps",sun_steps},
-        {"resolution_divisor",resolution_divisor},{"field_divisor",field_divisor},{"ground_shadows",shadows},{"self_shadow",self_shadow},
+        {"compact_reconstruction",compact},{"resolution_divisor",resolution_divisor},{"field_divisor",field_divisor},{"ground_shadows",shadows},{"self_shadow",self_shadow},
         {"shadow_resolution",shadow_resolution},{"shadow_steps",shadow_steps},{"mode",mode.empty() ? "all" : mode}}; }
 };
 struct Fixture {
@@ -174,7 +174,7 @@ void run(Json& output,std::string_view preset,bool smoke,bool quality,bool times
         output["memory_device_only"]=memory_sample(q);
         {
             start=Clock::now(); Fixture f(heap,q,preset); output["program_geometry_create_ms"]=elapsed(start);
-            f.optimized.resolution_divisor=tuning.resolution_divisor;
+            f.optimized.compact_reconstruction=tuning.compact; f.optimized.resolution_divisor=tuning.resolution_divisor;
             f.width=tuning.width; f.height=tuning.height;
             f.optimized.composition.reference.steps=tuning.steps; f.optimized.composition.reference.sun_steps=tuning.sun_steps;
             f.optimized.composition.reference.self_shadow=tuning.self_shadow; f.ground_shadows=tuning.shadows;
@@ -215,6 +215,8 @@ int main(int argc,char** argv) {
             else if(arg=="--preset" && i+1<argc) preset=argv[++i];
             else if(arg=="--output" && i+1<argc) report=argv[++i];
             else if(arg=="--mode" && i+1<argc) tuning.mode=argv[++i];
+            else if(arg=="--compact-reconstruction") tuning.compact=true;
+            else if(arg=="--legacy-reconstruction") tuning.compact=false;
             else if(arg=="--no-shadow") tuning.shadows=false;
             else if(arg=="--no-self-shadow") tuning.self_shadow=false;
             else if(arg=="--wait-tracy") tuning.wait_tracy=true;
@@ -238,7 +240,7 @@ int main(int argc,char** argv) {
             "tuning parameter exceeds supported budget");
         require(tuning.mode.empty() || tuning.mode=="combined-static" || tuning.mode=="combined-motion" || tuning.mode=="air-static" ||
             tuning.mode=="air-motion" || tuning.mode=="unlit-static" || tuning.mode=="unlit-motion","unknown tuning mode");
-        auto quality_defaults=DiagnosticOptions{}; quality_defaults.resolution_divisor=tuning.resolution_divisor;
+        auto quality_defaults=DiagnosticOptions{}; quality_defaults.resolution_divisor=tuning.resolution_divisor; quality_defaults.compact=tuning.compact;
         require(!quality || tuning.json()==quality_defaults.json(),"quality uses the fixed production configuration");
         if(tuning.wait_tracy) {
             require(profiling::enabled(),"Tracy capture requires a profiling build");

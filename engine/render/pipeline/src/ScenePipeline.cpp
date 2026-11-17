@@ -62,7 +62,7 @@ struct PipelineState {
     std::shared_ptr<VoxelPrograms> voxels;
 #endif
     Program cloud_program;
-    std::array<Program,3> cloud_optimized;
+    std::array<Program,5> cloud_optimized; // transport, temporal, legacy, compact classifier, queued rays
     std::filesystem::path directory;
 #ifdef DK_RENDER_SUNLIGHT
     std::optional<AtmosphereRenderer> atmosphere;
@@ -297,17 +297,21 @@ CloudHistoryReset history_reset(const detail::CloudHistorySlot& slot,const Rende
 }
 Buffer prepare_reconstruction(detail::PipelineState& state,const RenderView& view,const CloudOptimizedSettings& settings,
     const detail::CloudHistoryGeneration* previous) {
-    if(!state.cloud_optimized[0].pipeline) {
-        std::array<detail::PipelineState::Program,3> candidate;
-        for(unsigned i=0;i<3;++i) {
-            const auto stage=std::to_string(i); const std::array defines{ShaderDefine{"DK_CLOUD_STAGE",stage}};
-            auto code=take(compile_shader({state.directory/"cloud-reconstruction.slang","computeMain",ShaderStage::compute,{},defines},state.heap));
-            auto shader=take(state.factory.create_shader(code)); const std::array shaders{&shader};
-            candidate[i].layout=take(state.factory.create_pipeline_layout(shaders));
-            candidate[i].pipeline=take(state.factory.create_compute_pipeline({&shader,&candidate[i].layout}));
-        }
+    // Compile only the requested reconstruction route. Publish each complete program atomically.
+    for(unsigned i=0;i<5;++i) {
+        if((i==2 && settings.compact_reconstruction) || (i>=3 && !settings.compact_reconstruction) || state.cloud_optimized[i].pipeline) continue;
+        const auto stage=std::to_string(i<3 ? i : i==3 ? 2 : 3);
+        const std::array defines{ShaderDefine{"DK_CLOUD_STAGE",stage},ShaderDefine{"DK_CLOUD_COMPACT",i>=3 ? "1" : "0"}};
+        auto code=take(compile_shader({state.directory/"cloud-reconstruction.slang","computeMain",ShaderStage::compute,{},defines},state.heap));
+        auto shader=take(state.factory.create_shader(code)); const std::array shaders{&shader};
+        detail::PipelineState::Program candidate;
+        candidate.layout=take(state.factory.create_pipeline_layout(shaders));
+        candidate.pipeline=take(state.factory.create_compute_pipeline({&shader,&candidate.layout}));
+        state.cloud_optimized[i]=std::move(candidate);
+    }
+    if(!state.aerial_sampler) {
         SamplerDesc desc; desc.address_u=desc.address_v=desc.address_w=vk::SamplerAddressMode::eClampToEdge;
-        auto sampler=take(state.factory.create_sampler(desc)); state.cloud_optimized=std::move(candidate); state.aerial_sampler=std::move(sampler);
+        state.aerial_sampler=take(state.factory.create_sampler(desc));
     }
     struct Parameters { std::array<std::uint32_t,4> size; std::array<float,4> controls,previous_clip[4],camera_delta,previous_forward; };
     static_assert(sizeof(Parameters)==128);
@@ -480,7 +484,8 @@ struct Context {
     std::array<std::size_t,2> volumes{},cloud_images{},cloud_readback{};
     const CloudTextures* clouds=nullptr;
     std::size_t cloud_parameters=0;
-    bool optimized=false;
+    bool optimized=false,compact_cloud=false;
+    std::size_t fallback_pixels=0;
     std::uint32_t cloud_divisor=2;
     std::size_t reconstruction_parameters=0,statistics=0,statistics_readback=0;
     std::array<std::size_t,3> raw_cloud{},filtered_cloud{},previous_cloud{};
@@ -620,15 +625,16 @@ Result<void> cloud_pass(graph::PassContext& pass,void* pointer) {
 }
 Result<void> reconstruction_pass(graph::PassContext& pass,void* pointer) {
     auto& c=*static_cast<Context*>(pointer); const unsigned stage=unsigned(pass.pass_index()-3);
-    auto& program=c.pipeline.cloud_optimized[stage];
+    auto& program=c.pipeline.cloud_optimized[stage==3 ? 4 : stage==2 && c.compact_cloud ? 3 : stage];
     std::array<ImageView,14> views; unsigned view_count=0;
-    std::array<BindingWrite,23> writes; unsigned count=0;
+    std::array<BindingWrite,24> writes; unsigned count=0;
     auto buffer=[&](unsigned binding,std::size_t index) { writes[count++]={binding,0,BufferBinding{take(pass.buffer(index))}}; };
     auto image=[&](unsigned binding,std::size_t index,bool output=false,bool depth=false) {
         views[view_count]=take(c.pipeline.factory.create_view(*take(pass.image(index)),{vk::ImageViewType::e2D,depth ? depth_range : color_range}));
         writes[count++]={binding,0,ImageBinding{&views[view_count++],output ? vk::ImageLayout::eGeneral : vk::ImageLayout::eShaderReadOnlyOptimal}};
     };
     buffer(0,c.parameters); buffer(10,c.cloud_parameters); buffer(15,c.statistics); buffer(16,c.reconstruction_parameters);
+    if(stage>=2 && c.compact_cloud) buffer(23,c.fallback_pixels);
     const auto outputs=stage==0 ? c.raw_cloud : stage==1 ? c.filtered_cloud : std::array{c.composed,c.cloud_images[0],c.cloud_images[1]};
     image(1,outputs[0],true); image(6,outputs[1],true); image(7,outputs[2],true);
     if(stage!=1) {
@@ -639,10 +645,10 @@ Result<void> reconstruction_pass(graph::PassContext& pass,void* pointer) {
     }
     if(stage>0) for(unsigned i=0;i<3;++i) image(17+i,stage==1 ? c.raw_cloud[i] : c.filtered_cloud[i]);
     if(stage==1) for(unsigned i=0;i<3;++i) image(20+i,c.previous_cloud[i]);
-    if(stage==2) image(9,c.hdr);
+    if(stage>=2) image(9,c.hdr);
     auto bindings=take(c.pipeline.factory.create_bindings(program.layout,0,std::span{writes}.first(count)));
     auto encoder=take(pass.compute()); check(encoder.bind_pipeline(program.pipeline)); const std::array sets{&bindings}; check(encoder.bind_sets(sets));
-    const auto width=stage==2 ? c.width : (c.width+c.cloud_divisor-1)/c.cloud_divisor,height=stage==2 ? c.height : (c.height+c.cloud_divisor-1)/c.cloud_divisor;
+    const auto width=stage>=2 ? c.width : (c.width+c.cloud_divisor-1)/c.cloud_divisor,height=stage>=2 ? c.height : (c.height+c.cloud_divisor-1)/c.cloud_divisor;
     return encoder.dispatch({(width+7)/8,(height+7)/8,1});
 }
 #endif
@@ -1101,7 +1107,8 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
         }
         graph::ResourceId cloud_constants{}; std::array<graph::ResourceId,2> diagnostic_readbacks{};
         std::size_t cloud_parameters=0;
-        graph::ResourceId reconstruction_constants{},statistics_id{},statistics_readback_id{};
+        graph::ResourceId reconstruction_constants{},statistics_id{},statistics_readback_id{},fallback_id{};
+        std::size_t fallback_index=0;
         std::size_t reconstruction_parameters=0,statistics_index=0;
 #ifdef DK_RENDER_CLOUDS
         if(clouds) {
@@ -1115,6 +1122,10 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             }
         }
         if(optimized) {
+            if(optimized->compact_reconstruction) {
+                fallback_index=graph.counts().buffers;
+                fallback_id=take(graph.declare_buffer("cloud fallback mask",{std::uint64_t(width)*height*4,vk::BufferUsageFlagBits::eStorageBuffer}));
+            }
             reconstruction_parameters=graph.counts().buffers;
             reconstruction_constants=take(graph.declare_buffer("cloud reconstruction parameters",reconstruction_uniform.description(),graph::Lifetime::external,true));
             external.push_back({reconstruction_parameters,&reconstruction_uniform});
@@ -1155,6 +1166,7 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
         context.optimized=optimized!=nullptr; context.reconstruction_parameters=reconstruction_parameters;
 #ifdef DK_RENDER_CLOUDS
         context.cloud_divisor=optimized ? optimized->resolution_divisor : 2;
+        context.compact_cloud=optimized && optimized->compact_reconstruction; context.fallback_pixels=fallback_index;
 #endif
         context.statistics=statistics_index; context.statistics_readback=frame->cloud_statistics;
         frame->color=context.ldr; context.linear_readback=frame->linear_readback; context.parameters=parameters_index;
@@ -1263,7 +1275,7 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
                 ImageDesc half{cloud_info.width,cloud_info.height,vk::Format::eR32G32B32A32Sfloat,vk::ImageUsageFlagBits::eStorage|vk::ImageUsageFlagBits::eSampled};
                 for(unsigned i=0;i<3;++i) {
                     context.raw_cloud[i]=graph.counts().buffers+graph.counts().images;
-                    raw[i]=take(graph.declare_image("current half cloud "+std::to_string(i),half));
+                    raw[i]=take(graph.declare_image("current reduced cloud "+std::to_string(i),half));
                     context.filtered_cloud[i]=graph.counts().buffers+graph.counts().images;
                     filtered[i]=take(graph.declare_image("candidate cloud history "+std::to_string(i),half,graph::Lifetime::external));
                     external.push_back({context.filtered_cloud[i],nullptr,&candidate->images[i],{}});
@@ -1283,7 +1295,7 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
                     half_uses.push_back(use(fields[i],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal));
                     half_uses.push_back(use(raw[i],compute,vk::AccessFlagBits2::eShaderStorageWrite,vk::ImageLayout::eGeneral,true));
                 }
-                static_cast<void>(take(graph.add_pass({"half resolution cloud transport",half_uses})));
+                static_cast<void>(take(graph.add_pass({"reduced resolution cloud transport",half_uses})));
                 Vector<graph::Use> temporal_uses(0,memory::Allocator<graph::Use>{heap});
                 temporal_uses={use(constants,compute,vk::AccessFlagBits2::eUniformRead),use(cloud_constants,compute,vk::AccessFlagBits2::eUniformRead),
                     use(reconstruction_constants,compute,vk::AccessFlagBits2::eUniformRead),
@@ -1297,7 +1309,19 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
                 uses.push_back(use(reconstruction_constants,compute,vk::AccessFlagBits2::eUniformRead));
                 uses.push_back(use(statistics_id,compute,vk::AccessFlagBits2::eShaderStorageRead|vk::AccessFlagBits2::eShaderStorageWrite));
                 for(unsigned i=0;i<3;++i) uses.push_back(use(filtered[i],compute,sampled,vk::ImageLayout::eShaderReadOnlyOptimal));
-                static_cast<void>(take(graph.add_pass({"depth preserving cloud reconstruction",uses})));
+                if(context.compact_cloud) uses.push_back(use(fallback_id,compute,vk::AccessFlagBits2::eShaderStorageWrite,vk::ImageLayout::eUndefined,true));
+                static_cast<void>(take(graph.add_pass({context.compact_cloud ? "cloud reconstruction classification" : "depth preserving cloud reconstruction",uses})));
+                if(context.compact_cloud) {
+                    // This partial writer must retain the classifier's other pixels.
+                    for(auto& entry:uses) if(entry.resource==graph::ResourceId{final_hdr} || entry.resource==cloud_outputs[0] || entry.resource==cloud_outputs[1]) {
+                        entry.access.full_overwrite=false;
+                        entry.access.state.access|=vk::AccessFlagBits2::eShaderStorageRead;
+                    }
+                    for(auto& entry:uses) if(entry.resource==fallback_id) {
+                        entry.access.full_overwrite=false; entry.access.state.access=vk::AccessFlagBits2::eShaderStorageRead;
+                    }
+                    static_cast<void>(take(graph.add_pass({"compacted cloud fallback transport",uses})));
+                }
             }
         }
 #endif
@@ -1353,7 +1377,7 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
         if(atmosphere && !clouds) { callbacks.push_back({3,record<aerial_pass>,&context}); callbacks.push_back({4,record<aerial_pass>,&context}); }
 #ifdef DK_RENDER_CLOUDS
         if(clouds && !optimized) callbacks.push_back({3,record<cloud_pass>,&context});
-        if(optimized) for(unsigned i=0;i<3;++i) callbacks.push_back({3+i,record<reconstruction_pass>,&context});
+        if(optimized) for(unsigned i=0;i<(context.compact_cloud ? 4u : 3u);++i) callbacks.push_back({3+i,record<reconstruction_pass>,&context});
 #endif
         if(settings.depth_readback) callbacks.push_back({depth_pass,record<depth_readback_pass>,&context});
         callbacks.push_back({callbacks.size(),record<tone_pass>,&context}); callbacks.push_back({callbacks.size(),record<copy_pass>,&context});

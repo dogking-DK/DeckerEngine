@@ -7,7 +7,7 @@
   "validation": false,
   "manifest": {
     "status": "passed",
-    "started_at": "2026-11-17T09:26:56.832568+08:00",
+    "started_at": "2026-11-17T09:25:24.555639+08:00",
     "configuration": "RelWithDebInfo",
     "binary_sha256": "23fb2539257d87cefb3a60a7457687ef57308072b1633e2e350cefde7567ffb1",
     "sources_sha256": {
@@ -46,7 +46,9 @@
         "sha256": "e1f5a92411b90832fad591de5aa582275402f9fe21eb64cab0451967c9db5a0b"
       }
     ],
-    "finished_at": "2026-11-17T08:55:01+0800"
+    "finished_at": "2026-11-17T09:26:01.841242+08:00",
+    "archived_at": "2026-11-17T09:26:56.832568+08:00",
+    "timing_source": "first log creation / final log modification; archived_at is evidence packaging time"
   },
   "runs": [
     {

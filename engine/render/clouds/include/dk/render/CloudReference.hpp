@@ -39,7 +39,8 @@ struct CloudOptimizedSettings {
     std::uint64_t view_id=1, camera_revision=0; // Stable view identity; change camera_revision on camera selection/cut.
     bool temporal=true, empty_space_skipping=true;
     float termination_transmittance=1e-4f, history_weight=.85f;
-    std::uint64_t max_work=128ULL*1024*1024*1024; // Half image plus worst-case full-resolution fallback.
+    std::uint64_t max_work=128ULL*1024*1024*1024; // Reduced image plus worst-case full-resolution fallback.
+    bool compact_reconstruction=false; // Explicit diagnostic experiment; no stable performance gain on the acceptance GPU.
     std::uint32_t resolution_divisor=2; // Each axis: 2 or 4; full-size geometry and output.
     bool operator==(const CloudOptimizedSettings&) const = default;
 };

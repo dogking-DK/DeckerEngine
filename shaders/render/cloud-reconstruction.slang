@@ -1,4 +1,4 @@
-// Three graph stages: half-size transport, completed-history reprojection, depth-aware reconstruction.
+// Reduced transport, completed-history reprojection, reconstruction and optional compact fallback.
 struct Parameters {
     float4 geometry,rayleigh,mie,extinction,absorption,ground,sun,forward,right,up,sunDirection;
     uint4 frame; float4 depth,origin;
@@ -11,8 +11,8 @@ struct CloudFrameParameters { CloudParameters model; CloudRayData origin; float4
 #define cp cloudFrame.model
 #include "CloudCamera.slang"
 struct ReconstructionParameters {
-    uint4 size; // half width/height, valid completed history, empty-space skipping
-    float4 controls; // termination T, history weight, unused, unused
+    uint4 size; // integration width/height, valid completed history, empty-space skipping
+    float4 controls; // termination T, history weight, resolution divisor, unused
     float4 previousClip[4]; // Current anchor-relative point, wind compensated, to previous clip.
     float4 cameraDelta; // Current minus previous anchor, without wind compensation.
     float4 previousForward; // Previous world forward and near distance.
@@ -44,7 +44,10 @@ struct ReconstructionParameters {
 #include "../../engine/render/atmosphere/shaders/AtmosphereTransport.slang"
 #include "../../engine/render/clouds/shaders/CloudTransport.slang"
 #endif
-#if DK_CLOUD_STAGE == 2
+#if DK_CLOUD_STAGE >= 2 && DK_CLOUD_COMPACT
+[[vk::binding(23,0)]] RWStructuredBuffer<uint> fallbackPixels; // one fallback bit per full-resolution pixel
+#endif
+#if DK_CLOUD_STAGE >= 2
 [[vk::binding(9,0)]] Texture2D<float4> surfaceColor;
 #endif
 float3 worldRay(float2 pixel) {
@@ -165,11 +168,46 @@ Medium trace(uint2 pixel) {
     Medium value; value.L=float4(L,geometry); value.T=float4(T,opacity>0 ? moment/opacity : 0); value.cloud=float4(cloudL,cloudT); return value;
 }
 #endif
+#if DK_CLOUD_STAGE >= 2
+void compose(uint2 pixel,float3 L,float3 T,float4 C,float representative,float geometry,CameraMediumRay camera) {
+    float3 direction=camera.direction;
+    float3 segment=path(camera.height,camera.mu),terminal=0;
+    float distance=geometry>=0 ? geometry : max(0,segment.y*1000);
+    if(!(segment.z>0 && distance>=segment.y*1000)) {
+        if(geometry>=0) terminal=surfaceColor.Load(int3(pixel,0)).rgb;
+        else {
+            if(cp.flags.y==0) terminal=cloudFrame.clear.rgb;
+            float3 delta=direction-p.sunDirection.xyz;
+            if(p.frame.w!=0 && dot(delta,delta)<=p.sunDirection.w) terminal+=p.sun.rgb*p.sun.w;
+        }
+    }
+    outputL[pixel]=float4(L+T*terminal,1); outputT[pixel]=C; outputCloud[pixel]=float4(T,representative);
+}
+#endif
+#if DK_CLOUD_STAGE == 3
+groupshared uint tileCount;
+groupshared uint2 tilePixels[64];
+#endif
 [numthreads(8,8,1)]
-void computeMain(uint3 id:SV_DispatchThreadID) {
-#if DK_CLOUD_STAGE == 0
+void computeMain(uint3 id:SV_DispatchThreadID,uint3 local:SV_GroupThreadID) {
+#if DK_CLOUD_STAGE == 3
+    uint lane=local.y*8+local.x;
+    if(lane==0) tileCount=0;
+    GroupMemoryBarrierWithGroupSync();
+    if(all(id.xy<p.frame.xy)) {
+        if(fallbackPixels[id.y*p.frame.x+id.x]!=0) {
+            uint slot; InterlockedAdd(tileCount,1,slot); tilePixels[slot]=id.xy;
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if(lane>=tileCount) return;
+    uint2 pixel=tilePixels[lane];
+    Medium value=trace(pixel);
+    CameraMediumRay camera=mediumRay((float2(pixel)+.5)/float2(p.frame.xy)*2-1);
+    compose(pixel,value.L.rgb,value.T.rgb,value.cloud,value.T.a,value.L.a,camera);
+#elif DK_CLOUD_STAGE == 0
     if(any(id.xy>=reconstruction.size.xy)) return;
-    Medium value=trace(min(id.xy*2,p.frame.xy-1)); outputL[id.xy]=value.L; outputT[id.xy]=value.T; outputCloud[id.xy]=value.cloud;
+    Medium value=trace(min(id.xy*uint(reconstruction.controls.z),p.frame.xy-1)); outputL[id.xy]=value.L; outputT[id.xy]=value.T; outputCloud[id.xy]=value.cloud;
 #elif DK_CLOUD_STAGE == 1
     if(any(id.xy>=reconstruction.size.xy)) return;
     float4 L=currentL.Load(int3(id.xy,0)),T=currentT.Load(int3(id.xy,0)),C=currentCloud.Load(int3(id.xy,0));
@@ -181,13 +219,13 @@ void computeMain(uint3 id:SV_DispatchThreadID) {
         edge=edge || !matchingDepth(L.a,nL.a);
         lowL=min(lowL,nL.rgb); highL=max(highL,nL.rgb); lowT=min(lowT,nT.rgb); highT=max(highT,nT.rgb); lowC=min(lowC,nC); highC=max(highC,nC);
     }
-    float2 pixel=min(id.xy*2,p.frame.xy-1);
+    float2 pixel=min(id.xy*uint(reconstruction.controls.z),p.frame.xy-1);
     float3 origin=cloudCameraOrigin((pixel+.5)/float2(p.frame.xy)*2-1);
     float3 direction=worldRay(pixel); float4 position=float4(origin+direction*T.a,1);
     float4 clip=float4(dot(reconstruction.previousClip[0],position),dot(reconstruction.previousClip[1],position),
         dot(reconstruction.previousClip[2],position),dot(reconstruction.previousClip[3],position));
     float2 oldPixel=(clip.xy/max(clip.w,1e-8)*.5+.5)*float2(p.frame.xy)-.5;
-    float2 old=oldPixel*.5; int2 base=int2(floor(old)); float2 fraction=frac(old);
+    float2 old=oldPixel/reconstruction.controls.z; int2 base=int2(floor(old)); float2 fraction=frac(old);
     bool accepted=reconstruction.size.z!=0 && !edge && T.a>0 && C.a<.999 && clip.w>0 &&
         (p.origin.w==0 || clip.z>=0) && all(old>=0) && all(old<=float2(reconstruction.size.xy)-1);
     float4 priorL=0,priorT=0,priorC=0;
@@ -214,7 +252,10 @@ void computeMain(uint3 id:SV_DispatchThreadID) {
     outputL[id.xy]=L; outputT[id.xy]=T; outputCloud[id.xy]=C;
 #else
     if(any(id.xy>=p.frame.xy)) return;
-    float geometry=geometryDistance(id.xy); float2 halfPixel=float2(id.xy)*.5;
+#if DK_CLOUD_COMPACT
+    fallbackPixels[id.y*p.frame.x+id.x]=0;
+#endif
+    float geometry=geometryDistance(id.xy); float2 halfPixel=float2(id.xy)/reconstruction.controls.z;
     int2 base=int2(floor(halfPixel)); float2 fraction=frac(halfPixel);
     float3 L=0,T=0; float4 C=0; float representative=0,total=0,minC=1,maxC=0; float3 minT=1,maxT=0;
     for(int y=0;y<2;++y) for(int x=0;x<2;++x) {
@@ -225,7 +266,7 @@ void computeMain(uint3 id:SV_DispatchThreadID) {
     }
     // A two-tap pair can straddle an unresolved cloud edge with similar endpoint T.
     // Check the surrounding footprint before interpolating a non-anchor pixel.
-    if(any((id.xy&1u)!=0)) for(int y=-1;y<=1;++y) for(int x=-1;x<=1;++x) {
+    if(any((id.xy%uint(reconstruction.controls.z))!=0)) for(int y=-1;y<=1;++y) for(int x=-1;x<=1;++x) {
         int2 point=clamp(base+int2(x,y),0,int2(reconstruction.size.xy)-1);
         float4 a=currentL.Load(int3(point,0)),b=currentT.Load(int3(point,0)),c=currentCloud.Load(int3(point,0));
         if(!matchingDepth(geometry,a.a)) total=0;
@@ -236,19 +277,16 @@ void computeMain(uint3 id:SV_DispatchThreadID) {
     float3 direction=camera.direction,sunDelta=direction-p.sunDirection.xyz;
     bool solar=p.frame.w!=0 && dot(sunDelta,sunDelta)<=p.sunDirection.w;
     if(total<.999 || solar || max(maxC-minC,max(maxT.x-minT.x,max(maxT.y-minT.y,maxT.z-minT.z)))>.02) {
+#if DK_CLOUD_COMPACT
+        fallbackPixels[id.y*p.frame.x+id.x]=1;
+        // Define every output texel before the queued partial writer preserves the image.
+        outputL[id.xy]=0; outputT[id.xy]=0; outputCloud[id.xy]=0;
+        InterlockedAdd(statistics[5],1); return;
+#else
         Medium value=trace(id.xy); L=value.L.rgb; T=value.T.rgb; C=value.cloud; representative=value.T.a;
         InterlockedAdd(statistics[5],1);
+#endif
     } else { L/=total; T/=total; C/=total; representative/=total; InterlockedAdd(statistics[4],1); }
-    float3 segment=path(camera.height,camera.mu),terminal=0;
-    float distance=geometry>=0 ? geometry : max(0,segment.y*1000);
-    if(!(segment.z>0 && distance>=segment.y*1000)) {
-        if(geometry>=0) terminal=surfaceColor.Load(int3(id.xy,0)).rgb;
-        else {
-            if(cp.flags.y==0) terminal=cloudFrame.clear.rgb;
-            float3 delta=direction-p.sunDirection.xyz;
-            if(p.frame.w!=0 && dot(delta,delta)<=p.sunDirection.w) terminal+=p.sun.rgb*p.sun.w;
-        }
-    }
-    outputL[id.xy]=float4(L+T*terminal,1); outputT[id.xy]=C; outputCloud[id.xy]=float4(T,representative);
+    compose(id.xy,L,T,C,representative,geometry,camera);
 #endif
 }

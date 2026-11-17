@@ -46,6 +46,21 @@ def measurement():
 
 
 class Evidence(unittest.TestCase):
+    def test_quarter_resolution_cannot_masquerade_as_fixed_baseline(self):
+        data = measurement()
+        data["diagnostic_options"] = {"resolution_divisor": 4}
+        with self.assertRaises(ValueError): b.summarize(data)
+
+    def test_compacted_route_requires_both_leaf_passes(self):
+        data = measurement()
+        data["diagnostic_options"] = {"compact_reconstruction": True}
+        for row in data["frames"]:
+            if row["mode"].startswith("combined"):
+                row["gpu"]["zones"] = [dict(name=n, gpu_ms=.1, cpu_record_ms=.1) for n in ("reduced resolution cloud transport", "cloud reconstruction classification", "compacted cloud fallback transport")]
+        self.assertTrue(b.summarize(data)["diagnostic_options"]["compact_reconstruction"])
+        data["frames"][34]["gpu"]["zones"].pop()
+        with self.assertRaises(ValueError): b.summarize(data)
+
     def test_increment_counts_shadow_and_luts_once_without_adding_child_zones(self):
         result = b.summarize(measurement())
         self.assertEqual(result["increments"]["static"]["cloud_gpu_ms"]["p95"], 0)

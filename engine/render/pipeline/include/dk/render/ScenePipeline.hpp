@@ -138,7 +138,7 @@ public:
     // must match the view's environment. Zero clouds use the original M14 path.
     [[nodiscard]] Result<RenderFrame> render_clouds(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
         const AtmosphereSky&, const CloudTextures&, const CloudCompositionSettings&, const RenderSettings& = {}, const CloudShadowMap* = nullptr);
-    // Explicit half-resolution path, <=1920*1080 output pixels. Caller owns stable
+    // Explicit half/quarter-resolution path, <=1920*1080 output pixels. Caller owns stable
     // view_id/camera_revision. Poll publishes completed candidates; at most four views.
     [[nodiscard]] Result<RenderFrame> render_clouds_optimized(graphics::SubmissionQueue&, const RenderView&, const GpuAssets&,
         const AtmosphereSky&, const CloudTextures&, const CloudOptimizedSettings&, const RenderSettings& = {}, const CloudShadowMap* = nullptr);
