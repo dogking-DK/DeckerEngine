@@ -335,6 +335,7 @@ void optimization(Fixture& f,SubmissionQueue& q) {
     save(result,"cloud-optimized.ppm");
 }
 #include "CloudReconstructionCases.hpp"
+#include "CloudResolutionCases.hpp"
 #include "CloudShadowCases.hpp"
 #include "CloudOrthographicCases.hpp"
 }
@@ -354,6 +355,7 @@ int main(int argc,char** argv) {
                 else if(mode=="optimization_boundaries") optimization_boundaries(f,q);
                 else if(mode=="optimization_switches") optimization_switches(f,q); else if(mode=="temporal") temporal(f,q);
                 else if(mode=="history") history_lifecycle(f,q,options,system);
+                else if(mode=="resolution") resolution(f,q);
                 else if(mode=="orthographic") orthographic(f,q);
                 else if(mode=="shadow_numeric") shadow_numeric(f,q);
                 else if(mode=="shadow_surface") shadow_surface(f,q);

@@ -93,6 +93,9 @@ def main():
             descriptor = call("commands.describe", {"name": "render.capture"})
             assert not descriptor["parameters"]["additionalProperties"]
             assert "time_seconds" in descriptor["parameters"]["properties"]
+            assert descriptor["parameters"]["properties"]["render_options"]["properties"]["cloud_resolution_divisor"]["enum"] == [2, 4]
+            sequence_schema = call("commands.describe", {"name": "render.sequence"})
+            assert sequence_schema["parameters"]["properties"]["render_options"]["properties"]["cloud_resolution_divisor"]["enum"] == [2, 4]
             quality = descriptor["result"]["properties"]["provenance"]["properties"]["quality"]["enum"]
             assert {"cloud_reference_v1", "cloud_temporal_v1", "atmosphere_v1", "unlit_v1"}.issubset(quality)
             (root / "capture.schema.json").write_text(json.dumps(descriptor, indent=2), encoding="utf-8")
@@ -121,6 +124,11 @@ def main():
             repeat = capture(state, "repeat.ppm")
             wait(repeat)
             assert (root / "repeat.ppm").read_bytes() == (root / "first.ppm").read_bytes()
+            quarter = call("render.capture", {"guard": guard(state), "output": "quarter.ppm", "width": 17, "height": 19,
+                "camera": {"eye": [0, 0, -2], "target": [0, 0, 0]}, "validation": "required",
+                "render_options": {"mode": "temporal", "cloud_shadows": False, "cloud_resolution_divisor": 4}})
+            assert quarter["provenance"]["render_options"]["cloud_resolution_divisor"] == 4
+            wait(quarter)
             old = (root / "first.ppm").read_bytes()
             failed = wait(capture(state, "first.ppm", 65), success=False)
             assert "4096" in failed["error"]["message"], failed

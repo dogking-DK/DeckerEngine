@@ -112,6 +112,8 @@ TEST_CASE("environment render settings reject ambiguous modes time and fixed sha
     bad=s; bad.time_seconds=std::numeric_limits<double>::quiet_NaN(); CHECK_FALSE(validate_environment_render_settings(bad));
     bad=s; bad.time_seconds=1e10; CHECK_FALSE(validate_environment_render_settings(bad));
     bad=s; bad.view_id=0; CHECK_FALSE(validate_environment_render_settings(bad));
+    bad=s; bad.cloud_resolution_divisor=4; CHECK(validate_environment_render_settings(bad));
+    bad.cloud_resolution_divisor=3; CHECK_FALSE(validate_environment_render_settings(bad));
     bad=s; bad.shadow_resolution=17; CHECK_FALSE(validate_environment_render_settings(bad));
     bad=s; bad.shadow_extent_m=0; CHECK_FALSE(validate_environment_render_settings(bad));
     bad=s; bad.shadow_center_m.x()=1e10; CHECK_FALSE(validate_environment_render_settings(bad));

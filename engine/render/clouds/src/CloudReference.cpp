@@ -221,7 +221,9 @@ Result<void> validate_cloud_optimization(const EnvironmentDescription& e,const C
         r.steps>256 || r.sun_steps>64 || !range(s.termination_transmittance,0,1e-4) || !range(s.history_weight,0,.9) ||
         !s.max_work || s.max_work>128ULL*1024*1024*1024)
         return std::unexpected(invalid("Invalid cloud optimization extent, identity, sampling or reconstruction settings"));
-    const auto pixels=std::uint64_t{width}*height+std::uint64_t{(width+1)/2}*((height+1)/2);
+    if(s.resolution_divisor!=2 && s.resolution_divisor!=4) return std::unexpected(invalid("Cloud resolution divisor must be 2 or 4"));
+    const auto d=s.resolution_divisor;
+    const auto pixels=std::uint64_t{width}*height+std::uint64_t{(width+d-1)/d}*((height+d-1)/d);
     if(pixels*256*(5+2*(2*std::max(r.sun_steps,32u)+4))>s.max_work)
         return std::unexpected(Error{ErrorCode::invalid_state,"Cloud optimization work budget exceeded"});
     return {};

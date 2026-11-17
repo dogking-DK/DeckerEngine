@@ -4,11 +4,12 @@
 namespace {
 using Pixel=std::array<float,4>;
 struct DiagnosticOptions {
+    unsigned resolution_divisor=2;
     unsigned width=1920,height=1080,samples=20,steps=96,sun_steps=8,field_divisor=1,shadow_resolution=256,shadow_steps=256;
     bool shadows=true,self_shadow=true,wait_tracy=false;
     std::string mode;
     Json json() const { return {{"width",width},{"height",height},{"samples",samples},{"steps",steps},{"sun_steps",sun_steps},
-        {"field_divisor",field_divisor},{"ground_shadows",shadows},{"self_shadow",self_shadow},
+        {"resolution_divisor",resolution_divisor},{"field_divisor",field_divisor},{"ground_shadows",shadows},{"self_shadow",self_shadow},
         {"shadow_resolution",shadow_resolution},{"shadow_steps",shadow_steps},{"mode",mode.empty() ? "all" : mode}}; }
 };
 struct Fixture {
@@ -173,6 +174,7 @@ void run(Json& output,std::string_view preset,bool smoke,bool quality,bool times
         output["memory_device_only"]=memory_sample(q);
         {
             start=Clock::now(); Fixture f(heap,q,preset); output["program_geometry_create_ms"]=elapsed(start);
+            f.optimized.resolution_divisor=tuning.resolution_divisor;
             f.width=tuning.width; f.height=tuning.height;
             f.optimized.composition.reference.steps=tuning.steps; f.optimized.composition.reference.sun_steps=tuning.sun_steps;
             f.optimized.composition.reference.self_shadow=tuning.self_shadow; f.ground_shadows=tuning.shadows;
@@ -217,10 +219,10 @@ int main(int argc,char** argv) {
             else if(arg=="--no-self-shadow") tuning.self_shadow=false;
             else if(arg=="--wait-tracy") tuning.wait_tracy=true;
             else if((arg=="--width" || arg=="--height" || arg=="--samples" || arg=="--steps" || arg=="--sun-steps" ||
-                arg=="--field-divisor" || arg=="--shadow-resolution" || arg=="--shadow-steps") && i+1<argc) {
+                arg=="--resolution-divisor" || arg=="--field-divisor" || arg=="--shadow-resolution" || arg=="--shadow-steps") && i+1<argc) {
                 const std::string text=argv[++i]; std::size_t consumed=0; const auto value=std::stoul(text,&consumed);
                 require(consumed==text.size() && value<=65536 && !text.starts_with('-'),"invalid tuning integer");
-                if(arg=="--width") tuning.width=unsigned(value); else if(arg=="--height") tuning.height=unsigned(value);
+                if(arg=="--resolution-divisor") tuning.resolution_divisor=unsigned(value); else if(arg=="--width") tuning.width=unsigned(value); else if(arg=="--height") tuning.height=unsigned(value);
                 else if(arg=="--samples") tuning.samples=unsigned(value); else if(arg=="--steps") tuning.steps=unsigned(value);
                 else if(arg=="--sun-steps") tuning.sun_steps=unsigned(value); else if(arg=="--field-divisor") tuning.field_divisor=unsigned(value);
                 else if(arg=="--shadow-resolution") tuning.shadow_resolution=unsigned(value); else tuning.shadow_steps=unsigned(value);
@@ -229,14 +231,15 @@ int main(int argc,char** argv) {
         }
         require(!report.empty() && !(smoke && quality),"output and one run mode required");
         take(environment_preset(preset)); require(!quality || validation,"quality requires validation");
-        require(tuning.width>=32 && tuning.height>=32 && std::uint64_t(tuning.width)*tuning.height<=1920u*1080u &&
+        require((tuning.resolution_divisor==2 || tuning.resolution_divisor==4) && tuning.width>=32 && tuning.height>=32 && std::uint64_t(tuning.width)*tuning.height<=1920u*1080u &&
             tuning.samples>=1 && tuning.samples<=120 && tuning.steps>=8 && tuning.steps<=1024 &&
             tuning.sun_steps>=1 && tuning.sun_steps<=256 && (tuning.field_divisor==1 || tuning.field_divisor==2 || tuning.field_divisor==4) &&
             tuning.shadow_resolution>=16 && tuning.shadow_resolution<=512 && tuning.shadow_steps>=8 && tuning.shadow_steps<=1024,
             "tuning parameter exceeds supported budget");
         require(tuning.mode.empty() || tuning.mode=="combined-static" || tuning.mode=="combined-motion" || tuning.mode=="air-static" ||
             tuning.mode=="air-motion" || tuning.mode=="unlit-static" || tuning.mode=="unlit-motion","unknown tuning mode");
-        require(!quality || tuning.json()==DiagnosticOptions{}.json(),"quality uses the fixed production configuration");
+        auto quality_defaults=DiagnosticOptions{}; quality_defaults.resolution_divisor=tuning.resolution_divisor;
+        require(!quality || tuning.json()==quality_defaults.json(),"quality uses the fixed production configuration");
         if(tuning.wait_tracy) {
             require(profiling::enabled(),"Tracy capture requires a profiling build");
             const auto start=Clock::now(); while(!profiling::is_connected() && elapsed(start)<30000) std::this_thread::sleep_for(std::chrono::milliseconds(10));

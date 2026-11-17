@@ -171,7 +171,7 @@
 | 云球壳、解析解、混合合成、收敛参考、优化预算与云影投影（CPU-only） | dk_cloud_reference_tests | `^dk\.clouds\.(reference \|composition \|optimization \|shadow )` |
 | 无历史云参考GPU解析解、CPU对照、收敛和失败保护（required GPU） | dk_cloud_reference_probe | `^dk\.clouds\.reference_gpu_validation$` |
 | 云/空气/几何合成、诊断、CPU对照、遮挡和失败寿命（required GPU） | dk_cloud_composition_probe | `^dk\.clouds\.(numeric\|composition\|failures)_gpu_composition$` |
-| 半尺寸云/跳跃/早停/低角度光照、时域反遮挡、多视图重置与失败寿命（required GPU） | dk_cloud_composition_probe | `^dk\.clouds\.(optimization\|optimization_switches\|optimization_boundaries\|temporal\|history)_gpu_composition$` |
+| 独立半/四分之一尺寸云/跳跃/早停/低角度光照、时域反遮挡、多视图重置与失败寿命（required GPU） | dk_cloud_composition_probe | `^dk\.clouds\.(resolution\|optimization\|optimization_switches\|optimization_boundaries\|temporal\|history)_gpu_composition$` |
 | 固定世界云影、独立云柱/地表数值、风/相机稳定、直射隔离、失败/预算/在途寿命（required GPU） | dk_cloud_composition_probe | `^dk\.clouds\.shadow_(numeric\|surface\|failures)_gpu_composition$`（同步validation，无跳过） |
 | 云截图冻结状态/时间、schema/quality、零云退化及失败保留文件（required GPU） | dk_run | `^dk\.clouds\.capture_gpu_composition$`（Windows/Python 3.11+） |
 | 四预设收敛参考、静态/动态/云内外质量与GPU观测生命周期（required GPU） | dk_cloud_benchmark | `^dk\.clouds\.(quality_.*\|benchmark)_gpu_validation$` |

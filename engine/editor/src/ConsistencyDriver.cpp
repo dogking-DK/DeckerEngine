@@ -255,7 +255,7 @@ void ConsistencyDriver::presented(const Workspace& model,const WorkbenchUi& ui,c
         report["viewport"]["discarded"]=viewport.environment_discarded();
         const auto& settings=viewport.environment_settings();
         report["viewport"]["render_options"]={{"mode",settings.mode==render::CloudRenderMode::reference ? "reference" : "temporal"},
-            {"cloud_shadows",settings.cloud_shadows},{"shadow_center_m",vector(settings.shadow_center_m)},
+            {"cloud_resolution_divisor",settings.cloud_resolution_divisor},{"cloud_shadows",settings.cloud_shadows},{"shadow_center_m",vector(settings.shadow_center_m)},
             {"shadow_extent_m",settings.shadow_extent_m},{"shadow_resolution",settings.shadow_resolution}};
         report["viewport"]["time_seconds"]=settings.time_seconds;
         report["viewport"]["warmup_frames"]=viewport.environment_warmup();

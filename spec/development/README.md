@@ -178,6 +178,6 @@
 | 0174 | [环境面板即时应用与太阳方向盘](0174-environment-panel.md) | editor | completed |
 | 0175 | [大气与体积云性能归因](0175-atmosphere-cloud-profiling.md) | render-clouds、render-atmosphere、foundation-profiling、editor | completed |
 | 0176 | [云预览历史复用与渐进调度](0176-cloud-preview-scheduling.md) | editor、render-clouds | completed |
-| 0177 | [独立云积分分辨率](0177-cloud-resolution.md) | render-clouds、editor、render-services | in-progress |
+| 0177 | [独立云积分分辨率](0177-cloud-resolution.md) | render-clouds、editor、render-services | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

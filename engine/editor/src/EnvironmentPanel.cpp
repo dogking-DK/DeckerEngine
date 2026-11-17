@@ -183,6 +183,10 @@ void WorkbenchUi::environment(const Viewport& preview) {
             help("preview.mode",reference_available ? "" : "Reference requires a viewport of at most 4096 pixels.");
             ImGui::EndDisabled(); ImGui::EndCombo();
         }
+        ImGui::BeginDisabled(environment_settings_.mode!=render::CloudRenderMode::temporal);
+        int resolution=environment_settings_.cloud_resolution_divisor==4 ? 1 : 0;
+        if(ImGui::Combo("Cloud resolution",&resolution,"1/2 per axis\0" "1/4 per axis\0")) environment_settings_.cloud_resolution_divisor=resolution ? 4u : 2u;
+        help("preview.cloud_resolution_divisor"); ImGui::EndDisabled();
         ImGui::InputDouble("Time (s)",&environment_settings_.time_seconds,0,0,"%.6f"); mark("cloud_time"); help("preview.time_seconds");
         if(ImGui::Button("+1 second")) environment_settings_.time_seconds+=1; mark("cloud_time_step"); help("preview.time_seconds");
         ImGui::Checkbox("Cloud shadows",&environment_settings_.cloud_shadows); mark("cloud_shadow"); help("preview.cloud_shadows");

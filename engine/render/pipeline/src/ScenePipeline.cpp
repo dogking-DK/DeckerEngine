@@ -312,8 +312,8 @@ Buffer prepare_reconstruction(detail::PipelineState& state,const RenderView& vie
     struct Parameters { std::array<std::uint32_t,4> size; std::array<float,4> controls,previous_clip[4],camera_delta,previous_forward; };
     static_assert(sizeof(Parameters)==128);
     Parameters p{}; const auto& v=view.description();
-    p.size={(v.width+1)/2,(v.height+1)/2,previous ? 1u : 0u,settings.empty_space_skipping ? 1u : 0u};
-    p.controls={settings.termination_transmittance,settings.history_weight,0,0};
+    p.size={(v.width+settings.resolution_divisor-1)/settings.resolution_divisor,(v.height+settings.resolution_divisor-1)/settings.resolution_divisor,previous ? 1u : 0u,settings.empty_space_skipping ? 1u : 0u};
+    p.controls={settings.termination_transmittance,settings.history_weight,float(settings.resolution_divisor),0};
     if(previous) {
         const auto& old=previous->view; const auto& environment=view.scene().environment();
         const Vec3d delta=v.camera_world.matrix().topRightCorner<3,1>()-old.camera_world.matrix().topRightCorner<3,1>();
@@ -481,6 +481,7 @@ struct Context {
     const CloudTextures* clouds=nullptr;
     std::size_t cloud_parameters=0;
     bool optimized=false;
+    std::uint32_t cloud_divisor=2;
     std::size_t reconstruction_parameters=0,statistics=0,statistics_readback=0;
     std::array<std::size_t,3> raw_cloud{},filtered_cloud{},previous_cloud{};
 };
@@ -641,7 +642,7 @@ Result<void> reconstruction_pass(graph::PassContext& pass,void* pointer) {
     if(stage==2) image(9,c.hdr);
     auto bindings=take(c.pipeline.factory.create_bindings(program.layout,0,std::span{writes}.first(count)));
     auto encoder=take(pass.compute()); check(encoder.bind_pipeline(program.pipeline)); const std::array sets{&bindings}; check(encoder.bind_sets(sets));
-    const auto width=stage==2 ? c.width : (c.width+1)/2,height=stage==2 ? c.height : (c.height+1)/2;
+    const auto width=stage==2 ? c.width : (c.width+c.cloud_divisor-1)/c.cloud_divisor,height=stage==2 ? c.height : (c.height+c.cloud_divisor-1)/c.cloud_divisor;
     return encoder.dispatch({(width+7)/8,(height+7)/8,1});
 }
 #endif
@@ -687,8 +688,8 @@ const char* cloud_history_reset_name(CloudHistoryReset value) noexcept {
 Result<void> validate_environment_render_settings(const EnvironmentRenderSettings& s) {
     if((s.mode!=CloudRenderMode::reference && s.mode!=CloudRenderMode::temporal) || !std::isfinite(s.time_seconds) || std::abs(s.time_seconds)>1e9 ||
         !s.view_id || !s.shadow_center_m.allFinite() || (s.shadow_center_m.array().abs()>1e9).any() || !std::isfinite(s.shadow_extent_m) ||
-        s.shadow_extent_m<16 || s.shadow_extent_m>65536 || !std::has_single_bit(s.shadow_resolution) || s.shadow_resolution<16 || s.shadow_resolution>512)
-        return std::unexpected(Error{ErrorCode::invalid_argument,"Invalid environment mode, time, view identity or shadow region"});
+        s.shadow_extent_m<16 || s.shadow_extent_m>65536 || !std::has_single_bit(s.shadow_resolution) || s.shadow_resolution<16 || s.shadow_resolution>512 || (s.cloud_resolution_divisor!=2 && s.cloud_resolution_divisor!=4))
+        return std::unexpected(Error{ErrorCode::invalid_argument,"Invalid environment mode, time, view identity, cloud resolution or shadow region"});
     return {};
 }
 Result<void> validate_render_settings(const RenderView& view,const RenderSettings& settings) {
@@ -797,7 +798,7 @@ Result<RenderFrame> ScenePipeline::render_environment(SubmissionQueue& queue,con
 #ifdef DK_RENDER_CLOUDS
         CloudCompositionSettings composition; composition.reference.time_seconds=environment.time_seconds;
         CloudOptimizedSettings optimized; optimized.composition.reference.time_seconds=environment.time_seconds;
-        optimized.view_id=environment.view_id; optimized.camera_revision=environment.camera_revision;
+        optimized.resolution_divisor=environment.cloud_resolution_divisor; optimized.view_id=environment.view_id; optimized.camera_revision=environment.camera_revision;
         if(cloudy) {
             if(environment.mode==CloudRenderMode::reference) check(validate_cloud_composition(view.scene().environment(),composition,std::size_t(view.description().width)*view.description().height));
             else check(validate_cloud_optimization(view.scene().environment(),optimized,view.description().width,view.description().height));
@@ -943,7 +944,7 @@ Result<std::string> shader_fingerprint(const std::filesystem::path& directory,bo
 #endif
     }
     // CPU-side sampling/mapping version, including the fixed 64 x 64 x 128 AP grid.
-    for(const unsigned char c:std::string_view{"render-environment-v2:64x64x128:128:cloud-joint-v1:256x64x64:cloud-reconstruct-v1:96to256x8:half-fixed:cloud-shadow-v1:sunward-inner-sphere:environment-session-v1:low-sun-32"}) append(c);
+    for(const unsigned char c:std::string_view{"render-environment-v2:64x64x128:128:cloud-joint-v1:256x64x64:cloud-reconstruct-v1:96to256x8:divisor-2-or-4:cloud-shadow-v1:sunward-inner-sphere:environment-session-v1:low-sun-32"}) append(c);
     std::ostringstream out; out<<"fnv1a64:"<<std::hex<<std::setfill('0')<<std::setw(16)<<hash; return out.str();
 }
 Result<RenderFrame> ScenePipeline::render_atmosphere(SubmissionQueue& queue,const RenderView& view,const GpuAssets& assets,const AtmosphereSky& sky,const RenderSettings& settings,const AtmosphereSettings& atmosphere,const CloudShadowMap* shadow) {
@@ -1031,13 +1032,13 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
                 if(slot->sequence==UINT64_MAX) throw Error{ErrorCode::invalid_state,"Cloud history sequence exhausted"};
                 history_slot=&*slot;
             }
-            cloud_info.view_id=optimized->view_id; cloud_info.width=(width+1)/2; cloud_info.height=(height+1)/2;
+            cloud_info.view_id=optimized->view_id; cloud_info.width=(width+optimized->resolution_divisor-1)/optimized->resolution_divisor; cloud_info.height=(height+optimized->resolution_divisor-1)/optimized->resolution_divisor;
             cloud_info.reset=history_slot ? history_reset(*history_slot,view,*optimized) : CloudHistoryReset::disabled;
             if(cloud_info.reset==CloudHistoryReset::none) { previous=history_slot->completed; cloud_info.history_available=true; cloud_info.source_sequence=previous->sequence; }
             cloud_info.candidate_sequence=history_slot ? history_slot->sequence+1 : 0;
             std::uint64_t bytes=std::uint64_t{cloud_info.width}*cloud_info.height*48;
             for(const auto& slot:state_->cloud_history) for(const auto& generation:{slot.completed,slot.pending}) if(generation)
-                bytes+=std::uint64_t{(generation->view.width+1)/2}*((generation->view.height+1)/2)*48;
+                bytes+=std::uint64_t{generation->images[0].description().width}*generation->images[0].description().height*48;
             if(bytes>256ULL*1024*1024) throw Error{ErrorCode::invalid_state,"Cloud history image budget exceeded"};
             candidate=memory::make_shared_in<detail::CloudHistoryGeneration>(heap); candidate->settings=*optimized; candidate->view=view.description();
             candidate->scene=view.scene().id(); candidate->revision=view.scene().revision(); candidate->environment=view.scene().environment(); candidate->sequence=cloud_info.candidate_sequence;
@@ -1152,6 +1153,9 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
 #endif
         context.clouds=clouds; context.cloud_parameters=cloud_parameters; context.cloud_readback=frame->cloud_readback;
         context.optimized=optimized!=nullptr; context.reconstruction_parameters=reconstruction_parameters;
+#ifdef DK_RENDER_CLOUDS
+        context.cloud_divisor=optimized ? optimized->resolution_divisor : 2;
+#endif
         context.statistics=statistics_index; context.statistics_readback=frame->cloud_statistics;
         frame->color=context.ldr; context.linear_readback=frame->linear_readback; context.parameters=parameters_index;
         Vector<graph::Use> clear_uses(0,memory::Allocator<graph::Use>{heap});
@@ -1256,7 +1260,7 @@ Result<RenderFrame> ScenePipeline::render_impl(SubmissionQueue& queue,const Rend
             if(!optimized) static_cast<void>(take(graph.add_pass({"joint cloud air geometry composition",uses})));
             else {
                 std::array<graph::ResourceId,3> raw,filtered,history;
-                ImageDesc half{(width+1)/2,(height+1)/2,vk::Format::eR32G32B32A32Sfloat,vk::ImageUsageFlagBits::eStorage|vk::ImageUsageFlagBits::eSampled};
+                ImageDesc half{cloud_info.width,cloud_info.height,vk::Format::eR32G32B32A32Sfloat,vk::ImageUsageFlagBits::eStorage|vk::ImageUsageFlagBits::eSampled};
                 for(unsigned i=0;i<3;++i) {
                     context.raw_cloud[i]=graph.counts().buffers+graph.counts().images;
                     raw[i]=take(graph.declare_image("current half cloud "+std::to_string(i),half));

@@ -96,7 +96,7 @@ nlohmann::json camera_json(const CaptureCamera& c) {
 }
 nlohmann::json settings_json(const render::EnvironmentRenderSettings& s) {
     return {{"mode",s.mode==render::CloudRenderMode::reference ? "reference" : "temporal"},
-        {"cloud_shadows",s.cloud_shadows},{"shadow_center_m",{s.shadow_center_m.x(),s.shadow_center_m.y(),s.shadow_center_m.z()}},
+        {"cloud_resolution_divisor",s.cloud_resolution_divisor},{"cloud_shadows",s.cloud_shadows},{"shadow_center_m",{s.shadow_center_m.x(),s.shadow_center_m.y(),s.shadow_center_m.z()}},
         {"shadow_extent_m",s.shadow_extent_m},{"shadow_resolution",s.shadow_resolution}};
 }
 std::string provenance(const CaptureRequest& r,const EnvironmentDescription& environment) {

@@ -39,10 +39,11 @@ Json camera_schema(bool complete=false) {
     return schema::object(std::move(fields),complete ? Json{"eye","target","up","projection","near","far"} : Json{"eye","target"});
 }
 Json render_options_schema(bool complete=false) {
+    auto resolution=integer(4,2); resolution["enum"]={2,4};
     return schema::object({{"mode",{{"type","string"},{"enum",{"reference","temporal"}}}},
-        {"cloud_shadows",schema::boolean()},{"shadow_center_m",vector_schema()},
+        {"cloud_resolution_divisor",std::move(resolution)},{"cloud_shadows",schema::boolean()},{"shadow_center_m",vector_schema()},
         {"shadow_extent_m",number(16,65536)},{"shadow_resolution",integer(512,16)}},
-        complete ? Json{"mode","cloud_shadows","shadow_center_m","shadow_extent_m","shadow_resolution"} : Json::array());
+        complete ? Json{"mode","cloud_resolution_divisor","cloud_shadows","shadow_center_m","shadow_extent_m","shadow_resolution"} : Json::array());
 }
 Json reuse_schema() {
     const auto temporal=schema::object({{"reused",integer()},{"rejected",integer()},{"expired",integer()},{"support_corrected",integer()},
@@ -120,6 +121,7 @@ CaptureRequest request(const Json& p,bool sequence) {
     if(p.contains("render_options")) {
         const auto& o=p["render_options"]; auto& s=r.environment;
         s.mode=o.value("mode",std::string{"reference"})=="temporal" ? render::CloudRenderMode::temporal : render::CloudRenderMode::reference;
+        s.cloud_resolution_divisor=o.value("cloud_resolution_divisor",2U);
         s.cloud_shadows=o.value("cloud_shadows",true); s.shadow_extent_m=o.value("shadow_extent_m",8192.0); s.shadow_resolution=o.value("shadow_resolution",256U);
         if(o.contains("shadow_center_m")) s.shadow_center_m=vector(o["shadow_center_m"]);
     }

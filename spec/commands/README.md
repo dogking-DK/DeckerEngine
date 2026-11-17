@@ -42,7 +42,7 @@ M22.10 已接入[面板帮助与设置搜索](../guides/editor.md#字段帮助�
 | [历史](history.md) | `history.status`、`history.undo`、`history.redo` | 内存撤销与重做 |
 | [运行时与任务](runtime.md) | `runtime.capabilities`、`runtime.shutdown`、`tasks.list`、`tasks.get` | 能力、同步任务和关闭 |
 | [CPU 资产](assets.md) | `assets.open`、`assets.catalog`、`assets.import`、`assets.register`、`assets.rename`、`assets.load`、`assets.status`、`assets.unload` | 目录会话、持久身份和 CPU Ready |
-| [截图](render.md) | `render.capture`、`render.sequence` | 冻结场景/环境、相机与时间，支持云参考/时域、云影及原子图像或序列报告 |
+| [截图](render.md) | `render.capture`、`render.sequence` | 冻结场景/环境、相机与时间，支持云参考/时域、独立云积分分辨率、云影及原子图像或序列报告 |
 | [模拟](simulation.md) | `simulation.start`、`simulation.run`、`simulation.cancel`、`simulation.pause`、`simulation.resume`、`simulation.step`、`simulation.stop`、`simulation.query`、`simulation.sample`、`simulation.particles`、`simulation.export` | 独立 PlayWorld、固定步长、有限任务控制、CPU/GPU XPBD、显式数值/批次性能和实验导出 |
 | [后台作业](jobs.md) | `jobs.get`、`jobs.wait`、`jobs.cancel` | JobId 状态、等待和协作取消 |
 

@@ -159,6 +159,7 @@ std::vector<SettingInfo> build_settings_catalog(const CommandCatalogSnapshot& ca
     add("viewport.voxel_irradiance","View settings","Voxel","Voxel irradiance","体素 辐照度","editor.viewport.set","voxel_irradiance","Linear RGB irradiance for directional voxel shading.",view);
     for(const auto& [key,label,info]:std::initializer_list<std::array<const char*,3>>{
         {"mode","Cloud render mode","Temporal progressively refines while stationary; Reference requires at most 4096 viewport pixels."},
+        {"cloud_resolution_divisor","Cloud resolution","Temporal cloud integration at 1/2 or 1/4 per axis; geometry and output stay full-size. Default 1/2. Changes reset history."},
         {"time_seconds","Cloud render time","Fixed time in seconds; changes reset cloud history. Initial UI value 0."},
         {"cloud_shadows","Cloud shadows","Toggle raster cloud shadows; session-only, not the physical cloud enable."},
         {"shadow_center_m","Shadow center","World XYZ center in meters; each component must be finite, absolute value <= 1e9."},

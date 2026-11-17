@@ -89,7 +89,7 @@ TEST_CASE("capture sequence budgets modes and schema reject before any publicati
     auto descriptor=c.value("commands.describe",{{"name","render.sequence"}}); CHECK(descriptor["effect"]=="external"); CHECK(descriptor["undoable"]==false);
     const Json bad=GENERATE(Json{{"samples",Json::array()}},Json{{"warmup_frames",1}},Json{{"warmup_frames",65}},Json{{"output","wrong.ppm"}},
         Json{{"width",1024},{"height",1024}},Json{{"render_options",{{"mode","unknown"}}}},
-        Json{{"render_options",{{"shadow_resolution",17}}}},Json{{"time_seconds",1}});
+        Json{{"render_options",{{"cloud_resolution_divisor",3}}}},Json{{"render_options",{{"shadow_resolution",17}}}},Json{{"time_seconds",1}});
     auto params=base; params.update(bad); CHECK_FALSE(c.call("render.sequence",params));
     auto many=base; many["width"]=256; many["height"]=256; many["samples"]=Json::array({sample,sample,sample,sample,sample}); CHECK_FALSE(c.call("render.sequence",many));
     auto invalid=base; invalid["samples"][0]["time_seconds"]=1e10; CHECK_FALSE(c.call("render.sequence",invalid));

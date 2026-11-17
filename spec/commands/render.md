@@ -1,7 +1,7 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-11-12T16:55:54+08:00"
+updated_at: "2026-11-17T09:32:00+08:00"
 status: accepted
 ---
 
@@ -135,6 +135,7 @@ cloud_temporal_v1使用M15.4的96到256自适应主步、8云太阳步、保边�
 | 字段 | 默认 | 含义 |
 | --- | --- | --- |
 | mode | reference | reference或temporal；每次capture/sequence都从空历史开始 |
+| cloud_resolution_divisor | 2 | 2或4：temporal云积分宽高各1/2或1/4；网格/深度/输出尺寸不变，切换重置历史；reference忽略缩放保持全尺寸 |
 | cloud_shadows | true | 非零云且空气开启时自动绑定太阳云透射图，仅乘直射；空气关闭不施加地表云影 |
 | shadow_center_m | [0,0,0] | 固定世界覆盖中心，分量绝对值≤1e9m |
 | shadow_extent_m | 8192 | 太阳正交平面宽度，16–65536m |

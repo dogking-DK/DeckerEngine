@@ -60,6 +60,7 @@ struct EnvironmentRenderSettings {
     Vec3d shadow_center_m=Vec3d::Zero();
     double shadow_extent_m=8192;
     std::uint32_t shadow_resolution=256;
+    std::uint32_t cloud_resolution_divisor=2; // Temporal medium grid only; reference remains full-size.
     bool operator==(const EnvironmentRenderSettings&) const = default;
 };
 [[nodiscard]] Result<void> validate_environment_render_settings(const EnvironmentRenderSettings&);
