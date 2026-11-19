@@ -2,7 +2,7 @@
 
 ## 最近完成
 
-- Codex 桌面会话已复测 RTK 项目 hook，直接运行 `git status` 和 `rg` 均自动精简。权限诊断和折叠结果的取回方法见[项目导航 skill](.agents/skills/decker-code-navigation/SKILL.md#codex-中的-rtk)。
+- RTK 项目 hook 已验证自动精简。本工作副本已固定恢复库，根目录搜索、下一次调用从子目录取回折叠行均已通过。[项目导航 skill](.agents/skills/decker-code-navigation/SKILL.md#跨命令取回折叠结果)
 - 开发工作台、精简 benchmark、离线复算样本与本地代码索引的实施和验证见 [0183](spec/development/0183-development-workflow.md)。
 - 完整 RGB 表面直接光 ReSTIR v2 已接入 Editor 和 capture，Sponza 运动误差下降；原生尺寸更新率相对 v1 下降 4.1%。[0182 结果](spec/benchmarks/2026-11-17-restir-direct.md)
 - Scene media 的 RGB 预览降低天空开口花斑，受光地面与间接光仍有噪声。[0181 结果](spec/benchmarks/2026-11-17-media-preview.md)

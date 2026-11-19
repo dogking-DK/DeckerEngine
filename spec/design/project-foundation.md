@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-11-19T09:55:00+08:00"
+updated_at: "2026-11-19T11:15:58+08:00"
 status: accepted
 ---
 
@@ -21,6 +21,10 @@ CodeGraph 与 codebase-memory 使用各自的本地数据库。显式更新需�
 完成后查到指定源码中的已知符号，才向指南中的历史表写入该工具最近三次成功记录。
 北京时间、操作、版本、Git HEAD 与工作区状态对应实际运行。单写者与原子替换保护历史文档，
 某一工具失败时保留另一工具已经验证的结果。只读查询不刷新时间。
+
+RTK 的折叠输出按工作副本缓存在 `out/rtk/recall.db`。若沙箱为每次 shell 调用分配独立
+的数据目录，项目的本机 Codex 配置用 `RTK_RECALL_DB` 指向该库的绝对路径，使搜索与
+后续取回共用同一份结果。缓存可通过重跑查询重建。具体配置及验收见[项目导航 skill](../../.agents/skills/decker-code-navigation/SKILL.md#codex-中的-rtk)。
 
 ## 目标与范围
 

@@ -1,7 +1,7 @@
 ---
 id: "0183"
 created_at: "2026-11-19T09:55:00+08:00"
-updated_at: "2026-11-19T11:11:14+08:00"
+updated_at: "2026-11-19T11:22:57+08:00"
 status: completed
 design_refs:
   - ../design/project-foundation.md
@@ -56,3 +56,12 @@ MXC 对照同样使用 Codex 随附的 ripgrep。首次只读试跑中搜索成�
 | `rg -n parse_id_bytes engine/foundation/core` | 3 行，保留文件与行号 | 相同的 3 处命中 |
 
 以上命令均退出 0，行数排除了 RTK 的安装提示。固定字符串零命中时，裸 `rg` 和 `rtk bypass rg` 均退出 1。大查询给出的两个 `rtk recall` 哈希在该会话均返回 `no matching entry`；用 `rtk bypass rg -n namespace engine/editor/src/ConsoleSmoke.hpp` 重查可读到第 7、9 行。CTest 枚举用 `-N -R '^dk\.ipc\.client_help$'` 从 440 项筛至 1 项，仅验证枚举。
+
+### 修复跨调用的 RTK recall
+
+RTK 1.2.0 使用 SQLite。同一次桌面 shell 调用中先搜索再取回，两个哈希均有效，`%LOCALAPPDATA%/rtk/recall.db` 已生成。换一次调用后，`LOCALAPPDATA` 的沙箱目录变了，原哈希查询退出 1。RTK 优先用 `RTK_RECALL_DB` 定位恢复库。[上游实现](https://github.com/rtk-ai/rtk/blob/v1.2.0/src/core/retriever.rs#L160-L185)
+
+本工作副本在 `.codex/config.toml` 的 `[shell_environment_policy.set]` 指向 `out/rtk/recall.db` 的绝对路径。本机配置由 `.git/info/exclude` 排除，数据库由已有的 `/out/` 规则排除。旧聊天显式给搜索、取回设置同一路径后通过。新启动的 Codex 应用包 app-server 自动将项目配置传入独立的 `workspaceWrite` 命令。该探针另外为 RTK 提供本机 Claude 配置目录和随附 rg 的 PATH。
+
+- 从根目录执行 `rtk rg -n namespace engine`，在后续独立命令中从 `engine/` 取回两个哈希，各得到 1 行和 799 行。加上可见的 200 行，与 bypass 的 1000 个文件及行号匹配项逐项计数一致。RTK 的结果会整理缩进，长行也可能被截短。
+- 新生成的 260 行样本保留 25 行，跨调用取回其余 235 行，内容与顺序与样本相符。查询未存储的哈希仍退出 1。[使用方法](../../.agents/skills/decker-code-navigation/SKILL.md#跨命令取回折叠结果)
