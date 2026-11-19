@@ -1,7 +1,7 @@
 ---
 id: "0177"
 created_at: "2026-11-17T09:25:00+08:00"
-updated_at: "2026-11-17T09:53:00+08:00"
+updated_at: "2026-11-19T10:08:48+08:00"
 status: completed
 design_refs:
   - ../design/render-clouds.md
@@ -25,7 +25,7 @@ design_refs:
 
 RelWithDebInfo 定向运行092914：11项CPU及4项GPU（resolution/optimization/orthographic/history）通过，capture首次失败：整数schema缺少引擎要求的token标记。改为公共integer helper后，093612命令边界、实际UI帮助与capture **3/3通过**，验证commands.list/describe、17×19 quarter capture及冻结provenance。
 
-真实GPU/sync四预设1/4质量：`dk-cloud-benchmark --quality --validation --resolution-divisor 4 --preset <preset> --output <path>`，58组参考比较全部通过，包含32预热+120稳定帧及运动/云内外/太阳盘；沿用NRMSE≤.05、p99/max≤.12、云T≤.02、太阳≤.002。原始线性图像、日志和PPM见[ZIP](../benchmarks/2026-11-17-cloud-resolution-quality.zip)，[摘要](../benchmarks/2026-11-17-cloud-resolution-quality.json)。文档和diff检查通过。三轮分辨率性能对照与第三阶段同输入一起归档；未运行全量/Debug矩阵。
+真实GPU/sync四预设1/4质量：`dk-cloud-benchmark --quality --validation --resolution-divisor 4 --preset <preset> --output <path>`，58组参考比较全部通过，包含32预热+120稳定帧及运动/云内外/太阳盘；沿用NRMSE≤.05、p99/max≤.12、云T≤.02、太阳≤.002。原始线性图像、日志和PPM见ZIP（历史文件 `b8b0e7e:spec/benchmarks/2026-11-17-cloud-resolution-quality.zip`；[现存结果](../benchmarks/2026-11-17-cloud-optimization.md)），[摘要](../benchmarks/2026-11-17-cloud-resolution-quality.json)。文档和diff检查通过。三轮分辨率性能对照与第三阶段同输入一起归档；未运行全量/Debug矩阵。
 
 ## 偏差与决策
 

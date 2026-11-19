@@ -1,7 +1,7 @@
 ---
 id: "0142"
 created_at: "2026-10-20T00:00:00+08:00"
-updated_at: "2026-10-20T00:19:43+08:00"
+updated_at: "2026-11-19T10:08:48+08:00"
 status: completed
 design_refs:
   - ../design/render-pathtracing.md
@@ -33,7 +33,7 @@ design_refs:
 - [PathPreview](../../engine/editor/src/PathPreview.cpp)采用设备额度与表面tile256，介质tile64；面板显示当前额度。
 - [桌面验收](../../tests/integration/PathDesktopWorker.inl)使用真实默认相机和Sponza，1600×1200/2048²四模式连续累积，外持显示图像、取消恢复和关闭检查。
 - 扩展progressive/ReSTIR调度测试，逐值比较257×129、64/256 tile与反向遍历下颜色、二阶矩、命中及全部复用组合；更新显存外持回归以维持实际超额拒绝条件。
-- 无依赖版本、命令schema、shader或采样算法变化。保留全部24个新旧性能报告、3个桌面性能报告及验证证据，见[测量报告](../benchmarks/2026-10-20-path-preview.md)与[可复算归档](../benchmarks/2026-10-20-path-preview/README.md)。
+- 无依赖版本、命令schema、shader或采样算法变化。保留全部24个新旧性能报告、3个桌面性能报告及验证证据，见[测量报告](../benchmarks/2026-10-20-path-preview.md)与可复算归档（历史文件 `b8b0e7e:spec/benchmarks/2026-10-20-path-preview/README.md`；[现存结果](../benchmarks/2026-10-20-path-preview.md)）。
 
 ## 验证记录
 

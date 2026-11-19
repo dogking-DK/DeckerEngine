@@ -1,7 +1,7 @@
 ---
 id: "0180"
 created_at: "2026-11-17T11:44:26+08:00"
-updated_at: "2026-11-17T13:40:22+08:00"
+updated_at: "2026-11-19T10:08:48+08:00"
 status: completed
 design_refs:
   - ../design/render-pathtracing.md
@@ -36,7 +36,7 @@ design_refs:
 | 20261117-132018-27703d98 | windows-voxel-editor / Release；构建dk_pathtracing_probe、dk_pathmedia_benchmark、dk_editor_app，voxel_medium_numeric/schedule/state | 3/3通过 |
 | 20261117-132520-518699c3 | 同配置；测试夹具变量遮蔽警告修正后的schedule定向复跑 | 1/1通过 |
 
-均经scripts/verify.ps1显式Target/TestRegex；GPU required/Khronos/sync开启，无跳过。未执行全量引擎或Debug矩阵。性能/质量命令、精确工作量、冷编译成本、显存口径和限制见[性能报告](../benchmarks/2026-11-17-path-medium-optimization.md)，[结构化结果](../benchmarks/2026-11-17-path-medium-optimization.json)和[冻结证据](../benchmarks/2026-11-17-path-medium-optimization.raw.zip)。测量后仅整理一行C++缩进，已核对所有归档源文件去空白后完全相同；未重新计时或重复功能测试。
+均经scripts/verify.ps1显式Target/TestRegex；GPU required/Khronos/sync开启，无跳过。未执行全量引擎或Debug矩阵。性能/质量命令、精确工作量、冷编译成本、显存口径和限制见[性能报告](../benchmarks/2026-11-17-path-medium-optimization.md)，[结构化结果](../benchmarks/2026-11-17-path-medium-optimization.json)和冻结证据（历史文件 `b8b0e7e:spec/benchmarks/2026-11-17-path-medium-optimization.raw.zip`；[现存结果](../benchmarks/2026-11-17-path-medium-optimization.md)）。测量后仅整理一行C++缩进，已核对所有归档源文件去空白后完全相同；未重新计时或重复功能测试。
 
 实现范围为PathTraceRenderer、共享介质shader、GPU场owner、capture依赖指纹和定向测试/benchmark；无新第三方依赖、持久场景字段或Console命令。后续优先独立诊断既有128spp数值域拒绝；分段追踪需获得净收益后再评估默认策略，不能把本次实验自动启用。
 

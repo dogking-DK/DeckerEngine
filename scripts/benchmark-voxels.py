@@ -153,23 +153,16 @@ def aggregate(runs):
 
 
 def markdown(summary):
-    lines = ["# M23.7 三轮实测汇总", "", f"设备：{summary['device']['name']}；驱动：{summary['device']['driver']}。", "",
-        f"测量协议 v{summary['measurement_version']}：Release、validation OFF；每视图首帧 + 2 预热 + 8 采样帧，表中为三轮 24 样本。GPU 为 submission 时间，端到端包括 CPU 提交、等待和读回。v2 另有固定 64 帧设备预热，其全部耗时保留在原始报告。", "",
-        "| 输入 | Nano MiB | 转换 ms 中位数 | 上传 GPU ms | 调优/旧转换 GPU 比率（旧/新） | HDDA/逐格访问区域 |", "| --- | --- | --- | --- | --- | --- |"]
-    for c in summary["cases"]:
-        a = c["ablation"]
-        lines.append(f"| {c['name']} | {c['storage']['nano_bytes']/2**20:.4f} | {c['conversion_ms']['median']:.3f} | {c['upload_gpu_ms']['median']:.4f} | {c['transition_speed_ratio']:.3f} | {a['hdda']['visited']} / {a['cell_step']['visited']} |")
-    lines += ["", "大域逐格对照限制在 t≤4096、32 条相同射线；该工作量收益不代表完整画面加速。短查询有计时噪声，收益和退化均保留。", "",
-        "| 输入 | 视口 | 投影 | GPU ms 中位/p95 | CPU 提交 ms 中位 | 端到端 ms 中位/p95 | 旧帧+新帧 allocation MiB |", "| --- | --- | --- | --- | --- | --- | --- |"]
-    for c in summary["cases"]:
-        for r in c["renders"]:
-            lines.append(f"| {c['name']} | {r['width']}×{r['height']} | {r['projection']} | {r['gpu_ms']['median']:.3f}/{r['gpu_ms']['p95']:.3f} | {r['cpu_submit_ms']['median']:.3f} | {r['end_to_end_ms']['median']:.3f}/{r['end_to_end_ms']['p95']:.3f} | {r['old_pending_allocation_bytes']/2**20:.2f} |")
-    lines += ["", "| 输入 | source/normalized tree MiB | 已知转换同时存活 payload MiB | 转换期采样 working/private MiB | 旧代+新代上传 allocation MiB |", "| --- | --- | --- | --- | --- |"]
-    for c in summary["cases"]:
-        s = c["storage"]
-        lines.append(f"| {c['name']} | {s['source_tree_bytes']/2**20:.3f}/{s['normalized_tree_bytes']/2**20:.3f} | {s['conversion_live_payload_bytes']/2**20:.3f} | {c['conversion_sampled_working_peak']/2**20:.1f}/{c['conversion_sampled_private_peak']/2**20:.1f} | {c['old_generation_allocation_bytes']/2**20:.2f} |")
-    lines += ["", "进程采样间隔 1 ms，只给出观测下界，包含运行时/编译器/驱动及分配器保留量；不等同 OpenVDB 内部 scratch 的精确峰值。VMA allocation 与 block 分列在原始 JSON；device-local 和 host-visible 可重叠，不能相加。AS/AABB/SBT 不适用。所有用例和进程释放后的 allocation 数均恢复基线。", ""]
-    return "\n".join(lines)
+    renders = [view for case in summary["cases"] for view in case["renders"]]
+    medians = [r["gpu_ms"]["median"] for r in renders]
+    worst = max(renders, key=lambda r: r["gpu_ms"]["p95"])
+    return (
+        f"# 稀疏体素光栅基线\n\n{summary['device']['name']}，驱动 {summary['device']['driver']}，"
+        f"测量协议 v{summary['measurement_version']}，三轮 Release。\n\n"
+        f"{len(renders)} 个视图的 GPU submission 中位数范围 {min(medians):.3f}–{max(medians):.3f} ms。"
+        f"最高 p95 为 {worst['gpu_ms']['p95']:.3f} ms。\n\n"
+        "各视图端到端耗时、转换、上传、内存及消融对照见 [summary.json](summary.json)。\n"
+    )
 
 
 def plot(summary, output):

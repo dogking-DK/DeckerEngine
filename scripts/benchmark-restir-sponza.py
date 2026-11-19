@@ -37,11 +37,16 @@ def expected_restir(mode):
                              position_tolerance=1, normal_cosine=.9) if mode == 'spatial' else None)
 
 
-def common(value, mode, kind):
+def sampler_for_manifest(digest):
+    # Frozen M19.8 measurements predate the scene-media sampler change.
+    return 2 if digest == '9789ffe763e2e60da098345da47a585bdc812ed0194b86e00d34f49e69c1003d' else 3
+
+
+def common(value, mode, kind, sampler=3):
     need(value['schema'] == 1 and value['status'] == 'passed' and value['kind'] == kind, 'Failed/mislabeled run')
     need(value['algorithm'] == mode and value['restir'] == expected_restir(mode), 'Changed algorithm/settings')
     need(not value['smoke'] and not value['validation'] and value['configuration'] == 'Release', 'Invalid timing configuration')
-    need((value['model'], value['sampler'], value['time'], value['bounces'], value['tile']) == (4, 3, 17, 4, 64), 'Changed workload')
+    need((value['model'], value['sampler'], value['time'], value['bounces'], value['tile']) == (4, sampler, 17, 4, 64), 'Changed workload')
     need(value['rtxdi'] == '3.1.0/f12037fa8e97ebc08e9e3edfd2de528ed1772a4b' and value['reconstruction'] == 'none', 'Changed backend')
     need(value['quality_wait'] == 'active_poll_1ms_then_block', 'Changed quality waiting protocol')
     need(not value['cpu_live'] and not value['vma_live'] and value['diagnostics'] == dict(errors=0, warnings=0), 'Leak/diagnostic')
@@ -49,10 +54,10 @@ def common(value, mode, kind):
     stats([value['compile_ms'], value['asset_load_ms'], value['cpu_peak']])
 
 
-def source(row, mode, samples, empty=True, seed=None):
+def source(row, mode, samples, sampler, empty=True, seed=None):
     s = row['source']
     t = row['transport']
-    need((t['model'], t['sampler'], t['medium']) in ((3, 1, False), (4, 3, True)) and
+    need((t['model'], t['sampler'], t['medium']) in ((3, 1, False), (4, sampler, True)) and
          t['max_bounces'] == 4 and t['rr_start'] == 3, 'Changed actual transport settings')
     if seed is not None:
         need(t['seed'] == seed, 'Actual seed differs from independent chain')
@@ -78,12 +83,12 @@ def transport_input(row, case):
          and t['medium'] == (not case['surface_only']), 'Image transport differs from case input')
 
 
-def quality(values):
+def quality(values, sampler):
     result = []
     for case in CASES:
         runs = {m: values[m, case] for m in MODES}
         for mode, run in runs.items():
-            common(run, mode, 'quality')
+            common(run, mode, 'quality', sampler)
             need(run['timing_quality'] and run['quality_extent'] == [4, 4] and run['quality_limit'] == 16384
                  and run['reference_n'] == 16384 and run['skip_reference'] == (mode != 'classic'), 'Changed quality protocol')
             need([c['name'] for c in run['cases']] == [case], 'Missing quality case')
@@ -98,7 +103,7 @@ def quality(values):
             for key, spp in (('reference_n', 16384), ('reference_4n', 65536)):
                 need(row[key]['samples'] == spp, 'Changed reference range')
                 transport_input(row[key], runs['classic']['cases'][0])
-                source(row[key], 'classic', spp, seed=row['reference_seed'])
+                source(row[key], 'classic', spp, sampler, seed=row['reference_seed'])
                 flat(row[key]['second'], 16)
             refs.append(flat(row['reference_4n']['linear'], 16))
             refs_n.append(flat(row['reference_n']['linear'], 16))
@@ -119,7 +124,7 @@ def quality(values):
                     need(level['image']['samples'] == spp and level['submissions'] == submissions, 'Wrong candidate range/pass count')
                     stats([level['increment_ms'], level['increment_gpu_ms']])
                     transport_input(level, run['cases'][0])
-                    source(level, mode, spp, seed=row['seed'])
+                    source(level, mode, spp, sampler, seed=row['seed'])
                     images.append(flat(level['image']['linear'], 16)); flat(level['image']['second'], 16)
                 wall = [sum(v['increment_ms'] for v in row['levels'][:i+1]) for row in rows]
                 gpu = [sum(v['increment_gpu_ms'] for v in row['levels'][:i+1]) for row in rows]
@@ -161,10 +166,10 @@ def quality(values):
     return result
 
 
-def performance(rounds, mode):
+def performance(rounds, mode, sampler):
     need(len(rounds) == 3 and len({r['collection']['run_id'] for r in rounds}) == 3, 'Three independent runs required')
     for run in rounds:
-        common(run, mode, 'performance')
+        common(run, mode, 'performance', sampler)
         need(run['preview_extent'] == [640, 360] and run['performance_samples'] == 4, 'Changed preview/spp')
         need([c['name'] for c in run['cases']] == list(CASES), 'Missing/duplicate performance case')
     results = []
@@ -179,17 +184,17 @@ def performance(rounds, mode):
             preview += case['preview']; cancel += [r['reclaim_ms'] for r in case['cancel']]
             for i, row in enumerate(case['motion']):
                 transport_input(row, case)
-                s = source(row, mode, 1, empty=mode in ('classic', 'initial') or i == 0, seed=101)
+                s = source(row, mode, 1, sampler, empty=mode in ('classic', 'initial') or i == 0, seed=101)
                 need(abs(row['shift']-.01*(i+1)) < 1e-9, 'Changed camera sequence')
                 if mode in ('temporal', 'spatial') and i:
                     need(s['sampling_first_epoch'] == i and s['history_epoch'] == i-1 and not s['empty_history'], 'Motion lost history')
             transport_input(case['recovery'], case)
-            source(case['recovery'], mode, 16, empty=mode in ('classic', 'initial'), seed=101)
+            source(case['recovery'], mode, 16, sampler, empty=mode in ('classic', 'initial'), seed=101)
             need(case['recovery']['completed_spp'] == 16, 'Stop did not recover')
             memory.append(case['memory'])
             for frame in case['frames']:
                 transport_input(frame, case)
-                source(frame, mode, frame['completed_spp'], seed=101)
+                source(frame, mode, frame['completed_spp'], sampler, seed=101)
                 expected = 60 * dict(classic=1, initial=2, temporal=3, spatial=4)[mode]
                 need(len(frame['tiles']) == expected, 'Missing pass/tile timestamps')
                 frames.append(frame['wall_ms']); memory.append(frame['memory'])
@@ -203,6 +208,8 @@ def performance(rounds, mode):
                         passes.setdefault(zone['name'], []).append(zone['gpu_ms'])
                 gpu_frames.append(frame_gpu)
         need(all(0 < m['limit'] and 0 <= m['current'] <= m['peak'] <= m['limit'] for m in memory), 'GPU budget exceeded')
+        if sampler == 2:
+            need(all(m['limit'] == 1 << 30 for m in memory), 'Changed M19.8 GPU budget')
         result = dict(name=name, spp_wall_ms=stats(frames), spp_gpu_ms=stats(gpu_frames), tile_gpu_ms=stats(tiles),
                       preview_ms=stats(preview), cancel_ms=stats(cancel),
                       cold_cpu_scene_ms=stats([c['cpu_scene_ms'] for c in cases]),
@@ -253,7 +260,7 @@ def aggregate(read, read_image):
             validate_image(row, read_image(row))
     need(len(signatures) == 1, 'Mixed hardware/driver')
     quality_runs = {(m, c): reports[f'quality-{m}-{c}.json'] for m in MODES for c in CASES}
-    perf = {m: performance([reports[f'performance-{m}-{i}.json'] for i in range(1, 4)], m) for m in MODES}
+    perf = {m: performance([reports[f'performance-{m}-{i}.json'] for i in range(1, 4)], m, sampler_for_manifest(digest)) for m in MODES}
     for mode in MODES:
         first = reports[f'performance-{mode}-1.json']
         need(len(list(image_rows(first))) == len(CASES)*3, 'Missing full-resolution image evidence')
@@ -262,7 +269,7 @@ def aggregate(read, read_image):
             for row in (c['frames'][-1], c['motion'][-1], c['recovery']):
                 need('linear_file' in row and 'linear_sha256' in row, 'Missing final/moved/stopped image')
     return dict(schema=1, status='complete', device=next(iter(signatures))[0], driver=next(iter(signatures))[1],
-                quality_extent=[4, 4], performance_extent=[640, 360], quality=quality(quality_runs), performance=perf,
+                quality_extent=[4, 4], performance_extent=[640, 360], quality=quality(quality_runs, sampler_for_manifest(digest)), performance=perf,
                 cold={m: dict(compile_ms=stats([reports[f'performance-{m}-{i}.json']['compile_ms'] for i in range(1, 4)]),
                               asset_load_ms=stats([reports[f'performance-{m}-{i}.json']['asset_load_ms'] for i in range(1, 4)]),
                               cpu_peak=max(reports[f'performance-{m}-{i}.json']['cpu_peak'] for i in range(1, 4))) for m in MODES},
@@ -398,6 +405,20 @@ def verify_archive(directory):
     return result
 
 
+def verify_quality(directory):
+    """Replay the retained numerical ladder without the full-resolution performance images."""
+    manifest = read_json(directory / 'manifest.json')
+    digest = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
+    runs = {}
+    for mode in MODES:
+        for case in CASES:
+            with gzip.open(directory / f'quality-{mode}-{case}.json.gz', 'rt', encoding='utf-8') as stream:
+                run = json.load(stream)
+            need(run['collection']['manifest_sha256'] == digest, 'Quality input manifest differs')
+            runs[mode, case] = run
+    need(quality(runs, sampler_for_manifest(digest)) == read_json(directory / 'summary.json')['quality'], 'Quality summary does not reproduce')
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--directory', type=Path, required=True)
@@ -407,6 +428,7 @@ def main():
     p.add_argument('--mode', choices=(*MODES, 'all'), default='all')
     p.add_argument('--resume', action='store_true'); p.add_argument('--summarize', action='store_true')
     p.add_argument('--verify-archive', action='store_true')
+    p.add_argument('--verify-quality', action='store_true')
     args = p.parse_args(); args.directory.mkdir(parents=True, exist_ok=True)
     if args.collect:
         collect(args)
@@ -417,6 +439,8 @@ def main():
         archive(args.directory, args.archive); verify_archive(args.archive); print(args.archive)
     if args.verify_archive:
         verify_archive(args.directory); print('Archive hashes, images and recomputed summary passed')
+    if args.verify_quality:
+        verify_quality(args.directory); print('Reproduced 10 quality cases across all 4 modes')
 
 
 if __name__ == '__main__':

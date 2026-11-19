@@ -1,20 +1,22 @@
-# M19.8 RTX 5090 D v2 关键数据
+# M19.8 RTX 5090 D v2 离线样本
 
-结论与测量边界见[正式报告](../2026-10-19-restir-sponza.md)，实施与验证见[0141](../../development/0141-restir-sponza-acceptance.md)。
-新机于 2026-10-19 串行重采 12 个性能进程和 40 个质量进程，完整归档曾通过离线复算。
-2026-10-20 按用户要求精简，当前目录只保留以下关键数据，内容与精简前一致。
+[正式报告](../2026-10-19-restir-sponza.md)记录十场景四模式的最终结论。[汇总](summary.json)、[输入 manifest](manifest.json)、[设备环境](environment.json)与[原验收结果](validation/summary.json)来自同一次测量。
 
-| 文件 | 保留用途 |
-| --- | --- |
-| [summary.json](summary.json) | 四模式十场景的误差阶梯、均值、等误差/等时间、三轮性能与资源聚合结果 |
-| [manifest.json](manifest.json) | 程序、资产、Slang 和 RTXDI 头文件的冻结来源 SHA256 |
-| [environment.json](environment.json) | 设备、驱动、工具版本、运行库与相关源码来源 |
-| [validation/summary.json](validation/summary.json) | 14 项定向验证的选择、结果、目标和命令口径，0 失败/0 跳过 |
+仓库中的 40 个 quality-*.json.gz 是原实验的 4×4 线性样本和参考链。以下命令在 CPU 上重算全部十个场景的误差阶梯、等误差/等时间、均值与收敛状态，逐项对比 summary.json 中的 quality 字段。
 
-52 份逐进程报告、120 幅完整图像、构建/采集明细日志及引用这些文件的归档索引已移出当前目录。
-这里不再是完整归档，不能直接运行 `--verify-archive`；统计摘要不能代替原始样本复算。
-完整新机证据可从 Git 提交 `f1e57345c1e98aff7456945896dd3205a5275e7c` 中恢复本目录，旧机进度见提交 `3202043`。
-需要新测量时按正式报告采集到 `out/`，并按需在 `out/` 生成和验证完整归档；大型原始数据不再批量提交。
+```powershell
+python scripts/benchmark-restir-sponza.py --directory spec/benchmarks/2026-10-19-restir-sponza-5090 --verify-quality
+```
 
-结论保持：仅云内/云上方参考认证，其余八组未认证；ReSTIR 未达到 2× 等误差收益。
-三项交互同时达标的场景数为 6/10、7/10、2/10、0/10。默认保留 Classic MIS，4×4 质量不认证全尺寸画质。
+性能逐帧记录和全尺寸图像保存在本地 Git 历史。需要复算全部质量、性能、图像和哈希时，在包含 `f1e5734` 的完整克隆中运行：
+
+```powershell
+$sample = 'spec/benchmarks/2026-10-19-restir-sponza-5090'
+$replay = Join-Path 'out' ('restir-replay-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $replay | Out-Null
+git archive --format=zip "--output=$replay/evidence.zip" f1e57345c1e98aff7456945896dd3205a5275e7c $sample
+Expand-Archive -LiteralPath "$replay/evidence.zip" -DestinationPath $replay
+python scripts/benchmark-restir-sponza.py --directory "$replay/$sample" --verify-archive
+```
+
+[重新采集的配置与步骤](../../guides/path-media-benchmark.md#m198-restir-四模式-sponza-验收)

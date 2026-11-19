@@ -207,9 +207,18 @@ def source_manifest():
 def save_summary(directory, summary):
     directory.mkdir(parents=True, exist_ok=True)
     (directory/"summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    lines = ["# Joint voxel baseline", "", "GPU raster submissions and native path 1-spp epochs (4 bounces) are distinct workloads; not a shading speedup claim.", "", "| Input | Extent | Projection | Backend / edge | GPU median / p95 ms | CPU submit median ms | Wall median ms |", "| --- | --- | --- | --- | --- | --- | --- |"]
-    for r in summary["rows"]:
-        lines.append(f"| {r['name']} | {r['width']}x{r['height']} | {r['projection']} | {r['backend']} / {r['edge']} | {r['gpu_ms']['median']:.3f} / {r['gpu_ms']['p95']:.3f} | {r['cpu_submit_ms']['median']:.3f} | {r['wall_ms']['median']:.3f} |")
+    lines = ["# Joint voxel baseline", "",
+             f"{summary['device']['name']}, driver {summary['device']['driver']}. Three Release runs.",
+             "", "| Backend / edge | Views | GPU median range (ms) | Max view p95 (ms) |",
+             "| --- | ---: | ---: | ---: |"]
+    for edge in sorted({row["edge"] for row in summary["rows"]}):
+        rows = [row for row in summary["rows"] if row["edge"] == edge]
+        medians = [row["gpu_ms"]["median"] for row in rows]
+        tail = max(row["gpu_ms"]["p95"] for row in rows)
+        lines.append(f"| {rows[0]['backend']} / {edge} | {len(rows)} | "
+                     f"{min(medians):.3f}–{max(medians):.3f} | {tail:.3f} |")
+    lines += ["", "Raster submissions and native 1-spp epochs measure different work. "
+              "Per-view timings, resources and quality are in [summary.json](summary.json)."]
     (directory/"summary.md").write_text("\n".join(lines)+"\n", encoding="utf-8")
 
 def save_plot(directory, summary):

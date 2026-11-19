@@ -39,8 +39,8 @@ python scripts/benchmark-path-media.py --directory out/benchmarks/media --execut
 
 ```powershell
 python scripts/benchmark-path-media.py --directory out/benchmarks/media --summarize
-python scripts/benchmark-path-media.py --directory out/benchmarks/media --archive spec/benchmarks/2026-10-16-path-media
-python scripts/benchmark-path-media.py --directory spec/benchmarks/2026-10-16-path-media --verify-archive
+python scripts/benchmark-path-media.py --directory out/benchmarks/media --archive out/benchmarks/media-archive
+python scripts/benchmark-path-media.py --directory out/benchmarks/media-archive --verify-archive
 ```
 
 归档包含全部原始逐tile时间、线性/二阶矩、参考和输入摘要；校验重算门槛与三轮汇总，不把归档回放当作本机GPU验证。
@@ -63,9 +63,33 @@ python scripts/benchmark-path-media.py --directory spec/benchmarks/2026-10-16-pa
 参考 0.5%、候选 2%、收益 2 倍及预览/取消 100ms、tile 8ms 门槛固定，未认证或有限阶梯未达均保留。
 
 新机先按[构建指南](build.md#新机器接续)恢复环境与 Sponza。构建目标为 `dk_pathmedia_benchmark` / `dk_pathtracing_probe`，
-CTest 筛选与完整采集命令见[M19.8 报告](../benchmarks/2026-10-19-restir-sponza.md#复现)。
+历史质量样本复算见[M19.8 报告](../benchmarks/2026-10-19-restir-sponza.md)。重新采集使用以下独立目录。
 在全新证据目录依次执行 `--collect performance`、`--collect quality`、`--summarize`；四模式三轮性能共 12 进程，
 十场景四模式质量共 40 进程。`--archive` 保存完整线性图像与所有报告，`--verify-archive` 离线重算并核对字节摘要。
 仅同设备/驱动、同二进制和同输入可用 `--resume`；改变来源后完整重采，不拼接旧机器计时。
 参考与候选从各自空历史开始，模式共享参考数据，不共享 reservoir；保留全部 pass 与当前可见性校正。
 GPU tracking 步数未暴露时标为不可观测，不以预算代替实测。默认策略以报告证据为准，不由测量流程自动开启 ReSTIR。
+
+```powershell
+$previousObsLayer = $env:DISABLE_VULKAN_OBS_CAPTURE
+try {
+    $env:DISABLE_VULKAN_OBS_CAPTURE = '1' # 仅在 OBS 层实际产生版本警告的机器使用
+    & ./scripts/verify.ps1 -BuildDir out/build/windows-editor -Configuration Release `
+        -Target @('dk_pathmedia_benchmark', 'dk_pathtracing_probe') `
+        -TestRegex '^dk\.pathtracing\.(restir_sponza_.*|media_benchmark_aggregation|restir_(numeric|temporal_numeric|spatial_numeric|medium_numeric|medium_cloud|medium_reuse|medium_state|medium_support)_gpu_required)$' `
+        -Reason 'M19.8 Sponza smoke and direct numeric/state regression'
+    if ($LASTEXITCODE -ne 0) { throw 'Verification failed' }
+    $benchmarkArgs = @('--directory', 'out/restir-sponza-rerun',
+        '--executable', 'out/build/windows-editor/bin/Release/dk-pathmedia-benchmark.exe',
+        '--root', 'projects/demo', '--shaders', 'engine/render/pathtracing/shaders',
+        '--rtxdi', 'out/build/windows-editor/_deps/dk_rtxdi_source-src/Include')
+    python scripts/benchmark-restir-sponza.py @benchmarkArgs --collect performance
+    if ($LASTEXITCODE -ne 0) { throw 'Performance collection failed' }
+    python scripts/benchmark-restir-sponza.py @benchmarkArgs --collect quality
+    if ($LASTEXITCODE -ne 0) { throw 'Quality collection failed' }
+    python scripts/benchmark-restir-sponza.py --directory out/restir-sponza-rerun --summarize
+} finally { $env:DISABLE_VULKAN_OBS_CAPTURE = $previousObsLayer }
+
+python scripts/benchmark-restir-sponza.py --directory out/restir-sponza-rerun --archive out/restir-sponza-archive
+python scripts/benchmark-restir-sponza.py --directory out/restir-sponza-archive --verify-archive
+```

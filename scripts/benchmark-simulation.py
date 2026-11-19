@@ -199,9 +199,12 @@ def summarize(directory):
                 } for key, samples in groups.items()}
     summary = {"schema": 1, "status": "passed", "rows": rows, "overhead_percent": overhead, "runs": reports, "controls": controls}
     save(directory / "summary.json", summary)
-    lines = ["| Case | Cold batch ms | Steady batch p50 ms | Across-run p50 range ms |",
+    lines = ["# Simulation baseline", "", "Profiling disabled. Instrumented runs and control latency are in [summary.json](summary.json).", "",
+             "| Case | Cold batch ms | Steady batch p50 ms | Across-run p50 range ms |",
              "| --- | --- | --- | --- |"]
     for row in rows:
+        if not row["case"].endswith("-off"):
+            continue
         lo, hi = row["steady_p50_range_ms"]
         lines.append(f"| {row['case']} | {row['cold_batch_ms']:.3f} | {row['steady_batch_ms']:.3f} | {lo:.3f}–{hi:.3f} |")
     (directory / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

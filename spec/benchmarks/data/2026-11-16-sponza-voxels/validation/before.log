@@ -1,2 +1,0 @@
-GPU=NVIDIA GeForce RTX 4070 Laptop GPU driver=NVIDIA RT=disabled validation=required
-voxel probe failed: Voxel GPU query failed at ray 0 with status 3

@@ -1,7 +1,7 @@
 ---
 module: guide-voxels
 created_at: "2026-11-12T09:48:00+08:00"
-updated_at: "2026-11-16T15:25:58+08:00"
+updated_at: "2026-11-19T10:08:48+08:00"
 status: accepted
 ---
 
@@ -105,7 +105,7 @@ python scripts/benchmark-voxel-joint.py --exe out/build/windows-voxel-editor/bin
 正式测量期间不要改源码/程序或并发其他引擎验证。GPU 时间戳、CPU 提交、读回、AS 构建与转换分开记录；内存逻辑载荷、AS 要求、VMA 和采样峰值各有边界。
 131072 格双岛仍记录原生路径精度域拒绝，完整联合矩阵采用 16384 格双岛；大跨度光栅证据继续见 M23.7，不能据此宣称任意跨度 RT 支持。
 
-`--plot` 需要 matplotlib，采集/聚合本身只用 Python 标准库；离线复算与最终边界见[联合交付报告](../benchmarks/2026-11-12-voxel-joint.md)。required 质量矩阵包含 9 输入，以及 sparse64/128/256、solid256 的两分辨率 11 spp 斜向边界回归。
+`--plot` 需要 matplotlib，采集/聚合本身只用 Python 标准库；最终汇总与测量边界见[联合交付报告](../benchmarks/2026-11-12-voxel-joint.md)。required 质量矩阵包含 9 输入，以及 sparse64/128/256、solid256 的两分辨率 11 spp 斜向边界回归。
 
 ## glTF 网格体素化
 

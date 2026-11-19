@@ -1,7 +1,7 @@
 ---
 id: "0141"
 created_at: "2026-10-19T18:28:00+08:00"
-updated_at: "2026-10-20T08:57:58+08:00"
+updated_at: "2026-11-19T10:08:48+08:00"
 status: completed
 design_refs:
   - ../design/render-restir.md
@@ -31,7 +31,7 @@ design_refs:
 - 正式同来源数据：12/12 性能进程完成，28/40 质量进程完成。质量为 classic 10、initial 10、temporal 8、spatial 0。
 - 当时尚缺 temporal 的 cloud-inside/cloud-above，以及 spatial 全部十组；完整 summary、等误差/等时间与均值结论、最终归档复算尚未执行。
 - 当时已完成的数据和 120 幅全尺寸图像随提交 `3202043` 保存并转移；当前目录已按后述精简规则清除原始快照，历史证据可从该提交恢复。
-- 旧机三轮全尺寸结果的[历史结论](../benchmarks/2026-10-19-restir-sponza.md#旧机历史结论与保留范围)已合并到正式报告。预览/取消/tile 三项同时达标的场景数依次为 Classic 10/10、initial 10/10、temporal 1/10、spatial 0/10；owned peak 均低于 1GiB。它不是最终质量验收结论。
+- 旧机三轮全尺寸结果的[历史结论](../benchmarks/2026-10-19-restir-sponza.md)已合并到正式报告。预览/取消/tile 三项同时达标的场景数依次为 Classic 10/10、initial 10/10、temporal 1/10、spatial 0/10；owned peak 均低于 1GiB。它不是最终质量验收结论。
 - Classic 参考仅 cloud-inside/cloud-above 通过 0.5% 认证，其余八组不得生成认证等误差时间。4×4 质量与 640×360 画质严格区分；低尺寸首表面匹配率低，不能外推全尺寸时空复用收益。
 
 最终报告拒绝测试补充实际 transport/seed、各档 pass 提交数和分别非负的 wall/GPU 增量。7 个 Python 单元通过；`20261019-195954-a22b1281` 再次构建基准并通过新旧 2 项聚合 CTest（0 失败/0 跳过）。与前述 GPU 检查合计仍为 14 个唯一定向 CTest，不重复累加重跑次数。
@@ -67,7 +67,7 @@ vcpkg 最初缺少项目 baseline；仅 fetch 后旧 checkout 仍没有所需版
 - owned peak 最大 897.342 MiB，满足 1GiB；所有进程 CPU/VMA 活分配为 0、诊断错误/警告为 0。运动 epoch 连续，停动恢复到 16 spp，历史界限与来源通过聚合。
 - M19.8 与 M19 测量流程完成，默认仍为 Classic MIS，ReSTIR 显式可选。没有修改生产 shader、物理模型、采样门槛或默认算法；下一步为参考收敛和成本归因，不提前宣称 GI/PT/DLSS 已实现。
 
-新机 required 验证使用 Release，目标 dk_pathmedia_benchmark / dk_pathtracing_probe，14 项筛选与复现命令完整保存在[验证摘要](../benchmarks/2026-10-19-restir-sponza-5090/validation/summary.json)和[报告](../benchmarks/2026-10-19-restir-sponza.md#复现)。未运行全工程、Debug 矩阵、独立 CPU-only 或本阶段 GUI/capture 回归；本轮未改生产代码。最终文档检查通过 13 份 Markdown、851 个本地链接及全局索引/测试入口/JSON；归档说明补充后 2 份 / 24 链接复验通过。首次暂存检查发现原始工具输出的行尾空白，改为 gzip 保留原始字节；其余附加日志使用不被忽略的 txt，摘要文本通过 attributes 固定 LF，避免跨机换行转换破坏哈希。修正后 git diff --cached --check 通过，直接读取 Git 暂存 blob 的 181 个核心/附加文件 SHA-256 全部匹配；2 份文档 / 24 链接复验通过。
+新机 required 验证使用 Release，目标 dk_pathmedia_benchmark / dk_pathtracing_probe，14 项筛选与复现命令完整保存在[验证摘要](../benchmarks/2026-10-19-restir-sponza-5090/validation/summary.json)和[报告](../benchmarks/2026-10-19-restir-sponza.md)。未运行全工程、Debug 矩阵、独立 CPU-only 或本阶段 GUI/capture 回归；本轮未改生产代码。最终文档检查通过 13 份 Markdown、851 个本地链接及全局索引/测试入口/JSON；归档说明补充后 2 份 / 24 链接复验通过。首次暂存检查发现原始工具输出的行尾空白，改为 gzip 保留原始字节；其余附加日志使用不被忽略的 txt，摘要文本通过 attributes 固定 LF，避免跨机换行转换破坏哈希。修正后 git diff --cached --check 通过，直接读取 Git 暂存 blob 的 181 个核心/附加文件 SHA-256 全部匹配；2 份文档 / 24 链接复验通过。
 
 ## 2026-10-20 基准资料精简
 

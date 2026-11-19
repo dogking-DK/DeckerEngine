@@ -1,7 +1,7 @@
 ---
 id: "0143"
 created_at: "2026-10-20T00:31:00+08:00"
-updated_at: "2026-10-20T01:19:00+08:00"
+updated_at: "2026-11-19T10:08:48+08:00"
 status: completed
 design_refs:
   - ../design/render-pathtracing.md
@@ -37,7 +37,7 @@ design_refs:
 - 纹理回归覆盖65个发散descriptor和4097×1纹理；非整除257×129介质大/小tile、反向遍历和全部复用组合逐值一致。桌面worker覆盖1600×1200/2560×1440、四模式、外持旧帧、百万目标准入、在途取消和恢复。
 - 共享Renderer使独立捕获的GPU预算自动选择；命令schema、guard/effect、原子文件发布不变，实际registry/describe与Python示例验证。三个汇总器按报告额度检查，仍拒绝真实超额。
 - 修正本机DK_BUILD_SCRIPTING_LUAU=OFF时捕获验收仍无条件运行Luau示例的问题；CMake仅在该模块关闭时显式跳过Luau子检查，证据记录未运行，不跳过捕获/IPC/数值/Python检查。
-- 无依赖版本变化。完整[测量报告](../benchmarks/2026-10-20-media-capacity.md)与[可复算归档](../benchmarks/2026-10-20-media-capacity/README.md)保留18份新旧性能、3份桌面性能及全部中间验证结果。
+- 无依赖版本变化。完整[测量报告](../benchmarks/2026-10-20-media-capacity.md)与可复算归档（历史文件 `b8b0e7e:spec/benchmarks/2026-10-20-media-capacity/README.md`；[现存结果](../benchmarks/2026-10-20-media-capacity.md)）保留18份新旧性能、3份桌面性能及全部中间验证结果。
 
 ## 验证结果
 
