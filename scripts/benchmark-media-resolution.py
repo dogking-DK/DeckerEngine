@@ -70,17 +70,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for key in ("editor", "worker", "project", "output"):
         parser.add_argument("--" + key, type=lambda p: Path(p).resolve(), required=True)
-    parser.add_argument("--phase", choices=("validate", "performance", "quality", "references", "all"), default="all")
+    parser.add_argument("--phase", choices=("validate", "performance", "quality", "references", "replay", "all"), default="all")
     parser.add_argument("--seconds", type=int, default=10, choices=range(2, 21))
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     project_files = [p for p in args.project.rglob("*") if p.is_file() and p.parts[len(args.project.parts)] in ("assets", "scenes", "project.json")]
-    identity = dict(editor=digest(args.editor),
+    shader_root = Path(__file__).resolve().parents[1] / "engine/render/pathtracing/shaders"
+    identity = dict(editor=digest(args.editor), shaders={p.name: digest(p) for p in sorted(shader_root.glob("*.slang"))},
                     project={str(p.relative_to(args.project)): digest(p) for p in project_files}, seconds=args.seconds)
     manifest = args.output / "manifest.json"
     if manifest.exists():
         saved = json.loads(manifest.read_text())["identity"]
-        assert all(saved[key] == value for key, value in identity.items()), "Editor, scene or interval differs"
+        assert all(saved.get(key) == value for key, value in identity.items()), "Editor, shaders, scene or interval differs"
     else:
         write(manifest, dict(identity=identity, head=subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
               gpu=subprocess.check_output(["nvidia-smi", "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader"], text=True).strip()))
@@ -93,6 +94,14 @@ def main():
     if args.phase in ("all", "quality"):
         for cap in caps:
             run(args, f"quality-{cap}", cap, quality=True)
+    if args.phase == "replay":
+        directory, root = project(args, "motion-replay")
+        source = args.output / "quality-0/project/.dk-media-motion/motion-0.json"
+        assert source.is_file(), "Collect the native quality run before replay"
+        write(root / ".dk-direct-reference.json", dict(scene_media=True, motion_replay=True, sources=[dict(file=str(source))]))
+        execute(directory, [str(args.worker), str(root), str(directory / "result"), "--direct-reference"], timeout=1200)
+        report = json.loads((directory / "result/report.json").read_text())
+        assert report["status"] == "passed" and report["completed_poses"] == 400
     if args.phase in ("all", "references"):
         name = "references"
         attempt = 1

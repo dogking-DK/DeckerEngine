@@ -187,5 +187,6 @@
 | 0183 | [开发工作台与性能证据整理](0183-development-workflow.md) | project-foundation | completed |
 | 0184 | [Windows 增量构建与多目标验证](0184-build-iteration.md) | project-foundation、render-pathtracing | completed |
 | 0185 | [Scene media 首表面 ReSTIR v2 和运动预览尺寸](0185-media-restir-preview.md) | render-restir、editor | completed |
+| 0186 | [Sponza 运动路径 GPU 错误定位与复测](0186-path-gpu-motion-errors.md) | render-pathtracing、render-restir | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

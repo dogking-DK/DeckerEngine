@@ -1,0 +1,645 @@
+{
+  "baseline": "2026-11-19-media-resolution.json",
+  "fixed_base_head": "b244f07f17d7c2d63fbde1e87cbf0a14acdcac55",
+  "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU, 596.49, 8188 MiB",
+  "seconds": 10,
+  "editor_sha256": "f4e908e4ad787470691038c2695ec75d3b9f7f5c13896ea7412f72452418f300",
+  "worker_sha256": "6d326df58d1b75961f91a3ef3ae151b1bbe550861460705ac7fa349707421cc7",
+  "fixed_shader_sha256": {
+    "path-air.slang": "74ef396f85a9234c71fe7309bf3a4aa2a49d1b748a8616d393ecd140f90f6ffd",
+    "path-restir-bridge.slang": "b2df455d6f84de9825b82b7e6cf1bb1e49d1dac8ec76e0049babfcdc40349e21"
+  },
+  "aborted_attempts_before": [
+    {
+      "run": "perf-2-0",
+      "reason": "editor: Invalid GPU path sample/history"
+    },
+    {
+      "run": "perf-1-640",
+      "reason": "editor: GPU medium path exceeds numerical domain / render.pathtracing.medium_domain"
+    },
+    {
+      "run": "perf-1-192",
+      "reason": "editor: GPU medium path exceeds numerical domain / render.pathtracing.medium_domain"
+    }
+  ],
+  "aborted_attempts_after": [],
+  "native_pose_replay": {
+    "completed_poses": 400,
+    "device": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "diagnostics": 0,
+    "driver": "596.49",
+    "images": [],
+    "live_allocations": 0,
+    "status": "passed",
+    "validation": false
+  },
+  "classic_low_sun": {
+    "status": "passed",
+    "width": 640,
+    "height": 360,
+    "performance_samples": 128,
+    "diagnostics": {
+      "errors": 0,
+      "warnings": 0
+    }
+  },
+  "caps": {
+    "0": {
+      "before": {
+        "fps": 3.8120944924193014,
+        "per_window": 3.6978247176316055,
+        "input_p50_ms": 292.0194999999985,
+        "input_p95_ms": 315.181200000002,
+        "stop_to_full_ms": 501.4336000000003,
+        "gui_fps": 160.10778592069897
+      },
+      "after": {
+        "fps": 3.8826343902982194,
+        "per_window": 3.6990344040591636,
+        "input_p50_ms": 287.80319999999847,
+        "input_p95_ms": 300.1981999999989,
+        "stop_to_full_ms": 348.3294999999998,
+        "gui_fps": 161.65451688512923
+      },
+      "before_fps_runs": [
+        3.8175428309217914,
+        3.4837977222995824,
+        3.8120944924193014
+      ],
+      "after_runs": [
+        {
+          "frames": 37,
+          "seconds": 10.002610400000002,
+          "fps": 3.8624386467714453,
+          "per_window": 3.6990344040591636,
+          "input_p50_ms": 287.80319999999847,
+          "input_p95_ms": 325.7370600000002,
+          "gui_fps": 161.1583276796286,
+          "stop_to_full_ms": 348.3294999999998,
+          "size": [
+            1629,
+            989
+          ],
+          "spp": [
+            3
+          ]
+        },
+        {
+          "frames": 37,
+          "seconds": 10.003229800000002,
+          "fps": 3.8826343902982194,
+          "per_window": 3.6988053598448767,
+          "input_p50_ms": 288.91549999999916,
+          "input_p95_ms": 300.1981999999989,
+          "gui_fps": 162.14852270849573,
+          "stop_to_full_ms": 315.52030000000013,
+          "size": [
+            1629,
+            989
+          ],
+          "spp": [
+            3
+          ]
+        },
+        {
+          "frames": 38,
+          "seconds": 10.002866999999998,
+          "fps": 3.9254699246355407,
+          "per_window": 3.798910852258658,
+          "input_p50_ms": 284.6429499999995,
+          "input_p95_ms": 295.61836500000084,
+          "gui_fps": 161.65451688512923,
+          "stop_to_full_ms": 469.84600000000137,
+          "size": [
+            1629,
+            989
+          ],
+          "spp": [
+            3
+          ]
+        }
+      ],
+      "fps_delta_percent": 1.8504236455626488,
+      "motion_linear": [
+        {
+          "yaw": 89.0,
+          "spp": 3,
+          "size": [
+            1629,
+            989
+          ],
+          "epoch_first": 9,
+          "fp32_bitwise_identical": false,
+          "different_pixels": 10596,
+          "max_linear_abs": 1.7881393432617188e-07,
+          "linear_rmse": 2.582686523253248e-10,
+          "old_sha256": "f02cbca01c3abc6bcd34a51df9df263e2491db7624c4966c7a16a8df749758d8",
+          "fixed_sha256": "965a82e8b68cb0a50d1457642a8a5047eff462514fe2723c9e2479bf7e2be5d5",
+          "different_display_pixels": 0
+        },
+        {
+          "yaw": 91.0,
+          "spp": 3,
+          "size": [
+            1629,
+            989
+          ],
+          "epoch_first": 15,
+          "fp32_bitwise_identical": false,
+          "different_pixels": 10720,
+          "max_linear_abs": 3.5762786865234375e-07,
+          "linear_rmse": 3.124449424805504e-10,
+          "old_sha256": "8e3e9930daf4a89a0932a126c597e10520f6729587ce29e38e0c723d73fa9cdc",
+          "fixed_sha256": "de29f1bf9c759fbb88715113585cee87cdfb6aed2e4a73a6577e6cd01781cb5e",
+          "different_display_pixels": 0
+        },
+        {
+          "yaw": 93.00000000000001,
+          "spp": 3,
+          "size": [
+            1629,
+            989
+          ],
+          "epoch_first": 21,
+          "fp32_bitwise_identical": false,
+          "different_pixels": 10770,
+          "max_linear_abs": 1.1920928955078125e-07,
+          "linear_rmse": 2.410212022702299e-10,
+          "old_sha256": "2e820e6bf0ad175918d6f1bc68a661d7c72624d404f03fa9dea3afc03a7575fb",
+          "fixed_sha256": "303ee632eff63efe70b6ebeab3a4eb96ce9b6490a7c7f82a913b06c7f76aace5",
+          "different_display_pixels": 0
+        }
+      ],
+      "against_same_baseline_classic_96": [
+        {
+          "yaw": 89.0,
+          "before": {
+            "display_rmse": 0.0866578072309494,
+            "block_luma_ssim": 0.33226004242897034,
+            "block_rgb_rmse": 0.031938403844833374
+          },
+          "after": {
+            "display_rmse": 0.0866578072309494,
+            "block_luma_ssim": 0.33226004242897034,
+            "block_rgb_rmse": 0.031938403844833374
+          }
+        },
+        {
+          "yaw": 91.0,
+          "before": {
+            "display_rmse": 0.087249755859375,
+            "block_luma_ssim": 0.32883620262145996,
+            "block_rgb_rmse": 0.03240295499563217
+          },
+          "after": {
+            "display_rmse": 0.087249755859375,
+            "block_luma_ssim": 0.32883620262145996,
+            "block_rgb_rmse": 0.03240295499563217
+          }
+        },
+        {
+          "yaw": 93.00000000000001,
+          "before": {
+            "display_rmse": 0.08789133280515671,
+            "block_luma_ssim": 0.3255769908428192,
+            "block_rgb_rmse": 0.03288134187459946
+          },
+          "after": {
+            "display_rmse": 0.08789133280515671,
+            "block_luma_ssim": 0.3255769908428192,
+            "block_rgb_rmse": 0.03288134187459946
+          }
+        }
+      ]
+    },
+    "640": {
+      "before": {
+        "fps": 19.61390294911409,
+        "per_window": 19.49884332861374,
+        "input_p50_ms": 66.63249999999971,
+        "input_p95_ms": 73.23227000000225,
+        "stop_to_full_ms": 456.04229999999734,
+        "gui_fps": 164.99120926837017
+      },
+      "after": {
+        "fps": 21.28057354030167,
+        "per_window": 21.197788858644152,
+        "input_p50_ms": 65.76015000000007,
+        "input_p95_ms": 71.61705500000043,
+        "stop_to_full_ms": 443.97899999999936,
+        "gui_fps": 164.98388272449662
+      },
+      "before_fps_runs": [
+        21.09213117577853,
+        19.61390294911409,
+        18.636118207386755
+      ],
+      "after_runs": [
+        {
+          "frames": 208,
+          "seconds": 10.001030299999998,
+          "fps": 20.96736429747099,
+          "per_window": 20.79785719677302,
+          "input_p50_ms": 66.00295000000006,
+          "input_p95_ms": 71.96692500000081,
+          "gui_fps": 164.98388272449662,
+          "stop_to_full_ms": 445.0427000000018,
+          "size": [
+            640,
+            388
+          ],
+          "spp": [
+            3
+          ]
+        },
+        {
+          "frames": 212,
+          "seconds": 10.0010431,
+          "fps": 21.28057354030167,
+          "per_window": 21.197788858644152,
+          "input_p50_ms": 65.76015000000007,
+          "input_p95_ms": 71.61705500000043,
+          "gui_fps": 164.98319976076837,
+          "stop_to_full_ms": 443.97899999999936,
+          "size": [
+            640,
+            388
+          ],
+          "spp": [
+            3
+          ]
+        },
+        {
+          "frames": 213,
+          "seconds": 10.000595500000001,
+          "fps": 21.52787972633556,
+          "per_window": 21.29873166052961,
+          "input_p50_ms": 65.63550000000032,
+          "input_p95_ms": 69.20970000000007,
+          "gui_fps": 164.99057903793698,
+          "stop_to_full_ms": 438.42909999999756,
+          "size": [
+            640,
+            388
+          ],
+          "spp": [
+            3
+          ]
+        }
+      ],
+      "fps_delta_percent": 8.49739389203441,
+      "motion_linear": [
+        {
+          "yaw": 89.0,
+          "spp": 3,
+          "size": [
+            640,
+            388
+          ],
+          "epoch_first": 6,
+          "fp32_bitwise_identical": false,
+          "different_pixels": 1291,
+          "max_linear_abs": 3.427267074584961e-07,
+          "linear_rmse": 4.4977996508732563e-10,
+          "old_sha256": "c9b0e728a32551f547f3a315e410eecdce434a181cf6091ee113338d10f07d84",
+          "fixed_sha256": "70ae65e95b5c6e4c769d2505edb6e0014d28b098b05d9543f116ed54289727b4",
+          "different_display_pixels": 0
+        },
+        {
+          "yaw": 91.0,
+          "spp": 3,
+          "size": [
+            640,
+            388
+          ],
+          "epoch_first": 12,
+          "fp32_bitwise_identical": false,
+          "different_pixels": 1460,
+          "max_linear_abs": 1.1920928955078125e-07,
+          "linear_rmse": 2.498100241100574e-10,
+          "old_sha256": "a0069276cf5d99904bfba579f3097aa60608771fe74c01c536293beb01606c57",
+          "fixed_sha256": "c93c656996ad00e905acd563c4821e5204dd1d090ea86acda2c73a517958532d",
+          "different_display_pixels": 0
+        },
+        {
+          "yaw": 93.00000000000001,
+          "spp": 3,
+          "size": [
+            640,
+            388
+          ],
+          "epoch_first": 18,
+          "fp32_bitwise_identical": false,
+          "different_pixels": 1461,
+          "max_linear_abs": 1.1920928955078125e-07,
+          "linear_rmse": 2.4308228367151965e-10,
+          "old_sha256": "e3c3d63658b458d053644e5ceeb0b1f7ae795a0047715e350abb9ad25a423bb8",
+          "fixed_sha256": "7681ad0726e3a505082266736aeb5feddb6b553bca834c617fef37fb1210ae7f",
+          "different_display_pixels": 0
+        }
+      ],
+      "against_same_baseline_classic_96": [
+        {
+          "yaw": 89.0,
+          "before": {
+            "display_rmse": 0.07671741396188736,
+            "block_luma_ssim": 0.3676436245441437,
+            "block_rgb_rmse": 0.03589830920100212
+          },
+          "after": {
+            "display_rmse": 0.07671741396188736,
+            "block_luma_ssim": 0.3676436245441437,
+            "block_rgb_rmse": 0.03589830920100212
+          }
+        },
+        {
+          "yaw": 91.0,
+          "before": {
+            "display_rmse": 0.0770588219165802,
+            "block_luma_ssim": 0.3646111786365509,
+            "block_rgb_rmse": 0.036312635987997055
+          },
+          "after": {
+            "display_rmse": 0.0770588219165802,
+            "block_luma_ssim": 0.3646111786365509,
+            "block_rgb_rmse": 0.036312635987997055
+          }
+        },
+        {
+          "yaw": 93.00000000000001,
+          "before": {
+            "display_rmse": 0.07742024213075638,
+            "block_luma_ssim": 0.3601735830307007,
+            "block_rgb_rmse": 0.03662990406155586
+          },
+          "after": {
+            "display_rmse": 0.07742024213075638,
+            "block_luma_ssim": 0.3601735830307007,
+            "block_rgb_rmse": 0.03662990406155586
+          }
+        }
+      ]
+    },
+    "192": {
+      "before": {
+        "fps": 60.621059436355026,
+        "per_window": 60.38990039305826,
+        "input_p50_ms": 36.17270000000099,
+        "input_p95_ms": 36.98897500000203,
+        "stop_to_full_ms": 445.6746999999996,
+        "gui_fps": 164.70423436996793
+      },
+      "after": {
+        "fps": 67.18209560397824,
+        "per_window": 66.99877325246175,
+        "input_p50_ms": 30.944350000000668,
+        "input_p95_ms": 36.91110000000117,
+        "stop_to_full_ms": 441.1296000000002,
+        "gui_fps": 164.9980744724709
+      },
+      "before_fps_runs": [
+        60.621059436355026,
+        59.77973734508597,
+        61.72798676359251
+      ],
+      "after_runs": [
+        {
+          "frames": 670,
+          "seconds": 10.0001831,
+          "fps": 67.18209560397824,
+          "per_window": 66.99877325246175,
+          "input_p50_ms": 30.944350000000668,
+          "input_p95_ms": 36.82479500000136,
+          "gui_fps": 164.99746233902923,
+          "stop_to_full_ms": 432.3104000000021,
+          "size": [
+            192,
+            116
+          ],
+          "spp": [
+            3
+          ]
+        },
+        {
+          "frames": 681,
+          "seconds": 10.0058945,
+          "fps": 68.25343729830733,
+          "per_window": 68.05988210249468,
+          "input_p50_ms": 30.80500000000029,
+          "input_p95_ms": 36.91110000000117,
+          "gui_fps": 165.00317943437148,
+          "stop_to_full_ms": 441.1296000000002,
+          "size": [
+            192,
+            116
+          ],
+          "spp": [
+            3
+          ]
+        },
+        {
+          "frames": 619,
+          "seconds": 10.0001776,
+          "fps": 62.02459540167113,
+          "per_window": 61.898900675524,
+          "input_p50_ms": 36.10080000000016,
+          "input_p95_ms": 36.973180000000504,
+          "gui_fps": 164.9980744724709,
+          "stop_to_full_ms": 471.0764999999992,
+          "size": [
+            192,
+            116
+          ],
+          "spp": [
+            3
+          ]
+        }
+      ],
+      "fps_delta_percent": 10.823031185245991,
+      "motion_linear": [
+        {
+          "yaw": 89.0,
+          "spp": 3,
+          "size": [
+            192,
+            116
+          ],
+          "epoch_first": 6,
+          "fp32_bitwise_identical": false,
+          "different_pixels": 75,
+          "max_linear_abs": 2.9802322387695312e-08,
+          "linear_rmse": 2.3266011619292082e-10,
+          "old_sha256": "f2b7bcddfe3843778beb1d9069ab3fdc08da37a41eed23fda62cb895a17e84bf",
+          "fixed_sha256": "dbc487b25f7dfe3e09b49430d9927239a3f427cd9d5f9306e7502f5659dcf72a",
+          "different_display_pixels": 0
+        },
+        {
+          "yaw": 91.0,
+          "spp": 3,
+          "size": [
+            192,
+            116
+          ],
+          "epoch_first": 12,
+          "fp32_bitwise_identical": false,
+          "different_pixels": 92,
+          "max_linear_abs": 5.960464477539063e-08,
+          "linear_rmse": 2.9373363191535115e-10,
+          "old_sha256": "dc19605b856302a0b52b4473186835af78fa52dcdc04de4155d7c3e5cbdff6d2",
+          "fixed_sha256": "7f7b539ff36057bcb68ac39a295b03bd819f9a51050e77f2d05d3ca1e1bcdb5a",
+          "different_display_pixels": 0
+        },
+        {
+          "yaw": 93.00000000000001,
+          "spp": 3,
+          "size": [
+            192,
+            116
+          ],
+          "epoch_first": 18,
+          "fp32_bitwise_identical": false,
+          "different_pixels": 97,
+          "max_linear_abs": 5.960464477539063e-08,
+          "linear_rmse": 3.123878975597364e-10,
+          "old_sha256": "e335452c000679eb05b0e8de3e3d417bb1bd981a97160d082f49b666af94552d",
+          "fixed_sha256": "fd931eedf4eeb925ca7b20e9ffff69966c0de94cd864b6a22eaf64a0bf33169a",
+          "different_display_pixels": 0
+        }
+      ],
+      "against_same_baseline_classic_96": [
+        {
+          "yaw": 89.0,
+          "before": {
+            "display_rmse": 0.08644947409629822,
+            "block_luma_ssim": 0.3290415406227112,
+            "block_rgb_rmse": 0.06633500009775162
+          },
+          "after": {
+            "display_rmse": 0.08644947409629822,
+            "block_luma_ssim": 0.3290415406227112,
+            "block_rgb_rmse": 0.06633500009775162
+          }
+        },
+        {
+          "yaw": 91.0,
+          "before": {
+            "display_rmse": 0.0859774798154831,
+            "block_luma_ssim": 0.33260709047317505,
+            "block_rgb_rmse": 0.06560032814741135
+          },
+          "after": {
+            "display_rmse": 0.0859774798154831,
+            "block_luma_ssim": 0.33260709047317505,
+            "block_rgb_rmse": 0.06560032814741135
+          }
+        },
+        {
+          "yaw": 93.00000000000001,
+          "before": {
+            "display_rmse": 0.0871107205748558,
+            "block_luma_ssim": 0.3284376263618469,
+            "block_rgb_rmse": 0.06641729176044464
+          },
+          "after": {
+            "display_rmse": 0.0871107205748558,
+            "block_luma_ssim": 0.3284376263618469,
+            "block_rgb_rmse": 0.06641729176044464
+          }
+        }
+      ]
+    }
+  },
+  "references_linear": [
+    {
+      "yaw": 89.0,
+      "spp": 48,
+      "size": [
+        1629,
+        989
+      ],
+      "epoch_first": 0,
+      "fp32_bitwise_identical": false,
+      "different_pixels": 7831,
+      "max_linear_abs": 1.1920928955078125e-07,
+      "linear_rmse": 2.1954752909107648e-10,
+      "old_sha256": "f8aac5d7a238f650b0bf9db5842784406b5fd51df474699a877c3a1cc02ed565",
+      "fixed_sha256": "8908ac3a93c38449ef2285f31f56fd774c78549b8cb194be047869a3700d0db0"
+    },
+    {
+      "yaw": 89.0,
+      "spp": 96,
+      "size": [
+        1629,
+        989
+      ],
+      "epoch_first": 0,
+      "fp32_bitwise_identical": false,
+      "different_pixels": 9146,
+      "max_linear_abs": 5.960464477539063e-08,
+      "linear_rmse": 2.3152783746122142e-10,
+      "old_sha256": "c63ff734f6677c6c1116ad249c3b1f59fcbbd43a15b4a32d9d2337a89577d75d",
+      "fixed_sha256": "245466f08326a4a94a8bac9f65fe7e9bd9a51807bde8fcd74fa4be512bbf52c3"
+    },
+    {
+      "yaw": 91.0,
+      "spp": 48,
+      "size": [
+        1629,
+        989
+      ],
+      "epoch_first": 0,
+      "fp32_bitwise_identical": false,
+      "different_pixels": 7956,
+      "max_linear_abs": 5.960464477539063e-08,
+      "linear_rmse": 2.183709007487131e-10,
+      "old_sha256": "f400657fbdfa1d5adaed5a6b528a23bc3f47bed174d2abc43e1a0baf634d5b71",
+      "fixed_sha256": "51da99e806621a9c6e6caa5dcba412008e4a5d63ff3ea1a1f4163626705f1794"
+    },
+    {
+      "yaw": 91.0,
+      "spp": 96,
+      "size": [
+        1629,
+        989
+      ],
+      "epoch_first": 0,
+      "fp32_bitwise_identical": false,
+      "different_pixels": 9111,
+      "max_linear_abs": 1.4901161193847656e-07,
+      "linear_rmse": 2.3558732447117623e-10,
+      "old_sha256": "be175f76793e4a1f3297c9d4a654f2cda22293c7e4fdfa844ffd9f23d4659be9",
+      "fixed_sha256": "48b8e80b58c515ad535c3c9d9205432b64df8ff66617bc14d845dd4438f09adf"
+    },
+    {
+      "yaw": 93.00000000000001,
+      "spp": 48,
+      "size": [
+        1629,
+        989
+      ],
+      "epoch_first": 0,
+      "fp32_bitwise_identical": false,
+      "different_pixels": 7756,
+      "max_linear_abs": 8.940696716308594e-08,
+      "linear_rmse": 2.2535435591125982e-10,
+      "old_sha256": "43f5273ff45937ba50a3e9cdcdbf29acca5c36b6fbac36d3badd91f139ded7dd",
+      "fixed_sha256": "210ade763d68e38873d65681cba21834140c96b6c2a207ac7d6787a3d2721975"
+    },
+    {
+      "yaw": 93.00000000000001,
+      "spp": 96,
+      "size": [
+        1629,
+        989
+      ],
+      "epoch_first": 0,
+      "fp32_bitwise_identical": false,
+      "different_pixels": 9083,
+      "max_linear_abs": 5.960464477539063e-08,
+      "linear_rmse": 2.2002608297929408e-10,
+      "old_sha256": "52312cdc12a0250035e5a195c99811ad7841f737b9d08d15b8d50ac31d6d9712",
+      "fixed_sha256": "a57c0d90c70f51996f3ef41455f82341c0c28cceaf96386c14f63d8d16013152"
+    }
+  ]
+}

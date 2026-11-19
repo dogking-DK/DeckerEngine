@@ -35,6 +35,29 @@ int direct_reference_probe(const std::filesystem::path& root,const std::filesyst
                 request.width=source.at("width"); request.height=source.at("height"); request.settings.direct_only=!media;
                 request.settings.scene_media=media; request.settings.time_seconds=17;
                 request.settings.bounces=media ? 4 : 1; request.settings.seed=104729+source.at("seed").get<unsigned>(); ++request.settings.reset;
+                if(config.value("motion_replay",false)) {
+                    require(media,"Motion replay requires the Sponza medium");
+                    request.read_linear=false; request.settings.seed=1; request.settings.restir_di=true;
+                    request.settings.restir_temporal=true; request.settings.restir_spatial=true; request.settings.target=3;
+                    for(unsigned step=0;step<400;++step) {
+                        pose.yaw_deg=90+5.14*std::sin(double(step)*.777);
+                        check(camera.set_pose(pose,aspect)); request.camera=camera; request.sequence=++sequence;
+                        worker.request(request); const auto pose_start=Clock::now();
+                        for(;;) {
+                            if(auto result=worker.take_result(); result && result->sequence==sequence) {
+                                const auto& info=result->info;
+                                require(info.samples.count==3 && info.restir && info.restir->version==2 &&
+                                    info.medium && info.medium->field_hash==source.at("field_hash").get<std::uint64_t>() &&
+                                    info.sampling_first_epoch==step*3,"Motion replay source or history differs");
+                                report["completed_poses"]=step+1; break;
+                            }
+                            const auto state=worker.status();
+                            if(!state.error.empty()) throw std::runtime_error("Motion replay pose "+std::to_string(step)+": "+state.error);
+                            require(elapsed(pose_start)<120000,"Motion replay timed out"); std::this_thread::sleep_for(1ms);
+                        }
+                    }
+                    continue;
+                }
                 for(const unsigned target:media ? std::array{48u,96u} : std::array{256u,512u}) {
                     request.settings.target=target; request.sequence=++sequence; worker.request(request); const auto start=Clock::now();
                     for(;;) {

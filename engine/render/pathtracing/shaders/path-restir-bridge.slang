@@ -36,6 +36,21 @@ float restirRandom(uint pixel,uint sample,uint candidate,uint purpose) {
     return min((float(h>>8)+.5)/16777216.0,asfloat(0x3f7fffff));
 }
 void restirError() { uint ignored; InterlockedOr(status[0],1,ignored); }
+void finalizeRestir(inout RTXDI_DIReservoir reservoir,float support,uint pixel,uint epoch,uint purpose) {
+    float mass=reservoir.weightSum;
+    RTXDI_FinalizeResampling(reservoir,1,support);
+    if(reservoir.weightSum!=0 || reservoir.targetPdf<=0 || mass<=0) return;
+    float denominator=reservoir.targetPdf*support;
+    if(!isfinite(mass) || !isfinite(denominator) || denominator<=0) return; // Caller rejects invalid normalization.
+    // A positive quotient can flush to zero on FP32 hardware. Thin only that case.
+    // Each independent 1/256 survival multiplies W by 256, preserving its expectation and M.
+    // At most 19 shifts span the smallest positive float divided by the largest finite one.
+    for(uint i=0;i<19 && reservoir.weightSum==0;++i) {
+        if(restirRandom(pixel,epoch,i,purpose)>=1./256.) { reservoir.targetPdf=0; return; }
+        denominator*=1./256.;
+        reservoir.weightSum=mass/denominator;
+    }
+}
 // Match the renderer's 256 x 16-word diagnostic storage. Error/medium budget
 // words remain global; only observational words 2..15 are sharded.
 uint restirStatIndex(uint pixel,uint at) { return (mixBits(pixel)&255u)*16u+at; }
@@ -103,8 +118,9 @@ RestirSample initialRestir(PathPayload hit,float3 position,float3 normal,PathBsd
         }
         if(!isfinite(reservoir.weightSum)) { restirError(); return chosen; }
     }
-    RTXDI_FinalizeResampling(reservoir,1,reservoir.M);
+    finalizeRestir(reservoir,reservoir.M,pixel,sample,9);
     chosen.W=reservoir.weightSum; chosen.target=reservoir.targetPdf; chosen.M=reservoir.M;
+    if(chosen.W==0) chosen.light=0xffffffffu;
     if(!isfinite(chosen.W) || chosen.W<0 || (chosen.target>0 && chosen.W==0)) restirError();
     if(cachedRestirVisibility() && chosen.light!=0xffffffffu) {
         float3 wi,point; float pdf;
@@ -238,7 +254,7 @@ void temporalRestir(uint pixel,uint epoch) {
             if(RTXDI_CombineDIReservoirs(combined,sdkReservoir(old,old.M),restirRandom(pixel,epoch,0,5),target)) result=old;
             bool destinationVisible=!paperRestir() || temporalTarget(result,pixel,false,true,pixel)>0;
             float support=destinationVisible && temporalTarget(result,oldPixel,true,paperRestir(),pixel)>0 ? old.M : 0;
-            RTXDI_FinalizeResampling(combined,1,fresh.M+support);
+            finalizeRestir(combined,fresh.M+support,pixel,epoch,10);
             result.W=combined.weightSum; result.target=combined.targetPdf; result.M=combined.M;
             result.age=min(old.age,0xfffffffeu)+1; // Ancestry, diagnostic only in v2; capped effective M controls history.
             if(combined.weightSum==0) result.light=0xffffffffu;
@@ -299,7 +315,7 @@ void spatialRestir(uint pixel,uint epoch) {
             uint source=pixels[j];
             if(destinationVisible && (paperRestir() && source==pixel ? true : temporalTarget(result,source,false,paperRestir(),pixel)>0)) support+=counts[j];
         }
-        RTXDI_FinalizeResampling(combined,1,support);
+        finalizeRestir(combined,support,pixel,epoch,11);
         result.W=combined.weightSum; result.target=combined.targetPdf; result.M=combined.M; result.age=age;
         if(result.W==0) result.light=0xffffffffu;
         if(!destinationVisible) result=zeroRestir(result);

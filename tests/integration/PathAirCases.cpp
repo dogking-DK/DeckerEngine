@@ -43,6 +43,17 @@ void air_numeric(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueu
         }
     }
     s.sampler_version=3; s.seed=1;
+    // The maximum comes from an absorption layer below this ray. Every sampled collision is null.
+    // This counter draws a free path smaller than one ULP after a larger step rounded upward.
+    {
+        auto shell=air_environment(0,0); shell.atmosphere.absorption_center_height_m=0;
+        shell.atmosphere.absorption_half_width_m=50; shell.atmosphere.absorption_extinction_per_m={.001,.001,.001};
+        check(f.document->set_environment(shell)); const auto world=f.scene();
+        const auto scene=take(r.prepare_scene(q,world)); const auto medium=take(PathMediumSnapshot::create(shell));
+        const PathTraceRay up{{0,100,0},{0,1,0}};
+        const auto flight=complete(q,take(r.submit_air_rays(q,scene,medium,std::span{&up,1},s,{0,3},3102398418u)));
+        close_color(flight.linear_rgb()[0],s.environment_rgb,1e-7);
+    }
     // A tiny solar cone must not expand to sqrt(float epsilon) on the GPU.
     e.sun.angular_radius_rad=.00001; e.sun.direction={0,1,0}; f.document->set_environment(e).value();
     cpu=f.scene(); gpu=take(r.prepare_scene(q,cpu)); m=take(PathMediumSnapshot::create(e)); s.sun=true; s.environment_rgb.setZero();

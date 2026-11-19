@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-11-19T14:00:00+08:00"
+updated_at: "2026-11-19T15:14:00+08:00"
 status: accepted
 ---
 
@@ -213,6 +213,8 @@ M17.1所有系数/密度支持域继续适用；主射线沿用表面参考的�
 固定seed集合与样本分区、环境不匹配、非法/额度/活动取消/分配失败/旧输入寿命。阈值沿M17统计协议，新增具体夹具记录在[0124](../development/0124-volume-path-reference.md)。
 
 ### M17.3 GPU空气实施契约
+
+GPU 自由程与阴影透射共用补偿距离累加，使用按较大操作数优先的 FastTwoSum 恢复加法舍入残差。小于当前位置一个 ULP 的正步长允许取相同的浮点坐标，残差传递到下一步，候选仍消耗自己的随机序号与追踪预算。真实非法路径、预算超限及非有限历史继续拒绝整批。Sponza 的固定样本、转向重放与同机位线性对照见 [0186](../development/0186-path-gpu-motion-errors.md)。
 
 在PathTraceRenderer新增submit_air_rays、submit_air_view、configure_air_view，显式消费PathMediumSnapshot和VolumePathSettings。
 复用M17.2 model=4/sampler=2的RGB通道、analog自由程、Rayleigh/Mie混合相函数、真实多次散射、有限太阳、NEE/ratio tracking/MIS/RR。

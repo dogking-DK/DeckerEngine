@@ -931,7 +931,7 @@ M23.1–13 原始范围不包含体素密度场 ray marching、透明体素、�
 
 **第二批0179已完成**：平滑区重建及太阳密度严格零剔除默认启用，保留低角度32采样和现有画质门槛。122组参考、10组局部对照及GPU/后台GUI回归通过；三轮1080p默认日落44.045→33.673ms（减少23.55%）。1/4仍为显式档，compact保持关闭。见[实施记录](development/0179-cloud-sunset-optimization.md)与[性能报告](benchmarks/2026-11-17-cloud-sunset-optimization.md)。后续优化另立任务，本批不扩展路径介质或引入新依赖。
 
-**路径介质优化0180已完成**：保守局部上界粗筛及严格零密度剔除默认启用，原物理模型与随机序列保持；真实GPU同样本图像一致。含体素Release构建三轮日落4.992→4.429ms/spp（-11.28%），云内-22.44%，厚云+2.30%。分段局部追踪实测更慢，保持显式实验、默认关闭。CPU/GPU参考、mesh/voxel/四DI/capture/后台GUI回归通过；Sponza长链参考未收敛，达标时间为null。下一步独立诊断既有128spp数值域拒绝，见[0180记录](development/0180-path-medium-majorants.md)与[报告](benchmarks/2026-11-17-path-medium-optimization.md)。
+**路径介质优化0180已完成**：保守局部上界粗筛及严格零密度剔除默认启用，原物理模型与随机序列保持；真实GPU同样本图像一致。含体素Release构建三轮日落4.992→4.429ms/spp（-11.28%），云内-22.44%，厚云+2.30%。分段局部追踪实测更慢，保持显式实验、默认关闭。CPU/GPU参考、mesh/voxel/四DI/capture/后台GUI回归通过；Sponza长链参考未收敛，达标时间为null。既有低太阳角 128 spp 数值域拒绝已定位并修复，见[0186 复测](benchmarks/2026-11-19-media-motion-fix.md)。0180 的性能基线见[开发记录](development/0180-path-medium-majorants.md)与[报告](benchmarks/2026-11-17-path-medium-optimization.md)。
 
 M0–M6、M1.7 Memory/Tracy 补充均已完成。当前可运行的 CPU 链路包括
 Foundation、Scene 持久化、命令/事务、batch/stdio、资产导入/缓存与异步 CPU Ready。

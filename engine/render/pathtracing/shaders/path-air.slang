@@ -25,6 +25,15 @@ float airOpticalDistance(float u) {
     // Preserve the smallest sampler values when float subtraction would round 1-u to 1.
     return u<.001 ? u*(1+u*(.5+u/3)) : -log(1-u);
 }
+// Recover the exact rounding residual of the addition (FastTwoSum requires the larger
+// operand first). A long free path may exceed the distance accumulated so far.
+float airAdvance(float distance,float step,inout float correction) {
+    precise float adjusted=step-correction;
+    precise float next=distance+adjusted;
+    precise float residual=(next-max(distance,adjusted))-min(distance,adjusted);
+    correction=residual;
+    return next;
+}
 bool airStep(inout uint steps) {
     if(status[0]!=0) return false;
     uint4 limits=asuint(parameters[12]);
@@ -194,7 +203,7 @@ uint airFlight(RayDesc ray,AirLocation location,float3 segment,uint channel,uint
             if(!airStep(steps)) return 3;
             uint at=counter++; float optical=airOpticalDistance(airRandom(pixel,sample,event,2,at));
             if(optical>=(local.end-t)*rate) break;
-            float adjusted=optical/rate-correction,next=t+adjusted; correction=(next-t)-adjusted;
+            float next=airAdvance(t,optical/rate,correction);
             if(next<t || !isfinite(next)) { airError(4); return 3; }
             t=next; if(t>=local.end) break;
             AirLocation point=airAlong(location,ray.Direction,t); float4 c=airMediumCoefficients(point,channel,rate);
@@ -247,7 +256,7 @@ float airVisibility(AirVertex v,float3 wi,uint light,float3 point,uint channel,u
             if(!airStep(steps)) return 0;
             float optical=airOpticalDistance(airRandom(pixel,sample,event,stream,counter++));
             if(optical>=(local.end-t)*rate) break;
-            float adjusted=optical/rate-correction,next=t+adjusted; correction=(next-t)-adjusted;
+            float next=airAdvance(t,optical/rate,correction);
             if(next<t || !isfinite(next)) { airError(4); return 0; }
             t=next; if(t>=local.end) break;
             float extinction=airMediumCoefficients(airAlong(location,ray.Direction,t),channel,rate).w;
