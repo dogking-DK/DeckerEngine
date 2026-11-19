@@ -1,6 +1,6 @@
 ---
 created_at: "2026-09-28T16:00:00+08:00"
-updated_at: "2026-11-12T10:31:11+08:00"
+updated_at: "2026-11-19T11:53:00+08:00"
 ---
 
 # 构建与依赖配置
@@ -233,6 +233,16 @@ feature 选择在 `project()` 前映射到 `VCPKG_MANIFEST_FEATURES`，
 更换生成器、triplet 或开关 vcpkg 时使用独立构建目录。
 
 ## Ninja / 其他平台
+
+Windows 日常命令行开发可用 `windows-dev-ninja`。在 **x64 Native Tools Command Prompt** 或 x64 Developer PowerShell 中确认 `cl`、`ninja` 和 `cmake` 在 PATH，再将 `VCPKG_ROOT` 指向项目使用的 checkout（VS 初始化可能设置这个变量）。预设继承 `windows-dev` 的模块选项和 triplet，在 `out/build/windows-dev-ninja` 中生成 Ninja Multi-Config 构建树。
+
+```powershell
+cmake --preset windows-dev-ninja
+cmake --build --preset windows-dev-ninja-debug --parallel 4 --target dk_scene_tests
+ctest --preset windows-dev-ninja-debug -R '^dk\.scene\.'
+```
+
+Release 使用 `windows-dev-ninja-release` 构建和测试预设。用 `verify.ps1` 验证时传入 `-BuildDir out/build/windows-dev-ninja` 和相应的 `-Configuration`。MSVC 的本地化 include 前缀在配置时探测；切换工具集或编译器输出语言后重新配置。
 
 在已设置 C++ 编译器、Ninja 和 VCPKG_ROOT 的环境中：
 

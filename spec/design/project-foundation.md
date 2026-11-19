@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-11-19T11:15:58+08:00"
+updated_at: "2026-11-19T11:50:00+08:00"
 status: accepted
 ---
 
@@ -95,6 +95,7 @@ CTest 保留 runner 冒烟验证，开发预设额外运行 Catch2 行为测试�
   关闭日志/数学/IO/单元测试，构建目录为 out/build/windows-bootstrap-stduuid；
   此生成器要求 CMake 4.2 或更新。
 - `windows-dev`：相同生成器，开启 vcpkg 并选择 foundation feature。
+- `windows-dev-ninja` 继承 `windows-dev` 的功能和 x64 triplet，使用独立的 Ninja Multi-Config 构建目录和 MSVC 开发环境，提供 Debug / Release 构建与测试入口。普通 C++ 源按头文件依赖增量编译。配置时探测本机编译器实际输出的 include 前缀，验收覆盖头文件内容变更、下游重新链接以及无改动复建。
 - `windows-profiling`：继承 windows-dev，启用 DK_ENABLE_PROFILING，build/test 使用 RelWithDebInfo；
   环境限制 localhost/IPv4，手动启动程序时须自行传入同样环境。
 - `windows-desktop-deps`：准备后续桌面功能依赖；安装依赖不表示模块已实现。

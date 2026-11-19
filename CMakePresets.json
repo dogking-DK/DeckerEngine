@@ -146,6 +146,18 @@
       }
     },
     {
+      "name": "windows-dev-ninja",
+      "inherits": "windows-dev",
+      "displayName": "Windows development (Ninja Multi-Config, MSVC x64)",
+      "generator": "Ninja Multi-Config",
+      "architecture": { "value": "x64", "strategy": "external" },
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "cl",
+        "CMAKE_CONFIGURATION_TYPES": "Debug;Release;MinSizeRel;RelWithDebInfo",
+        "CMAKE_CXX_SCAN_FOR_MODULES": "OFF"
+      }
+    },
+    {
       "name": "windows-scripting",
       "inherits": "windows-dev",
       "displayName": "Windows CPU Luau scene scripting",
@@ -265,6 +277,16 @@
   ],
   "buildPresets": [
     {
+      "name": "windows-dev-ninja-debug",
+      "configurePreset": "windows-dev-ninja",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-dev-ninja-release",
+      "configurePreset": "windows-dev-ninja",
+      "configuration": "Release"
+    },
+    {
       "name": "windows-profiling",
       "configurePreset": "windows-profiling",
       "configuration": "RelWithDebInfo"
@@ -299,6 +321,20 @@
     }
   ],
   "testPresets": [
+    {
+      "name": "windows-dev-ninja-debug",
+      "configurePreset": "windows-dev-ninja",
+      "configuration": "Debug",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error" }
+    },
+    {
+      "name": "windows-dev-ninja-release",
+      "configurePreset": "windows-dev-ninja",
+      "configuration": "Release",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error" }
+    },
     {
       "name": "windows-profiling",
       "configurePreset": "windows-profiling",
