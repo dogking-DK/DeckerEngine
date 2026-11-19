@@ -1,7 +1,7 @@
 ---
 id: "0183"
 created_at: "2026-11-19T09:55:00+08:00"
-updated_at: "2026-11-19T10:55:38+08:00"
+updated_at: "2026-11-19T11:11:14+08:00"
 status: completed
 design_refs:
   - ../design/project-foundation.md
@@ -44,3 +44,15 @@ design_refs:
 独立 CLI 的 Windows `elevated` 只读沙箱起初无法运行用户级 WinGet 安装的 RTK。经用户确认，仅为该 `rtk.exe` 添加本机 `CodexSandboxUsers` 的读取和执行权限。通过的测试进程还将 `CLAUDE_CONFIG_DIR` 指向本机实际的 Claude 配置目录，并将 Codex 随附的 `rg.exe` 所在目录加入该进程的 PATH。单独关闭 RTK 的安装提示无法解决配置目录查找错误。
 
 MXC 对照同样使用 Codex 随附的 ripgrep。首次只读试跑中搜索成功，Git 报工作树错误。同一安装在项目日常 `workspace-write` 模式下，将每条命令的工作目录明确设为仓库根目录，`git rev-parse --show-toplevel` 返回本项目，`--is-bare-repository` 返回 `false`。两条裸命令均自动精简且成功退出，`rtk bypass git status` 同时返回 5 行原始状态。此次 MXC 验收使用默认的 Claude 目录解析。
+
+### 桌面会话复测
+
+2026-11-19 在仓库根目录的 Codex 桌面 `workspace-write` 会话复测。`rtk --version` 返回 1.2.0，`icacls (Get-Command rtk.exe).Source` 显示 WinGet 安装的实际程序已有 `CodexSandboxUsers:(RX)`。本轮沿用现有权限和环境。
+
+| 裸命令 | 自动精简 | 同参数 `rtk bypass` 对照 |
+| --- | --- | --- |
+| `git status` | 2 行，显示分支与工作树状态 | 5 行 Git 原始状态 |
+| `rg -n namespace engine` | 204 行，摘要显示 1000 个命中、404 个文件 | 1000 行匹配结果 |
+| `rg -n parse_id_bytes engine/foundation/core` | 3 行，保留文件与行号 | 相同的 3 处命中 |
+
+以上命令均退出 0，行数排除了 RTK 的安装提示。固定字符串零命中时，裸 `rg` 和 `rtk bypass rg` 均退出 1。大查询给出的两个 `rtk recall` 哈希在该会话均返回 `no matching entry`；用 `rtk bypass rg -n namespace engine/editor/src/ConsoleSmoke.hpp` 重查可读到第 7、9 行。CTest 枚举用 `-N -R '^dk\.ipc\.client_help$'` 从 440 项筛至 1 项，仅验证枚举。
