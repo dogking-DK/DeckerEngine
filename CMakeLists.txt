@@ -11,6 +11,11 @@ include(Vcpkg)
 
 project(DeckerEngine VERSION 0.1.0 DESCRIPTION "DeckerEngine" LANGUAGES CXX)
 
+if(CMAKE_GENERATOR STREQUAL "Visual Studio 18 2026")
+    file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/CMakeFiles/dk-verify-msbuild.txt"
+        CONTENT "@CMAKE_VS_MSBUILD_COMMAND@\n@CMAKE_VS_PLATFORM_NAME@\n" @ONLY)
+endif()
+
 if(CMAKE_GENERATOR MATCHES "^Ninja" AND CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     include(MsvcNinjaIncludes)
 endif()

@@ -1,7 +1,7 @@
 ---
 module: project-foundation
 created_at: "2026-09-22T09:09:41+08:00"
-updated_at: "2026-11-19T11:50:00+08:00"
+updated_at: "2026-11-19T12:06:00+08:00"
 status: accepted
 ---
 
@@ -188,6 +188,7 @@ M1.7.2 再次核验同一官方基线，新增 heap/关闭闸门/预算及内存
   scripts/verify.ps1 接收 BuildDir、Configuration（默认 Debug）、Target 和 TestRegex；
   显式 Full+Reason 才构建/测试全部，不自行切换配置或扩展范围。
   要求已配置构建目录；先构建指定目标，失败停止；再枚举匹配测试，零匹配报错，最后执行 CTest。
+  VS 2026 的多目标请求按生成的解决方案文件夹映射到 MSBuild 目标，在同一次调用中调度共享依赖。先检查 CMake 是否需要重新生成，再解析当前解决方案。使用配置树选定的 MSBuild 和平台。单目标、Full、其他生成器、旧树及特殊目标沿用 CMake 构建入口。摘要单独记录构建耗时。
   每次独立保存日志、JUnit 和 summary.json 到 out/verify，记录提交/工作区、所选测试及通过/失败/跳过。
   调用者须确认 Target 覆盖所选测试程序及进程夹具；脚本不从文件名猜测依赖，也不自动配置或清理缓存。
 - decker-state-contracts：明确修改状态、成功结果、失败保护、提交点和必要案例；

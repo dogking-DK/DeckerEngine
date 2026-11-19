@@ -2,7 +2,7 @@
 
 ## 最近完成
 
-- Windows 命令行开发可使用与 windows-dev 功能对齐的 Ninja 预设。Scene 的头文件重编与两轮耗时见 [0184](spec/development/0184-build-iteration.md)。
+- Windows 命令行开发可使用与 windows-dev 功能对齐的 Ninja 预设。VS 多目标定向验证共用一次 MSBuild，三目标无改动构建中位数从 2.14 秒降到 1.38 秒。[0184 验证记录](spec/development/0184-build-iteration.md)
 - RTK 项目 hook 已验证自动精简。本工作副本已固定恢复库，根目录搜索、下一次调用从子目录取回折叠行均已通过。[项目导航 skill](.agents/skills/decker-code-navigation/SKILL.md#跨命令取回折叠结果)
 - 开发工作台、精简 benchmark、离线复算样本与本地代码索引的实施和验证见 [0183](spec/development/0183-development-workflow.md)。
 - 完整 RGB 表面直接光 ReSTIR v2 已接入 Editor 和 capture，Sponza 运动误差下降；原生尺寸更新率相对 v1 下降 4.1%。[0182 结果](spec/benchmarks/2026-11-17-restir-direct.md)
@@ -10,7 +10,7 @@
 
 ## 当前工作
 
-正在优化 VS 多目标定向验证，比较一次调度多个目标与原入口的耗时。
+本轮构建工作流优化已交付。下一项引擎开发尚待选定。
 
 ## 下一步
 

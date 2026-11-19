@@ -17,4 +17,6 @@
 
 `test run --target` 支持多个目标，底层 [verify.ps1](../../scripts/verify.ps1) 负责构建、发现、执行和计数。日志与 JUnit 在返回的 summary.json 同一目录。CPU / GPU 采集的前置构建见 [Tracy 指南](../../tools/profiling/README.md)；专项云采集使用 `profile run cloud`。原始采集写入 out/。
 
+在已配置的 VS 2026 树中同时指定多个普通 `dk_*` 目标时，共用一次 MSBuild 调度。解决方案中的文件夹由脚本解析，调用者仍填写 CMake 目标名。旧树首次重新配置后即可使用。摘要的 `build_seconds` 只统计构建阶段，包含需要的工程重新生成；测试耗时见 `tests.log`。
+
 索引命令优先复用本机 Codex 配置中的同名 MCP 启动器，也支持 PATH 上的上游 CLI。更新完成后须从当前仓库查到 StableId.cpp 中的 parse_id_bytes 才会写入[更新记录](code-index-history.md)。CodeGraph 首次建库后显式更新使用增量同步。codebase-memory 按本仓库根目录选项目；命令只记录实际完成并验证的显式更新，文件监视器的活动不写入表格。

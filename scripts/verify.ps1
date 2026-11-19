@@ -47,6 +47,7 @@ $summary = [ordered]@{
     commit = $null
     working_tree = $null
     stage = 'metadata'
+    build_seconds = $null
     status = 'failed'
     selected_tests = @()
     passed = $null
@@ -69,6 +70,46 @@ function Invoke-Logged([string]$Command, [string[]]$Arguments, [string]$Log, [st
     return $nativeExit
 }
 
+function Get-GroupedVsBuild {
+    if ($Target.Count -lt 2 -or @($Target -notmatch '^dk_[a-zA-Z0-9_]+$').Count) { return }
+    $toolInfo = Join-Path $BuildDir 'CMakeFiles/dk-verify-msbuild.txt'
+    $solution = Join-Path $BuildDir 'DeckerEngine.slnx'
+    $stamps = Join-Path $BuildDir 'CMakeFiles/generate.stamp.list'
+    if (-not (Test-Path -LiteralPath $toolInfo) -or -not (Test-Path -LiteralPath $solution) -or
+        -not (Test-Path -LiteralPath $stamps) -or (Test-Path -LiteralPath (Join-Path $BuildDir 'CMakeFiles/VerifyGlobs.cmake'))) { return }
+    $cache = Get-Content -LiteralPath (Join-Path $BuildDir 'CMakeCache.txt') -Encoding UTF8
+    if ($cache -notcontains 'CMAKE_GENERATOR:INTERNAL=Visual Studio 18 2026') { return }
+
+    # Use the same regeneration check as ZERO_CHECK before reading solution folders.
+    $sourceDir = ($cache -like 'CMAKE_HOME_DIRECTORY:INTERNAL=*') -replace '^CMAKE_HOME_DIRECTORY:INTERNAL='
+    $check = @('-S', $sourceDir, '-B', $BuildDir, '--check-stamp-list', $stamps, '--vs-solution-file', $solution)
+    if ((Invoke-Logged $cmake $check (Join-Path $logDir 'regenerate.log')) -ne 0) {
+        throw 'CMake regeneration failed. See regenerate.log.'
+    }
+    $msbuild, $platform = Get-Content -LiteralPath $toolInfo -Encoding UTF8
+    if (-not $platform -or -not $msbuild -or -not (Test-Path -LiteralPath $msbuild -PathType Leaf)) { return }
+
+    [xml]$xml = Get-Content -LiteralPath $solution -Raw -Encoding UTF8
+    $paths = @{}
+    foreach ($project in $xml.SelectNodes('/Solution/Folder/Project | /Solution/Project')) {
+        $path = $project.GetAttribute('Path')
+        if ([IO.Path]::GetExtension($path) -ne '.vcxproj') { continue }
+        $name = [IO.Path]::GetFileNameWithoutExtension($path)
+        $folder = $project.ParentNode.GetAttribute('Name').Trim('/').Replace('/', '\')
+        $paths[$name] = if ($folder) { "$folder\$name" } else { $name }
+    }
+    $requested = [System.Collections.Generic.List[string]]::new()
+    foreach ($name in $Target) {
+        if (-not $paths.ContainsKey($name) -or $paths[$name] -notmatch '^[a-zA-Z0-9_ \\-]+$') { return }
+        $requested.Add($paths[$name])
+    }
+    [pscustomobject]@{
+        Command = $msbuild
+        Arguments = @($solution, "/p:Configuration=$Configuration", "/p:Platform=$platform",
+                      "/m:$Parallel", '/v:minimal', "/t:$($requested -join ';')")
+    }
+}
+
 $exitCode = 1
 try {
     $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -80,11 +121,20 @@ try {
         if ($LASTEXITCODE -eq 0) { $summary.working_tree = @($changes) }
     }
     $summary.stage = 'build'
-    $buildArgs = @('--build', $BuildDir, '--config', $Configuration, '--parallel', "$Parallel")
-    if (-not $Full) { $buildArgs += @('--target') + $Target }
     Write-Host "Building requested scope ($Configuration). Logs: $logDir"
-    if ((Invoke-Logged $cmake $buildArgs (Join-Path $logDir 'build.log')) -ne 0) {
-        throw 'Build failed; tests were not run.'
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    try {
+        $build = Get-GroupedVsBuild
+        if ($build) {
+            $buildExit = Invoke-Logged $build.Command $build.Arguments (Join-Path $logDir 'build.log')
+        } else {
+            $buildArgs = @('--build', $BuildDir, '--config', $Configuration, '--parallel', "$Parallel")
+            if (-not $Full) { $buildArgs += @('--target') + $Target }
+            $buildExit = Invoke-Logged $cmake $buildArgs (Join-Path $logDir 'build.log')
+        }
+        if ($buildExit -ne 0) { throw 'Build failed; tests were not run.' }
+    } finally {
+        $summary.build_seconds = [Math]::Round($timer.Elapsed.TotalSeconds, 3)
     }
 
     $summary.stage = 'discovery'
