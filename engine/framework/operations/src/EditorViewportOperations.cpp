@@ -15,7 +15,7 @@ Result<EditorViewportGuard> read_guard(const Json& value) {
 }
 Json properties() {
     return {{"renderer",choice({"raster","pathtrace"})},{"medium_mode",choice({"surface_only","scene_media"})},
-        {"direct_lighting",choice({"classic","restir_di"})},{"initial_candidates",integer(1,64)},
+        {"lighting_scope",choice({"full_path","direct_only"})},{"direct_lighting",choice({"classic","restir_di"})},{"initial_candidates",integer(1,64)},
         {"temporal_reuse",schema::boolean()},{"spatial_reuse",schema::boolean()},
         {"target_spp",integer(1,UINT32_MAX)},{"seed",integer(0,UINT32_MAX)},{"bounces",integer(1,32)},
         {"environment_rgb",schema::array(number(0,1000),3,3)},{"sky_enabled",schema::boolean()},{"sun",schema::boolean()},
@@ -28,7 +28,7 @@ Json object_with_all(Json fields) { auto keys=Json::array(); for(const auto& [na
 Json settings_json(const EditorViewportSettings& s) {
     const auto& p=s.path;
     return {{"renderer",s.path_trace ? "pathtrace" : "raster"},{"medium_mode",p.scene_media ? "scene_media" : "surface_only"},
-        {"direct_lighting",p.restir_di ? "restir_di" : "classic"},{"initial_candidates",p.restir_candidates},
+        {"lighting_scope",p.direct_only ? "direct_only" : "full_path"},{"direct_lighting",p.restir_di ? "restir_di" : "classic"},{"initial_candidates",p.restir_candidates},
         {"temporal_reuse",p.restir_temporal},{"spatial_reuse",p.restir_spatial},{"target_spp",p.target},{"seed",p.seed},{"bounces",p.bounces},
         {"environment_rgb",{p.sky.x(),p.sky.y(),p.sky.z()}},{"sky_enabled",p.sky_enabled},{"sun",p.sun},{"exposure_ev",p.exposure},
         {"raster_exposure",s.raster_exposure},{"unlit_inspection",s.unlit_inspection},
@@ -54,6 +54,11 @@ EditorViewportSettings patch(const Json& p,EditorViewportSettings s) {
     auto& v=s.path;
     if(p.contains("renderer")) s.path_trace=p["renderer"]=="pathtrace";
     if(p.contains("medium_mode")) v.scene_media=p["medium_mode"]=="scene_media";
+    if(p.contains("lighting_scope")) {
+        const bool enabling=p["lighting_scope"]=="direct_only" && !v.direct_only;
+        v.direct_only=p["lighting_scope"]=="direct_only";
+        if(enabling) { v.bounces=1; v.restir_candidates=32; v.restir_temporal=true; v.restir_spatial=true; }
+    }
     if(p.contains("direct_lighting")) v.restir_di=p["direct_lighting"]=="restir_di";
     assign(p,"initial_candidates",v.restir_candidates); assign(p,"temporal_reuse",v.restir_temporal); assign(p,"spatial_reuse",v.restir_spatial);
     assign(p,"target_spp",v.target); assign(p,"seed",v.seed); assign(p,"bounces",v.bounces);
@@ -88,6 +93,7 @@ Result<void> register_editor_viewport_commands(CommandRegistry& registry,std::fu
             for(const auto& [name,value] : setting_fields.items()) { (void)value;
                 help["/properties/"+name]={{"examples",Json::array({defaults[name]})},{"description","Edit viewport session setting; omitted fields preserve current values. Does not edit the scene or undo history."}};
             }
+            help["/properties/lighting_scope"]["description"]="direct_only requires surface_only. On entry sets bounces=1, candidates=32 and both reuse stages; explicit fields override defaults. ReSTIR uses the v2 RGB visibility-corrected profile.";
             help["/properties/target_spp"]["description"]="Absolute target spp, not an additional iteration count; preserves completed samples.";
             help["/properties/exposure_ev"]["unit"]="EV";
             help["/properties/exposure_ev"]["description"]="Path display exposure; preserves accumulated samples.";

@@ -244,7 +244,10 @@ Result<void> trace_record(graph::PassContext& pass,void* context) {
 }
 void restir_memory(const PathGpuState&,std::uint64_t,std::uint32_t,const RestirDiSettings&,bool signals=false);
 std::uint64_t restir_evaluations(const RestirDiSettings& r) {
-    return r.initial_candidates+(r.temporal ? 2 : 0)+(r.spatial ? 2*r.spatial->neighbor_count+1 : 0);
+    return r.initial_candidates+(r.version==2 ? 1+(r.temporal ? 1 : 0) : 0)+(r.temporal ? 2 : 0)+(r.spatial ? 2*r.spatial->neighbor_count+1 : 0);
+}
+std::uint64_t restir_visibility_budget(const RestirDiSettings& r) {
+    return r.version==2 ? 1+(r.temporal ? 2 : 0)+(r.spatial ? r.spatial->neighbor_count+2 : 0) : 0;
 }
 Parameters view_parameters(const PathSceneState&,const RenderView&,const PathTraceSettings&,PathTraceSamples);
 Parameters parameters(const PathSceneState& scene,const PathTraceSettings& s,PathTraceSamples samples,
@@ -1043,12 +1046,12 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
         batch->sampling_history=view->sampling_history;
         batch->count=std::min(view->schedule.batch_spp,view->schedule.target_spp-completed); batch->stop=stop;
         batch->reverse_tiles=view->schedule.reverse_tiles;
-        auto pixels=view->settings.max_rays/((view->restir ? 1 : batch->count)*(2ull*view->settings.max_bounces+(view->restir && !view->medium ? 2 : 1)));
+        auto pixels=view->settings.max_rays/((view->restir ? 1 : batch->count)*(2ull*view->settings.max_bounces+(view->restir && !view->medium ? 2 : 1)+(view->restir ? restir_visibility_budget(*view->restir) : 0)));
         if(view->restir) pixels=std::min(pixels,view->restir->max_candidate_evaluations/restir_evaluations(*view->restir));
         batch->edge=std::min(view->schedule.tile_edge,std::uint32_t(std::sqrt(double(pixels))));
         const auto tile_pixels=std::uint64_t{batch->edge}*batch->edge;
         const auto ray_work=tile_pixels*(view->restir ? 1 : batch->count)*
-            (2ull*view->settings.max_bounces+(view->restir && !view->medium ? 2 : 1));
+            (2ull*view->settings.max_bounces+(view->restir && !view->medium ? 2 : 1)+(view->restir ? restir_visibility_budget(*view->restir) : 0));
         auto group_limit=std::min(std::uint64_t{view->schedule.tiles_per_submission},view->settings.max_rays/ray_work);
         if(view->restir) group_limit=std::min(group_limit,view->restir->max_candidate_evaluations/(tile_pixels*restir_evaluations(*view->restir)));
         batch->tiles_per_submission=std::uint32_t(group_limit);
@@ -1113,7 +1116,10 @@ Result<bool> PathTraceRenderer::submit_batch(SubmissionQueue& queue,std::uint64_
     }
     const Buffer* old_surface=nullptr; const Buffer* old_reservoir=nullptr;
     if(info.restir) {
-        p[0]=integers(width,height,batch->first+batch->epoch,1); p[32]=integers(info.restir->initial_candidates,batch->phase,0,0);
+        p[0]=integers(width,height,batch->first+batch->epoch,1); p[32]=integers(info.restir->initial_candidates,batch->phase,info.restir->version,0);
+        if(info.restir->version==2) {
+            const Mat4d camera=d.camera_world.matrix().inverse(); p[43]=pack(-camera.block<1,3>(2,0).transpose(),-camera(2,3));
+        }
         info.samples={batch->first+batch->epoch,1};
         p[33]=integers(view->epoch_origin,0,0,0);
         p[39]=integers(d.width,d.height,0,0);
@@ -1363,6 +1369,7 @@ Result<std::optional<PathTraceGpuImage>> PathTraceFrame::read(SubmissionQueue& q
         tracking_steps=diagnostic[1];
     }
     auto image=memory::make_shared_in<PathGpuImage>(state_->heap,state_->heap); image->info=state_->info;
+    if(image->info.restir && image->info.restir->version==2) image->info.statistics.rays+=image->info.spatial_statistics.current_visibility_rays;
     if(state_->diagnostic_offset && image->info.medium) image->info.medium->tracking_steps=tracking_steps;
     const auto count=std::size_t{image->info.width}*image->info.height;
     Vector<PathGpuPixel> pixels(count*(state_->stride/sizeof(PathGpuPixel)),memory::Allocator<PathGpuPixel>{state_->heap});

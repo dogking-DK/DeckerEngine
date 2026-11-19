@@ -63,7 +63,7 @@ def main():
                 if source["pathtrace"]["direct_lighting"] == "restir_di":
                     assert source["rtxdi_version"] == "3.1.0" and source["restir_sampler_version"] == 1
                     assert source["reuse"] is not None
-                    assert source["pathtrace"]["restir"]["version"] == 1
+                    assert source["pathtrace"]["restir"]["version"] == ticket["provenance"]["pathtrace"]["restir"]["version"]
             evidence["cases"].append(dict(output=ticket["output"], provenance=source))
             return value
         def equal(a, b):
@@ -130,6 +130,21 @@ def main():
                 assert call("jobs.cancel", dict(id=long["job_id"]))["accepted"]
                 finish(queued, "cancelled"); finish(long, "cancelled")
                 assert (root / "old.json").read_text() == "previous"
+            direct = dict(version=3, medium_mode="surface_only", direct_lighting="restir_di", target_spp=3,
+                          max_bounces=1, rr_start=1, restir=dict(version=2, temporal={}, spatial={}))
+            rgb = read(submit("rgb-direct.json", direct))
+            used = rgb["provenance"]["pathtrace"]["restir"]
+            assert used["initial_candidates"] == 32 and used["temporal"]["max_history_age"] == 0
+            assert used["spatial"]["radius"] == 30 and used["spatial"]["neighbor_count"] == 3
+            for bad in (dict(direct, max_bounces=2), dict(direct, medium_mode="scene_media"),
+                        dict(direct, restir=dict(version=2, temporal=dict(version=1)))):
+                try:
+                    submit("invalid-direct.json", bad)
+                except Exception:
+                    pass
+                else:
+                    raise AssertionError("Invalid direct profile created a capture job")
+            assert not (root / "invalid-direct.json").exists()
             script = subprocess.run([sys.executable, str(args.python_example), "--pipe", endpoint, "--ctl", str(args.client),
                                      "--media", "--orthographic", "--restir", "joint"], capture_output=True, text=True,
                                     timeout=160, creationflags=subprocess.CREATE_NO_WINDOW)

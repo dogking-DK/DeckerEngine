@@ -11,8 +11,8 @@ Vec3d temporal_furnace_oracle(std::uint64_t seed,unsigned count,const RestirDiSe
                 restir_reference_sample(seed,0,epoch,candidate,RestirRandomPurpose::replacement)))) z=v;
         }
         unsigned M=fresh.candidates(); double W=fresh.normalization();
-        if(oldM && age<settings.temporal->max_history_age) {
-            const auto m=std::min(oldM,settings.temporal->max_history_candidates);
+        if(oldM && (settings.version==2 || age<settings.temporal->max_history_age)) {
+            const auto m=std::min(oldM,settings.version==2 ? std::min(settings.temporal->max_history_candidates,20*M) : settings.temporal->max_history_candidates);
             const std::array<RisReuseSource,2> sources{{{brightness*z,W,M},{brightness*oldZ,oldW,m}}};
             const std::array<std::uint8_t,4> support{std::uint8_t(z>0),std::uint8_t(oldZ>0),std::uint8_t(z>0),std::uint8_t(oldZ>0)};
             auto merged=take(resample_ris_sources(sources,support,std::array{0.,restir_reference_sample(seed,0,epoch,0,RestirRandomPurpose::temporal_replacement)}));
@@ -23,13 +23,13 @@ Vec3d temporal_furnace_oracle(std::uint64_t seed,unsigned count,const RestirDiSe
     }
     return sum/count;
 }
-void temporal_mean(const std::array<Vec3d,8>& observations,const std::array<Vec3d,8>& reference) {
+void temporal_mean(const std::array<Vec3d,8>& observations,const std::array<Vec3d,8>& reference,bool relative_precision=true) {
     Vec3d a=Vec3d::Zero(),b=Vec3d::Zero(); for(unsigned i=0;i<8;++i) { a+=observations[i]/8; b+=reference[i]/8; }
     for(unsigned c=0;c<3;++c) {
         double variance=0; for(unsigned i=0;i<8;++i) variance+=std::pow(observations[i][c]-a[c],2)+std::pow(reference[i][c]-b[c],2);
         const double error=std::abs(a[c]-b[c]),se=std::sqrt(variance/56);
         std::printf("temporal RGB[%u] GPU=%.9g reference=%.9g SE=%.9g\n",c,a[c],b[c],se);
-        require(error<=.02*std::abs(b[c])+1e-4 && error<=5*se+1e-4,"temporal independent chain mean differs");
+        require((!relative_precision || error<=.02*std::abs(b[c])+1e-4) && error<=5*se+1e-4,"temporal independent chain mean differs");
     }
 }
 RestirDiSettings temporal_settings() { RestirDiSettings r; r.temporal.emplace(); return r; }

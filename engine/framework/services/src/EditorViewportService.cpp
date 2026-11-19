@@ -10,7 +10,7 @@ Result<void> validate(const EditorViewportSettings& settings) {
     if(!settings.voxel.valid() || !range(settings.raster_exposure,0,1e6) || !p.target || p.bounces<1 || p.bounces>32 ||
        !p.restir_candidates || p.restir_candidates>64 || !range(p.exposure,-16,16) ||
        !range(p.time_seconds,-1e9,1e9) || !range(p.cloud_albedo,0,1) || !range(p.cloud_anisotropy,-.95,.95) ||
-       !p.sky.allFinite() || (p.sky.array()<0).any() || (p.sky.array()>1000).any() || !p.surface_only)
+       !p.sky.allFinite() || (p.sky.array()<0).any() || (p.sky.array()>1000).any() || !p.surface_only || (p.direct_only && (p.scene_media || p.bounces!=1)))
         return std::unexpected(Error{ErrorCode::invalid_argument,"Viewport settings outside supported ranges"});
     return {};
 }

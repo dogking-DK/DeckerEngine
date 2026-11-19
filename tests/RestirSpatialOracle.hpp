@@ -13,6 +13,8 @@ inline std::vector<Vec3d> render(const PathTraceScene& scene,const RenderView& v
     const RestirDiSettings& config,unsigned epochs) {
     const auto& state=*PathReferenceAccess::get(scene); const auto& spatial=*config.spatial;
     const unsigned width=view.description().width,height=view.description().height,n=width*height;
+    const Mat4d camera=view.description().camera_world.matrix().inverse();
+    const auto depth=[&](const Vec3d& p) { return -(camera.block<1,3>(2,0)*p).value()-camera(2,3); };
     struct Sample {
         std::optional<PathTraceHit> hit; PathBsdf bsdf; Vec3d wo;
         RestirLightSample light; double W=0,target=0; unsigned M=0;
@@ -34,6 +36,10 @@ inline std::vector<Vec3d> render(const PathTraceScene& scene,const RenderView& v
                 if(reservoir.stream(e.target,light.proposal_pdf,restir_reference_sample(settings.seed,pixel,epoch,i,RestirRandomPurpose::replacement)).value()) s.light=light;
             }
             s.W=reservoir.normalization(); s.target=reservoir.target(); s.M=reservoir.candidates();
+            if(config.version==2 && s.W>0) {
+                const auto e=evaluate_restir_light(state,settings,*s.hit,s.bsdf,s.wo,s.light).value(); PathTraceStatistics stats;
+                if(!path_visible(state,*s.hit,e.direction,stats,s.light.kind==RestirLightKind::triangle ? &state.triangles[s.light.triangle] : nullptr,e.point)) s.W=s.target=0;
+            }
         }
         for(unsigned pixel=0;pixel<n;++pixel) {
             const auto& own=input[pixel]; if(!own.hit) { sum[pixel]+=settings.environment_rgb; continue; }
@@ -42,11 +48,16 @@ inline std::vector<Vec3d> render(const PathTraceScene& scene,const RenderView& v
             for(unsigned i=0;i<spatial.neighbor_count;++i) {
                 unsigned offset=std::min(unsigned(restir_reference_sample(settings.seed,pixel,epoch,i,RestirRandomPurpose::spatial_neighbor)*(side*side-1)),side*side-2);
                 if(offset>=center) ++offset;
-                const int x=int(pixel%width)+int(offset%side)-int(spatial.radius),y=int(pixel/width)+int(offset/side)-int(spatial.radius);
+                int x=int(pixel%width)+int(offset%side)-int(spatial.radius),y=int(pixel/width)+int(offset/side)-int(spatial.radius);
+                if(config.version==2) {
+                    const double angle=2*path_pi*restir_reference_sample(settings.seed,pixel,epoch,0,RestirRandomPurpose::spatial_neighbor)+i*2.39996323;
+                    const double radius=spatial.radius*std::sqrt((i+restir_reference_sample(settings.seed,pixel,epoch,i,static_cast<RestirRandomPurpose>(8)))/spatial.neighbor_count);
+                    x=int(pixel%width)+int(std::round(radius*std::cos(angle))); y=int(pixel/width)+int(std::round(radius*std::sin(angle)));
+                }
                 if(x<0 || y<0 || x>=int(width) || y>=int(height)) continue;
                 const unsigned index=unsigned(y)*width+unsigned(x); const auto& other=input[index];
                 if(std::find(sources.begin(),sources.end(),index)!=sources.end() || !other.hit ||
-                    (own.hit->position-other.hit->position).norm()>spatial.position_tolerance || own.hit->normal.dot(other.hit->normal)<spatial.normal_cosine) continue;
+                    (config.version==2 ? std::abs(depth(own.hit->position)-depth(other.hit->position))/std::max(1e-6,depth(own.hit->position)) : (own.hit->position-other.hit->position).norm())>spatial.position_tolerance || own.hit->normal.dot(other.hit->normal)<spatial.normal_cosine) continue;
                 sources.push_back(index); uniforms.push_back(restir_reference_sample(settings.seed,pixel,epoch,i,RestirRandomPurpose::spatial_replacement));
             }
             const auto target=[&](const Sample& receiver,const Sample& source) {
@@ -54,7 +65,15 @@ inline std::vector<Vec3d> render(const PathTraceScene& scene,const RenderView& v
             };
             std::vector<RisReuseSource> reuse; std::vector<std::uint8_t> support;
             for(unsigned index:sources) reuse.push_back({target(own,input[index]),input[index].W,std::min(input[index].M,spatial.max_source_candidates)});
-            for(unsigned row:sources) for(unsigned column:sources) support.push_back(std::uint8_t(target(input[row],input[column])>0));
+            for(unsigned row:sources) for(unsigned column:sources) {
+                bool supported=target(input[row],input[column])>0;
+                if(config.version==2 && supported) {
+                    const auto& receiver=input[row]; const auto& light=input[column].light;
+                    const auto e=evaluate_restir_light(state,settings,*receiver.hit,receiver.bsdf,receiver.wo,light).value(); PathTraceStatistics stats;
+                    supported=path_visible(state,*receiver.hit,e.direction,stats,light.kind==RestirLightKind::triangle ? &state.triangles[light.triangle] : nullptr,e.point);
+                }
+                support.push_back(std::uint8_t(supported));
+            }
             const auto chosen=resample_ris_sources(reuse,support,uniforms).value();
             Vec3d value=state.triangles[own.hit->index].emission;
             if(chosen.selected!=RisReservoir::invalid_sample) {

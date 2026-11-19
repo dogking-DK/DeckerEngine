@@ -32,9 +32,9 @@ public:
     [[nodiscard]] std::uint32_t path_samples() const { return path_samples_; }
     [[nodiscard]] bool path_interactive() const { return path_interactive_; }
     // Disposable probe only; freeze before the first path request.
-    void configure_media_probe(bool legacy,bool pixels) {
+    void configure_media_probe(bool legacy,bool pixels,bool surface_direct=false) {
         if(path_active_) throw std::logic_error("Media probe policy must precede path activation");
-        legacy_media_probe_=legacy; retain_pixels_=pixels;
+        legacy_media_probe_=legacy && !surface_direct; legacy_surface_direct_probe_=legacy && surface_direct; retain_pixels_=pixels;
     }
     // Acceptance calls this after the GUI submission has completed.
     [[nodiscard]] double path_latency_ms() const {
@@ -97,7 +97,7 @@ private:
     render::PathTraceGpuImageInfo path_info_;
     bool path_active_=false;
     bool path_interactive_=false;
-    bool legacy_media_probe_=false;
+    bool legacy_media_probe_=false,legacy_surface_direct_probe_=false;
     std::uint64_t path_observed_camera_=0;
     std::chrono::steady_clock::time_point path_motion_until_{},path_requested_at_{},path_published_request_{};
 #endif

@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-11-17T14:25:00+08:00"
+updated_at: "2026-11-17T16:35:02+08:00"
 status: accepted
 ---
 
@@ -401,6 +401,9 @@ Scene media 相机移动期间长边192像素，面板显示 Motion preview 和�
 Suspend 通知立即唤醒 worker；排空在途提交后才报告 Suspended，不将 cancel 调用返回作为 GPU 回收完成。
 
 ## ReSTIR 直接光照选择（M19.7）
+
+0182新增`lighting_scope=direct_only`及Direct lighting only控件，只支持Surface only，启用时设1反弹、32候选和时空复用；显式命令字段覆盖进入默认。Classic与ReSTIR均为完整RGB直接光，ReSTIR选择[版本2契约](render-restir.md#0182-完整-rgb-表面直接光)。切换Scene media时GUI清除此选项；命令矛盾参数原子拒绝。bounces在该模式固定1，目标/曝光/暂停及Scene/Undo边界不变。私有Sponza探针可选版本1作同积分对照，普通设置不提供该钩子。
+
 
 Path tracing 面板将 Classic MIS / ReSTIR DI 与 Surface only / Scene media 分开，提供候选数和 temporal/spatial 开关，保留可切回经典路径的会话配置。worker 选择相应 renderer 配置入口，不持久化到 Scene/Undo。配置变化沿已有历史契约失效；曝光/暂停/target 保留累计，姿态变化仅在时间复用有效时保留采样历史。
 

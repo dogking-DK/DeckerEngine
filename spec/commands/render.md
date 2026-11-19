@@ -1,7 +1,7 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-11-17T14:25:00+08:00"
+updated_at: "2026-11-17T16:35:02+08:00"
 status: accepted
 ---
 
@@ -287,6 +287,11 @@ v1/v2 不接受 direct_lighting/restir，继续原经典 MIS；v3 禁止旧布�
 不提供 BSDF-only、外部 history、first_sample、RTXDI 原始对象或 DLSS 参数；未知字段拒绝。render.sequence 仍为光栅。
 
 restir 中字段均可省略，成功来源返回全部有效值；缺少 temporal/spatial 表示关闭，对象 `{}` 表示按默认开启。
+
+0182新增`restir.version=2`完整RGB表面直接光配置，要求`medium_mode=surface_only`、`max_bounces=1`（`rr_start`不得大于1）。时空子对象的version默认为父版本且必须相同。v2初始候选默认32；temporal默认`max_history_candidates=1280,max_history_age=0,position_tolerance=0.1,normal_cosine=0.90630778703665`，有效历史M另受`20*freshM`限制，age仅观测不失效；spatial默认`neighbor_count=3,radius=30,max_source_candidates=16384,position_tolerance=0.1,normal_cosine=0.90630778703665`，M范围1..16384。两种position_tolerance在v2表示相对相机空间深度，法线阈值25度。每阶段采用当前冻结几何的可见支持校正，最终复用本epoch可见性。缺少temporal/spatial仍表示关闭；下表为v1默认与范围。v1行为不变。
+
+示例pathtrace部分：`{"version":3,"medium_mode":"surface_only","direct_lighting":"restir_di","target_spp":64,"max_bounces":1,"rr_start":1,"restir":{"version":2,"temporal":{},"spatial":{}}}`。完整capture仍需相机和输出参数。版本2不接受Scene media或多反弹，请求在创建Job前拒绝。
+
 
 | 字段 | 默认 | 合法范围 / 含义 |
 | --- | --- | --- |

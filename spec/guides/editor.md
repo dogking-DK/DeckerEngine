@@ -400,6 +400,10 @@ Path tracing 面板默认 **Classic MIS**。切到 **ReSTIR DI** 后，可以设
 并分别勾选 **Temporal reuse** 和 **Spatial reuse**。两个都关闭是初始 RIS；此选择与 Surface only / Scene media 独立。
 设置只影响当前预览会话，不修改 Scene 或撤销历史；也不代表启用了 DLSS。
 
+要查看完整 RGB 表面直接光，选择 **Surface only**，勾选 **Direct lighting only**，再选择 **ReSTIR DI**。
+进入直接光模式时会设为 1 次反弹、32 个候选并开启时空复用。完成帧显示 **ReSTIR profile v2 / RGB direct lighting**。
+切到 **Classic MIS** 可以在同一光照范围内对比。两种分辨率的实测见 [Sponza 运动报告](../benchmarks/2026-11-17-restir-direct.md)。
+
 **Shown lighting** 与候选/复用信息来自实际已完成图像。面板同时显示采样 epoch 起点、历史年龄、有效 M 和复用/拒绝计数，
 **Latest reset** 标出 worker 最近清空图像历史的原因。spp 只统计全图完成的样本，不把候选或内部 pass 当作 spp。
 曝光、Pause/Resume 和目标 spp 不改变已有线性样本；Reset accumulation、算法/物理配置、尺寸/投影、Refresh 和文档变化会重置。

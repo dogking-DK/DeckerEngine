@@ -9,6 +9,20 @@
 [[vk::binding(14,0)]] StructuredBuffer<float4> spatialReservoirs;
 struct RestirSample { uint light; float2 uv; float W, target, M; uint age; };
 RestirSample emptyRestir() { RestirSample s={}; s.light=0xffffffffu; return s; }
+bool paperRestir() { return asuint(parameters[32]).z==2; }
+float restirDepth(float3 position) { return dot(parameters[43],float4(position,1)); }
+bool cachedRestirVisibility() { return paperRestir() && asuint(parameters[32]).y!=2; }
+// Visibility is evaluated in the current frozen scene, including old receivers.
+// It is not a cache of last frame's shadow result.
+bool restirVisible(RestirSample s,PathPayload hit,float3 position,float3 wi,float3 point,uint pixel) {
+#if !DK_PATH_EMPTY
+    uint rays=0; bool result=visible(hit,position,wi,s.light==asuint(parameters[2]).z ? 0xffffffffu : s.light,point,rays);
+    restirStat(pixel,13,rays); return result;
+#else
+    return true;
+#endif
+}
+RestirSample zeroRestir(RestirSample s) { s.light=0xffffffffu; s.target=0; s.W=0; return s; }
 float restirRandom(uint pixel,uint sample,uint candidate,uint purpose) {
     uint4 p=asuint(parameters[1]); uint h=mixBits(p.x^0x52495331u);
     h=mixBits(h^p.y); h=mixBits(h^pixel); h=mixBits(h^sample); h=mixBits(h^candidate); h=mixBits(h^purpose);
@@ -85,6 +99,11 @@ RestirSample initialRestir(PathPayload hit,float3 position,float3 normal,PathBsd
     RTXDI_FinalizeResampling(reservoir,1,reservoir.M);
     chosen.W=reservoir.weightSum; chosen.target=reservoir.targetPdf; chosen.M=reservoir.M;
     if(!isfinite(chosen.W) || chosen.W<0 || (chosen.target>0 && chosen.W==0)) restirError();
+    if(cachedRestirVisibility() && chosen.light!=0xffffffffu) {
+        float3 wi,point; float pdf;
+        restirEvaluate(chosen.light,chosen.uv,position,normal,bsdf,wo,wi,point,pdf);
+        if(!restirVisible(chosen,hit,position,wi,point,pixel)) chosen=zeroRestir(chosen); // Keep M, including zero draws.
+    }
     return chosen;
 }
 #if !DK_PATH_EMPTY
@@ -101,7 +120,7 @@ float3 shadeRestir(RestirSample s,PathPayload hit,float3 position,float3 normal,
         float3 wi,point; float pdf; float3 contribution=restirEvaluate(s.light,s.uv,position,normal,bsdf,wo,wi,point,pdf);
         uint emitter=s.light==asuint(parameters[2]).z ? 0xffffffffu : s.light;
         uint before=rays;
-        if(visible(hit,position,wi,emitter,point,rays)) value=contribution*s.W;
+        if(cachedRestirVisibility() || visible(hit,position,wi,emitter,point,rays)) value=contribution*s.W;
 #if DK_PATH_SIGNALS
         diffuse=value*diffuseFraction(bsdf,normal,wo,wi);
 #endif
@@ -142,10 +161,13 @@ bool temporalReceiver(uint pixel,out uint previousPixel) {
     if(any(uv<0) || any(uv>=1)) return false;
     uint2 size=asuint(parameters[39]).xy,xy=uint2(uv*float2(size));
     previousPixel=xy.y*size.x+xy.x;
-    if(any(asuint(previousSurfaces[previousPixel*6+4])!=asuint(restirSurfaces[pixel*6+4])) ||
-        any(asint(previousSurfaces[previousPixel*6+5])!=asint(restirSurfaces[pixel*6+5]))) return false;
+    if(previousSurfaces[previousPixel*6].w==0) return false;
+    if(!paperRestir() && (any(asuint(previousSurfaces[previousPixel*6+4])!=asuint(restirSurfaces[pixel*6+4])) ||
+        any(asint(previousSurfaces[previousPixel*6+5])!=asint(restirSurfaces[pixel*6+5])))) return false;
     float3 oldPosition=previousSurfaces[previousPixel*6+2].xyz;
-    if(distance(oldPosition,position)>parameters[34].x ||
+    float depth=restirDepth(position);
+    float difference=paperRestir() ? abs(restirDepth(oldPosition)-depth)/max(depth,1e-6) : distance(oldPosition,position);
+    if(difference>parameters[34].x ||
         dot(previousSurfaces[previousPixel*6+1].xyz,restirSurfaces[pixel*6+1].xyz)<parameters[34].y) return false;
     if(asuint(previousSurfaces[previousPixel*6+3].w)!=asuint(parameters[34]).w) { restirError(); return false; }
     return true;
@@ -160,18 +182,20 @@ PathBsdf restirMaterial(float4 hit,uint4 key) {
 #endif
     return result;
 }
-PathPayload restirPayload(uint pixel) {
-    float4 record=restirSurfaces[pixel*6]; uint4 key=asuint(restirSurfaces[pixel*6+4]);
+PathPayload restirPayload(uint pixel,bool previous=false) {
+    float4 record=previous ? previousSurfaces[pixel*6] : restirSurfaces[pixel*6];
+    uint4 key=asuint(previous ? previousSurfaces[pixel*6+4] : restirSurfaces[pixel*6+4]);
     PathPayload hit={}; hit.distance=record.x; hit.barycentric=record.yz; hit.found=(key.x==1 || key.x==2) ? 1u : 0u; hit.index=key.y;
 #if DK_PATH_VOXELS
     if(key.x==2) {
         hit.kind=1; hit.instance=key.y; hit.face=key.z; hit.value=key.w;
-        hit.cell=asint(restirSurfaces[pixel*6+5]).xyz; hit.position=restirSurfaces[pixel*6+2].xyz;
+        hit.cell=asint(previous ? previousSurfaces[pixel*6+5] : restirSurfaces[pixel*6+5]).xyz;
+        hit.position=previous ? previousSurfaces[pixel*6+2].xyz : restirSurfaces[pixel*6+2].xyz;
     }
 #endif
     return hit;
 }
-float temporalTarget(RestirSample s,uint pixel,bool previous=false) {
+float temporalTarget(RestirSample s,uint pixel,bool previous=false,bool visibility=false,uint diagnosticPixel=0) {
     float4 hit=previous ? previousSurfaces[pixel*6] : restirSurfaces[pixel*6];
     float3 position=previous ? previousSurfaces[pixel*6+2].xyz : restirSurfaces[pixel*6+2].xyz;
     float3 normal=previous ? previousSurfaces[pixel*6+1].xyz : restirSurfaces[pixel*6+1].xyz;
@@ -182,6 +206,7 @@ float temporalTarget(RestirSample s,uint pixel,bool previous=false) {
     float3 value=restirEvaluate(s.light,s.uv,position,normal,restirMaterial(hit,key),wo,wi,point,pdf);
     float result=dot(value,float3(.2126,.7152,.0722));
     if(!isfinite(result) || result<0) restirError();
+    if(visibility && result>0 && !restirVisible(s,restirPayload(pixel,previous),position,wi,point,diagnosticPixel)) return 0;
     return result;
 }
 RTXDI_DIReservoir sdkReservoir(RestirSample s,float M) {
@@ -196,18 +221,21 @@ void temporalRestir(uint pixel,uint epoch) {
     if(temporalReceiver(pixel,oldPixel)) {
         float4 a=previousReservoirs[oldPixel*2],b=previousReservoirs[oldPixel*2+1];
         if(asuint(b.z)!=asuint(parameters[34]).w) restirError();
-        if(asuint(b.w)>=asuint(parameters[33]).w) restirStat(pixel,4);
+        if(!paperRestir() && asuint(b.w)>=asuint(parameters[33]).w) restirStat(pixel,4);
         else {
             RestirSample old; old.light=asuint(a.x); old.uv=a.yz; old.W=a.w; old.target=b.x; old.M=min(b.y,float(asuint(parameters[34]).z)); old.age=asuint(b.w);
+            if(paperRestir()) old.M=min(old.M,20*fresh.M);
             RTXDI_DIReservoir combined=RTXDI_EmptyDIReservoir();
             RTXDI_CombineDIReservoirs(combined,sdkReservoir(fresh,fresh.M),0,fresh.target);
             float target=temporalTarget(old,pixel);
             if(RTXDI_CombineDIReservoirs(combined,sdkReservoir(old,old.M),restirRandom(pixel,epoch,0,5),target)) result=old;
-            float support=temporalTarget(result,oldPixel,true)>0 ? old.M : 0;
+            bool destinationVisible=!paperRestir() || temporalTarget(result,pixel,false,true,pixel)>0;
+            float support=destinationVisible && temporalTarget(result,oldPixel,true,paperRestir(),pixel)>0 ? old.M : 0;
             RTXDI_FinalizeResampling(combined,1,fresh.M+support);
             result.W=combined.weightSum; result.target=combined.targetPdf; result.M=combined.M;
-            result.age=old.age+1; // Ancestry of ALL sources, never the age of the selected sample.
+            result.age=min(old.age,0xfffffffeu)+1; // Ancestry, diagnostic only in v2; capped effective M controls history.
             if(combined.weightSum==0) result.light=0xffffffffu;
+            if(!destinationVisible) result=zeroRestir(result);
             restirStat(pixel,2); if(support==0 && old.M>0) restirStat(pixel,7);
         }
     } else restirStat(pixel,3);
@@ -235,12 +263,19 @@ void spatialRestir(uint pixel,uint epoch) {
             uint offset=min(uint(restirRandom(pixel,epoch,i,6)*float(side*side-1)),side*side-2);
             if(offset>=center) ++offset;
             int2 xy=int2(pixel%size.x,pixel/size.x)+int2(offset%side,offset/side)-int(config.y);
+            if(paperRestir()) {
+                float angle=2*pi*restirRandom(pixel,epoch,0,6)+float(i)*2.39996323;
+                float radius=float(config.y)*sqrt((float(i)+restirRandom(pixel,epoch,i,8))/float(config.x));
+                xy=int2(pixel%size.x,pixel/size.x)+int2(round(radius*float2(cos(angle),sin(angle))));
+            }
             bool accepted=all(xy>=0) && all(xy<int2(size));
             uint source=accepted ? uint(xy.y)*size.x+uint(xy.x) : 0;
             if(accepted) {
                 for(uint j=0;j<count;++j) if(pixels[j]==source) accepted=false;
                 float4 sourceHit=restirSurfaces[source*6];
-                if(sourceHit.w==0 || distance(position,restirSurfaces[source*6+2].xyz)>parameters[41].x ||
+                float depth=restirDepth(position);
+                float difference=paperRestir() ? abs(restirDepth(restirSurfaces[source*6+2].xyz)-depth)/max(depth,1e-6) : distance(position,restirSurfaces[source*6+2].xyz);
+                if(sourceHit.w==0 || difference>parameters[41].x ||
                     dot(normal,restirSurfaces[source*6+1].xyz)<parameters[41].y) accepted=false;
             }
             if(!accepted) { restirStat(pixel,9); continue; }
@@ -252,13 +287,15 @@ void spatialRestir(uint pixel,uint epoch) {
             restirStat(pixel,8);
         }
         float support=0;
+        bool destinationVisible=!paperRestir() || temporalTarget(result,pixel,false,true,pixel)>0;
         for(uint j=0;j<count;++j) {
             uint source=pixels[j];
-            if(temporalTarget(result,source)>0) support+=counts[j];
+            if(destinationVisible && (paperRestir() && source==pixel ? true : temporalTarget(result,source,false,paperRestir(),pixel)>0)) support+=counts[j];
         }
         RTXDI_FinalizeResampling(combined,1,support);
         result.W=combined.weightSum; result.target=combined.targetPdf; result.M=combined.M; result.age=age;
         if(result.W==0) result.light=0xffffffffu;
+        if(!destinationVisible) result=zeroRestir(result);
         if(support<combined.M && result.W>0) restirStat(pixel,10);
     }
     if(!isfinite(result.W) || result.W<0 || !isfinite(result.M) || (result.target>0 && result.W==0)) restirError();

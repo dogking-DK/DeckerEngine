@@ -182,7 +182,7 @@ std::vector<SettingInfo> build_settings_catalog(const CommandCatalogSnapshot& ca
     add("camera.cancel","View settings","Camera/Lens and navigation","Cancel camera","取消 相机","","","Close the popup and discard its unapplied values.","No camera/Scene/Undo change.");
     add("camera.defaults","View settings","Camera/Lens and navigation","Restore camera defaults","恢复 默认 相机","editor.camera.reset","defaults","Restore pose, projection, navigation mode and all preferences; use defaults=true in the command.",camera);
     for(const auto& [key,label,alias]:std::initializer_list<std::array<const char*,3>>{
-        {"medium_mode","Medium mode","介质 表面 大气 云"},{"direct_lighting","Direct lighting","直接光照 ReSTIR 算法"},{"initial_candidates","Initial candidates","候选数量 ReSTIR"},
+        {"lighting_scope","Direct lighting only","完整 RGB 直接光 ReSTIR"},{"medium_mode","Medium mode","介质 表面 大气 云"},{"direct_lighting","Direct lighting","直接光照 ReSTIR 算法"},{"initial_candidates","Initial candidates","候选数量 ReSTIR"},
         {"temporal_reuse","Temporal reuse","时间复用 ReSTIR"},{"spatial_reuse","Spatial reuse","空间复用 ReSTIR"},{"target_spp","Target spp","采样 目标 次数"},
         {"seed","Seed","随机 种子"},{"bounces","Bounces","反弹 次数"},{"environment_rgb","Environment RGB","环境 颜色 光照"},{"sky_enabled","Sky","天空 开关"},
         {"sun","Scene sun","太阳 开关 光照"},{"exposure_ev","Exposure EV","曝光"},{"time_seconds","Medium time","介质 时间"},{"cloud_albedo","Cloud albedo","云 反照率"},{"cloud_anisotropy","Cloud anisotropy","云 各向异性"}})

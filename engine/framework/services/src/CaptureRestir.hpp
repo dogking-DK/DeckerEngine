@@ -4,14 +4,14 @@
 #include <cmath>
 namespace dk::capture_detail {
 inline bool valid_restir(const CaptureRestir& r) {
-    if(r.version!=1 || !r.initial_candidates || r.initial_candidates>64 || !r.max_candidate_evaluations || r.max_candidate_evaluations>(1ull<<24)) return false;
+    if((r.version!=1 && r.version!=2) || !r.initial_candidates || r.initial_candidates>64 || !r.max_candidate_evaluations || r.max_candidate_evaluations>(1ull<<24)) return false;
     const auto receiver=[](double position,double normal) { return std::isfinite(position) && position>0 && position<=1e6 && float(position)>0 &&
         std::isfinite(normal) && normal>=-1 && normal<=1; };
     if(r.temporal) { const auto& t=*r.temporal;
-        if(t.version!=1 || !t.max_history_candidates || t.max_history_candidates>4096 || !t.max_history_age || t.max_history_age>32 || (t.normal_cosine<0 || !receiver(t.position_tolerance,t.normal_cosine))) return false;
+        if(t.version!=r.version || !t.max_history_candidates || t.max_history_candidates>4096 || (r.version==1 ? (!t.max_history_age || t.max_history_age>32) : t.max_history_age!=0) || (t.normal_cosine<0 || !receiver(t.position_tolerance,t.normal_cosine))) return false;
     }
     if(r.spatial) { const auto& s=*r.spatial;
-        if(s.version!=1 || !s.neighbor_count || s.neighbor_count>8 || !s.radius || s.radius>32 || !s.max_source_candidates || s.max_source_candidates>4096 || !receiver(s.position_tolerance,s.normal_cosine)) return false;
+        if(s.version!=r.version || !s.neighbor_count || s.neighbor_count>8 || !s.radius || s.radius>32 || !s.max_source_candidates || s.max_source_candidates>(r.version==2 ? 16384u : 4096u) || !receiver(s.position_tolerance,s.normal_cosine)) return false;
     }
     return true;
 }

@@ -13,7 +13,7 @@ struct ViewportPathSettings {
     std::uint32_t target=64,seed=1,bounces=4;
     Vec3d sky{.3,.4,.6};
     double exposure=0;
-    bool paused=false,sun=true,surface_only=true,scene_media=false,sky_enabled=true;
+    bool paused=false,sun=true,surface_only=true,scene_media=false,sky_enabled=true,direct_only=false;
     double time_seconds=0,cloud_albedo=.9,cloud_anisotropy=.6;
     bool restir_di=false,restir_temporal=false,restir_spatial=false;
     std::uint32_t restir_candidates=8;

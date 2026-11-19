@@ -181,9 +181,12 @@ void PathPreview::run(std::stop_token stop) {
                 schedule.tile_edge=256;
                 schedule.tiles_per_submission=4;
                 schedule.paused=active->settings.paused; schedule.exposure=active->settings.exposure;
-                render::RestirDiSettings restir; restir.initial_candidates=active->settings.restir_candidates;
-                if(active->settings.restir_temporal) restir.temporal.emplace();
-                if(active->settings.restir_spatial) restir.spatial.emplace();
+                auto restir=active->settings.direct_only && !active->legacy_surface_direct_probe ? render::surface_direct_restir_settings() : render::RestirDiSettings{};
+                restir.initial_candidates=active->settings.restir_candidates;
+                if(!active->settings.restir_temporal) restir.temporal.reset();
+                else if(!restir.temporal) restir.temporal.emplace();
+                if(!active->settings.restir_spatial) restir.spatial.reset();
+                else if(!restir.spatial) restir.spatial.emplace();
                 if(active->settings.scene_media) {
                     const auto& environment=active->snapshot.scene.environment(); const auto& clouds=environment.clouds;
                     std::shared_ptr<const render::CloudFieldData> candidate;

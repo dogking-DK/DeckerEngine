@@ -137,3 +137,17 @@ TEST_CASE("viewport Runtime never fills host guards from scene auto guard") {
     runtime.reset(); CHECK_FALSE(host->query());
     host->present({},{}); CHECK_FALSE(host->query());
 }
+
+TEST_CASE("viewport RGB direct profile defaults and conflicts are atomic") {
+    Fixture f; const auto original=f.query(); const auto scene=f.model->snapshot()->state;
+    auto direct=f.change({{"lighting_scope","direct_only"},{"direct_lighting","restir_di"}});
+    CHECK(direct["settings"]["bounces"]==1); CHECK(direct["settings"]["initial_candidates"]==32);
+    CHECK(direct["settings"]["temporal_reuse"]==true); CHECK(direct["settings"]["spatial_reuse"]==true);
+    for(const auto& bad:{Json{{"medium_mode","scene_media"}},Json{{"bounces",2}}}) {
+        auto args=bad; args["guard"]=direct["guard"]; CHECK_FALSE(f.call("editor.viewport.set",args)); CHECK(f.query()==direct);
+    }
+    CHECK(f.change({{"initial_candidates",16},{"temporal_reuse",false}})["settings"]["initial_candidates"]==16);
+    CHECK(f.change({{"lighting_scope","direct_only"}})["settings"]["initial_candidates"]==16);
+    CHECK(f.change({{"lighting_scope","full_path"},{"medium_mode","scene_media"},{"bounces",4}})["settings"]["bounces"]==4);
+    CHECK(f.model->snapshot()->state.revision==scene.revision);
+}

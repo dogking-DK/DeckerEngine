@@ -1,7 +1,7 @@
 ---
 module: command-reference-editor-viewport
 created_at: "2026-11-03T14:56:20+08:00"
-updated_at: "2026-11-12T16:55:54+08:00"
+updated_at: "2026-11-17T16:35:02+08:00"
 status: accepted
 ---
 
@@ -86,6 +86,7 @@ guard 必填，且至少提供一个设置字段。省略字段保持当前值�
 | --- | --- | --- |
 | renderer | raster / pathtrace | raster；Edit 渲染器 |
 | medium_mode | surface_only / scene_media | surface_only；路径是否追踪场景空气和云 |
+| lighting_scope | full_path / direct_only | full_path；direct_only仅支持surface_only，进入时默认bounces=1、候选32、时空复用开启，显式参数覆盖默认；ReSTIR使用v2完整RGB直接光 |
 | direct_lighting | classic / restir_di | classic；路径直接光照算法 |
 | initial_candidates | 整数 1–64 | 8；ReSTIR 初始候选数 |
 | temporal_reuse / spatial_reuse | boolean | false / false；ReSTIR 时空复用，Classic 下保留设置 |

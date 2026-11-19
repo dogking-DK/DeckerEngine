@@ -1,27 +1,27 @@
 // Kept with the renderer's private scene/resource owners; no SDK types in this API.
 namespace {
 void validate_restir(const PathTraceSettings& path,const RestirDiSettings& r,std::uint64_t pixels,PathTraceSamples samples,bool fixed_work=false,bool medium=false) {
-    if(r.version!=1 || r.initial_candidates<1 || r.initial_candidates>64 ||
+    if((r.version!=1 && r.version!=2) || (r.version==2 && (medium || path.max_bounces!=1)) || r.initial_candidates<1 || r.initial_candidates>64 ||
         !r.max_candidate_evaluations || r.max_candidate_evaluations>(1ull<<24) || path.estimator!=PathTraceEstimator::mis)
         throw path_invalid("Invalid GPU initial RIS settings or estimator combination");
     if(r.temporal) {
         const auto& t=*r.temporal;
-        if(fixed_work || t.version!=1 || !t.max_history_candidates || t.max_history_candidates>4096 ||
-            !t.max_history_age || t.max_history_age>32 || !std::isfinite(t.position_tolerance) ||
+        if(fixed_work || t.version!=r.version || !t.max_history_candidates || t.max_history_candidates>4096 ||
+            (r.version==1 ? (!t.max_history_age || t.max_history_age>32) : t.max_history_age!=0) || !std::isfinite(t.position_tolerance) ||
             t.position_tolerance<=0 || t.position_tolerance>1e6 || float(t.position_tolerance)==0 ||
             !std::isfinite(t.normal_cosine) || t.normal_cosine<0 || t.normal_cosine>1)
             throw path_invalid("Invalid temporal RIS settings or missing progressive view");
     }
     if(r.spatial) {
         const auto& s=*r.spatial;
-        if(fixed_work || s.version!=1 || !s.neighbor_count || s.neighbor_count>8 || !s.radius || s.radius>32 ||
-            !s.max_source_candidates || s.max_source_candidates>4096 || !std::isfinite(s.position_tolerance) ||
+        if(fixed_work || s.version!=r.version || !s.neighbor_count || s.neighbor_count>8 || !s.radius || s.radius>32 ||
+            !s.max_source_candidates || s.max_source_candidates>(r.version==2 ? 16384u : 4096u) || !std::isfinite(s.position_tolerance) ||
             s.position_tolerance<=0 || s.position_tolerance>1e6 || float(s.position_tolerance)==0 ||
             !std::isfinite(s.normal_cosine) || s.normal_cosine< -1 || s.normal_cosine>1)
             throw path_invalid("Invalid spatial RIS settings or missing progressive view");
     }
     if(pixels*samples.count*restir_evaluations(r)>r.max_candidate_evaluations ||
-        pixels*samples.count*(2ull*path.max_bounces+(medium ? 1 : 2))>path.max_rays ||
+        pixels*samples.count*(2ull*path.max_bounces+(medium ? 1 : 2)+restir_visibility_budget(r))>path.max_rays ||
         (fixed_work && std::uint64_t(samples.count)*r.initial_candidates>PathTraceRenderer::restir_max_candidates_per_invocation))
         throw path_invalid("GPU initial RIS candidate or ray budget exceeded");
 }
@@ -51,7 +51,7 @@ Result<PathTraceFrame> PathTraceRenderer::submit_restir_rays(SubmissionQueue& qu
         packed.push_back(pack(ray.origin,ray.minimum==0 ? 0.0 : ray.minimum)); packed.push_back(pack(ray.direction,maximum));
     }
     const auto width=std::uint32_t(rays.size()); auto p=parameters(cpu,settings,samples,width,1,true,first_pixel);
-    p[32]=integers(restir.initial_candidates,2,0,0);
+    p[32]=integers(restir.initial_candidates,2,restir.version,0);
     auto info=info_for(scene.source(),width,1,settings,samples); info.fixed_rays=true; info.first_pixel=first_pixel; info.restir=restir;
     info.sampling_first_epoch=samples.first;
     return PathTraceFrame{submit(*state_,queue,*scene.state_,p,packed,std::move(info),stop)};
@@ -65,7 +65,7 @@ Result<PathTraceFrame> PathTraceRenderer::submit_restir_view(SubmissionQueue& qu
     const auto& cpu=*PathReferenceAccess::get(scene.source()); check(validate_path_view(cpu,view));
     const auto& d=view.description(); check(validate_path_work(cpu,std::uint64_t{d.width}*d.height,settings,samples,false));
     validate_restir(settings,restir,std::uint64_t{d.width}*d.height,samples,true);
-    auto p=view_parameters(cpu,view,settings,samples); p[32]=integers(restir.initial_candidates,2,0,0);
+    auto p=view_parameters(cpu,view,settings,samples); p[32]=integers(restir.initial_candidates,2,restir.version,0);
     auto info=info_for(scene.source(),d.width,d.height,settings,samples); info.view=d; info.restir=restir;
     info.sampling_first_epoch=samples.first;
     const std::array<Float4,2> dummy{};

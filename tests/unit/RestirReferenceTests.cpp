@@ -371,7 +371,11 @@ TEST_CASE("RESTIR CPU active cancellation publishes no partial estimate") {
 TEST_CASE("RESTIR CPU rejects budgets combinations cancellation and keeps frozen input") {
     Fixture f; f.quad(-8,8,0,{.6f,.6f,.6f}); const auto scene=f.scene(); auto s=settings(); s.environment_rgb=Vec3d::Ones();
     const auto before=estimate_restir_reference(scene,down,s,{}, {0,16}).value(); const auto revision=f.doc->revision();
-    RestirDiSettings r; r.version=2; CHECK_FALSE(estimate_restir_reference(scene,down,s,r)); r={};
+    RestirDiSettings r; r.version=3; CHECK_FALSE(estimate_restir_reference(scene,down,s,r)); r={};
+    auto direct=surface_direct_restir_settings(); direct.temporal.reset(); direct.spatial.reset();
+    auto legacy=direct; legacy.version=1;
+    CHECK(estimate_restir_reference(scene,down,s,direct,{0,16})->mean==estimate_restir_reference(scene,down,s,legacy,{0,16})->mean);
+    auto indirect=s; indirect.max_bounces=2; CHECK_FALSE(estimate_restir_reference(scene,down,indirect,direct));
     for(unsigned n:{0u,65u}) { r.initial_candidates=n; CHECK_FALSE(estimate_restir_reference(scene,down,s,r)); } r={};
     r.max_candidate_evaluations=127; CHECK_FALSE(estimate_restir_reference(scene,down,s,r,{0,16})); r={};
     s.max_rays=63; CHECK_FALSE(estimate_restir_reference(scene,down,s,r,{0,16})); s.max_rays=1<<24;

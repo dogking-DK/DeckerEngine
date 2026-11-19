@@ -39,6 +39,7 @@ struct RestirTemporalStatistics {
     std::uint32_t max_age=0, max_candidates=0;
 };
 struct RestirSpatialStatistics {
+    // v1: selected shading shadows. v2: all reservoir visibility/support rays in current frozen geometry.
     std::uint64_t reused = 0, rejected = 0, support_corrected = 0, current_visibility_rays = 0;
     std::uint32_t max_candidates = 0, max_age = 0;
 };

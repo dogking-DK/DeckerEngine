@@ -179,7 +179,7 @@ void restir_state(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQue
     const auto generation=take(r.status(81)).generation;
     schedule.target_spp=4; schedule.exposure=2; schedule.reverse_tiles=true;
     check(r.configure_restir_view(q,81,gpu,view,s,{},schedule)); require(take(r.status(81)).generation==generation,"display/schedule reset RIS");
-    RestirDiSettings invalid; invalid.version=2; require(!r.configure_restir_view(q,81,gpu,view,s,invalid,schedule),"unknown version accepted");
+    RestirDiSettings invalid; invalid.version=3; require(!r.configure_restir_view(q,81,gpu,view,s,invalid,schedule),"unknown version accepted");
     auto wrong=s; wrong.estimator=PathTraceEstimator::bsdf_only; require(!r.configure_restir_view(q,81,gpu,view,wrong,{},schedule),"RIS BSDF-only accepted");
     invalid={}; invalid.max_candidate_evaluations=7; require(!r.configure_restir_view(q,81,gpu,view,s,invalid,schedule),"one-pixel candidate budget accepted");
     require(r.completed_frame(81).linear_buffer()==held.linear_buffer(),"reject lost completed owner");
@@ -209,22 +209,40 @@ void restir_state(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQue
     compare_images(complete(q,take(held.read_linear(q))),original,0);
     auto bounded=take(PathTraceRenderer::create(heap,q,DK_PATH_SHADER_DIR,{},1ull<<20)); auto small=take(bounded.prepare_scene(q,f.scene()));
     // A one-epoch tail allocates no ping-pong buffer even if batch_spp is larger.
-    auto tail=f.view(f.source(),64); check(bounded.configure_restir_view(q,1,small,tail,s,{},schedule));
+    // Leave room for the actual frozen scene beside the 256-byte/pixel candidate.
+    auto tail=f.view(f.source(),56); check(bounded.configure_restir_view(q,1,small,tail,s,{},schedule));
     advance_view(bounded,q,1); require(bounded.completed_frame(1).info().samples.count==1,"bounded tail did not complete"); check(bounded.release_view(1));
     auto large=f.view(f.source(),72); require(!bounded.configure_restir_view(q,1,small,large,s,{},schedule),"RIS planes bypass memory limit");
     check(bounded.configure_restir_view(q,1,small,view,s,{},schedule)); finish_view(bounded,q,1); auto old=bounded.completed_frame(1);
     const auto owned=bounded.memory_stats(q).owned.current; check(bounded.release_view(1));
     require(bounded.memory_stats(q).owned.current==owned,"external completed owner not charged"); old={};
     require(bounded.memory_stats(q).owned.current+128*16<=owned,"RIS image owner did not release bytes");
-    // Candidate rejection caused by external full-frame owners must be recoverable.
+    // Accumulate immutable owners until the actual device budget rejects the next batch.
+    // Use one tile so the same submission needs both candidate planes and dispatch buffers.
     schedule.target_spp=2; schedule.batch_spp=2; schedule.tile_edge=64;
-    auto medium_view=f.view(f.source(),40); check(bounded.configure_restir_view(q,1,small,medium_view,s,{},schedule)); advance_view(bounded,q,1);
-    auto first=bounded.completed_frame(1); check(bounded.reset(1)); advance_view(bounded,q,1);
-    auto second=bounded.completed_frame(1); check(bounded.reset(1)); advance_view(bounded,q,1);
-    const auto retained=bounded.completed_frame(1).linear_buffer(); schedule.target_spp=4;
+    auto medium_view=f.view(f.source(),32);
     check(bounded.configure_restir_view(q,1,small,medium_view,s,{},schedule));
-    require(!bounded.submit_batch(q,1) && bounded.completed_frame(1).linear_buffer()==retained,"held owners bypassed candidate budget");
-    first={}; second={}; advance_view(bounded,q,1); check(bounded.release_view(1));
+    advance_view(bounded,q,1);
+    std::vector<decltype(bounded.completed_frame(1))> retained;
+    for(;;) {
+        const auto current=bounded.completed_frame(1);
+        retained.push_back(current);
+        schedule.target_spp+=2;
+        check(bounded.configure_restir_view(q,1,small,medium_view,s,{},schedule));
+        const auto next=bounded.submit_batch(q,1);
+        if(!next) {
+            require(next.error().code==ErrorCode::invalid_argument && next.error().message.find("budget")!=std::string::npos,
+                "expected allocation budget failure");
+            require(bounded.completed_frame(1).linear_buffer()==current.linear_buffer(),"failed allocation replaced completed image");
+            break;
+        }
+        require(*next && retained.size()<8,"held owners bypassed the 1 MiB budget");
+        collect(bounded,q); advance_view(bounded,q,1);
+    }
+    retained.clear();
+    advance_view(bounded,q,1);
+    require(bounded.completed_frame(1).info().samples.count==schedule.target_spp,"budget recovery lost progress");
+    check(bounded.release_view(1));
     std::puts("RIS invalid/budget/two views/phase failure/cancel/late/immutable owner=pass");
 }
 }

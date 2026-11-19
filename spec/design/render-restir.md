@@ -1,7 +1,7 @@
 ---
 module: render-restir
 created_at: "2026-10-19T12:50:00+08:00"
-updated_at: "2026-11-17T14:25:00+08:00"
+updated_at: "2026-11-17T16:35:02+08:00"
 status: accepted
 ---
 
@@ -15,6 +15,18 @@ status: accepted
 统计与调度优化见[0144](../development/0144-path-throughput-optimization.md)及[路径追踪提交契约](render-pathtracing.md#提交与统计吞吐优化0144)：诊断使用device-local storage，观测统计256分片并在完成后精确归约；错误与介质总量保留每dispatch实时检查。保留全部来源/历史/可见性统计，不通过删除统计获得性能。可显式合并同一pass内的有界tile组，跨pass屏障、独立空间平面、epoch顺序及完整候选提交点保持。
 
 # ReSTIR 光照重采样设计
+
+## 0182 完整 RGB 表面直接光
+
+本次新增显式 `lighting_scope=direct_only`（Surface only），将有效反弹数固定为1；相机可见发光/背景、首表面直接光及既有mask灯BSDF命中组成同一直接光积分。每条路径为完整RGB，不经过Scene media的hero通道。Classic是同积分的对照；该模式的ReSTIR使用版本2，版本1及Scene media保持原契约。继续使用固定RTXDI 3.1.0的reservoir流/合并数学，不升级依赖、不声称采用其完整示例渲染器。
+
+版本2以[Bitterli 2020原论文](https://research.nvidia.com/sites/default/files/pubs/2020-07_Spatiotemporal-reservoir-resampling/ReSTIR.pdf)§3–5/Alg.5–6的无偏配置为基线：32初始候选，1个reservoir，3个低差异圆盘邻居、30像素半径、1轮空间复用；按10%相对深度与25度法线阈值选择邻居，静态场景相机移动不要求同一三角形。时间来源M限制为当前fresh M的20倍，不按8 epoch整体过期。完整来源/位置/材质保留，动态几何/光源内容变化仍清历史，不在本次扩展动态物体运动向量。
+
+可见性参与采样支持域：初始RIS选中样本在当前接收点不可见时清W但保留M；合并后按论文Alg.6重算所有来源对最终样本的正支持（BSDF目标与当前冻结几何下的可见性），再调用RTXDI归一化。每个阶段最终样本在接收点不可见时清W，保证下一阶段来源确实具有可见支持；最终着色复用本epoch已确认的几何可见性，不复用跨帧旧遮挡结果。空来源仍参与有效计数。无偏性、跨不同遮挡/法线来源和全零来源必须由独立CPU/解析与GPU数值用例验证，不能仅看图像变亮。
+
+状态仍由PathTraceRenderer拥有：候选全图prepare/temporal/spatial/shade完成后提交图像、reservoir及统计；失败/取消不替换完整历史。相机姿态变更清图像累积并保留可重投影采样历史，尺寸/投影/积分版本/灯光/材质/场景/reset变化清两者。曝光、暂停和目标样本不改物理历史。公开Editor设置通过Service校验及guard提交；direct_only与Scene media互斥，模式切换不修改Scene或Undo。
+
+验证先覆盖表面直接光RGB、遮挡支持校正、时间M限制/不按年龄过期、空间几何筛选、配置切换/取消及原版本回归；再用一次性Sponza正常窗口、固定分辨率运动输入测量。正式对照为Classic直接光、原v1直接光和v2直接光，统一场景、光照、RGB、反弹数与尺寸；低分辨率与原生窗口结果分别报告。质量用相同相机/采样历史的运动帧对照独立高样本直接光参考，计时禁用读回/validation，至少三轮交错串行。上一轮Scene media只作为不同物理模型的视觉背景，不能用于同积分收益比。无降噪/重建，未完成检查不得计为通过。
 
 本文件是[路径追踪设计](render-pathtracing.md)的采样扩展设计。
 CPU 数学、GPU 初始 RIS、时间与空间复用的现行契约见 M19.1–M19.4，CPU 介质条件采样见 M19.5，GPU 空气/云接入见 M19.6，Editor/独立捕获见 M19.7；

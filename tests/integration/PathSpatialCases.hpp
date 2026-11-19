@@ -119,7 +119,7 @@ void spatial_state(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQu
     compare_images(complete(q,take(held.read_linear(q))),original,0); check(r.release_view(103));
     std::puts("spatial validation private epochs phase failures cancellation camera reset and held owner=pass");
 }
-void spatial_support(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q,bool edges) {
+void spatial_support(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q,bool edges,bool paper=false) {
     Fixture f{heap};
     if(edges) {
         // Adjacent materials and geometric normals; a small raised black surface creates a silhouette.
@@ -143,17 +143,33 @@ void spatial_support(memory::ResourceHandle heap,PathTraceRenderer& r,Submission
     auto ris=spatial_settings(!edges); ris.spatial->neighbor_count=8; ris.spatial->radius=1; ris.spatial->normal_cosine=-1;
     ris.spatial->max_source_candidates=8;
     if(ris.temporal) { ris.temporal->max_history_candidates=4; ris.temporal->max_history_age=4; }
+    if(paper) {
+        ris=surface_direct_restir_settings(); ris.spatial->radius=1;
+        // Dense neighbors on a tiny independent energy fixture; production radius remains 30.
+        ris.spatial->neighbor_count=3;
+    }
     std::array<std::array<Vec3d,8>,9> observations,reference; std::uint64_t corrections=0,reused=0,visibility=0;
     for(unsigned chain=0;chain<8;++chain) {
-        s.seed=101+7919*chain; PathTraceSchedule schedule; schedule.target_spp=4096; schedule.batch_spp=16;
+        s.seed=101+7919*chain; PathTraceSchedule schedule; schedule.target_spp=paper ? 16384 : 4096; schedule.batch_spp=16;
         check(r.configure_restir_view(q,105,gpu,view,s,ris,schedule)); auto image=finish_view(r,q,105);
         const auto& stats=image.info().spatial_statistics; corrections+=stats.support_corrected; reused+=stats.reused; visibility+=stats.current_visibility_rays;
-        require(stats.current_visibility_rays<=9*4096,"spatial correction ray budget exceeded");
+        require(stats.current_visibility_rays<=9*std::uint64_t(schedule.target_spp)*(paper ? 8 : 1),"spatial correction ray budget exceeded");
         auto cpu=take(render_path_reference(heap,gpu.source(),view,s,{0,65536}));
         for(unsigned pixel=0;pixel<9;++pixel) { observations[pixel][chain]=image.linear_rgb()[pixel]; reference[pixel][chain]=cpu.linear_rgb()[pixel]; }
         check(r.release_view(105));
     }
-    for(unsigned pixel=0;pixel<9;++pixel) { std::printf("spatial %s pixel=%u\n",edges ? "edges" : "support",pixel); temporal_mean(observations[pixel],reference[pixel]); }
+    for(unsigned pixel=0;pixel<9;++pixel) { std::printf("spatial %s pixel=%u\n",edges ? "edges" : "support",pixel); temporal_mean(observations[pixel],reference[pixel],!paper); }
+    if(paper) {
+        // Long unexpired histories correlate pixels and epochs. Treat each whole
+        // image/history chain as an observation; per-pixel consistency uses SE,
+        // while the independent total-energy estimate must also meet 2%.
+        std::array<Vec3d,8> energy,truth;
+        for(unsigned c=0;c<8;++c) {
+            energy[c].setZero(); truth[c].setZero();
+            for(unsigned p=0;p<9;++p) { energy[c]+=observations[p][c]/9; truth[c]+=reference[p][c]/9; }
+        }
+        std::puts("paper whole-image independent chain energy (2% plus 5 SE)"); temporal_mean(energy,truth);
+    }
     require(reused>1000 && corrections>0 && visibility>0,"spatial boundary/support fixture inactive");
     std::printf("spatial corrections=%llu reused=%llu fresh_visibility=%llu CPU classic MIS per-pixel mean=pass\n",
         static_cast<unsigned long long>(corrections),static_cast<unsigned long long>(reused),static_cast<unsigned long long>(visibility));

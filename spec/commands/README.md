@@ -1,7 +1,7 @@
 ---
 module: command-reference
 created_at: "2026-09-22T17:00:46+08:00"
-updated_at: "2026-11-17T14:25:00+08:00"
+updated_at: "2026-11-19T09:08:00+08:00"
 status: accepted
 ---
 
@@ -36,7 +36,7 @@ M22.10 已接入[面板帮助与设置搜索](../guides/editor.md#字段帮助�
 | [发现](discovery.md) | `commands.list`、`commands.describe` | 列出命令、查询参数和结果 schema |
 | [场景与工程](scene.md) | `scene.new`、`scene.load`、`scene.query`、`scene.save`、`project.save`、`scene.transaction` | 文档会话、查询、保存和事务 |
 | [环境](environment.md) | `environment.query`、`environment.preset`、`environment.set` | 大气/单太阳/云CPU参数、environment v2、事务/撤销与场景持久化 |
-| [Editor 视口](editor-viewport.md) | `editor.viewport.query`、`editor.viewport.set`、`editor.viewport.pause`、`editor.viewport.resume`、`editor.viewport.reset` | 仅 Editor；Edit 会话模式、ReSTIR、目标/曝光/介质与累积控制，不修改场景历史 |
+| [Editor 视口](editor-viewport.md) | `editor.viewport.query`、`editor.viewport.set`、`editor.viewport.pause`、`editor.viewport.resume`、`editor.viewport.reset` | Edit 会话的完整路径或 RGB 表面直接光、ReSTIR、曝光、介质与累积控制 |
 | [Editor 相机](editor-camera.md) | `editor.camera.query`、`editor.camera.set`、`editor.camera.orbit`、`editor.camera.pan`、`editor.camera.zoom`、`editor.camera.frame`、`editor.camera.reset` | 仅 Editor；模式/投影/镜头/导航偏好及姿态操作，与视口设置共享 guard |
 | [实体](entity.md) | `entity.create`、`entity.get`、`entity.delete`、`entity.set_name`、`entity.set_transform`、`entity.set_parent`、`entity.set_assets` | 实体编辑和查询 |
 | [历史](history.md) | `history.status`、`history.undo`、`history.redo` | 内存撤销与重做 |
@@ -153,6 +153,6 @@ stdio 在 EOF/shutdown 正常退出时为 0，先前可恢复的请求错误不�
 设计原因见 [命令层](../design/commands.md)、[应用服务](../design/application-services.md)、
 [Runtime](../design/runtime.md) 和 [自动化协议](../design/automation-protocol.md)。
 
-路径截图参数/线性报告见[render.capture](render.md#固定-spp-路径追踪)，GPU预算按设备当前可用显存选择；采样进度通过[jobs](jobs.md)返回。
+完整 RGB 表面直接光截图使用 pathtrace v3、surface_only、单次反弹和 restir.version=2。路径截图参数/线性报告见[render.capture](render.md#固定-spp-路径追踪)，GPU预算按设备当前可用显存选择；采样进度通过[jobs](jobs.md)返回。
 
 render.capture / render.sequence 支持光栅空气/云正交及 projection 与 ortho_height；默认仍为透视，正交拒绝显式 fov_y，来源只报告生效镜头。render.capture 的固定路径设置兼容 v1 表面和 v2 显式 Surface only / Scene media；v3 增加 Classic MIS / ReSTIR DI 和独立空历史捕获，见 [ReSTIR 参数与来源](render.md#restir-直接光照v3)。

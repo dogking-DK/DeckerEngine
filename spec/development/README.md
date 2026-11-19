@@ -183,5 +183,6 @@
 | 0179 | [日落云重建与太阳采样优化](0179-cloud-sunset-optimization.md) | render-clouds、render-pipeline | completed |
 | 0180 | [光追日落大气与云优化](0180-path-medium-majorants.md) | render-pathtracing | completed |
 | 0181 | [Scene media 运动预览颜色稳定性](0181-media-preview-color.md) | render-pathtracing、editor | completed |
+| 0182 | [完整RGB表面直接光ReSTIR与Sponza运动验证](0182-restir-surface-direct.md) | render-restir、editor | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

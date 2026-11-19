@@ -10,13 +10,13 @@ Json uuid() { return schema::string(36,36); }
 Json number(double low,double high) { return {{"type","number"},{"minimum",low},{"maximum",high}}; }
 Json vector_schema() { return schema::array(schema::number(),3,3); }
 Json restir_schema(bool complete=false) {
-    auto temporal=schema::object({{"version",integer(1,1)},{"max_history_candidates",integer(4096,1)},{"max_history_age",integer(32,1)},
+    auto temporal=schema::object({{"version",integer(2,1)},{"max_history_candidates",integer(4096,1)},{"max_history_age",integer(32,0)},
         {"position_tolerance",number(0,1e6)},{"normal_cosine",number(0,1)}},
         complete ? Json{"version","max_history_candidates","max_history_age","position_tolerance","normal_cosine"} : Json::array());
-    auto spatial=schema::object({{"version",integer(1,1)},{"neighbor_count",integer(8,1)},{"radius",integer(32,1)},
-        {"max_source_candidates",integer(4096,1)},{"position_tolerance",number(0,1e6)},{"normal_cosine",number(-1,1)}},
+    auto spatial=schema::object({{"version",integer(2,1)},{"neighbor_count",integer(8,1)},{"radius",integer(32,1)},
+        {"max_source_candidates",integer(16384,1)},{"position_tolerance",number(0,1e6)},{"normal_cosine",number(-1,1)}},
         complete ? Json{"version","neighbor_count","radius","max_source_candidates","position_tolerance","normal_cosine"} : Json::array());
-    return schema::object({{"version",integer(1,1)},{"initial_candidates",integer(64,1)},{"max_candidate_evaluations",integer(1ull<<24,1)},
+    return schema::object({{"version",integer(2,1)},{"initial_candidates",integer(64,1)},{"max_candidate_evaluations",integer(1ull<<24,1)},
         {"temporal",std::move(temporal)},{"spatial",std::move(spatial)}},complete ? Json{"version","initial_candidates","max_candidate_evaluations"} : Json::array());
 }
 Json path_schema(bool complete=false) {
@@ -108,12 +108,13 @@ CaptureRequest request(const Json& p,bool sequence) {
         path.restir_di=v.value("direct_lighting",std::string{"classic_mis"})=="restir_di";
         if(v.contains("restir")) {
             const auto& j=v["restir"]; CaptureRestir restir;
-            restir.version=j.value("version",1U); restir.initial_candidates=j.value("initial_candidates",8U);
+            restir.version=j.value("version",1U); restir.initial_candidates=j.value("initial_candidates",restir.version==2 ? 32U : 8U);
+            const bool paper=restir.version==2;
             restir.max_candidate_evaluations=j.value("max_candidate_evaluations",1ull<<24);
-            if(j.contains("temporal")) { const auto& t=j["temporal"]; restir.temporal=CaptureRestirTemporal{t.value("version",1U),t.value("max_history_candidates",64U),
-                t.value("max_history_age",8U),t.value("position_tolerance",.1),t.value("normal_cosine",.95)}; }
-            if(j.contains("spatial")) { const auto& s=j["spatial"]; restir.spatial=CaptureRestirSpatial{s.value("version",1U),s.value("neighbor_count",4U),s.value("radius",2U),
-                s.value("max_source_candidates",64U),s.value("position_tolerance",1.),s.value("normal_cosine",.9)}; }
+            if(j.contains("temporal")) { const auto& t=j["temporal"]; restir.temporal=CaptureRestirTemporal{t.value("version",restir.version),t.value("max_history_candidates",paper ? 1280U : 64U),
+                t.value("max_history_age",paper ? 0U : 8U),t.value("position_tolerance",.1),t.value("normal_cosine",paper ? .90630778703665 : .95)}; }
+            if(j.contains("spatial")) { const auto& s=j["spatial"]; restir.spatial=CaptureRestirSpatial{s.value("version",restir.version),s.value("neighbor_count",paper ? 3U : 4U),s.value("radius",paper ? 30U : 2U),
+                s.value("max_source_candidates",paper ? 16384U : 64U),s.value("position_tolerance",paper ? .1 : 1.),s.value("normal_cosine",paper ? .90630778703665 : .9)}; }
             path.restir=restir;
         }
         r.path=path;

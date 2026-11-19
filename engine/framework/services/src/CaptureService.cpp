@@ -290,7 +290,7 @@ Result<CaptureTicket> CaptureService::capture(const SceneService& scene,EditGuar
                 p.max_tracking_steps>=1 && p.max_tracking_steps<=(1ull<<28) && p.max_steps_per_path>=1 && p.max_steps_per_path<=(1u<<20),
                 "Invalid pathtrace media settings");
             require((p.version==3 || (!p.restir_di && !p.restir)) && p.restir_di==p.restir.has_value(),"ReSTIR requires pathtrace v3 and matching direct_lighting/restir settings");
-            require(!p.restir || capture_detail::valid_restir(*p.restir),"Invalid ReSTIR settings");
+            require(!p.restir || (capture_detail::valid_restir(*p.restir) && (p.restir->version!=2 || (!p.scene_media && p.max_bounces==1))),"Invalid ReSTIR settings");
             require(!request.linear_json || std::size_t{request.width}*request.height<=524288,"Path linear report allows at most 524288 pixels");
         }
         check(render::validate_environment_render_settings(request.environment));

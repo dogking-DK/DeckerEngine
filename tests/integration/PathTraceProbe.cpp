@@ -307,6 +307,7 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
 #include "PathRestirCases.hpp"
 #include "PathTemporalCases.hpp"
 #include "PathSpatialCases.hpp"
+#include "PathDirectRestirCases.hpp"
 #include "PathRestirMediumCases.hpp"
 #include "PathRestirMediumSupportCases.hpp"
 #include "PathTileGroupCases.hpp"
@@ -358,6 +359,8 @@ int main(int argc,char** argv) {
               else if(mode=="restir_medium_failure") restir_medium_failure(memory.heap,queue);
               else if(mode=="restir_medium_support") restir_medium_support(memory.heap,renderer,queue);
               else if(mode=="restir_medium_support_initial") restir_medium_support(memory.heap,renderer,queue,true);
+              else if(mode=="restir_direct_support") spatial_support(memory.heap,renderer,queue,false,true);
+              else if(mode=="restir_direct") restir_direct(memory.heap,renderer,queue);
               else if(mode=="restir_spatial_numeric") spatial_numeric(memory.heap,renderer,queue);
               else if(mode=="restir_spatial_schedule") spatial_schedule(memory.heap,renderer,queue);
               else if(mode=="restir_spatial_state") spatial_state(memory.heap,renderer,queue);

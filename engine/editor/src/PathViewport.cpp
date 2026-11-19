@@ -55,7 +55,7 @@ void Viewport::update_path(const SceneReadSnapshot& snapshot,std::uint32_t width
             if(snapshot.scene.logical_bytes()>32U*1024U*1024U) throw std::runtime_error("Path preview snapshot exceeds 32 MiB");
             if(!path_active_) path_samples_=0;
             PathPreviewRequest request{snapshot,camera,width,height,srgb,edit,preview,path_reload_,++path_sequence_,settings,retain_pixels_};
-            request.legacy_media_probe=legacy_media_probe_; path_->request(std::move(request));
+            request.legacy_media_probe=legacy_media_probe_; request.legacy_surface_direct_probe=legacy_surface_direct_probe_; path_->request(std::move(request));
             attempted_=key; published_.reset(); path_settings_=settings; path_active_=true; error_.clear(); path_requested_at_=now;
         }
         const auto status=path_->status(); if(status.sequence==path_sequence_ && !status.error.empty()) error_=status.error;
