@@ -21,6 +21,10 @@ description: "Locate DeckerEngine code from an approximate feature name, trace c
 
 在 Codex 中直接运行 `git status`，精简输出以 `* main` 等分支摘要开头。用 `rg -n namespace engine` 验证大查询，RTK 会显示命中数、文件数及省略提示；只有少数命中的查询可能逐行保留。需要完整输出时用 `rtk bypass git status` 或 `rtk bypass rg -n namespace engine`。
 
-若裸命令仍返回完整输出，先检查该项目 hook 的信任状态。可立即显式使用 `rtk git status` 或 `rtk rg -n namespace engine`。`rtk hook check --agent codex 'git status'` 只预览改写规则，实际启用以当前会话运行裸命令的输出为准。[Codex hook 文档](https://developers.openai.com/codex/hooks/) · [RTK 1.2.0 的 Codex 集成](https://github.com/rtk-ai/rtk/blob/v1.2.0/hooks/codex/README.md)
+若已信任但原对话仍返回完整输出，在新的 Codex 会话中将工作目录明确设为仓库根目录后复测。原对话可显式用 `rtk git status` 或 `rtk rg -n namespace engine`。本机 MXC 的 `workspace-write` 会话实测两条裸命令均退出 0，大搜索显示 `1000 matches in 404 files`。即使 RTK 1.2.0 同时输出 `No hook installed`，仍可通过执行事件中的 `rtk` 前缀及精简结果确认改写。
+
+独立 Windows CLI 若报告无法启动 `rtk.exe`，检查当前沙箱对实际二进制的读取和执行权限。若 RTK 报找不到 Claude 配置目录，为该 CLI 会话传入指向本机实际目录的 `CLAUDE_CONFIG_DIR`；若报找不到 `rg`，用 `Get-Command rg.exe` 核对该进程的 PATH。[本机验收条件](../../../spec/development/0183-development-workflow.md#codex-的-rtk-hook)
+
+`rtk hook check --agent codex 'git status'` 只预览改写规则，实际启用以当前会话运行裸命令的输出为准。[Codex hook 文档](https://developers.openai.com/codex/hooks/) · [RTK 1.2.0 的 Codex 集成](https://github.com/rtk-ai/rtk/blob/v1.2.0/hooks/codex/README.md)
 
 上游参考：[RTK](https://github.com/rtk-ai/rtk) · [codebase-memory MCP](https://github.com/DeusData/codebase-memory-mcp#mcp-tools) · [CodeGraph](https://github.com/colbymchenry/codegraph#mcp-tools)。

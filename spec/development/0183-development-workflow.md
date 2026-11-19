@@ -1,7 +1,7 @@
 ---
 id: "0183"
 created_at: "2026-11-19T09:55:00+08:00"
-updated_at: "2026-11-19T10:33:15+08:00"
+updated_at: "2026-11-19T10:55:38+08:00"
 status: completed
 design_refs:
   - ../design/project-foundation.md
@@ -37,4 +37,10 @@ design_refs:
 
 项目在 [.codex/hooks.json](../../.codex/hooks.json) 注册 RTK 1.2.0 的 `PreToolUse`。本机 Codex CLI 0.169.0-alpha.11.1 的 `hooks/list` 识别到项目来源、`Bash` 匹配器与 `rtk hook codex`，首次读取为 `enabled: true`、`trustStatus: untrusted`。
 
-在当前 Codex 会话直接运行 `git status`、`rg -n namespace engine` 得到原始输出。相同工作区状态下显式使用 RTK，Git 状态从 9 行缩到 2 行，搜索从 1000 行缩到 204 行（404 个文件），只计算标准输出。`rg -n parse_id_bytes engine/foundation/core` 的 3 个命中逐行保留，零命中仍退出 1。`rtk bypass` 返回完整输出。信任后的裸命令验收待完成。
+首次登记时，在原 Codex 会话运行 `git status`、`rg -n namespace engine` 得到原始输出。相同工作区状态下显式使用 RTK，Git 状态从 9 行缩到 2 行，搜索从 1000 行缩到 204 行（404 个文件），只计算标准输出。`rg -n parse_id_bytes engine/foundation/core` 的 3 个命中逐行保留，零命中仍退出 1。`rtk bypass` 返回完整输出。
+
+用户信任后，`hooks/list` 返回 `trusted`。该桌面对话复测仍是原始输出。新的临时 Codex CLI 会话接收两条裸命令，执行事件分别显示 `rtk git status`、`rtk rg -n namespace engine`。在干净的工作树中两者退出码均为 0，Git 由 5 行缩至 2 行，搜索由 1000 行缩至 204 行。行数排除 RTK 另发的安装提示。
+
+独立 CLI 的 Windows `elevated` 只读沙箱起初无法运行用户级 WinGet 安装的 RTK。经用户确认，仅为该 `rtk.exe` 添加本机 `CodexSandboxUsers` 的读取和执行权限。通过的测试进程还将 `CLAUDE_CONFIG_DIR` 指向本机实际的 Claude 配置目录，并将 Codex 随附的 `rg.exe` 所在目录加入该进程的 PATH。单独关闭 RTK 的安装提示无法解决配置目录查找错误。
+
+MXC 对照同样使用 Codex 随附的 ripgrep。首次只读试跑中搜索成功，Git 报工作树错误。同一安装在项目日常 `workspace-write` 模式下，将每条命令的工作目录明确设为仓库根目录，`git rev-parse --show-toplevel` 返回本项目，`--is-bare-repository` 返回 `false`。两条裸命令均自动精简且成功退出，`rtk bypass git status` 同时返回 5 行原始状态。此次 MXC 验收使用默认的 Claude 目录解析。
