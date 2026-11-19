@@ -1,11 +1,13 @@
 ---
 module: roadmap
 created_at: "2026-09-22T09:29:25+08:00"
-updated_at: "2026-11-17T13:37:55+08:00"
+updated_at: "2026-11-19T10:08:48+08:00"
 status: accepted
 ---
 
 # DeckerEngine 开发 Roadmap
+
+当前开发目标和接续入口见 [WORK.md](../WORK.md)。
 
 ## 目标与当前起点
 
@@ -922,6 +924,8 @@ M23.1–13 原始范围不包含体素密度场 ray marching、透明体素、�
 各实施小阶段开始时更新直接相关设计并创建实际开发记录；当前不预分配未来编号或预报通过的测试。
 
 ## 当前执行边界与下一步
+
+当前任务与排期统一见 [WORK.md](../WORK.md)。以下为既有阶段验收摘要，其中的“下一步”是当时的阶段交接。
 
 **2026-11-17 云优化第一批已完成。** [0176预览历史与渐进调度](development/0176-cloud-preview-scheduling.md)与[0177独立云分辨率](development/0177-cloud-resolution.md)已实现验收；[0178重建实验](development/0178-cloud-reconstruction.md)完成旧/新对照，因无稳定净收益维持原重建默认。1/4为显式选项，默认1/2；最终GPU/GUI/命令与两档四预设质量通过，见[报告](benchmarks/2026-11-17-cloud-optimization.md)。本批不重开M15/M23，不扩展路径介质。后续优化须另行确定，不能把实验自动启用。
 

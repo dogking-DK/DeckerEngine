@@ -7,7 +7,8 @@
 - [开发目录](development/README.md)：按编号排列的实际变更、验证结果和交接信息。
 - [命令参考](commands/README.md)：按功能分类的命令目录、参数、返回值和调用示例。
 - [架构总览](design/architecture.md)
-- [开发 Roadmap](roadmap.md)：阶段依赖、交付物、验收条件和近期任务。
+- [WORK.md](../WORK.md)：当前工作、最近验收和下一步；[开发工作台](guides/development-cli.md)提供统一 CLI。
+- [开发 Roadmap](roadmap.md)：阶段依赖、交付物和验收条件。
 - [工程基础设计](design/project-foundation.md)
 - [三方库说明](third-party-libraries.md)：当前版本、用途、接入状态和默认采用 vcpkg 最新版本的规则。
 - [粒子流体设计](design/physics-fluids.md) / [原生点绘制设计](design/render-particles.md)：WCSPH/PBF CPU/GPU 和通用粒子输出；实施状态见 Roadmap M21。
@@ -24,6 +25,7 @@
 
 | Skill | 适用范围 |
 | --- | --- |
+| [decker-code-navigation](../.agents/skills/decker-code-navigation/SKILL.md) | 用 RTK 精简命令输出，用本地索引按功能或调用关系定位源码 |
 | [decker-build-verify](../.agents/skills/decker-build-verify/SKILL.md) | 按目标行为选择局部构建和测试，汇总实际结果 |
 | [decker-state-contracts](../.agents/skills/decker-state-contracts/SKILL.md) | 状态变化、失败保护及提交点，具体操作仍在模块设计中 |
 | [decker-command-development](../.agents/skills/decker-command-development/SKILL.md) | Commands/Operations/Services 开发与命令参考同步 |
@@ -43,7 +45,8 @@ check-spec 校验索引完整性/状态、元数据引用、表格结构和测�
 | --- | --- |
 | 稳定工程约束、任务入口 | 根 AGENTS.md |
 | 留档、验证、协作流程 | 本文；skill 只提供按任务使用的方法 |
-| 阶段状态、前置依赖、下一项 | Roadmap；其他入口链接它，不复制进度清单 |
+| 当前工作、最近完成、下一步与待决定事项 | 根 WORK.md，任务切换或验收时在同一次提交更新 |
+| 里程碑状态与前置依赖 | Roadmap 的目标阶段 |
 | 当前模块契约、限制和设计理由 | 对应模块设计；新约定合入主题，替换过期描述 |
 | 可执行用法、配置示例 | spec/guides；具体命令字段以 spec/commands 为准 |
 | 当次决策、历史验证和交接 | 编号开发记录；历史结果不成为默认执行要求 |
@@ -56,7 +59,7 @@ check-spec 校验索引完整性/状态、元数据引用、表格结构和测�
 | --- | --- | --- |
 | 只读解释、审查或方案规划 | 问题指定的路径/模块；未知时搜索设计索引对应行，读取相关设计/接口 | 询问阶段状态或规划依赖时读 Roadmap 目标章节；不因只读任务启动留档流程 |
 | 已明确模块的实现、修复、重构、构建/依赖调整 | spec-workflow；本规范“开发记录粒度”“每次开发的执行顺序”；相关设计契约、源码与测试入口 | 需要创建/更新元数据时读“文件和元数据”；涉及命令时读“命令文档” |
-| 继续 Mx.y 或“下一步开发” | 指定阶段直接搜索该节；未指定时先定位 Roadmap“当前执行边界与下一步”，再读目标阶段和必要前置 | 按模块进入设计；已有任务续做时读取关联记录的未完成项/验证结论 |
+| 继续 Mx.y 或“下一步开发” | 指定阶段直接搜索该节；未指定时直接读根 WORK.md；已有明确阶段时按需查前置和验收条件 | 按模块进入设计；已有任务续做时读取关联记录的未完成项/验证结论 |
 | 新能力或尚无设计的模块 | 搜索设计索引及 Roadmap 中的能力关键词，核对是否已有入口；再读相邻模块的边界 | 无命中时扩大同义词/目录检索，不展开全部里程碑；进入实现前按设计模板建文档 |
 | 纯文档或 skill 维护 | 受影响文档及本规范适用章节；skill 只加载本次需要修改/使用的入口 | 文档检查；格式/链接修改不默认读取引擎模块设计、Roadmap 或构建配置 |
 
@@ -123,6 +126,10 @@ rg -n '^#{2,3} ' spec/design/render-pipeline.md
 新增、修改或删除命令时同步对应参考页和目录。以 commands.list/commands.describe
 核对实际注册与 schema，并运行受影响的示例；业务语义同时对照模块设计与实现。
 模块设计保存设计理由，skill 保存开发方法；具体命令定义不复制到 skill 中。
+
+## Benchmark 报告
+
+每项测量保留一份短报告，先写决定与关键收益或退化，再列硬件、构建、输入、统计口径和一张最终比较表。提供重采命令或操作指南以及最终数据链接。原始运行、逐帧日志、trace 和对照图集默认写入 out/；只有支持最终判断的汇总、代表图或明确要求的离线样本进入 spec/benchmarks。离线样本给出实际可运行的复算入口。
 
 ## 开发记录粒度
 

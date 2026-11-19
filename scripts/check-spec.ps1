@@ -173,7 +173,7 @@ if ($Path.Count) {
         $item
     })
 } else {
-    $documents = @(Get-Item -LiteralPath (Join-Path $repoRoot 'README.md'), (Join-Path $repoRoot 'AGENTS.md'))
+    $documents = @(Get-Item -LiteralPath (Join-Path $repoRoot 'README.md'), (Join-Path $repoRoot 'AGENTS.md'), (Join-Path $repoRoot 'WORK.md'))
     $documents += @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'spec') -Recurse -Filter '*.md')
     $documents += @(Get-ChildItem -LiteralPath (Join-Path $repoRoot '.agents/skills') -Recurse -Filter '*.md')
 }

@@ -248,4 +248,5 @@ try {
     }
     $summary.finished_at = [DateTimeOffset]::Now.ToString('o')
     [IO.File]::WriteAllText((Join-Path $runDir 'summary.json'), ($summary | ConvertTo-Json -Depth 8) + "`n")
+    Write-Host "Summary: $(Join-Path $runDir 'summary.json')"
 }

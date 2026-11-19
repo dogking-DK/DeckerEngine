@@ -110,4 +110,5 @@ try {
     }
     $summary.finished_at=[DateTimeOffset]::Now.ToString('o')
     $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runDir 'summary.json') -Encoding utf8
+    Write-Host "Summary: $(Join-Path $runDir 'summary.json')"
 }

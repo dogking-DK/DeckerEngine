@@ -12,7 +12,8 @@ CMake target 使用 dk_* / dk::*，构建选项和宏使用 DK_*，程序使用 
 
 已知模块直接进入相关设计/源码；未知时用 `rg -n` 在 [模块与源码索引](spec/design/README.md) 定位对应行。
 长文档先搜索关键词/标题，再读相关章节；默认不整读 [Roadmap](spec/roadmap.md)、设计索引或开发索引。
-仅阶段规划/推进、依赖或当前状态核对需要 Roadmap；“下一步”先定位其“当前执行边界与下一步”，再读目标阶段。
+续做、交接或选择下一步直接读 [WORK.md](WORK.md)。切换任务或验收时在同次提交更新；只为阶段规划或依赖核对查相应 Roadmap 章节。
+文档、测试、profile 与代码索引统一入口见 [tools/dk.py](tools/dk.py) 和[用法](spec/guides/development-cli.md)。
 新模块、依赖方向变化或跨模块改动补读架构边界；续做、追查决策或设计/实现冲突时才补读关联历史记录。
 读取范围与留档细则以 [spec 规范](spec/README.md#文档职责与读取范围) 为准；信息足以行动即停止扩读，有缺口再补。
 
@@ -30,6 +31,7 @@ CMake target 使用 dk_* / dk::*，构建选项和宏使用 DK_*，程序使用 
 自动化启动 dk-editor 时使用 `--background`，避免测试窗口抢占用户焦点；普通交互启动不加此项。
 按任务使用以下 skill，具体操作仍以模块设计和命令文档为准：
 
+- [decker-code-navigation](.agents/skills/decker-code-navigation/SKILL.md)：模糊定位、跨模块调用、索引与 RTK。
 - [decker-build-verify](.agents/skills/decker-build-verify/SKILL.md)：选择并执行定向构建/测试。
 - [decker-state-contracts](.agents/skills/decker-state-contracts/SKILL.md)：状态变化、提交点和失败保护。
 - [decker-command-development](.agents/skills/decker-command-development/SKILL.md)：命令实现、契约和文档同步。

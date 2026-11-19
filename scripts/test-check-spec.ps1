@@ -38,6 +38,7 @@ $baseline = @{
 | expression | `a\|b` |
 '@
     'AGENTS.md' = '# Fixture instructions'
+    'WORK.md' = '[Current design](spec/design/sample.md)'
     'spec/templates/design.md' = 'Template without metadata'
     'spec/design/sample.md' = @'
 ---
@@ -83,6 +84,7 @@ $cases = @(
     @{ name = 'limited-scan'; change = {}; error = ''; limited = $true },
     @{ name = 'empty-table-cell'; change = { param($r) Replace-Fixture $r 'README.md' '| expression | `a\|b` |' '| expression | |' }; error = '' },
     @{ name = 'broken-link'; change = { param($r) Write-Fixture $r 'README.md' '[missing](missing.md)' }; error = 'Broken local link' },
+    @{ name = 'broken-work-handoff'; change = { param($r) Write-Fixture $r 'WORK.md' '[next](missing.md)' }; error = 'Broken local link' },
     @{ name = 'metadata-outside-frontmatter'; change = { param($r) Replace-Fixture $r 'spec/design/sample.md' 'module: sample' '# module: sample' }; error = 'Missing or duplicate module' },
     @{ name = 'invalid-design-status'; change = { param($r) Replace-Fixture $r 'spec/design/sample.md' 'status: accepted' 'status: completed' }; error = 'Invalid design status' },
     @{ name = 'invalid-development-status'; change = { param($r) Replace-Fixture $r 'spec/development/0001-sample.md' 'status: completed' 'status: accepted' }; error = 'Invalid development status' },
