@@ -2,6 +2,8 @@
 
 ## 最近完成
 
+- Sponza 开启稀疏体积云和大气后，Scene media + ReSTIR v2 在 RTX 4070 Laptop 上的实际新视角更新率为原生 3.81、640 长边 19.61、192 长边 60.62 帧/秒。12 次性能尝试中有 3 次 GPU 路径错误，同设置重跑完成。[数据、同机位画质和复测方法](spec/benchmarks/2026-11-19-media-resolution.md)
+
 - Scene media 可在保留体积云和大气的同时使用首表面 ReSTIR v2，运动预览默认原尺寸，长边可在 Path tracing 面板调整。[0185 实现与验收](spec/development/0185-media-restir-preview.md)
 - 路径追踪探针的 ReSTIR、介质与体素用例已独立编译。修改直接光 ReSTIR 用例时只重编对应对象，Release 增量构建中位数从 18.70 秒降到 11.43 秒。[测量与验收](spec/development/0184-build-iteration.md#release-探针增量构建)
 - Windows 命令行开发可使用与 windows-dev 功能对齐的 Ninja 预设。VS 多目标定向验证共用一次 MSBuild，三目标无改动构建中位数从 2.14 秒降到 1.38 秒。[0184 验证记录](spec/development/0184-build-iteration.md)

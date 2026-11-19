@@ -1,0 +1,313 @@
+{
+  "head": "1c9f7fda6c448ef08439ea6e366e2dfc25c93a53",
+  "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU, 596.49, 8188 MiB",
+  "seconds": 10,
+  "editor_sha256": "256b7a4d8414c96792e393f3130a1b3a3058ec1e0bd9a6d3db46abffdfba809a",
+  "worker_sha256": "8b2693138d33800b64910a7a3d4c4a5e557979c4a631a3eaa0ec124d45a7112a",
+  "performance": {
+    "0": {
+      "runs": [
+        {
+          "frames": 37,
+          "seconds": 10.005882600000001,
+          "fps": 3.8175428309217914,
+          "per_window": 3.6978247176316055,
+          "input_p50_ms": 292.0194999999985,
+          "input_p95_ms": 308.2725600000027,
+          "gui_fps": 161.61706943316176,
+          "stop_to_full_ms": 501.4336000000003,
+          "size": [
+            1629,
+            989
+          ],
+          "spp": [
+            3
+          ]
+        },
+        {
+          "frames": 33,
+          "seconds": 10.001052499999998,
+          "fps": 3.4837977222995824,
+          "per_window": 3.2996527115521097,
+          "input_p50_ms": 304.48029999999926,
+          "input_p95_ms": 430.2132199999992,
+          "gui_fps": 152.48432461142997,
+          "stop_to_full_ms": 292.8689000000013,
+          "size": [
+            1629,
+            989
+          ],
+          "spp": [
+            3
+          ]
+        },
+        {
+          "frames": 37,
+          "seconds": 10.005840200000002,
+          "fps": 3.8120944924193014,
+          "per_window": 3.697840387257034,
+          "input_p50_ms": 290.9981000000007,
+          "input_p95_ms": 315.181200000002,
+          "gui_fps": 160.10778592069897,
+          "stop_to_full_ms": 537.3919999999998,
+          "size": [
+            1629,
+            989
+          ],
+          "spp": [
+            3
+          ]
+        }
+      ],
+      "median": {
+        "fps": 3.8120944924193014,
+        "per_window": 3.6978247176316055,
+        "input_p50_ms": 292.0194999999985,
+        "input_p95_ms": 315.181200000002,
+        "stop_to_full_ms": 501.4336000000003,
+        "gui_fps": 160.10778592069897
+      }
+    },
+    "640": {
+      "runs": [
+        {
+          "frames": 210,
+          "seconds": 10.000596600000002,
+          "fps": 21.09213117577853,
+          "per_window": 20.998747214741165,
+          "input_p50_ms": 65.724549999999,
+          "input_p95_ms": 72.13944500000089,
+          "gui_fps": 164.99060048549035,
+          "stop_to_full_ms": 433.0640999999996,
+          "size": [
+            640,
+            388
+          ],
+          "spp": [
+            3
+          ]
+        },
+        {
+          "frames": 195,
+          "seconds": 10.000593200000003,
+          "fps": 19.61390294911409,
+          "per_window": 19.49884332861374,
+          "input_p50_ms": 66.63249999999971,
+          "input_p95_ms": 73.23227000000225,
+          "gui_fps": 164.99120926837017,
+          "stop_to_full_ms": 459.1474999999991,
+          "size": [
+            640,
+            388
+          ],
+          "spp": [
+            3
+          ]
+        },
+        {
+          "frames": 186,
+          "seconds": 10.004963400000001,
+          "fps": 18.636118207386755,
+          "per_window": 18.59077265589997,
+          "input_p50_ms": 71.77149999999892,
+          "input_p95_ms": 77.73604999999861,
+          "gui_fps": 165.01959255333247,
+          "stop_to_full_ms": 456.04229999999734,
+          "size": [
+            640,
+            388
+          ],
+          "spp": [
+            3
+          ]
+        }
+      ],
+      "median": {
+        "fps": 19.61390294911409,
+        "per_window": 19.49884332861374,
+        "input_p50_ms": 66.63249999999971,
+        "input_p95_ms": 73.23227000000225,
+        "stop_to_full_ms": 456.04229999999734,
+        "gui_fps": 164.99120926837017
+      }
+    },
+    "192": {
+      "runs": [
+        {
+          "frames": 604,
+          "seconds": 10.0016724,
+          "fps": 60.621059436355026,
+          "per_window": 60.38990039305826,
+          "input_p50_ms": 35.73949999999968,
+          "input_p95_ms": 43.39521499999828,
+          "gui_fps": 163.77367010705686,
+          "stop_to_full_ms": 425.7612000000008,
+          "size": [
+            192,
+            116
+          ],
+          "spp": [
+            3,
+            6
+          ]
+        },
+        {
+          "frames": 597,
+          "seconds": 10.0059086,
+          "fps": 59.77973734508597,
+          "per_window": 59.66474648789017,
+          "input_p50_ms": 36.22600000000239,
+          "input_p95_ms": 36.95015999999814,
+          "gui_fps": 164.70423436996793,
+          "stop_to_full_ms": 473.26610000000073,
+          "size": [
+            192,
+            116
+          ],
+          "spp": [
+            3
+          ]
+        },
+        {
+          "frames": 616,
+          "seconds": 10.0057028,
+          "fps": 61.72798676359251,
+          "per_window": 61.564890774089356,
+          "input_p50_ms": 36.17270000000099,
+          "input_p95_ms": 36.98897500000203,
+          "gui_fps": 165.00708121242766,
+          "stop_to_full_ms": 445.6746999999996,
+          "size": [
+            192,
+            116
+          ],
+          "spp": [
+            3
+          ]
+        }
+      ],
+      "median": {
+        "fps": 60.621059436355026,
+        "per_window": 60.38990039305826,
+        "input_p50_ms": 36.17270000000099,
+        "input_p95_ms": 36.98897500000203,
+        "stop_to_full_ms": 445.6746999999996,
+        "gui_fps": 164.70423436996793
+      }
+    }
+  },
+  "quality": {
+    "0": {
+      "poses": [
+        {
+          "yaw": 89.0,
+          "display_rmse": 0.0866578072309494,
+          "block_luma_ssim": 0.33226004242897034,
+          "block_rgb_rmse": 0.031938403844833374
+        },
+        {
+          "yaw": 91.0,
+          "display_rmse": 0.087249755859375,
+          "block_luma_ssim": 0.32883620262145996,
+          "block_rgb_rmse": 0.03240295499563217
+        },
+        {
+          "yaw": 93.00000000000001,
+          "display_rmse": 0.08789133280515671,
+          "block_luma_ssim": 0.3255769908428192,
+          "block_rgb_rmse": 0.03288134187459946
+        }
+      ],
+      "mean": {
+        "display_rmse": 0.08726629863182704,
+        "block_luma_ssim": 0.3288910786310832,
+        "block_rgb_rmse": 0.03240756690502167
+      }
+    },
+    "640": {
+      "poses": [
+        {
+          "yaw": 89.0,
+          "display_rmse": 0.07671741396188736,
+          "block_luma_ssim": 0.3676436245441437,
+          "block_rgb_rmse": 0.03589830920100212
+        },
+        {
+          "yaw": 91.0,
+          "display_rmse": 0.0770588219165802,
+          "block_luma_ssim": 0.3646111786365509,
+          "block_rgb_rmse": 0.036312635987997055
+        },
+        {
+          "yaw": 93.00000000000001,
+          "display_rmse": 0.07742024213075638,
+          "block_luma_ssim": 0.3601735830307007,
+          "block_rgb_rmse": 0.03662990406155586
+        }
+      ],
+      "mean": {
+        "display_rmse": 0.07706549266974132,
+        "block_luma_ssim": 0.3641427954037984,
+        "block_rgb_rmse": 0.03628028308351835
+      }
+    },
+    "192": {
+      "poses": [
+        {
+          "yaw": 89.0,
+          "display_rmse": 0.08644947409629822,
+          "block_luma_ssim": 0.3290415406227112,
+          "block_rgb_rmse": 0.06633500009775162
+        },
+        {
+          "yaw": 91.0,
+          "display_rmse": 0.0859774798154831,
+          "block_luma_ssim": 0.33260709047317505,
+          "block_rgb_rmse": 0.06560032814741135
+        },
+        {
+          "yaw": 93.00000000000001,
+          "display_rmse": 0.0871107205748558,
+          "block_luma_ssim": 0.3284376263618469,
+          "block_rgb_rmse": 0.06641729176044464
+        }
+      ],
+      "mean": {
+        "display_rmse": 0.08651255816221237,
+        "block_luma_ssim": 0.33002875248591107,
+        "block_rgb_rmse": 0.0661175400018692
+      }
+    }
+  },
+  "reference_48_to_96": [
+    {
+      "display_rmse": 0.03910480812191963,
+      "block_luma_ssim": 0.8075546622276306,
+      "block_rgb_rmse": 0.00802858266979456
+    },
+    {
+      "display_rmse": 0.03930439054965973,
+      "block_luma_ssim": 0.807073712348938,
+      "block_rgb_rmse": 0.0080420458689332
+    },
+    {
+      "display_rmse": 0.039552949368953705,
+      "block_luma_ssim": 0.8057914972305298,
+      "block_rgb_rmse": 0.008098279125988483
+    }
+  ],
+  "aborted_attempts": [
+    {
+      "run": "perf-2-0",
+      "reason": "editor: Invalid GPU path sample/history"
+    },
+    {
+      "run": "perf-1-640",
+      "reason": "editor: GPU medium path exceeds numerical domain / render.pathtracing.medium_domain"
+    },
+    {
+      "run": "perf-1-192",
+      "reason": "editor: GPU medium path exceeds numerical domain / render.pathtracing.medium_domain"
+    }
+  ]
+}

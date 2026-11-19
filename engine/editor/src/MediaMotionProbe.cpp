@@ -27,13 +27,19 @@ void MediaMotionProbe::save() {
     std::ofstream file(directory_/"report.json"); file<<report_.dump(2); file.close();
     if(!file) throw std::runtime_error("Cannot save media motion report");
 }
+bool MediaMotionProbe::moving_extent(const Viewport& viewport) const {
+    const auto cap=config_.value("motion_preview_long_edge",192u);
+    const unsigned native=std::max(report_.at("full_size")[0].get<unsigned>(),report_.at("full_size")[1].get<unsigned>());
+    return std::max(viewport.info().width,viewport.info().height)==(cap ? std::min(cap,native) : native);
+}
 void MediaMotionProbe::input(const WorkbenchUi& ui,Workspace& model,Viewport& viewport,platform::Window& window) {
     if(done()) return;
     applied_input_=pending_input_;
     if(ticks_++<20) return;
     auto& io=ImGui::GetIO(); io.ConfigInputTrickleEventQueue=false;
     if(stage_==0) {
-        viewport.configure_media_probe(config_.at("legacy").get<bool>(),config_.at("images").get<bool>(),config_.value("surface_direct",false));
+        const bool legacy=config_.at("legacy").get<bool>(),surface=config_.value("surface_direct",false);
+        viewport.configure_media_probe(legacy && !surface,legacy || (!surface && !config_.contains("motion_preview_long_edge")),config_.at("images").get<bool>());
         check(model.preset_environment(config_.at("preset").get<std::string>())); check(model.apply_environment());
         const auto set=[&](const char* method,Json parameters) {
             parameters["guard"]=take(model.execute_console("editor.viewport.query")).at("guard");
@@ -41,9 +47,9 @@ void MediaMotionProbe::input(const WorkbenchUi& ui,Workspace& model,Viewport& vi
         };
         report_["viewport"]=set("editor.viewport.set",{{"renderer","pathtrace"},{"medium_mode",config_.value("surface_direct",false) ? "surface_only" : "scene_media"},
             {"lighting_scope",config_.value("surface_direct",false) ? "direct_only" : "full_path"},
-            {"motion_preview_long_edge",192},
+            {"motion_preview_long_edge",config_.value("motion_preview_long_edge",192u)},
             {"direct_lighting",config_["algorithm"]=="restir" ? "restir_di" : "classic"},
-            {"initial_candidates",config_.value("surface_direct",false) ? 32 : 8},{"temporal_reuse",true},{"spatial_reuse",true},{"target_spp",64},
+            {"initial_candidates",config_.value("surface_direct",false) ? 32 : 8},{"temporal_reuse",true},{"spatial_reuse",true},{"target_spp",config_.value("matched_poses",false) ? 3 : 64},
             {"seed",1},{"bounces",config_.value("surface_direct",false) ? 1 : 4},{"exposure_ev",2.5},{"time_seconds",17}}).at("settings");
         report_["camera"]=set("editor.camera.set",{{"navigation_mode","fly"},{"eye",{8,1.8,0}},
             {"yaw_deg",90},{"pitch_deg",-.9548412539},{"fov_y_deg",65}}).at("settings");
@@ -51,11 +57,20 @@ void MediaMotionProbe::input(const WorkbenchUi& ui,Workspace& model,Viewport& vi
         stage_=1; save(); return;
     }
     if(stage_!=2) return;
+    if(config_.value("matched_poses",false)) {
+        if(next_quality_pose_) {
+            ++quality_step_;
+            Json params={{"yaw_deg",86.0+quality_step_},{"guard",take(model.execute_console("editor.viewport.query")).at("guard")}};
+            take(model.execute_console(Json{{"method","editor.camera.set"},{"params",params}}.dump()));
+            next_quality_pose_=false;
+        }
+        return;
+    }
     io.AddFocusEvent(true); io.AddMousePosEvent(pointer_.x,pointer_.y);
     const double time=now();
     if(!started_) {
         pointer_=ui.controls().at("viewport"); io.AddMousePosEvent(pointer_.x,pointer_.y); io.AddMouseButtonEvent(1,true);
-        motion_start_=time; measure_start_=config_.value("surface_direct",false) ? 1e30 : time+2000; pending_input_=time; started_=true; return;
+        motion_start_=time; measure_start_=config_.value("surface_direct",false) || config_.contains("motion_preview_long_edge") ? 1e30 : time+2000; pending_input_=time; started_=true; return;
     }
     if(time<measure_start_+1000*config_.at("seconds").get<double>()) {
         io.AddMouseButtonEvent(1,true);
@@ -77,19 +92,29 @@ void MediaMotionProbe::presented(const WorkbenchUi& ui,Viewport& viewport) {
         observed_camera_=revision; input_times_[revision]=applied_input_;
         if(stage_==2 && applied_input_>=measure_start_) report_["inputs"].push_back({revision,applied_input_-measure_start_});
     }
-    if(stage_==1 && (config_.value("surface_direct",false) ? !viewport.path_info().medium : viewport.path_info().medium.has_value()) && viewport.camera_current(ui.input().camera()) && viewport.info().width>192) {
+    const unsigned cap=config_.value("motion_preview_long_edge",192u);
+    if(stage_==1 && (config_.value("surface_direct",false) ? !viewport.path_info().medium : viewport.path_info().medium.has_value()) && viewport.camera_current(ui.input().camera()) && viewport.info().width>cap) {
         report_["cold_ready_ms"]=time; report_["full_size"]={viewport.info().width,viewport.info().height};
         report_["initial_source"]=media_probe_source(viewport.path_info(),viewport.published_camera());
         stage_=2; save();
     }
-    if(stage_==2 && started_ && config_.value("surface_direct",false) && measure_start_>1e20) {
+    if(stage_==2 && config_.value("matched_poses",false) && !next_quality_pose_ && viewport.camera_current(ui.input().camera()) && moving_extent(viewport) &&
+       std::abs(viewport.published_camera().pose().yaw_deg-(86.0+quality_step_))<1e-6) {
+        if(quality_step_==3 || quality_step_==5 || quality_step_==7) {
+            auto source=media_probe_source(viewport.path_info(),viewport.published_camera()); source["exposure_ev"]=2.5;
+            save_media_linear(directory_/("motion-"+std::to_string(images_++)),viewport.path_linear(),std::move(source));
+        }
+        next_quality_pose_=true;
+        if(quality_step_==7) { stage_=4; report_["status"]="passed"; save(); }
+    }
+    if(stage_==2 && started_ && measure_start_>1e20 && (config_.value("surface_direct",false) || moving_extent(viewport))) {
         if(viewport.published_camera().revision()!=warm_camera_) { warm_camera_=viewport.published_camera().revision(); ++warm_frames_; }
         if(warm_frames_>=20 && time-motion_start_>=2000) { measure_start_=time; report_["warm_camera_updates"]=warm_frames_; }
     }
     if(stage_==2 && started_ && time>=measure_start_) {
         if(previous_present_>=measure_start_) report_["gui_intervals_ms"].push_back(time-previous_present_);
         const auto published=viewport.published_camera().revision();
-        if(published!=published_camera_ && input_times_.contains(published) && input_times_.at(published)>=measure_start_ && (config_.value("surface_direct",false) || viewport.info().width<=192)) {
+        if(published!=published_camera_ && input_times_.contains(published) && input_times_.at(published)>=measure_start_ && (config_.value("surface_direct",false) || moving_extent(viewport))) {
             published_camera_=published;
             const auto& shown=viewport.path_info();
             report_["frames"].push_back({{"at_ms",time-measure_start_},{"input_ms",time-input_times_.at(published)},
@@ -103,7 +128,8 @@ void MediaMotionProbe::presented(const WorkbenchUi& ui,Viewport& viewport) {
         }
     }
     previous_present_=time;
-    if(stage_==3 && viewport.camera_current(ui.input().camera()) && viewport.info().width>192 && (config_.value("surface_direct",false) ? !viewport.path_info().medium : viewport.path_info().medium.has_value())) {
+    if(stage_==3 && viewport.camera_current(ui.input().camera()) && viewport.info().width==report_.at("full_size")[0].get<unsigned>() &&
+       viewport.info().height==report_.at("full_size")[1].get<unsigned>() && (config_.value("surface_direct",false) ? !viewport.path_info().medium : viewport.path_info().medium.has_value())) {
         if(!restored_spp_) {
             restored_spp_=viewport.path_samples(); report_["stop_to_full_ms"]=time-stop_;
             report_["restored_source"]=media_probe_source(viewport.path_info(),viewport.published_camera());

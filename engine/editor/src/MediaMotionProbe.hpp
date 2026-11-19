@@ -16,11 +16,14 @@ private:
     using Clock=std::chrono::steady_clock;
     double now() const { return std::chrono::duration<double,std::milli>(Clock::now()-origin_).count(); }
     void save();
+    bool moving_extent(const Viewport&) const;
     std::filesystem::path directory_;
     Json config_,report_;
     Clock::time_point origin_=Clock::now();
     unsigned stage_=0,ticks_=0,images_=0,warm_frames_=0;
     std::uint64_t warm_camera_=0;
+    unsigned quality_step_=0;
+    bool next_quality_pose_=true;
     bool started_=false;
     double motion_start_=0,measure_start_=0,stop_=0,previous_present_=0,pending_input_=0,applied_input_=0,last_look_=0;
     std::uint64_t observed_camera_=0,published_camera_=0;

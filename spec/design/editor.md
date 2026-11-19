@@ -1,7 +1,7 @@
 ---
 module: editor
 created_at: "2026-10-08T09:36:00+08:00"
-updated_at: "2026-11-19T14:04:00+08:00"
+updated_at: "2026-11-19T14:48:00+08:00"
 status: accepted
 ---
 
@@ -395,6 +395,8 @@ M22.11 的 ConsoleWorkflowSmoke 与独立 Python 驱动把命令发现/补全、
 
 同资产、相同世界实例/引用的环境版本复用 CPU 路径几何，并通过 renderer 相同几何owner复用 AS；源重绑失败不发布候选。相机变化不重建几何。
 Scene media 相机移动时，默认使用视口原尺寸。会话参数 `motion_preview_long_edge` 可限制长边像素数，0 表示原尺寸。发生缩放时面板显示 Motion preview 和实际 Shown size，停动 200 ms 后按原尺寸重新累积。按[0181](../development/0181-media-preview-color.md)使用sampler=3均衡RGB及3 spp完整批次（末批尊重剩余目标）；相机请求等待完整预览后合并最新姿态，取消原100ms替换以避免三样本首帧饥饿。冷编译/导入期间同样合并输入，物理变更/刷新/尺寸变化立即失效，不混合尺寸历史。迟到图保留真实来源，不能作为当前相机拾取。
+
+运动分辨率基准使用生产版 Scene media ReSTIR v2 和相同视口，在 SDL 连续转向时按已提交的新相机画面计数。画质另行采集，在固定姿态序列比较同一机位的首个完整批次，并以启用相同云场和大气的原尺寸 Classic MIS 图作为有限采样参考。旧版对照保留自己的采样策略。
 请求合并和失效规则保持document/revision/物理参数边界，迟到帧保留实际相机与尺寸并标旧来源；完整新视角与GUI帧循环分别测量。
 性能观测使用独立开关，GPU时间戳/VMA统计只在测量时启用；初始化读取一次heap预算选择renderer额度，取消返回与GPU回收分别记录。
 

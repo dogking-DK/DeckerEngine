@@ -5,7 +5,8 @@ int direct_reference_probe(const std::filesystem::path& root,const std::filesyst
         require(std::filesystem::is_regular_file(root/".dk-editor-smoke"),"Reference requires a disposable project");
         std::ifstream input(root/".dk-direct-reference.json"); Json config; input>>config;
         auto model=take(Workspace::create(root)); check(model->open("project.json"));
-        check(model->preset_environment("clear")); check(model->apply_environment());
+        const bool media=config.value("scene_media",false);
+        check(model->preset_environment(media ? "sparse" : "clear")); check(model->apply_environment());
         auto system=memory::MemorySystem::create().value(); auto heap=system.create_heap({"direct-reference",memory::DomainCategory::render}).value();
         std::atomic<unsigned> diagnostics=0;
         {
@@ -21,6 +22,7 @@ int direct_reference_probe(const std::filesystem::path& root,const std::filesyst
             unsigned sequence=0;
             for(const auto& entry:config.at("sources")) {
                 std::ifstream file(entry.at("file").get<std::string>()); Json source; file>>source;
+                // As in the editor, the path integrator owns the medium. Camera environment mode is for raster clipping.
                 Camera camera; camera.set_environment(false); camera.set_pathtracing(true);
                 const double aspect=double(source.at("width").get<unsigned>())/source.at("height").get<unsigned>();
                 auto pose=camera.pose(); const auto& p=source.at("pose");
@@ -30,9 +32,10 @@ int direct_reference_probe(const std::filesystem::path& root,const std::filesyst
                 settings.lens.fov_y=source.at("lens").at("fov_y"); settings.lens.near_plane=source.at("lens").at("near"); settings.lens.far_plane=source.at("lens").at("far");
                 check(camera.set_settings(settings,aspect));
                 PathPreviewRequest request{*model->snapshot(),camera}; request.read_linear=true;
-                request.width=source.at("width"); request.height=source.at("height"); request.settings.direct_only=true;
-                request.settings.bounces=1; request.settings.seed=104729+source.at("seed").get<unsigned>(); ++request.settings.reset;
-                for(const unsigned target:{256u,512u}) {
+                request.width=source.at("width"); request.height=source.at("height"); request.settings.direct_only=!media;
+                request.settings.scene_media=media; request.settings.time_seconds=17;
+                request.settings.bounces=media ? 4 : 1; request.settings.seed=104729+source.at("seed").get<unsigned>(); ++request.settings.reset;
+                for(const unsigned target:media ? std::array{48u,96u} : std::array{256u,512u}) {
                     request.settings.target=target; request.sequence=++sequence; worker.request(request); const auto start=Clock::now();
                     for(;;) {
                         if(auto result=worker.take_result(); result && result->sequence==request.sequence && result->info.samples.count==target) {
@@ -44,7 +47,7 @@ int direct_reference_probe(const std::filesystem::path& root,const std::filesyst
                             report["images"].push_back(metadata); std::cout<<stem<<std::endl; break;
                         }
                         const auto status=worker.status(); require(status.error.empty(),status.error.c_str());
-                        require(elapsed(start)<180000,"Direct reference timed out"); std::this_thread::sleep_for(1ms);
+                        require(elapsed(start)<600000,"Camera reference timed out"); std::this_thread::sleep_for(1ms);
                     }
                 }
             }

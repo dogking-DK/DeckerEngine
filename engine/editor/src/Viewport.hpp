@@ -32,10 +32,10 @@ public:
     [[nodiscard]] std::uint32_t path_samples() const { return path_samples_; }
     [[nodiscard]] bool path_interactive() const { return path_interactive_; }
     // Disposable probe only; freeze before the first path request.
-    void configure_media_probe(bool legacy,bool pixels,bool surface_direct=false) {
+    void configure_media_probe(bool legacy_media,bool restir_v1,bool pixels) {
         if(path_active_) throw std::logic_error("Media probe policy must precede path activation");
-        legacy_media_probe_=legacy && !surface_direct;
-        restir_v1_probe_=!surface_direct || legacy;
+        legacy_media_probe_=legacy_media;
+        restir_v1_probe_=restir_v1;
         retain_pixels_=pixels;
     }
     // Acceptance calls this after the GUI submission has completed.
