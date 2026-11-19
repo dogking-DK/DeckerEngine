@@ -1,13 +1,5 @@
 // Included after the probe's fixture/helpers, in the same translation unit.
 namespace {
-void add_texture(Fixture& f,std::size_t primitive,Vec2f uv={.25f,.25f}) {
-    TextureData texture; texture.id=AssetId::generate().value(); texture.width=texture.height=2;
-    texture.origin="procedural/baseColor"; texture.sampler.mag_filter=TextureFilter::nearest;
-    texture.rgba8={std::byte{128},std::byte{0},std::byte{0},std::byte{0},std::byte{0},std::byte{255},std::byte{0},std::byte{255},
-        std::byte{0},std::byte{0},std::byte{255},std::byte{128},std::byte{255},std::byte{255},std::byte{255},std::byte{255}};
-    f.asset.materials[primitive].base_color_texture=texture.id;
-    f.asset.mesh.primitives[primitive].texcoords={uv,uv,uv}; f.asset.textures.push_back(std::move(texture));
-}
 void texture_numeric(memory::ResourceHandle heap,PathTraceRenderer& renderer,SubmissionQueue& queue) {
     auto s=settings(); s.estimator=PathTraceEstimator::bsdf_only; s.environment_rgb=Vec3d::Ones();
     double worst=0;

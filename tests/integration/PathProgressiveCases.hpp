@@ -42,31 +42,6 @@ void progressive_counter(memory::ResourceHandle heap,SubmissionQueue& q) {
     require(std::bit_cast<std::uint32_t>(history[5][3])==2 && std::bit_cast<std::uint32_t>(history[6][3])==8,"progressive uint64 ray counter lost carry");
     require(std::bit_cast<std::uint32_t>(history[4][3])==41 && history[1][3]==0,"counter test corrupted sample state");
 }
-bool collect(PathTraceRenderer& r,SubmissionQueue& q) {
-    q.device().logical_device().waitIdle(); return take(r.poll(q));
-}
-void advance_view(PathTraceRenderer& r,SubmissionQueue& q,std::uint64_t id) {
-    for(unsigned step=0;step<100000;++step) {
-        const auto state=take(r.status(id));
-        if(state.completed_spp>=state.target_spp && !state.pending)
-            return;
-        take(r.submit_batch(q,id)); collect(r,q);
-    }
-    throw std::runtime_error("progressive view failed to finish");
-}
-PathTraceGpuImage finish_view(PathTraceRenderer& r,SubmissionQueue& q,std::uint64_t id) {
-    advance_view(r,q,id); return complete(q,take(r.completed_frame(id).read_linear(q)));
-}
-void compare_images(const PathTraceGpuImage& a,const PathTraceGpuImage& b,double tolerance=1e-6) {
-    require(a.linear_rgb().size()==b.linear_rgb().size(),"progressive image size mismatch");
-    for(std::size_t i=0;i<a.linear_rgb().size();++i) {
-        close_color(a.linear_rgb()[i],b.linear_rgb()[i],tolerance);
-        close_color(a.second_moment()[i],b.second_moment()[i],tolerance);
-        require(bool(a.primary_hits()[i])==bool(b.primary_hits()[i]),"progressive primary hit changed");
-        if(a.primary_hits()[i]) require(a.primary_hits()[i]->index==b.primary_hits()[i]->index,"first sample hit changed");
-    }
-    require(a.info().statistics.rays==b.info().statistics.rays,"progressive ray accounting changed");
-}
 void progressive_images(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q) {
     Fixture f{heap}; f.quad(-.32f,.32f,0,{.6f,.4f,.2f}); f.quad(-.1f,.1f,.6f,{0,0,0},{2,3,4},true);
     auto cpu=f.scene(); auto gpu=take(r.prepare_scene(q,cpu)); auto view=f.view(f.source(),7);

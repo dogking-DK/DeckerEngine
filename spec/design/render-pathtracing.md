@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-11-17T15:07:05+08:00"
+updated_at: "2026-11-19T12:37:00+08:00"
 status: accepted
 ---
 
@@ -686,6 +686,8 @@ Python/Luau/IPC 调用同一服务。对应阶段应用 command-development，�
 命令参考及可执行示例；M16.10复用现有命令，不引入M13布料实验格式。
 
 ## 验收集、阈值与性能基线
+
+GPU 测试程序 `dk_pathtracing_probe` 统一管理设备、队列、故障注入、命令行分派和泄漏检查。ReSTIR、介质与体素用例以独立 C++ 源文件编译，通过测试私有的夹具和函数声明协作。体素源文件随 voxel importer 条件加入。CTest 名称、参数、环境和超时沿用各用例原有契约。 量测方法与结果见 [0184](../development/0184-build-iteration.md#release-探针增量构建)。
 
 固定场景：空常量天空、单三角/遮挡板、Lambert 白炉、Cornell 风格封闭盒与面积灯、
 镜像/剪切实例、metallic/roughness 球组、alpha-mask 栅栏、资产重载和交互变换序列。

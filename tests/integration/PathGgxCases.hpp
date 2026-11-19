@@ -1,8 +1,5 @@
 #include "../PathBsdfOracle.hpp"
 namespace {
-PathTraceScene ggx_scene(const Fixture& f) {
-    const std::array assets{&f.asset}; return take(PathTraceScene::create(f.heap,f.source(),assets,{},PathTraceMaterialModel::metallic_roughness));
-}
 void ggx_material(Fixture& f,float metal,float rough) { for(auto& m:f.asset.materials) { m.metallic=metal; m.roughness=rough; } }
 void ggx_numeric(memory::ResourceHandle heap,PathTraceRenderer& renderer,SubmissionQueue& queue) {
     Fixture constant{heap}; constant.quad(-10,10,0,{.7f,.4f,.2f}); auto constant_settings=settings();

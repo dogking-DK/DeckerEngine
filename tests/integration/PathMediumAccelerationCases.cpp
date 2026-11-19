@@ -1,5 +1,7 @@
-#pragma once
-namespace {
+#include "PathVolumeProbe.hpp"
+#include <array>
+
+namespace dk::test::path_probe {
 void medium_acceleration(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q) {
     Fixture f{heap}; auto e=cloud_environment(); e.clouds.weather_resolution=e.clouds.base_resolution=32;
     e.enabled=true; e.clouds.coverage=.65; e.clouds.extinction_per_m=.0008;
@@ -36,4 +38,4 @@ void medium_acceleration(memory::ResourceHandle heap,PathTraceRenderer& r,Submis
     require((n.reference-four.reference).norm()/std::max(1e-4,four.reference.norm())<=.005,"CPU N/4N reference not converged");
     std::puts("zero culling exact sequence; local absorption and mixed low-sun 8-seed oracle passed");
 }
-}
+} // namespace dk::test::path_probe

@@ -1,5 +1,12 @@
-#pragma once
-namespace {
+#include "PathRestirProbe.hpp"
+#include <dk/math/Projection.hpp>
+#include <numbers>
+#include <cmath>
+#include <limits>
+#include <array>
+#include <stop_token>
+
+namespace dk::test::path_probe {
 Vec3d temporal_furnace_oracle(std::uint64_t seed,unsigned count,const RestirDiSettings& settings,const Vec3d& color) {
     double oldZ=0,oldW=0; unsigned oldM=0,age=0; Vec3d sum=Vec3d::Zero();
     const double brightness=color.dot(Vec3d{.2126,.7152,.0722})/std::numbers::pi;
@@ -23,7 +30,7 @@ Vec3d temporal_furnace_oracle(std::uint64_t seed,unsigned count,const RestirDiSe
     }
     return sum/count;
 }
-void temporal_mean(const std::array<Vec3d,8>& observations,const std::array<Vec3d,8>& reference,bool relative_precision=true) {
+void temporal_mean(const std::array<Vec3d,8>& observations,const std::array<Vec3d,8>& reference,bool relative_precision) {
     Vec3d a=Vec3d::Zero(),b=Vec3d::Zero(); for(unsigned i=0;i<8;++i) { a+=observations[i]/8; b+=reference[i]/8; }
     for(unsigned c=0;c<3;++c) {
         double variance=0; for(unsigned i=0;i<8;++i) variance+=std::pow(observations[i][c]-a[c],2)+std::pow(reference[i][c]-b[c],2);
@@ -32,8 +39,8 @@ void temporal_mean(const std::array<Vec3d,8>& observations,const std::array<Vec3
         require((!relative_precision || error<=.02*std::abs(b[c])+1e-4) && error<=5*se+1e-4,"temporal independent chain mean differs");
     }
 }
-RestirDiSettings temporal_settings() { RestirDiSettings r; r.temporal.emplace(); return r; }
-RenderView temporal_view(Fixture& f,unsigned size=5,bool ortho=false,double x=.2,double angle=0,double extent=1) {
+static RestirDiSettings temporal_settings() { RestirDiSettings r; r.temporal.emplace(); return r; }
+RenderView temporal_view(Fixture& f,unsigned size,bool ortho,double x,double angle,double extent) {
     auto d=f.view(f.source(),size).description(); Trsd camera; camera.translation={x,.1,1};
     camera.rotation=Quatd{Eigen::AngleAxisd{angle,Vec3d::UnitY()}}; d.camera_world=take(Transformd::from_trs(camera));
     if(ortho) d.projection=take(orthographic_projection({extent,.1,10},1));
@@ -266,4 +273,4 @@ void temporal_support(memory::ResourceHandle heap,PathTraceRenderer& r,Submissio
     std::printf("temporal support corrections=%llu reused=%llu mask current visibility=pass\n",
         static_cast<unsigned long long>(corrections),static_cast<unsigned long long>(reused));
 }
-}
+} // namespace dk::test::path_probe

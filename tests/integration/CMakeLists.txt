@@ -72,13 +72,18 @@ if(TARGET dk_render_pathtracing)
                 "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/PathBenchmarkTest.py")
         endif()
     endif()
-    add_executable(dk_pathtracing_probe PathTraceProbe.cpp)
+    add_executable(dk_pathtracing_probe
+        PathTraceProbe.cpp PathProbeSupport.cpp
+        PathAirCases.cpp PathCloudCases.cpp PathMediumAccelerationCases.cpp PathOrthographicCases.cpp
+        PathRestirCases.cpp PathTemporalCases.cpp PathSpatialCases.cpp PathDirectRestirCases.cpp
+        PathRestirMediumCases.cpp PathRestirMediumSupportCases.cpp)
     target_link_libraries(dk_pathtracing_probe PRIVATE dk::render_pathtracing dk::graphics_shaders dk::graphics_graph)
     target_include_directories(dk_pathtracing_probe PRIVATE "${PROJECT_SOURCE_DIR}/engine/graphics/device/src")
     target_compile_definitions(dk_pathtracing_probe PRIVATE DK_PATH_SHADER_DIR="${PROJECT_SOURCE_DIR}/engine/render/pathtracing/shaders")
     dk_target_defaults(dk_pathtracing_probe)
     dk_deploy_slang(dk_pathtracing_probe)
     if(TARGET dk_asset_voxel_importers)
+        target_sources(dk_pathtracing_probe PRIVATE PathVoxelCases.cpp PathVoxelRestirCases.cpp PathVoxelMediumCases.cpp)
         target_link_libraries(dk_pathtracing_probe PRIVATE dk::asset_voxel_importers)
         target_compile_definitions(dk_pathtracing_probe PRIVATE DK_PATH_VOXEL_TESTS=1)
         foreach(case IN ITEMS voxel_numeric voxel_lighting voxel_state voxel_restir_numeric voxel_restir_reuse voxel_signals voxel_restir_state voxel_medium_numeric voxel_medium_schedule voxel_medium_state voxel_medium_reuse)

@@ -1,6 +1,15 @@
-#pragma once
-namespace {
-PathMediumSnapshot voxel_medium(const EnvironmentDescription& e,CloudFieldCache& cache,double time=17) {
+#include "PathVoxelProbe.hpp"
+#include "../PathVoxelSupport.hpp"
+#include "PathVolumeProbe.hpp"
+#include "PathRestirProbe.hpp"
+#include <dk/math/Projection.hpp>
+#include <numbers>
+#include <cmath>
+#include <array>
+#include <stop_token>
+
+namespace dk::test::path_probe {
+static PathMediumSnapshot voxel_medium(const EnvironmentDescription& e,CloudFieldCache& cache,double time=17) {
     PathMediumSettings ms; ms.time_seconds=time;
     return take(PathMediumSnapshot::create(e,ms,e.clouds.enabled ? take(cache.prepare(e.clouds)) : std::shared_ptr<const CloudFieldData>{}));
 }
@@ -161,4 +170,4 @@ void voxel_medium_state(memory::ResourceHandle heap,PathTraceRenderer& r,Submiss
     compare_images(complete(q,take(held.read_linear(q))),old,0); check(r.release_view(242));
     std::puts("voxel medium phase/tracking/cancel/late/owner/camera/palette/grid/transform/air/wind/field/signals=pass");
 }
-}
+} // namespace dk::test::path_probe

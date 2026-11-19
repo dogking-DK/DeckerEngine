@@ -44,8 +44,8 @@ design_refs:
 
 ## 数值与状态证据
 
-新增 [介质测试](../../tests/integration/PathRestirMediumCases.hpp)和
-[交界支持测试](../../tests/integration/PathRestirMediumSupportCases.hpp)，注册于 required GPU 探针。
+新增 [介质测试](../../tests/integration/PathRestirMediumCases.cpp)和
+[交界支持测试](../../tests/integration/PathRestirMediumSupportCases.cpp)，注册于 required GPU 探针。
 9 个新增 GPU 用例、10 个直接受影响的 GPU 回归用例和 10 个 CPU-only 参考用例最终全部通过，零跳过。
 随机均值固定 8 seeds `101+7919*i`，以独立链求标准误差；每通道同时要求
 `abs(error)<=2%*abs(reference)+1e-4` 和 `abs(error)<=5*combined_SE+1e-4`，不放宽 M19 的门槛。

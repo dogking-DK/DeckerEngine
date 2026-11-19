@@ -1,19 +1,5 @@
 #pragma once
 namespace {
-Vec3d signal_rgb(const DenoisingSignalPixel::Float4& v) { return {v[0],v[1],v[2]}; }
-void signal_recompose(const PathTraceGpuImage& image) {
-    require(image.info().signals.has_value(),"signal provenance missing");
-    const auto& source=image.info().signals->source;
-    require(source.version==2 && source.content_version && source.source_serial && source.renderer_id && source.width==image.info().width &&
-        source.height==image.info().height && source.fingerprint==image.info().fingerprint &&
-        source.sample_first+source.sample_count==source.accumulated_spp,"signal source identity mismatch");
-    require(image.denoising_signals().size()==image.linear_rgb().size(),"partial signal image published");
-    for(const auto& p:image.denoising_signals()) {
-        const Vec3d raw=signal_rgb(p.fresh_sum),sum=signal_rgb(p.diffuse_sum)+signal_rgb(p.specular_sum)+signal_rgb(p.emission_sum)+signal_rgb(p.background_sum);
-        close_color(sum,raw,2e-5*std::max(1.,raw.maxCoeff()));
-        require(p.guide_samples()==source.accumulated_spp && p.identity[3]==source.sample_count && p.identity[1]==source.sampling_first_epoch,"guide/fresh coverage mismatch");
-    }
-}
 RenderView signal_view(const Fixture& f,std::uint32_t width=7,std::uint32_t height=5,bool ortho=false,double x=0) {
     auto d=f.view(f.source(),width).description(); d.height=height;
     if(ortho) d.projection=take(orthographic_projection({2,.25,4},double(width)/height));

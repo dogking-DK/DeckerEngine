@@ -1,6 +1,11 @@
-#pragma once
-namespace {
-EnvironmentDescription air_environment(double extinction=2e-5,double scattering=1e-5) {
+#include "PathVolumeProbe.hpp"
+#include <numbers>
+#include <cmath>
+#include <array>
+#include <stop_token>
+
+namespace dk::test::path_probe {
+EnvironmentDescription air_environment(double extinction,double scattering) {
     EnvironmentDescription e; e.enabled=true; auto& a=e.atmosphere;
     a.atmosphere_height_m=10000; a.mie_scale_height_m=10000;
     a.absorption_center_height_m=5000; a.absorption_half_width_m=2500;
@@ -8,12 +13,12 @@ EnvironmentDescription air_environment(double extinction=2e-5,double scattering=
     a.mie_extinction_per_m={extinction,extinction,extinction}; a.mie_scattering_per_m={scattering,scattering,scattering};
     a.mie_anisotropy=0; a.ground_albedo={0,0,0}; return e;
 }
-VolumePathSettings air_settings(unsigned depth=1) {
+VolumePathSettings air_settings(unsigned depth) {
     VolumePathSettings s; s.gpu_local_majorants=false; // Preserve the paired CPU/global random-sequence oracle.
     s.max_bounces=depth; s.rr_start=0; s.sun=false; return s;
 }
 PathTraceGpuImage air_image(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& scene,const PathMediumSnapshot& m,
-    VolumePathSettings s,unsigned samples,const PathTraceRay& ray,unsigned pixels=1) {
+    VolumePathSettings s,unsigned samples,const PathTraceRay& ray,unsigned pixels) {
     std::vector<PathTraceRay> rays(pixels,ray);
     return complete(q,take(r.submit_air_rays(q,scene,m,rays,s,{0,samples})));
 }
@@ -76,7 +81,7 @@ void air_numeric(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueu
     std::puts("air vacuum/finite sun/near-ground/far-clip/Lambert/GGX/mask/CPU=pass");
 }
 struct AirPopulation { Vec3d mean=Vec3d::Zero(),error=Vec3d::Zero(); double mse=0,cpu_rmse=0; };
-AirPopulation air_population(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& scene,const PathMediumSnapshot& m,
+static AirPopulation air_population(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& scene,const PathMediumSnapshot& m,
     const PathTraceRay& ray,VolumePathSettings s,unsigned samples,const Vec3d& expected,unsigned pixels=1,bool cpu=false) {
     AirPopulation p; std::array<Vec3d,8> values; double difference=0,energy=0;
     for(unsigned seed=0;seed<8;++seed) {
@@ -93,7 +98,7 @@ AirPopulation air_population(PathTraceRenderer& r,SubmissionQueue& q,const PathT
     for(const auto& value:values) p.error+=(value-p.mean).cwiseAbs2()/56;
     p.error=p.error.cwiseSqrt(); p.cpu_rmse=std::sqrt(difference/std::max(energy,1e-20)); return p;
 }
-void air_statistical_check(const AirPopulation& p,const Vec3d& expected) {
+static void air_statistical_check(const AirPopulation& p,const Vec3d& expected) {
     std::printf("air mean=(%.9g %.9g %.9g) expected=(%.9g %.9g %.9g) stderr=(%.6g %.6g %.6g) MSE=%.9g CPU nRMSE=%.9g\n",
         p.mean.x(),p.mean.y(),p.mean.z(),expected.x(),expected.y(),expected.z(),p.error.x(),p.error.y(),p.error.z(),p.mse,p.cpu_rmse);
     for(unsigned c=0;c<3;++c) {
@@ -237,4 +242,4 @@ void air_resources(memory::ResourceHandle heap,SubmissionQueue& q) {
     require(r.memory_stats(q).owned.current==baseline,"air resources retained after release");
     std::printf("air 1MiB resource limit peak=%llu texture/AS reuse/invalidation/failure/weak cache/external owners=pass\n",stats.owned.peak);
 }
-}
+} // namespace dk::test::path_probe

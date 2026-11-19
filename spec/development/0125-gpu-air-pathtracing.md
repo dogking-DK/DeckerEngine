@@ -29,7 +29,7 @@ GPU云、Editor/capture和交互优化仍按M17.4–6推进。
 - 拆分GPU几何owner与场景wrapper；独立geometry_fingerprint排除环境/revision，命中后完整比较消费内容，
   两个弱缓存复用AS/纹理且不延长GPU资源寿命。环境变更重置历史但不重建相同几何，材质/纹理改变仍重建。
   弱缓存可保留至多两个CPU控制块；准备失败不发布缓存。所有GPU资源沿用统一AllocationBudget。
-- 新增[五组空气验收](../../tests/integration/PathAirCases.hpp)、CPU几何身份测试，并更新既有上传/分配失败夹具：
+- 新增[五组空气验收](../../tests/integration/PathAirCases.cpp)、CPU几何身份测试，并更新既有上传/分配失败夹具：
   故障注入使用实际变化的输入，避免缓存命中绕过上传；失败准备仍要求Memory精确回到旧值，成功准备允许有界弱缓存控制块。
   测试填满heap的占位块使用作用域清理，断言失败也不会以heap关闭异常掩盖原因。
 - 更新模块设计、架构、索引与[GPU使用指南](../guides/pathtracing-gpu.md)。无新依赖、命令或schema。

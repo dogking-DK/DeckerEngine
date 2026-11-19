@@ -1,5 +1,9 @@
-#pragma once
-namespace {
+#include "PathVolumeProbe.hpp"
+#include <dk/math/Projection.hpp>
+#include <numbers>
+#include <cmath>
+
+namespace dk::test::path_probe {
 void orthographic(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q) {
     Fixture f{heap}; f.quad(-.5f,.5f,0,{0,0,0},{2,3,4});
     auto s=settings(1); auto source=f.source(); auto cpu=f.scene(); auto gpu=take(r.prepare_scene(q,cpu));
@@ -74,4 +78,4 @@ void orthographic_medium(memory::ResourceHandle heap,PathTraceRenderer& r,Submis
         check(r.release_view(702));
     }
 }
-}
+} // namespace dk::test::path_probe

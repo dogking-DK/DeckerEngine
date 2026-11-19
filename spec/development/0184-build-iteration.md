@@ -1,10 +1,11 @@
 ---
 id: "0184"
 created_at: "2026-11-19T11:50:00+08:00"
-updated_at: "2026-11-19T12:13:00+08:00"
+updated_at: "2026-11-19T13:01:00+08:00"
 status: completed
 design_refs:
   - ../design/project-foundation.md
+  - ../design/render-pathtracing.md
 ---
 
 # 0184 Windows 增量构建与多目标验证
@@ -45,3 +46,27 @@ CMake 4.2.1 / 中文 MSVC 19.51 的默认探测会转码 include 前缀。配置
 - 在独立 VS 树中使生成戳过期并改动解决方案文件夹，确认 CMake 先重新生成并恢复映射，随后一次 MSBuild 构建成功。嵌套的 Engine/Foundation 与 Tests 可同时选中。
 - 在独立树的生成头中注入编译错误，验证停在 build 阶段，无测试结果；恢复后通过。未知目标回退到 CMake 并返回实际构建错误。单目标、缺少新工具信息的旧树和 Ninja 多目标入口均通过定向验证。
 - 以上耗时只对应所列样本。全量构建、Editor Release 和 GPU 用例未运行。
+
+## Release 探针增量构建
+
+`dk_pathtracing_probe` 的 ReSTIR、体积和体素用例原由 PathTraceProbe.cpp 包含。现在 13 个源文件独立编译，按功能分组的私有头声明用例和共用函数。场景夹具、帧等待、图像比较和故障注入标志有唯一实现。三个体素源文件随 voxel importer 加入目标。设备初始化、命令行分派和退出前的泄漏检查仍在原入口。
+
+在同一台机器、同一 `windows-voxel-editor` 构建目录中预热目标，再运行下列命令。前两轮分别修改同一直接光 ReSTIR 用例文件末尾的注释，第三轮恢复原内容。计时从启动 CMake 至退出，包含依赖检查、编译和链接。构建前后分别比对树中 Release 对象的修改时间。
+
+```powershell
+cmake --build out/build/windows-voxel-editor --config Release --parallel 4 --target dk_pathtracing_probe
+```
+
+| 修改文件 | 三轮增量构建（秒） | 中位数（秒） | 每轮更新的对象 |
+| --- | --- | --- | --- |
+| 拆分前的 PathDirectRestirCases.hpp | 19.463 / 18.701 / 18.441 | 18.701 | PathTraceProbe.obj |
+| 拆分后的 PathDirectRestirCases.cpp | 11.352 / 11.663 / 11.428 | 11.428 | PathDirectRestirCases.obj |
+
+本机 Release 增量构建中位数减少 7.27 秒，约 39%。无改动对照各测一次，前后为 1.98 秒、1.69 秒，均无对象更新。完整重编耗时未比较。原始时间、变动对象、逐轮日志和 CTest 清单位于 `out/probe-split`，最终对比使用 `times.jsonl` 的 before 与 final 两组。
+
+逐项核对启用体素时拆分前后的 79 个 CTest 入口，名称、命令、参数和属性均相同；main 函数正文以及 13 个文件中的 75 个用例和辅助函数正文一致。另在关闭 VDB 的 `windows-editor` 中实际构建 RelWithDebInfo 探针；其 68 个入口与上述清单移除 11 项可选体素测试后的结果匹配，比较时归一化构建树和配置目录。
+
+GPU 验收使用 `scripts/verify.ps1 -Target dk_pathtracing_probe`。第一次运行检测到本机 AMD 切换显卡层的 Vulkan 1.3/1.4 版本警告后中止。按[构建指南](../guides/build.md)仅对测试进程设置 `DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1=1`，保留 required validation/sync。
+
+- 启用体素的 Release 运行 14 项，覆盖直接光、时空复用、介质、体素、信号和渐进提交失败恢复，全部通过，跳过 0 项。摘要和实际用例见 `out/verify/20261119-125854-b7025803/summary.json`。
+- 关闭体素的 RelWithDebInfo 从原 CTest 入口执行 `restir_direct`，1 项通过。摘要见 `out/verify/20261119-130055-6b3ab831/summary.json`。其余入口比对了注册信息，本次未逐项执行。

@@ -2,6 +2,7 @@
 
 ## 最近完成
 
+- 路径追踪探针的 ReSTIR、介质与体素用例已独立编译。修改直接光 ReSTIR 用例时只重编对应对象，Release 增量构建中位数从 18.70 秒降到 11.43 秒。[测量与验收](spec/development/0184-build-iteration.md#release-探针增量构建)
 - Windows 命令行开发可使用与 windows-dev 功能对齐的 Ninja 预设。VS 多目标定向验证共用一次 MSBuild，三目标无改动构建中位数从 2.14 秒降到 1.38 秒。[0184 验证记录](spec/development/0184-build-iteration.md)
 - RTK 项目 hook 已验证自动精简。本工作副本已固定恢复库，根目录搜索、下一次调用从子目录取回折叠行均已通过。[项目导航 skill](.agents/skills/decker-code-navigation/SKILL.md#跨命令取回折叠结果)
 - 开发工作台、精简 benchmark、离线复算样本与本地代码索引的实施和验证见 [0183](spec/development/0183-development-workflow.md)。

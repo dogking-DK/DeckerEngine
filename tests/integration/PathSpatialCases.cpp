@@ -1,7 +1,11 @@
-#pragma once
+#include "PathRestirProbe.hpp"
 #include "../RestirSpatialOracle.hpp"
-namespace {
-RestirDiSettings spatial_settings(bool temporal=false) {
+#include <limits>
+#include <array>
+#include <stop_token>
+
+namespace dk::test::path_probe {
+RestirDiSettings spatial_settings(bool temporal) {
     RestirDiSettings r; r.spatial.emplace(); r.spatial->position_tolerance=4;
     if(temporal) { r.temporal.emplace(); r.temporal->position_tolerance=2; }
     return r;
@@ -119,7 +123,7 @@ void spatial_state(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQu
     compare_images(complete(q,take(held.read_linear(q))),original,0); check(r.release_view(103));
     std::puts("spatial validation private epochs phase failures cancellation camera reset and held owner=pass");
 }
-void spatial_support(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q,bool edges,bool paper=false) {
+void spatial_support(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q,bool edges,bool paper) {
     Fixture f{heap};
     if(edges) {
         // Adjacent materials and geometric normals; a small raised black surface creates a silhouette.
@@ -198,4 +202,4 @@ void spatial_budget(memory::ResourceHandle heap,SubmissionQueue& q) {
     require(image.info().samples.count==2,"minimum spatial work budget failed"); check(r.release_view(106));
     std::puts("spatial full/tail payload held owners release recovery and minimum tile work=pass");
 }
-}
+} // namespace dk::test::path_probe

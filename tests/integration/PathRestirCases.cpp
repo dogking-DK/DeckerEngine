@@ -1,5 +1,11 @@
-#pragma once
-namespace {
+#include "PathRestirProbe.hpp"
+#include <dk/math/Projection.hpp>
+#include <numbers>
+#include <cmath>
+#include <array>
+#include <stop_token>
+
+namespace dk::test::path_probe {
 void compare_restir_statistics(const PathTraceGpuImageInfo& actual,const PathTraceGpuImageInfo& expected) {
     const auto& a=actual.temporal_statistics; const auto& b=expected.temporal_statistics;
     require(a.reused==b.reused && a.rejected==b.rejected && a.expired==b.expired && a.support_corrected==b.support_corrected &&
@@ -12,11 +18,11 @@ void compare_restir_statistics(const PathTraceGpuImageInfo& actual,const PathTra
         actual.restir_medium_statistics.applied_surfaces==expected.restir_medium_statistics.applied_surfaces,
         "medium diagnostics depend on scheduling");
 }
-PathTraceGpuImage ris_ray(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& scene,const PathTraceSettings& s,
+static PathTraceGpuImage ris_ray(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& scene,const PathTraceSettings& s,
     std::uint32_t count,const RestirDiSettings& ris={},const PathTraceRay& ray=down) {
     return complete(q,take(r.submit_restir_rays(q,scene,std::span{&ray,1},s,ris,{0,count})));
 }
-void restir_population(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& gpu,PathTraceSettings s,
+static void restir_population(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& gpu,PathTraceSettings s,
     std::uint32_t count=16384,const RestirDiSettings& ris={},const PathTraceRay& ray=down,const Vec3d* analytic=nullptr) {
     std::array<Vec3d,8> values,references; Vec3d mean=Vec3d::Zero(),ref=Vec3d::Zero(); double difference=0,norm=0;
     for(unsigned i=0;i<8;++i) {
@@ -245,4 +251,4 @@ void restir_state(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQue
     check(bounded.release_view(1));
     std::puts("RIS invalid/budget/two views/phase failure/cancel/late/immutable owner=pass");
 }
-}
+} // namespace dk::test::path_probe

@@ -29,7 +29,7 @@ design_refs:
 - CPU快照只读公开已有不可变field owner，无新GPU依赖。renderer缓存最近成功使用的field，
   也复用其他视图/在途代持有的相同key/hash；上传buffer计入既有AllocationBudget，时间/光照编辑不重新上传。
   prepare候选不替换缓存，成功configure/submit才提交；失败/取消/旧代迟到不推进completed_spp或污染旧帧。
-- 新增[五组GPU云验收](../../tests/integration/PathCloudCases.hpp)，扩展原探针/CTest及CPU owner断言；
+- 新增[五组GPU云验收](../../tests/integration/PathCloudCases.cpp)，扩展原探针/CTest及CPU owner断言；
   更新模块、架构、索引和[使用指南](../guides/pathtracing-gpu.md)。无新命令、schema、依赖或上层Scene media模式。
 
 ## 验证记录

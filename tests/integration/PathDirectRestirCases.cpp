@@ -1,5 +1,7 @@
-#pragma once
-namespace {
+#include "PathRestirProbe.hpp"
+#include "../RestirSpatialOracle.hpp"
+
+namespace dk::test::path_probe {
 void restir_direct(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q) {
     Fixture f{heap}; f.quad(-8,8,0,{.6f,.4f,.2f});
     auto gpu=take(r.prepare_scene(q,f.scene())); auto s=settings(); s.environment_rgb=Vec3d::Ones();
@@ -45,4 +47,4 @@ void restir_direct(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQu
     }
     std::puts("paper RGB direct visibility/support oracle, history, reset, failure and scheduling=pass");
 }
-}
+} // namespace dk::test::path_probe

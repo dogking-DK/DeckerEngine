@@ -1,6 +1,10 @@
-#pragma once
+#include "PathVoxelProbe.hpp"
 #include "../PathVoxelSupport.hpp"
-namespace {
+#include <numbers>
+#include <cmath>
+#include <array>
+
+namespace dk::test::path_probe {
 void voxel_numeric(memory::ResourceHandle heap,PathTraceRenderer& renderer,SubmissionQueue& queue) {
     path_voxel_test::Fixture f{heap};
     const std::array blocks{assets::VoxelBlock{{-8,0,0},8,1,false},assets::VoxelBlock{{0,0,0},1,2}}; f.grid(blocks);
@@ -148,4 +152,4 @@ void voxel_state(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueu
     Trsd far; far.translation={1e8,0,0}; f.transform(far); require(!r.prepare_scene(q,f.scene()),"unrepresentable voxel transform accepted");
     compare_images(complete(q,take(r.submit_view(q,gpu,original_view,s,{0,7}))),fixed,0);
 }
-} // namespace
+} // namespace dk::test::path_probe

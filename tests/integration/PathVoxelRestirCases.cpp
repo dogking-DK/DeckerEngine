@@ -1,12 +1,21 @@
-#pragma once
-namespace {
+#include "PathVoxelProbe.hpp"
+#include "../PathVoxelSupport.hpp"
+#include "../RestirSpatialOracle.hpp"
+#include <dk/math/Projection.hpp>
+#include <numbers>
+#include <cmath>
+#include <cstring>
+#include <array>
+#include <stop_token>
+
+namespace dk::test::path_probe {
 RestirDiSettings voxel_ris(unsigned mode) {
     RestirDiSettings r;
     if(mode&1) {r.temporal.emplace(); r.temporal->position_tolerance=1; r.temporal->max_history_age=4;}
     if(mode&2) {r.spatial.emplace(); r.spatial->position_tolerance=2; r.spatial->max_source_candidates=8;}
     return r;
 }
-RenderView voxel_signal_view(const path_voxel_test::Fixture& f,bool ortho=false,double x=.5,unsigned size=5) {
+RenderView voxel_signal_view(const path_voxel_test::Fixture& f,bool ortho,double x,unsigned size) {
     auto d=f.view(size).description(); Trsd camera; camera.translation={x,.5,2}; d.camera_world=take(Transformd::from_trs(camera));
     d.projection(0,0)=1.25; d.projection(1,1)=-1.25;
     if(ortho) d.projection=take(orthographic_projection({1.5,.1,10},1));
@@ -181,4 +190,4 @@ void voxel_restir_state(memory::ResourceHandle heap,PathTraceRenderer& r,Submiss
         compare_images(before,complete(q,take(bounded.completed_frame(1).read_linear(q))),0); check(bounded.release_view(1));}
     std::puts("voxel RIS all phase failures/cancel/release/v1 and forged owner rejection/content reset/immutable epoch/budget=pass");
 }
-}
+} // namespace dk::test::path_probe

@@ -1,10 +1,16 @@
-#pragma once
-namespace {
+#include "PathRestirProbe.hpp"
+#include "PathVolumeProbe.hpp"
+#include <dk/math/Projection.hpp>
+#include <numbers>
+#include <array>
+#include <stop_token>
+
+namespace dk::test::path_probe {
 PathTraceGpuImage ris_medium_image(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& scene,const PathMediumSnapshot& m,
-    VolumePathSettings s,unsigned count,const PathTraceRay& ray,const RestirDiSettings& ris={},unsigned first=0,unsigned pixel=0) {
+    VolumePathSettings s,unsigned count,const PathTraceRay& ray,const RestirDiSettings& ris,unsigned first,unsigned pixel) {
     return complete(q,take(r.submit_restir_medium_rays(q,scene,m,std::span{&ray,1},s,ris,{first,count},pixel)));
 }
-Vec3d ris_medium_mean(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& scene,const PathMediumSnapshot& m,
+static Vec3d ris_medium_mean(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& scene,const PathMediumSnapshot& m,
     VolumePathSettings s,unsigned count,const PathTraceRay& ray,const RestirDiSettings& ris={}) {
     Vec3d value=Vec3d::Zero();
     for(unsigned first=0;first<count;) {
@@ -13,7 +19,7 @@ Vec3d ris_medium_mean(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpu
     }
     return value;
 }
-void ris_medium_population(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& scene,const PathMediumSnapshot& m,
+static void ris_medium_population(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& scene,const PathMediumSnapshot& m,
     const PathTraceRay& ray,VolumePathSettings s,unsigned count=32768,const Vec3d* expected=nullptr,bool classic=false,const RestirDiSettings& ris={}) {
     std::array<Vec3d,8> values,reference;
     for(unsigned seed=0;seed<8;++seed) {
@@ -23,10 +29,10 @@ void ris_medium_population(PathTraceRenderer& r,SubmissionQueue& q,const PathTra
     }
     temporal_mean(values,reference);
 }
-void medium_horizontal(Fixture& f,float height,Vec3f color) {
+static void medium_horizontal(Fixture& f,float height,Vec3f color) {
     f.triangle({-200,height,-200},{0,height,200},{200,height,-200},color);
 }
-RenderView medium_down_view(Fixture& f,unsigned size=5,bool ortho=false,double height=1,double x=.2) {
+RenderView medium_down_view(Fixture& f,unsigned size,bool ortho,double height,double x) {
     auto d=f.view(f.source(),size).description(); Trsd pose; pose.translation={x,height,.1};
     pose.rotation=Quatd{Eigen::AngleAxisd{-std::numbers::pi/2,Vec3d::UnitX()}}; d.camera_world=take(Transformd::from_trs(pose));
     if(ortho) d.projection=take(orthographic_projection({1,.1,20000},1));
@@ -315,4 +321,4 @@ void restir_medium_failure(memory::ResourceHandle heap,SubmissionQueue& q) {
     require(r.memory_stats(q).owned.peak<=r.memory_stats(q).owned.limit,"medium RIS peak exceeded quota");
     std::puts("medium RIS phase failures/tracking/cancel/invalid/work/memory/held owners/recovery=pass");
 }
-}
+} // namespace dk::test::path_probe

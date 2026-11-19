@@ -1,6 +1,9 @@
-#pragma once
-namespace {
-void restir_medium_support(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q,bool initial=false) {
+#include "PathRestirProbe.hpp"
+#include "PathVolumeProbe.hpp"
+#include <array>
+
+namespace dk::test::path_probe {
+void restir_medium_support(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q,bool initial) {
     Fixture f{heap}; auto e=cloud_environment(); e.atmosphere.ground_albedo={.2,.6,.8}; check(f.document->set_environment(e));
     // Adjacent ground/mesh receivers have different colors/normals. A one-sided area
     // emitter crosses support between receivers; a mask wall changes visibility only.
@@ -61,4 +64,4 @@ void restir_medium_support(memory::ResourceHandle heap,PathTraceRenderer& r,Subm
     require(corrected>0 && reused>1000,"ground/mesh support correction fixture inactive");
     std::printf("medium support ground/mesh/one-sided emitter/mask/cloud corrected=%llu reused=%llu=pass\n",corrected,reused);
 }
-}
+} // namespace dk::test::path_probe

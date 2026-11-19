@@ -1,4 +1,10 @@
-#include "../RenderAssetSupport.hpp"
+#include "PathRestirProbe.hpp"
+#include "PathVolumeProbe.hpp"
+#ifdef DK_PATH_VOXEL_TESTS
+#include "PathVoxelProbe.hpp"
+#endif
+#include <dk/memory/Context.hpp>
+#include <dk/memory/MemorySystem.hpp>
 #include <dk/render/PathTraceRenderer.hpp>
 #include <dk/math/Projection.hpp>
 #include <dk/scene/SceneDocument.hpp>
@@ -22,10 +28,8 @@
 using namespace dk;
 using namespace dk::render;
 using namespace dk::graphics;
+using namespace dk::test::path_probe;
 namespace {
-void require(bool value,const char* message) { if (!value) throw std::runtime_error(message); }
-template<class T> T take(Result<T> r) { if (!r) { for (const auto& c:r.error().context) std::fprintf(stderr,"%s\n",c.c_str()); throw std::runtime_error(r.error().message); } return std::move(*r); }
-void check(Result<void> r) { if (!r) throw std::runtime_error(r.error().message); }
 struct Diagnostics { std::atomic<unsigned> errors=0,warnings=0; };
 void diagnostic(void* p,const Diagnostic& d) noexcept {
     auto& c=*static_cast<Diagnostics*>(p);
@@ -34,50 +38,13 @@ void diagnostic(void* p,const Diagnostic& d) noexcept {
     if (d.severity>=VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) std::fprintf(stderr,"%.*s: %.*s\n",int(d.name.size()),d.name.data(),int(d.message.size()),d.message.data());
 }
 PFN_vkQueueSubmit2 native_submit=nullptr; PFN_vkWaitSemaphores native_wait=nullptr;
-bool fail_submit=false,timeout_once=false,lose_wait=false;
+bool timeout_once=false,lose_wait=false;
 VKAPI_ATTR VkResult VKAPI_CALL submit_override(VkQueue q,std::uint32_t n,const VkSubmitInfo2* s,VkFence f) {
     if (std::exchange(fail_submit,false)) return VK_ERROR_OUT_OF_HOST_MEMORY; return native_submit(q,n,s,f);
 }
 VKAPI_ATTR VkResult VKAPI_CALL wait_override(VkDevice d,const VkSemaphoreWaitInfo* i,std::uint64_t t) {
     if (std::exchange(lose_wait,false)) return VK_ERROR_DEVICE_LOST;
     if (std::exchange(timeout_once,false)) return VK_TIMEOUT; return native_wait(d,i,t);
-}
-struct Fixture {
-    memory::ResourceHandle heap;
-    std::unique_ptr<SceneDocument> document=SceneDocument::create().value(); CpuAsset asset; EntityId entity;
-    explicit Fixture(memory::ResourceHandle h):heap(h) {
-        asset.mesh.id=AssetId::generate().value(); entity=document->create_entity().value();
-        document->set_asset_references(entity,{{asset.mesh.id,AssetKind::mesh}}).value();
-    }
-    void triangle(Vec3f a,Vec3f b,Vec3f c,Vec3f color,Vec3f emission={0,0,0},bool two=false) {
-        MaterialData m; m.id=AssetId::generate().value(); m.metallic=0; m.base_color={color.x(),color.y(),color.z(),1}; m.emissive=emission; m.double_sided=two;
-        asset.materials.push_back(m); MeshPrimitive p; p.positions={a,b,c}; p.indices={0,1,2}; p.material=m.id; asset.mesh.primitives.push_back(std::move(p));
-    }
-    void quad(float lo,float hi,float z,Vec3f color,Vec3f emission={0,0,0},bool flip=false) {
-        const Vec3f a{lo,lo,z},b{hi,lo,z},c{hi,hi,z},d{lo,hi,z};
-        if (flip) { triangle(a,c,b,color,emission); triangle(a,d,c,color,emission); }
-        else { triangle(a,b,c,color,emission); triangle(a,c,d,color,emission); }
-    }
-    RenderScene source() const { return RenderScene::extract(heap,document->snapshot().value()).value(); }
-    PathTraceScene scene() const { const std::array assets{&asset}; return take(PathTraceScene::create(heap,source(),assets)); }
-    RenderView view(const RenderScene& source,std::uint32_t size=4) const {
-        ViewDescription d{size,size}; Trsd camera; camera.translation={0,0,1}; d.camera_world=Transformd::from_trs(camera).value();
-        d.projection.setZero(); d.projection(0,0)=2; d.projection(1,1)=-2;
-        const double near=.1,far=10; d.projection(2,2)=far/(near-far); d.projection(2,3)=far*near/(near-far); d.projection(3,2)=-1;
-        return take(RenderView::create(source,d));
-    }
-};
-const PathTraceRay down{{0,0,1},{0,0,-1}};
-PathTraceSettings settings(std::uint32_t depth=1) { PathTraceSettings s; s.max_bounces=depth; s.rr_start=0; return s; }
-PathTraceGpuImage complete(SubmissionQueue& q,const PathTraceFrame& frame) {
-    require(take(q.wait(frame.submission())),"GPU frame wait failed"); auto result=take(frame.read(q)); require(bool(result),"completed frame still pending"); return std::move(*result);
-}
-PathTraceGpuImage ray_image(PathTraceRenderer& renderer,SubmissionQueue& queue,const PathTraceGpuScene& scene,PathTraceSettings s,
-    std::uint32_t samples,const PathTraceRay& ray=down,std::uint32_t first=0) {
-    return complete(queue,take(renderer.submit_rays(queue,scene,std::span{&ray,1},s,{first,samples})));
-}
-void close_color(const Vec3d& value,const Vec3d& expected,double tolerance=1e-4) {
-    if ((value-expected).cwiseAbs().maxCoeff()>tolerance) { std::printf("actual %.9g %.9g %.9g expected %.9g %.9g %.9g\n",value.x(),value.y(),value.z(),expected.x(),expected.y(),expected.z()); throw std::runtime_error("linear color mismatch"); }
 }
 void analytic(memory::ResourceHandle heap,PathTraceRenderer& renderer,SubmissionQueue& queue) {
     Fixture f{heap}; auto s=settings(); auto empty=take(renderer.prepare_scene(queue,f.scene()));
@@ -297,25 +264,8 @@ void allocations(memory::MemorySystem& system,memory::ResourceHandle heap,Submis
 #include "PathTextureCases.hpp"
 #include "PathGgxCases.hpp"
 #include "PathProgressiveCases.hpp"
-#ifdef DK_PATH_VOXEL_TESTS
-#include "PathVoxelCases.hpp"
-#endif
-#include "PathAirCases.hpp"
-#include "PathCloudCases.hpp"
-#include "PathMediumAccelerationCases.hpp"
-#include "PathOrthographicCases.hpp"
-#include "PathRestirCases.hpp"
-#include "PathTemporalCases.hpp"
-#include "PathSpatialCases.hpp"
-#include "PathDirectRestirCases.hpp"
-#include "PathRestirMediumCases.hpp"
-#include "PathRestirMediumSupportCases.hpp"
 #include "PathTileGroupCases.hpp"
 #include "PathSignalCases.hpp"
-#ifdef DK_PATH_VOXEL_TESTS
-#include "PathVoxelRestirCases.hpp"
-#include "PathVoxelMediumCases.hpp"
-#endif
 int main(int argc,char** argv) {
     try {
         require(argc==2,"expected analytic/statistics/images/lifetime case");

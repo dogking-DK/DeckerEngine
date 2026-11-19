@@ -1,22 +1,23 @@
-#pragma once
-namespace {
+#include "PathVolumeProbe.hpp"
+#include <numbers>
+#include <cmath>
+#include <array>
+#include <stop_token>
+
+namespace dk::test::path_probe {
 EnvironmentDescription cloud_environment() {
     auto e=air_environment(0,0); e.enabled=false; e.clouds.enabled=true; e.clouds.coverage=1;
     e.clouds.weather_resolution=e.clouds.base_resolution=e.clouds.detail_resolution=16;
     return e;
 }
 PathTraceGpuImage cloud_image(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& scene,const PathMediumSnapshot& m,
-    VolumePathSettings s,unsigned samples,const PathTraceRay& ray,unsigned pixels=1) {
+    VolumePathSettings s,unsigned samples,const PathTraceRay& ray,unsigned pixels) {
     std::vector<PathTraceRay> rays(pixels,ray);
     auto result=complete(q,take(r.submit_medium_rays(q,scene,m,rays,s,{0,samples})));
     require(result.info().medium && result.info().medium->field_hash==m.field_hash(),"cloud provenance missing"); return result;
 }
-struct CloudPopulation {
-    Vec3d mean=Vec3d::Zero(),reference=Vec3d::Zero(),error=Vec3d::Zero(),reference_error=Vec3d::Zero();
-    double mse=0,rmse=0; std::uint64_t multiple=0;
-};
 CloudPopulation cloud_population(PathTraceRenderer& r,SubmissionQueue& q,const PathTraceGpuScene& scene,const PathMediumSnapshot& m,
-    const PathTraceRay& ray,VolumePathSettings s,unsigned samples,unsigned pixels,const Vec3d* expected=nullptr) {
+    const PathTraceRay& ray,VolumePathSettings s,unsigned samples,unsigned pixels,const Vec3d* expected) {
     CloudPopulation result; std::array<Vec3d,8> values,reference; double difference=0,energy=0;
     for(unsigned seed=0;seed<8;++seed) {
         s.seed=101+7919*seed; values[seed].setZero(); reference[seed].setZero();
@@ -48,7 +49,7 @@ CloudPopulation cloud_population(PathTraceRenderer& r,SubmissionQueue& q,const P
         samples,result.mean.x(),result.mean.y(),result.mean.z(),result.reference.x(),result.reference.y(),result.reference.z(),result.rmse,result.mse,result.multiple);
     return result;
 }
-void cloud_check(const CloudPopulation& p,bool paired=true) {
+void cloud_check(const CloudPopulation& p,bool paired) {
     for(unsigned c=0;c<3;++c) {
         require(std::abs(p.mean[c]-p.reference[c])<=.02*std::abs(p.reference[c])+1e-4,"cloud mean outside 2% reference");
         require(std::abs(p.mean[c]-p.reference[c])<=5*std::hypot(p.error[c],p.reference_error[c])+1e-4,"cloud mean outside 5 joint standard errors");
@@ -155,7 +156,7 @@ void cloud_surface(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQu
     require(lit.mean.maxCoeff()>1e-3,"cloud scattering geometry shadow fixture unlit");
     std::puts("cloud solar shadow/geometry occlusion at surface and volume/mask/GGX reflection=pass");
 }
-void cloud_progressive(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q,bool local=false) {
+void cloud_progressive(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q,bool local) {
     Fixture f{heap}; auto e=cloud_environment(); f.document->set_environment(e).value(); auto gpu=take(r.prepare_scene(q,f.scene()));
     CloudFieldCache cache; auto fields=take(cache.prepare(e.clouds)); PathMediumSettings ms; ms.time_seconds=23;
     auto m=take(PathMediumSnapshot::create(e,ms,fields)); auto description=f.view(f.source(),7).description();
@@ -204,7 +205,7 @@ void cloud_progressive(memory::ResourceHandle heap,PathTraceRenderer& r,Submissi
     check(r.release_view(1)); check(r.release_view(2));
     std::puts("cloud exact batches/tiles/wind reset/reuse/new field/late completion/old frame=pass");
 }
-void cloud_failure(memory::ResourceHandle heap,SubmissionQueue& q,bool local=false) {
+void cloud_failure(memory::ResourceHandle heap,SubmissionQueue& q,bool local) {
     auto r=take(PathTraceRenderer::create(heap,q,DK_PATH_SHADER_DIR,{},1u<<20)); Fixture f{heap}; auto e=cloud_environment();
     f.document->set_environment(e).value(); auto gpu=take(r.prepare_scene(q,f.scene())); CloudFieldCache cache;
     auto fields=take(cache.prepare(e.clouds)); auto m=take(PathMediumSnapshot::create(e,{},fields)); auto view=f.view(f.source(),4);
@@ -233,4 +234,4 @@ void cloud_failure(memory::ResourceHandle heap,SubmissionQueue& q,bool local=fal
     require(r.memory_stats(q).owned.peak<=r.memory_stats(q).owned.limit,"cloud budget overshot"); check(r.release_view(1));
     std::printf("cloud tracking/submit/cancel/upload-budget/admission/recovery peak=%llu=pass\n",r.memory_stats(q).owned.peak);
 }
-}
+} // namespace dk::test::path_probe
