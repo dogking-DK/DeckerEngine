@@ -11,7 +11,12 @@ void WorkbenchUi::path_panel(Viewport& preview) {
     ImGui::TextUnformatted(path_mode() ? "GPU path tracing" : "Select Path trace in Viewport");
     if(ImGui::RadioButton("Surface only",!path_settings_.scene_media)) path_settings_.scene_media=false; mark("path_surface"); help("path.medium_mode");
     ImGui::SameLine(); if(ImGui::RadioButton("Scene media",path_settings_.scene_media)) { path_settings_.scene_media=true; path_settings_.direct_only=false; } mark("path_media"); help("path.medium_mode");
-    ImGui::TextWrapped(path_settings_.scene_media ? "Trace scene air, clouds and surfaces at a fixed time." : "Trace surface lighting; omit scene air and clouds.");
+    if(path_settings_.scene_media) {
+        ImGui::SetNextItemWidth(85);
+        ImGui::InputScalar("Motion preview long edge (px, 0 = full)",ImGuiDataType_U32,&path_settings_.motion_preview_long_edge);
+        mark("path_motion_preview_long_edge"); help("path.motion_preview_long_edge");
+        controls_["path_motion_preview_long_edge"].x=ImGui::GetItemRectMin().x+30;
+    } else ImGui::TextWrapped("Trace surface lighting; omit scene air and clouds.");
     ImGui::BeginDisabled(path_settings_.scene_media);
     if(ImGui::Checkbox("Direct lighting only",&path_settings_.direct_only) && path_settings_.direct_only) {
         path_settings_.bounces=1; path_settings_.restir_candidates=32;
@@ -43,7 +48,7 @@ void WorkbenchUi::path_panel(Viewport& preview) {
     }
     help("path.environment_rgb");
     ImGui::Checkbox("Sky",&path_settings_.sky_enabled); mark("path_sky"); help("path.sky_enabled");
-    ImGui::Checkbox("Scene sun",&path_settings_.sun); mark("path_sun"); help("path.sun");
+    ImGui::SameLine(); ImGui::Checkbox("Scene sun",&path_settings_.sun); mark("path_sun"); help("path.sun");
     float exposure=float(path_settings_.exposure); ImGui::SetNextItemWidth(125);
     if(ImGui::InputFloat("Exposure (EV)",&exposure,.25f,1,"%.2f")) path_settings_.exposure=std::clamp(double(exposure),-16.,16.); mark("path_exposure"); help("path.exposure_ev"); controls_["path_exposure"].x=ImGui::GetItemRectMin().x+30;
     ImGui::BeginDisabled(!path_mode());
@@ -72,7 +77,8 @@ void WorkbenchUi::path_panel(Viewport& preview) {
         ImGui::Text("Shown size: %u x %u",used.width,used.height);
         ImGui::TextWrapped("Shown lighting: %s",used.restir ? "ReSTIR DI (RTXDI 3.1.0)" : "Classic MIS");
         if(used.restir) {
-            ImGui::Text("ReSTIR profile v%u / %s",used.restir->version,used.restir->version==2 ? "RGB direct lighting" : "first-bounce DI");
+            ImGui::Text("ReSTIR profile v%u / %s",used.restir->version,used.medium ? "first-surface DI in media" :
+                used.restir->version==2 ? "RGB direct lighting" : "first-bounce DI");
             ImGui::TextWrapped("Candidates %u / temporal %s / spatial %s",used.restir->initial_candidates,used.restir->temporal ? "on" : "off",used.restir->spatial ? "on" : "off");
             ImGui::TextWrapped("Epoch start %u / history %s",used.sampling_first_epoch,used.temporal_history_epoch ? "reprojected" : "empty");
             const auto& t=used.temporal_statistics; const auto& s=used.spatial_statistics;

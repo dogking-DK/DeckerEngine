@@ -18,6 +18,7 @@ struct ViewportPathSettings {
     bool restir_di=false,restir_temporal=false,restir_spatial=false;
     std::uint32_t restir_candidates=8;
     std::uint64_t reset=0;
+    std::uint32_t motion_preview_long_edge=0; // Scene media, pixels. Zero keeps the viewport extent.
     bool operator==(const ViewportPathSettings&) const = default;
 };
 struct EditorViewportSettings {

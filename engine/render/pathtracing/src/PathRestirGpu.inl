@@ -1,7 +1,7 @@
 // Kept with the renderer's private scene/resource owners; no SDK types in this API.
 namespace {
 void validate_restir(const PathTraceSettings& path,const RestirDiSettings& r,std::uint64_t pixels,PathTraceSamples samples,bool fixed_work=false,bool medium=false) {
-    if((r.version!=1 && r.version!=2) || (r.version==2 && (medium || path.max_bounces!=1)) || r.initial_candidates<1 || r.initial_candidates>64 ||
+    if((r.version!=1 && r.version!=2) || (r.version==2 && !medium && path.max_bounces!=1) || r.initial_candidates<1 || r.initial_candidates>64 ||
         !r.max_candidate_evaluations || r.max_candidate_evaluations>(1ull<<24) || path.estimator!=PathTraceEstimator::mis)
         throw path_invalid("Invalid GPU initial RIS settings or estimator combination");
     if(r.temporal) {

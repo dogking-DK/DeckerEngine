@@ -73,6 +73,9 @@ def main():
                 if name == "underground":
                     assert "below the atmosphere ground" in value["error"], value
                 if name in ("returned", "media_air_motion"):
+                    if name == "returned":
+                        view = client.call("editor.viewport.query").value
+                        client.call("editor.viewport.set", dict(guard=view["guard"], motion_preview_long_edge=192))
                     preset = client.call("environment.preset", dict(name="clear" if name == "returned" else "sparse")).value
                     state = client.call("scene.query").value["state"]
                     client.call("environment.set", dict(guard=guard(state), environment=preset["environment"]))

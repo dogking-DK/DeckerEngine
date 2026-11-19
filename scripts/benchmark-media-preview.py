@@ -55,6 +55,7 @@ def run(args, name, algorithm, preset, legacy=False, images=False, validation=Fa
         assert "validation errors=0 warnings=0 liveAllocations=0" in log, log
         assert len(report["frames"]) >= 2 and len(report["inputs"]) >= 8, report
         assert all(f["sampler"] == (2 if legacy else 3) and f["spp"] >= (1 if legacy else 3)
+                   and f["restir_version"] == (1 if algorithm == "restir" else 0)
                    and max(f["width"], f["height"]) == 192 and f["input_ms"] > 0 for f in report["frames"]), report
         assert report["next_spp"] > report["restored_source"]["spp"], report
         if images:

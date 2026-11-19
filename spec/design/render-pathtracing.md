@@ -1,7 +1,7 @@
 ---
 module: render-pathtracing
 created_at: "2026-10-14T08:18:00+08:00"
-updated_at: "2026-11-19T12:37:00+08:00"
+updated_at: "2026-11-19T14:00:00+08:00"
 status: accepted
 ---
 
@@ -36,7 +36,7 @@ GPU场景检查设备AS、buffer、image和descriptor限制；纹理数组按需
 - `VolumePathSettings` 默认 sampler=3，model=4 不变；原 sampler=2 继续接受并保持原序列。v3 只改变 hero 通道选择：由 seed/pixel 的独立整数散列产生随机循环排列，按绝对 sample/epoch 编号循环 RGB，任意连续三个样本覆盖三个通道。其余 v2 随机流、单路径乘3权重、真实射线数和二阶矩语义不变。
 - 通道排列与像素抖动、自由程、阴影和完整 RGB reservoir 的随机流分离；ReSTIR 相机移动后的非零 epoch 起点同样保证三样本覆盖。相关样本的误差评估使用独立 seed 之间的方差，不把单路径二阶矩解释为独立样本均值误差。
 - CPU/GPU、Classic/四种 DI、固定捕获均使用实际 sampler 版本；版本变化沿 `same_integrator` 清空累积/复用，失败保留旧完成帧。固定 capture 的请求版本不变，来源 sampler_version 更新为3；旧 v2 序列通过原生设置显式选择。
-- Editor 的 Scene media 按3 spp完整批次发布，末批取剩余目标数；target=1/2仍按明确目标显示，暂停/曝光不额外采样。移动使用192长边，停止200ms恢复原尺寸；相机请求等待完整批次后合并最新姿态，物理变更/尺寸恢复/Refresh/关闭仍可取消。没有新增滤波器或宣称低spp介质已收敛。
+- Editor 的 Scene media 按3 spp完整批次发布，末批取剩余目标数。0185 将运动预览长边改为视口会话设置 `motion_preview_long_edge`。默认 0 使用原尺寸，正整数按比例限制长边，只缩小。停动 200 ms 后请求原尺寸。相机请求等待完整批次后合并最新姿态。实际尺寸变化清空图像和采样历史，调整上限而实际尺寸相同则保留累积。设置走现有视口 guard，独立 capture 始终使用请求尺寸。
 - 验证：v2冻结值；v3任意起点三样本真空/发光颜色、分批/尾数/CPU与GPU一致；彩色吸收与ReSTIR条件均值；版本切换清历史、失败/取消保护；真实后台GUI持续运动发布与独立capture线性一致。记录见[0181](../development/0181-media-preview-color.md)。
 
 Sponza实测补充：显式验收入口在一次性工程上复现旧sampler2/batch1/100ms替换策略，与当前sampler3/batch3/完整预览合并比较；不是历史二进制比较。探针策略在首次路径请求前冻结，默认关闭，不进入Scene/公开命令设置。实际SDL右键Fly转动使用同一按墙钟定义的正弦轨迹，冷准备、运动预热、稳态运动、停动恢复分开记录；输入排队至完成GUI提交、请求至交付、GUI帧间隔和完整新视角更新率分别测量，不称为显示器光子延迟。计时轮次不读回像素；图像轮次另采运动预览。固定相机另比较旧1 spp、旧3 spp、新3 spp及96 spp颜色参考，覆盖多个seed/姿态；有限参考仅用于彩色噪声代理，不作收敛认证。所有结果冻结场景/资产/二进制/源码摘要，validation验收与无validation计时分离。

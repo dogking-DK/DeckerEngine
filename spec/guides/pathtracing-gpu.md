@@ -1,6 +1,6 @@
 ---
 created_at: "2026-10-14T14:37:00+08:00"
-updated_at: "2026-11-17T14:25:00+08:00"
+updated_at: "2026-11-19T14:04:00+08:00"
 ---
 
 # GPU表面、空气、云与渐进路径追踪
@@ -82,9 +82,7 @@ CPU 初始参考和无历史 `submit_restir_rays/view` 拒绝空间配置。
 要求 MIS；无历史入口只支持初始 RIS，渐进入口可按上文单开时间、空间或同时启用：
 
 ```cpp
-dk::render::RestirDiSettings sampling;
-sampling.temporal.emplace();
-sampling.spatial.emplace();
+auto sampling = dk::render::surface_direct_restir_settings(); // v2，32 个候选，并启用时空复用
 // renderer、queue、gpu_scene、medium、view、volume_settings 和 schedule 按本指南创建。
 auto configured = renderer.configure_restir_medium_view(
     queue, view_id, gpu_scene, medium, view, volume_settings, sampling, schedule);
@@ -92,7 +90,7 @@ auto configured = renderer.configure_restir_medium_view(
 ```
 
 只有主段未发生真实散射而到达网格/地面的路径应用首表面 DI；其他事件和后续反弹继续普通体积 MIS/RR。
-候选与完整 RGB 目标先于 hero/自由程产生，历史不保存随机存活或阴影透射；每次着色重新求当前几何/mask/行星遮蔽和空气/云透射。
+候选与完整 RGB 目标先于 hero/自由程产生，历史不保存随机存活或阴影透射；v2 在选样和合并时检查当前几何/mask/行星遮蔽，最终着色使用本轮可见性并独立采样空气/云透射。
 有限太阳、环境和面积灯均可采样；地面为球面 Lambert 接收点，空几何场景也支持复用。
 
 来源同时保存 `info().medium` 和 `info().restir`。`restir_medium_statistics` 仅在完整渐进图像中累计
@@ -101,10 +99,10 @@ auto configured = renderer.configure_restir_medium_view(
 
 相机姿态变化按上文分离图像/采样历史；风时间、场 hash、介质/照明/材质、投影/尺寸、采样配置和 session/gesture 变化清空两种历史。
 相同云场和几何仍可共享；切回 `configure_medium_view` 清除 RIS 状态，曝光/暂停/工作额度保留采样身份。
-介质保留 `2*bounces+1` 每路径射线上界，候选额度含时空目标评估；tracking 逐路径和逐 shade dispatch 限额沿用普通介质配置。
+介质 v1 的每路径射线上界为 `2*bounces+1`；v2 另计准备与时空合并的可见性查询。候选额度含时空目标评估；tracking 逐路径和逐 shade dispatch 限额沿用普通介质配置。
 云场、历史、空间平面与调用方持有的旧图像都计入共享内存额度，失败/取消不发布部分批次。
 
-接口仅为 C++ 渲染能力；Editor/capture 切换与 DLSS 另行接入。精确契约见 [M19.6 设计](../design/render-restir.md#m196-gpu-scene-media-实施契约)，
+Editor 和独立捕获的使用方式见[编辑器指南](editor.md#restir-直接光照)与[命令参考](../commands/render.md#restir-直接光照v3)。精确契约见 [M19.6 设计](../design/render-restir.md#m196-gpu-scene-media-实施契约)，
 定向验证为 `dk_pathtracing_probe` / `^dk\.pathtracing\.restir_medium_.*_gpu_required$`，证据见 [0139](../development/0139-restir-gpu-media.md)。
 
 ## 构建与验证

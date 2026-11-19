@@ -37,6 +37,7 @@ void restir_direct(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQu
 void restir_medium_numeric(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q);
 void restir_medium_lights(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q);
 void restir_medium_cloud(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q);
+void restir_medium_v2(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q);
 void restir_medium_schedule(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q);
 void restir_medium_reuse(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q);
 void restir_medium_state(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q);

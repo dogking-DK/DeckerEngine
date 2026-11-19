@@ -233,7 +233,7 @@ VS2026 用户打开 `out/build/windows-editor/DeckerEngine.slnx`，选择 Debug/
 **Surface only** 是默认模式，明确忽略场景空气和云。介质时间使用 Path tracing 面板的 **Time (s)**，不随墙钟推进，
 与 Raster 的时间设置独立；云反照率和各向异性控制散射。相机、介质、种子、模式与会话变化重置累积，曝光只改变显示。
 面板的 Shown 来源来自最后完整帧，显示模式、模型/采样版本、固定时间和场 hash；失败时旧图保留并标 STALE PREVIEW。
-修改合法参数或按 Refresh 可恢复；GPU 不支持的尺度/工作额度仍会明确报错。Scene media 操作相机时使用长边192像素的临时预览，面板显示 Motion preview/Shown size；停动200ms恢复原尺寸并重新累积。
+修改合法参数或按 Refresh 可恢复；GPU 不支持的尺度/工作额度仍会明确报错。在 Path tracing 面板的 **Motion preview long edge (px, 0 = full)** 输入运动时的长边上限。默认 0 使用视口原尺寸，输入 640 时按比例缩小至最长 640 像素。面板的 **Shown size** 显示实际发布尺寸。停动 200 ms 后恢复原尺寸请求。
 Scene media采用循环RGB分层，通常每3 spp显示一个完整批次，降低首帧纯红/绿/蓝色块。持续移动会先交付当前小预览再合并最新相机；末批和显式1/2 spp目标仍尊重实际目标数。此策略不代替降噪，低样本光照/散射仍有噪点；提高Target spp主要改善静止后的最终质量。
 这只改善操作反馈，完整尺寸收敛仍需要等待；固定质量和性能边界见[测量指南](path-media-benchmark.md)。
 
@@ -403,6 +403,8 @@ Path tracing 面板默认 **Classic MIS**。切到 **ReSTIR DI** 后，可以设
 要查看完整 RGB 表面直接光，选择 **Surface only**，勾选 **Direct lighting only**，再选择 **ReSTIR DI**。
 进入直接光模式时会设为 1 次反弹、32 个候选并开启时空复用。完成帧显示 **ReSTIR profile v2 / RGB direct lighting**。
 切到 **Classic MIS** 可以在同一光照范围内对比。两种分辨率的实测见 [Sponza 运动报告](../benchmarks/2026-11-17-restir-direct.md)。
+
+要同时渲染云和大气，选择 **Scene media** 和 **ReSTIR DI**。完成帧显示 **ReSTIR profile v2 / first-surface DI in media**。候选数、时空复用和反弹数沿用面板设置。首表面使用可见性校正的直接光样本，空气和云继续散射、衰减光线。
 
 **Shown lighting** 与候选/复用信息来自实际已完成图像。面板同时显示采样 epoch 起点、历史年龄、有效 M 和复用/拒绝计数，
 **Latest reset** 标出 worker 最近清空图像历史的原因。spp 只统计全图完成的样本，不把候选或内部 pass 当作 spp。

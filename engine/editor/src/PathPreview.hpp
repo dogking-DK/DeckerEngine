@@ -16,7 +16,7 @@ struct PathPreviewRequest {
     bool read_linear=false; // Explicit acceptance-only readback, never normal presentation.
     bool observe_memory=false; // Explicit benchmark-only VMA snapshot.
     std::uint64_t activation=0; // Stamped by request(), survives coalesced suspend/resume.
-    bool legacy_surface_direct_probe=false; // Disposable v1 versus v2 same-integral control.
+    bool restir_v1_probe=false; // Freeze the sampling profile for the 0181/0182 benchmarks.
     bool legacy_media_probe=false; // Explicit disposable benchmark only: sampler 2, batch 1.
 };
 struct PathPreviewStatus {

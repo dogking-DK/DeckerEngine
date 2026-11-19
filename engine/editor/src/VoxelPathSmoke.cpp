@@ -89,7 +89,7 @@ void VoxelPathSmoke::presented(WorkbenchUi& ui,Workspace& model,Viewport& viewpo
             {"environment_rgb",settings.sky_enabled ? Json{settings.sky.x(),settings.sky.y(),settings.sky.z()} : Json{0,0,0}},
             {"sun",settings.sun},{"exposure_ev",settings.exposure}};
         if(settings.restir_di) {
-            Json config={{"initial_candidates",settings.restir_candidates}};
+            Json config={{"version",settings.scene_media || settings.direct_only ? 2 : 1},{"initial_candidates",settings.restir_candidates}};
             if(settings.restir_temporal) config["temporal"]=Json::object(); if(settings.restir_spatial) config["spatial"]=Json::object();
             report["pathtrace"]["restir"]=std::move(config);
         }

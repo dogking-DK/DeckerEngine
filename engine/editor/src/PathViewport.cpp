@@ -14,10 +14,12 @@ void Viewport::update_path(const SceneReadSnapshot& snapshot,std::uint32_t width
     if(!path_active_ || camera.revision()!=path_observed_camera_) {
         path_motion_until_=now+std::chrono::milliseconds(200); path_observed_camera_=camera.revision();
     }
-    path_interactive_=settings.scene_media && now<path_motion_until_ && std::max(width,height)>192;
+    const auto long_edge=std::max(width,height);
+    const auto cap=settings.motion_preview_long_edge;
+    path_interactive_=settings.scene_media && now<path_motion_until_ && cap!=0 && cap<long_edge;
     if(path_interactive_) {
-        const double scale=192.0/std::max(width,height);
-        width=std::max(1u,std::uint32_t(width*scale)); height=std::max(1u,std::uint32_t(height*scale));
+        width=std::max(1u,std::uint32_t(std::uint64_t(width)*cap/long_edge));
+        height=std::max(1u,std::uint32_t(std::uint64_t(height)*cap/long_edge));
     }
     const Key key{snapshot.state.document_id,snapshot.state.revision,width,height,srgb,camera.revision(),preview,float(settings.exposure),{}};
     try {
@@ -55,7 +57,7 @@ void Viewport::update_path(const SceneReadSnapshot& snapshot,std::uint32_t width
             if(snapshot.scene.logical_bytes()>32U*1024U*1024U) throw std::runtime_error("Path preview snapshot exceeds 32 MiB");
             if(!path_active_) path_samples_=0;
             PathPreviewRequest request{snapshot,camera,width,height,srgb,edit,preview,path_reload_,++path_sequence_,settings,retain_pixels_};
-            request.legacy_media_probe=legacy_media_probe_; request.legacy_surface_direct_probe=legacy_surface_direct_probe_; path_->request(std::move(request));
+            request.legacy_media_probe=legacy_media_probe_; request.restir_v1_probe=restir_v1_probe_; path_->request(std::move(request));
             attempted_=key; published_.reset(); path_settings_=settings; path_active_=true; error_.clear(); path_requested_at_=now;
         }
         const auto status=path_->status(); if(status.sequence==path_sequence_ && !status.error.empty()) error_=status.error;

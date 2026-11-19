@@ -1,6 +1,7 @@
 #include "SceneTestFiles.hpp"
 #include "ConsoleAssist.hpp"
 #include <dk/editor/Workspace.hpp>
+#include <algorithm>
 #include <limits>
 
 using namespace dk;
@@ -40,9 +41,20 @@ TEST_CASE("viewport commands are host only discoverable and complete from shared
     const auto set_help=f.call("commands.describe",{{"name","editor.viewport.set"}}).value()["help"]["fields"];
     CHECK_FALSE(set_help["/properties/target_spp"].contains("default")); // Omission preserves current values.
     CHECK(set_help["/properties/target_spp"]["examples"][0]==64);
+    CHECK(q["settings"]["motion_preview_long_edge"]==0);
+    const auto listed=f.call("commands.list").value();
+    CHECK(std::ranges::any_of(listed,[](const Json& c){return c["name"]=="editor.viewport.set";}));
     CHECK_FALSE(f.call("editor.viewport.set",{{"guard",q["guard"]}}));
     CHECK_FALSE(f.call("scene.transaction",{{"guard",{{"document_id",q["guard"]["document_id"]},{"revision",1}}},
         {"commands",Json::array({{{"method","editor.viewport.pause"},{"params",{{"guard",q["guard"]}}}}})}}));
+}
+TEST_CASE("viewport motion preview size preserves omitted settings and rejects invalid caps atomically") {
+    Fixture f; auto capped=f.change({{"motion_preview_long_edge",720}});
+    CHECK(capped["settings"]["motion_preview_long_edge"]==720);
+    CHECK(f.change({{"target_spp",64}})["guard"]==capped["guard"]);
+    CHECK_FALSE(f.call("editor.viewport.set",{{"guard",capped["guard"]},{"motion_preview_long_edge",-1},{"bounces",1}}));
+    CHECK(f.query()==capped);
+    CHECK(f.change({{"motion_preview_long_edge",0}})["settings"]["motion_preview_long_edge"]==0);
 }
 TEST_CASE("viewport voxel raster settings work without RT and reject atomically without scene history") {
     Fixture f(false); const auto scene=f.model->snapshot()->state; const auto history=f.model->history();

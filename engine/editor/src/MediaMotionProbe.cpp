@@ -41,6 +41,7 @@ void MediaMotionProbe::input(const WorkbenchUi& ui,Workspace& model,Viewport& vi
         };
         report_["viewport"]=set("editor.viewport.set",{{"renderer","pathtrace"},{"medium_mode",config_.value("surface_direct",false) ? "surface_only" : "scene_media"},
             {"lighting_scope",config_.value("surface_direct",false) ? "direct_only" : "full_path"},
+            {"motion_preview_long_edge",192},
             {"direct_lighting",config_["algorithm"]=="restir" ? "restir_di" : "classic"},
             {"initial_candidates",config_.value("surface_direct",false) ? 32 : 8},{"temporal_reuse",true},{"spatial_reuse",true},{"target_spp",64},
             {"seed",1},{"bounces",config_.value("surface_direct",false) ? 1 : 4},{"exposure_ev",2.5},{"time_seconds",17}}).at("settings");

@@ -2,6 +2,7 @@
 
 ## 最近完成
 
+- Scene media 可在保留体积云和大气的同时使用首表面 ReSTIR v2，运动预览默认原尺寸，长边可在 Path tracing 面板调整。[0185 实现与验收](spec/development/0185-media-restir-preview.md)
 - 路径追踪探针的 ReSTIR、介质与体素用例已独立编译。修改直接光 ReSTIR 用例时只重编对应对象，Release 增量构建中位数从 18.70 秒降到 11.43 秒。[测量与验收](spec/development/0184-build-iteration.md#release-探针增量构建)
 - Windows 命令行开发可使用与 windows-dev 功能对齐的 Ninja 预设。VS 多目标定向验证共用一次 MSBuild，三目标无改动构建中位数从 2.14 秒降到 1.38 秒。[0184 验证记录](spec/development/0184-build-iteration.md)
 - RTK 项目 hook 已验证自动精简。本工作副本已固定恢复库，根目录搜索、下一次调用从子目录取回折叠行均已通过。[项目导航 skill](.agents/skills/decker-code-navigation/SKILL.md#跨命令取回折叠结果)
@@ -11,7 +12,7 @@
 
 ## 当前工作
 
-本轮构建工作流优化已交付。下一项引擎开发尚待选定。
+Scene media 的首表面直接光和运动预览设置已接入 Editor。介质采样与后续反弹仍使用现有体积积分器。
 
 ## 下一步
 
@@ -21,4 +22,4 @@
 
 ## 待决定
 
-选择下一条开发路线。若继续当前渲染研究，0182 的后续问题是介质散射噪声、动态几何重投影及更广的运动样本；目前尚未排期。[0182 边界](spec/development/0182-restir-surface-direct.md#遗留问题与下一步)
+若继续当前渲染研究，候选问题包括介质散射噪声、动态几何重投影和不同运动预览分辨率的性能测量，目前尚未排期。[0185 记录](spec/development/0185-media-restir-preview.md)

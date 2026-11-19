@@ -18,7 +18,7 @@ Result<PathTraceFrame> PathTraceRenderer::submit_restir_medium_rays(SubmissionQu
     }
     const auto width=std::uint32_t(rays.size());
     auto p=parameters(*PathReferenceAccess::get(scene.source()),common_settings(settings),samples,width,1,true,first_pixel);
-    medium_parameters(p,medium,settings); p[32]=integers(restir.initial_candidates,2,0,0);
+    medium_parameters(p,medium,settings); p[32]=integers(restir.initial_candidates,2,restir.version,0);
     auto info=medium_info(scene.source(),medium,settings,width,1,samples);
     info.fixed_rays=true; info.first_pixel=first_pixel; info.restir=restir; info.sampling_first_epoch=samples.first;
     return PathTraceFrame{submit(*state_,queue,*scene.state_,p,packed,std::move(info),stop,nullptr,nullptr,prepare_cloud(*state_,medium))};
@@ -34,7 +34,7 @@ Result<PathTraceFrame> PathTraceRenderer::submit_restir_medium_view(SubmissionQu
     validate_medium(scene.source(),medium,settings,samples,pixels); validate_restir(common_settings(settings),restir,pixels,samples,true,true);
     const auto& cpu=*PathReferenceAccess::get(scene.source()); check(validate_path_view(cpu,view));
     auto p=view_parameters(cpu,view,common_settings(settings),samples); medium_parameters(p,medium,settings);
-    medium_origin(p,medium,{p[6][0],p[6][1],p[6][2]}); p[32]=integers(restir.initial_candidates,2,0,0);
+    medium_origin(p,medium,{p[6][0],p[6][1],p[6][2]}); p[32]=integers(restir.initial_candidates,2,restir.version,0);
     auto info=medium_info(scene.source(),medium,settings,d.width,d.height,samples); info.view=d; info.restir=restir; info.sampling_first_epoch=samples.first;
     const std::array<Float4,3> dummy{};
     return PathTraceFrame{submit(*state_,queue,*scene.state_,p,dummy,std::move(info),stop,nullptr,nullptr,prepare_cloud(*state_,medium))};

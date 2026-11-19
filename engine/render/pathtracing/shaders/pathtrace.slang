@@ -215,13 +215,10 @@ RayDesc primaryRay(uint2 coordinate,uint pixel,uint sample,out float3 originOffs
     return ray;
 }
 AirLocation primaryLocation(uint pixel,float3 offset) {
-    bool fixed=asuint(parameters[2]).w!=0;
-    float4 initial=fixed ? inputRays[pixel*6+2] : parameters[13];
-    AirLocation location; location.radial=normalize(initial.xyz); location.height=initial.w;
-    location.weather=(fixed ? inputRays[pixel*6+3] : parameters[26]).xy;
-    location.base=(fixed ? inputRays[pixel*6+4] : parameters[27]).xyz;
-    location.detail=(fixed ? inputRays[pixel*6+5] : parameters[28]).xyz;
-    if(!fixed && parameters[6].w!=0) {
+    if(asuint(parameters[2]).w!=0)
+        return airLocation(inputRays[pixel*6+2],inputRays[pixel*6+3].xy,inputRays[pixel*6+4].xyz,inputRays[pixel*6+5].xyz);
+    AirLocation location=airViewOrigin();
+    if(parameters[6].w!=0) {
         location=airMove(location,offset);
         if(asuint(parameters[12]).y!=0 && location.height<0) airError(4);
     }
@@ -355,7 +352,7 @@ void runRestirPixel(uint2 coordinate) {
                 key=v.ground ? uint4(3,0xffffffffu,0,0) : surfaceKey(hit);
                 cell=v.ground ? int4(0) : surfaceCell(hit);
                 if(asuint(parameters[1]).z!=0) {
-                    reservoir=initialRestir(hit,v.position,v.normal,v.bsdf,-ray.Direction,counter,epoch); restirStat(pixel,14);
+                    reservoir=initialRestir(v.hit,v.position,v.normal,v.bsdf,-ray.Direction,counter,epoch); restirStat(pixel,14);
                 }
             }
         } else {

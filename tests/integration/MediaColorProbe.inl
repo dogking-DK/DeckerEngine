@@ -25,6 +25,7 @@ int media_color_probe(const std::filesystem::path& root,const std::filesystem::p
             Camera camera; camera.set_environment(true); camera.set_pathtracing(true);
             PathPreviewRequest request{*model->snapshot(),camera}; request.read_linear=true;
             request.width=192; request.height=config.value("height",116u);
+            request.restir_v1_probe=true; // Compare channel samplers under the same first-surface estimator.
             request.settings.scene_media=true; request.settings.restir_di=config.at("algorithm")=="restir";
             request.settings.restir_temporal=true; request.settings.restir_spatial=true;
             request.settings.time_seconds=17; request.settings.exposure=2.5;

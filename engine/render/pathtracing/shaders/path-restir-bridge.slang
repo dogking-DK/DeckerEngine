@@ -15,8 +15,15 @@ bool cachedRestirVisibility() { return paperRestir() && asuint(parameters[32]).y
 // Visibility is evaluated in the current frozen scene, including old receivers.
 // It is not a cache of last frame's shadow result.
 bool restirVisible(RestirSample s,PathPayload hit,float3 position,float3 wi,float3 point,uint pixel) {
+    uint rays=0;
+    // The medium's finite sun and environment both have infinite shadow rays.
+    uint light=s.light<asuint(parameters[2]).z ? s.light : 0xffffffffu;
+    if(asuint(parameters[12]).x!=0) {
+        bool result=airRestirVisible(hit,position,wi,light,point,rays);
+        restirStat(pixel,13,rays); return result;
+    }
 #if !DK_PATH_EMPTY
-    uint rays=0; bool result=visible(hit,position,wi,s.light==asuint(parameters[2]).z ? 0xffffffffu : s.light,point,rays);
+    bool result=visible(hit,position,wi,light,point,rays);
     restirStat(pixel,13,rays); return result;
 #else
     return true;

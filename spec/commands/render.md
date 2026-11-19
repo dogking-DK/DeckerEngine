@@ -1,7 +1,7 @@
 ---
 module: render-command-reference
 created_at: "2026-10-03T21:44:26+08:00"
-updated_at: "2026-11-17T16:35:02+08:00"
+updated_at: "2026-11-19T14:04:00+08:00"
 status: accepted
 ---
 
@@ -288,14 +288,14 @@ v1/v2 不接受 direct_lighting/restir，继续原经典 MIS；v3 禁止旧布�
 
 restir 中字段均可省略，成功来源返回全部有效值；缺少 temporal/spatial 表示关闭，对象 `{}` 表示按默认开启。
 
-0182新增`restir.version=2`完整RGB表面直接光配置，要求`medium_mode=surface_only`、`max_bounces=1`（`rr_start`不得大于1）。时空子对象的version默认为父版本且必须相同。v2初始候选默认32；temporal默认`max_history_candidates=1280,max_history_age=0,position_tolerance=0.1,normal_cosine=0.90630778703665`，有效历史M另受`20*freshM`限制，age仅观测不失效；spatial默认`neighbor_count=3,radius=30,max_source_candidates=16384,position_tolerance=0.1,normal_cosine=0.90630778703665`，M范围1..16384。两种position_tolerance在v2表示相对相机空间深度，法线阈值25度。每阶段采用当前冻结几何的可见支持校正，最终复用本epoch可见性。缺少temporal/spatial仍表示关闭；下表为v1默认与范围。v1行为不变。
+`restir.version=2` 在 `surface_only` 下计算完整 RGB 表面直接光，要求 `max_bounces=1` 和 `rr_start<=1`。在 `scene_media` 下，同一配置只重采样首表面的直接光，保留调用者的反弹数、空气与云的路径传输。时空子对象的version默认为父版本且必须相同。v2初始候选默认32；temporal默认`max_history_candidates=1280,max_history_age=0,position_tolerance=0.1,normal_cosine=0.90630778703665`，有效历史M另受`20*freshM`限制，age仅观测不失效；spatial默认`neighbor_count=3,radius=30,max_source_candidates=16384,position_tolerance=0.1,normal_cosine=0.90630778703665`，M范围1..16384。两种position_tolerance在v2表示相对相机空间深度，法线阈值25度。每阶段采用当前冻结几何的可见支持校正，最终复用本epoch可见性。缺少temporal/spatial仍表示关闭；下表为v1默认与范围。v1行为不变。
 
-示例pathtrace部分：`{"version":3,"medium_mode":"surface_only","direct_lighting":"restir_di","target_spp":64,"max_bounces":1,"rr_start":1,"restir":{"version":2,"temporal":{},"spatial":{}}}`。完整capture仍需相机和输出参数。版本2不接受Scene media或多反弹，请求在创建Job前拒绝。
+示例pathtrace部分：`{"version":3,"medium_mode":"surface_only","direct_lighting":"restir_di","target_spp":64,"max_bounces":1,"rr_start":1,"restir":{"version":2,"temporal":{},"spatial":{}}}`。完整capture仍需相机和输出参数。联合介质示例将此对象的 `medium_mode` 改为 `scene_media`，`max_bounces` 改为 4。
 
 
 | 字段 | 默认 | 合法范围 / 含义 |
 | --- | --- | --- |
-| version | 1 | 仅 1 |
+| version | 1 | 1 或 2 |
 | initial_candidates | 8 | 整数 1..64，每像素/epoch 新候选数，不是 spp |
 | max_candidate_evaluations | 16777216 | 整数 1..16777216，GPU 调度候选评估额度；不足时 Job 失败 |
 | temporal | 无 | 可选对象，开启上一完整 epoch 重投影 |

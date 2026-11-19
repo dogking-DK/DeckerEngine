@@ -1,5 +1,12 @@
 // Model 4, sampler 2/3: scalar hero-RGB analog transport. No view-dependent LUTs.
 struct AirLocation { float3 radial; float height; float2 weather; float3 base,detail; };
+AirLocation airLocation(float4 planet,float2 weather,float3 base,float3 detail) {
+    AirLocation a; a.radial=normalize(planet.xyz); a.height=planet.w;
+    a.weather=weather; a.base=base; a.detail=detail; return a;
+}
+AirLocation airViewOrigin() {
+    return airLocation(parameters[13],parameters[26].xy,parameters[27].xyz,parameters[28].xyz);
+}
 #include "path-cloud.slang"
 float airRandom(uint pixel,uint sample,uint event,uint stream,uint counter=0) {
     uint4 p=asuint(parameters[1]); uint h=mixBits(p.x^0x3c6ef372u);
@@ -206,16 +213,21 @@ uint airFlight(RayDesc ray,AirLocation location,float3 segment,uint channel,uint
     return 0;
 }
 
-float airVisibility(AirVertex v,float3 wi,uint light,float3 point,uint channel,uint pixel,uint sample,uint event,inout uint rays,inout uint steps,uint stream=10) {
-    RayDesc ray; AirLocation location; ray.Origin=airOrigin(v,wi,location); ray.Direction=wi; ray.TMin=0; ray.TMax=infinity;
+bool airShadowRay(AirVertex v,float3 wi,uint light,float3 point,out RayDesc ray,out AirLocation location) {
+    ray.Origin=airOrigin(v,wi,location); ray.Direction=wi; ray.TMin=0; ray.TMax=infinity;
 #if !DK_PATH_EMPTY
     if(light!=0xffffffffu) {
         float3 end=offsetOrigin(light,point,-wi),delta=end-ray.Origin; float distance=length(delta);
-        if(distance<=0 || dot(delta,wi)<=0) return 0;
+        if(distance<=0 || dot(delta,wi)<=0) return false;
         ray.Direction=delta/distance; ray.TMax=nextFloat(distance,-1);
     }
 #endif
-    if(airNearest(ray,rays).found!=0) return 0;
+    return true;
+}
+float airVisibility(AirVertex v,float3 wi,uint light,float3 point,uint channel,uint pixel,uint sample,uint event,inout uint rays,inout uint steps,uint stream=10,bool geometryKnownVisible=false) {
+    RayDesc ray; AirLocation location;
+    if(!airShadowRay(v,wi,light,point,ray,location)) return 0;
+    if(!geometryKnownVisible && airNearest(ray,rays).found!=0) return 0;
     float3 segment=airSegment(location,ray.Direction,ray.TMax); if(segment.z!=0) return 0;
     float T=1; uint counter=0; AirIntervals intervals=airIntervals(location,ray.Direction,segment);
     for(uint k=0;k<intervals.count;++k) {
@@ -295,14 +307,31 @@ AirVertex airEndpoint(RayDesc ray,AirLocation location,float3 segment,PathPayloa
     return v;
 }
 #if DK_PATH_RESTIR
+// A saved receiver can belong to the previous camera. Build its shadow segment
+// from the world position using the current view's planet and cloud coordinates.
+AirVertex airRestirReceiver(PathPayload hit,float3 position) {
+    AirVertex v=(AirVertex)0;
+    v.hit=hit; v.ground=hit.found==0; v.position=position;
+    v.location=airMove(airViewOrigin(),position-parameters[6].xyz);
+    v.location.height=v.ground ? 0 : max(0.0,v.location.height);
+    return v;
+}
+bool airRestirVisible(PathPayload hit,float3 position,float3 wi,uint light,float3 point,inout uint rays) {
+    RayDesc ray; AirLocation location;
+    if(!airShadowRay(airRestirReceiver(hit,position),wi,light,point,ray,location)) return false;
+    if(airNearest(ray,rays).found!=0) return false;
+    return airSegment(location,ray.Direction,ray.TMax).z==0;
+}
 float shadeAirRestir(RestirSample s,AirVertex v,uint channel,uint pixel,uint sample,inout uint rays,inout uint steps) {
     if(s.light==0xffffffffu || s.W==0) return 0;
     float3 wi,point; float pdf;
     float3 contribution=restirEvaluate(s.light,s.uv,v.position,v.normal,v.bsdf,-v.incoming,wi,point,pdf);
     if(contribution[channel]==0) return 0;
     uint light=s.light<asuint(parameters[2]).z ? s.light : 0xffffffffu,before=rays;
-    float T=airVisibility(v,wi,light,point,channel,pixel,sample,0,rays,steps,11);
-    if(asuint(parameters[40]).w!=0) restirStat(pixel,13,rays-before);
+    bool cached=cachedRestirVisibility();
+    if(cached) v=airRestirReceiver(v.hit,v.position);
+    float T=airVisibility(v,wi,light,point,channel,pixel,sample,0,rays,steps,11,cached);
+    if(!paperRestir() && asuint(parameters[40]).w!=0) restirStat(pixel,13,rays-before);
     return contribution[channel]*s.W*T;
 }
 #endif

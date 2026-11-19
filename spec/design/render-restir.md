@@ -1,7 +1,7 @@
 ---
 module: render-restir
 created_at: "2026-10-19T12:50:00+08:00"
-updated_at: "2026-11-17T16:35:02+08:00"
+updated_at: "2026-11-19T14:00:00+08:00"
 status: accepted
 ---
 
@@ -16,9 +16,13 @@ status: accepted
 
 # ReSTIR 光照重采样设计
 
+## 0185 Scene media 首表面直接光
+
+0185 扩展 GPU Scene media 的首表面 DI。Editor 选择 Scene media + ReSTIR DI 时使用 v2，capture v3 通过 `restir.version=2` 选择同一实现。保留介质反弹上限、有限太阳、空气与云的自由程，以及最终 hero 通道的独立透射估计。几何候选在自由程之前生成，只有无真实散射到达首表面才消费。v2 在当前冻结几何下核验地面、网格和体素到选中光源的可见性，并在合并时重新检查来源支持。随机透射只参与最终着色。时空复用/候选数量仍可独立配置，介质、尺寸或版本切换使历史失效。
+
 ## 0182 完整 RGB 表面直接光
 
-本次新增显式 `lighting_scope=direct_only`（Surface only），将有效反弹数固定为1；相机可见发光/背景、首表面直接光及既有mask灯BSDF命中组成同一直接光积分。每条路径为完整RGB，不经过Scene media的hero通道。Classic是同积分的对照；该模式的ReSTIR使用版本2，版本1及Scene media保持原契约。继续使用固定RTXDI 3.1.0的reservoir流/合并数学，不升级依赖、不声称采用其完整示例渲染器。
+本次新增显式 `lighting_scope=direct_only`（Surface only），将有效反弹数固定为1；相机可见发光/背景、首表面直接光及既有mask灯BSDF命中组成同一直接光积分。每条路径为完整RGB，不经过Scene media的hero通道。Classic是同积分的对照；该模式的ReSTIR使用版本2。继续使用固定RTXDI 3.1.0的reservoir流/合并数学，不升级依赖、不声称采用其完整示例渲染器。
 
 版本2以[Bitterli 2020原论文](https://research.nvidia.com/sites/default/files/pubs/2020-07_Spatiotemporal-reservoir-resampling/ReSTIR.pdf)§3–5/Alg.5–6的无偏配置为基线：32初始候选，1个reservoir，3个低差异圆盘邻居、30像素半径、1轮空间复用；按10%相对深度与25度法线阈值选择邻居，静态场景相机移动不要求同一三角形。时间来源M限制为当前fresh M的20倍，不按8 epoch整体过期。完整来源/位置/材质保留，动态几何/光源内容变化仍清历史，不在本次扩展动态物体运动向量。
 

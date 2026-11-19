@@ -110,6 +110,50 @@ void restir_medium_cloud(memory::ResourceHandle heap,PathTraceRenderer& r,Submis
     }
     std::puts("medium RIS cloud wind/current shadow/multiple scattering/RR/no volume reuse=pass");
 }
+void restir_medium_v2(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q) {
+    Fixture f{heap}; auto e=cloud_environment(); e.enabled=true;
+    e.atmosphere.mie_extinction_per_m={.00001,.00003,.00008};
+    e.atmosphere.ground_albedo={.5,.5,.5}; e.sun.angular_radius_rad=1e-6;
+    check(f.document->set_environment(e));
+    CloudFieldCache cache; PathMediumSettings ms; ms.cloud_albedo=0; ms.time_seconds=17;
+    auto medium=take(PathMediumSnapshot::create(e,ms,take(cache.prepare(e.clouds))));
+    auto scene=take(r.prepare_scene(q,f.scene())); auto view=medium_down_view(f,12,true,1,0);
+    auto s=air_settings(4); s.sun=true;
+    auto ris=surface_direct_restir_settings(); ris.spatial->radius=2;
+    PathTraceSchedule schedule; schedule.target_spp=96; schedule.batch_spp=16;
+    check(r.configure_restir_medium_view(q,185,scene,medium,view,s,ris,schedule));
+    auto lit=finish_view(r,q,185); const auto& info=lit.info();
+    require(info.restir->version==2 && info.medium->field_hash==medium.field_hash() &&
+        info.restir_medium_statistics.applied_surfaces>0 && info.temporal_statistics.max_age>8 &&
+        info.spatial_statistics.reused>0 && info.spatial_statistics.current_visibility_rays>info.restir_medium_statistics.applied_surfaces,
+        "medium v2 did not use visibility-corrected surface histories");
+    Vec3d mean=Vec3d::Zero(); for(const auto& color:lit.linear_rgb()) mean+=color;
+    mean/=double(lit.linear_rgb().size());
+    // Orthographic footprint is one metre across. The near-vertical sun is the
+    // only light and both media only absorb, including on the return shadow ray.
+    const auto t=take(medium.integrate({{0,0,0},{0,1,0},100000},{8192,40960})).transmittance;
+    close_color(mean,t*(.5/std::numbers::pi),.012);
+    // The primary still sees the ground. An opaque mesh above the camera hides the sun.
+    medium_horizontal(f,5,{0,0,0}); f.asset.materials.back().double_sided=true;
+    scene=take(r.prepare_scene(q,f.scene())); view=medium_down_view(f,12,true,1,0);
+    check(r.configure_restir_medium_view(q,185,scene,medium,view,s,ris,schedule));
+    auto shadow=finish_view(r,q,185); for(const auto& color:shadow.linear_rgb()) close_color(color,Vec3d::Zero(),0);
+    check(r.release_view(185));
+
+    // With sky as the primary hit, even paths scattering back to a surface
+    // follow ordinary volume transport. v2 must reproduce its samples exactly.
+    e.atmosphere.mie_scattering_per_m=e.atmosphere.mie_extinction_per_m;
+    ms.cloud_albedo=.9;
+    check(f.document->set_environment(e)); scene=take(r.prepare_scene(q,f.scene()));
+    medium=take(PathMediumSnapshot::create(e,ms,take(cache.prepare(e.clouds))));
+    s.environment_rgb={.2,.3,.4};
+    const PathTraceRay sky{{0,2000,0},{0,1,0}};
+    ris.temporal.reset(); ris.spatial.reset();
+    auto scattered=ris_medium_image(r,q,scene,medium,s,256,sky,ris);
+    require(scattered.info().medium->tracking_steps>0 && scattered.linear_rgb()[0].minCoeff()>0,
+        "sky scattering fixture produced no transport");
+    compare_images(scattered,cloud_image(r,q,scene,medium,s,256,sky),0);
+}
 void restir_medium_schedule(memory::ResourceHandle heap,PathTraceRenderer& r,SubmissionQueue& q) {
     Fixture f{heap}; auto e=cloud_environment(); e.atmosphere.ground_albedo={.5,.4,.3}; check(f.document->set_environment(e));
     CloudFieldCache cache; auto fields=take(cache.prepare(e.clouds)); PathMediumSettings ms; ms.time_seconds=17;

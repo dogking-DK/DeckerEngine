@@ -26,7 +26,8 @@ std::span<const char* const> actions(std::size_t stage,bool desktop,bool media,b
         static constexpr std::array joint={"path_spatial"};
         static constexpr std::array time={"path_time",":all",":two",":enter","path_temporal"};
         static constexpr std::array classic={"path_surface","path_classic"}, medium={"path_media","path_restir"};
-        switch(stage) { case 0:return initial; case 1:return air; case 2:return joint; case 3:return time; case 8:return classic; case 9:return medium; default:break; }
+        static constexpr std::array motion_size={"path_motion_preview_long_edge",":all",":preview_edge",":enter","camera_perspective"};
+        switch(stage) { case 0:return initial; case 1:return air; case 2:return joint; case 3:return time; case 8:return classic; case 9:return medium; case 14:return motion_size; default:break; }
     }
     if(media) {
         static constexpr std::array media_path={"path_mode","path_target",":all",":three",":enter"};
@@ -110,6 +111,7 @@ void PathSmoke::input(const WorkbenchUi& ui,const Workspace& model,const Viewpor
         else if(action==":one") io.AddInputCharactersUTF8("1");
         else if(action==":two") io.AddInputCharactersUTF8("2");
         else if(action==":three") io.AddInputCharactersUTF8("3");
+        else if(action==":preview_edge") io.AddInputCharactersUTF8("160");
         else if(action==":many") io.AddInputCharactersUTF8("64");
         else if(action==":enter") io.AddKeyEvent(ImGuiKey_Enter,true);
         else if(action==":home") io.AddKeyEvent(ImGuiKey_Home,true);
@@ -151,7 +153,8 @@ void PathSmoke::presented(const Workspace& model,const WorkbenchUi& ui,Viewport&
         if(stage_==15 && !waiting_ && !ready_ && motion_start_!=std::chrono::steady_clock::time_point{} &&
             viewport.info().frame!=motion_signature_) {
             motion_signature_=viewport.info().frame;
-            if(viewport.path_info().medium && viewport.info().width==192 && viewport.path_samples()==3) {
+            const auto cap=ui.path_settings().motion_preview_long_edge;
+            if(viewport.path_info().medium && (!cap || std::max(viewport.info().width,viewport.info().height)==cap) && viewport.path_samples()==3) {
                 ++motion_updates_;
                 motion_samples_.push_back({{"latency_ms",viewport.path_latency_ms()},
                     {"spp",viewport.path_samples()},{"width",viewport.info().width},{"height",viewport.info().height}});
@@ -250,7 +253,7 @@ void PathSmoke::presented_media(const Workspace& model,const WorkbenchUi& ui,Vie
     else if(!rejected && (!viewport.current(model.snapshot()->state) || !viewport.camera_current(ui.input().camera()) ||
         progress.completed_spp!=3 || viewport.path_samples()!=3)) return;
     if(stage_==15) {
-        if(viewport.path_interactive() || viewport.info().width<=192) return;
+        if(viewport.path_interactive() || (ui.path_settings().motion_preview_long_edge && viewport.info().width==ui.path_settings().motion_preview_long_edge)) return;
         require(motion_updates_>=2,"continuous media motion starved complete RGB previews");
     }
     const auto& state=model.snapshot()->state; const auto& used=viewport.path_info(); const auto& settings=ui.path_settings();
@@ -279,7 +282,7 @@ void PathSmoke::presented_media(const Workspace& model,const WorkbenchUi& ui,Vie
     if(restir_) {
         auto& path=report["pathtrace"]; path["version"]=3; path["direct_lighting"]=used.restir ? "restir_di" : "classic_mis";
         if(used.restir) {
-            Json config={{"initial_candidates",used.restir->initial_candidates}};
+            Json config={{"version",used.restir->version},{"initial_candidates",used.restir->initial_candidates}};
             if(used.restir->temporal) config["temporal"]=Json::object();
             if(used.restir->spatial) config["spatial"]=Json::object();
             path["restir"]=std::move(config);

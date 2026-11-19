@@ -184,7 +184,7 @@ std::vector<SettingInfo> build_settings_catalog(const CommandCatalogSnapshot& ca
     for(const auto& [key,label,alias]:std::initializer_list<std::array<const char*,3>>{
         {"lighting_scope","Direct lighting only","完整 RGB 直接光 ReSTIR"},{"medium_mode","Medium mode","介质 表面 大气 云"},{"direct_lighting","Direct lighting","直接光照 ReSTIR 算法"},{"initial_candidates","Initial candidates","候选数量 ReSTIR"},
         {"temporal_reuse","Temporal reuse","时间复用 ReSTIR"},{"spatial_reuse","Spatial reuse","空间复用 ReSTIR"},{"target_spp","Target spp","采样 目标 次数"},
-        {"seed","Seed","随机 种子"},{"bounces","Bounces","反弹 次数"},{"environment_rgb","Environment RGB","环境 颜色 光照"},{"sky_enabled","Sky","天空 开关"},
+        {"motion_preview_long_edge","Motion preview long edge","运动预览 长边 分辨率 原尺寸"},{"seed","Seed","随机 种子"},{"bounces","Bounces","反弹 次数"},{"environment_rgb","Environment RGB","环境 颜色 光照"},{"sky_enabled","Sky","天空 开关"},
         {"sun","Scene sun","太阳 开关 光照"},{"exposure_ev","Exposure EV","曝光"},{"time_seconds","Medium time","介质 时间"},{"cloud_albedo","Cloud albedo","云 反照率"},{"cloud_anisotropy","Cloud anisotropy","云 各向异性"}})
         add("path."+std::string(key),"Path tracing","Settings",label,alias,"editor.viewport.set",key,"Edit path tracing preference. Disabled dependent controls retain their values until their mode is enabled.",view);
     add("path.pause","Path tracing","Controls","Pause / Resume","暂停 继续","editor.viewport.pause","","Pause further sampling; the GUI button resumes when already paused. In-flight work may complete.","Preserves completed samples and old image. Session-only; no Undo.");
@@ -253,7 +253,7 @@ std::string setting_unavailable(const SettingInfo& s,const SettingsContext& c) {
         if(c.camera_popup) return "Apply or Cancel the Camera popup first.";
         if((id=="path.pause" || id=="path.reset") && !c.path_mode) return "Select Path trace in Viewport first.";
         if((id=="path.initial_candidates" || id=="path.temporal_reuse" || id=="path.spatial_reuse") && !c.restir) return "Select ReSTIR DI to edit reuse/candidate settings.";
-        if((id=="path.time_seconds" || id=="path.cloud_albedo" || id=="path.cloud_anisotropy") && !c.scene_media) return "Select Scene media to edit medium settings.";
+        if((id=="path.motion_preview_long_edge" || id=="path.time_seconds" || id=="path.cloud_albedo" || id=="path.cloud_anisotropy") && !c.scene_media) return "Select Scene media to edit medium settings.";
         if(id=="viewport.unlit_inspection" && c.path_mode) return "Unlit inspection applies to the raster renderer.";
         if(id.starts_with("viewport.voxel_") && c.path_mode) return "Voxel display settings apply to the raster renderer.";
     } else if(id.starts_with("simulation.") && s.section!="Next experiment") {

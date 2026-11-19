@@ -303,6 +303,7 @@ int main(int argc,char** argv) {
               else if(mode=="restir_medium_numeric") restir_medium_numeric(memory.heap,renderer,queue);
               else if(mode=="restir_medium_lights") restir_medium_lights(memory.heap,renderer,queue);
               else if(mode=="restir_medium_cloud") restir_medium_cloud(memory.heap,renderer,queue);
+              else if(mode=="restir_medium_v2") restir_medium_v2(memory.heap,renderer,queue);
               else if(mode=="restir_medium_reuse") restir_medium_reuse(memory.heap,renderer,queue);
               else if(mode=="restir_medium_schedule") restir_medium_schedule(memory.heap,renderer,queue);
               else if(mode=="restir_medium_state") restir_medium_state(memory.heap,renderer,queue);

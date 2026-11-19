@@ -181,7 +181,8 @@ void PathPreview::run(std::stop_token stop) {
                 schedule.tile_edge=256;
                 schedule.tiles_per_submission=4;
                 schedule.paused=active->settings.paused; schedule.exposure=active->settings.exposure;
-                auto restir=active->settings.direct_only && !active->legacy_surface_direct_probe ? render::surface_direct_restir_settings() : render::RestirDiSettings{};
+                const bool use_v2=(active->settings.scene_media || active->settings.direct_only) && !active->restir_v1_probe;
+                auto restir=use_v2 ? render::surface_direct_restir_settings() : render::RestirDiSettings{};
                 restir.initial_candidates=active->settings.restir_candidates;
                 if(!active->settings.restir_temporal) restir.temporal.reset();
                 else if(!restir.temporal) restir.temporal.emplace();

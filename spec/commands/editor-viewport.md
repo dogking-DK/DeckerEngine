@@ -1,7 +1,7 @@
 ---
 module: command-reference-editor-viewport
 created_at: "2026-11-03T14:56:20+08:00"
-updated_at: "2026-11-17T16:35:02+08:00"
+updated_at: "2026-11-19T14:04:00+08:00"
 status: accepted
 ---
 
@@ -87,7 +87,8 @@ guard 必填，且至少提供一个设置字段。省略字段保持当前值�
 | renderer | raster / pathtrace | raster；Edit 渲染器 |
 | medium_mode | surface_only / scene_media | surface_only；路径是否追踪场景空气和云 |
 | lighting_scope | full_path / direct_only | full_path；direct_only仅支持surface_only，进入时默认bounces=1、候选32、时空复用开启，显式参数覆盖默认；ReSTIR使用v2完整RGB直接光 |
-| direct_lighting | classic / restir_di | classic；路径直接光照算法 |
+| direct_lighting | classic / restir_di | 默认 classic。Scene media 的 restir_di 使用 v2 首表面直接光，保留介质散射和反弹数 |
+| motion_preview_long_edge | 整数 0–4294967295 | 默认 0 使用视口原尺寸。正数限制 Scene media 相机运动时的长边，只缩小；停动 200 ms 恢复原尺寸请求 |
 | initial_candidates | 整数 1–64 | 8；ReSTIR 初始候选数 |
 | temporal_reuse / spatial_reuse | boolean | false / false；ReSTIR 时空复用，Classic 下保留设置 |
 | target_spp | 整数 1–4294967295 | 64；绝对采样目标，不是追加次数 |
@@ -110,13 +111,13 @@ guard 必填，且至少提供一个设置字段。省略字段保持当前值�
 以下 `<view_id>`、`<document_id>` 和 revision 必须替换为 query 返回的实际值：
 
 ```text
-editor.viewport.set guard={"view_id":"<view_id>","document_id":"<document_id>","revision":0} renderer=pathtrace direct_lighting=restir_di target_spp=12
+editor.viewport.set guard={"view_id":"<view_id>","document_id":"<document_id>","revision":0} renderer=pathtrace medium_mode=scene_media lighting_scope=full_path direct_lighting=restir_di temporal_reuse=true spatial_reuse=true motion_preview_long_edge=640 target_spp=12
 ```
 
 相同设置的 IPC 请求：
 
 ```json
-{"jsonrpc":"2.0","id":2,"method":"editor.viewport.set","params":{"guard":{"view_id":"<view_id>","document_id":"<document_id>","revision":0},"renderer":"pathtrace","direct_lighting":"restir_di","target_spp":12}}
+{"jsonrpc":"2.0","id":2,"method":"editor.viewport.set","params":{"guard":{"view_id":"<view_id>","document_id":"<document_id>","revision":0},"renderer":"pathtrace","medium_mode":"scene_media","lighting_scope":"full_path","direct_lighting":"restir_di","temporal_reuse":true,"spatial_reuse":true,"motion_preview_long_edge":640,"target_spp":12}}
 ```
 
 ## editor.viewport.pause / resume / reset

@@ -54,8 +54,8 @@ struct RestirDiSettings {
     std::optional<RestirTemporalSettings> temporal; // Full progressive GPU view only.
     std::optional<RestirSpatialSettings> spatial; // Independent frozen-input spatial pass.
 };
-// Paper's single-reservoir, unbiased surface-direct profile. Version 2 requires
-// max_bounces=1 and no medium; thresholds are relative depth and normal cosine.
+// GPU v2 first-surface DI. Surface-only views require a single bounce.
+// Medium views retain volume transport and the configured path depth.
 [[nodiscard]] inline RestirDiSettings surface_direct_restir_settings() {
     RestirDiSettings r; r.version=2; r.initial_candidates=32;
     r.temporal=RestirTemporalSettings{2,1280,0,.1,.90630778703665};

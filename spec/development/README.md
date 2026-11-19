@@ -186,5 +186,6 @@
 | 0182 | [完整RGB表面直接光ReSTIR与Sponza运动验证](0182-restir-surface-direct.md) | render-restir、editor | completed |
 | 0183 | [开发工作台与性能证据整理](0183-development-workflow.md) | project-foundation | completed |
 | 0184 | [Windows 增量构建与多目标验证](0184-build-iteration.md) | project-foundation、render-pathtracing | completed |
+| 0185 | [Scene media 首表面 ReSTIR v2 和运动预览尺寸](0185-media-restir-preview.md) | render-restir、editor | completed |
 
 按编号升序维护。创建新记录前检查现有最大编号；同一任务继续更新原文件。

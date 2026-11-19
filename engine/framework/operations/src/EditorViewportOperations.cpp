@@ -17,7 +17,7 @@ Json properties() {
     return {{"renderer",choice({"raster","pathtrace"})},{"medium_mode",choice({"surface_only","scene_media"})},
         {"lighting_scope",choice({"full_path","direct_only"})},{"direct_lighting",choice({"classic","restir_di"})},{"initial_candidates",integer(1,64)},
         {"temporal_reuse",schema::boolean()},{"spatial_reuse",schema::boolean()},
-        {"target_spp",integer(1,UINT32_MAX)},{"seed",integer(0,UINT32_MAX)},{"bounces",integer(1,32)},
+        {"target_spp",integer(1,UINT32_MAX)},{"motion_preview_long_edge",integer(0,UINT32_MAX)},{"seed",integer(0,UINT32_MAX)},{"bounces",integer(1,32)},
         {"environment_rgb",schema::array(number(0,1000),3,3)},{"sky_enabled",schema::boolean()},{"sun",schema::boolean()},
         {"exposure_ev",number(-16,16)},{"raster_exposure",number(0,1e6)},{"unlit_inspection",schema::boolean()},
         {"voxel_shading",choice({"unlit","directional"})},{"voxel_light_direction",schema::array(number(-1,1),3,3)},
@@ -36,7 +36,7 @@ Json settings_json(const EditorViewportSettings& s) {
         {"voxel_light_direction",{s.voxel.light_direction.x(),s.voxel.light_direction.y(),s.voxel.light_direction.z()}},
         {"voxel_irradiance",{s.voxel.irradiance.x(),s.voxel.irradiance.y(),s.voxel.irradiance.z()}},
         {"time_seconds",p.time_seconds},{"cloud_albedo",p.cloud_albedo},{"cloud_anisotropy",p.cloud_anisotropy},
-        {"paused",p.paused},{"reset_sequence",p.reset}};
+        {"motion_preview_long_edge",p.motion_preview_long_edge},{"paused",p.paused},{"reset_sequence",p.reset}};
 }
 Json result_schema() {
     auto settings=properties(); settings["paused"]=schema::boolean(); settings["reset_sequence"]=integer(0,UINT64_MAX);
@@ -62,6 +62,7 @@ EditorViewportSettings patch(const Json& p,EditorViewportSettings s) {
     if(p.contains("direct_lighting")) v.restir_di=p["direct_lighting"]=="restir_di";
     assign(p,"initial_candidates",v.restir_candidates); assign(p,"temporal_reuse",v.restir_temporal); assign(p,"spatial_reuse",v.restir_spatial);
     assign(p,"target_spp",v.target); assign(p,"seed",v.seed); assign(p,"bounces",v.bounces);
+    assign(p,"motion_preview_long_edge",v.motion_preview_long_edge);
     assign(p,"sky_enabled",v.sky_enabled); assign(p,"sun",v.sun); assign(p,"exposure_ev",v.exposure);
     if(p.contains("environment_rgb")) for(int i=0;i<3;++i) v.sky[i]=p["environment_rgb"][i].get<double>();
     assign(p,"raster_exposure",s.raster_exposure); assign(p,"unlit_inspection",s.unlit_inspection);
@@ -95,6 +96,8 @@ Result<void> register_editor_viewport_commands(CommandRegistry& registry,std::fu
             }
             help["/properties/lighting_scope"]["description"]="direct_only requires surface_only. On entry sets bounces=1, candidates=32 and both reuse stages; explicit fields override defaults. ReSTIR uses the v2 RGB visibility-corrected profile.";
             help["/properties/target_spp"]["description"]="Absolute target spp, not an additional iteration count; preserves completed samples.";
+            help["/properties/motion_preview_long_edge"]["description"]="Maximum long edge in pixels while moving the Scene media camera. Zero keeps the full viewport size.";
+            help["/properties/direct_lighting"]["description"]="ReSTIR DI uses v2 for the first surface in Scene media and for surface direct_only. Volume scattering and later bounces retain their path estimator.";
             help["/properties/exposure_ev"]["unit"]="EV";
             help["/properties/exposure_ev"]["description"]="Path display exposure; preserves accumulated samples.";
             help["/properties/time_seconds"]["unit"]="s";

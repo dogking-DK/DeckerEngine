@@ -136,7 +136,10 @@ def main():
             used = rgb["provenance"]["pathtrace"]["restir"]
             assert used["initial_candidates"] == 32 and used["temporal"]["max_history_age"] == 0
             assert used["spatial"]["radius"] == 30 and used["spatial"]["neighbor_count"] == 3
-            for bad in (dict(direct, max_bounces=2), dict(direct, medium_mode="scene_media"),
+            media_v2 = read(submit("media-v2.json", dict(direct, medium_mode="scene_media", max_bounces=4)))
+            assert media_v2["provenance"]["reuse"]["applied_surfaces"] > 0
+            assert media_v2["provenance"]["pathtrace"]["max_bounces"] == 4
+            for bad in (dict(direct, max_bounces=2),
                         dict(direct, restir=dict(version=2, temporal=dict(version=1)))):
                 try:
                     submit("invalid-direct.json", bad)

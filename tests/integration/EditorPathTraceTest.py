@@ -110,7 +110,9 @@ def main():
             assert air["mode"] == "scene_media" and air["generation"] > first["generation"]
             assert air["pixels"] != first["pixels"] and air["field_hash"] == "fnv1a64:0000000000000000"
             compare_capture(air)
-            if args.restir: assert air["temporal_reused"] > 0 and air["history_age"] > 0
+            if args.restir:
+                assert air["pathtrace"]["restir"]["version"] == 2 and air["pathtrace"]["max_bounces"] > 1
+                assert air["temporal_reused"] > 0 and air["history_age"] > 0
             env = call("environment.query")["environment"]
             assert env["enabled"]  # enabled through the actual Environment panel
             env["atmosphere"]["planet_center_m"][1] -= 10
@@ -174,11 +176,16 @@ def main():
             linear = json.loads((evidence / "console.linear.json").read_text())
             error = max(abs(a-b) for left, right in zip(linear, image["linear_rgb"]) for a,b in zip(left,right))
             assert error <= 1e-5 and image["provenance"]["cloud_field_hash"] == console["field_hash"]
-            report["console_capture_max_abs"] = error; advance("console")
+            report["console_capture_max_abs"] = error
+            viewport = call("editor.viewport.query")
+            assert viewport["settings"]["motion_preview_long_edge"] == 0
+            advance("console")
             compare_projections(console)
             motion = checkpoint("motion")
-            assert motion["motion_updates"] >= 2 and motion["width"] > 192 and motion["spp"] == 3
-            assert all(x["width"] == 192 and x["spp"] == 3 for x in motion["motion_samples"])
+            assert motion["motion_updates"] >= 2 and motion["width"] == console["width"] and motion["spp"] == 3
+            edge = 160 if args.restir else max(motion["width"], motion["height"])
+            assert call("editor.viewport.query")["settings"]["motion_preview_long_edge"] == (160 if args.restir else 0)
+            assert all(max(x["width"], x["height"]) == edge and x["spp"] == 3 for x in motion["motion_samples"])
             compare_capture(motion)
             advance("motion")
             closing = checkpoint("closing")
