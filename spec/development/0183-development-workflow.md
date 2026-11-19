@@ -1,7 +1,7 @@
 ---
 id: "0183"
 created_at: "2026-11-19T09:55:00+08:00"
-updated_at: "2026-11-19T10:24:01+08:00"
+updated_at: "2026-11-19T10:33:15+08:00"
 status: completed
 design_refs:
   - ../design/project-foundation.md
@@ -32,3 +32,9 @@ design_refs:
 - check-spec.ps1 全仓库文档检查、26 个检查器夹具、skill quick_validate 与四个索引回归通过。索引用例覆盖各自轮转、部分失败、空操作和监视器写锁竞争。
 
 未运行全量引擎或跨设备矩阵；图查询属于静态索引，codebase-memory 报告部分文件仅部分解析。最新性能数值沿用历史测量。下一项引擎任务由 [WORK.md](../../WORK.md) 交接。
+
+## Codex 的 RTK hook
+
+项目在 [.codex/hooks.json](../../.codex/hooks.json) 注册 RTK 1.2.0 的 `PreToolUse`。本机 Codex CLI 0.169.0-alpha.11.1 的 `hooks/list` 识别到项目来源、`Bash` 匹配器与 `rtk hook codex`，首次读取为 `enabled: true`、`trustStatus: untrusted`。
+
+在当前 Codex 会话直接运行 `git status`、`rg -n namespace engine` 得到原始输出。相同工作区状态下显式使用 RTK，Git 状态从 9 行缩到 2 行，搜索从 1000 行缩到 204 行（404 个文件），只计算标准输出。`rg -n parse_id_bytes engine/foundation/core` 的 3 个命中逐行保留，零命中仍退出 1。`rtk bypass` 返回完整输出。信任后的裸命令验收待完成。

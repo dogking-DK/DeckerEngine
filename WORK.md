@@ -10,6 +10,8 @@
 
 本轮工作流维护已交付。下一项引擎开发尚待选定。
 
+RTK 的项目 hook 已登记，Codex 最近一次检查显示待信任。信任后用裸命令 `git status` 与 `rg -n namespace engine` 验收自动精简。[项目导航 skill](.agents/skills/decker-code-navigation/SKILL.md#codex-中的-rtk)
+
 ## 下一步
 
 - 降噪路线停在 M20.2 已验收。候选 M20.3 的目标是独立 À-trous 滤波选项，以及 Editor / capture 的最小接通。[降噪设计](spec/design/render-denoising.md)
